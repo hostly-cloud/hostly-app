@@ -32,6 +32,8 @@ export const en: MessageTree = {
     reload: "Reload",
     saving: "Saving…",
     deleting: "Deleting…",
+    emDash: "—",
+    emptyCell: "-",
   },
   dashboard: {
     title: "Hostly dashboard",
@@ -74,6 +76,13 @@ export const en: MessageTree = {
     noticeDeleted: "Purchase deleted.",
     noticeEstadoUpdated: "Status updated.",
     confirmDelete: "Delete this purchase?",
+    errorRequireSupplier: "Enter the supplier.",
+    errorInvalidDate: "Enter a valid date.",
+    errorTotalInvalid: "Total must be a number ≥ 0.",
+    placeholderSupplier: "e.g. Makro Ibiza",
+    placeholderTotalZero: "0.00",
+    placeholderNotes: "Order references, delivery note…",
+    ariaPurchaseStatus: "Purchase status for {{supplier}}",
   },
   stock: {
     title: "Stock",
@@ -110,6 +119,9 @@ export const en: MessageTree = {
     qtyPlaceholder: "e.g. 1.5",
     confirmDelete: "Delete this shrinkage entry? Stock will be restored if it was already deducted.",
     emptyList: "No shrinkage entries yet. Tap «+ Add shrinkage» to add the first one.",
+    errorInvalidDate: "Invalid date.",
+    errorPickProduct: "Choose a product from inventory.",
+    errorQtyPositive: "Enter a quantity greater than zero.",
   },
   reportes: {
     title: "Reports",

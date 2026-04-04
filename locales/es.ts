@@ -32,6 +32,8 @@ export const es: MessageTree = {
     reload: "Recargar",
     saving: "Guardando…",
     deleting: "Eliminando…",
+    emDash: "—",
+    emptyCell: "-",
   },
   dashboard: {
     title: "Dashboard Hostly",
@@ -74,6 +76,13 @@ export const es: MessageTree = {
     noticeDeleted: "Compra eliminada.",
     noticeEstadoUpdated: "Estado actualizado.",
     confirmDelete: "¿Eliminar esta compra?",
+    errorRequireSupplier: "Indica el proveedor.",
+    errorInvalidDate: "Indica una fecha válida.",
+    errorTotalInvalid: "El total debe ser un número ≥ 0.",
+    placeholderSupplier: "Ej. Makro Ibiza",
+    placeholderTotalZero: "0,00",
+    placeholderNotes: "Referencias del pedido, albarán…",
+    ariaPurchaseStatus: "Estado de compra {{supplier}}",
   },
   stock: {
     title: "Stock",
@@ -112,6 +121,9 @@ export const es: MessageTree = {
     confirmDelete: "¿Eliminar esta merma? Se devolverá al stock si ya estaba descontada.",
     emptyList:
       "No hay mermas. Pulsa «+ Añadir merma» para registrar la primera.",
+    errorInvalidDate: "Fecha no válida.",
+    errorPickProduct: "Elige un producto del inventario.",
+    errorQtyPositive: "Indica una cantidad mayor que cero.",
   },
   reportes: {
     title: "Reportes",

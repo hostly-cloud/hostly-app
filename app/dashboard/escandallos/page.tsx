@@ -339,7 +339,9 @@ export default function EscandallosPage() {
                         href={`/dashboard/escandallos/${encodeURIComponent(String(item.id))}`}
                         style={{ textDecoration: "none", color: "#2563eb" }}
                       >
-                        <div style={{ fontWeight: 600, color: "#0f172a" }}>{item.nombre_plato ?? "-"}</div>
+                        <div style={{ fontWeight: 600, color: "#0f172a" }}>
+                          {item.nombre_plato ?? t("common.emptyCell")}
+                        </div>
                       </Link>
                     </td>
 

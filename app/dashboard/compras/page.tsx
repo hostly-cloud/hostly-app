@@ -67,13 +67,18 @@ function formatEuro(n: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 }
 
-function inventarioDesdeCompra(c: CompraLocal, ps: StockProducto[], notLinkedLabel: string): string {
+function inventarioDesdeCompra(
+  c: CompraLocal,
+  ps: StockProducto[],
+  notLinkedLabel: string,
+  defaultProductName: string,
+): string {
   const qty = coercedCantidadRecibida(c.cantidad_recibida as unknown);
   if (!c.producto_stock_id || qty == null || qty <= 0) {
     return notLinkedLabel;
   }
   const live = ps.find((p) => p.id === c.producto_stock_id);
-  const name = (c.producto_stock_nombre?.trim() || live?.nombre || "").trim() || "Producto";
+  const name = (c.producto_stock_nombre?.trim() || live?.nombre || "").trim() || defaultProductName;
   const u = c.unidad || live?.unidad || "";
   return `${name} · ${qty} ${u}`.trim();
 }
@@ -186,16 +191,16 @@ export default function ComprasPage() {
     setFormError(null);
     const proveedor = draftProveedor.trim();
     if (!proveedor) {
-      setFormError("Indica el proveedor.");
+      setFormError(t("compras.errorRequireSupplier"));
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draftFecha.trim())) {
-      setFormError("Indica una fecha válida.");
+      setFormError(t("compras.errorInvalidDate"));
       return;
     }
     const total = parseTotal(draftTotal);
     if (total === null) {
-      setFormError("El total debe ser un número ≥ 0.");
+      setFormError(t("compras.errorTotalInvalid"));
       return;
     }
 
@@ -330,7 +335,7 @@ export default function ComprasPage() {
                 <input
                   value={draftProveedor}
                   onChange={(e) => setDraftProveedor(e.target.value)}
-                  placeholder="Ej. Makro Ibiza"
+                  placeholder={t("compras.placeholderSupplier")}
                   style={inputStyle}
                 />
               </div>
@@ -361,7 +366,7 @@ export default function ComprasPage() {
                   min={0}
                   value={draftTotal}
                   onChange={(e) => setDraftTotal(e.target.value)}
-                  placeholder="0,00"
+                  placeholder={t("compras.placeholderTotalZero")}
                   style={inputStyle}
                 />
               </div>
@@ -381,9 +386,9 @@ export default function ComprasPage() {
                 </select>
                 {draftStockProductoId ? (
                   <p style={{ margin: "8px 0 0", fontSize: 12, color: "#64748b" }}>
-                    Unidad del inventario:{" "}
+                    {t("compras.inventoryUnitHint")}{" "}
                     <strong style={{ color: "#94a3b8" }}>
-                      {productosStock.find((p) => p.id === draftStockProductoId)?.unidad ?? "—"}
+                      {productosStock.find((p) => p.id === draftStockProductoId)?.unidad ?? t("common.emDash")}
                     </strong>
                   </p>
                 ) : null}
@@ -406,7 +411,7 @@ export default function ComprasPage() {
                 <textarea
                   value={draftNotas}
                   onChange={(e) => setDraftNotas(e.target.value)}
-                  placeholder="Referencias del pedido, albarán…"
+                  placeholder={t("compras.placeholderNotes")}
                   rows={3}
                   style={{ ...inputStyle, resize: "vertical", minHeight: 72 }}
                 />
@@ -508,7 +513,12 @@ export default function ComprasPage() {
                 <tbody>
                   {sorted.map((c) => {
                     const tone = rowTone(c.estado);
-                    const invLabel = inventarioDesdeCompra(c, productosStock, t("compras.notLinked"));
+                    const invLabel = inventarioDesdeCompra(
+                      c,
+                      productosStock,
+                      t("compras.notLinked"),
+                      t("common.product"),
+                    );
                     return (
                       <tr
                         key={c.id}
@@ -525,7 +535,7 @@ export default function ComprasPage() {
                           <select
                             value={c.estado}
                             onChange={(e) => updateEstado(c.id, e.target.value as CompraEstado)}
-                            aria-label={`Estado de compra ${c.proveedor}`}
+                            aria-label={t("compras.ariaPurchaseStatus", { supplier: c.proveedor })}
                             style={{
                               ...inputStyle,
                               maxWidth: 160,
@@ -582,7 +592,7 @@ export default function ComprasPage() {
                           }}
                           title={c.notas ?? undefined}
                         >
-                          {c.notas ?? "—"}
+                          {c.notas ?? t("common.emDash")}
                         </td>
                         <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
                           <button

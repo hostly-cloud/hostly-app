@@ -127,17 +127,17 @@ export default function MermasPage() {
   function submit() {
     setFormError(null);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draftFecha.trim())) {
-      setFormError("Fecha no válida.");
+      setFormError(t("mermas.errorInvalidDate"));
       return;
     }
     const pid = draftProductoId.trim();
     if (!pid) {
-      setFormError("Elige un producto del inventario.");
+      setFormError(t("mermas.errorPickProduct"));
       return;
     }
     const qty = parseCantidadInput(draftCantidad);
     if (qty == null) {
-      setFormError("Indica una cantidad mayor que cero.");
+      setFormError(t("mermas.errorQtyPositive"));
       return;
     }
     const stock = loadStock();
@@ -269,7 +269,7 @@ export default function MermasPage() {
                 <input type="date" value={draftFecha} onChange={(e) => setDraftFecha(e.target.value)} style={inputStyle} />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>Producto</label>
+                <label style={labelStyle}>{t("common.product")}</label>
                 <select
                   value={draftProductoId}
                   onChange={(e) => setDraftProductoId(e.target.value)}
@@ -297,7 +297,7 @@ export default function MermasPage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Motivo</label>
+                <label style={labelStyle}>{t("common.reason")}</label>
                 <select
                   value={draftMotivo}
                   onChange={(e) => setDraftMotivo(e.target.value as MermaMotivo)}
