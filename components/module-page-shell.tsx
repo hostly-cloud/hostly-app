@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useI18n } from "@/components/i18n-provider";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 export type ModulePageShellProps = {
   title: ReactNode;
@@ -24,8 +26,11 @@ export default function ModulePageShell({
   maxWidth = DEFAULT_MAX,
   headerRight,
   backHref = "/dashboard",
-  backLabel = "← Volver al dashboard",
+  backLabel,
 }: ModulePageShellProps) {
+  const { t } = useI18n();
+  const resolvedBack = backLabel ?? t("common.backToDashboard");
+
   return (
     <main
       style={{
@@ -38,18 +43,29 @@ export default function ModulePageShell({
       }}
     >
       <div style={{ maxWidth, margin: "0 auto", width: "100%" }}>
-        <Link
-          href={backHref}
+        <div
           style={{
-            color: "#60a5fa",
-            textDecoration: "none",
-            fontWeight: "bold",
-            fontSize: 17,
-            display: "inline-block",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
           }}
         >
-          {backLabel}
-        </Link>
+          <Link
+            href={backHref}
+            style={{
+              color: "#60a5fa",
+              textDecoration: "none",
+              fontWeight: "bold",
+              fontSize: 17,
+              display: "inline-block",
+            }}
+          >
+            {resolvedBack}
+          </Link>
+          <LanguageSwitcher />
+        </div>
 
         <div
           style={{

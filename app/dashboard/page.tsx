@@ -1,9 +1,12 @@
 "use client";
 
+import { useI18n } from "@/components/i18n-provider";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { t } = useI18n();
 
   return (
     <main
@@ -15,13 +18,22 @@ export default function DashboardPage() {
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <h1 style={{ fontSize: "42px", marginBottom: "10px" }}>
-        Dashboard Hostly
-      </h1>
-
-      <p style={{ color: "#94a3b8", marginBottom: "40px" }}>
-        Bienvenido al panel principal de gestión
-      </p>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 16,
+          flexWrap: "wrap",
+          marginBottom: "40px",
+        }}
+      >
+        <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+          <h1 style={{ fontSize: "42px", marginBottom: "10px", marginTop: 0 }}>{t("dashboard.title")}</h1>
+          <p style={{ color: "#94a3b8", marginBottom: 0 }}>{t("dashboard.welcome")}</p>
+        </div>
+        <LanguageSwitcher />
+      </div>
 
       <div
         style={{
@@ -39,8 +51,8 @@ export default function DashboardPage() {
             cursor: "pointer",
           }}
         >
-          <h2>Stock</h2>
-          <p style={{ color: "#94a3b8" }}>Control de inventario</p>
+          <h2>{t("dashboard.moduleStock")}</h2>
+          <p style={{ color: "#94a3b8" }}>{t("dashboard.moduleStockDesc")}</p>
         </div>
 
         <div
@@ -65,8 +77,8 @@ export default function DashboardPage() {
             cursor: "pointer",
           }}
         >
-          <h2>Mermas</h2>
-          <p style={{ color: "#94a3b8" }}>Control de pérdidas</p>
+          <h2>{t("dashboard.moduleMermas")}</h2>
+          <p style={{ color: "#94a3b8" }}>{t("dashboard.moduleMermasDesc")}</p>
         </div>
 
         <div
@@ -78,8 +90,8 @@ export default function DashboardPage() {
             cursor: "pointer",
           }}
         >
-          <h2>Escandallos</h2>
-          <p style={{ color: "#94a3b8" }}>Costes de platos</p>
+          <h2>{t("dashboard.moduleEscandallos")}</h2>
+          <p style={{ color: "#94a3b8" }}>{t("dashboard.moduleEscandallosDesc")}</p>
         </div>
 
         <div
@@ -91,8 +103,8 @@ export default function DashboardPage() {
             cursor: "pointer",
           }}
         >
-          <h2>Reportes</h2>
-          <p style={{ color: "#94a3b8" }}>Análisis del negocio</p>
+          <h2>{t("dashboard.moduleReportes")}</h2>
+          <p style={{ color: "#94a3b8" }}>{t("dashboard.moduleReportesDesc")}</p>
         </div>
 
         <div
@@ -104,8 +116,8 @@ export default function DashboardPage() {
             cursor: "pointer",
           }}
         >
-          <h2>Usuarios</h2>
-          <p style={{ color: "#94a3b8" }}>Gestión de empleados</p>
+          <h2>{t("dashboard.moduleUsuarios")}</h2>
+          <p style={{ color: "#94a3b8" }}>{t("dashboard.moduleUsuariosDesc")}</p>
         </div>
       </div>
     </main>

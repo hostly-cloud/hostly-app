@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import {
   type CompraEstado,
@@ -66,10 +67,10 @@ function formatEuro(n: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 }
 
-function inventarioDesdeCompra(c: CompraLocal, ps: StockProducto[]): string {
+function inventarioDesdeCompra(c: CompraLocal, ps: StockProducto[], notLinkedLabel: string): string {
   const qty = coercedCantidadRecibida(c.cantidad_recibida as unknown);
   if (!c.producto_stock_id || qty == null || qty <= 0) {
-    return "Sin vincular";
+    return notLinkedLabel;
   }
   const live = ps.find((p) => p.id === c.producto_stock_id);
   const name = (c.producto_stock_nombre?.trim() || live?.nombre || "").trim() || "Producto";
@@ -78,6 +79,7 @@ function inventarioDesdeCompra(c: CompraLocal, ps: StockProducto[]): string {
 }
 
 export default function ComprasPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<CompraLocal[]>([]);
   const [productosStock, setProductosStock] = useState<StockProducto[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -214,16 +216,16 @@ export default function ComprasPage() {
     persistCompras(nextList);
     refreshStock();
     if (idEdit) {
-      setNotice("Compra actualizada.");
+      setNotice(t("compras.noticeUpdated"));
     } else {
-      setNotice("Compra creada.");
+      setNotice(t("compras.noticeCreated"));
     }
     closeForm();
     window.setTimeout(() => setNotice(null), 3200);
   }
 
   function removeCompra(id: string) {
-    if (!window.confirm("¿Eliminar esta compra?")) return;
+    if (!window.confirm(t("compras.confirmDelete"))) return;
     const c = loadCompras().find((x) => x.id === id);
     if (!c) return;
     let st = loadStock();
@@ -232,7 +234,7 @@ export default function ComprasPage() {
     const nextList = loadCompras().filter((x) => x.id !== id);
     persistCompras(nextList);
     refreshStock();
-    setNotice("Compra eliminada.");
+    setNotice(t("compras.noticeDeleted"));
     window.setTimeout(() => setNotice(null), 3200);
     if (editingId === id) closeForm();
   }
@@ -247,22 +249,22 @@ export default function ComprasPage() {
     const nextList = loadCompras().map((c) => (c.id === id ? compra : c));
     persistCompras(nextList);
     refreshStock();
-    setNotice("Estado actualizado.");
+    setNotice(t("compras.noticeEstadoUpdated"));
     window.setTimeout(() => setNotice(null), 2200);
   }
 
   if (!hydrated) {
     return (
-      <ModulePageShell title="Compras" subtitle="Cargando…" maxWidth={1180}>
-        <p style={{ color: "#94a3b8" }}>Preparando datos…</p>
+      <ModulePageShell title={t("compras.title")} subtitle={t("compras.loadingSubtitle")} maxWidth={1180}>
+        <p style={{ color: "#94a3b8" }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
   }
 
   return (
     <ModulePageShell
-      title="Compras"
-      subtitle="Gestiona pedidos, proveedores y seguimiento de compras del negocio."
+      title={t("compras.title")}
+      subtitle={t("compras.subtitle")}
       maxWidth={1180}
       headerRight={
         <button
@@ -279,7 +281,7 @@ export default function ComprasPage() {
             fontSize: 14,
           }}
         >
-          + Nueva compra
+          {t("compras.newPurchase")}
         </button>
       }
     >
@@ -309,11 +311,12 @@ export default function ComprasPage() {
             }}
           >
             <h2 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>
-              {editingId ? "Editar compra" : "Nueva compra"}
+              {editingId ? t("compras.editPurchase") : t("compras.newPurchaseForm")}
             </h2>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#94a3b8", lineHeight: 1.45 }}>
-              Al marcar <strong>Recibido</strong>, si eliges producto y cantidad, el stock se actualiza automáticamente
-              (una sola vez por recepción registrada).
+              {t("compras.formHintBeforeStrong")}{" "}
+              <strong>{t("compras.received")}</strong>
+              {t("compras.formHintAfterStrong")}
             </p>
             <div
               style={{
@@ -323,7 +326,7 @@ export default function ComprasPage() {
               }}
             >
               <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>Proveedor</label>
+                <label style={labelStyle}>{t("common.supplier")}</label>
                 <input
                   value={draftProveedor}
                   onChange={(e) => setDraftProveedor(e.target.value)}
@@ -332,11 +335,11 @@ export default function ComprasPage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Fecha</label>
+                <label style={labelStyle}>{t("common.date")}</label>
                 <input type="date" value={draftFecha} onChange={(e) => setDraftFecha(e.target.value)} style={inputStyle} />
               </div>
               <div>
-                <label style={labelStyle}>Estado</label>
+                <label style={labelStyle}>{t("common.status")}</label>
                 <select
                   value={draftEstado}
                   onChange={(e) => setDraftEstado(e.target.value as CompraEstado)}
@@ -350,7 +353,7 @@ export default function ComprasPage() {
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>Total (€)</label>
+                <label style={labelStyle}>{t("compras.totalEuro")}</label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -363,13 +366,13 @@ export default function ComprasPage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Producto en inventario (opcional)</label>
+                <label style={labelStyle}>{t("compras.optionalInventoryProduct")}</label>
                 <select
                   value={draftStockProductoId}
                   onChange={(e) => setDraftStockProductoId(e.target.value)}
                   style={inputStyle}
                 >
-                  <option value="">Sin vincular</option>
+                  <option value="">{t("compras.notLinked")}</option>
                   {productosStock.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nombre} ({p.unidad})
@@ -386,7 +389,7 @@ export default function ComprasPage() {
                 ) : null}
               </div>
               <div>
-                <label style={labelStyle}>Cantidad recibida (opcional)</label>
+                <label style={labelStyle}>{t("compras.qtyReceivedOptional")}</label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -394,12 +397,12 @@ export default function ComprasPage() {
                   min={0}
                   value={draftCantidad}
                   onChange={(e) => setDraftCantidad(e.target.value)}
-                  placeholder="Misma unidad que el producto"
+                  placeholder={t("compras.qtyPlaceholder")}
                   style={inputStyle}
                 />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>Notas (opcional)</label>
+                <label style={labelStyle}>{t("common.notesOptional")}</label>
                 <textarea
                   value={draftNotas}
                   onChange={(e) => setDraftNotas(e.target.value)}
@@ -426,7 +429,7 @@ export default function ComprasPage() {
                   cursor: "pointer",
                 }}
               >
-                Guardar cambios
+                {t("common.saveChanges")}
               </button>
               <button
                 type="button"
@@ -441,7 +444,7 @@ export default function ComprasPage() {
                   cursor: "pointer",
                 }}
               >
-                Cancelar
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -457,7 +460,7 @@ export default function ComprasPage() {
         >
           {sorted.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
-              <p style={{ margin: "0 0 16px", fontSize: 16 }}>No hay compras todavía.</p>
+              <p style={{ margin: "0 0 16px", fontSize: 16 }}>{t("compras.noPurchases")}</p>
               <button
                 type="button"
                 onClick={openCreate}
@@ -471,7 +474,7 @@ export default function ComprasPage() {
                   cursor: "pointer",
                 }}
               >
-                Crear la primera compra
+                {t("compras.createFirst")}
               </button>
             </div>
           ) : (
@@ -479,25 +482,33 @@ export default function ComprasPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
                 <thead>
                   <tr style={{ background: "#0f172a", textAlign: "left" }}>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>Proveedor</th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>Fecha</th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>Estado</th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
-                      Total
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
+                      {t("common.supplier")}
                     </th>
                     <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
-                      Inventario
+                      {t("common.date")}
                     </th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>Notas</th>
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
+                      {t("common.status")}
+                    </th>
                     <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
-                      Acciones
+                      {t("common.total")}
+                    </th>
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
+                      {t("common.inventory")}
+                    </th>
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
+                      {t("common.notes")}
+                    </th>
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
+                      {t("common.actions")}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {sorted.map((c) => {
                     const tone = rowTone(c.estado);
-                    const invLabel = inventarioDesdeCompra(c, productosStock);
+                    const invLabel = inventarioDesdeCompra(c, productosStock, t("compras.notLinked"));
                     return (
                       <tr
                         key={c.id}
@@ -555,7 +566,7 @@ export default function ComprasPage() {
                                 border: "1px solid rgba(34, 197, 94, 0.28)",
                               }}
                             >
-                              Aplicado a stock
+                              {t("compras.appliedToStock")}
                             </span>
                           ) : null}
                         </td>
@@ -589,7 +600,7 @@ export default function ComprasPage() {
                               fontSize: 13,
                             }}
                           >
-                            Editar
+                            {t("common.edit")}
                           </button>
                           <button
                             type="button"
@@ -605,7 +616,7 @@ export default function ComprasPage() {
                               fontSize: 13,
                             }}
                           >
-                            Eliminar
+                            {t("common.delete")}
                           </button>
                         </td>
                       </tr>

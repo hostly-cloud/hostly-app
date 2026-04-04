@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import {
   type MermaLocal,
@@ -60,6 +61,7 @@ function todayIso(): string {
 }
 
 export default function MermasPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<MermaLocal[]>([]);
   const [stockRows, setStockRows] = useState<StockProducto[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -170,7 +172,7 @@ export default function MermasPage() {
   }
 
   function remove(id: string) {
-    if (!window.confirm("¿Eliminar esta merma? Se devolverá al stock si ya estaba descontada.")) return;
+    if (!window.confirm(t("mermas.confirmDelete"))) return;
     const m = loadMermas().find((x) => x.id === id);
     if (!m) return;
     let st = loadStock();
@@ -185,16 +187,16 @@ export default function MermasPage() {
 
   if (!hydrated) {
     return (
-      <ModulePageShell title="Módulo de Mermas" subtitle="Cargando…">
-        <p style={{ color: "#94a3b8" }}>Preparando…</p>
+      <ModulePageShell title={t("mermas.title")} subtitle={t("mermas.loadingSubtitle")}>
+        <p style={{ color: "#94a3b8" }}>{t("common.preparing")}</p>
       </ModulePageShell>
     );
   }
 
   return (
     <ModulePageShell
-      title="Módulo de Mermas"
-      subtitle="Control de pérdidas, desperdicios y producto no aprovechado"
+      title={t("mermas.title")}
+      subtitle={t("mermas.subtitle")}
     >
       <div
         style={{
@@ -205,16 +207,18 @@ export default function MermasPage() {
         }}
       >
         <div style={{ backgroundColor: "#1e293b", padding: "24px", borderRadius: "20px" }}>
-          <h2 style={{ color: "white", margin: 0 }}>Mermas hoy</h2>
-          <p style={{ color: "#94a3b8", marginTop: "10px" }}>{mermasHoy} registro{mermasHoy === 1 ? "" : "s"}</p>
+          <h2 style={{ color: "white", margin: 0 }}>{t("mermas.today")}</h2>
+          <p style={{ color: "#94a3b8", marginTop: "10px" }}>
+            {mermasHoy} {mermasHoy === 1 ? t("mermas.recordSingular") : t("mermas.recordPlural")}
+          </p>
         </div>
         <div style={{ backgroundColor: "#1e293b", padding: "24px", borderRadius: "20px" }}>
-          <h2 style={{ color: "white", margin: 0 }}>Total registradas</h2>
+          <h2 style={{ color: "white", margin: 0 }}>{t("mermas.totalRegistered")}</h2>
           <p style={{ color: "#94a3b8", marginTop: "10px" }}>{items.length}</p>
         </div>
         <div style={{ backgroundColor: "#1e293b", padding: "24px", borderRadius: "20px" }}>
-          <h2 style={{ color: "white", margin: 0 }}>Inventario</h2>
-          <p style={{ color: "#94a3b8", marginTop: "10px" }}>{stockRows.length} productos</p>
+          <h2 style={{ color: "white", margin: 0 }}>{t("mermas.inventoryCard")}</h2>
+          <p style={{ color: "#94a3b8", marginTop: "10px" }}>{t("mermas.productsInInventory", { count: stockRows.length })}</p>
         </div>
       </div>
 
@@ -229,7 +233,7 @@ export default function MermasPage() {
             gap: 12,
           }}
         >
-          <h3 style={{ color: "white", margin: 0, fontSize: "24px" }}>Registro de mermas</h3>
+          <h3 style={{ color: "white", margin: 0, fontSize: "24px" }}>{t("mermas.registerTitle")}</h3>
           <button
             type="button"
             onClick={openCreate}
@@ -244,7 +248,7 @@ export default function MermasPage() {
               fontSize: "15px",
             }}
           >
-            + Añadir merma
+            {t("mermas.addMerma")}
           </button>
         </div>
 
@@ -258,9 +262,7 @@ export default function MermasPage() {
               background: "#0f172a",
             }}
           >
-            <p style={{ margin: "0 0 16px", color: "#94a3b8", fontSize: 14 }}>
-              Al guardar se descuenta del stock (no puede superar el disponible).
-            </p>
+            <p style={{ margin: "0 0 16px", color: "#94a3b8", fontSize: 14 }}>{t("mermas.formHint")}</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
               <div>
                 <label style={labelStyle}>Fecha</label>

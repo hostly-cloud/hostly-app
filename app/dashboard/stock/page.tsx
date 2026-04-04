@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import {
   type StockProducto,
@@ -34,6 +35,7 @@ const labelStyle: CSSProperties = {
 };
 
 export default function StockPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<StockProducto[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -123,7 +125,7 @@ export default function StockPage() {
         p.id === editingId ? { ...p, nombre, unidad: draftUnidad, stock_actual, stock_minimo } : p,
       );
       persist(next);
-      setNotice("Producto actualizado.");
+      setNotice(t("stock.noticeProductUpdated"));
     } else {
       const nuevo: StockProducto = {
         id: newStockProductoId(),
@@ -133,32 +135,32 @@ export default function StockPage() {
         stock_minimo,
       };
       persist([...items, nuevo]);
-      setNotice("Producto añadido.");
+      setNotice(t("stock.noticeProductAdded"));
     }
     closeForm();
     window.setTimeout(() => setNotice(null), 3200);
   }
 
   function removeProduct(id: string) {
-    if (!window.confirm("¿Eliminar este producto del stock local?")) return;
+    if (!window.confirm(t("stock.confirmDeleteProduct"))) return;
     persist(items.filter((p) => p.id !== id));
-    setNotice("Producto eliminado.");
+    setNotice(t("stock.noticeProductDeleted"));
     window.setTimeout(() => setNotice(null), 3200);
     if (editingId === id) closeForm();
   }
 
   if (!hydrated) {
     return (
-      <ModulePageShell title="Stock" subtitle="Cargando inventario…" maxWidth={1180}>
-        <p style={{ color: "#94a3b8" }}>Preparando datos…</p>
+      <ModulePageShell title={t("stock.title")} subtitle={t("stock.loadingSubtitle")} maxWidth={1180}>
+        <p style={{ color: "#94a3b8" }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
   }
 
   return (
     <ModulePageShell
-      title="Stock"
-      subtitle="Inventario con unidades, niveles mínimos y alertas de reposición. Los datos se guardan en este navegador hasta conectar con el backend."
+      title={t("stock.title")}
+      subtitle={t("stock.subtitle")}
       maxWidth={1180}
       headerRight={
         <button
@@ -175,7 +177,7 @@ export default function StockPage() {
             fontSize: 14,
           }}
         >
-          + Añadir producto
+          {t("stock.addProduct")}
         </button>
       }
     >
@@ -206,8 +208,7 @@ export default function StockPage() {
               fontSize: 14,
             }}
           >
-            <strong>{bajosCount}</strong> producto{bajosCount === 1 ? "" : "s"} con stock en o por debajo del mínimo.
-            Revisa la tabla.
+            {t("stock.lowStockBanner", { count: bajosCount })}
           </div>
         ) : null}
 
@@ -221,7 +222,7 @@ export default function StockPage() {
             }}
           >
             <h2 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>
-              {editingId ? "Editar producto" : "Nuevo producto"}
+              {editingId ? t("stock.editProduct") : t("stock.newProduct")}
             </h2>
             <div
               style={{
@@ -231,7 +232,7 @@ export default function StockPage() {
               }}
             >
               <div>
-                <label style={labelStyle}>Nombre</label>
+                <label style={labelStyle}>{t("common.name")}</label>
                 <input
                   value={draftNombre}
                   onChange={(e) => setDraftNombre(e.target.value)}
@@ -240,7 +241,7 @@ export default function StockPage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Unidad</label>
+                <label style={labelStyle}>{t("common.unit")}</label>
                 <select
                   value={draftUnidad}
                   onChange={(e) => setDraftUnidad(e.target.value as UnidadStock)}
@@ -254,7 +255,7 @@ export default function StockPage() {
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>Stock actual</label>
+                <label style={labelStyle}>{t("common.currentStock")}</label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -267,7 +268,7 @@ export default function StockPage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Stock mínimo</label>
+                <label style={labelStyle}>{t("common.minStock")}</label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -297,7 +298,7 @@ export default function StockPage() {
                   cursor: "pointer",
                 }}
               >
-                Guardar cambios
+                {t("common.saveChanges")}
               </button>
               <button
                 type="button"
@@ -312,7 +313,7 @@ export default function StockPage() {
                   cursor: "pointer",
                 }}
               >
-                Cancelar
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -328,7 +329,7 @@ export default function StockPage() {
         >
           {sorted.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
-              <p style={{ margin: "0 0 16px", fontSize: 16 }}>No hay productos en stock.</p>
+              <p style={{ margin: "0 0 16px", fontSize: 16 }}>{t("stock.noProducts")}</p>
               <button
                 type="button"
                 onClick={openCreate}
@@ -342,7 +343,7 @@ export default function StockPage() {
                   cursor: "pointer",
                 }}
               >
-                Añadir el primero
+                {t("stock.addFirst")}
               </button>
             </div>
           ) : (
@@ -350,17 +351,23 @@ export default function StockPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
                 <thead>
                   <tr style={{ background: "#0f172a", textAlign: "left" }}>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>Producto</th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>Unidad</th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
-                      Stock actual
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
+                      {t("common.product")}
+                    </th>
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
+                      {t("common.unit")}
                     </th>
                     <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
-                      Stock mínimo
+                      {t("common.currentStock")}
                     </th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>Estado</th>
                     <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
-                      Acciones
+                      {t("common.minStock")}
+                    </th>
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
+                      {t("common.status")}
+                    </th>
+                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
+                      {t("common.actions")}
                     </th>
                   </tr>
                 </thead>
@@ -413,7 +420,7 @@ export default function StockPage() {
                                 border: "1px solid rgba(239, 68, 68, 0.35)",
                               }}
                             >
-                              Stock bajo
+                              {t("stock.stockLow")}
                             </span>
                           ) : (
                             <span
@@ -428,7 +435,7 @@ export default function StockPage() {
                                 border: "1px solid rgba(34, 197, 94, 0.3)",
                               }}
                             >
-                              OK
+                              {t("stock.ok")}
                             </span>
                           )}
                         </td>
@@ -448,7 +455,7 @@ export default function StockPage() {
                               fontSize: 13,
                             }}
                           >
-                            Editar
+                            {t("common.edit")}
                           </button>
                           <button
                             type="button"
@@ -464,7 +471,7 @@ export default function StockPage() {
                               fontSize: 13,
                             }}
                           >
-                            Eliminar
+                            {t("common.delete")}
                           </button>
                         </td>
                       </tr>
