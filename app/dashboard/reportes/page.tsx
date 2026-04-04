@@ -1,11 +1,13 @@
+"use client";
+
+import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 
 export default function ReportesPage() {
+  const { t } = useI18n();
+
   return (
-    <ModulePageShell
-      title="Reportes"
-      subtitle="Análisis del negocio y métricas operativas."
-    >
+    <ModulePageShell title={t("reportes.title")} subtitle={t("reportes.subtitle")}>
       <div
         style={{
           backgroundColor: "#1e293b",
@@ -15,10 +17,7 @@ export default function ReportesPage() {
           border: "1px solid #334155",
         }}
       >
-        <p style={{ margin: 0, color: "#cbd5e1", lineHeight: 1.6 }}>
-          Módulo en construcción. Aquí podrás consultar resúmenes de compras, mermas, costes y
-          rendimiento cuando conectemos los datos y los gráficos.
-        </p>
+        <p style={{ margin: 0, color: "#cbd5e1", lineHeight: 1.6 }}>{t("reportes.body")}</p>
       </div>
     </ModulePageShell>
   );

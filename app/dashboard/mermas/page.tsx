@@ -265,7 +265,7 @@ export default function MermasPage() {
             <p style={{ margin: "0 0 16px", color: "#94a3b8", fontSize: 14 }}>{t("mermas.formHint")}</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
               <div>
-                <label style={labelStyle}>Fecha</label>
+                <label style={labelStyle}>{t("common.date")}</label>
                 <input type="date" value={draftFecha} onChange={(e) => setDraftFecha(e.target.value)} style={inputStyle} />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
@@ -275,7 +275,7 @@ export default function MermasPage() {
                   onChange={(e) => setDraftProductoId(e.target.value)}
                   style={inputStyle}
                 >
-                  <option value="">Seleccionar…</option>
+                  <option value="">{t("common.selectEllipsis")}</option>
                   {stockRows.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nombre} — {p.stock_actual} {p.unidad}
@@ -284,7 +284,7 @@ export default function MermasPage() {
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>Cantidad</label>
+                <label style={labelStyle}>{t("common.quantity")}</label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -292,7 +292,7 @@ export default function MermasPage() {
                   min={0}
                   value={draftCantidad}
                   onChange={(e) => setDraftCantidad(e.target.value)}
-                  placeholder="Ej. 1,5"
+                  placeholder={t("mermas.qtyPlaceholder")}
                   style={inputStyle}
                 />
               </div>
@@ -311,7 +311,7 @@ export default function MermasPage() {
                 </select>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>Notas (opcional)</label>
+                <label style={labelStyle}>{t("common.notesOptional")}</label>
                 <input
                   value={draftNotas}
                   onChange={(e) => setDraftNotas(e.target.value)}
@@ -336,7 +336,7 @@ export default function MermasPage() {
                   cursor: "pointer",
                 }}
               >
-                Guardar merma
+                {t("mermas.saveMerma")}
               </button>
               <button
                 type="button"
@@ -350,7 +350,7 @@ export default function MermasPage() {
                   cursor: "pointer",
                 }}
               >
-                Cancelar
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -358,7 +358,7 @@ export default function MermasPage() {
 
         {sorted.length === 0 ? (
           <p style={{ color: "#94a3b8", margin: "24px 0", textAlign: "center" }}>
-            No hay mermas. Pulsa «+ Añadir merma» para registrar la primera.
+            {t("mermas.emptyList")}
           </p>
         ) : (
           <>
@@ -372,11 +372,11 @@ export default function MermasPage() {
                 borderBottom: "1px solid #334155",
               }}
             >
-              <span>Producto</span>
-              <span>Cantidad</span>
-              <span>Motivo</span>
-              <span>Fecha</span>
-              <span style={{ textAlign: "right" }}>Acciones</span>
+              <span>{t("common.product")}</span>
+              <span>{t("common.quantity")}</span>
+              <span>{t("common.reason")}</span>
+              <span>{t("common.date")}</span>
+              <span style={{ textAlign: "right" }}>{t("common.actions")}</span>
             </div>
             {sorted.map((m) => (
               <div key={m.id} style={rowStyle}>
@@ -402,7 +402,7 @@ export default function MermasPage() {
                       fontSize: 13,
                     }}
                   >
-                    Editar
+                    {t("common.edit")}
                   </button>
                   <button
                     type="button"
@@ -417,7 +417,7 @@ export default function MermasPage() {
                       fontSize: 13,
                     }}
                   >
-                    Eliminar
+                    {t("common.delete")}
                   </button>
                 </span>
               </div>

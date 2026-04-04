@@ -32,6 +32,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
     <div className={className} style={wrap} role="group" aria-label={t("common.language")}>
       {SUPPORTED_LOCALES.map((code: Locale) => {
         const active = locale === code;
+        const borderColor: string = active ? "rgba(96, 165, 250, 0.65)" : "rgba(148, 163, 184, 0.45)";
         return (
           <button
             key={code}
@@ -40,8 +41,8 @@ export function LanguageSwitcher({ className }: { className?: string }) {
             aria-pressed={active}
             style={{
               ...btnBase,
-              background: active ? "rgba(59, 130, 246, 0.35)" : btnBase.background,
-              borderColor: active ? "rgba(96, 165, 250, 0.65)" : btnBase.border,
+              background: active ? "rgba(59, 130, 246, 0.35)" : "rgba(15, 23, 42, 0.6)",
+              borderColor,
               color: active ? "#fff" : "#cbd5e1",
             }}
           >
