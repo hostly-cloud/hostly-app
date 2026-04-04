@@ -1,11 +1,13 @@
+"use client";
+
+import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 
 export default function UsuariosPage() {
+  const { t } = useI18n();
+
   return (
-    <ModulePageShell
-      title="Usuarios"
-      subtitle="Gestión de empleados y permisos del equipo."
-    >
+    <ModulePageShell title={t("users.title")} subtitle={t("users.subtitle")}>
       <div
         style={{
           backgroundColor: "#1e293b",
@@ -15,10 +17,7 @@ export default function UsuariosPage() {
           border: "1px solid #334155",
         }}
       >
-        <p style={{ margin: 0, color: "#cbd5e1", lineHeight: 1.6 }}>
-          Módulo en construcción. Aquí podrás invitar usuarios, asignar roles y revisar el acceso al
-          panel cuando conectemos la autenticación.
-        </p>
+        <p style={{ margin: 0, color: "#cbd5e1", lineHeight: 1.6 }}>{t("users.body")}</p>
       </div>
     </ModulePageShell>
   );

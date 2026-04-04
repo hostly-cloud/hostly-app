@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/components/i18n-provider";
 import { supabase } from "@/lib/supabase";
 import { mockInventarioProductos } from "@/lib/inventario-productos";
 
@@ -48,6 +49,7 @@ function parseNumber(value: string, fallback: number): number {
 }
 
 export default function InventarioPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<ProductoRow[]>([]);
   const [drafts, setDrafts] = useState<DraftById>({});
   const [loading, setLoading] = useState(true);
@@ -109,7 +111,7 @@ export default function InventarioPage() {
         }
         return next;
       });
-      setError(e instanceof Error ? e.message : "No se pudo cargar inventario (modo ejemplo).");
+      setError(e instanceof Error ? e.message : t("inventory.errorLoadMock"));
     } finally {
       setLoading(false);
     }
@@ -190,7 +192,7 @@ export default function InventarioPage() {
         if (error) throw error;
 
         const inserted = (data ?? null) as ProductoRow | null;
-        if (!inserted) throw new Error("No se pudo crear el producto.");
+        if (!inserted) throw new Error(t("inventory.errorCreateProduct"));
 
         setItems((prev) => prev.map((r) => (String(r.id) === key ? inserted : r)));
         setDrafts((prev) => {
@@ -226,7 +228,7 @@ export default function InventarioPage() {
       );
     } catch (e) {
       // fallback seguro: no rompemos la pantalla
-      setError(e instanceof Error ? e.message : "Error al guardar");
+      setError(e instanceof Error ? e.message : t("inventory.errorSave"));
     } finally {
       setSavingById((prev) => ({ ...prev, [key]: false }));
     }
@@ -258,7 +260,7 @@ export default function InventarioPage() {
         return next;
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al eliminar");
+      setError(e instanceof Error ? e.message : t("inventory.errorDelete"));
     } finally {
       setDeletingById((prev) => ({ ...prev, [key]: false }));
     }
@@ -270,10 +272,8 @@ export default function InventarioPage() {
     <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 650, margin: 0 }}>Inventario</h1>
-          <p style={{ margin: "6px 0 0", color: "rgba(0,0,0,0.65)" }}>
-            Gestiona stock, coste unitario y stock mínimo de tus productos.
-          </p>
+          <h1 style={{ fontSize: 22, fontWeight: 650, margin: 0 }}>{t("inventory.title")}</h1>
+          <p style={{ margin: "6px 0 0", color: "rgba(0,0,0,0.65)" }}>{t("inventory.subtitle")}</p>
         </div>
         <button
           onClick={cargar}
@@ -286,7 +286,7 @@ export default function InventarioPage() {
             cursor: "pointer",
           }}
         >
-          Recargar
+          {t("common.reload")}
         </button>
       </div>
 
@@ -316,7 +316,9 @@ export default function InventarioPage() {
             borderRadius: 12,
           }}
         >
-          Mostrando datos de ejemplo: no se pudo cargar la tabla <code>inventario_productos</code> en Supabase.
+          {t("inventory.mockBannerBefore")}
+          <code>inventario_productos</code>
+          {t("inventory.mockBannerAfter")}
         </div>
       ) : null}
 
@@ -333,7 +335,7 @@ export default function InventarioPage() {
             fontWeight: 600,
           }}
         >
-          + Añadir producto
+          {t("inventory.addProduct")}
         </button>
       </div>
 
@@ -350,16 +352,16 @@ export default function InventarioPage() {
           <thead>
             <tr>
               {[
-                { label: "Nombre", align: "left", width: undefined },
-                { label: "Unidad", align: "left", width: 120 },
-                { label: "Stock actual", align: "right", width: 150 },
-                { label: "Coste unitario (€)", align: "right", width: 170 },
-                { label: "Stock mínimo", align: "right", width: 150 },
-                { label: "Guardar", align: "right", width: 140 },
-                { label: "Eliminar", align: "right", width: 140 },
+                { id: "name", label: t("common.name"), align: "left" as const, width: undefined },
+                { id: "unit", label: t("common.unit"), align: "left" as const, width: 120 },
+                { id: "stock", label: t("common.currentStock"), align: "right" as const, width: 150 },
+                { id: "cost", label: t("inventory.colUnitCostEuro"), align: "right" as const, width: 170 },
+                { id: "min", label: t("common.minStock"), align: "right" as const, width: 150 },
+                { id: "save", label: t("common.save"), align: "right" as const, width: 140 },
+                { id: "del", label: t("common.delete"), align: "right" as const, width: 140 },
               ].map((h) => (
                 <th
-                  key={h.label}
+                  key={h.id}
                   style={{
                     textAlign: h.align as "left" | "right",
                     fontWeight: 600,
@@ -379,7 +381,7 @@ export default function InventarioPage() {
             {rowsForRender.length === 0 ? (
               <tr>
                 <td colSpan={7} style={{ padding: 16, color: "rgba(0,0,0,0.65)" }}>
-                  {loading ? "Cargando productos..." : "No hay productos en inventario."}
+                  {loading ? t("inventory.loadingProducts") : t("inventory.emptyProducts")}
                 </td>
               </tr>
             ) : (
@@ -399,8 +401,8 @@ export default function InventarioPage() {
                       <input
                         value={draft.nombre}
                         onChange={(e) => updateDraft(item.id, { nombre: e.target.value })}
-                        placeholder={item.nombre ?? "Producto"}
-                        aria-label="Nombre"
+                        placeholder={item.nombre ?? t("inventory.placeholderProduct")}
+                        aria-label={t("common.name")}
                         style={{
                           width: "100%",
                           padding: "8px 10px",
@@ -416,7 +418,7 @@ export default function InventarioPage() {
                       <select
                         value={draft.unidad}
                         onChange={(e) => updateDraft(item.id, { unidad: e.target.value })}
-                        aria-label="Unidad"
+                        aria-label={t("common.unit")}
                         style={{
                           width: "100%",
                           padding: "8px 10px",
@@ -449,7 +451,7 @@ export default function InventarioPage() {
                         value={draft.stock_actual}
                         onChange={(e) => updateDraft(item.id, { stock_actual: e.target.value })}
                         placeholder={item.stock_actual == null ? "" : String(roundTo(item.stock_actual, 3))}
-                        aria-label="Stock actual"
+                        aria-label={t("common.currentStock")}
                         style={{
                           width: "100%",
                           maxWidth: 120,
@@ -477,7 +479,7 @@ export default function InventarioPage() {
                         value={draft.coste_unitario}
                         onChange={(e) => updateDraft(item.id, { coste_unitario: e.target.value })}
                         placeholder={item.coste_unitario == null ? "" : formatMoney2(item.coste_unitario)}
-                        aria-label="Coste unitario"
+                        aria-label={t("inventory.ariaUnitCost")}
                         style={{
                           width: "100%",
                           maxWidth: 140,
@@ -505,7 +507,7 @@ export default function InventarioPage() {
                         value={draft.stock_minimo}
                         onChange={(e) => updateDraft(item.id, { stock_minimo: e.target.value })}
                         placeholder={item.stock_minimo == null ? "" : String(roundTo(item.stock_minimo, 3))}
-                        aria-label="Stock mínimo"
+                        aria-label={t("common.minStock")}
                         style={{
                           width: "100%",
                           maxWidth: 120,
@@ -532,7 +534,7 @@ export default function InventarioPage() {
                           fontWeight: 600,
                         }}
                       >
-                        {savingById[key] ? "Guardando..." : "Guardar"}
+                        {savingById[key] ? t("common.saving") : t("common.save")}
                       </button>
                     </td>
 
@@ -550,7 +552,7 @@ export default function InventarioPage() {
                           fontWeight: 650,
                         }}
                       >
-                        {deletingById[key] ? "Eliminando..." : "Eliminar"}
+                        {deletingById[key] ? t("common.deleting") : t("common.delete")}
                       </button>
                     </td>
                   </tr>

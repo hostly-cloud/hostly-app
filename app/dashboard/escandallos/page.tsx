@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import { supabase } from "@/lib/supabase";
 
@@ -23,6 +24,7 @@ type DraftById = Record<
 const ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY = "hostly.escandallos.coste_total_override.v1";
 
 export default function EscandallosPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<EscandalloRow[]>([]);
   const [drafts, setDrafts] = useState<DraftById>({});
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
@@ -170,8 +172,8 @@ export default function EscandallosPage() {
 
   return (
     <ModulePageShell
-      title="Escandallos"
-      subtitle="Edita el coste y el precio de venta. El margen se calcula automáticamente."
+      title={t("escandallos.title")}
+      subtitle={t("escandallos.subtitle")}
       maxWidth={1180}
       headerRight={
         <button
@@ -187,7 +189,7 @@ export default function EscandallosPage() {
             fontWeight: 600,
           }}
         >
-          Recargar
+          {t("common.reload")}
         </button>
       }
     >
@@ -232,7 +234,7 @@ export default function EscandallosPage() {
                     fontSize: 13,
                   }}
                 >
-                  Nombre
+                  {t("common.name")}
                 </th>
                 <th
                   style={{
@@ -246,7 +248,7 @@ export default function EscandallosPage() {
                     width: "18%",
                   }}
                 >
-                  Coste (€)
+                  {t("escandallos.colCostEuro")}
                 </th>
                 <th
                   style={{
@@ -260,7 +262,7 @@ export default function EscandallosPage() {
                     width: "18%",
                   }}
                 >
-                  Venta (€)
+                  {t("escandallos.colSaleEuro")}
                 </th>
                 <th
                   style={{
@@ -274,7 +276,7 @@ export default function EscandallosPage() {
                     width: "14%",
                   }}
                 >
-                  Margen (%)
+                  {t("escandallos.colMarginPct")}
                 </th>
                 <th
                   style={{
@@ -288,7 +290,7 @@ export default function EscandallosPage() {
                     width: "15%",
                   }}
                 >
-                  Guardar
+                  {t("common.save")}
                 </th>
               </tr>
             </thead>
@@ -305,7 +307,11 @@ export default function EscandallosPage() {
                     fontSize: 15,
                   }}
                 >
-                  No hay platos en la tabla <code style={{ color: "#0f172a", background: "#e2e8f0", padding: "2px 6px", borderRadius: 6 }}>escandallos</code>.
+                  {t("escandallos.emptyBefore")}
+                  <code style={{ color: "#0f172a", background: "#e2e8f0", padding: "2px 6px", borderRadius: 6 }}>
+                    escandallos
+                  </code>
+                  {t("escandallos.emptyAfter")}
                 </td>
               </tr>
             ) : (
@@ -352,7 +358,9 @@ export default function EscandallosPage() {
                         value={draft.coste_total}
                         onChange={(e) => updateDraft(item.id, "coste_total", e.target.value)}
                         placeholder={item.coste_total == null ? "" : formatMoney2OrDash(item.coste_total)}
-                        aria-label={`Coste total para ${item.nombre_plato ?? "plato"}`}
+                        aria-label={t("escandallos.ariaTotalCost", {
+                          name: item.nombre_plato?.trim() || t("escandallos.unnamedDish"),
+                        })}
                         style={{
                           width: "100%",
                           maxWidth: 152,
@@ -386,7 +394,9 @@ export default function EscandallosPage() {
                         value={draft.precio_venta}
                         onChange={(e) => updateDraft(item.id, "precio_venta", e.target.value)}
                         placeholder={item.precio_venta == null ? "" : formatMoneyUpTo2OrDash(item.precio_venta)}
-                        aria-label={`Precio de venta para ${item.nombre_plato ?? "plato"}`}
+                        aria-label={t("escandallos.ariaSalePrice", {
+                          name: item.nombre_plato?.trim() || t("escandallos.unnamedDish"),
+                        })}
                         style={{
                           width: "100%",
                           maxWidth: 152,
@@ -443,7 +453,7 @@ export default function EscandallosPage() {
                           fontSize: 13,
                         }}
                       >
-                        {savingById[key] ? "Guardando..." : "Guardar"}
+                        {savingById[key] ? t("common.saving") : t("common.save")}
                       </button>
                     </td>
                   </tr>
