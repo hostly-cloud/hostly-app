@@ -256,8 +256,10 @@ export default function StockPage() {
               <div>
                 <label style={labelStyle}>Stock actual</label>
                 <input
-                  type="text"
+                  type="number"
                   inputMode="decimal"
+                  step="any"
+                  min={0}
                   value={draftActual}
                   onChange={(e) => setDraftActual(e.target.value)}
                   placeholder="0"
@@ -267,8 +269,10 @@ export default function StockPage() {
               <div>
                 <label style={labelStyle}>Stock mínimo</label>
                 <input
-                  type="text"
+                  type="number"
                   inputMode="decimal"
+                  step="any"
+                  min={0}
                   value={draftMinimo}
                   onChange={(e) => setDraftMinimo(e.target.value)}
                   placeholder="0"

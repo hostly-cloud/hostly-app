@@ -472,7 +472,7 @@ export default function InventarioPage() {
                     >
                       <input
                         type="number"
-                        step="any"
+                        step="0.01"
                         inputMode="decimal"
                         value={draft.coste_unitario}
                         onChange={(e) => updateDraft(item.id, { coste_unitario: e.target.value })}

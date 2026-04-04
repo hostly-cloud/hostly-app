@@ -347,7 +347,7 @@ export default function EscandallosPage() {
                     >
                       <input
                         type="number"
-                        step="any"
+                        step="0.01"
                         inputMode="decimal"
                         value={draft.coste_total}
                         onChange={(e) => updateDraft(item.id, "coste_total", e.target.value)}
@@ -381,7 +381,7 @@ export default function EscandallosPage() {
                     >
                       <input
                         type="number"
-                        step="any"
+                        step="0.01"
                         inputMode="decimal"
                         value={draft.precio_venta}
                         onChange={(e) => updateDraft(item.id, "precio_venta", e.target.value)}

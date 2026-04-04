@@ -352,8 +352,10 @@ export default function ComprasPage() {
               <div>
                 <label style={labelStyle}>Total (€)</label>
                 <input
-                  type="text"
+                  type="number"
                   inputMode="decimal"
+                  step="0.01"
+                  min={0}
                   value={draftTotal}
                   onChange={(e) => setDraftTotal(e.target.value)}
                   placeholder="0,00"
@@ -386,8 +388,10 @@ export default function ComprasPage() {
               <div>
                 <label style={labelStyle}>Cantidad recibida (opcional)</label>
                 <input
-                  type="text"
+                  type="number"
                   inputMode="decimal"
+                  step="any"
+                  min={0}
                   value={draftCantidad}
                   onChange={(e) => setDraftCantidad(e.target.value)}
                   placeholder="Misma unidad que el producto"

@@ -284,6 +284,10 @@ export default function MermasPage() {
               <div>
                 <label style={labelStyle}>Cantidad</label>
                 <input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  min={0}
                   value={draftCantidad}
                   onChange={(e) => setDraftCantidad(e.target.value)}
                   placeholder="Ej. 1,5"

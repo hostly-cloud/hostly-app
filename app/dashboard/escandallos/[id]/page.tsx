@@ -781,7 +781,7 @@ export default function EscandalloDetallePage() {
                     >
                       <input
                         type="number"
-                        step="any"
+                        step="0.01"
                         inputMode="decimal"
                         value={r.coste_unitario}
                         onChange={(e) => updateIngredientRow(r.id, { coste_unitario: e.target.value })}
