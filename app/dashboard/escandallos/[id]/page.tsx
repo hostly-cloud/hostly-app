@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import ModulePageShell from "@/components/module-page-shell";
+import { useI18n } from "@/components/i18n-provider";
 import { supabase } from "@/lib/supabase";
-import { fetchInventarioProductos, type InventarioProducto } from "@/lib/inventario-productos";
 
 type Escandallo = {
   id: string | number;
@@ -13,63 +13,35 @@ type Escandallo = {
   precio_venta: number | null;
 };
 
-type IngredientRow = {
-  id: string;
-  ingrediente: string;
-  cantidad_usada: number;
+/** Fila en public.escandallo_ingredientes */
+type EscandalloIngredienteRow = {
+  id: string | number;
+  escandallo_id: number;
+  producto_id: number;
+  cantidad: number;
   unidad: string;
-  coste_unitario: number;
-  inventario_producto_id?: string | number | null;
+  created_at?: string;
+};
+
+/** public.productos — columnas de coste opcionales según esquema real */
+type ProductoRow = {
+  id: number | string;
+  nombre?: string | null;
+  unidad?: string | null;
+  coste_unitario?: unknown;
+  coste?: unknown;
+  precio_compra?: unknown;
+  precio_coste?: unknown;
 };
 
 type IngredientDraftRow = {
-  id: string;
-  ingrediente: string;
-  cantidad_usada: string;
+  clientRowId: string;
+  producto_id: string;
+  cantidad: string;
   unidad: string;
-  coste_unitario: string;
-  inventario_producto_id: string;
-  isNew?: boolean;
 };
 
-const ING_SELECT_WITH_INV = "id, ingrediente, cantidad_usada, unidad, coste_unitario, inventario_producto_id";
-const ING_SELECT_BASIC = "id, ingrediente, cantidad_usada, unidad, coste_unitario";
-
-function isMissingInventarioFkError(err: { message?: string } | null): boolean {
-  const m = (err?.message ?? "").toLowerCase();
-  return m.includes("inventario_producto_id") || m.includes("schema cache");
-}
-
-function parseInventarioProductoId(value: string): number | null {
-  const t = value.trim();
-  if (!t) return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
-}
-
-function draftFromIngredientRow(r: IngredientRow): IngredientDraftRow {
-  const inv =
-    r.inventario_producto_id == null || r.inventario_producto_id === ""
-      ? ""
-      : String(r.inventario_producto_id);
-  return {
-    id: String(r.id),
-    ingrediente: r.ingrediente,
-    cantidad_usada: String(r.cantidad_usada),
-    unidad: r.unidad,
-    coste_unitario: String(r.coste_unitario),
-    inventario_producto_id: inv,
-  };
-}
-
-function costeUnitarioStringFromProducto(p: InventarioProducto): string {
-  const cu = p.coste_unitario;
-  if (cu == null || !Number.isFinite(cu)) return "";
-  const rounded = Math.round((cu + Number.EPSILON) * 100) / 100;
-  return rounded.toFixed(2);
-}
-
-const ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY = "hostly.escandallos.coste_total_override.v1";
+const ING_SELECT = "id, escandallo_id, producto_id, cantidad, unidad, created_at";
 
 function formatMoneyOrDash(value: number | null | undefined): string {
   if (value == null) return "-";
@@ -86,11 +58,6 @@ function formatMarginOrDash(costeTotal: number | null, precioVenta: number | nul
   return `${m.toFixed(1)}%`;
 }
 
-function safeNumber(n: unknown, fallback = 0): number {
-  const v = typeof n === "number" ? n : Number(n);
-  return Number.isFinite(v) ? v : fallback;
-}
-
 function parseNullableNumber(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -99,36 +66,74 @@ function parseNullableNumber(value: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function setLocalCosteTotalOverride(id: string | number, coste_total: number) {
-  try {
-    const raw = localStorage.getItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
-    parsed[String(id)] = coste_total;
-    localStorage.setItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY, JSON.stringify(parsed));
-  } catch {
-    // noop (best-effort fallback)
-  }
+function parseProductoId(value: string): number | null {
+  const t = value.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
 }
 
-function mockIngredientsForEscandallo(id: string): IngredientRow[] {
-  // Mock minimal y estable para no bloquear el módulo si faltan relaciones en Supabase.
-  // Se puede reemplazar por tabla real más adelante.
-  if (id === "1") {
-    return [
-      { id: "m1", ingrediente: "Arroz bomba", cantidad_usada: 0.12, unidad: "kg", coste_unitario: 3.8 },
-      { id: "m2", ingrediente: "Caldo", cantidad_usada: 0.35, unidad: "l", coste_unitario: 1.1 },
-      { id: "m3", ingrediente: "Pollo", cantidad_usada: 0.18, unidad: "kg", coste_unitario: 6.4 },
-    ];
-  }
+function unitCostFromProductoRow(p: ProductoRow | undefined): number | null {
+  if (!p) return null;
+  const raw = p.coste_unitario ?? p.coste ?? p.precio_compra ?? p.precio_coste;
+  if (raw == null || raw === "") return null;
+  const n = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
 
-  return [
-    { id: "m1", ingrediente: "Ingrediente A", cantidad_usada: 1, unidad: "uds", coste_unitario: 0.35 },
-    { id: "m2", ingrediente: "Ingrediente B", cantidad_usada: 0.25, unidad: "kg", coste_unitario: 4.2 },
-    { id: "m3", ingrediente: "Ingrediente C", cantidad_usada: 0.1, unidad: "l", coste_unitario: 2.6 },
-  ];
+function dbRowsToDraft(rows: EscandalloIngredienteRow[]): IngredientDraftRow[] {
+  return rows.map((row) => ({
+    clientRowId: `db-${String(row.id)}`,
+    producto_id: String(row.producto_id),
+    cantidad: String(row.cantidad),
+    unidad: row.unidad ?? "",
+  }));
+}
+
+function classifyRows(rows: IngredientDraftRow[]): {
+  incomplete: boolean;
+  valid: { producto_id: number; cantidad: number; unidad: string }[];
+} {
+  const valid: { producto_id: number; cantidad: number; unidad: string }[] = [];
+  for (const r of rows) {
+    const pid = parseProductoId(r.producto_id);
+    const qty = parseNullableNumber(r.cantidad);
+    const u = r.unidad.trim();
+    const empty = !pid && !r.cantidad.trim() && !u;
+    if (empty) continue;
+    if (!pid || qty == null || qty <= 0 || !u) {
+      return { incomplete: true, valid: [] };
+    }
+    valid.push({ producto_id: pid, cantidad: qty, unidad: u });
+  }
+  return { incomplete: false, valid };
+}
+
+function lineCostEuro(r: IngredientDraftRow, byId: Map<number, ProductoRow>): number {
+  const qty = parseNullableNumber(r.cantidad) ?? 0;
+  const pid = parseProductoId(r.producto_id);
+  if (!pid || qty <= 0) return 0;
+  const uc = unitCostFromProductoRow(byId.get(pid));
+  if (uc == null) return 0;
+  return qty * uc;
+}
+
+async function fetchProductosCatalog(): Promise<{ productos: ProductoRow[]; errorMessage: string | null }> {
+  const selectors = ["id, nombre, unidad, coste_unitario", "id, nombre, unidad, coste", "id, nombre, unidad"];
+  let lastMsg: string | null = null;
+  for (const sel of selectors) {
+    const { data, error } = await supabase
+      .from("productos")
+      .select(sel)
+      .order("nombre", { ascending: true, nullsFirst: false });
+    if (!error) return { productos: (data ?? []) as unknown as ProductoRow[], errorMessage: null };
+    lastMsg = error.message;
+  }
+  return { productos: [], errorMessage: lastMsg };
 }
 
 export default function EscandalloDetallePage() {
+  const { t } = useI18n();
   const params = useParams();
   const id =
     typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] ?? "" : "";
@@ -137,24 +142,46 @@ export default function EscandalloDetallePage() {
 
   const [plato, setPlato] = useState<Escandallo | null>(null);
   const [ingredientes, setIngredientes] = useState<IngredientDraftRow[]>([]);
-  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const [productosCatalog, setProductosCatalog] = useState<ProductoRow[]>([]);
+  const [productosCatalogError, setProductosCatalogError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [usingMock, setUsingMock] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [inventarioProductos, setInventarioProductos] = useState<InventarioProducto[]>([]);
+
+  const productosById = useMemo(() => {
+    const m = new Map<number, ProductoRow>();
+    for (const p of productosCatalog) {
+      const n = Number(p.id);
+      if (Number.isFinite(n)) m.set(n, p);
+    }
+    return m;
+  }, [productosCatalog]);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { productos } = await fetchInventarioProductos();
-      if (alive) setInventarioProductos(productos);
+      const { productos, errorMessage } = await fetchProductosCatalog();
+      if (!alive) return;
+      setProductosCatalog(productos);
+      setProductosCatalogError(errorMessage);
     })();
     return () => {
       alive = false;
     };
   }, []);
+
+  const loadIngredientes = useCallback(async (): Promise<{ ok: boolean; rows: IngredientDraftRow[] }> => {
+    const { data, error: ingError } = await supabase
+      .from("escandallo_ingredientes")
+      .select(ING_SELECT)
+      .eq("escandallo_id", idNum)
+      .order("created_at", { ascending: true });
+    if (ingError) {
+      return { ok: false, rows: [] };
+    }
+    return { ok: true, rows: dbRowsToDraft((data ?? []) as EscandalloIngredienteRow[]) };
+  }, [idNum]);
 
   useEffect(() => {
     let alive = true;
@@ -164,8 +191,6 @@ export default function EscandalloDetallePage() {
         setError(null);
         setPlato(null);
         setIngredientes([]);
-        setDeletedIds([]);
-        setUsingMock(false);
         setSaveMsg(null);
         setLoading(false);
         return;
@@ -173,7 +198,6 @@ export default function EscandalloDetallePage() {
 
       setLoading(true);
       setError(null);
-      setUsingMock(false);
       setSaveMsg(null);
 
       try {
@@ -189,59 +213,32 @@ export default function EscandalloDetallePage() {
           setError(platoError.message);
           setPlato(null);
           setIngredientes([]);
-          setDeletedIds([]);
           return;
         }
 
         const platoRow = (platoData ?? null) as Escandallo | null;
         setPlato(platoRow);
 
-        // Intento de carga de ingredientes. Si la tabla/relación no existe aún, se usa mock.
-        const ingFirst = await supabase
+        const { data: ingData, error: ingError } = await supabase
           .from("escandallo_ingredientes")
-          .select(ING_SELECT_WITH_INV)
+          .select(ING_SELECT)
           .eq("escandallo_id", idNum)
-          .order("ingrediente", { ascending: true, nullsFirst: false });
-
-        let ingData: IngredientRow[] | null = ingFirst.data as IngredientRow[] | null;
-        let ingError = ingFirst.error;
-        if (ingFirst.error && isMissingInventarioFkError(ingFirst.error)) {
-          const ingSecond = await supabase
-            .from("escandallo_ingredientes")
-            .select(ING_SELECT_BASIC)
-            .eq("escandallo_id", idNum)
-            .order("ingrediente", { ascending: true, nullsFirst: false });
-          ingData = ingSecond.data as IngredientRow[] | null;
-          ingError = ingSecond.error;
-        }
+          .order("created_at", { ascending: true });
 
         if (!alive) return;
 
         if (ingError) {
-          setUsingMock(true);
-          const rows = mockIngredientsForEscandallo(String(idNum));
-          setIngredientes(rows.map((r) => draftFromIngredientRow(r)));
-          setDeletedIds([]);
+          setError(ingError.message);
+          setIngredientes([]);
           return;
         }
 
-        const rows = ((ingData ?? []) as IngredientRow[]).map((r) => draftFromIngredientRow(r));
-
-        if (rows.length) {
-          setIngredientes(rows);
-          setUsingMock(false);
-          setDeletedIds([]);
-        } else {
-          setIngredientes(mockIngredientsForEscandallo(String(idNum)).map((r) => draftFromIngredientRow(r)));
-          setUsingMock(true);
-          setDeletedIds([]);
-        }
+        setIngredientes(dbRowsToDraft((ingData ?? []) as EscandalloIngredienteRow[]));
       } catch (e) {
         if (!alive) return;
-        setError(e instanceof Error ? e.message : "Error inesperado");
+        setError(e instanceof Error ? e.message : t("escandalloDetail.unexpectedError"));
         setPlato(null);
         setIngredientes([]);
-        setDeletedIds([]);
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -252,25 +249,27 @@ export default function EscandalloDetallePage() {
     return () => {
       alive = false;
     };
-  }, [idOk, idNum]);
+  }, [idOk, idNum, t]);
 
   function updateIngredientRow(rowId: string, patch: Partial<IngredientDraftRow>) {
-    setIngredientes((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...patch } : r)));
+    setIngredientes((prev) => prev.map((r) => (r.clientRowId === rowId ? { ...r, ...patch } : r)));
   }
 
-  function onSelectProductoInventario(rowId: string, productId: string) {
+  function onSelectProducto(rowId: string, productId: string) {
     if (!productId) {
-      updateIngredientRow(rowId, { inventario_producto_id: "" });
+      updateIngredientRow(rowId, { producto_id: "" });
       return;
     }
-    const p = inventarioProductos.find((x) => String(x.id) === productId);
-    if (!p) return;
-    updateIngredientRow(rowId, {
-      inventario_producto_id: String(p.id),
-      ingrediente: p.nombre ?? "",
-      unidad: (p.unidad ?? "kg").trim() || "kg",
-      coste_unitario: costeUnitarioStringFromProducto(p),
-    });
+    const n = Number(productId);
+    const p = Number.isFinite(n) ? productosById.get(n) : undefined;
+    setIngredientes((prev) =>
+      prev.map((r) => {
+        if (r.clientRowId !== rowId) return r;
+        const nextUnidad =
+          r.unidad.trim() || (p?.unidad && String(p.unidad).trim()) || "kg";
+        return { ...r, producto_id: productId, unidad: nextUnidad };
+      }),
+    );
   }
 
   function addIngredientRow() {
@@ -278,22 +277,23 @@ export default function EscandalloDetallePage() {
     setIngredientes((prev) => [
       ...prev,
       {
-        id: tmpId,
-        ingrediente: "",
-        cantidad_usada: "",
-        unidad: "kg",
-        coste_unitario: "",
-        inventario_producto_id: "",
-        isNew: true,
+        clientRowId: tmpId,
+        producto_id: "",
+        cantidad: "",
+        unidad: "",
       },
     ]);
   }
 
   function removeIngredientRow(rowId: string) {
-    setIngredientes((prev) => prev.filter((r) => r.id !== rowId));
-    if (!rowId.startsWith("tmp_")) {
-      setDeletedIds((prev) => (prev.includes(rowId) ? prev : [...prev, rowId]));
-    }
+    setIngredientes((prev) => prev.filter((r) => r.clientRowId !== rowId));
+  }
+
+  function nombreProductoDisplay(productoId: string): string {
+    const pid = parseProductoId(productoId);
+    if (pid == null) return "—";
+    const p = productosById.get(pid);
+    return p?.nombre?.trim() || t("escandalloDetail.unknownProductName", { id: pid });
   }
 
   async function guardarCambios() {
@@ -301,153 +301,116 @@ export default function EscandalloDetallePage() {
     setError(null);
 
     if (!idOk) {
-      setSaveMsg("Escandallo no encontrado");
+      setSaveMsg(t("escandalloDetail.msgSaveNotFound"));
       return;
     }
 
-    const costeTotalParaGuardar = ingredientes.reduce((acc, r) => {
-      const cantidad = parseNullableNumber(r.cantidad_usada) ?? 0;
-      const unit = parseNullableNumber(r.coste_unitario) ?? 0;
-      return acc + cantidad * unit;
-    }, 0);
-
-    if (usingMock) {
-      setPlato((prev) => (prev ? { ...prev, coste_total: costeTotalParaGuardar } : prev));
-      setLocalCosteTotalOverride(idNum, costeTotalParaGuardar);
-      setSaveMsg("Cambios guardados (modo ejemplo).");
+    const { incomplete, valid } = classifyRows(ingredientes);
+    if (incomplete) {
+      setError(t("escandalloDetail.errorRowIncomplete"));
       return;
     }
+
+    const costeTotalParaGuardar = ingredientes.reduce((acc, r) => acc + lineCostEuro(r, productosById), 0);
 
     setSaving(true);
     try {
-      const toDelete = deletedIds;
-      const existing = ingredientes.filter((r) => !r.id.startsWith("tmp_"));
-      const created = ingredientes.filter((r) => r.id.startsWith("tmp_"));
+      const { error: delErr } = await supabase.from("escandallo_ingredientes").delete().eq("escandallo_id", idNum);
+      if (delErr) throw delErr;
 
-      // Deletes
-      if (toDelete.length) {
-        const { error: delErr } = await supabase.from("escandallo_ingredientes").delete().in("id", toDelete);
-        if (delErr) throw delErr;
+      if (valid.length > 0) {
+        const payload = valid.map((v) => ({
+          escandallo_id: idNum,
+          producto_id: v.producto_id,
+          cantidad: v.cantidad,
+          unidad: v.unidad,
+        }));
+        const { error: insErr } = await supabase.from("escandallo_ingredientes").insert(payload);
+        if (insErr) throw insErr;
       }
-
-      // Updates (solo si la fila tiene datos numéricos válidos; si no, se guarda null y Supabase decide)
-      for (const r of existing) {
-        const cantidad = parseNullableNumber(r.cantidad_usada);
-        const coste = parseNullableNumber(r.coste_unitario);
-        const fk = parseInventarioProductoId(r.inventario_producto_id);
-        const base = {
-          ingrediente: r.ingrediente.trim() || null,
-          cantidad_usada: cantidad,
-          unidad: r.unidad,
-          coste_unitario: coste,
-        };
-
-        let updRes = await supabase
-          .from("escandallo_ingredientes")
-          .update({ ...base, inventario_producto_id: fk })
-          .eq("id", r.id);
-
-        if (updRes.error && isMissingInventarioFkError(updRes.error)) {
-          updRes = await supabase.from("escandallo_ingredientes").update(base).eq("id", r.id);
-        }
-
-        if (updRes.error) throw updRes.error;
-      }
-
-      // Inserts
-      if (created.length) {
-        const buildPayload = (includeFk: boolean) =>
-          created.map((r) => {
-            const row: Record<string, unknown> = {
-              escandallo_id: idNum,
-              ingrediente: r.ingrediente.trim() || null,
-              cantidad_usada: parseNullableNumber(r.cantidad_usada),
-              unidad: r.unidad,
-              coste_unitario: parseNullableNumber(r.coste_unitario),
-            };
-            if (includeFk) row.inventario_producto_id = parseInventarioProductoId(r.inventario_producto_id);
-            return row;
-          });
-
-        let insRes = await supabase.from("escandallo_ingredientes").insert(buildPayload(true));
-        if (insRes.error && isMissingInventarioFkError(insRes.error)) {
-          insRes = await supabase.from("escandallo_ingredientes").insert(buildPayload(false));
-        }
-        if (insRes.error) throw insRes.error;
-      }
-
-      // Reload para recuperar IDs reales y estado consistente
-      const reloadFirst = await supabase
-        .from("escandallo_ingredientes")
-        .select(ING_SELECT_WITH_INV)
-        .eq("escandallo_id", idNum)
-        .order("ingrediente", { ascending: true, nullsFirst: false });
-
-      let ingData: IngredientRow[] | null = reloadFirst.data as IngredientRow[] | null;
-      let ingError = reloadFirst.error;
-      if (reloadFirst.error && isMissingInventarioFkError(reloadFirst.error)) {
-        const reloadSecond = await supabase
-          .from("escandallo_ingredientes")
-          .select(ING_SELECT_BASIC)
-          .eq("escandallo_id", idNum)
-          .order("ingrediente", { ascending: true, nullsFirst: false });
-        ingData = reloadSecond.data as IngredientRow[] | null;
-        ingError = reloadSecond.error;
-      }
-
-      if (ingError) throw ingError;
-
-      const rows = ((ingData ?? []) as IngredientRow[]).map((r) => draftFromIngredientRow(r));
-
-      setIngredientes(rows);
-      setDeletedIds([]);
-      setPlato((prev) => (prev ? { ...prev, coste_total: costeTotalParaGuardar } : prev));
 
       const { error: upCostErr } = await supabase
         .from("escandallos")
         .update({ coste_total: costeTotalParaGuardar })
         .eq("id", idNum);
 
+      const reloaded = await loadIngredientes();
+      if (!reloaded.ok) {
+        throw new Error(t("escandalloDetail.errorReloadIngredients"));
+      }
+      setIngredientes(reloaded.rows);
+
       if (upCostErr) {
-        setLocalCosteTotalOverride(idNum, costeTotalParaGuardar);
-        setSaveMsg("Ingredientes guardados. No se pudo actualizar el coste total en Supabase.");
+        setPlato((prev) => (prev ? { ...prev, coste_total: costeTotalParaGuardar } : prev));
+        setSaveMsg(`${t("escandalloDetail.msgIngredientsSavedCostUpdateFail")} (${upCostErr.message})`);
         return;
       }
 
-      setSaveMsg("Cambios guardados.");
-    } catch (e) {
-      // Si el guardado falla (tabla inexistente / permisos / etc), volvemos a modo mock sin romper UX.
-      setUsingMock(true);
       setPlato((prev) => (prev ? { ...prev, coste_total: costeTotalParaGuardar } : prev));
-      setLocalCosteTotalOverride(idNum, costeTotalParaGuardar);
-      setSaveMsg("No se pudo guardar en Supabase. Sigues en modo ejemplo.");
-      setError(e instanceof Error ? e.message : "Error al guardar");
+      setSaveMsg(t("escandalloDetail.msgSaved"));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t("escandalloDetail.errorSave");
+      setError(msg);
+      setSaveMsg(null);
     } finally {
       setSaving(false);
     }
   }
 
-  const draftRowsForCalc = ingredientes;
-  const costeTotalCalculado = useMemo(() => {
-    return draftRowsForCalc.reduce((acc, r) => {
-      const cantidad = parseNullableNumber(r.cantidad_usada) ?? 0;
-      const unit = parseNullableNumber(r.coste_unitario) ?? 0;
-      return acc + cantidad * unit;
-    }, 0);
-  }, [draftRowsForCalc]);
+  const costeTotalCalculado = useMemo(
+    () => ingredientes.reduce((acc, r) => acc + lineCostEuro(r, productosById), 0),
+    [ingredientes, productosById],
+  );
 
   const costeTotalActual = plato?.coste_total ?? null;
   const precioVentaActual = plato?.precio_venta ?? null;
-  const margen = formatMarginOrDash(costeTotalActual, precioVentaActual);
+  const margenEstimado = formatMarginOrDash(costeTotalCalculado, precioVentaActual);
+
+  const inputDark = {
+    padding: "9px 11px",
+    borderRadius: 10,
+    border: "1px solid #334155",
+    backgroundColor: "#0f172a",
+    color: "#f8fafc",
+    fontSize: 14,
+    outline: "none",
+    boxSizing: "border-box" as const,
+  };
+
+  const selectDark = {
+    ...inputDark,
+    cursor: "pointer" as const,
+  };
 
   return (
     <ModulePageShell
       backHref="/dashboard/escandallos"
-      backLabel="← Volver a escandallos"
-      title={
-        loading ? "Cargando..." : idOk ? plato?.nombre_plato ?? "Escandallo no encontrado" : "Escandallo no encontrado"
+      backLabel={
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "10px 18px",
+            borderRadius: 12,
+            border: "1px solid #334155",
+            background: "#1e293b",
+            color: "#93c5fd",
+            fontWeight: 700,
+            fontSize: 15,
+            boxShadow: "0 4px 14px rgba(0,0,0,0.2)",
+          }}
+        >
+          {t("escandalloDetail.backToList")}
+        </span>
       }
-      subtitle="Coste calculado por ingredientes y comparación con el coste/venta actuales."
+      title={
+        loading
+          ? t("common.loading")
+          : idOk
+            ? plato?.nombre_plato ?? t("escandalloDetail.notFoundTitle")
+            : t("escandalloDetail.notFoundTitle")
+      }
+      subtitle={t("escandalloDetail.subtitle")}
       maxWidth={1100}
       headerRight={
         <button
@@ -463,19 +426,38 @@ export default function EscandalloDetallePage() {
             fontWeight: 600,
           }}
         >
-          Recargar
+          {t("common.reload")}
         </button>
       }
     >
+      {productosCatalogError ? (
+        <div
+          style={{
+            marginTop: 14,
+            border: "1px solid rgba(234, 179, 8, 0.45)",
+            background: "rgba(234, 179, 8, 0.12)",
+            color: "#fef08a",
+            padding: "12px 14px",
+            borderRadius: 12,
+            fontSize: 14,
+            lineHeight: 1.45,
+          }}
+        >
+          {t("escandalloDetail.errorLoadProductos")}: {productosCatalogError}
+        </div>
+      ) : null}
+
       {error ? (
         <div
           style={{
             marginTop: 14,
-            border: "1px solid rgba(220, 38, 38, 0.35)",
-            background: "rgba(220, 38, 38, 0.06)",
-            color: "rgb(153, 27, 27)",
-            padding: "10px 12px",
+            border: "1px solid rgba(248, 113, 113, 0.45)",
+            background: "rgba(127, 29, 29, 0.35)",
+            color: "#fecaca",
+            padding: "12px 14px",
             borderRadius: 12,
+            fontSize: 14,
+            lineHeight: 1.45,
           }}
         >
           {error}
@@ -486,14 +468,15 @@ export default function EscandalloDetallePage() {
         <div
           style={{
             marginTop: 14,
-            border: "1px solid rgba(0,0,0,0.10)",
-            background: "rgba(0,0,0,0.02)",
-            color: "rgba(0,0,0,0.72)",
-            padding: "10px 12px",
+            border: "1px solid #475569",
+            background: "#1e293b",
+            color: "#cbd5e1",
+            padding: "12px 14px",
             borderRadius: 12,
+            fontSize: 15,
           }}
         >
-          Escandallo no encontrado
+          {t("escandalloDetail.notFoundBody")}
         </div>
       ) : null}
 
@@ -501,92 +484,122 @@ export default function EscandalloDetallePage() {
         <div
           style={{
             marginTop: 14,
-            border: "1px solid rgba(0,0,0,0.10)",
-            background: "rgba(0,0,0,0.02)",
-            color: "rgba(0,0,0,0.72)",
-            padding: "10px 12px",
+            border: "1px solid #475569",
+            background: "#1e293b",
+            color: "#e2e8f0",
+            padding: "12px 14px",
             borderRadius: 12,
+            fontSize: 14,
           }}
         >
           {saveMsg}
         </div>
       ) : null}
 
-      {usingMock ? (
-        <div
-          style={{
-            marginTop: 14,
-            border: "1px solid rgba(234, 179, 8, 0.35)",
-            background: "rgba(234, 179, 8, 0.10)",
-            color: "rgba(0,0,0,0.78)",
-            padding: "10px 12px",
-            borderRadius: 12,
-          }}
-        >
-          Mostrando datos de ejemplo: aún no hay ingredientes conectados en Supabase para este plato.
-        </div>
-      ) : null}
-
       <div
         style={{
-          marginTop: 16,
+          marginTop: 20,
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 12,
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+          gap: 14,
         }}
       >
         <div
           style={{
-            border: "1px solid rgba(0,0,0,0.10)",
-            borderRadius: 14,
-            background: "white",
-            padding: 14,
+            border: "1px solid #334155",
+            borderRadius: 16,
+            background: "#1e293b",
+            padding: "16px 18px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
           }}
         >
-          <div style={{ color: "rgba(0,0,0,0.6)", fontSize: 12, fontWeight: 650 }}>Coste total actual</div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ color: "#94a3b8", fontSize: 12, fontWeight: 650, letterSpacing: "0.02em" }}>
+            {t("escandalloDetail.costeRegistrado")}
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 22,
+              fontWeight: 700,
+              fontVariantNumeric: "tabular-nums",
+              color: "#f8fafc",
+            }}
+          >
             {formatMoneyOrDash(costeTotalActual)} €
           </div>
         </div>
 
         <div
           style={{
-            border: "1px solid rgba(0,0,0,0.10)",
-            borderRadius: 14,
-            background: "white",
-            padding: 14,
+            border: "1px solid #334155",
+            borderRadius: 16,
+            background: "#1e293b",
+            padding: "16px 18px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
           }}
         >
-          <div style={{ color: "rgba(0,0,0,0.6)", fontSize: 12, fontWeight: 650 }}>Precio de venta actual</div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ color: "#94a3b8", fontSize: 12, fontWeight: 650, letterSpacing: "0.02em" }}>
+            {t("escandalloDetail.precioVenta")}
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 22,
+              fontWeight: 700,
+              fontVariantNumeric: "tabular-nums",
+              color: "#f8fafc",
+            }}
+          >
             {formatMoneyOrDash(precioVentaActual)} €
           </div>
         </div>
 
         <div
           style={{
-            border: "1px solid rgba(0,0,0,0.10)",
-            borderRadius: 14,
-            background: "white",
-            padding: 14,
+            border: "1px solid #334155",
+            borderRadius: 16,
+            background: "#1e293b",
+            padding: "16px 18px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
           }}
         >
-          <div style={{ color: "rgba(0,0,0,0.6)", fontSize: 12, fontWeight: 650 }}>Margen</div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-            {margen}
+          <div style={{ color: "#94a3b8", fontSize: 12, fontWeight: 650, letterSpacing: "0.02em" }}>
+            {t("escandalloDetail.margenEstimado")}
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 22,
+              fontWeight: 700,
+              fontVariantNumeric: "tabular-nums",
+              color: "#86efac",
+            }}
+          >
+            {margenEstimado}
           </div>
         </div>
 
         <div
           style={{
-            border: "1px solid rgba(0,0,0,0.10)",
-            borderRadius: 14,
-            background: "white",
-            padding: 14,
+            border: "1px solid #334155",
+            borderRadius: 16,
+            background: "#1e293b",
+            padding: "16px 18px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
           }}
         >
-          <div style={{ color: "rgba(0,0,0,0.6)", fontSize: 12, fontWeight: 650 }}>Coste total calculado</div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ color: "#94a3b8", fontSize: 12, fontWeight: 650, letterSpacing: "0.02em" }}>
+            {t("escandalloDetail.costePorIngredientes")}
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 22,
+              fontWeight: 700,
+              fontVariantNumeric: "tabular-nums",
+              color: "#fde68a",
+            }}
+          >
             {formatMoneyOrDash(costeTotalCalculado)} €
           </div>
         </div>
@@ -594,11 +607,12 @@ export default function EscandalloDetallePage() {
 
       <div
         style={{
-          marginTop: 16,
-          border: "1px solid rgba(0,0,0,0.10)",
-          borderRadius: 14,
+          marginTop: 20,
+          border: "1px solid #334155",
+          borderRadius: 16,
           overflow: "hidden",
-          background: "white",
+          background: "#1e293b",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.22)",
         }}
       >
         <div
@@ -607,261 +621,269 @@ export default function EscandalloDetallePage() {
             justifyContent: "space-between",
             alignItems: "center",
             gap: 12,
-            padding: "12px 14px",
-            borderBottom: "1px solid rgba(0,0,0,0.08)",
-            background: "rgba(0,0,0,0.02)",
+            padding: "14px 16px",
+            borderBottom: "1px solid #334155",
+            background: "#0f172a",
+            flexWrap: "wrap",
           }}
         >
-          <div style={{ fontWeight: 650 }}>Ingredientes</div>
-          <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 17, color: "#f8fafc" }}>{t("escandalloDetail.ingredients")}</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button
               onClick={addIngredientRow}
               type="button"
               style={{
-                border: "1px solid rgba(0,0,0,0.12)",
-                background: "white",
-                padding: "8px 12px",
+                border: "1px solid #334155",
+                background: "#1e293b",
+                color: "#e2e8f0",
+                padding: "9px 14px",
                 borderRadius: 10,
                 cursor: "pointer",
                 fontWeight: 600,
+                fontSize: 14,
               }}
             >
-              + Añadir ingrediente
+              {t("escandalloDetail.addIngredient")}
             </button>
             <button
               onClick={guardarCambios}
               type="button"
-              disabled={saving || loading || !idOk || !plato}
+              disabled={saving || loading || !idOk || !plato || Boolean(productosCatalogError)}
               style={{
-                border: "1px solid rgba(0,0,0,0.12)",
-                background: saving ? "rgba(0,0,0,0.04)" : "rgba(0,0,0,0.02)",
-                padding: "8px 12px",
+                border: "none",
+                background: saving ? "#166534" : "#22c55e",
+                color: "#ffffff",
+                padding: "9px 16px",
                 borderRadius: 10,
-                cursor: saving ? "not-allowed" : "pointer",
+                cursor: saving || loading || !idOk || !plato || productosCatalogError ? "not-allowed" : "pointer",
                 fontWeight: 700,
+                fontSize: 14,
+                opacity: saving || loading || !idOk || !plato || productosCatalogError ? 0.65 : 1,
               }}
             >
-              {saving ? "Guardando..." : "Guardar cambios"}
+              {saving ? t("common.saving") : t("common.saveChanges")}
             </button>
           </div>
         </div>
 
-        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
-          <thead>
-            <tr>
-              {[
-                { label: "Producto inventario", align: "left", width: 200 },
-                { label: "Ingrediente", align: "left", width: undefined },
-                { label: "Cantidad usada", align: "right", width: 160 },
-                { label: "Unidad", align: "left", width: 120 },
-                { label: "Coste unitario (€)", align: "right", width: 170 },
-                { label: "Coste usado (€)", align: "right", width: 170 },
-                { label: "Eliminar", align: "right", width: 120 },
-              ].map((h) => (
-                <th
-                  key={h.label}
+        <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", background: "#1e293b" }}>
+          <table style={{ width: "100%", minWidth: 860, borderCollapse: "separate", borderSpacing: 0 }}>
+            <thead>
+              <tr>
+                {[
+                  { label: t("escandalloDetail.colProduct"), align: "left", width: 200 },
+                  { label: t("escandalloDetail.colIngredient"), align: "left", width: undefined },
+                  { label: t("escandalloDetail.colQtyUsed"), align: "right", width: 140 },
+                  { label: t("escandalloDetail.colUnit"), align: "left", width: 110 },
+                  { label: t("escandalloDetail.colUnitCostEuro"), align: "right", width: 130 },
+                  { label: t("escandalloDetail.colLineCostEuro"), align: "right", width: 130 },
+                  { label: t("escandalloDetail.colActions"), align: "right", width: 100 },
+                ].map((h) => (
+                  <th
+                    key={h.label}
+                    style={{
+                      textAlign: h.align as "left" | "right",
+                      fontWeight: 600,
+                      padding: "12px 14px",
+                      borderBottom: "1px solid #334155",
+                      background: "#0f172a",
+                      width: h.width,
+                      color: "#94a3b8",
+                      fontSize: 12,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    {h.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {ingredientes.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    style={{
+                      padding: 22,
+                      color: "#94a3b8",
+                      background: "#1e293b",
+                      fontSize: 15,
+                      textAlign: "center",
+                    }}
+                  >
+                    {loading ? t("escandalloDetail.loadingIngredients") : t("escandalloDetail.noIngredients")}
+                  </td>
+                </tr>
+              ) : (
+                ingredientes.map((r, idx) => {
+                  const pid = parseProductoId(r.producto_id);
+                  const p = pid != null ? productosById.get(pid) : undefined;
+                  const unitCost = unitCostFromProductoRow(p);
+                  const cantidadN = parseNullableNumber(r.cantidad) ?? 0;
+                  const lineTotal =
+                    unitCost != null && cantidadN > 0 && pid != null ? cantidadN * unitCost : null;
+                  const rowBg = idx % 2 === 0 ? "#1e293b" : "rgba(15, 23, 42, 0.55)";
+
+                  return (
+                    <tr key={r.clientRowId} style={{ background: rowBg }}>
+                      <td style={{ padding: "12px 14px", borderBottom: "1px solid #334155", verticalAlign: "middle" }}>
+                        <select
+                          value={r.producto_id}
+                          onChange={(e) => onSelectProducto(r.clientRowId, e.target.value)}
+                          aria-label={t("escandalloDetail.ariaProduct")}
+                          style={{ ...selectDark, width: "100%", maxWidth: 240 }}
+                        >
+                          <option value="">{t("escandalloDetail.selectProductPlaceholder")}</option>
+                          {productosCatalog.map((prod) => (
+                            <option key={String(prod.id)} value={String(prod.id)}>
+                              {prod.nombre?.trim() || t("escandalloDetail.productFallback", { id: prod.id })}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 14px",
+                          borderBottom: "1px solid #334155",
+                          verticalAlign: "middle",
+                          color: "#e2e8f0",
+                          fontWeight: 600,
+                          fontSize: 14,
+                        }}
+                      >
+                        {nombreProductoDisplay(r.producto_id)}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 14px",
+                          borderBottom: "1px solid #334155",
+                          textAlign: "right",
+                          fontVariantNumeric: "tabular-nums",
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        <input
+                          type="number"
+                          step="any"
+                          inputMode="decimal"
+                          value={r.cantidad}
+                          onChange={(e) => updateIngredientRow(r.clientRowId, { cantidad: e.target.value })}
+                          placeholder={t("escandalloDetail.placeholderQty")}
+                          aria-label={t("escandalloDetail.ariaQtyUsed")}
+                          style={{
+                            ...inputDark,
+                            width: "100%",
+                            maxWidth: 120,
+                            marginLeft: "auto",
+                            display: "block",
+                          }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px 14px", borderBottom: "1px solid #334155", verticalAlign: "middle" }}>
+                        <input
+                          value={r.unidad}
+                          onChange={(e) => updateIngredientRow(r.clientRowId, { unidad: e.target.value })}
+                          placeholder={t("escandalloDetail.placeholderUnit")}
+                          aria-label={t("escandalloDetail.ariaUnit")}
+                          style={{ ...inputDark, width: "100%" }}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 14px",
+                          borderBottom: "1px solid #334155",
+                          textAlign: "right",
+                          fontVariantNumeric: "tabular-nums",
+                          verticalAlign: "middle",
+                          color: unitCost != null ? "#cbd5e1" : "#64748b",
+                          fontWeight: 600,
+                          fontSize: 14,
+                        }}
+                      >
+                        {unitCost != null ? `${formatMoneyOrDash(unitCost)} €` : "—"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 14px",
+                          borderBottom: "1px solid #334155",
+                          textAlign: "right",
+                          fontVariantNumeric: "tabular-nums",
+                          fontWeight: 700,
+                          color: lineTotal != null ? "#fde68a" : "#64748b",
+                          fontSize: 15,
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        {lineTotal != null ? `${formatMoneyOrDash(lineTotal)} €` : "—"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 14px",
+                          borderBottom: "1px solid #334155",
+                          textAlign: "right",
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        <button
+                          onClick={() => removeIngredientRow(r.clientRowId)}
+                          type="button"
+                          style={{
+                            border: "1px solid #64748b",
+                            background: "rgba(15, 23, 42, 0.6)",
+                            color: "#fecaca",
+                            padding: "8px 12px",
+                            borderRadius: 10,
+                            cursor: "pointer",
+                            fontWeight: 650,
+                            fontSize: 13,
+                          }}
+                        >
+                          {t("common.delete")}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+
+            <tfoot>
+              <tr>
+                <td
+                  colSpan={6}
                   style={{
-                    textAlign: h.align as "left" | "right",
-                    fontWeight: 600,
-                    padding: "12px 14px",
-                    borderBottom: "1px solid rgba(0,0,0,0.08)",
-                    background: "rgba(0,0,0,0.02)",
-                    width: h.width,
+                    padding: "14px 16px",
+                    textAlign: "right",
+                    fontWeight: 700,
+                    background: "#0f172a",
+                    borderTop: "1px solid #334155",
+                    color: "#cbd5e1",
+                    fontSize: 14,
                   }}
                 >
-                  {h.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {ingredientes.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: 16, color: "rgba(0,0,0,0.65)" }}>
-                  {loading ? "Cargando ingredientes..." : "No hay ingredientes para este plato."}
+                  {t("escandalloDetail.footerLineTotal")}
+                </td>
+                <td
+                  style={{
+                    padding: "14px 16px",
+                    textAlign: "right",
+                    fontWeight: 800,
+                    fontVariantNumeric: "tabular-nums",
+                    background: "#0f172a",
+                    borderTop: "1px solid #334155",
+                    color: "#fde68a",
+                    fontSize: 17,
+                  }}
+                >
+                  {formatMoneyOrDash(costeTotalCalculado)} €
                 </td>
               </tr>
-            ) : (
-              ingredientes.map((r) => {
-                const cantidadN = parseNullableNumber(r.cantidad_usada) ?? 0;
-                const unitN = parseNullableNumber(r.coste_unitario) ?? 0;
-                const usado = cantidadN * unitN;
-
-                return (
-                  <tr key={r.id}>
-                    <td style={{ padding: "12px 14px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-                      <select
-                        value={r.inventario_producto_id}
-                        onChange={(e) => onSelectProductoInventario(r.id, e.target.value)}
-                        aria-label="Producto inventario"
-                        style={{
-                          width: "100%",
-                          maxWidth: 220,
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(0,0,0,0.14)",
-                          outline: "none",
-                          background: "white",
-                        }}
-                      >
-                        <option value="">— Manual / sin vincular</option>
-                        {inventarioProductos.map((p) => (
-                          <option key={String(p.id)} value={String(p.id)}>
-                            {p.nombre ?? `Producto ${p.id}`}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: "12px 14px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-                      <input
-                        value={r.ingrediente}
-                        onChange={(e) => updateIngredientRow(r.id, { ingrediente: e.target.value })}
-                        placeholder="Ingrediente"
-                        aria-label="Ingrediente"
-                        style={{
-                          width: "100%",
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(0,0,0,0.14)",
-                          outline: "none",
-                          fontWeight: 550,
-                        }}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        borderBottom: "1px solid rgba(0,0,0,0.06)",
-                        textAlign: "right",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      <input
-                        type="number"
-                        step="any"
-                        inputMode="decimal"
-                        value={r.cantidad_usada}
-                        onChange={(e) => updateIngredientRow(r.id, { cantidad_usada: e.target.value })}
-                        placeholder="0"
-                        aria-label="Cantidad usada"
-                        style={{
-                          width: "100%",
-                          maxWidth: 140,
-                          textAlign: "right",
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(0,0,0,0.14)",
-                          outline: "none",
-                        }}
-                      />
-                    </td>
-                    <td style={{ padding: "12px 14px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-                      <input
-                        value={r.unidad}
-                        onChange={(e) => updateIngredientRow(r.id, { unidad: e.target.value })}
-                        placeholder="kg"
-                        aria-label="Unidad"
-                        style={{
-                          width: "100%",
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(0,0,0,0.14)",
-                          outline: "none",
-                        }}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        borderBottom: "1px solid rgba(0,0,0,0.06)",
-                        textAlign: "right",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        value={r.coste_unitario}
-                        onChange={(e) => updateIngredientRow(r.id, { coste_unitario: e.target.value })}
-                        placeholder="0.00"
-                        aria-label="Coste unitario"
-                        style={{
-                          width: "100%",
-                          maxWidth: 150,
-                          textAlign: "right",
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(0,0,0,0.14)",
-                          outline: "none",
-                        }}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        borderBottom: "1px solid rgba(0,0,0,0.06)",
-                        textAlign: "right",
-                        fontVariantNumeric: "tabular-nums",
-                        fontWeight: 650,
-                      }}
-                    >
-                      {formatMoneyOrDash(usado)}
-                    </td>
-                    <td style={{ padding: "12px 14px", borderBottom: "1px solid rgba(0,0,0,0.06)", textAlign: "right" }}>
-                      <button
-                        onClick={() => removeIngredientRow(r.id)}
-                        type="button"
-                        style={{
-                          border: "1px solid rgba(0,0,0,0.12)",
-                          background: "rgba(0,0,0,0.02)",
-                          padding: "8px 12px",
-                          borderRadius: 10,
-                          cursor: "pointer",
-                          fontWeight: 650,
-                        }}
-                      >
-                        Eliminar
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-
-          <tfoot>
-            <tr>
-              <td
-                colSpan={6}
-                style={{
-                  padding: "12px 14px",
-                  textAlign: "right",
-                  fontWeight: 700,
-                  background: "rgba(0,0,0,0.02)",
-                  borderTop: "1px solid rgba(0,0,0,0.06)",
-                }}
-              >
-                Coste total calculado
-              </td>
-              <td
-                style={{
-                  padding: "12px 14px",
-                  textAlign: "right",
-                  fontWeight: 800,
-                  fontVariantNumeric: "tabular-nums",
-                  background: "rgba(0,0,0,0.02)",
-                  borderTop: "1px solid rgba(0,0,0,0.06)",
-                }}
-              >
-                {formatMoneyOrDash(costeTotalCalculado)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </ModulePageShell>
   );
 }
-
