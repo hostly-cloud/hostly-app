@@ -64,8 +64,8 @@ export default function DashboardPage() {
             cursor: "pointer",
           }}
         >
-          <h2>Compras</h2>
-          <p style={{ color: "#94a3b8" }}>Pedidos y proveedores</p>
+          <h2>{t("dashboard.moduleCompras")}</h2>
+          <p style={{ color: "#94a3b8" }}>{t("dashboard.moduleComprasDesc")}</p>
         </div>
 
         <div
