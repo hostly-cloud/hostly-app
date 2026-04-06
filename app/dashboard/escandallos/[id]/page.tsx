@@ -329,20 +329,20 @@ export default function EscandalloDetallePage() {
         if (insErr) throw insErr;
       }
 
-      const { error: upCostErr } = await supabase
-        .from("escandallos")
-        .update({ coste_total: costeTotalParaGuardar })
-        .eq("id", idNum);
-
       const reloaded = await loadIngredientes();
       if (!reloaded.ok) {
         throw new Error(t("escandalloDetail.errorReloadIngredients"));
       }
       setIngredientes(reloaded.rows);
 
+      const { error: upCostErr } = await supabase
+        .from("escandallos")
+        .update({ coste_total: costeTotalParaGuardar })
+        .eq("id", idNum);
+
       if (upCostErr) {
-        setPlato((prev) => (prev ? { ...prev, coste_total: costeTotalParaGuardar } : prev));
-        setSaveMsg(`${t("escandalloDetail.msgIngredientsSavedCostUpdateFail")} (${upCostErr.message})`);
+        setError(`${t("escandalloDetail.errorUpdateCosteTotal")} ${upCostErr.message}`);
+        setSaveMsg(t("escandalloDetail.msgIngredientsSavedCostUpdateFail"));
         return;
       }
 

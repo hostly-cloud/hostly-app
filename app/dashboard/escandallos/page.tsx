@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
@@ -23,12 +24,246 @@ type DraftById = Record<
 
 const ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY = "hostly.escandallos.coste_total_override.v1";
 
+function computeMarginPercent(costeTotal: number | null, precioVenta: number | null): number | null {
+  if (precioVenta == null || precioVenta === 0) return null;
+  if (costeTotal == null) return null;
+  const m = ((precioVenta - costeTotal) / precioVenta) * 100;
+  return Number.isFinite(m) ? m : null;
+}
+
+function parseNullableNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(",", ".");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+function roundTo(n: number, decimals: number): number {
+  const f = 10 ** decimals;
+  return Math.round((n + Number.EPSILON) * f) / f;
+}
+
+function getDraftForItem(item: EscandalloRow, drafts: DraftById): { coste_total: string; precio_venta: string } {
+  const key = String(item.id);
+  return (
+    drafts[key] ?? {
+      coste_total: item.coste_total == null ? "" : String(item.coste_total),
+      precio_venta: item.precio_venta == null ? "" : String(item.precio_venta),
+    }
+  );
+}
+
+type EscandalloListStats = {
+  sortedItems: EscandalloRow[];
+  avgMargin: number | null;
+  bestKey: string | null;
+  worstKey: string | null;
+};
+
+/** Orden por margen (borrador actual), media solo con márgenes válidos, mejor/peor solo si hay ≥2 y max≠min. */
+function computeEscandalloListStats(items: EscandalloRow[], drafts: DraftById): EscandalloListStats {
+  const entries = items.map((item) => {
+    const key = String(item.id);
+    const draft = getDraftForItem(item, drafts);
+    const costeN = parseNullableNumber(draft.coste_total);
+    const ventaN = parseNullableNumber(draft.precio_venta);
+    const marginPct = computeMarginPercent(costeN, ventaN);
+    return { item, key, marginPct };
+  });
+
+  const withMargin = entries.filter((e): e is (typeof entries)[number] & { marginPct: number } => e.marginPct != null);
+
+  const avgMargin =
+    withMargin.length > 0
+      ? withMargin.reduce((s, e) => s + e.marginPct, 0) / withMargin.length
+      : null;
+
+  let bestKey: string | null = null;
+  let worstKey: string | null = null;
+  if (withMargin.length >= 2) {
+    const maxM = Math.max(...withMargin.map((e) => e.marginPct));
+    const minM = Math.min(...withMargin.map((e) => e.marginPct));
+    if (maxM !== minM) {
+      const maxKeys = withMargin
+        .filter((e) => e.marginPct === maxM)
+        .map((e) => e.key)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const minKeys = withMargin
+        .filter((e) => e.marginPct === minM)
+        .map((e) => e.key)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      bestKey = maxKeys[0] ?? null;
+      worstKey = minKeys[0] ?? null;
+    }
+  }
+
+  const sortedItems = [...entries]
+    .sort((a, b) => {
+      if (a.marginPct == null && b.marginPct == null) {
+        return (a.item.nombre_plato ?? "").localeCompare(b.item.nombre_plato ?? "", undefined, {
+          sensitivity: "base",
+        });
+      }
+      if (a.marginPct == null) return 1;
+      if (b.marginPct == null) return -1;
+      if (b.marginPct !== a.marginPct) return b.marginPct - a.marginPct;
+      return (a.item.nombre_plato ?? "").localeCompare(b.item.nombre_plato ?? "", undefined, {
+        sensitivity: "base",
+      });
+    })
+    .map((e) => e.item);
+
+  return { sortedItems, avgMargin, bestKey, worstKey };
+}
+
+type MarginHealth = "none" | "excelente" | "bueno" | "ajustado" | "peligro";
+
+/** Umbrales de negocio: &gt;75 excelente; 65–75 bueno; 55–65 ajustado; &lt;55 peligro. */
+function marginHealthCategory(pct: number | null): MarginHealth {
+  if (pct == null) return "none";
+  if (pct > 75) return "excelente";
+  if (pct >= 65) return "bueno";
+  if (pct >= 55) return "ajustado";
+  return "peligro";
+}
+
+function marginHealthPctColor(tier: MarginHealth): string {
+  switch (tier) {
+    case "excelente":
+      return "#4ade80";
+    case "bueno":
+      return "#6ee7b7";
+    case "ajustado":
+      return "#fbbf24";
+    case "peligro":
+      return "#f87171";
+    default:
+      return "#94a3b8";
+  }
+}
+
+function marginHealthBadgeBaseStyle(tier: MarginHealth): CSSProperties {
+  switch (tier) {
+    case "excelente":
+      return {
+        background: "rgba(74, 222, 128, 0.18)",
+        border: "1px solid rgba(74, 222, 128, 0.45)",
+        color: "#86efac",
+      };
+    case "bueno":
+      return {
+        background: "rgba(110, 231, 183, 0.14)",
+        border: "1px solid rgba(110, 231, 183, 0.38)",
+        color: "#6ee7b7",
+      };
+    case "ajustado":
+      return {
+        background: "rgba(251, 191, 36, 0.14)",
+        border: "1px solid rgba(245, 158, 11, 0.42)",
+        color: "#fcd34d",
+      };
+    case "peligro":
+      return {
+        background: "rgba(248, 113, 113, 0.16)",
+        border: "1px solid rgba(248, 113, 113, 0.42)",
+        color: "#fca5a5",
+      };
+    default:
+      return {};
+  }
+}
+
+function marginHealthBadgeI18nKey(tier: MarginHealth): string | null {
+  switch (tier) {
+    case "excelente":
+      return "escandallos.marginBadgeExcellent";
+    case "bueno":
+      return "escandallos.marginBadgeGood";
+    case "ajustado":
+      return "escandallos.marginBadgeTight";
+    case "peligro":
+      return "escandallos.marginBadgeDanger";
+    default:
+      return null;
+  }
+}
+
+function marginHealthHintI18nKey(tier: MarginHealth): string {
+  switch (tier) {
+    case "excelente":
+      return "escandallos.marginHintExcellent";
+    case "bueno":
+      return "escandallos.marginHintGood";
+    case "ajustado":
+      return "escandallos.marginHintTight";
+    case "peligro":
+      return "escandallos.marginHintDanger";
+    default:
+      return "escandallos.marginHintIncomplete";
+  }
+}
+
+/** Columnas alineadas cabecera + filas (listado TPV). */
+const TPV_ROW_GRID: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns:
+    "minmax(128px, 1.35fr) 76px 76px minmax(88px, 0.85fr) minmax(72px, 0.55fr) minmax(88px, 1fr) 68px",
+  gap: "6px 8px",
+  alignItems: "center",
+  padding: "8px 10px",
+};
+
+const tpvInputWrap: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  minWidth: 0,
+  justifyContent: "center",
+};
+
+const tpvEuroInput: CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  padding: "10px 6px",
+  borderRadius: 10,
+  border: "1px solid #475569",
+  backgroundColor: "#0f172a",
+  color: "#f8fafc",
+  fontSize: 15,
+  fontWeight: 600,
+  fontVariantNumeric: "tabular-nums",
+  textAlign: "center",
+  outline: "none",
+  boxSizing: "border-box",
+  minHeight: 44,
+};
+
+const tpvEuroSuffix: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#64748b",
+  flexShrink: 0,
+};
+
+type TierFilterChoice = "all" | Exclude<MarginHealth, "none">;
+
+const TIER_FILTER_CHOICES: { id: TierFilterChoice; labelKey: string }[] = [
+  { id: "all", labelKey: "escandallos.tpvFilterAll" },
+  { id: "excelente", labelKey: "escandallos.tpvFilterExcellent" },
+  { id: "bueno", labelKey: "escandallos.tpvFilterGood" },
+  { id: "ajustado", labelKey: "escandallos.tpvFilterTight" },
+  { id: "peligro", labelKey: "escandallos.tpvFilterDanger" },
+];
+
 export default function EscandallosPage() {
   const { t } = useI18n();
   const [items, setItems] = useState<EscandalloRow[]>([]);
   const [drafts, setDrafts] = useState<DraftById>({});
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [tierFilter, setTierFilter] = useState<TierFilterChoice>("all");
 
   useEffect(() => {
     cargar();
@@ -76,19 +311,6 @@ export default function EscandallosPage() {
       }
       return next;
     });
-  }
-
-  function parseNullableNumber(value: string): number | null {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const normalized = trimmed.replace(",", ".");
-    const n = Number(normalized);
-    return Number.isFinite(n) ? n : null;
-  }
-
-  function roundTo(n: number, decimals: number): number {
-    const f = 10 ** decimals;
-    return Math.round((n + Number.EPSILON) * f) / f;
   }
 
   function formatMoney2OrDash(value: number | null | undefined): string {
@@ -170,11 +392,48 @@ export default function EscandallosPage() {
     }
   }
 
+  const listStats = useMemo(() => computeEscandalloListStats(items, drafts), [items, drafts]);
+
+  const filteredSortedItems = useMemo(() => {
+    let rows = listStats.sortedItems;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((i) => (i.nombre_plato ?? "").toLowerCase().includes(q));
+    }
+    if (tierFilter !== "all") {
+      rows = rows.filter((i) => {
+        const draft = getDraftForItem(i, drafts);
+        const tier = marginHealthCategory(
+          computeMarginPercent(parseNullableNumber(draft.coste_total), parseNullableNumber(draft.precio_venta)),
+        );
+        return tier === tierFilter;
+      });
+    }
+    return rows;
+  }, [listStats.sortedItems, search, tierFilter, drafts]);
+
+  const bestWorstBar = useMemo(() => {
+    const resolve = (k: string | null) => {
+      if (!k) return null;
+      const item = items.find((i) => String(i.id) === k);
+      if (!item) return null;
+      const draft = getDraftForItem(item, drafts);
+      const m = computeMarginPercent(parseNullableNumber(draft.coste_total), parseNullableNumber(draft.precio_venta));
+      if (m == null) return null;
+      const raw = (item.nombre_plato ?? "").trim();
+      const name = raw.length > 26 ? `${raw.slice(0, 24)}…` : raw || "—";
+      return { pct: roundTo(m, 1).toFixed(1), name };
+    };
+    return { best: resolve(listStats.bestKey), worst: resolve(listStats.worstKey) };
+  }, [items, drafts, listStats.bestKey, listStats.worstKey]);
+
   return (
     <ModulePageShell
       title={t("escandallos.title")}
       subtitle={t("escandallos.subtitle")}
-      maxWidth={1180}
+      maxWidth={1760}
+      compactLayout
+      lockViewport
       headerRight={
         <button
           onClick={cargar}
@@ -193,16 +452,27 @@ export default function EscandallosPage() {
         </button>
       }
     >
-      <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div
+        style={{
+          width: "100%",
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          overflow: "hidden",
+        }}
+      >
         {error ? (
           <div
             style={{
+              flexShrink: 0,
               border: "1px solid rgba(248, 113, 113, 0.45)",
               background: "rgba(127, 29, 29, 0.4)",
               color: "#fecaca",
-              padding: "12px 14px",
-              borderRadius: 12,
-              fontSize: 14,
+              padding: "10px 12px",
+              borderRadius: 10,
+              fontSize: 13,
               lineHeight: 1.45,
             }}
           >
@@ -210,261 +480,532 @@ export default function EscandallosPage() {
           </div>
         ) : null}
 
-        <div
-          style={{
-            width: "100%",
-            border: "1px solid #334155",
-            borderRadius: 14,
-            overflow: "hidden",
-            background: "#f1f5f9",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.22)",
-          }}
-        >
-          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
-            <thead>
-              <tr>
-                <th
+        {!error && items.length > 0 ? (
+          <div
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "10px 16px",
+            }}
+          >
+            {listStats.avgMargin != null ? (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(34, 197, 94, 0.28)",
+                  background: "linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(15, 23, 42, 0.55) 100%)",
+                }}
+              >
+                <p
                   style={{
-                    textAlign: "left",
-                    fontWeight: 600,
-                    padding: "14px 16px",
-                    borderBottom: "1px solid #cbd5e1",
-                    background: "#e2e8f0",
-                    color: "#0f172a",
-                    fontSize: 13,
-                  }}
-                >
-                  {t("common.name")}
-                </th>
-                <th
-                  style={{
-                    textAlign: "right",
-                    fontWeight: 600,
-                    padding: "14px 16px",
-                    borderBottom: "1px solid #cbd5e1",
-                    background: "#e2e8f0",
-                    color: "#0f172a",
-                    fontSize: 13,
-                    width: "18%",
-                  }}
-                >
-                  {t("escandallos.colCostEuro")}
-                </th>
-                <th
-                  style={{
-                    textAlign: "right",
-                    fontWeight: 600,
-                    padding: "14px 16px",
-                    borderBottom: "1px solid #cbd5e1",
-                    background: "#e2e8f0",
-                    color: "#0f172a",
-                    fontSize: 13,
-                    width: "18%",
-                  }}
-                >
-                  {t("escandallos.colSaleEuro")}
-                </th>
-                <th
-                  style={{
-                    textAlign: "right",
-                    fontWeight: 600,
-                    padding: "14px 16px",
-                    borderBottom: "1px solid #cbd5e1",
-                    background: "#e2e8f0",
-                    color: "#0f172a",
-                    fontSize: 13,
-                    width: "14%",
-                  }}
-                >
-                  {t("escandallos.colMarginPct")}
-                </th>
-                <th
-                  style={{
-                    textAlign: "right",
-                    fontWeight: 600,
-                    padding: "14px 16px",
-                    borderBottom: "1px solid #cbd5e1",
-                    background: "#e2e8f0",
-                    color: "#0f172a",
-                    fontSize: 13,
-                    width: "15%",
-                  }}
-                >
-                  {t("common.save")}
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={5}
-                  style={{
-                    padding: 20,
-                    color: "#475569",
-                    background: "#fff",
+                    margin: 0,
                     fontSize: 15,
+                    fontWeight: 800,
+                    letterSpacing: "-0.02em",
+                    color: "#ecfdf5",
+                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  {t("escandallos.emptyBefore")}
-                  <code style={{ color: "#0f172a", background: "#e2e8f0", padding: "2px 6px", borderRadius: 6 }}>
-                    escandallos
-                  </code>
-                  {t("escandallos.emptyAfter")}
-                </td>
-              </tr>
-            ) : (
-              items.map((item) => {
-                const key = String(item.id);
-                const draft = drafts[key] ?? {
-                  coste_total: item.coste_total == null ? "" : String(item.coste_total),
-                  precio_venta: item.precio_venta == null ? "" : String(item.precio_venta),
-                };
+                  {t("escandallos.businessAvgMargin", { pct: roundTo(listStats.avgMargin, 1).toFixed(1) })}
+                </p>
+              </div>
+            ) : null}
+            <p
+              style={{
+                margin: 0,
+                flex: "1 1 200px",
+                fontSize: 13,
+                lineHeight: 1.45,
+                color: "#64748b",
+                minWidth: 0,
+              }}
+            >
+              {t("escandallos.contextHint")}
+            </p>
+          </div>
+        ) : null}
 
-                const costeN = parseNullableNumber(draft.coste_total);
-                const ventaN = parseNullableNumber(draft.precio_venta);
-                const marginText = formatMarginOrDash(costeN, ventaN);
+        {!error && items.length === 0 ? (
+          <div
+            style={{
+              padding: "40px 32px 44px",
+              borderRadius: 18,
+              border: "1px solid rgba(148, 163, 184, 0.12)",
+              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.85) 100%)",
+              textAlign: "center",
+              boxShadow: "0 10px 36px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03)",
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 20,
+                fontWeight: 700,
+                letterSpacing: "-0.02em",
+                color: "#f8fafc",
+                lineHeight: 1.3,
+              }}
+            >
+              {t("escandallos.listEmptyTitle")}
+            </h2>
+            <p
+              style={{
+                margin: "16px auto 0",
+                maxWidth: 440,
+                fontSize: 15,
+                lineHeight: 1.6,
+                color: "#94a3b8",
+              }}
+            >
+              {t("escandallos.listEmptyBody")}
+            </p>
+            <Link
+              href="/dashboard/inventario"
+              style={{
+                display: "inline-block",
+                marginTop: 26,
+                padding: "12px 22px",
+                borderRadius: 12,
+                border: "1px solid rgba(148, 163, 184, 0.22)",
+                background: "rgba(15, 23, 42, 0.6)",
+                color: "#e2e8f0",
+                fontSize: 14,
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {t("escandallos.listEmptyCtaInventario")}
+            </Link>
+          </div>
+        ) : null}
 
+        {!error && items.length > 0 ? (
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid #334155",
+              background: "#1e293b",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "8px 14px",
+                width: "100%",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#e2e8f0",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {t("escandallos.tpvTotalCount", { count: items.length })}
+              </span>
+              <span style={{ width: 1, height: 18, background: "#475569", flexShrink: 0 }} aria-hidden />
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#86efac",
+                  fontVariantNumeric: "tabular-nums",
+                  maxWidth: 260,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={
+                  bestWorstBar.best
+                    ? t("escandallos.tpvBestSummary", {
+                        pct: bestWorstBar.best.pct,
+                        name: bestWorstBar.best.name,
+                      })
+                    : undefined
+                }
+              >
+                {bestWorstBar.best
+                  ? t("escandallos.tpvBestSummary", {
+                      pct: bestWorstBar.best.pct,
+                      name: bestWorstBar.best.name,
+                    })
+                  : t("escandallos.tpvBestEmpty")}
+              </span>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#fca5a5",
+                  fontVariantNumeric: "tabular-nums",
+                  maxWidth: 260,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={
+                  bestWorstBar.worst
+                    ? t("escandallos.tpvWorstSummary", {
+                        pct: bestWorstBar.worst.pct,
+                        name: bestWorstBar.worst.name,
+                      })
+                    : undefined
+                }
+              >
+                {bestWorstBar.worst
+                  ? t("escandallos.tpvWorstSummary", {
+                      pct: bestWorstBar.worst.pct,
+                      name: bestWorstBar.worst.name,
+                    })
+                  : t("escandallos.tpvWorstEmpty")}
+              </span>
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("escandallos.tpvSearchPlaceholder")}
+                aria-label={t("escandallos.tpvSearchPlaceholder")}
+                style={{
+                  marginLeft: "auto",
+                  minWidth: 140,
+                  flex: "1 1 200px",
+                  maxWidth: 360,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #475569",
+                  background: "#0f172a",
+                  color: "#f8fafc",
+                  fontSize: 14,
+                  outline: "none",
+                  boxSizing: "border-box",
+                  minHeight: 44,
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+              {TIER_FILTER_CHOICES.map((opt) => {
+                const active = tierFilter === opt.id;
                 return (
-                  <tr key={key} style={{ background: "#fff" }}>
-                    <td
-                      style={{
-                        padding: "12px 16px",
-                        borderBottom: "1px solid #e2e8f0",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      <Link
-                        href={`/dashboard/escandallos/${encodeURIComponent(String(item.id))}`}
-                        style={{ textDecoration: "none", color: "#2563eb" }}
-                      >
-                        <div style={{ fontWeight: 600, color: "#0f172a" }}>
-                          {item.nombre_plato ?? t("common.emptyCell")}
-                        </div>
-                      </Link>
-                    </td>
-
-                    <td
-                      style={{
-                        padding: "10px 16px",
-                        borderBottom: "1px solid #e2e8f0",
-                        textAlign: "right",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        value={draft.coste_total}
-                        onChange={(e) => updateDraft(item.id, "coste_total", e.target.value)}
-                        placeholder={item.coste_total == null ? "" : formatMoney2OrDash(item.coste_total)}
-                        aria-label={t("escandallos.ariaTotalCost", {
-                          name: item.nombre_plato?.trim() || t("escandallos.unnamedDish"),
-                        })}
-                        style={{
-                          width: "100%",
-                          maxWidth: 152,
-                          marginLeft: "auto",
-                          display: "block",
-                          textAlign: "right",
-                          padding: "9px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #cbd5e1",
-                          outline: "none",
-                          backgroundColor: "#fff",
-                          color: "#0f172a",
-                          fontSize: 14,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      />
-                    </td>
-
-                    <td
-                      style={{
-                        padding: "10px 16px",
-                        borderBottom: "1px solid #e2e8f0",
-                        textAlign: "right",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        value={draft.precio_venta}
-                        onChange={(e) => updateDraft(item.id, "precio_venta", e.target.value)}
-                        placeholder={item.precio_venta == null ? "" : formatMoneyUpTo2OrDash(item.precio_venta)}
-                        aria-label={t("escandallos.ariaSalePrice", {
-                          name: item.nombre_plato?.trim() || t("escandallos.unnamedDish"),
-                        })}
-                        style={{
-                          width: "100%",
-                          maxWidth: 152,
-                          marginLeft: "auto",
-                          display: "block",
-                          textAlign: "right",
-                          padding: "9px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #cbd5e1",
-                          outline: "none",
-                          backgroundColor: "#fff",
-                          color: "#0f172a",
-                          fontSize: 14,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      />
-                    </td>
-
-                    <td
-                      style={{
-                        padding: "12px 16px",
-                        borderBottom: "1px solid #e2e8f0",
-                        textAlign: "right",
-                        fontVariantNumeric: "tabular-nums",
-                        color: marginText === "-" ? "#94a3b8" : "#0f172a",
-                        fontWeight: 600,
-                        fontSize: 14,
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {marginText}
-                    </td>
-
-                    <td
-                      style={{
-                        padding: "10px 16px",
-                        borderBottom: "1px solid #e2e8f0",
-                        textAlign: "right",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      <button
-                        onClick={() => guardarFila(item.id)}
-                        type="button"
-                        disabled={Boolean(savingById[key])}
-                        style={{
-                          border: "1px solid #64748b",
-                          background: savingById[key] ? "#e2e8f0" : "#f8fafc",
-                          color: "#0f172a",
-                          padding: "8px 14px",
-                          borderRadius: 10,
-                          cursor: savingById[key] ? "not-allowed" : "pointer",
-                          fontWeight: 600,
-                          fontSize: 13,
-                        }}
-                      >
-                        {savingById[key] ? t("common.saving") : t("common.save")}
-                      </button>
-                    </td>
-                  </tr>
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setTierFilter(opt.id)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 10,
+                      border: active ? "1px solid rgba(34, 197, 94, 0.55)" : "1px solid #475569",
+                      background: active ? "rgba(34, 197, 94, 0.18)" : "#0f172a",
+                      color: active ? "#ecfdf5" : "#cbd5e1",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      minHeight: 40,
+                    }}
+                  >
+                    {t(opt.labelKey)}
+                  </button>
                 );
-              })
-            )}
-            </tbody>
-          </table>
-        </div>
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {!error && items.length > 0 ? (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              border: "1px solid #334155",
+              borderRadius: 12,
+              background: "#0f172a",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: "auto",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <div style={{ minWidth: 920 }}>
+                <div
+                  role="row"
+                  style={{
+                    ...TPV_ROW_GRID,
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 2,
+                    background: "#1e293b",
+                    borderBottom: "1px solid #334155",
+                    fontSize: 10,
+                    fontWeight: 800,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "#64748b",
+                  }}
+                >
+                  <span>{t("escandallos.tpvHeadDish")}</span>
+                  <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadCost")}</span>
+                  <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadSale")}</span>
+                  <span>{t("escandallos.tpvHeadMargin")}</span>
+                  <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadVsAvg")}</span>
+                  <span>{t("escandallos.tpvHeadHint")}</span>
+                  <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadSave")}</span>
+                </div>
+
+                {filteredSortedItems.length === 0 ? (
+                  <div style={{ padding: "28px 16px", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>
+                    {t("escandallos.tpvNoResults")}
+                  </div>
+                ) : (
+                  filteredSortedItems.map((item, rowIdx) => {
+                    const key = String(item.id);
+                    const draft = getDraftForItem(item, drafts);
+
+                    const costeN = parseNullableNumber(draft.coste_total);
+                    const ventaN = parseNullableNumber(draft.precio_venta);
+                    const marginText = formatMarginOrDash(costeN, ventaN);
+                    const marginPct = computeMarginPercent(costeN, ventaN);
+                    const marginTier = marginHealthCategory(marginPct);
+                    const marginColor = marginHealthPctColor(marginTier);
+                    const badgeKey = marginHealthBadgeI18nKey(marginTier);
+                    const hintKey = marginHealthHintI18nKey(marginTier);
+                    const isBest = listStats.bestKey === key;
+                    const isWorst = listStats.worstKey === key;
+                    let vsAvgLine: string | null = null;
+                    let vsAvgColor = "#94a3b8";
+                    if (marginPct != null && listStats.avgMargin != null) {
+                      const diff = roundTo(marginPct - listStats.avgMargin, 1);
+                      if (Math.abs(diff) < 0.05) {
+                        vsAvgLine = t("escandallos.marginVsAvgFlat");
+                      } else if (diff > 0) {
+                        vsAvgLine = t("escandallos.marginVsAvgAbove", { pct: Math.abs(diff).toFixed(1) });
+                        vsAvgColor = "#6ee7b7";
+                      } else {
+                        vsAvgLine = t("escandallos.marginVsAvgBelow", { pct: Math.abs(diff).toFixed(1) });
+                        vsAvgColor = "#fca5a5";
+                      }
+                    }
+
+                    const zebra = rowIdx % 2 === 1 ? "rgba(30, 41, 59, 0.35)" : "transparent";
+
+                    return (
+                      <div
+                        key={key}
+                        role="row"
+                        style={{
+                          ...TPV_ROW_GRID,
+                          borderBottom: "1px solid rgba(51, 65, 85, 0.65)",
+                          background: zebra,
+                        }}
+                      >
+                        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                            <Link
+                              href={`/dashboard/escandallos/${encodeURIComponent(String(item.id))}`}
+                              style={{
+                                textDecoration: "none",
+                                color: "#f8fafc",
+                                fontWeight: 700,
+                                fontSize: 14,
+                                lineHeight: 1.25,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                minWidth: 0,
+                                flex: "1 1 80px",
+                              }}
+                            >
+                              {item.nombre_plato ?? t("common.emptyCell")}
+                            </Link>
+                          </div>
+                          {(isBest || isWorst) && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                              {isBest ? (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    padding: "2px 6px",
+                                    borderRadius: 6,
+                                    fontSize: 9,
+                                    fontWeight: 800,
+                                    letterSpacing: "0.04em",
+                                    background: "rgba(34, 197, 94, 0.22)",
+                                    border: "1px solid rgba(34, 197, 94, 0.5)",
+                                    color: "#bbf7d0",
+                                  }}
+                                >
+                                  {t("escandallos.badgeBestMargin")}
+                                </span>
+                              ) : null}
+                              {isWorst ? (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    padding: "2px 6px",
+                                    borderRadius: 6,
+                                    fontSize: 9,
+                                    fontWeight: 800,
+                                    letterSpacing: "0.04em",
+                                    background: "rgba(248, 113, 113, 0.12)",
+                                    border: "1px solid rgba(248, 113, 113, 0.32)",
+                                    color: "#fecaca",
+                                  }}
+                                >
+                                  {t("escandallos.badgeWorstMargin")}
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={tpvInputWrap}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={draft.coste_total}
+                            onChange={(e) => updateDraft(item.id, "coste_total", e.target.value)}
+                            placeholder={item.coste_total == null ? "" : formatMoney2OrDash(item.coste_total)}
+                            aria-label={t("escandallos.ariaTotalCost", {
+                              name: item.nombre_plato?.trim() || t("escandallos.unnamedDish"),
+                            })}
+                            style={tpvEuroInput}
+                          />
+                          <span style={tpvEuroSuffix}>€</span>
+                        </div>
+
+                        <div style={tpvInputWrap}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={draft.precio_venta}
+                            onChange={(e) => updateDraft(item.id, "precio_venta", e.target.value)}
+                            placeholder={item.precio_venta == null ? "" : formatMoneyUpTo2OrDash(item.precio_venta)}
+                            aria-label={t("escandallos.ariaSalePrice", {
+                              name: item.nombre_plato?.trim() || t("escandallos.unnamedDish"),
+                            })}
+                            style={tpvEuroInput}
+                          />
+                          <span style={tpvEuroSuffix}>€</span>
+                        </div>
+
+                        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                            <span
+                              style={{
+                                fontSize: 15,
+                                fontWeight: 800,
+                                fontVariantNumeric: "tabular-nums",
+                                color: marginColor,
+                                lineHeight: 1.1,
+                              }}
+                            >
+                              {marginText}
+                            </span>
+                            {badgeKey ? (
+                              <span
+                                style={{
+                                  ...marginHealthBadgeBaseStyle(marginTier),
+                                  display: "inline-block",
+                                  padding: "2px 6px",
+                                  borderRadius: 6,
+                                  fontSize: 9,
+                                  fontWeight: 800,
+                                  letterSpacing: "0.05em",
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                {t(badgeKey)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            fontVariantNumeric: "tabular-nums",
+                            color: vsAvgColor,
+                            lineHeight: 1.3,
+                            textAlign: "center",
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                          title={vsAvgLine ?? undefined}
+                        >
+                          {vsAvgLine ?? "—"}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 11,
+                            lineHeight: 1.35,
+                            color: "#94a3b8",
+                            fontWeight: 500,
+                            minWidth: 0,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {t(hintKey)}
+                        </div>
+
+                        <button
+                          onClick={() => guardarFila(item.id)}
+                          type="button"
+                          disabled={Boolean(savingById[key])}
+                          style={{
+                            justifySelf: "center",
+                            width: "100%",
+                            maxWidth: 68,
+                            border: "none",
+                            background: savingById[key] ? "#166534" : "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
+                            color: "#fff",
+                            padding: "12px 8px",
+                            borderRadius: 10,
+                            cursor: savingById[key] ? "not-allowed" : "pointer",
+                            fontWeight: 800,
+                            fontSize: 12,
+                            letterSpacing: "0.02em",
+                            opacity: savingById[key] ? 0.85 : 1,
+                            boxShadow: savingById[key]
+                              ? "none"
+                              : "0 4px 14px rgba(34, 197, 94, 0.35), inset 0 1px 0 rgba(255,255,255,0.2)",
+                            minHeight: 44,
+                          }}
+                        >
+                          {savingById[key] ? t("common.saving") : t("common.save")}
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </ModulePageShell>
   );

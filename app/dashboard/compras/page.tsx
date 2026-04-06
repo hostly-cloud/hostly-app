@@ -8,7 +8,6 @@ import {
   type CompraEstado,
   type CompraLocal,
   COMPRA_ESTADOS,
-  formatFechaCompra,
   loadCompras,
   newCompraId,
   parseCantidadRecibida as coercedCantidadRecibida,
@@ -18,34 +17,90 @@ import { reconcileCompraStock, undoCompraStockEffect } from "@/lib/compras-stock
 import type { StockProducto } from "@/lib/stock-local";
 import { loadStock, saveStock } from "@/lib/stock-local";
 
-const inputStyle: CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 10,
+type CompraListFilter = "todas" | "pendiente" | "recibido" | "cancelado";
+
+type CompraListSort = "fecha_desc" | "fecha_asc" | "importe_desc" | "importe_asc";
+
+type OperationalFocus = "pendientes" | "entregas" | "sin_factura" | "sin_vincular";
+
+const QUICK_CREATE_ESTADOS = ["pendiente", "recibido"] as const satisfies readonly CompraEstado[];
+
+const inputStyle = {
+  padding: "8px 10px",
+  borderRadius: 8,
   border: "1px solid #334155",
   backgroundColor: "#0f172a",
   color: "#f8fafc",
-  fontSize: 14,
+  fontSize: 13,
   width: "100%",
+  boxSizing: "border-box" as const,
+} satisfies CSSProperties;
+
+const labelStyle = {
+  display: "block",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#94a3b8",
+  marginBottom: 4,
+} satisfies CSSProperties;
+
+/** Select en filas del listado: secundario, no compite con importe ni proveedor. */
+const selectRow: CSSProperties = {
+  padding: "3px 8px",
+  fontSize: 11,
+  fontWeight: 500,
+  lineHeight: 1.25,
+  minWidth: 102,
+  maxWidth: "100%",
+  borderRadius: 6,
+  border: "1px solid rgba(100, 116, 139, 0.32)",
+  backgroundColor: "rgba(15, 23, 42, 0.72)",
+  color: "#cbd5e1",
+  cursor: "pointer",
   boxSizing: "border-box",
 };
 
-const labelStyle: CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: 600,
-  color: "#94a3b8",
-  marginBottom: 6,
-};
-
-function rowTone(estado: CompraEstado): { bg: string; border: string } {
+function rowTone(estado: CompraEstado): { bg: string; border: string; stripe: string } {
   switch (estado) {
     case "recibido":
-      return { bg: "rgba(34, 197, 94, 0.1)", border: "rgba(34, 197, 94, 0.25)" };
+      return {
+        bg: "linear-gradient(90deg, rgba(51, 65, 85, 0.22) 0%, rgba(30, 41, 59, 0.48) 44%)",
+        border: "rgba(71, 85, 105, 0.38)",
+        stripe: "rgba(100, 116, 139, 0.45)",
+      };
     case "cancelado":
-      return { bg: "rgba(239, 68, 68, 0.1)", border: "rgba(239, 68, 68, 0.25)" };
+      return {
+        bg: "linear-gradient(90deg, rgba(239, 68, 68, 0.06) 0%, rgba(30, 41, 59, 0.42) 42%)",
+        border: "rgba(248, 113, 113, 0.22)",
+        stripe: "rgba(248, 113, 113, 0.75)",
+      };
+    case "pendiente":
+      return {
+        bg: "linear-gradient(90deg, rgba(251, 191, 36, 0.07) 0%, rgba(30, 41, 59, 0.48) 40%)",
+        border: "rgba(251, 191, 36, 0.22)",
+        stripe: "rgba(251, 191, 36, 0.78)",
+      };
     default:
-      return { bg: "transparent", border: "transparent" };
+      return {
+        bg: "rgba(30, 41, 59, 0.45)",
+        border: "rgba(51, 65, 85, 0.55)",
+        stripe: "rgba(100, 116, 139, 0.45)",
+      };
   }
+}
+
+/** Incidencia de stock no aplicado: refuerzo suave del ribete sin subir altura de fila. */
+function rowToneWithSync(
+  estado: CompraEstado,
+  syncKind: "applied" | "not_applied" | "neutral",
+): { bg: string; border: string; stripe: string } {
+  const base = rowTone(estado);
+  if (syncKind !== "not_applied") return base;
+  return {
+    ...base,
+    stripe: "rgba(251, 146, 60, 0.45)",
+    border: "rgba(251, 146, 60, 0.14)",
+  };
 }
 
 function parseTotal(s: string): number | null {
@@ -63,8 +118,69 @@ function parseCantidadRecibida(s: string): number | undefined {
   return n;
 }
 
-function formatEuro(n: number): string {
-  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
+function formatEuro(n: number, loc: "es" | "en"): string {
+  return new Intl.NumberFormat(loc === "en" ? "en-GB" : "es-ES", { style: "currency", currency: "EUR" }).format(n);
+}
+
+function formatFechaCorta(iso: string, loc: "es" | "en"): string {
+  const t = iso.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return iso;
+  try {
+    const [y, m, d] = t.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(loc === "en" ? "en-GB" : "es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function formatQuickEstimatedUnitAmount(n: number, locale: "es" | "en"): string {
+  return new Intl.NumberFormat(locale === "en" ? "en-GB" : "es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(n);
+}
+
+/** Precio unitario guardado en una compra (total ÷ cantidad); excluye datos incompletos. */
+function unitPriceFromStoredCompra(c: CompraLocal): number | null {
+  const qty = coercedCantidadRecibida(c.cantidad_recibida as unknown);
+  const id = c.producto_stock_id?.trim();
+  const total = typeof c.total === "number" && Number.isFinite(c.total) ? c.total : NaN;
+  if (!id || qty == null || qty <= 0 || !(total > 0)) return null;
+  return total / qty;
+}
+
+/** Último precio unitario conocido para el producto (por fecha e id, más reciente primero). */
+function lastHistoricalUnitPriceForProduct(items: CompraLocal[], productId: string): number | null {
+  const ordered = [...items].sort((a, b) => {
+    if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
+    return b.id.localeCompare(a.id);
+  });
+  for (const c of ordered) {
+    if (c.estado === "cancelado") continue;
+    if ((c.producto_stock_id ?? "").trim() !== productId) continue;
+    const u = unitPriceFromStoredCompra(c);
+    if (u != null) return u;
+  }
+  return null;
+}
+
+function normalizeForSearch(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function formatPercentForWarning(n: number, locale: "es" | "en"): string {
+  const abs = Math.abs(n);
+  const opts: Intl.NumberFormatOptions =
+    abs > 0 && abs < 10 ? { maximumFractionDigits: 1, minimumFractionDigits: 0 } : { maximumFractionDigits: 0, minimumFractionDigits: 0 };
+  return new Intl.NumberFormat(locale === "en" ? "en-GB" : "es-ES", opts).format(n);
 }
 
 function inventarioDesdeCompra(
@@ -83,8 +199,106 @@ function inventarioDesdeCompra(
   return `${name} · ${qty} ${u}`.trim();
 }
 
+function estadoLabelCompra(estado: CompraEstado, t: (key: string) => string): string {
+  switch (estado) {
+    case "pendiente":
+      return t("dashboard.compraEstadoPendiente");
+    case "recibido":
+      return t("dashboard.compraEstadoRecibido");
+    case "cancelado":
+      return t("dashboard.compraEstadoCancelado");
+    default:
+      return estado;
+  }
+}
+
+const estadoSelectLook: Record<CompraEstado, { border: string; bg: string; color: string }> = {
+  recibido: {
+    border: "rgba(51, 65, 85, 0.45)",
+    bg: "rgba(15, 23, 42, 0.55)",
+    color: "#9ca3af",
+  },
+  pendiente: {
+    border: "rgba(234, 179, 8, 0.22)",
+    bg: "rgba(66, 32, 6, 0.22)",
+    color: "#e7d3a0",
+  },
+  cancelado: {
+    border: "rgba(248, 113, 113, 0.22)",
+    bg: "rgba(69, 10, 10, 0.2)",
+    color: "#d6a4a4",
+  },
+};
+
+/** Separador vertical fino entre segmentos de meta (proveedor). */
+const metaHairlineSep: CSSProperties = {
+  display: "inline-block",
+  width: 1,
+  height: 8,
+  margin: "0 7px",
+  background: "rgba(148, 163, 184, 0.16)",
+  borderRadius: 1,
+  verticalAlign: "middle",
+  flexShrink: 0,
+};
+
+function stockSyncUiKind(c: CompraLocal): "applied" | "not_applied" | "neutral" {
+  if (c.stock_aplicado) return "applied";
+  const qty = coercedCantidadRecibida(c.cantidad_recibida as unknown);
+  if (c.estado === "recibido" && (c.producto_stock_id ?? "").trim() && qty != null && qty > 0) return "not_applied";
+  return "neutral";
+}
+
+function todayIsoLocal(): string {
+  const x = new Date();
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const t = new Date(y, m - 1, d);
+  t.setDate(t.getDate() + days);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+}
+
+/** Recibido sin referencia documental reconocible en notas (heurística local). */
+function compraSinFacturaDoc(c: CompraLocal): boolean {
+  if (c.estado !== "recibido") return false;
+  const n = (c.notas ?? "").trim();
+  if (n === "") return true;
+  return !/\b(factura|fact\.|albar[aá]n|invoice|ticket|n[ºo]\s*[\w\d-]|#\s*\d)/i.test(n);
+}
+
+function entregaProximaPredicate(c: CompraLocal, today: string, weekEnd: string): boolean {
+  if (c.estado !== "pendiente") return false;
+  return c.fecha === today || (c.fecha > today && c.fecha <= weekEnd);
+}
+
+function rowPurchaseTypeLabel(c: CompraLocal, tf: (key: string) => string): string {
+  const n = normalizeForSearch(c.notas ?? "");
+  if (n.includes("semanal") || n.includes("weekly")) return tf("compras.rowTypeWeekly");
+  if (n.includes("mensual") || n.includes("monthly")) return tf("compras.rowTypeMonthly");
+  if (n.includes("urgente") || n.includes("urgent")) return tf("compras.rowTypeUrgent");
+  if (n.includes("fresco") || n.includes("fresh")) return tf("compras.rowTypeFresh");
+  return tf("compras.rowTypeDefault");
+}
+
+function rowLineItemCount(c: CompraLocal): number {
+  const qty = coercedCantidadRecibida(c.cantidad_recibida as unknown);
+  if ((c.producto_stock_id ?? "").trim() && qty != null && qty > 0) return 1;
+  return 0;
+}
+
+function rowOperationalHints(c: CompraLocal, tf: (key: string) => string): string[] {
+  const hints: string[] = [];
+  if (compraSinFacturaDoc(c)) hints.push(tf("compras.hintSinFactura"));
+  if (c.estado !== "cancelado" && !(c.producto_stock_id ?? "").trim()) hints.push(tf("compras.hintSinVincular"));
+  if (stockSyncUiKind(c) === "not_applied") hints.push(tf("compras.hintStockPendiente"));
+  return hints;
+}
+
 export default function ComprasPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [items, setItems] = useState<CompraLocal[]>([]);
   const [productosStock, setProductosStock] = useState<StockProducto[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -99,8 +313,33 @@ export default function ComprasPage() {
   const [draftCantidad, setDraftCantidad] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [listFilter, setListFilter] = useState<CompraListFilter>("todas");
+  const [listSearch, setListSearch] = useState("");
+  const [listSort, setListSort] = useState<CompraListSort>("fecha_desc");
+  const [operFocus, setOperFocus] = useState<OperationalFocus | null>(null);
+  const [rowMenuOpenId, setRowMenuOpenId] = useState<string | null>(null);
   /** Id de compra en edición: ref evita que el submit pierda el id por cierre/desincronía de estado. */
   const editingIdRef = useRef<string | null>(null);
+
+  const draftPrecioUnitario = useMemo(() => {
+    const total = parseTotal(draftTotal);
+    const qty = parseCantidadRecibida(draftCantidad);
+    if (total === null || total <= 0 || qty === undefined || qty <= 0) return null;
+    return total / qty;
+  }, [draftTotal, draftCantidad]);
+
+  const quickPriceIncreaseWarning = useMemo(() => {
+    if (editingId != null) return null;
+    const pid = draftStockProductoId.trim();
+    if (!pid || draftPrecioUnitario == null) return null;
+    const previous = lastHistoricalUnitPriceForProduct(items, pid);
+    if (previous == null) return null;
+    const prevScaled = Math.round(previous * 10000);
+    const newScaled = Math.round(draftPrecioUnitario * 10000);
+    if (newScaled <= prevScaled) return null;
+    const pctRaw = ((draftPrecioUnitario - previous) / previous) * 100;
+    return { pctLabel: formatPercentForWarning(pctRaw, locale) };
+  }, [editingId, draftStockProductoId, draftPrecioUnitario, items, locale]);
 
   const refreshStock = useCallback(() => {
     setProductosStock(loadStock());
@@ -117,19 +356,95 @@ export default function ComprasPage() {
     setHydrated(true);
   }, [refreshStock]);
 
-  const sorted = useMemo(() => {
-    return [...items].sort((a, b) => {
-      if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
-      return b.id.localeCompare(a.id);
-    });
+  useEffect(() => {
+    if (!rowMenuOpenId) return;
+    const close = () => setRowMenuOpenId(null);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [rowMenuOpenId]);
+
+  const operationalCounts = useMemo(() => {
+    const today = todayIsoLocal();
+    const weekEnd = addDaysIso(today, 7);
+    let pendientes = 0;
+    let entregas = 0;
+    let sinFactura = 0;
+    let sinVincular = 0;
+    for (const c of items) {
+      if (c.estado === "pendiente") pendientes += 1;
+      if (entregaProximaPredicate(c, today, weekEnd)) entregas += 1;
+      if (compraSinFacturaDoc(c)) sinFactura += 1;
+      if (c.estado !== "cancelado" && !(c.producto_stock_id ?? "").trim()) sinVincular += 1;
+    }
+    return { pendientes, entregas, sinFactura, sinVincular };
   }, [items]);
 
-  function openCreate() {
-    editingIdRef.current = null;
-    setEditingId(null);
-    setDraftProveedor("");
+  const resumenCompras = useMemo(() => {
+    const totalCount = items.length;
+    const gastoTotal = items.reduce((acc, c) => {
+      const n = c.total;
+      return acc + (typeof n === "number" && Number.isFinite(n) ? n : 0);
+    }, 0);
+    const pendientes = items.filter((c) => c.estado === "pendiente").length;
+    const recibidas = items.filter((c) => c.estado === "recibido").length;
+    return { totalCount, gastoTotal, pendientes, recibidas };
+  }, [items]);
+
+  const displayedRows = useMemo(() => {
+    const today = todayIsoLocal();
+    const weekEnd = addDaysIso(today, 7);
+    let list: CompraLocal[];
+    if (operFocus === "pendientes") {
+      list = items.filter((c) => c.estado === "pendiente");
+    } else if (operFocus === "entregas") {
+      list = items.filter((c) => entregaProximaPredicate(c, today, weekEnd));
+    } else if (operFocus === "sin_factura") {
+      list = items.filter((c) => compraSinFacturaDoc(c));
+    } else if (operFocus === "sin_vincular") {
+      list = items.filter((c) => c.estado !== "cancelado" && !(c.producto_stock_id ?? "").trim());
+    } else {
+      list = listFilter === "todas" ? [...items] : items.filter((c) => c.estado === listFilter);
+    }
+    const q = normalizeForSearch(listSearch);
+    if (q) {
+      list = list.filter((c) => {
+        const supplier = normalizeForSearch(c.proveedor);
+        const notas = normalizeForSearch(c.notas ?? "");
+        const prodStored = normalizeForSearch(c.producto_stock_nombre ?? "");
+        const live = productosStock.find((p) => p.id === c.producto_stock_id);
+        const prodLive = normalizeForSearch(live?.nombre ?? "");
+        const fecha = normalizeForSearch(c.fecha);
+        return (
+          supplier.includes(q) ||
+          notas.includes(q) ||
+          prodStored.includes(q) ||
+          prodLive.includes(q) ||
+          fecha.includes(q)
+        );
+      });
+    }
+    list.sort((a, b) => {
+      const ta = typeof a.total === "number" && Number.isFinite(a.total) ? a.total : 0;
+      const tb = typeof b.total === "number" && Number.isFinite(b.total) ? b.total : 0;
+      switch (listSort) {
+        case "fecha_asc":
+          return a.fecha.localeCompare(b.fecha) || a.id.localeCompare(b.id);
+        case "importe_desc":
+          return tb - ta || b.fecha.localeCompare(a.fecha) || b.id.localeCompare(a.id);
+        case "importe_asc":
+          return ta - tb || a.fecha.localeCompare(b.fecha) || a.id.localeCompare(b.id);
+        case "fecha_desc":
+        default:
+          return b.fecha.localeCompare(a.fecha) || b.id.localeCompare(a.id);
+      }
+    });
+    return list;
+  }, [items, listFilter, listSearch, listSort, productosStock, operFocus]);
+
+  function resetQuickCreateDrafts() {
     const today = new Date();
     const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    setDraftProveedor(t("compras.quickDefaultSupplier"));
     setDraftFecha(iso);
     setDraftEstado("pendiente");
     setDraftTotal("");
@@ -137,6 +452,12 @@ export default function ComprasPage() {
     setDraftStockProductoId("");
     setDraftCantidad("");
     setFormError(null);
+  }
+
+  function openCreate() {
+    editingIdRef.current = null;
+    setEditingId(null);
+    resetQuickCreateDrafts();
     setFormOpen(true);
     refreshStock();
   }
@@ -222,10 +543,11 @@ export default function ComprasPage() {
     refreshStock();
     if (idEdit) {
       setNotice(t("compras.noticeUpdated"));
+      closeForm();
     } else {
       setNotice(t("compras.noticeCreated"));
+      resetQuickCreateDrafts();
     }
-    closeForm();
     window.setTimeout(() => setNotice(null), 3200);
   }
 
@@ -260,17 +582,39 @@ export default function ComprasPage() {
 
   if (!hydrated) {
     return (
-      <ModulePageShell title={t("compras.title")} subtitle={t("compras.loadingSubtitle")} maxWidth={1180}>
-        <p style={{ color: "#94a3b8" }}>{t("common.preparingData")}</p>
+      <ModulePageShell
+        title={t("compras.title")}
+        subtitle={t("compras.loadingSubtitle")}
+        maxWidth={1000}
+        compactLayout
+        lockViewport
+      >
+        <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
   }
 
+  const selectedStockProduct = draftStockProductoId
+    ? productosStock.find((p) => p.id === draftStockProductoId)
+    : undefined;
+
+  const quickUnitSuffix =
+    selectedStockProduct?.unidad?.trim() !== "" && selectedStockProduct?.unidad != null
+      ? `€/${selectedStockProduct.unidad.trim()}`
+      : t("compras.quickEstimatedUnitBareEuro");
+
+  const quickUnitPriceHighlightLine =
+    draftPrecioUnitario != null
+      ? `${t("compras.quickUnitPriceHighlightLabel")} ${formatQuickEstimatedUnitAmount(draftPrecioUnitario, locale)} ${quickUnitSuffix}`
+      : null;
+
   return (
     <ModulePageShell
       title={t("compras.title")}
-      subtitle={t("compras.subtitle")}
-      maxWidth={1180}
+      subtitle={t("compras.subtitleTpv")}
+      maxWidth={1000}
+      compactLayout
+      lockViewport
       headerRight={
         <button
           type="button"
@@ -279,84 +623,398 @@ export default function ComprasPage() {
             border: "none",
             background: "#22c55e",
             color: "#fff",
-            padding: "10px 18px",
-            borderRadius: 10,
+            padding: "7px 14px",
+            borderRadius: 8,
             fontWeight: 700,
             cursor: "pointer",
-            fontSize: 14,
+            fontSize: 13,
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            boxShadow: "0 2px 10px rgba(34, 197, 94, 0.3)",
           }}
         >
           {t("compras.newPurchase")}
         </button>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          overflow: "hidden",
+        }}
+      >
         {notice ? (
           <div
             style={{
-              padding: "12px 14px",
-              borderRadius: 10,
-              background: "rgba(59, 130, 246, 0.15)",
-              border: "1px solid rgba(59, 130, 246, 0.35)",
+              flexShrink: 0,
+              padding: "4px 10px",
+              borderRadius: 8,
+              background: "rgba(59, 130, 246, 0.1)",
+              border: "1px solid rgba(59, 130, 246, 0.32)",
               color: "#93c5fd",
-              fontSize: 14,
+              fontSize: 12,
+              lineHeight: 1.35,
             }}
           >
             {notice}
           </div>
         ) : null}
 
-        {formOpen ? (
-          <div
-            style={{
-              background: "#1e293b",
-              borderRadius: 16,
-              padding: 22,
-              border: "1px solid #334155",
-            }}
-          >
-            <h2 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>
-              {editingId ? t("compras.editPurchase") : t("compras.newPurchaseForm")}
-            </h2>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#94a3b8", lineHeight: 1.45 }}>
-              {t("compras.formHintBeforeStrong")}{" "}
-              <strong>{t("compras.received")}</strong>
-              {t("compras.formHintAfterStrong")}
-            </p>
+        <div
+          style={{
+            flexShrink: 0,
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 8,
+          }}
+        >
+          {[
+            {
+              label: t("compras.metricTotalPurchases"),
+              value: String(resumenCompras.totalCount),
+              valueColor: "#f8fafc",
+            },
+            {
+              label: t("compras.metricTotalSpend"),
+              value: formatEuro(resumenCompras.gastoTotal, locale),
+              valueColor: "#fde68a",
+            },
+            {
+              label: t("compras.metricPending"),
+              value: String(resumenCompras.pendientes),
+              valueColor: "#fcd34d",
+            },
+            {
+              label: t("compras.metricReceived"),
+              value: String(resumenCompras.recibidas),
+              valueColor: "#8da399",
+            },
+          ].map((m) => (
             <div
+              key={m.label}
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: 16,
+                border: "1px solid rgba(51, 65, 85, 0.42)",
+                borderRadius: 8,
+                background: "linear-gradient(155deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.78) 100%)",
+                padding: "8px 10px",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
               }}
             >
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={labelStyle}>{t("common.supplier")}</label>
-                <input
-                  value={draftProveedor}
-                  onChange={(e) => setDraftProveedor(e.target.value)}
-                  placeholder={t("compras.placeholderSupplier")}
-                  style={inputStyle}
-                />
+              <div
+                style={{
+                  color: "#64748b",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  lineHeight: 1.15,
+                }}
+              >
+                {m.label}
               </div>
-              <div>
-                <label style={labelStyle}>{t("common.date")}</label>
-                <input type="date" value={draftFecha} onChange={(e) => setDraftFecha(e.target.value)} style={inputStyle} />
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 20,
+                  fontWeight: 800,
+                  fontVariantNumeric: "tabular-nums",
+                  color: m.valueColor,
+                  lineHeight: 1.05,
+                  letterSpacing: "-0.03em",
+                }}
+              >
+                {m.value}
               </div>
-              <div>
-                <label style={labelStyle}>{t("common.status")}</label>
-                <select
-                  value={draftEstado}
-                  onChange={(e) => setDraftEstado(e.target.value as CompraEstado)}
-                  style={inputStyle}
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            overflowX: "auto",
+            overflowY: "hidden",
+            padding: "1px 0 2px",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 8,
+              fontWeight: 700,
+              color: "#64748b",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              flexShrink: 0,
+            }}
+          >
+            {t("compras.operFocusTitle")}
+          </span>
+          {(
+            [
+              {
+                id: "pendientes" as const,
+                label: t("compras.operChipPendientes"),
+                n: operationalCounts.pendientes,
+                idle: {
+                  border: "1px solid rgba(148, 163, 184, 0.12)",
+                  background: "rgba(15, 23, 42, 0.45)",
+                  color: "#a8b0c0",
+                },
+                act: {
+                  border: "1px solid rgba(148, 163, 184, 0.14)",
+                  background: "rgba(30, 27, 19, 0.5)",
+                  color: "#d6c9a8",
+                  boxShadow: "inset 0 -2px 0 rgba(234, 179, 8, 0.45)",
+                },
+              },
+              {
+                id: "entregas" as const,
+                label: t("compras.operChipEntregas"),
+                n: operationalCounts.entregas,
+                idle: {
+                  border: "1px solid rgba(148, 163, 184, 0.12)",
+                  background: "rgba(15, 23, 42, 0.45)",
+                  color: "#9db0c4",
+                },
+                act: {
+                  border: "1px solid rgba(148, 163, 184, 0.14)",
+                  background: "rgba(12, 26, 38, 0.48)",
+                  color: "#b8d4e8",
+                  boxShadow: "inset 0 -2px 0 rgba(56, 189, 248, 0.38)",
+                },
+              },
+              {
+                id: "sin_factura" as const,
+                label: t("compras.operChipSinFactura"),
+                n: operationalCounts.sinFactura,
+                idle: {
+                  border: "1px solid rgba(148, 163, 184, 0.12)",
+                  background: "rgba(15, 23, 42, 0.45)",
+                  color: "#b4a8a8",
+                },
+                act: {
+                  border: "1px solid rgba(148, 163, 184, 0.14)",
+                  background: "rgba(38, 18, 18, 0.35)",
+                  color: "#d4b8b8",
+                  boxShadow: "inset 0 -2px 0 rgba(248, 113, 113, 0.28)",
+                },
+              },
+              {
+                id: "sin_vincular" as const,
+                label: t("compras.operChipSinVincular"),
+                n: operationalCounts.sinVincular,
+                idle: {
+                  border: "1px solid rgba(148, 163, 184, 0.12)",
+                  background: "rgba(15, 23, 42, 0.45)",
+                  color: "#a8b0c3",
+                },
+                act: {
+                  border: "1px solid rgba(148, 163, 184, 0.14)",
+                  background: "rgba(22, 22, 38, 0.45)",
+                  color: "#c4c8e0",
+                  boxShadow: "inset 0 -2px 0 rgba(129, 140, 248, 0.32)",
+                },
+              },
+            ] as const
+          ).map((chip) => {
+            const active = operFocus === chip.id;
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setOperFocus((p) => (p === chip.id ? null : chip.id))}
+                style={{
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "3px 9px",
+                  borderRadius: 4,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.01em",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  ...(active ? chip.act : chip.idle),
+                }}
+              >
+                <span>{chip.label}</span>
+                <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.72, fontWeight: 600, fontSize: 9 }}>{chip.n}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          role="search"
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 8px",
+            borderRadius: 10,
+            border: "1px solid #334155",
+            background: "#0f172a",
+            rowGap: 6,
+          }}
+        >
+          <input
+            type="search"
+            value={listSearch}
+            onChange={(e) => setListSearch(e.target.value)}
+            placeholder={t("compras.searchPlaceholder")}
+            aria-label={t("compras.searchPlaceholder")}
+            style={{
+              flex: "1 1 160px",
+              minWidth: 120,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #334155",
+              background: "#020617",
+              color: "#f8fafc",
+              fontSize: 12,
+              boxSizing: "border-box",
+            }}
+          />
+          <div
+            role="group"
+            aria-label={t("compras.listSectionTitle")}
+            style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}
+          >
+            {(
+              [
+                { key: "todas" as const, label: t("compras.filterAll") },
+                { key: "pendiente" as const, label: t("compras.filterPendingOnly") },
+                { key: "recibido" as const, label: t("compras.filterReceivedOnly") },
+                { key: "cancelado" as const, label: t("compras.filterCancelledOnly") },
+              ] as const
+            ).map(({ key, label }) => {
+              const active = listFilter === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setOperFocus(null);
+                    setListFilter(key);
+                  }}
+                  style={{
+                    border: active ? "1px solid rgba(100, 116, 139, 0.28)" : "1px solid rgba(51, 65, 85, 0.55)",
+                    background: active ? "rgba(30, 41, 59, 0.75)" : "transparent",
+                    color: active ? "#d1d9e6" : "#7c8798",
+                    padding: "3px 9px",
+                    borderRadius: 5,
+                    fontWeight: 600,
+                    fontSize: 10,
+                    lineHeight: 1.2,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
                 >
-                  {COMPRA_ESTADOS.map((e) => (
-                    <option key={e} value={e}>
-                      {e.charAt(0).toUpperCase() + e.slice(1)}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#64748b", flexShrink: 0 }}>
+            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("compras.sortBy")}</span>
+            <select
+              value={listSort}
+              onChange={(e) => setListSort(e.target.value as CompraListSort)}
+              style={{
+                padding: "4px 8px",
+                borderRadius: 8,
+                border: "1px solid #334155",
+                background: "#020617",
+                color: "#e2e8f0",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <option value="fecha_desc">{t("compras.sortFechaDesc")}</option>
+              <option value="fecha_asc">{t("compras.sortFechaAsc")}</option>
+              <option value="importe_desc">{t("compras.sortImporteDesc")}</option>
+              <option value="importe_asc">{t("compras.sortImporteAsc")}</option>
+            </select>
+          </label>
+        </div>
+
+        {formOpen && !editingId ? (
+          <div
+            style={{
+              flexShrink: 0,
+              maxHeight: "min(300px, 36vh)",
+              overflowY: "auto",
+              background: "#1e293b",
+              borderRadius: 12,
+              padding: "12px 14px",
+              border: "1px solid #334155",
+              boxShadow: "0 4px 18px rgba(0,0,0,0.18)",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#f8fafc", lineHeight: 1.2 }}>{t("compras.newPurchaseForm")}</h2>
+            <p style={{ margin: "6px 0 0", fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>{t("compras.quickFormHint")}</p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+              <div>
+                <label style={labelStyle}>{t("compras.productLabel")}</label>
+                <select
+                  value={draftStockProductoId}
+                  onChange={(e) => setDraftStockProductoId(e.target.value)}
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                >
+                  <option value="">{t("compras.notLinked")}</option>
+                  {productosStock.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
                     </option>
                   ))}
                 </select>
               </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end" }}>
+                <div>
+                  <label style={labelStyle}>{t("compras.quantityLabel")}</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min={0}
+                    value={draftCantidad}
+                    onChange={(e) => setDraftCantidad(e.target.value)}
+                    placeholder={t("compras.qtyPlaceholder")}
+                    style={inputStyle}
+                  />
+                </div>
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #334155",
+                    background: "#0f172a",
+                    color: selectedStockProduct ? "#e2e8f0" : "#64748b",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    minWidth: 52,
+                    textAlign: "center",
+                  }}
+                  title={t("compras.unitAuto")}
+                >
+                  {selectedStockProduct?.unidad ?? "—"}
+                </div>
+              </div>
+
               <div>
                 <label style={labelStyle}>{t("compras.totalEuro")}</label>
                 <input
@@ -367,60 +1025,270 @@ export default function ComprasPage() {
                   value={draftTotal}
                   onChange={(e) => setDraftTotal(e.target.value)}
                   placeholder={t("compras.placeholderTotalZero")}
+                  style={{ ...inputStyle, fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}
+                />
+                {quickUnitPriceHighlightLine ? (
+                  <div
+                    aria-live="polite"
+                    style={{
+                      marginTop: 12,
+                      padding: "14px 16px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(74, 222, 128, 0.45)",
+                      background: "linear-gradient(145deg, rgba(22, 163, 74, 0.22) 0%, rgba(21, 128, 61, 0.14) 100%)",
+                      boxShadow: "0 0 0 1px rgba(34, 197, 94, 0.08) inset, 0 4px 18px rgba(34, 197, 94, 0.12)",
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: "#bbf7d0",
+                      letterSpacing: "0.02em",
+                      fontVariantNumeric: "tabular-nums",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {quickUnitPriceHighlightLine}
+                  </div>
+                ) : null}
+                {quickPriceIncreaseWarning ? (
+                  <div
+                    aria-live="polite"
+                    role="status"
+                    style={{
+                      marginTop: quickUnitPriceHighlightLine ? 10 : 12,
+                      padding: "12px 16px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(251, 191, 36, 0.42)",
+                      background: "linear-gradient(145deg, rgba(180, 83, 9, 0.2) 0%, rgba(120, 53, 15, 0.18) 100%)",
+                      boxShadow: "0 0 0 1px rgba(245, 158, 11, 0.06) inset, 0 4px 16px rgba(245, 158, 11, 0.1)",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#fde68a", lineHeight: 1.4 }}>
+                      {t("compras.priceIncreaseWarningTitle")}
+                    </p>
+                    <p
+                      style={{
+                        margin: "8px 0 0",
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: "#fcd34d",
+                        fontVariantNumeric: "tabular-nums",
+                        lineHeight: 1.45,
+                        opacity: 0.95,
+                      }}
+                    >
+                      {t("compras.priceIncreaseWarningDetail", { pct: quickPriceIncreaseWarning.pctLabel })}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <label style={labelStyle}>{t("common.status")}</label>
+                <select
+                  value={draftEstado}
+                  onChange={(e) => setDraftEstado(e.target.value as CompraEstado)}
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                >
+                  {QUICK_CREATE_ESTADOS.map((e) => (
+                    <option key={e} value={e}>
+                      {e.charAt(0).toUpperCase() + e.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {formError ? (
+              <p style={{ color: "#fca5a5", marginTop: 12, marginBottom: 0, fontSize: 13 }}>{formError}</p>
+            ) : null}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                onClick={submitForm}
+                style={{
+                  border: "none",
+                  background: "#22c55e",
+                  color: "#fff",
+                  padding: "10px 16px",
+                  borderRadius: 8,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  fontSize: 14,
+                  width: "100%",
+                  boxShadow: "0 4px 14px rgba(34, 197, 94, 0.3)",
+                }}
+              >
+                {t("compras.savePurchase")}
+              </button>
+              <button
+                type="button"
+                onClick={closeForm}
+                style={{
+                  border: "1px solid #475569",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  width: "100%",
+                }}
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {formOpen && editingId ? (
+          <div
+            style={{
+              flexShrink: 0,
+              maxHeight: "min(340px, 42vh)",
+              overflowY: "auto",
+              background: "#1e293b",
+              borderRadius: 12,
+              padding: "12px 14px",
+              border: "1px solid #334155",
+              boxShadow: "0 4px 18px rgba(0,0,0,0.18)",
+            }}
+          >
+            <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#f8fafc", lineHeight: 1.2 }}>{t("compras.editPurchase")}</h2>
+            <p style={{ margin: "0 0 12px", fontSize: 11, color: "#94a3b8", lineHeight: 1.4 }}>
+              {t("compras.formHintBeforeStrong")} <strong>{t("compras.received")}</strong>
+              {t("compras.formHintAfterStrong")}
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <label style={labelStyle}>{t("common.supplier")}</label>
+                <input
+                  value={draftProveedor}
+                  onChange={(e) => setDraftProveedor(e.target.value)}
+                  placeholder={t("compras.placeholderSupplier")}
                   style={inputStyle}
                 />
               </div>
+
               <div>
-                <label style={labelStyle}>{t("compras.optionalInventoryProduct")}</label>
+                <label style={labelStyle}>{t("compras.productLabel")}</label>
                 <select
                   value={draftStockProductoId}
                   onChange={(e) => setDraftStockProductoId(e.target.value)}
-                  style={inputStyle}
+                  style={{ ...inputStyle, cursor: "pointer" }}
                 >
                   <option value="">{t("compras.notLinked")}</option>
                   {productosStock.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.nombre} ({p.unidad})
+                      {p.nombre}
                     </option>
                   ))}
                 </select>
-                {draftStockProductoId ? (
-                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "#64748b" }}>
-                    {t("compras.inventoryUnitHint")}{" "}
-                    <strong style={{ color: "#94a3b8" }}>
-                      {productosStock.find((p) => p.id === draftStockProductoId)?.unidad ?? t("common.emDash")}
-                    </strong>
-                  </p>
-                ) : null}
               </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label style={labelStyle}>{t("compras.quantityLabel")}</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min={0}
+                    value={draftCantidad}
+                    onChange={(e) => setDraftCantidad(e.target.value)}
+                    placeholder={t("compras.qtyPlaceholder")}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>{t("compras.unitAuto")}</label>
+                  <div
+                    style={{
+                      ...inputStyle,
+                      display: "flex",
+                      alignItems: "center",
+                      minHeight: 38,
+                      color: selectedStockProduct ? "#e2e8f0" : "#64748b",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {selectedStockProduct?.unidad ?? t("common.emDash")}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  background: "#0f172a",
+                  border: "1px solid #334155",
+                }}
+              >
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  {t("compras.unitPriceLabel")}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#fde68a" }}>
+                  {draftPrecioUnitario != null ? formatEuro(draftPrecioUnitario, locale) : t("common.emDash")}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
+                  {draftPrecioUnitario != null ? t("compras.unitPriceDerivedHint") : t("compras.unitPriceEmpty")}
+                </div>
+              </div>
+
               <div>
-                <label style={labelStyle}>{t("compras.qtyReceivedOptional")}</label>
+                <label style={labelStyle}>{t("compras.totalEuro")}</label>
                 <input
                   type="number"
                   inputMode="decimal"
-                  step="any"
+                  step="0.01"
                   min={0}
-                  value={draftCantidad}
-                  onChange={(e) => setDraftCantidad(e.target.value)}
-                  placeholder={t("compras.qtyPlaceholder")}
-                  style={inputStyle}
+                  value={draftTotal}
+                  onChange={(e) => setDraftTotal(e.target.value)}
+                  placeholder={t("compras.placeholderTotalZero")}
+                  style={{ ...inputStyle, fontSize: 18, fontWeight: 700 }}
                 />
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label style={labelStyle}>{t("common.date")}</label>
+                  <input type="date" value={draftFecha} onChange={(e) => setDraftFecha(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>{t("common.status")}</label>
+                  <select
+                    value={draftEstado}
+                    onChange={(e) => setDraftEstado(e.target.value as CompraEstado)}
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    {COMPRA_ESTADOS.map((e) => (
+                      <option key={e} value={e}>
+                        {e.charAt(0).toUpperCase() + e.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
                 <label style={labelStyle}>{t("common.notesOptional")}</label>
                 <textarea
                   value={draftNotas}
                   onChange={(e) => setDraftNotas(e.target.value)}
                   placeholder={t("compras.placeholderNotes")}
-                  rows={3}
-                  style={{ ...inputStyle, resize: "vertical", minHeight: 72 }}
+                  rows={2}
+                  style={{ ...inputStyle, resize: "vertical", minHeight: 52 }}
                 />
               </div>
             </div>
+
             {formError ? (
-              <p style={{ color: "#fca5a5", marginTop: 12, marginBottom: 0, fontSize: 14 }}>{formError}</p>
+              <p style={{ color: "#fca5a5", marginTop: 8, marginBottom: 0, fontSize: 12 }}>{formError}</p>
             ) : null}
-            <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
               <button
                 type="button"
                 onClick={submitForm}
@@ -428,13 +1296,14 @@ export default function ComprasPage() {
                   border: "none",
                   background: "#3b82f6",
                   color: "#fff",
-                  padding: "10px 20px",
-                  borderRadius: 10,
+                  padding: "8px 16px",
+                  borderRadius: 8,
                   fontWeight: 700,
                   cursor: "pointer",
+                  fontSize: 13,
                 }}
               >
-                {t("common.saveChanges")}
+                {t("compras.savePurchase")}
               </button>
               <button
                 type="button"
@@ -443,10 +1312,11 @@ export default function ComprasPage() {
                   border: "1px solid #475569",
                   background: "transparent",
                   color: "#e2e8f0",
-                  padding: "10px 18px",
-                  borderRadius: 10,
+                  padding: "8px 14px",
+                  borderRadius: 8,
                   fontWeight: 600,
                   cursor: "pointer",
+                  fontSize: 13,
                 }}
               >
                 {t("common.cancel")}
@@ -457,15 +1327,58 @@ export default function ComprasPage() {
 
         <div
           style={{
-            background: "#1e293b",
-            borderRadius: 16,
-            border: "1px solid #334155",
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
             overflow: "hidden",
+            background: "#1e293b",
+            borderRadius: 12,
+            border: "1px solid #334155",
           }}
         >
-          {sorted.length === 0 ? (
-            <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>
-              <p style={{ margin: "0 0 16px", fontSize: 16 }}>{t("compras.noPurchases")}</p>
+          <div
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "6px 10px",
+              borderBottom: "1px solid rgba(51, 65, 85, 0.55)",
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 10,
+                fontWeight: 700,
+                color: "#64748b",
+                letterSpacing: "0.09em",
+                textTransform: "uppercase",
+              }}
+            >
+              {t("compras.listSectionTitle")}
+            </h3>
+            <span style={{ fontSize: 10, fontWeight: 600, color: "#475569", fontVariantNumeric: "tabular-nums" }}>
+              {displayedRows.length}/{items.length}
+            </span>
+          </div>
+
+          {items.length === 0 ? (
+            <div
+              style={{
+                flex: 1,
+                padding: 24,
+                textAlign: "center",
+                color: "#94a3b8",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <p style={{ margin: "0 0 12px", fontSize: 14 }}>{t("compras.noPurchases")}</p>
               <button
                 type="button"
                 onClick={openCreate}
@@ -473,167 +1386,425 @@ export default function ComprasPage() {
                   border: "none",
                   background: "#22c55e",
                   color: "#fff",
-                  padding: "10px 20px",
-                  borderRadius: 10,
+                  padding: "8px 16px",
+                  borderRadius: 8,
                   fontWeight: 700,
                   cursor: "pointer",
+                  fontSize: 13,
                 }}
               >
                 {t("compras.createFirst")}
               </button>
             </div>
+          ) : displayedRows.length === 0 ? (
+            <div
+              style={{
+                flex: 1,
+                padding: 20,
+                textAlign: "center",
+                color: "#94a3b8",
+                fontSize: 13,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {listSearch.trim() ? t("compras.searchNoResults") : t("compras.filterEmpty")}
+            </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
-                <thead>
-                  <tr style={{ background: "#0f172a", textAlign: "left" }}>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
-                      {t("common.supplier")}
-                    </th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
-                      {t("common.date")}
-                    </th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
-                      {t("common.status")}
-                    </th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
-                      {t("common.total")}
-                    </th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
-                      {t("common.inventory")}
-                    </th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700 }}>
-                      {t("common.notes")}
-                    </th>
-                    <th style={{ padding: "14px 16px", color: "#94a3b8", fontSize: 12, fontWeight: 700, textAlign: "right" }}>
-                      {t("common.actions")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((c) => {
-                    const tone = rowTone(c.estado);
-                    const invLabel = inventarioDesdeCompra(
-                      c,
-                      productosStock,
-                      t("compras.notLinked"),
-                      t("common.product"),
-                    );
-                    return (
-                      <tr
-                        key={c.id}
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                overflowX: "auto",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <div
+                style={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 2,
+                  display: "grid",
+                  gridTemplateColumns: "40px minmax(120px, 1.45fr) 78px 88px minmax(80px, 1.05fr) 84px 156px",
+                  gap: "3px 6px",
+                  alignItems: "center",
+                  padding: "5px 8px",
+                  background: "linear-gradient(180deg, #1e293b 0%, #1e293bee 100%)",
+                  borderBottom: "1px solid rgba(51, 65, 85, 0.65)",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                }}
+              >
+                <span>{t("compras.colDate")}</span>
+                <span>{t("compras.colSupplier")}</span>
+                <span style={{ textAlign: "right" }}>{t("compras.colTotal")}</span>
+                <span>{t("compras.colStatus")}</span>
+                <span>{t("compras.colProduct")}</span>
+                <span>{t("compras.colStock")}</span>
+                <span style={{ textAlign: "right" }}>{t("compras.colActions")}</span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "3px 5px 6px" }}>
+                {displayedRows.map((c) => {
+                  const syncKind = stockSyncUiKind(c);
+                  const tone = rowToneWithSync(c.estado, syncKind);
+                  const invLabel = inventarioDesdeCompra(
+                    c,
+                    productosStock,
+                    t("compras.notLinked"),
+                    t("common.product"),
+                  );
+                  const notasHint = c.notas?.trim() ? c.notas.trim() : "";
+                  const look = estadoSelectLook[c.estado];
+                  const itemLabel = rowLineItemCount(c) === 0 ? t("compras.rowItemsNone") : t("compras.rowItemsOne");
+                  const typeL = rowPurchaseTypeLabel(c, t);
+                  const rowHints = rowOperationalHints(c, t);
+                  const showRecibido = c.estado === "pendiente";
+                  const showFactura = c.estado !== "cancelado";
+                  const showStock =
+                    c.estado !== "cancelado" && (!(c.producto_stock_id ?? "").trim() || syncKind === "not_applied");
+
+                  return (
+                    <div
+                      key={c.id}
+                      style={{
+                        background: tone.bg,
+                        borderRadius: 7,
+                        border: `1px solid ${tone.border}`,
+                        padding: "3px 6px",
+                        boxShadow: `inset 3px 0 0 ${tone.stripe}, inset 0 1px 0 rgba(255,255,255,0.03)`,
+                      }}
+                      title={notasHint ? `${c.proveedor} — ${notasHint}` : c.proveedor}
+                    >
+                      <div
                         style={{
-                          borderTop: "1px solid #334155",
-                          background: tone.bg,
-                          boxShadow:
-                            c.estado !== "pendiente" ? `inset 0 0 0 1px ${tone.border}` : undefined,
+                          display: "grid",
+                          gridTemplateColumns: "40px minmax(120px, 1.45fr) 78px 88px minmax(80px, 1.05fr) 84px 156px",
+                          gap: "3px 6px",
+                          alignItems: "center",
                         }}
                       >
-                        <td style={{ padding: "14px 16px", fontWeight: 600, color: "#f8fafc" }}>{c.proveedor}</td>
-                        <td style={{ padding: "14px 16px", color: "#cbd5e1" }}>{formatFechaCompra(c.fecha)}</td>
-                        <td style={{ padding: "12px 16px" }}>
-                          <select
-                            value={c.estado}
-                            onChange={(e) => updateEstado(c.id, e.target.value as CompraEstado)}
-                            aria-label={t("compras.ariaPurchaseStatus", { supplier: c.proveedor })}
-                            style={{
-                              ...inputStyle,
-                              maxWidth: 160,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {COMPRA_ESTADOS.map((e) => (
-                              <option key={e} value={e}>
-                                {e.charAt(0).toUpperCase() + e.slice(1)}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td
+                        <span
                           style={{
-                            padding: "14px 16px",
-                            textAlign: "right",
-                            fontVariantNumeric: "tabular-nums",
+                            fontSize: 9,
                             fontWeight: 600,
-                            color: "#e2e8f0",
+                            color: "#64748b",
+                            fontVariantNumeric: "tabular-nums",
+                            lineHeight: 1.15,
                           }}
                         >
-                          {formatEuro(c.total)}
-                        </td>
-                        <td style={{ padding: "14px 16px", fontSize: 13, color: "#cbd5e1" }}>
-                          <div>{invLabel}</div>
-                          {c.stock_aplicado ? (
+                          {formatFechaCorta(c.fecha, locale)}
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 15,
+                              fontWeight: 700,
+                              color: "#f8fafc",
+                              letterSpacing: "-0.02em",
+                              lineHeight: 1.15,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {c.proveedor}
+                          </div>
+                          <div
+                            style={{
+                              marginTop: 3,
+                              display: "flex",
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                              rowGap: 2,
+                              lineHeight: 1.25,
+                            }}
+                          >
+                            <span style={{ fontSize: 9, color: "#a8b0be", fontWeight: 500, letterSpacing: "0.02em" }}>{typeL}</span>
+                            <span style={metaHairlineSep} aria-hidden />
+                            <span style={{ fontSize: 9, color: "#6c7384", fontWeight: 500 }}>{itemLabel}</span>
+                            {rowHints.map((h, i) => (
+                              <span key={`${c.id}-hint-${i}`} style={{ display: "inline-flex", alignItems: "center" }}>
+                                <span style={metaHairlineSep} aria-hidden />
+                                <span style={{ fontSize: 8.5, color: "#5a6270", fontWeight: 500, letterSpacing: "0.02em" }}>{h}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 16,
+                            fontWeight: 700,
+                            fontVariantNumeric: "tabular-nums",
+                            color: "#e2ddd0",
+                            textAlign: "right",
+                            letterSpacing: "-0.02em",
+                            lineHeight: 1.05,
+                          }}
+                        >
+                          {formatEuro(typeof c.total === "number" && Number.isFinite(c.total) ? c.total : 0, locale)}
+                        </div>
+                        <select
+                          value={c.estado}
+                          onChange={(e) => updateEstado(c.id, e.target.value as CompraEstado)}
+                          aria-label={t("compras.ariaPurchaseStatus", { supplier: c.proveedor })}
+                          style={{
+                            ...selectRow,
+                            padding: "2px 5px",
+                            fontSize: 8.5,
+                            fontWeight: 500,
+                            textTransform: "none",
+                            letterSpacing: "0.02em",
+                            border: `1px solid ${look.border}`,
+                            backgroundColor: look.bg,
+                            color: look.color,
+                            borderRadius: 4,
+                            minWidth: 0,
+                            width: "100%",
+                            maxWidth: "100%",
+                          }}
+                        >
+                          {COMPRA_ESTADOS.map((e) => (
+                            <option key={e} value={e}>
+                              {estadoLabelCompra(e, t)}
+                            </option>
+                          ))}
+                        </select>
+                        <div style={{ minWidth: 0 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 500,
+                              color: invLabel === t("compras.notLinked") ? "#5c6575" : "#7d8698",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              display: "block",
+                              lineHeight: 1.2,
+                            }}
+                            title={invLabel}
+                          >
+                            {invLabel}
+                          </span>
+                          {notasHint && invLabel !== notasHint ? (
                             <span
                               style={{
-                                display: "inline-block",
-                                marginTop: 6,
-                                padding: "2px 8px",
-                                borderRadius: 999,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                background: "rgba(34, 197, 94, 0.15)",
-                                color: "#86efac",
-                                border: "1px solid rgba(34, 197, 94, 0.28)",
+                                marginTop: 3,
+                                fontSize: 8.5,
+                                fontWeight: 500,
+                                color: "#525a6b",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                display: "block",
+                                lineHeight: 1.2,
+                              }}
+                              title={notasHint}
+                            >
+                              {notasHint.length > 42 ? `${notasHint.slice(0, 40)}…` : notasHint}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                          {syncKind === "applied" ? (
+                            <span
+                              style={{
+                                fontWeight: 500,
+                                fontSize: 8,
+                                letterSpacing: "0.06em",
+                                textTransform: "uppercase",
+                                color: "#6b7380",
+                                whiteSpace: "nowrap",
                               }}
                             >
                               {t("compras.appliedToStock")}
                             </span>
-                          ) : null}
-                        </td>
-                        <td
+                          ) : syncKind === "not_applied" ? (
+                            <span
+                              style={{
+                                fontWeight: 500,
+                                fontSize: 8,
+                                letterSpacing: "0.05em",
+                                textTransform: "uppercase",
+                                color: "#9a8460",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {t("compras.notAppliedStock")}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 9, fontWeight: 500, color: "#4a5160" }}>{t("common.emDash")}</span>
+                          )}
+                        </div>
+                        <div
                           style={{
-                            padding: "14px 16px",
-                            color: c.notas ? "#94a3b8" : "#64748b",
-                            fontSize: 14,
-                            maxWidth: 180,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 3,
+                            justifyContent: "flex-end",
+                            alignItems: "center",
+                            flexShrink: 0,
                           }}
-                          title={c.notas ?? undefined}
                         >
-                          {c.notas ?? t("common.emDash")}
-                        </td>
-                        <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
-                          <button
-                            type="button"
-                            onClick={() => openEdit(c)}
-                            style={{
-                              marginRight: 8,
-                              border: "1px solid #475569",
-                              background: "#0f172a",
-                              color: "#e2e8f0",
-                              padding: "8px 12px",
-                              borderRadius: 8,
-                              cursor: "pointer",
-                              fontWeight: 600,
-                              fontSize: 13,
-                            }}
-                          >
-                            {t("common.edit")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeCompra(c.id)}
-                            style={{
-                              border: "1px solid rgba(239, 68, 68, 0.4)",
-                              background: "rgba(239, 68, 68, 0.12)",
-                              color: "#fca5a5",
-                              padding: "8px 12px",
-                              borderRadius: 8,
-                              cursor: "pointer",
-                              fontWeight: 600,
-                              fontSize: 13,
-                            }}
-                          >
-                            {t("common.delete")}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          {showRecibido ? (
+                            <button
+                              type="button"
+                              onClick={() => updateEstado(c.id, "recibido")}
+                              style={{
+                                border: "1px solid rgba(71, 85, 105, 0.35)",
+                                background: "rgba(15, 23, 42, 0.35)",
+                                color: "#8f9fa8",
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                fontWeight: 500,
+                                fontSize: 8.5,
+                                lineHeight: 1.15,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {t("compras.actionMarkReceived")}
+                            </button>
+                          ) : null}
+                          {showFactura ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(c)}
+                              style={{
+                                border: "1px solid rgba(51, 65, 85, 0.45)",
+                                background: "transparent",
+                                color: "#6f7c8c",
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                fontWeight: 500,
+                                fontSize: 8.5,
+                                lineHeight: 1.15,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {t("compras.actionInvoice")}
+                            </button>
+                          ) : null}
+                          {showStock ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(c)}
+                              style={{
+                                border: "1px solid rgba(51, 65, 85, 0.45)",
+                                background: "transparent",
+                                color: "#6f7c8c",
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                fontWeight: 500,
+                                fontSize: 8.5,
+                                lineHeight: 1.15,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {t("compras.actionLinkStock")}
+                            </button>
+                          ) : null}
+                          <div style={{ position: "relative", display: "inline-flex" }}>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRowMenuOpenId((p) => (p === c.id ? null : c.id));
+                              }}
+                              aria-label={t("compras.menuEditDelete")}
+                              aria-expanded={rowMenuOpenId === c.id}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                color: "#5c6574",
+                                padding: "2px 5px",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                fontWeight: 500,
+                                fontSize: 12,
+                                lineHeight: 1,
+                                minWidth: 22,
+                              }}
+                            >
+                              {t("compras.actionMore")}
+                            </button>
+                            {rowMenuOpenId === c.id ? (
+                              <div
+                                role="menu"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                style={{
+                                  position: "absolute",
+                                  right: 0,
+                                  top: "calc(100% + 2px)",
+                                  zIndex: 30,
+                                  minWidth: 120,
+                                  borderRadius: 8,
+                                  border: "1px solid #334155",
+                                  background: "#020617",
+                                  boxShadow: "0 12px 28px rgba(0,0,0,0.5)",
+                                  padding: 4,
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 2,
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRowMenuOpenId(null);
+                                    openEdit(c);
+                                  }}
+                                  style={{
+                                    border: "none",
+                                    background: "transparent",
+                                    color: "#cbd5e1",
+                                    textAlign: "left",
+                                    padding: "6px 8px",
+                                    borderRadius: 6,
+                                    cursor: "pointer",
+                                    fontWeight: 600,
+                                    fontSize: 11,
+                                  }}
+                                >
+                                  {t("common.edit")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRowMenuOpenId(null);
+                                    removeCompra(c.id);
+                                  }}
+                                  style={{
+                                    border: "none",
+                                    background: "transparent",
+                                    color: "#f87171",
+                                    textAlign: "left",
+                                    padding: "6px 8px",
+                                    borderRadius: 6,
+                                    cursor: "pointer",
+                                    fontWeight: 600,
+                                    fontSize: 11,
+                                  }}
+                                >
+                                  {t("common.delete")}
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
