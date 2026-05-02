@@ -217,6 +217,7 @@ const controlPanelStyle: CSSProperties = {
 };
 
 export default function DashboardPage() {
+  console.log("DEPLOY TEST HOSTLY");
   const router = useRouter();
   const { t, locale } = useI18n();
   const { restaurantId, restaurantName, role, refreshProfile } = useAuth();
