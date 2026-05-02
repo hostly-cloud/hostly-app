@@ -58,6 +58,11 @@ export async function saveEscandalloCosteForPlato(
     return { ok: false, error: "NO_ESCANDALLO_LINK", escandalloId: null };
   }
 
+  if (!supabase) {
+    writeCosteOverride(sid, costeTotal);
+    return { ok: true, error: null, escandalloId: sid };
+  }
+
   const { error } = await supabase.from("escandallos").update({ coste_total: costeTotal }).eq("id", sid);
 
   if (error) {

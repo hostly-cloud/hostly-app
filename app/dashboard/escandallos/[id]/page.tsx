@@ -119,6 +119,8 @@ function lineCostEuro(r: IngredientDraftRow, byId: Map<number, ProductoRow>): nu
 }
 
 async function fetchProductosCatalog(): Promise<{ productos: ProductoRow[]; errorMessage: string | null }> {
+  if (!supabase) return { productos: [], errorMessage: null };
+
   const selectors = ["id, nombre, unidad, coste_unitario", "id, nombre, unidad, coste", "id, nombre, unidad"];
   let lastMsg: string | null = null;
   for (const sel of selectors) {
@@ -172,6 +174,8 @@ export default function EscandalloDetallePage() {
   }, []);
 
   const loadIngredientes = useCallback(async (): Promise<{ ok: boolean; rows: IngredientDraftRow[] }> => {
+    if (!supabase) return { ok: true, rows: [] };
+
     const { data, error: ingError } = await supabase
       .from("escandallo_ingredientes")
       .select(ING_SELECT)
@@ -201,6 +205,13 @@ export default function EscandalloDetallePage() {
       setSaveMsg(null);
 
       try {
+        if (!supabase) {
+          setError("Supabase no configurado");
+          setPlato(null);
+          setIngredientes([]);
+          return;
+        }
+
         const { data: platoData, error: platoError } = await supabase
           .from("escandallos")
           .select("id, nombre_plato, coste_total, precio_venta")
@@ -315,6 +326,11 @@ export default function EscandalloDetallePage() {
 
     setSaving(true);
     try {
+      if (!supabase) {
+        setError("Supabase no configurado");
+        return;
+      }
+
       const { error: delErr } = await supabase.from("escandallo_ingredientes").delete().eq("escandallo_id", idNum);
       if (delErr) throw delErr;
 

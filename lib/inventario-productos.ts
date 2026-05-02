@@ -21,6 +21,10 @@ export function mockInventarioProductos(): InventarioProducto[] {
 
 /** Carga inventario desde Supabase; si falla, devuelve el mismo mock que /dashboard/inventario. */
 export async function fetchInventarioProductos(): Promise<{ productos: InventarioProducto[]; usingMock: boolean }> {
+  if (!supabase) {
+    return { productos: mockInventarioProductos(), usingMock: true };
+  }
+
   try {
     const { data, error } = await supabase
       .from("inventario_productos")

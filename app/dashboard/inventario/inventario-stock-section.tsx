@@ -69,6 +69,27 @@ export default function InventarioStockSection() {
     setError(null);
     setUsingMock(false);
 
+    if (!supabase) {
+      setUsingMock(true);
+      const rows = mockInventarioProductos() as ProductoRow[];
+      setItems(rows);
+      setDrafts(() => {
+        const next: DraftById = {};
+        for (const r of rows) {
+          next[String(r.id)] = {
+            nombre: r.nombre ?? "",
+            unidad: r.unidad ?? "kg",
+            stock_actual: r.stock_actual == null ? "" : String(roundTo(r.stock_actual, 3)),
+            coste_unitario: r.coste_unitario == null ? "" : String(roundTo(r.coste_unitario, 2)),
+            stock_minimo: r.stock_minimo == null ? "" : String(roundTo(r.stock_minimo, 3)),
+          };
+        }
+        return next;
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from("inventario_productos")
@@ -166,7 +187,7 @@ export default function InventarioStockSection() {
       };
 
       // Modo mock: solo memoria
-      if (usingMock) {
+      if (usingMock || !supabase) {
         setItems((prev) =>
           prev.map((r) =>
             String(r.id) === key
@@ -241,7 +262,7 @@ export default function InventarioStockSection() {
     setDeletingById((prev) => ({ ...prev, [key]: true }));
 
     try {
-      if (usingMock || key.startsWith("tmp_")) {
+      if (usingMock || !supabase || key.startsWith("tmp_")) {
         setItems((prev) => prev.filter((r) => String(r.id) !== key));
         setDrafts((prev) => {
           const next = { ...prev };

@@ -361,6 +361,11 @@ export default function EscandallosPage() {
       const coste_total = parseNullableNumber(draft.coste_total);
       const precio_venta = parseNullableNumber(draft.precio_venta);
 
+      if (!supabase) {
+        setError("Supabase no configurado");
+        return;
+      }
+
       const { error } = await supabase
         .from("escandallos")
         .update({ coste_total, precio_venta })

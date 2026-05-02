@@ -23,6 +23,8 @@ function badRequest(message: string, status = 400) {
 }
 
 async function bootstrapFromEscandallosIfEmpty(restauranteId: string, db: FirebaseFirestore.Firestore) {
+  if (!supabase) return;
+
   const coll = db.collection("restaurantes").doc(restauranteId).collection("catalogoVenta");
   const existing = await coll.limit(1).get();
   if (!existing.empty) return;
@@ -71,6 +73,13 @@ export async function GET(req: Request) {
   const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
   if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
   assertServerRestauranteAllowed(restauranteId);
+
+  if (!supabase) {
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const db = getHostlyFirestore();
   if (!db) return badRequest("FIRESTORE_NOT_CONFIGURED", 501);

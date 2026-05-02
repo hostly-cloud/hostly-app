@@ -24,6 +24,7 @@ type EscandalloDbRow = {
 export async function bootstrapPlatosFromEscandallosIfEmpty(restauranteId: string): Promise<PlatoCarta[]> {
   const platos = loadPlatos(restauranteId);
   if (platos.length > 0) return platos;
+  if (!supabase) return platos;
 
   const { data, error } = await supabase
     .from("escandallos")
@@ -73,6 +74,8 @@ function newId(): string {
  * Crea fila mínima en `escandallos` para cada producto de venta activo sin vínculo.
  */
 export async function ensureEscandalloRowsForPlatos(platos: PlatoCarta[]): Promise<{ next: PlatoCarta[]; error: string | null }> {
+  if (!supabase) return { next: [...platos], error: null };
+
   let error: string | null = null;
   const next = [...platos];
   for (let i = 0; i < next.length; i++) {
@@ -107,6 +110,8 @@ export async function ensureEscandalloRowsForPlatos(platos: PlatoCarta[]): Promi
  * Listado unificado para Escandallos / KPIs: solo productos de venta activos del catálogo con fila remota.
  */
 export async function fetchEscandalloMergedRowsForBrowser(): Promise<{ rows: EscandalloMergedRow[]; error: string | null }> {
+  if (!supabase) return { rows: [], error: null };
+
   const restauranteId = getBrowserRestauranteId();
   let platos = await bootstrapPlatosFromEscandallosIfEmpty(restauranteId);
 
@@ -167,6 +172,8 @@ export async function mirrorPlatoToEscandalloRow(plato: PlatoCarta): Promise<{ e
   if (!plato.escandalloSupabaseId || !plato.activo) {
     return { error: null };
   }
+  if (!supabase) return { error: null };
+
   const { error } = await supabase
     .from("escandallos")
     .update({
@@ -216,6 +223,13 @@ export function cartaRowEconomicsTier(input: {
 export async function fetchEscandalloMetaForIds(ids: number[]): Promise<EscandalloMetaMap> {
   const out: EscandalloMetaMap = new Map();
   if (ids.length === 0) return out;
+
+  if (!supabase) {
+    for (const id of ids) {
+      out.set(id, { tieneEscandallo: false, costeTotal: null });
+    }
+    return out;
+  }
 
   const { data: escRows, error: escMetaErr } = await supabase.from("escandallos").select("id, coste_total").in("id", ids);
 
