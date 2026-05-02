@@ -65,6 +65,28 @@ body {
   backdrop-filter: blur(10px);
 }
 
+/* Móvil dashboard: pestañas horizontales con scroll si no caben */
+@media (max-width: 767px) {
+  [data-hostly-touch] [role="tablist"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  [data-hostly-touch] .carta-mode-seg {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+  }
+}
+
 .hostly-page-title {
   font-size: 18px;
   font-weight: 900;

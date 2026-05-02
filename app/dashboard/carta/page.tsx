@@ -933,6 +933,16 @@ export default function CartaPage() {
   const isInteractingRef = useRef(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const restaurantId = profileRestaurantId ?? user?.uid ?? null;
+
+  const [cartaHeaderMobile, setCartaHeaderMobile] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setCartaHeaderMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
   const waiterId =
     (user as { uid?: string; id?: string } | null | undefined)?.uid ||
     (user as { uid?: string; id?: string } | null | undefined)?.id ||
@@ -4546,6 +4556,7 @@ export default function CartaPage() {
   return (
     <div
       className="carta-root"
+      data-carta-mobile={cartaHeaderMobile ? "true" : undefined}
       style={{
         background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
         color: "#e5e7eb",
@@ -4819,6 +4830,60 @@ export default function CartaPage() {
 .carta-root .hostly-page-header {
   flex-shrink: 0;
   padding: 0;
+}
+
+/* Móvil Carta: scroll natural, cabecera apilada (detalle en HostlyPageHeader + data-carta-mobile) */
+.carta-root[data-carta-mobile="true"] {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 6rem;
+}
+
+.carta-root[data-carta-mobile="true"] .hostly-page-header {
+  position: static !important;
+  top: auto !important;
+  z-index: auto !important;
+}
+
+.carta-root[data-carta-mobile="true"] .carta-page-main--below-header {
+  margin-top: 12px;
+}
+
+.carta-root[data-carta-mobile="true"] .carta-header-mode-tabs {
+  display: inline-flex !important;
+  flex-wrap: nowrap !important;
+  align-self: stretch !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.carta-root[data-carta-mobile="true"] .carta-page-main,
+.carta-root[data-carta-mobile="true"] .carta-page-main--map {
+  flex: none !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.carta-root[data-carta-mobile="true"] .carta-map-page-fill {
+  flex: none !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.carta-root[data-carta-mobile="true"] .carta-table-map-grid {
+  flex: none !important;
+  min-height: 420px !important;
+  overflow: visible !important;
 }
 
 .carta-page-main {
@@ -6198,6 +6263,8 @@ export default function CartaPage() {
       />
       <HostlyPageHeader
         wide
+        isMobileLayout={cartaHeaderMobile}
+        mobileStackLeftColumn={cartaHeaderMobile}
         left={
           <HostlyBackButton
             onClick={() => router.push("/dashboard")}
@@ -6209,7 +6276,7 @@ export default function CartaPage() {
         subtitle={t("cartaTpv.viewTpv")}
         right={
           <div
-            className="carta-mode-seg carta-mode-seg--compact"
+            className="carta-mode-seg carta-mode-seg--compact carta-header-mode-tabs"
             role="group"
             aria-label="Modo"
           >
@@ -6239,11 +6306,14 @@ export default function CartaPage() {
             </button>
           </div>
         }
-        containerStyle={{ paddingTop: 6, paddingBottom: 6 }}
+        containerStyle={{
+          paddingTop: 6,
+          paddingBottom: cartaHeaderMobile ? 16 : 6,
+        }}
       />
 
       <div
-        className={`carta-page-main${showTableMap ? " carta-page-main--map" : ""}`}
+        className={`carta-page-main carta-page-main--below-header${showTableMap ? " carta-page-main--map" : ""}`}
       >
       {viewMode === "cocina" ? (
         <HostlyPageContainer
@@ -6337,15 +6407,27 @@ export default function CartaPage() {
           {showTableMap ? (
             <div
               className="carta-table-map-shell"
-              style={{
-                position: "relative",
-                flex: 1,
-                minHeight: 0,
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-              }}
+              style={
+                cartaHeaderMobile
+                  ? {
+                      width: "100%",
+                      minHeight: "420px",
+                      height: "auto",
+                      overflow: "visible",
+                      position: "relative",
+                      display: "flex",
+                      flexDirection: "column",
+                    }
+                  : {
+                      position: "relative",
+                      flex: 1,
+                      minHeight: 0,
+                      width: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      overflow: "hidden",
+                    }
+              }
             >
               <div
                 role="status"
@@ -6460,22 +6542,33 @@ export default function CartaPage() {
               <div
                 ref={mapRef}
                 className="carta-table-map-grid"
-                style={{
-                  position: "relative",
-                  flex: 1,
-                  minHeight: 0,
-                  width: "100%",
-                  overflow: "hidden",
-                  cursor: "default",
-                }}
+                style={
+                  cartaHeaderMobile
+                    ? {
+                        position: "relative",
+                        width: "100%",
+                        minHeight: "420px",
+                        height: "auto",
+                        overflow: "visible",
+                        cursor: "default",
+                      }
+                    : {
+                        position: "relative",
+                        flex: 1,
+                        minHeight: 0,
+                        width: "100%",
+                        overflow: "hidden",
+                        cursor: "default",
+                      }
+                }
                 onWheel={handleMapWheel}
               >
                 <div
                   style={{
                     position: "relative",
                     width: "100%",
-                    height: "100%",
-                    minHeight: 0,
+                    height: cartaHeaderMobile ? "auto" : "100%",
+                    minHeight: cartaHeaderMobile ? "420px" : 0,
                   }}
                 >
                 {tablesVisibleOnMap.length === 0 ? (

@@ -445,6 +445,129 @@ export default function DashboardPage() {
     lineHeight: 1.3,
   };
 
+  const ownerBlock =
+    role === "owner" && restaurantId && isFirebaseConfigured ? (
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "12px 14px",
+          borderRadius: 12,
+          border: "1px solid #334155",
+          background: "#1e293b",
+        }}
+      >
+        <div style={{ ...sectionTitleStyle, marginBottom: 10 }}>Nombre del restaurante</div>
+        <input
+          type="text"
+          value={restaurantNameInput}
+          onChange={(e) => setRestaurantNameInput(e.target.value)}
+          style={{
+            width: "100%",
+            maxWidth: 360,
+            boxSizing: "border-box",
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid #475569",
+            background: "#0f172a",
+            color: "#f8fafc",
+            fontSize: 14,
+            marginBottom: 10,
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            void (async () => {
+              if (!restaurantId) return;
+              await updateRestaurantName(restaurantId, restaurantNameInput);
+              await refreshProfile();
+            })();
+          }}
+          style={{
+            padding: "8px 16px",
+            borderRadius: 8,
+            border: "none",
+            background: "#2563eb",
+            color: "#fff",
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: "pointer",
+          }}
+        >
+          Guardar
+        </button>
+      </div>
+    ) : null;
+
+  const moduleEntriesOperacion = MODULE_ENTRIES.slice(0, 1);
+  const moduleEntriesRest = MODULE_ENTRIES.slice(1);
+
+  const renderModuleGrid = (modules: readonly (typeof MODULE_ENTRIES)[number][]) => (
+    <div style={{ flexShrink: 0 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+          gap: 12,
+        }}
+      >
+        {modules.map((mod) => {
+          const hovered = hoverModule === mod.path;
+          const Icon = mod.Icon;
+          return (
+            <button
+              key={mod.path}
+              type="button"
+              onClick={() => router.push(mod.path)}
+              onMouseEnter={() => setHoverModule(mod.path)}
+              onMouseLeave={() => setHoverModule(null)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                textAlign: "left",
+                cursor: "pointer",
+                borderRadius: 14,
+                padding: "18px 20px",
+                minHeight: 76,
+                border: hovered ? "1px solid rgba(96, 165, 250, 0.45)" : "1px solid #334155",
+                background: hovered ? "rgba(30, 41, 59, 0.95)" : "#0f172a",
+                color: "#f8fafc",
+                transition: "border-color 0.15s ease, background 0.15s ease",
+              }}
+            >
+              <span
+                style={{
+                  color: hovered ? "#93c5fd" : "#94a3b8",
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: hovered ? "rgba(56, 189, 248, 0.12)" : "rgba(148, 163, 184, 0.08)",
+                }}
+              >
+                <Icon size={22} />
+              </span>
+              <span
+                style={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.25,
+                }}
+              >
+                {mod.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <ModulePageShell
       title={t("dashboard.title")}
@@ -476,58 +599,8 @@ export default function DashboardPage() {
               }
         }
       >
-        {role === "owner" && restaurantId && isFirebaseConfigured ? (
-          <div
-            style={{
-              flexShrink: 0,
-              padding: "12px 14px",
-              borderRadius: 12,
-              border: "1px solid #334155",
-              background: "#1e293b",
-            }}
-          >
-            <div style={{ ...sectionTitleStyle, marginBottom: 10 }}>Nombre del restaurante</div>
-            <input
-              type="text"
-              value={restaurantNameInput}
-              onChange={(e) => setRestaurantNameInput(e.target.value)}
-              style={{
-                width: "100%",
-                maxWidth: 360,
-                boxSizing: "border-box",
-                padding: "10px 12px",
-                borderRadius: 8,
-                border: "1px solid #475569",
-                background: "#0f172a",
-                color: "#f8fafc",
-                fontSize: 14,
-                marginBottom: 10,
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                void (async () => {
-                  if (!restaurantId) return;
-                  await updateRestaurantName(restaurantId, restaurantNameInput);
-                  await refreshProfile();
-                })();
-              }}
-              style={{
-                padding: "8px 16px",
-                borderRadius: 8,
-                border: "none",
-                background: "#2563eb",
-                color: "#fff",
-                fontWeight: 600,
-                fontSize: 14,
-                cursor: "pointer",
-              }}
-            >
-              Guardar
-            </button>
-          </div>
-        ) : null}
+        {!mobileScroll && ownerBlock}
+        {mobileScroll ? renderModuleGrid(moduleEntriesOperacion) : null}
 
         <div
           style={{
@@ -624,6 +697,8 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {mobileScroll && ownerBlock}
 
         <div
           style={{
@@ -736,69 +811,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div style={{ flexShrink: 0 }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-              gap: 12,
-            }}
-          >
-            {MODULE_ENTRIES.map((mod) => {
-              const hovered = hoverModule === mod.path;
-              const Icon = mod.Icon;
-              return (
-                <button
-                  key={mod.path}
-                  type="button"
-                  onClick={() => router.push(mod.path)}
-                  onMouseEnter={() => setHoverModule(mod.path)}
-                  onMouseLeave={() => setHoverModule(null)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 14,
-                    textAlign: "left",
-                    cursor: "pointer",
-                    borderRadius: 14,
-                    padding: "18px 20px",
-                    minHeight: 76,
-                    border: hovered ? "1px solid rgba(96, 165, 250, 0.45)" : "1px solid #334155",
-                    background: hovered ? "rgba(30, 41, 59, 0.95)" : "#0f172a",
-                    color: "#f8fafc",
-                    transition: "border-color 0.15s ease, background 0.15s ease",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: hovered ? "#93c5fd" : "#94a3b8",
-                      flexShrink: 0,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      background: hovered ? "rgba(56, 189, 248, 0.12)" : "rgba(148, 163, 184, 0.08)",
-                    }}
-                  >
-                    <Icon size={22} />
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 700,
-                      letterSpacing: "-0.02em",
-                      lineHeight: 1.25,
-                    }}
-                  >
-                    {mod.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {renderModuleGrid(mobileScroll ? moduleEntriesRest : MODULE_ENTRIES)}
       </div>
     </ModulePageShell>
   );

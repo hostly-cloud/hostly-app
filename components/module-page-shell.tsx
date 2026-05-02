@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HostlyBackButton } from "@/components/hostly/back-button";
@@ -52,8 +53,18 @@ export default function ModulePageShell({
   fitLaptopViewport,
 }: ModulePageShellProps) {
   const { t } = useI18n();
+  const [isMobile, setIsMobile] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
   const resolvedBack = backLabel ?? t("common.backToDashboard");
-  const laptopFit = Boolean(lockViewport && fitLaptopViewport && compactLayout && operationalFocus);
+  const effectiveLockViewport = Boolean(lockViewport && !isMobile);
+  const laptopFit = Boolean(effectiveLockViewport && fitLaptopViewport && compactLayout && operationalFocus);
   const pad = laptopFit
     ? "clamp(4px, 0.8vw, 10px)"
     : compactLayout && operationalFocus
@@ -71,24 +82,34 @@ export default function ModulePageShell({
   return (
     <main
       style={{
-        minHeight: lockViewport ? "100dvh" : "100vh",
-        height: lockViewport ? (laptopFit ? "calc(100dvh - 2px)" : "100dvh") : undefined,
-        maxHeight: lockViewport ? (laptopFit ? "calc(100dvh - 2px)" : "100dvh") : undefined,
         boxSizing: "border-box",
         background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
         color: "#f8fafc",
         paddingTop: padTop,
         paddingLeft: 0,
         paddingRight: 0,
-        paddingBottom: pad,
         fontFamily: "Arial, sans-serif",
-        overflow: lockViewport ? "hidden" : undefined,
-        display: lockViewport ? "flex" : undefined,
-        flexDirection: lockViewport ? "column" : undefined,
+        ...(isMobile
+          ? {
+              minHeight: "100dvh",
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              paddingBottom: "6rem",
+            }
+          : {
+              paddingBottom: pad,
+              minHeight: effectiveLockViewport ? "100dvh" : "100vh",
+              height: effectiveLockViewport ? (laptopFit ? "calc(100dvh - 2px)" : "100dvh") : undefined,
+              maxHeight: effectiveLockViewport ? (laptopFit ? "calc(100dvh - 2px)" : "100dvh") : undefined,
+              overflow: effectiveLockViewport ? "hidden" : undefined,
+              display: effectiveLockViewport ? "flex" : undefined,
+              flexDirection: effectiveLockViewport ? "column" : undefined,
+            }),
       }}
     >
       <HostlyPageHeader
         wide={isWide}
+        isMobileLayout={isMobile}
         containerStyle={maxWidth !== DEFAULT_MAX ? { maxWidth } : undefined}
         left={
           hideBackLink ? null : (
@@ -129,13 +150,17 @@ export default function ModulePageShell({
         style={{
           ...(maxWidth !== DEFAULT_MAX ? { maxWidth } : null),
           marginTop: laptopFit ? 10 : compactLayout ? (operationalFocus ? 10 : denseWorkbench ? 14 : 16) : 24,
-          flexGrow: lockViewport ? 1 : undefined,
-          flexShrink: lockViewport ? 1 : undefined,
-          flexBasis: lockViewport ? 0 : undefined,
-          minHeight: lockViewport ? 0 : undefined,
-          overflow: lockViewport ? "hidden" : undefined,
-          display: lockViewport ? "flex" : undefined,
-          flexDirection: lockViewport ? "column" : undefined,
+          ...(isMobile
+            ? {}
+            : {
+                flexGrow: effectiveLockViewport ? 1 : undefined,
+                flexShrink: effectiveLockViewport ? 1 : undefined,
+                flexBasis: effectiveLockViewport ? 0 : undefined,
+                minHeight: effectiveLockViewport ? 0 : undefined,
+                overflow: effectiveLockViewport ? "hidden" : undefined,
+                display: effectiveLockViewport ? "flex" : undefined,
+                flexDirection: effectiveLockViewport ? "column" : undefined,
+              }),
         }}
       >
         {children}
