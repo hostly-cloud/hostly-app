@@ -5,6 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
+import { fetchEscandalloMergedRowsForBrowser } from "@/lib/platos-escandallo-bridge";
+import { syncPlatoPrecioFromEscandalloSave } from "@/lib/platos-local";
 import { supabase } from "@/lib/supabase";
 
 type EscandalloRow = {
@@ -207,36 +211,37 @@ function marginHealthHintI18nKey(tier: MarginHealth): string {
 /** Columnas alineadas cabecera + filas (listado TPV). */
 const TPV_ROW_GRID: CSSProperties = {
   display: "grid",
-  gridTemplateColumns:
-    "minmax(128px, 1.35fr) 76px 76px minmax(88px, 0.85fr) minmax(72px, 0.55fr) minmax(88px, 1fr) 68px",
-  gap: "6px 8px",
+  // Estructura fija: Producto | Coste | Venta | Margen | Estado | Guardar
+  gridTemplateColumns: "minmax(220px, 1.6fr) 110px 110px 110px 140px 120px",
+  gap: "6px 10px",
   alignItems: "center",
-  padding: "8px 10px",
+  padding: "9px 12px",
 };
 
 const tpvInputWrap: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 4,
+  gap: 6,
   minWidth: 0,
-  justifyContent: "center",
+  justifyContent: "flex-end",
+  width: "100%",
 };
 
 const tpvEuroInput: CSSProperties = {
   width: "100%",
   minWidth: 0,
-  padding: "10px 6px",
+  height: 40,
+  padding: "9px 10px",
   borderRadius: 10,
   border: "1px solid #475569",
   backgroundColor: "#0f172a",
   color: "#f8fafc",
-  fontSize: 15,
-  fontWeight: 600,
+  fontSize: 14,
+  fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
-  textAlign: "center",
+  textAlign: "right",
   outline: "none",
   boxSizing: "border-box",
-  minHeight: 44,
 };
 
 const tpvEuroSuffix: CSSProperties = {
@@ -271,18 +276,13 @@ export default function EscandallosPage() {
 
   async function cargar() {
     setError(null);
-    const { data, error } = await supabase
-      .from("escandallos")
-      .select("id, nombre_plato, coste_total, precio_venta")
-      .order("nombre_plato", { ascending: true, nullsFirst: false });
+    const { rows: baseRows, error: mergeError } = await fetchEscandalloMergedRowsForBrowser();
 
-    if (error) {
-      setError(error.message);
+    if (mergeError) {
+      setError(mergeError);
       setItems([]);
       return;
     }
-
-    const baseRows = (data ?? []) as EscandalloRow[];
     let overrides: Record<string, number> = {};
     try {
       const raw = localStorage.getItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY);
@@ -316,7 +316,7 @@ export default function EscandallosPage() {
   function formatMoney2OrDash(value: number | null | undefined): string {
     if (value == null) return "-";
     if (!Number.isFinite(value)) return "-";
-    return roundTo(value, 2).toFixed(2);
+    return roundTo(value, 2).toFixed(2).replace(".", ",");
   }
 
   /** Alias por si el JSX o HMR aún referencian el nombre antiguo (evita ReferenceError). */
@@ -328,7 +328,7 @@ export default function EscandallosPage() {
     if (value == null) return "-";
     if (!Number.isFinite(value)) return "-";
     const s = roundTo(value, 2).toFixed(2);
-    return s.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+    return s.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1").replace(".", ",");
   }
 
   function formatMarginOrDash(costeTotal: number | null, precioVenta: number | null): string {
@@ -336,7 +336,7 @@ export default function EscandallosPage() {
     if (costeTotal == null) return "-";
     const m = ((precioVenta - costeTotal) / precioVenta) * 100;
     if (!Number.isFinite(m)) return "-";
-    return `${m.toFixed(1)}%`;
+    return `${m.toFixed(1).replace(".", ",")} %`;
   }
 
   function updateDraft(id: string | number, field: "coste_total" | "precio_venta", value: string) {
@@ -370,6 +370,8 @@ export default function EscandallosPage() {
         setError(error.message);
         return;
       }
+
+      syncPlatoPrecioFromEscandalloSave(getBrowserRestauranteId(), Number(id), precio_venta);
 
       if (coste_total != null) {
         try {
@@ -431,21 +433,22 @@ export default function EscandallosPage() {
     <ModulePageShell
       title={t("escandallos.title")}
       subtitle={t("escandallos.subtitle")}
-      maxWidth={1760}
       compactLayout
+      operationalFocus
       lockViewport
       headerRight={
         <button
           onClick={cargar}
           type="button"
           style={{
-            border: "1px solid #334155",
-            background: "#1e293b",
-            color: "#f8fafc",
-            padding: "8px 12px",
+            border: "1px solid rgba(71, 85, 105, 0.65)",
+            background: "rgba(15, 23, 42, 0.55)",
+            color: "#94a3b8",
+            padding: "7px 12px",
             borderRadius: 10,
             cursor: "pointer",
             fontWeight: 600,
+            fontSize: 12,
           }}
         >
           {t("common.reload")}
@@ -459,7 +462,7 @@ export default function EscandallosPage() {
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          gap: 10,
+          gap: 5,
           overflow: "hidden",
         }}
       >
@@ -487,25 +490,25 @@ export default function EscandallosPage() {
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
-              gap: "10px 16px",
+              gap: "6px 10px",
             }}
           >
             {listStats.avgMargin != null ? (
               <div
                 style={{
-                  padding: "10px 14px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(34, 197, 94, 0.28)",
-                  background: "linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(15, 23, 42, 0.55) 100%)",
+                  padding: "6px 9px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(34, 197, 94, 0.2)",
+                  background: "rgba(34, 197, 94, 0.06)",
                 }}
               >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: 15,
-                    fontWeight: 800,
+                    fontSize: 12,
+                    fontWeight: 700,
                     letterSpacing: "-0.02em",
-                    color: "#ecfdf5",
+                    color: "#a7f3d0",
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
@@ -517,9 +520,9 @@ export default function EscandallosPage() {
               style={{
                 margin: 0,
                 flex: "1 1 200px",
-                fontSize: 13,
-                lineHeight: 1.45,
-                color: "#64748b",
+                fontSize: 11,
+                lineHeight: 1.35,
+                color: "#5c6570",
                 minWidth: 0,
               }}
             >
@@ -563,7 +566,7 @@ export default function EscandallosPage() {
               {t("escandallos.listEmptyBody")}
             </p>
             <Link
-              href="/dashboard/inventario"
+              href="/dashboard/carta"
               style={{
                 display: "inline-block",
                 marginTop: 26,
@@ -577,7 +580,7 @@ export default function EscandallosPage() {
                 textDecoration: "none",
               }}
             >
-              {t("escandallos.listEmptyCtaInventario")}
+              {t("escandallos.listEmptyCtaCarta")}
             </Link>
           </div>
         ) : null}
@@ -586,13 +589,13 @@ export default function EscandallosPage() {
           <div
             style={{
               flexShrink: 0,
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid #334155",
-              background: "#1e293b",
+              padding: "6px 8px",
+              borderRadius: 10,
+              border: "1px solid rgba(51, 65, 85, 0.65)",
+              background: "#151b2e",
               display: "flex",
               flexDirection: "column",
-              gap: 10,
+              gap: 6,
             }}
           >
             <div
@@ -600,15 +603,15 @@ export default function EscandallosPage() {
                 display: "flex",
                 flexWrap: "wrap",
                 alignItems: "center",
-                gap: "8px 14px",
+                gap: "8px 12px",
                 width: "100%",
               }}
             >
               <span
                 style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: "#e2e8f0",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#94a3b8",
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
@@ -680,7 +683,7 @@ export default function EscandallosPage() {
                   minWidth: 140,
                   flex: "1 1 200px",
                   maxWidth: 360,
-                  padding: "10px 12px",
+                  padding: "8px 10px",
                   borderRadius: 10,
                   border: "1px solid #475569",
                   background: "#0f172a",
@@ -688,11 +691,10 @@ export default function EscandallosPage() {
                   fontSize: 14,
                   outline: "none",
                   boxSizing: "border-box",
-                  minHeight: 44,
                 }}
               />
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
               {TIER_FILTER_CHOICES.map((opt) => {
                 const active = tierFilter === opt.id;
                 return (
@@ -701,15 +703,17 @@ export default function EscandallosPage() {
                     type="button"
                     onClick={() => setTierFilter(opt.id)}
                     style={{
-                      padding: "8px 12px",
+                      padding: "7px 12px",
                       borderRadius: 10,
-                      border: active ? "1px solid rgba(34, 197, 94, 0.55)" : "1px solid #475569",
-                      background: active ? "rgba(34, 197, 94, 0.18)" : "#0f172a",
+                      border: active ? "1px solid rgba(34, 197, 94, 0.55)" : "1px solid rgba(71, 85, 105, 0.55)",
+                      background: active ? "rgba(34, 197, 94, 0.18)" : "transparent",
                       color: active ? "#ecfdf5" : "#cbd5e1",
                       fontSize: 12,
                       fontWeight: 700,
                       cursor: "pointer",
-                      minHeight: 40,
+                      minHeight: 36,
+                      boxSizing: "border-box",
+                      touchAction: "manipulation",
                     }}
                   >
                     {t(opt.labelKey)}
@@ -741,7 +745,17 @@ export default function EscandallosPage() {
                 WebkitOverflowScrolling: "touch",
               }}
             >
-              <div style={{ minWidth: 920 }}>
+              <div style={{ minWidth: 820 }}>
+                <div
+                  style={{
+                    flexShrink: 0,
+                    padding: "6px 10px 5px",
+                    borderBottom: "1px solid #334155",
+                    background: "#0c1222",
+                  }}
+                >
+                  <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("escandallos.tpvWorkbenchTitle")}</h2>
+                </div>
                 <div
                   role="row"
                   style={{
@@ -749,21 +763,20 @@ export default function EscandallosPage() {
                     position: "sticky",
                     top: 0,
                     zIndex: 2,
-                    background: "#1e293b",
-                    borderBottom: "1px solid #334155",
-                    fontSize: 10,
+                    background: "linear-gradient(180deg, #1e293b 0%, #1a2332 100%)",
+                    borderBottom: "1px solid rgba(51, 65, 85, 0.85)",
+                    fontSize: 11,
                     fontWeight: 800,
-                    letterSpacing: "0.08em",
+                    letterSpacing: "0.06em",
                     textTransform: "uppercase",
-                    color: "#64748b",
+                    color: "#94a3b8",
                   }}
                 >
                   <span>{t("escandallos.tpvHeadDish")}</span>
                   <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadCost")}</span>
                   <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadSale")}</span>
                   <span>{t("escandallos.tpvHeadMargin")}</span>
-                  <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadVsAvg")}</span>
-                  <span>{t("escandallos.tpvHeadHint")}</span>
+                  <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadStatus")}</span>
                   <span style={{ textAlign: "center" }}>{t("escandallos.tpvHeadSave")}</span>
                 </div>
 
@@ -779,6 +792,7 @@ export default function EscandallosPage() {
                     const costeN = parseNullableNumber(draft.coste_total);
                     const ventaN = parseNullableNumber(draft.precio_venta);
                     const marginText = formatMarginOrDash(costeN, ventaN);
+                    const marginTextDisplay = marginText === "-" ? "—" : marginText.replace(".", ",").replace("%", " %");
                     const marginPct = computeMarginPercent(costeN, ventaN);
                     const marginTier = marginHealthCategory(marginPct);
                     const marginColor = marginHealthPctColor(marginTier);
@@ -803,20 +817,41 @@ export default function EscandallosPage() {
 
                     const zebra = rowIdx % 2 === 1 ? "rgba(30, 41, 59, 0.35)" : "transparent";
 
+                    const ROW_GRID: CSSProperties = {
+                      display: "grid",
+                      gridTemplateColumns: "minmax(220px, 1.6fr) 110px 110px 110px 140px 120px",
+                      gap: "10px",
+                      alignItems: "center",
+                      width: "100%",
+                      padding: "10px 12px",
+                      boxSizing: "border-box",
+                    };
+
+                    const CELL_NUM: CSSProperties = {
+                      width: "100%",
+                      minWidth: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      gap: 6,
+                    };
+
                     return (
                       <div
                         key={key}
                         role="row"
                         style={{
                           ...TPV_ROW_GRID,
+                          ...ROW_GRID,
                           borderBottom: "1px solid rgba(51, 65, 85, 0.65)",
                           background: zebra,
                         }}
                       >
-                        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
                             <Link
                               href={`/dashboard/escandallos/${encodeURIComponent(String(item.id))}`}
+                              className="hostly-tpv-row-link"
                               style={{
                                 textDecoration: "none",
                                 color: "#f8fafc",
@@ -834,7 +869,7 @@ export default function EscandallosPage() {
                             </Link>
                           </div>
                           {(isBest || isWorst) && (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                               {isBest ? (
                                 <span
                                   style={{
@@ -875,7 +910,7 @@ export default function EscandallosPage() {
                           )}
                         </div>
 
-                        <div style={tpvInputWrap}>
+                        <div style={CELL_NUM}>
                           <input
                             type="number"
                             step="0.01"
@@ -886,12 +921,18 @@ export default function EscandallosPage() {
                             aria-label={t("escandallos.ariaTotalCost", {
                               name: item.nombre_plato?.trim() || t("escandallos.unnamedDish"),
                             })}
-                            style={tpvEuroInput}
+                            style={{
+                              ...tpvEuroInput,
+                              width: 110,
+                              height: 40,
+                              padding: "9px 10px",
+                              textAlign: "right",
+                            }}
                           />
                           <span style={tpvEuroSuffix}>€</span>
                         </div>
 
-                        <div style={tpvInputWrap}>
+                        <div style={CELL_NUM}>
                           <input
                             type="number"
                             step="0.01"
@@ -902,74 +943,98 @@ export default function EscandallosPage() {
                             aria-label={t("escandallos.ariaSalePrice", {
                               name: item.nombre_plato?.trim() || t("escandallos.unnamedDish"),
                             })}
-                            style={tpvEuroInput}
+                            style={{
+                              ...tpvEuroInput,
+                              width: 110,
+                              height: 40,
+                              padding: "9px 10px",
+                              textAlign: "right",
+                            }}
                           />
                           <span style={tpvEuroSuffix}>€</span>
                         </div>
 
-                        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-                            <span
-                              style={{
-                                fontSize: 15,
-                                fontWeight: 800,
-                                fontVariantNumeric: "tabular-nums",
-                                color: marginColor,
-                                lineHeight: 1.1,
-                              }}
-                            >
-                              {marginText}
-                            </span>
+                        <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-start" }}>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 950,
+                              fontVariantNumeric: "tabular-nums",
+                              color: marginColor,
+                              lineHeight: 1.1,
+                              justifySelf: "start",
+                            }}
+                          >
+                            {marginTextDisplay}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            minWidth: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            textAlign: "center",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 22 }}>
                             {badgeKey ? (
                               <span
                                 style={{
                                   ...marginHealthBadgeBaseStyle(marginTier),
-                                  display: "inline-block",
-                                  padding: "2px 6px",
-                                  borderRadius: 6,
-                                  fontSize: 9,
-                                  fontWeight: 800,
-                                  letterSpacing: "0.05em",
-                                  lineHeight: 1.2,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  padding: "4px 10px",
+                                  borderRadius: 999,
+                                  fontSize: 10,
+                                  fontWeight: 900,
+                                  letterSpacing: "0.06em",
+                                  lineHeight: 1.1,
+                                  minWidth: 104,
+                                  whiteSpace: "nowrap",
                                 }}
                               >
                                 {t(badgeKey)}
                               </span>
-                            ) : null}
+                            ) : (
+                              <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", color: "#64748b" }}>—</span>
+                            )}
                           </div>
-                        </div>
-
-                        <div
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            fontVariantNumeric: "tabular-nums",
-                            color: vsAvgColor,
-                            lineHeight: 1.3,
-                            textAlign: "center",
-                            minWidth: 0,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                          title={vsAvgLine ?? undefined}
-                        >
-                          {vsAvgLine ?? "—"}
-                        </div>
-
-                        <div
-                          style={{
-                            fontSize: 11,
-                            lineHeight: 1.35,
-                            color: "#94a3b8",
-                            fontWeight: 500,
-                            minWidth: 0,
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {t(hintKey)}
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 800,
+                              fontVariantNumeric: "tabular-nums",
+                              color: vsAvgColor,
+                              lineHeight: 1.15,
+                              maxWidth: "100%",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={vsAvgLine ?? undefined}
+                          >
+                            {vsAvgLine ?? "—"}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              lineHeight: 1.25,
+                              color: "#94a3b8",
+                              fontWeight: 550,
+                              maxWidth: "100%",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={t(hintKey)}
+                          >
+                            {t(hintKey)}
+                          </div>
                         </div>
 
                         <button
@@ -979,21 +1044,21 @@ export default function EscandallosPage() {
                           style={{
                             justifySelf: "center",
                             width: "100%",
-                            maxWidth: 68,
                             border: "none",
                             background: savingById[key] ? "#166534" : "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
                             color: "#fff",
-                            padding: "12px 8px",
+                            height: 40,
+                            padding: "0 12px",
                             borderRadius: 10,
                             cursor: savingById[key] ? "not-allowed" : "pointer",
                             fontWeight: 800,
-                            fontSize: 12,
+                            fontSize: 13,
                             letterSpacing: "0.02em",
                             opacity: savingById[key] ? 0.85 : 1,
                             boxShadow: savingById[key]
                               ? "none"
                               : "0 4px 14px rgba(34, 197, 94, 0.35), inset 0 1px 0 rgba(255,255,255,0.2)",
-                            minHeight: 44,
+                            marginRight: 8,
                           }}
                         >
                           {savingById[key] ? t("common.saving") : t("common.save")}

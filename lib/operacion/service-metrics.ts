@@ -1,0 +1,119 @@
+import { isBarItem, type BarClassifiable } from "@/lib/kds/bar-classification";
+
+export type ServiceScope = "kitchen" | "bar" | "all";
+
+export type ServiceMetricsItem = BarClassifiable & {
+  status?: unknown;
+  sentAt?: unknown;
+  preparedAt?: unknown;
+  servedAt?: unknown;
+};
+
+export type ServiceMetrics = {
+  sent: number;
+  prepared: number;
+  served: number;
+  avgPrepMinutes: number | null;
+  avgServeMinutes: number | null;
+};
+
+function readMs(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (v && typeof v === "object") {
+    const obj = v as {
+      toMillis?: () => number;
+      toDate?: () => Date;
+    };
+    if (typeof obj.toMillis === "function") {
+      try {
+        return obj.toMillis();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (typeof obj.toDate === "function") {
+      try {
+        return obj.toDate().getTime();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return undefined;
+}
+
+function normalizedStatus(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw.trim().toLowerCase();
+}
+
+function matchesScope(
+  item: ServiceMetricsItem,
+  scope: ServiceScope,
+): boolean {
+  if (scope === "all") return true;
+  const bar = isBarItem(item);
+  return scope === "bar" ? bar : !bar;
+}
+
+export function computeServiceMetrics(
+  items: ServiceMetricsItem[],
+  scope: ServiceScope,
+): ServiceMetrics {
+  let sent = 0;
+  let prepared = 0;
+  let served = 0;
+  let prepSumMs = 0;
+  let prepCount = 0;
+  let serveSumMs = 0;
+  let serveCount = 0;
+
+  for (const it of items) {
+    if (!matchesScope(it, scope)) continue;
+    const st = normalizedStatus(it.status);
+    if (st === "sent") sent += 1;
+    else if (st === "prepared" || st === "ready") prepared += 1;
+    else if (st === "served") served += 1;
+
+    const sentMs = readMs(it.sentAt);
+    const preparedMs = readMs(it.preparedAt);
+    const servedMs = readMs(it.servedAt);
+
+    if (sentMs != null && preparedMs != null && preparedMs >= sentMs) {
+      prepSumMs += preparedMs - sentMs;
+      prepCount += 1;
+    }
+    if (preparedMs != null && servedMs != null && servedMs >= preparedMs) {
+      serveSumMs += servedMs - preparedMs;
+      serveCount += 1;
+    }
+  }
+
+  return {
+    sent,
+    prepared,
+    served,
+    avgPrepMinutes: prepCount > 0 ? prepSumMs / prepCount / 60000 : null,
+    avgServeMinutes: serveCount > 0 ? serveSumMs / serveCount / 60000 : null,
+  };
+}
+
+export function formatAvgMinutes(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const rounded = Math.round(value);
+  if (rounded <= 0) return "<1 min";
+  return `${rounded} min`;
+}
+
+const TERMINAL_ORDER_STATUSES = new Set([
+  "closed",
+  "paid",
+  "cancelled",
+  "canceled",
+]);
+
+export function isOrderActiveForMetrics(status: unknown): boolean {
+  const s = normalizedStatus(status);
+  if (!s) return true;
+  return !TERMINAL_ORDER_STATUSES.has(s);
+}

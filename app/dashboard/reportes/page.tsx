@@ -5,8 +5,8 @@ import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import { loadCompras, type CompraLocal } from "@/lib/compras-local";
 import { loadMermas, type MermaLocal, type MermaMotivo } from "@/lib/mermas-local";
+import { fetchEscandalloMergedRowsForBrowser } from "@/lib/platos-escandallo-bridge";
 import { STOCK_CHANGED_EVENT, isStockBajo, loadStock, type StockProducto, type UnidadStock } from "@/lib/stock-local";
-import { supabase } from "@/lib/supabase";
 import type { Locale } from "@/lib/i18n";
 
 type EscandalloRow = {
@@ -182,14 +182,14 @@ function InsightCard({ label, value, sub, accent = "slate" }: InsightCardProps) 
     <div
       style={{
         borderRadius: 12,
-        padding: "10px 12px",
+        padding: "12px 14px",
         border: `1px solid ${insightAccentBorder[accent]}`,
         background: "linear-gradient(155deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.72) 100%)",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
         minWidth: 0,
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: 8,
       }}
     >
       <span
@@ -313,18 +313,15 @@ export default function ReportesPage() {
 
   const loadEscandallos = useCallback(async () => {
     setEscandalloError(null);
-    const { data, error } = await supabase
-      .from("escandallos")
-      .select("id, nombre_plato, coste_total, precio_venta")
-      .order("nombre_plato", { ascending: true, nullsFirst: false });
+    const { rows, error } = await fetchEscandalloMergedRowsForBrowser();
 
     if (error) {
-      setEscandalloError(error.message);
+      setEscandalloError(error);
       setEscandallos([]);
       return;
     }
 
-    setEscandallos(mergeEscandalloOverrides((data ?? []) as EscandalloRow[]));
+    setEscandallos(mergeEscandalloOverrides(rows as EscandalloRow[]));
   }, []);
 
   useEffect(() => {
@@ -456,7 +453,7 @@ export default function ReportesPage() {
     minHeight: 0,
     display: "flex",
     flexDirection: "column",
-    gap: 4,
+    gap: 8,
     boxShadow: "0 10px 28px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255,255,255,0.04)",
   };
 
@@ -488,11 +485,11 @@ export default function ReportesPage() {
             border: "1px solid #334155",
             background: "#0f172a",
             color: "#e2e8f0",
-            padding: "7px 12px",
-            borderRadius: 8,
+            padding: "10px 16px",
+            borderRadius: 10,
             fontWeight: 700,
             cursor: "pointer",
-            fontSize: 12,
+            fontSize: 14,
             lineHeight: 1.2,
             whiteSpace: "nowrap",
           }}
@@ -516,7 +513,7 @@ export default function ReportesPage() {
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: 10,
+            gap: 12,
             flexShrink: 0,
           }}
         >
@@ -591,7 +588,7 @@ export default function ReportesPage() {
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: 8,
+              gap: 12,
             }}
           >
             <InsightCard
@@ -686,7 +683,7 @@ export default function ReportesPage() {
         ) : null}
 
         {/* Paneles inferiores */}
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <h2 style={{ ...sectionEyebrow, marginBottom: 0 }}>{t("reportes.sectionPanels")}</h2>
           <div
             style={{
@@ -694,7 +691,7 @@ export default function ReportesPage() {
               minHeight: 0,
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 10,
+              gap: 12,
               alignContent: "stretch",
             }}
           >
@@ -765,7 +762,7 @@ export default function ReportesPage() {
                   {criticalList.length === 0 ? (
                     <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>{t("reportes.noData")}</p>
                   ) : (
-                    <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
                       {criticalList.map((p) => (
                         <li key={p.id} style={{ fontSize: 12, color: "#e2e8f0", lineHeight: 1.35 }}>
                           {t("reportes.stockLine", {

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
 import {
   type CompraEstado,
   type CompraLocal,
@@ -27,9 +28,9 @@ type ValidationPhase = "cancelada" | "pendiente" | "incidencia" | "validada";
 const metaHairlineSep: CSSProperties = {
   display: "inline-block",
   width: 1,
-  height: 8,
-  margin: "0 6px",
-  background: "rgba(148, 163, 184, 0.16)",
+  height: 9,
+  margin: "0 7px",
+  background: "rgba(148, 163, 184, 0.12)",
   borderRadius: 1,
   verticalAlign: "middle",
   flexShrink: 0,
@@ -158,27 +159,20 @@ function estadoLabel(estado: CompraEstado, t: (k: string) => string): string {
 
 const estadoLook: Record<CompraEstado, { border: string; bg: string; color: string }> = {
   recibido: {
-    border: "rgba(51, 65, 85, 0.45)",
-    bg: "rgba(15, 23, 42, 0.55)",
-    color: "#9ca3af",
+    border: "rgba(148, 163, 184, 0.45)",
+    bg: "rgba(15, 23, 42, 0.88)",
+    color: "#e2e8f0",
   },
   pendiente: {
-    border: "rgba(234, 179, 8, 0.22)",
-    bg: "rgba(66, 32, 6, 0.22)",
-    color: "#e7d3a0",
+    border: "rgba(251, 191, 36, 0.55)",
+    bg: "rgba(66, 32, 6, 0.42)",
+    color: "#fffbeb",
   },
   cancelado: {
-    border: "rgba(248, 113, 113, 0.22)",
-    bg: "rgba(69, 10, 10, 0.2)",
-    color: "#d6a4a4",
+    border: "rgba(252, 165, 165, 0.45)",
+    bg: "rgba(69, 10, 10, 0.36)",
+    color: "#ffe4e6",
   },
-};
-
-const phaseAccent: Record<ValidationPhase, string> = {
-  cancelada: "rgba(148, 163, 184, 0.45)",
-  pendiente: "rgba(234, 179, 8, 0.42)",
-  incidencia: "rgba(251, 113, 133, 0.52)",
-  validada: "rgba(34, 211, 238, 0.55)",
 };
 
 function phaseLabels(phase: ValidationPhase, t: (k: string) => string): { title: string; sub: string } {
@@ -207,70 +201,110 @@ function collectRowIncidents(c: CompraLocal, sinF: boolean, sync: ReturnType<typ
   return out;
 }
 
-function FlowStrip({ c, t }: { c: CompraLocal; t: (k: string) => string }) {
-  const cancelled = c.estado === "cancelado";
-  const rec = c.estado === "recibido";
-  const phase = validationPhase(c);
-  const sinF = compraSinFacturaDoc(c);
-  const sync = stockSyncUiKind(c);
-  const stk = sync === "applied";
-
-  const Step = ({ on, warn, label }: { on: boolean; warn?: boolean; label: string }) => (
-    <span
-      style={{
-        fontSize: 6.5,
-        fontWeight: 600,
-        letterSpacing: "0.04em",
-        color: !on ? "rgba(61, 71, 84, 0.9)" : warn ? "rgba(180, 140, 110, 0.95)" : "rgba(100, 124, 130, 0.95)",
-        fontVariantNumeric: "tabular-nums",
-      }}
-    >
-      {label}
-    </span>
-  );
-
-  const sep = <span style={{ color: "rgba(51, 65, 85, 0.55)", fontSize: 6, fontWeight: 500, userSelect: "none" }}>·</span>;
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 2, marginTop: 2, flexWrap: "wrap", opacity: 0.92 }} aria-hidden>
-      <Step label={t("recepciones.flowPed")} on={!cancelled} />
-      {sep}
-      <Step label={t("recepciones.flowRec")} on={rec} />
-      {sep}
-      <Step label={t("recepciones.flowVal")} on={rec} warn={phase === "incidencia"} />
-      {sep}
-      <Step label={t("recepciones.flowFac")} on={rec && !sinF} warn={rec && sinF} />
-      {sep}
-      <Step label={t("recepciones.flowStk")} on={rec && (stk || sync === "not_applied")} warn={sync === "not_applied"} />
-    </div>
-  );
-}
-
 function CheckRow({ done, na, label }: { done: boolean; na?: boolean; label: string }) {
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
-        padding: "8px 0",
-        borderBottom: "1px solid rgba(51, 65, 85, 0.45)",
+        gap: 12,
+        padding: "9px 0",
+        borderBottom: "1px solid rgba(51, 65, 85, 0.4)",
       }}
     >
       <span
         aria-hidden
         style={{
-          width: 14,
-          height: 14,
+          width: 18,
+          height: 18,
           borderRadius: 999,
           flexShrink: 0,
-          border: na ? "1px dashed rgba(100,116,139,0.35)" : done ? "none" : "1px solid rgba(100,116,139,0.4)",
-          background: done ? "rgba(6, 78, 90, 0.38)" : na ? "transparent" : "transparent",
-          boxShadow: done ? "inset 0 0 0 1px rgba(34,211,238,0.42)" : undefined,
+          border: na ? "1px dashed rgba(100,116,139,0.4)" : done ? "none" : "1px solid rgba(100,116,139,0.45)",
+          background: done ? "rgba(6, 78, 90, 0.45)" : na ? "transparent" : "transparent",
+          boxShadow: done ? "inset 0 0 0 2px rgba(34,211,238,0.45)" : undefined,
         }}
       />
-      <span style={{ fontSize: 12, color: na ? "#525c6c" : "#94a3b8", lineHeight: 1.35, fontWeight: 500 }}>{label}</span>
+      <span style={{ fontSize: 13, color: na ? "#64748b" : "#cbd5e1", lineHeight: 1.4, fontWeight: 600 }}>{label}</span>
     </div>
+  );
+}
+
+type RecepBadgeVariant = "neutral" | "ok" | "warn" | "bad" | "muted";
+
+function RecepOperBadge({ label, value, variant }: { label: string; value: string; variant: RecepBadgeVariant }) {
+  const pal: Record<RecepBadgeVariant, { bd: string; bg: string; lab: string; val: string }> = {
+    neutral: {
+      bd: "rgba(71, 85, 105, 0.55)",
+      bg: "rgba(15, 23, 42, 0.72)",
+      lab: "#64748b",
+      val: "#e2e8f0",
+    },
+    ok: {
+      bd: "rgba(45, 212, 191, 0.38)",
+      bg: "rgba(6, 78, 59, 0.28)",
+      lab: "#5eead4",
+      val: "#ccfbf1",
+    },
+    warn: {
+      bd: "rgba(251, 191, 36, 0.5)",
+      bg: "rgba(120, 53, 15, 0.28)",
+      lab: "#fcd34d",
+      val: "#fffbeb",
+    },
+    bad: {
+      bd: "rgba(248, 113, 113, 0.45)",
+      bg: "rgba(127, 29, 29, 0.26)",
+      lab: "#fca5a5",
+      val: "#fecaca",
+    },
+    muted: {
+      bd: "rgba(51, 65, 85, 0.5)",
+      bg: "rgba(15, 23, 42, 0.45)",
+      lab: "#64748b",
+      val: "#94a3b8",
+    },
+  };
+  const c = pal[variant];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "6px 11px",
+        borderRadius: 999,
+        border: `1px solid ${c.bd}`,
+        background: c.bg,
+        maxWidth: "100%",
+        boxSizing: "border-box",
+      }}
+    >
+      <span
+        style={{
+          fontSize: 9,
+          fontWeight: 800,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          color: c.lab,
+          flexShrink: 0,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: c.val,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          minWidth: 0,
+        }}
+      >
+        {value}
+      </span>
+    </span>
   );
 }
 
@@ -287,6 +321,7 @@ export default function RecepcionesPage() {
   const [soloIncidencias, setSoloIncidencias] = useState(false);
   const [panelId, setPanelId] = useState<string | null>(null);
   const [menuRowId, setMenuRowId] = useState<string | null>(null);
+  const [hoverRowId, setHoverRowId] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     setItems(loadCompras());
@@ -425,11 +460,17 @@ export default function RecepcionesPage() {
 
   const panelCompra = useMemo(() => (panelId ? items.find((c) => c.id === panelId) ?? null : null), [panelId, items]);
 
-  const gridCols = "30px minmax(88px,1.1fr) 52px 64px minmax(118px,0.95fr) 42px 46px 118px";
-
   if (!hydrated) {
     return (
-      <ModulePageShell title={t("recepciones.title")} subtitle={t("recepciones.loadingSubtitle")} compactLayout lockViewport maxWidth={1200}>
+      <ModulePageShell
+        title={t("recepciones.title")}
+        subtitle={t("recepciones.loadingSubtitle")}
+        compactLayout
+        denseWorkbench
+        operationalFocus
+        lockViewport
+        maxWidth={1380}
+      >
         <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
@@ -439,61 +480,121 @@ export default function RecepcionesPage() {
     <ModulePageShell
       title={t("recepciones.title")}
       subtitle={t("recepciones.subtitle")}
-      maxWidth={1200}
+      maxWidth={1380}
       compactLayout
+      denseWorkbench
+      operationalFocus
       lockViewport
       headerRight={
         <button
           type="button"
           onClick={() => router.push("/dashboard/compras")}
           style={{
-            border: "none",
-            background: "linear-gradient(180deg, #0891b2 0%, #0e7490 100%)",
-            color: "#ecfeff",
-            padding: "7px 14px",
-            borderRadius: 8,
-            fontWeight: 700,
+            border: "1px solid rgba(34, 211, 238, 0.4)",
+            background: "rgba(8, 51, 68, 0.45)",
+            color: "#a5f3fc",
+            padding: "9px 14px",
+            borderRadius: 10,
+            fontWeight: 600,
             cursor: "pointer",
             fontSize: 13,
             lineHeight: 1.2,
+            minHeight: 44,
             whiteSpace: "nowrap",
-            boxShadow: "0 2px 14px rgba(8, 145, 178, 0.35)",
+            touchAction: "manipulation",
           }}
         >
           {t("recepciones.ctaRegister")}
         </button>
       }
     >
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            .hostly-recep-chip {
+              transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+              touch-action: manipulation;
+            }
+            .hostly-recep-chip.hostly-recep-chip-idle:hover {
+              border-color: rgba(34, 211, 238, 0.28) !important;
+              background: rgba(12, 74, 90, 0.28) !important;
+              color: #e0f2fe !important;
+            }
+            .hostly-recep-chip.hostly-recep-chip-idle:active { transform: scale(0.98); }
+            .hostly-recep-chip.hostly-recep-chip-on:hover { filter: brightness(1.06); }
+            .hostly-recep-chip.hostly-recep-chip-on:active { transform: scale(0.98); }
+          `,
+        }}
+      />
+      <div
+        style={{
+          flexGrow: 1,
+          flexShrink: 1,
+          flexBasis: 0,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          paddingTop: 0,
+          overflow: "hidden",
+        }}
+      >
         <div
           style={{
             flexShrink: 0,
             display: "grid",
             gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 8,
+            gap: 5,
           }}
         >
           {[
-            { label: t("recepciones.kpiPending"), sub: t("recepciones.kpiPendingSub"), v: String(kpis.pend), color: "#e7d3a0" },
+            { label: t("recepciones.kpiPending"), sub: t("recepciones.kpiPendingSub"), v: String(kpis.pend), color: "#fcd34d" },
             { label: t("recepciones.kpiReceivedToday"), sub: t("recepciones.kpiReceivedTodaySub"), v: String(kpis.hoy), color: "#7dd3fc" },
-            { label: t("recepciones.kpiIncidents"), sub: t("recepciones.kpiIncidentsSub"), v: String(kpis.inc), color: "#d4b8a8" },
-            { label: t("recepciones.kpiNoInvoice"), sub: t("recepciones.kpiNoInvoiceSub"), v: String(kpis.sinF), color: "#b4a8b8" },
+            { label: t("recepciones.kpiIncidents"), sub: t("recepciones.kpiIncidentsSub"), v: String(kpis.inc), color: "#fca5a5" },
+            { label: t("recepciones.kpiNoInvoice"), sub: t("recepciones.kpiNoInvoiceSub"), v: String(kpis.sinF), color: "#c4b5fd" },
           ].map((k) => (
             <div
               key={k.label}
               style={{
                 border: "1px solid rgba(51, 65, 85, 0.42)",
-                borderRadius: 8,
+                borderRadius: 10,
                 background: "linear-gradient(155deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.78) 100%)",
-                padding: "7px 10px",
+                padding: "8px 10px",
+                minHeight: 58,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                boxSizing: "border-box",
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
               }}
             >
-              <div style={{ fontSize: 8, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{k.label}</div>
-              <div style={{ marginTop: 2, fontSize: 19, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: k.color, letterSpacing: "-0.03em" }}>
+              <div
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: "#94a3b8",
+                  letterSpacing: "0.07em",
+                  textTransform: "uppercase",
+                  lineHeight: 1.2,
+                }}
+              >
+                {k.label}
+              </div>
+              <div
+                style={{
+                  marginTop: 3,
+                  fontSize: 18,
+                  fontWeight: 800,
+                  fontVariantNumeric: "tabular-nums",
+                  color: k.color,
+                  letterSpacing: "-0.03em",
+                  lineHeight: 1.08,
+                  textShadow: "0 1px 14px rgba(0,0,0,0.35)",
+                }}
+              >
                 {k.v}
               </div>
-              <div style={{ fontSize: 9, color: "#525c6c", marginTop: 1 }}>{k.sub}</div>
+              <div style={{ fontSize: 9, color: "#64748b", marginTop: 2, lineHeight: 1.3 }}>{k.sub}</div>
             </div>
           ))}
         </div>
@@ -502,14 +603,16 @@ export default function RecepcionesPage() {
           style={{
             flexShrink: 0,
             display: "flex",
-            alignItems: "stretch",
-            gap: 8,
+            alignItems: "center",
+            gap: 6,
             overflowX: "auto",
-            padding: "6px 8px",
-            borderRadius: 8,
-            border: "1px solid rgba(34, 211, 238, 0.14)",
-            background: "linear-gradient(90deg, rgba(8, 51, 68, 0.4) 0%, rgba(15, 23, 42, 0.55) 100%)",
-            boxShadow: "inset 0 1px 0 rgba(34, 211, 238, 0.05)",
+            overflowY: "hidden",
+            padding: "5px 8px",
+            borderRadius: 10,
+            border: "1px solid rgba(34, 211, 238, 0.18)",
+            background: "linear-gradient(90deg, rgba(8, 51, 68, 0.42) 0%, rgba(15, 23, 42, 0.6) 100%)",
+            boxShadow: "inset 0 1px 0 rgba(34, 211, 238, 0.06)",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <div
@@ -518,23 +621,103 @@ export default function RecepcionesPage() {
               display: "flex",
               flexDirection: "column",
               justifyContent: "center",
-              paddingRight: 8,
+              paddingRight: 10,
               marginRight: 2,
-              borderRight: "1px solid rgba(51, 65, 85, 0.55)",
+              borderRight: "1px solid rgba(51, 65, 85, 0.5)",
             }}
           >
-            <span style={{ fontSize: 8, fontWeight: 800, color: "#7dd3fc", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("recepciones.operTitle")}</span>
-            <span style={{ fontSize: 8, color: "#5c6574", fontWeight: 600, marginTop: 2, lineHeight: 1.25, maxWidth: 132 }}>{t("recepciones.operSubtitle")}</span>
+            <span style={{ fontSize: 9, fontWeight: 800, color: "#7dd3fc", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {t("recepciones.operTitle")}
+            </span>
+            <span style={{ fontSize: 9, color: "#64748b", fontWeight: 600, marginTop: 2, lineHeight: 1.3, maxWidth: 150 }}>
+              {t("recepciones.operSubtitle")}
+            </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: 0,
+              minWidth: 0,
+            }}
+          >
             {(
               [
-                { id: "pendientes" as const, label: t("recepciones.operPendientes"), n: operCounts.pendientes, shadow: "inset 0 -2px 0 rgba(234, 179, 8, 0.45)" },
-                { id: "diferencia" as const, label: t("recepciones.operDiff"), n: operCounts.diferencia, shadow: "inset 0 -2px 0 rgba(251, 146, 60, 0.4)" },
-                { id: "sin_factura" as const, label: t("recepciones.operNoInvoice"), n: operCounts.sinFactura, shadow: "inset 0 -2px 0 rgba(248, 113, 113, 0.32)" },
-                { id: "sin_vincular" as const, label: t("recepciones.operUnlinked"), n: operCounts.sinVincular, shadow: "inset 0 -2px 0 rgba(129, 140, 248, 0.35)" },
-                { id: "stock_no" as const, label: t("recepciones.operStockPending"), n: operCounts.stockNo, shadow: "inset 0 -2px 0 rgba(34, 211, 238, 0.32)" },
-                { id: "lineas_faltantes" as const, label: t("recepciones.operLinesMissing"), n: operCounts.lineasFaltantes, shadow: "inset 0 -2px 0 rgba(251, 191, 36, 0.35)" },
+                {
+                  id: "pendientes" as const,
+                  label: t("recepciones.operPendientes"),
+                  n: operCounts.pendientes,
+                  idle: { border: "1px solid rgba(51, 65, 85, 0.5)", background: "rgba(15, 23, 42, 0.55)", color: "#a8b0c0" },
+                  act: {
+                    border: "1px solid rgba(234, 179, 8, 0.35)",
+                    background: "rgba(66, 32, 6, 0.35)",
+                    color: "#fef3c7",
+                    boxShadow: "inset 0 -2px 0 rgba(234, 179, 8, 0.45)",
+                  },
+                },
+                {
+                  id: "diferencia" as const,
+                  label: t("recepciones.operDiff"),
+                  n: operCounts.diferencia,
+                  idle: { border: "1px solid rgba(51, 65, 85, 0.5)", background: "rgba(15, 23, 42, 0.55)", color: "#a8b0c0" },
+                  act: {
+                    border: "1px solid rgba(251, 146, 60, 0.35)",
+                    background: "rgba(67, 20, 7, 0.3)",
+                    color: "#fed7aa",
+                    boxShadow: "inset 0 -2px 0 rgba(251, 146, 60, 0.4)",
+                  },
+                },
+                {
+                  id: "sin_factura" as const,
+                  label: t("recepciones.operNoInvoice"),
+                  n: operCounts.sinFactura,
+                  idle: { border: "1px solid rgba(51, 65, 85, 0.5)", background: "rgba(15, 23, 42, 0.55)", color: "#a8b0c0" },
+                  act: {
+                    border: "1px solid rgba(248, 113, 113, 0.32)",
+                    background: "rgba(50, 15, 15, 0.32)",
+                    color: "#fecaca",
+                    boxShadow: "inset 0 -2px 0 rgba(248, 113, 113, 0.32)",
+                  },
+                },
+                {
+                  id: "sin_vincular" as const,
+                  label: t("recepciones.operUnlinked"),
+                  n: operCounts.sinVincular,
+                  idle: { border: "1px solid rgba(51, 65, 85, 0.5)", background: "rgba(15, 23, 42, 0.55)", color: "#a8b0c0" },
+                  act: {
+                    border: "1px solid rgba(129, 140, 248, 0.38)",
+                    background: "rgba(30, 27, 60, 0.38)",
+                    color: "#e0e7ff",
+                    boxShadow: "inset 0 -2px 0 rgba(129, 140, 248, 0.35)",
+                  },
+                },
+                {
+                  id: "stock_no" as const,
+                  label: t("recepciones.operStockPending"),
+                  n: operCounts.stockNo,
+                  idle: { border: "1px solid rgba(51, 65, 85, 0.5)", background: "rgba(15, 23, 42, 0.55)", color: "#a8b0c0" },
+                  act: {
+                    border: "1px solid rgba(34, 211, 238, 0.35)",
+                    background: "rgba(8, 51, 68, 0.38)",
+                    color: "#cffafe",
+                    boxShadow: "inset 0 -2px 0 rgba(34, 211, 238, 0.32)",
+                  },
+                },
+                {
+                  id: "lineas_faltantes" as const,
+                  label: t("recepciones.operLinesMissing"),
+                  n: operCounts.lineasFaltantes,
+                  idle: { border: "1px solid rgba(51, 65, 85, 0.5)", background: "rgba(15, 23, 42, 0.55)", color: "#a8b0c0" },
+                  act: {
+                    border: "1px solid rgba(251, 191, 36, 0.4)",
+                    background: "rgba(55, 40, 10, 0.32)",
+                    color: "#fde68a",
+                    boxShadow: "inset 0 -2px 0 rgba(251, 191, 36, 0.35)",
+                  },
+                },
               ] as const
             ).map((chip) => {
               const active = operFocus === chip.id;
@@ -543,37 +726,38 @@ export default function RecepcionesPage() {
                 <button
                   key={chip.id}
                   type="button"
+                  className={`hostly-recep-chip ${active ? "hostly-recep-chip-on" : "hostly-recep-chip-idle"}`}
                   onClick={() => setOperFocus((p) => (p === chip.id ? null : chip.id))}
                   style={{
                     flexShrink: 0,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
-                    padding: "4px 9px",
-                    borderRadius: 5,
-                    fontSize: 10,
-                    fontWeight: 600,
+                    padding: "6px 10px",
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 700,
                     cursor: "pointer",
                     whiteSpace: "nowrap",
-                    border: active ? "1px solid rgba(34, 211, 238, 0.28)" : "1px solid rgba(51, 65, 85, 0.45)",
-                    background: active ? "rgba(12, 74, 90, 0.35)" : "rgba(15, 23, 42, 0.5)",
-                    color: active ? "#e0f2fe" : open ? "#cbd5e1" : "#6b7380",
-                    boxShadow: active ? chip.shadow : open ? "inset 0 0 0 1px rgba(251, 113, 133, 0.12)" : "none",
+                    minHeight: 36,
+                    boxSizing: "border-box",
+                    boxShadow: active ? undefined : open ? "inset 0 1px 0 rgba(255,255,255,0.04)" : undefined,
+                    ...(active ? chip.act : { ...chip.idle, color: open ? chip.idle.color : "#5c6474" }),
                   }}
                 >
                   <span
                     aria-hidden
                     style={{
-                      width: 6,
-                      height: 6,
+                      width: 7,
+                      height: 7,
                       borderRadius: 999,
                       flexShrink: 0,
-                      background: open ? "rgba(251, 113, 133, 0.9)" : "rgba(51, 65, 85, 0.85)",
-                      boxShadow: open ? "0 0 0 1px rgba(0,0,0,0.2)" : undefined,
+                      background: open ? "rgba(251, 113, 133, 0.95)" : "rgba(51, 65, 85, 0.85)",
+                      boxShadow: open ? "0 0 0 1px rgba(0,0,0,0.25)" : undefined,
                     }}
                   />
                   <span>{chip.label}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.8, fontSize: 9, fontWeight: 700 }}>{chip.n}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.85, fontSize: 12, fontWeight: 800 }}>{chip.n}</span>
                 </button>
               );
             })}
@@ -581,17 +765,19 @@ export default function RecepcionesPage() {
         </div>
 
         <div
+          role="search"
           style={{
             flexShrink: 0,
             display: "flex",
             flexWrap: "nowrap",
             alignItems: "center",
-            gap: 8,
+            gap: 6,
             padding: "5px 8px",
-            borderRadius: 8,
+            borderRadius: 10,
             border: "1px solid #334155",
             background: "#0f172a",
             overflowX: "auto",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <input
@@ -599,21 +785,37 @@ export default function RecepcionesPage() {
             value={listSearch}
             onChange={(e) => setListSearch(e.target.value)}
             placeholder={t("recepciones.toolbarSearchPlaceholder")}
+            aria-label={t("recepciones.toolbarSearchPlaceholder")}
             style={{
-              flex: "1 1 120px",
-              minWidth: 100,
-              maxWidth: 220,
-              padding: "5px 8px",
-              borderRadius: 6,
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: "160px",
+              minWidth: 140,
+              minHeight: 36,
+              padding: "7px 10px",
+              borderRadius: 10,
               border: "1px solid #334155",
               background: "#020617",
               color: "#f8fafc",
-              fontSize: 11,
+              fontSize: 14,
               boxSizing: "border-box",
+              touchAction: "manipulation",
             }}
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
-            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("recepciones.filterStatus")}</span>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexShrink: 0,
+              fontSize: 11,
+              color: "#64748b",
+              minHeight: 36,
+            }}
+          >
+            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+              {t("recepciones.filterStatus")}
+            </span>
             <select
               value={listFilter}
               onChange={(e) => {
@@ -621,14 +823,18 @@ export default function RecepcionesPage() {
                 setListFilter(e.target.value as ListFilter);
               }}
               style={{
-                padding: "4px 6px",
-                borderRadius: 5,
+                padding: "6px 9px",
+                borderRadius: 10,
                 border: "1px solid #334155",
                 background: "#020617",
-                color: "#cbd5e1",
-                fontSize: 10,
+                color: "#e2e8f0",
+                fontSize: 13,
                 fontWeight: 600,
+                minHeight: 36,
+                maxWidth: 160,
+                boxSizing: "border-box",
                 cursor: "pointer",
+                touchAction: "manipulation",
               }}
             >
               <option value="todas">{t("recepciones.filterAll")}</option>
@@ -637,20 +843,35 @@ export default function RecepcionesPage() {
               <option value="cancelado">{t("recepciones.filterCancelled")}</option>
             </select>
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
-            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("recepciones.filterDate")}</span>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexShrink: 0,
+              fontSize: 11,
+              color: "#64748b",
+              minHeight: 36,
+            }}
+          >
+            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+              {t("recepciones.filterDate")}
+            </span>
             <select
               value={datePreset}
               onChange={(e) => setDatePreset(e.target.value as DatePreset)}
               style={{
-                padding: "4px 6px",
-                borderRadius: 5,
+                padding: "6px 9px",
+                borderRadius: 10,
                 border: "1px solid #334155",
                 background: "#020617",
-                color: "#cbd5e1",
-                fontSize: 10,
+                color: "#e2e8f0",
+                fontSize: 13,
                 fontWeight: 600,
+                minHeight: 36,
+                boxSizing: "border-box",
                 cursor: "pointer",
+                touchAction: "manipulation",
               }}
             >
               <option value="todas">{t("recepciones.dateAll")}</option>
@@ -659,20 +880,36 @@ export default function RecepcionesPage() {
               <option value="mes">{t("recepciones.dateMonth")}</option>
             </select>
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
-            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("recepciones.sortBy")}</span>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexShrink: 0,
+              fontSize: 11,
+              color: "#64748b",
+              minHeight: 36,
+            }}
+          >
+            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+              {t("recepciones.sortBy")}
+            </span>
             <select
               value={listSort}
               onChange={(e) => setListSort(e.target.value as ListSort)}
               style={{
-                padding: "4px 6px",
-                borderRadius: 5,
+                padding: "6px 9px",
+                borderRadius: 10,
                 border: "1px solid #334155",
                 background: "#020617",
-                color: "#cbd5e1",
-                fontSize: 10,
+                color: "#e2e8f0",
+                fontSize: 13,
                 fontWeight: 600,
+                minHeight: 36,
+                maxWidth: 200,
+                boxSizing: "border-box",
                 cursor: "pointer",
+                touchAction: "manipulation",
               }}
             >
               <option value="fecha_desc">{t("recepciones.sortFechaDesc")}</option>
@@ -686,207 +923,489 @@ export default function RecepcionesPage() {
             onClick={() => setSoloIncidencias((v) => !v)}
             style={{
               flexShrink: 0,
-              border: soloIncidencias ? "1px solid rgba(251, 146, 60, 0.35)" : "1px solid rgba(51, 65, 85, 0.55)",
-              background: soloIncidencias ? "rgba(120, 53, 15, 0.15)" : "transparent",
-              color: soloIncidencias ? "#e7c4a8" : "#6b7380",
-              padding: "4px 8px",
-              borderRadius: 5,
-              fontSize: 10,
-              fontWeight: 600,
+              border: soloIncidencias ? "1px solid rgba(251, 146, 60, 0.45)" : "1px solid rgba(51, 65, 85, 0.55)",
+              background: soloIncidencias ? "rgba(120, 53, 15, 0.22)" : "transparent",
+              color: soloIncidencias ? "#fde68a" : "#94a3b8",
+              padding: "6px 11px",
+              borderRadius: 10,
+              fontSize: 12,
+              fontWeight: 700,
               cursor: "pointer",
               whiteSpace: "nowrap",
+              minHeight: 36,
+              boxSizing: "border-box",
+              touchAction: "manipulation",
             }}
           >
             {t("recepciones.toggleIncidents")}
           </button>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "row", overflow: "hidden", gap: 0 }}>
+        <div
+          style={{
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "row",
+            overflow: "hidden",
+            gap: 6,
+            alignItems: "stretch",
+          }}
+        >
           <div
             style={{
-              flex: 1,
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: 0,
               minWidth: 0,
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
-              border: "1px solid rgba(51, 65, 85, 0.55)",
-              borderRadius: 10,
-              background: "#1e293b",
-              boxShadow: "inset 3px 0 0 rgba(34, 211, 238, 0.1)",
+              border: "1px solid rgba(51, 65, 85, 0.5)",
+              borderRadius: 12,
+              background: "linear-gradient(180deg, #1e293b 0%, #1a2332 100%)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035), inset 3px 0 0 rgba(34, 211, 238, 0.12)",
             }}
           >
-            <div style={{ flexShrink: 0, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 8px", borderBottom: "1px solid rgba(51,65,85,0.55)" }}>
-              <h3 style={{ margin: 0, fontSize: 10, fontWeight: 700, color: "#64748b", letterSpacing: "0.09em", textTransform: "uppercase" }}>
-                {t("recepciones.listTitle")}
-              </h3>
-              <span style={{ fontSize: 10, color: "#475569", fontVariantNumeric: "tabular-nums" }}>
-                {t("recepciones.listCount", { shown: displayedRows.length, total: items.length })}
-              </span>
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                padding: "7px 10px",
+                borderBottom: "1px solid rgba(51,65,85,0.4)",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("recepciones.listTitle")}</h2>
+                <p style={OPER_PRIMARY_COUNT_META}>
+                  {t("recepciones.listCount", { shown: displayedRows.length, total: items.length })}
+                </p>
+              </div>
             </div>
             {items.length === 0 ? (
-              <div style={{ flex: 1, display: "grid", placeItems: "center", color: "#94a3b8", fontSize: 13 }}>{t("recepciones.emptyNone")}</div>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                }}
+              >
+                {t("recepciones.emptyNone")}
+              </div>
             ) : displayedRows.length === 0 ? (
-              <div style={{ flex: 1, display: "grid", placeItems: "center", color: "#94a3b8", fontSize: 13 }}>{t("recepciones.emptyFilter")}</div>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                }}
+              >
+                {t("recepciones.emptyFilter")}
+              </div>
             ) : (
-              <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-                <div
-                  style={{
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 2,
-                    display: "grid",
-                    gridTemplateColumns: gridCols,
-                    gap: "2px 5px",
-                    alignItems: "center",
-                    padding: "4px 6px",
-                    background: "linear-gradient(180deg,#1e293b 0%,#1e293bee 100%)",
-                    borderBottom: "1px solid rgba(51,65,85,0.65)",
-                    fontSize: 7.5,
-                    fontWeight: 700,
-                    letterSpacing: "0.07em",
-                    textTransform: "uppercase",
-                    color: "#64748b",
-                  }}
-                >
-                  <span>{t("recepciones.colDate")}</span>
-                  <span style={{ color: "#94a3b8" }}>{t("recepciones.colSupplier")}</span>
-                  <span>{t("recepciones.colOrder")}</span>
-                  <span style={{ textAlign: "right", color: "#cbd5e1" }}>{t("recepciones.colAmount")}</span>
-                  <span style={{ color: "#6bb8b0" }}>{t("recepciones.colValidation")}</span>
-                  <span>{t("recepciones.colInvoice")}</span>
-                  <span>{t("recepciones.colStock")}</span>
-                  <span style={{ textAlign: "right" }}>{t("recepciones.colActions")}</span>
-                </div>
-                <div style={{ padding: "2px 4px 4px", display: "flex", flexDirection: "column", gap: 1 }}>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  minHeight: 0,
+                  overflow: "auto",
+                  WebkitOverflowScrolling: "touch",
+                }}
+              >
+                <div style={{ padding: "8px 8px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
                   {displayedRows.map((c) => {
                     const look = estadoLook[c.estado];
                     const sync = stockSyncUiKind(c);
                     const sinF = compraSinFacturaDoc(c);
                     const phase = validationPhase(c);
-                    const accent = phaseAccent[phase];
                     const { title: phaseTitle, sub: phaseSub } = phaseLabels(phase, t);
                     const nItems = lineItemCount(c);
                     const itemStr = nItems === 0 ? t("recepciones.rowItemsNone") : nItems === 1 ? t("recepciones.rowItemsOne") : t("recepciones.rowItemsMany", { count: nItems });
                     const notas = (c.notas ?? "").trim();
-                    const refSnippet = notas ? (notas.length > 28 ? `${notas.slice(0, 26)}…` : notas) : "";
+                    const refSnippet = notas ? (notas.length > 36 ? `${notas.slice(0, 34)}…` : notas) : "";
                     const incidents = collectRowIncidents(c, sinF, sync, t);
                     const primaryIncident = incidents[0];
                     const extraIncidents = incidents.length - 1;
                     const incidentsTitle = incidents.map((i) => i.text).join(" · ");
                     const orderLabel = `${t("recepciones.orderRef")} · ${c.id.slice(-6)}`;
-                    const rowInset = phase === "incidencia" ? "inset 2px 0 0 rgba(251, 113, 133, 0.28)" : undefined;
                     const validatePrimary = phase === "pendiente" || phase === "incidencia";
+                    const selected = panelId === c.id;
+                    const hovered = hoverRowId === c.id;
+                    const attention = hasIncidencia(c);
+                    const sinVin = c.estado !== "cancelado" && !(c.producto_stock_id ?? "").trim();
+                    const boost: "high" | "mid" | "low" = attention
+                      ? "high"
+                      : (sinF && c.estado === "recibido") || sync === "not_applied" || sinVin
+                        ? "mid"
+                        : "low";
+
+                    let rowBg: string = "rgba(15, 23, 42, 0.55)";
+                    let rowInset = "inset 3px 0 0 rgba(34, 211, 238, 0.42)";
+                    let rowGlow = "0 6px 22px rgba(0,0,0,0.22)";
+                    if (boost === "high") {
+                      rowBg = "linear-gradient(135deg, rgba(69, 26, 3, 0.38) 0%, rgba(50, 15, 22, 0.48) 100%)";
+                      rowInset = "inset 4px 0 0 rgba(249, 115, 22, 0.9)";
+                      rowGlow = "0 0 0 1px rgba(251, 146, 60, 0.22), 0 8px 30px rgba(0,0,0,0.3)";
+                    } else if (boost === "mid") {
+                      rowBg = "rgba(45, 35, 10, 0.36)";
+                      rowInset = "inset 3px 0 0 rgba(234, 179, 8, 0.78)";
+                      rowGlow = "0 0 0 1px rgba(234, 179, 8, 0.14), 0 6px 22px rgba(0,0,0,0.22)";
+                    }
+
+                    const invVariant: RecepBadgeVariant =
+                      c.estado !== "recibido" ? "muted" : sinF ? "bad" : "ok";
+                    const invVal =
+                      c.estado !== "recibido" ? "—" : sinF ? t("recepciones.invoiceMissing") : t("recepciones.invoiceOk");
+                    const stkVariant: RecepBadgeVariant =
+                      sync === "applied" ? "ok" : sync === "not_applied" ? "warn" : "muted";
+                    const stkVal = sync === "applied" ? t("recepciones.stockOk") : sync === "not_applied" ? t("recepciones.stockPending") : t("recepciones.stockNA");
+                    const pedVariant: RecepBadgeVariant =
+                      c.estado === "pendiente" ? "warn" : c.estado === "recibido" ? "ok" : "muted";
+
+                    const borderColor = selected
+                      ? "rgba(34, 211, 238, 0.55)"
+                      : hovered
+                        ? "rgba(148, 163, 184, 0.42)"
+                        : boost === "high"
+                          ? "rgba(251, 146, 60, 0.35)"
+                          : "rgba(51, 65, 85, 0.55)";
 
                     return (
                       <div
                         key={c.id}
+                        role="presentation"
+                        onClick={() => {
+                          setMenuRowId(null);
+                          setPanelId(c.id);
+                        }}
+                        onMouseEnter={() => setHoverRowId(c.id)}
+                        onMouseLeave={() => setHoverRowId(null)}
                         style={{
-                          display: "grid",
-                          gridTemplateColumns: gridCols,
-                          gap: "2px 5px",
-                          alignItems: "center",
-                          padding: "2px 5px",
-                          borderRadius: 5,
-                          border: "1px solid rgba(51, 65, 85, 0.38)",
-                          background: phase === "incidencia" ? "rgba(30, 15, 20, 0.35)" : "rgba(15, 23, 42, 0.32)",
-                          ...(rowInset ? { boxShadow: rowInset } : {}),
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "stretch",
+                          gap: 14,
+                          padding: "14px 14px 16px",
+                          borderRadius: 14,
+                          border: `1px solid ${borderColor}`,
+                          background: rowBg,
+                          boxShadow: `${rowInset}, ${rowGlow}`,
+                          cursor: "pointer",
+                          touchAction: "manipulation",
+                          boxSizing: "border-box",
+                          transition: "border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease",
                         }}
                       >
-                        <span style={{ fontSize: 8.5, color: "#64748b", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{formatFechaCorta(c.fecha, locale)}</span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#f8fafc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2 }}>{c.proveedor}</div>
-                          <div style={{ marginTop: 1, display: "flex", flexWrap: "wrap", alignItems: "baseline", rowGap: 0, columnGap: 0 }}>
-                            <span style={{ fontSize: 8, color: "#7d8698", fontWeight: 500 }}>{itemStr}</span>
-                            {refSnippet ? (
-                              <>
-                                <span style={metaHairlineSep} aria-hidden />
-                                <span style={{ fontSize: 8, color: "#525c6c", fontWeight: 500 }}>
-                                  {t("recepciones.rowAlbaran")} {refSnippet}
-                                </span>
-                              </>
-                            ) : null}
-                            {primaryIncident ? (
-                              <>
-                                <span style={metaHairlineSep} aria-hidden />
-                                <span
-                                  title={extraIncidents > 0 ? incidentsTitle : undefined}
-                                  style={{ display: "inline-flex", alignItems: "center", gap: 3, maxWidth: "100%" }}
-                                >
-                                  <span
-                                    style={{
-                                      fontSize: 8,
-                                      fontWeight: 700,
-                                      letterSpacing: "0.01em",
-                                      color: primaryIncident.tone === "high" ? "#e8a598" : "#b0a078",
-                                      flexShrink: 0,
-                                    }}
-                                  >
-                                    {primaryIncident.text}
-                                  </span>
-                                  {extraIncidents > 0 ? (
-                                    <span style={{ fontSize: 7.5, fontWeight: 600, color: "#5c6574", flexShrink: 0 }}>
-                                      {t("recepciones.incidentsMore", { count: extraIncidents })}
-                                    </span>
-                                  ) : null}
-                                </span>
-                              </>
-                            ) : null}
-                          </div>
-                          <FlowStrip c={c} t={t} />
-                        </div>
-                        <span style={{ fontSize: 8, color: "#5c6574", fontVariantNumeric: "tabular-nums", fontWeight: 600 }} title={c.id}>
-                          {orderLabel}
-                        </span>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: "#f1f5f9", textAlign: "right", fontVariantNumeric: "tabular-nums", lineHeight: 1.2 }}>
-                          {formatEuro(typeof c.total === "number" && Number.isFinite(c.total) ? c.total : 0, locale)}
-                        </span>
-                        <div
-                          title={`${phaseTitle} — ${phaseSub}`}
-                          style={{
-                            minWidth: 0,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                            padding: "1px 0 1px 4px",
-                            borderRadius: 4,
-                            border: "1px solid rgba(51, 65, 85, 0.45)",
-                            background: "rgba(15, 23, 42, 0.55)",
-                            borderLeft: `2px solid ${accent}`,
-                          }}
-                        >
-                          <span
+                        {/* Identidad */}
+                        <div style={{ flex: "1 1 240px", minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div
                             style={{
-                              fontSize: 7.5,
-                              fontWeight: 700,
-                              color: "#cbd5e1",
-                              letterSpacing: "0.02em",
-                              flexShrink: 0,
-                              maxWidth: 68,
+                              fontSize: 19,
+                              fontWeight: 800,
+                              color: "#f8fafc",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
                               lineHeight: 1.2,
+                              letterSpacing: "-0.025em",
                             }}
                           >
-                            {phaseTitle}
-                          </span>
+                            {c.proveedor}
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "#8896ab", fontVariantNumeric: "tabular-nums" }}>
+                            {formatFechaCorta(c.fecha, locale)}
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", fontVariantNumeric: "tabular-nums" }} title={c.id}>
+                            {orderLabel}
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                              gap: 6,
+                              rowGap: 6,
+                              paddingTop: 4,
+                              borderTop: "1px solid rgba(148, 163, 184, 0.12)",
+                            }}
+                          >
+                            <span style={{ fontSize: 10, color: "#7c8799", fontWeight: 600 }}>{itemStr}</span>
+                            {refSnippet ? (
+                              <>
+                                <span style={metaHairlineSep} aria-hidden />
+                                <span style={{ fontSize: 10, color: "#5f6b7c", fontWeight: 500 }}>
+                                  {t("recepciones.rowAlbaran")} {refSnippet}
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+                            <RecepOperBadge label={t("recepciones.badgeLabelFactura")} value={invVal} variant={invVariant} />
+                            <RecepOperBadge label={t("recepciones.badgeLabelStock")} value={stkVal} variant={stkVariant} />
+                            <RecepOperBadge label={t("recepciones.badgeLabelPedido")} value={estadoLabel(c.estado, t)} variant={pedVariant} />
+                          </div>
+                        </div>
+
+                        {/* Estado operativo */}
+                        <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10, justifyContent: "center" }}>
+                          {attention ? (
+                            <div
+                              role="status"
+                              style={{
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: "1px solid rgba(251, 146, 60, 0.45)",
+                                background: "linear-gradient(180deg, rgba(127, 29, 29, 0.35) 0%, rgba(69, 26, 3, 0.4) 100%)",
+                                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                                <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }} aria-hidden>
+                                  ⚠️
+                                </span>
+                                <div style={{ minWidth: 0 }}>
+                                  <div
+                                    style={{
+                                      fontSize: 13,
+                                      fontWeight: 800,
+                                      color: "#fed7aa",
+                                      letterSpacing: "-0.02em",
+                                      lineHeight: 1.3,
+                                    }}
+                                  >
+                                    {t("recepciones.rowIncidentHeadline")}
+                                  </div>
+                                  {primaryIncident ? (
+                                    <div
+                                      style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "#fecaca", lineHeight: 1.35 }}
+                                      title={extraIncidents > 0 ? incidentsTitle : undefined}
+                                    >
+                                      {primaryIncident.text}
+                                      {extraIncidents > 0 ? (
+                                        <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                                          {" "}
+                                          {t("recepciones.incidentsMore", { count: extraIncidents })}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+                          <div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                              {t("recepciones.colAmount")}
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 4,
+                                fontSize: 24,
+                                fontWeight: 800,
+                                color: "#fffbeb",
+                                fontVariantNumeric: "tabular-nums",
+                                letterSpacing: "-0.03em",
+                                lineHeight: 1.1,
+                                textShadow: "0 0 28px rgba(251, 191, 36, 0.15)",
+                              }}
+                            >
+                              {formatEuro(typeof c.total === "number" && Number.isFinite(c.total) ? c.total : 0, locale)}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", lineHeight: 1.35 }}>
+                            <span style={{ color: "#cbd5e1" }}>{phaseTitle}</span>
+                            <span style={{ color: "#64748b", fontWeight: 600 }}> · {phaseSub}</span>
+                          </div>
+                        </div>
+
+                        {/* Acciones */}
+                        <div
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            flex: "0 1 200px",
+                            minWidth: 168,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 10,
+                            alignItems: "stretch",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setPanelId(c.id)}
+                            style={{
+                              width: "100%",
+                              border: "none",
+                              borderRadius: 12,
+                              padding: "13px 16px",
+                              fontSize: 14,
+                              fontWeight: 800,
+                              letterSpacing: "0.02em",
+                              cursor: "pointer",
+                              boxSizing: "border-box",
+                              touchAction: "manipulation",
+                              color: validatePrimary ? "#042f2e" : "#e2e8f0",
+                              background: validatePrimary
+                                ? "linear-gradient(180deg, #2dd4bf 0%, #14b8a6 48%, #0d9488 100%)"
+                                : "rgba(51, 65, 85, 0.45)",
+                              boxShadow: validatePrimary
+                                ? "0 4px 18px rgba(20, 184, 166, 0.45), inset 0 1px 0 rgba(255,255,255,0.2)"
+                                : "inset 0 1px 0 rgba(255,255,255,0.06)",
+                            }}
+                          >
+                            {t("recepciones.actionValidatePrimary")}
+                          </button>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              onClick={() => setPanelId(c.id)}
+                              style={{
+                                border: "1px solid rgba(148, 163, 184, 0.35)",
+                                background: "rgba(15, 23, 42, 0.5)",
+                                color: "#cbd5e1",
+                                padding: "8px 12px",
+                                borderRadius: 10,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                minHeight: 40,
+                                boxSizing: "border-box",
+                                whiteSpace: "nowrap",
+                                touchAction: "manipulation",
+                              }}
+                            >
+                              {t("recepciones.actionInvoice")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => router.push("/dashboard/compras")}
+                              style={{
+                                border: "1px solid rgba(51, 65, 85, 0.55)",
+                                background: "transparent",
+                                color: "#7c8a9e",
+                                padding: "8px 10px",
+                                borderRadius: 10,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                minHeight: 40,
+                                boxSizing: "border-box",
+                                whiteSpace: "nowrap",
+                                touchAction: "manipulation",
+                              }}
+                            >
+                              {t("recepciones.actionStock")}
+                            </button>
+                            <div style={{ position: "relative", display: "inline-flex" }}>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuRowId((p) => (p === c.id ? null : c.id));
+                                }}
+                                aria-expanded={menuRowId === c.id}
+                                style={{
+                                  border: "1px solid rgba(71, 85, 105, 0.5)",
+                                  background: "rgba(15, 23, 42, 0.35)",
+                                  color: "#94a3b8",
+                                  padding: "0 10px",
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                  fontSize: 17,
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  borderRadius: 10,
+                                  boxSizing: "border-box",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  touchAction: "manipulation",
+                                }}
+                              >
+                                {t("recepciones.actionMore")}
+                              </button>
+                              {menuRowId === c.id ? (
+                                <div
+                                  role="menu"
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  style={{
+                                    position: "absolute",
+                                    right: 0,
+                                    top: "calc(100% + 8px)",
+                                    zIndex: 40,
+                                    minWidth: 200,
+                                    borderRadius: 12,
+                                    border: "1px solid #334155",
+                                    background: "#020617",
+                                    boxShadow: "0 12px 28px rgba(0,0,0,0.5)",
+                                    padding: 8,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setMenuRowId(null);
+                                      router.push("/dashboard/compras");
+                                    }}
+                                    style={{
+                                      border: "none",
+                                      background: "transparent",
+                                      color: "#cbd5e1",
+                                      textAlign: "left",
+                                      width: "100%",
+                                      padding: "14px 16px",
+                                      borderRadius: 10,
+                                      fontSize: 14,
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      minHeight: 48,
+                                      boxSizing: "border-box",
+                                    }}
+                                  >
+                                    {t("recepciones.menuEditCompra")}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
                           <select
                             value={c.estado}
                             onChange={(e) => updateEstado(c.id, e.target.value as CompraEstado)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
                             aria-label={t("recepciones.ariaEstado", { supplier: c.proveedor })}
                             style={{
-                              flex: 1,
+                              width: "100%",
                               minWidth: 0,
-                              padding: "1px 3px",
-                              fontSize: 8,
+                              minHeight: 36,
+                              padding: "6px 8px",
+                              fontSize: 11,
                               fontWeight: 600,
-                              borderRadius: 3,
+                              borderRadius: 8,
                               border: `1px solid ${look.border}`,
                               background: look.bg,
                               color: look.color,
+                              opacity: 0.92,
                               cursor: "pointer",
                               boxSizing: "border-box",
                               lineHeight: 1.2,
+                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                             }}
                           >
                             {COMPRA_ESTADOS.map((e) => (
@@ -895,137 +1414,6 @@ export default function RecepcionesPage() {
                               </option>
                             ))}
                           </select>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: 8,
-                            fontWeight: 600,
-                            letterSpacing: "0.02em",
-                            color: c.estado !== "recibido" ? "#4a5160" : sinF ? "#c99a8e" : "#6b9d9a",
-                          }}
-                        >
-                          {c.estado === "recibido" ? (sinF ? t("recepciones.invoiceMissing") : t("recepciones.invoiceOk")) : "—"}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 7.5,
-                            fontWeight: 600,
-                            letterSpacing: "0.04em",
-                            textTransform: "uppercase",
-                            color: sync === "applied" ? "#6b9d9a" : sync === "not_applied" ? "#c99a8e" : "#4a5160",
-                          }}
-                        >
-                          {sync === "applied" ? t("recepciones.stockOk") : sync === "not_applied" ? t("recepciones.stockPending") : t("recepciones.stockNA")}
-                        </span>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 2, justifyContent: "flex-end" }}>
-                          <button
-                            type="button"
-                            onClick={() => setPanelId(c.id)}
-                            style={{
-                              border: "1px solid rgba(51, 65, 85, 0.55)",
-                              background: "transparent",
-                              color: "#8da4b0",
-                              padding: "1px 4px",
-                              borderRadius: 3,
-                              fontSize: 8,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {t("recepciones.actionInvoice")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPanelId(c.id)}
-                            style={{
-                              border: validatePrimary ? "1px solid rgba(34, 211, 238, 0.32)" : "1px solid rgba(51, 65, 85, 0.5)",
-                              background: validatePrimary ? "rgba(8, 51, 68, 0.28)" : "transparent",
-                              color: validatePrimary ? "#8ec5d4" : "#6b7380",
-                              padding: "1px 4px",
-                              borderRadius: 3,
-                              fontSize: 8,
-                              fontWeight: 700,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {t("recepciones.actionValidatePrimary")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => router.push("/dashboard/compras")}
-                            style={{
-                              border: "1px solid rgba(51, 65, 85, 0.5)",
-                              background: "transparent",
-                              color: "#7a8794",
-                              padding: "1px 4px",
-                              borderRadius: 3,
-                              fontSize: 8,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                            }}
-                          >
-                            {t("recepciones.actionStock")}
-                          </button>
-                          <div style={{ position: "relative", display: "inline-flex" }}>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuRowId((p) => (p === c.id ? null : c.id));
-                              }}
-                              style={{
-                                border: "none",
-                                background: "transparent",
-                                color: "#5c6574",
-                                padding: "1px 3px",
-                                fontSize: 11,
-                                cursor: "pointer",
-                              }}
-                            >
-                              {t("recepciones.actionMore")}
-                            </button>
-                            {menuRowId === c.id ? (
-                              <div
-                                role="menu"
-                                onMouseDown={(e) => e.stopPropagation()}
-                                style={{
-                                  position: "absolute",
-                                  right: 0,
-                                  top: "100%",
-                                  zIndex: 40,
-                                  minWidth: 140,
-                                  borderRadius: 8,
-                                  border: "1px solid #334155",
-                                  background: "#020617",
-                                  boxShadow: "0 12px 28px rgba(0,0,0,0.5)",
-                                  padding: 4,
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setMenuRowId(null);
-                                    router.push("/dashboard/compras");
-                                  }}
-                                  style={{
-                                    border: "none",
-                                    background: "transparent",
-                                    color: "#cbd5e1",
-                                    textAlign: "left",
-                                    width: "100%",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {t("recepciones.menuEditCompra")}
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
                         </div>
                       </div>
                     );
@@ -1038,48 +1426,97 @@ export default function RecepcionesPage() {
           {panelCompra ? (
             <aside
               style={{
-                width: 300,
+                flexGrow: 0,
                 flexShrink: 0,
+                flexBasis: "clamp(360px, 34vw, 480px)",
+                maxWidth: "100%",
+                minWidth: 300,
                 display: "flex",
                 flexDirection: "column",
-                border: "1px solid rgba(34, 211, 238, 0.14)",
-                borderRadius: 10,
-                marginLeft: 8,
-                background: "#0f172a",
+                border: "1px solid rgba(34, 211, 238, 0.22)",
+                borderRadius: 12,
+                background: "linear-gradient(180deg, #0f172a 0%, #0c1222 100%)",
                 overflow: "hidden",
-                boxShadow: "inset 0 1px 0 rgba(34, 211, 238, 0.04)",
+                boxShadow: "inset 0 1px 0 rgba(34, 211, 238, 0.06), 0 4px 24px rgba(0,0,0,0.25)",
               }}
             >
-              <div style={{ flexShrink: 0, padding: "8px 10px", borderBottom: "1px solid rgba(51,65,85,0.55)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                <h2 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "#f1f5f9", letterSpacing: "-0.02em" }}>{t("recepciones.panelTitle")}</h2>
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: "10px 12px",
+                  borderBottom: "1px solid rgba(51,65,85,0.45)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: 10,
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em", lineHeight: 1.25 }}>
+                    {t("recepciones.panelTitle")}
+                  </h2>
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8", fontWeight: 600, lineHeight: 1.35 }}>{panelCompra.proveedor}</p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setPanelId(null)}
                   style={{
+                    flexShrink: 0,
                     border: "1px solid #334155",
                     background: "#020617",
-                    color: "#94a3b8",
-                    padding: "3px 8px",
-                    borderRadius: 6,
-                    fontSize: 10,
-                    fontWeight: 600,
+                    color: "#cbd5e1",
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    fontSize: 13,
+                    fontWeight: 700,
                     cursor: "pointer",
+                    minHeight: 44,
+                    boxSizing: "border-box",
+                    touchAction: "manipulation",
                   }}
                 >
                   {t("recepciones.panelClose")}
                 </button>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>{t("recepciones.panelSummary")}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#f8fafc", marginBottom: 4 }}>{panelCompra.proveedor}</div>
-                <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
-                  {formatFechaCorta(panelCompra.fecha, locale)} · {formatEuro(typeof panelCompra.total === "number" ? panelCompra.total : 0, locale)}
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  WebkitOverflowScrolling: "touch",
+                  padding: "12px 12px 14px",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(51, 65, 85, 0.5)",
+                    background: "rgba(15, 23, 42, 0.65)",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+                    {t("recepciones.panelSummary")}
+                  </div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#fffbeb", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
+                    {formatEuro(typeof panelCompra.total === "number" ? panelCompra.total : 0, locale)}
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8", fontWeight: 600, lineHeight: 1.45 }}>
+                    {formatFechaCorta(panelCompra.fecha, locale)} · {t("recepciones.orderRef")} · {panelCompra.id.slice(-6)}
+                  </div>
+                  <div style={{ marginTop: 10, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    {t("recepciones.panelState")}
+                  </div>
+                  <div style={{ marginTop: 3, fontSize: 14, color: "#e2e8f0", fontWeight: 700 }}>{estadoLabel(panelCompra.estado, t)}</div>
                 </div>
-                <div style={{ marginTop: 10, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("recepciones.panelState")}</div>
-                <div style={{ marginTop: 4, fontSize: 12, color: "#cbd5e1", fontWeight: 600 }}>{estadoLabel(panelCompra.estado, t)}</div>
 
-                <div style={{ marginTop: 14, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("recepciones.panelChecklist")}</div>
-                <div style={{ marginTop: 4 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#5eead4", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+                  {t("recepciones.panelChecklist")}
+                </div>
+                <div style={{ marginBottom: 12, borderTop: "1px solid rgba(51, 65, 85, 0.35)", paddingTop: 2 }}>
                   <CheckRow done={panelCompra.estado === "recibido"} na={panelCompra.estado === "cancelado"} label={t("recepciones.panelCheckGoods")} />
                   <CheckRow
                     done={panelCompra.estado === "recibido" && !compraSinFacturaDoc(panelCompra)}
@@ -1094,39 +1531,43 @@ export default function RecepcionesPage() {
                   <CheckRow done={!hasDiferenciaNotas(panelCompra)} label={t("recepciones.panelCheckNoIncident")} />
                 </div>
 
-                <div style={{ marginTop: 16, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("recepciones.panelInvoiceZone")}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+                  {t("recepciones.panelInvoiceZone")}
+                </div>
                 <div
                   style={{
-                    marginTop: 6,
                     minHeight: 72,
-                    borderRadius: 8,
-                    border: "1px dashed rgba(100, 116, 139, 0.35)",
-                    background: "rgba(15, 23, 42, 0.6)",
+                    borderRadius: 10,
+                    border: "1px dashed rgba(100, 116, 139, 0.4)",
+                    background: "rgba(15, 23, 42, 0.5)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    padding: 10,
+                    padding: 12,
                     textAlign: "center",
+                    marginBottom: 12,
                   }}
                 >
-                  <span style={{ fontSize: 11, color: "#64748b", lineHeight: 1.45 }}>{t("recepciones.panelInvoiceHint")}</span>
+                  <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5, fontWeight: 500 }}>{t("recepciones.panelInvoiceHint")}</span>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => setPanelId(null)}
                   style={{
-                    marginTop: 16,
                     width: "100%",
-                    border: "1px solid rgba(34, 211, 238, 0.28)",
-                    background: "linear-gradient(180deg, rgba(8, 51, 68, 0.55) 0%, rgba(15, 23, 42, 0.85) 100%)",
+                    border: "1px solid rgba(34, 211, 238, 0.35)",
+                    background: "linear-gradient(180deg, rgba(8, 51, 68, 0.6) 0%, rgba(15, 23, 42, 0.9) 100%)",
                     color: "#e0f2fe",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    fontWeight: 700,
-                    fontSize: 12,
+                    padding: "14px 16px",
+                    borderRadius: 12,
+                    fontWeight: 800,
+                    fontSize: 15,
                     cursor: "pointer",
-                    boxShadow: "0 2px 12px rgba(8, 145, 178, 0.15)",
+                    minHeight: 48,
+                    boxSizing: "border-box",
+                    boxShadow: "0 2px 14px rgba(8, 145, 178, 0.2)",
+                    touchAction: "manipulation",
                   }}
                 >
                   {t("recepciones.panelValidateCta")}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
 import {
   type CompraEstado,
   type CompraLocal,
@@ -228,53 +229,40 @@ function pendingInboxStyle(lane: RowLane): {
   text: Record<string, string | number>;
 } {
   const base: Record<string, string | number> = {
-    borderRadius: 8,
-    padding: "8px 10px",
-    minHeight: 44,
-    display: "flex",
-    alignItems: "center",
+    padding: "6px 0 6px 10px",
+    minHeight: 0,
+    display: "block",
     boxSizing: "border-box",
+    border: "none",
+    borderLeft: "3px solid transparent",
+    background: "transparent",
+    borderRadius: 0,
   };
   switch (lane) {
     case "inactivo":
       return {
-        wrap: { ...base, background: "rgba(30, 41, 59, 0.4)", border: "1px solid rgba(51, 65, 85, 0.45)" },
+        wrap: { ...base, borderLeftColor: "rgba(100, 116, 139, 0.55)" },
         text: { fontSize: 10, fontWeight: 700, color: "#64748b", lineHeight: 1.35 },
       };
     case "bloqueo":
       return {
-        wrap: {
-          ...base,
-          background: "rgba(248, 113, 113, 0.11)",
-          border: "1px solid rgba(248, 113, 113, 0.42)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
-        },
+        wrap: { ...base, borderLeftColor: "rgba(248, 113, 113, 0.65)" },
         text: { fontSize: 11, fontWeight: 800, color: "#fecaca", lineHeight: 1.35 },
       };
     case "listo":
       return {
-        wrap: {
-          ...base,
-          background: "rgba(52, 211, 153, 0.1)",
-          border: "1px solid rgba(52, 211, 153, 0.35)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-        },
+        wrap: { ...base, borderLeftColor: "rgba(52, 211, 153, 0.55)" },
         text: { fontSize: 11, fontWeight: 700, color: "#a7f3d0", lineHeight: 1.35 },
       };
     case "tu_turno":
       return {
-        wrap: {
-          ...base,
-          background: "rgba(251, 191, 36, 0.12)",
-          border: "1px solid rgba(251, 191, 36, 0.45)",
-          boxShadow: "inset 0 0 0 1px rgba(251, 191, 36, 0.06), 0 2px 12px rgba(0,0,0,0.2)",
-        },
+        wrap: { ...base, borderLeftColor: "rgba(251, 191, 36, 0.7)" },
         text: { fontSize: 11, fontWeight: 800, color: "#fef08a", lineHeight: 1.35 },
       };
     case "espera":
     default:
       return {
-        wrap: { ...base, background: "rgba(51, 65, 85, 0.32)", border: "1px solid rgba(71, 85, 105, 0.5)" },
+        wrap: { ...base, borderLeftColor: "rgba(71, 85, 105, 0.55)" },
         text: { fontSize: 10, fontWeight: 700, color: "#cbd5e1", lineHeight: 1.35 },
       };
   }
@@ -422,11 +410,18 @@ export default function ValidacionInteligentePage() {
 
   const panelCompra = useMemo(() => (panelId ? items.find((c) => c.id === panelId) ?? null : null), [panelId, items]);
 
-  const gridCols = "46px minmax(168px,1.35fr) minmax(132px,1.05fr) minmax(128px,1.02fr) minmax(130px,148px)";
+  const gridCols = "46px minmax(168px,1.35fr) minmax(132px,1.05fr) minmax(128px,1.02fr) minmax(148px,auto)";
 
   if (!hydrated) {
     return (
-      <ModulePageShell title={t("validacionInteligente.title")} subtitle={t("validacionInteligente.loadingSubtitle")} compactLayout lockViewport maxWidth={1200}>
+      <ModulePageShell
+        title={t("validacionInteligente.title")}
+        subtitle={t("validacionInteligente.loadingSubtitle")}
+        compactLayout
+        operationalFocus
+        lockViewport
+        maxWidth={1200}
+      >
         <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
@@ -438,31 +433,42 @@ export default function ValidacionInteligentePage() {
       subtitle={t("validacionInteligente.subtitle")}
       maxWidth={1200}
       compactLayout
+      operationalFocus
       lockViewport
       headerRight={
         <button
           type="button"
           onClick={() => router.push("/dashboard/compras")}
           style={{
-            border: "none",
-            background: "linear-gradient(180deg, #7c3aed 0%, #5b21b6 100%)",
-            color: "#f5f3ff",
-            padding: "7px 14px",
-            borderRadius: 8,
-            fontWeight: 700,
+            border: "1px solid rgba(167, 139, 250, 0.45)",
+            background: "rgba(76, 29, 149, 0.22)",
+            color: "#e9d5ff",
+            padding: "9px 14px",
+            borderRadius: 10,
+            fontWeight: 600,
             cursor: "pointer",
             fontSize: 13,
             lineHeight: 1.2,
             whiteSpace: "nowrap",
-            boxShadow: "0 2px 14px rgba(124, 58, 237, 0.35)",
           }}
         >
           {t("validacionInteligente.ctaUpload")}
         </button>
       }
     >
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
-        <div style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+      <div
+        style={{
+          flexGrow: 1,
+          flexShrink: 1,
+          flexBasis: 0,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 5,
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6 }}>
           {[
             { label: t("validacionInteligente.kpiPending"), sub: t("validacionInteligente.kpiPendingSub"), v: String(kpis.pend), color: IA_ACCENT },
             { label: t("validacionInteligente.kpiAuto"), sub: t("validacionInteligente.kpiAutoSub"), v: String(kpis.coincid), color: "#86efac" },
@@ -480,8 +486,8 @@ export default function ValidacionInteligentePage() {
               }}
             >
               <div style={{ fontSize: 8.5, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" }}>{k.label}</div>
-              <div style={{ marginTop: 3, fontSize: 18, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: k.color, letterSpacing: "-0.03em" }}>{k.v}</div>
-              <div style={{ fontSize: 9.5, color: "#64748b", marginTop: 2, lineHeight: 1.3 }}>{k.sub}</div>
+              <div style={{ marginTop: 2, fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: k.color, letterSpacing: "-0.03em" }}>{k.v}</div>
+              <div style={{ fontSize: 9.5, color: "#64748b", marginTop: 1, lineHeight: 1.3 }}>{k.sub}</div>
             </div>
           ))}
         </div>
@@ -491,9 +497,9 @@ export default function ValidacionInteligentePage() {
             flexShrink: 0,
             display: "flex",
             alignItems: "stretch",
-            gap: 8,
+            gap: 6,
             overflowX: "auto",
-            padding: "6px 8px",
+            padding: "5px 8px",
             borderRadius: 8,
             border: `1px solid ${IA_DIM}`,
             background: "linear-gradient(90deg, rgba(49, 46, 129, 0.22) 0%, rgba(15, 23, 42, 0.52) 100%)",
@@ -504,7 +510,17 @@ export default function ValidacionInteligentePage() {
             <span style={{ fontSize: 8, fontWeight: 800, color: IA_ACCENT_STRONG, letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("validacionInteligente.colaTitle")}</span>
             <span style={{ fontSize: 8, color: "#5c6574", fontWeight: 600, marginTop: 2, lineHeight: 1.25, maxWidth: 132 }}>{t("validacionInteligente.colaSubtitle")}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: 0,
+              minWidth: 0,
+            }}
+          >
             {(
               [
                 { id: "nuevos" as const, label: t("validacionInteligente.colaNew"), n: colaCounts.nuevos },
@@ -525,10 +541,10 @@ export default function ValidacionInteligentePage() {
                     flexShrink: 0,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 5,
-                    padding: "4px 9px",
-                    borderRadius: 5,
-                    fontSize: 10,
+                    gap: 6,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    fontSize: 11,
                     fontWeight: 600,
                     cursor: "pointer",
                     whiteSpace: "nowrap",
@@ -540,15 +556,15 @@ export default function ValidacionInteligentePage() {
                   <span
                     aria-hidden
                     style={{
-                      width: 5,
-                      height: 5,
+                      width: 6,
+                      height: 6,
                       borderRadius: 999,
                       flexShrink: 0,
                       background: open ? IA_ACCENT_STRONG : "rgba(51, 65, 85, 0.85)",
                     }}
                   />
                   <span>{chip.label}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.85, fontSize: 9, fontWeight: 700 }}>{chip.n}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.85, fontSize: 10, fontWeight: 700 }}>{chip.n}</span>
                 </button>
               );
             })}
@@ -561,7 +577,7 @@ export default function ValidacionInteligentePage() {
             display: "flex",
             flexWrap: "nowrap",
             alignItems: "center",
-            gap: 8,
+            gap: 6,
             padding: "5px 8px",
             borderRadius: 8,
             border: "1px solid #334155",
@@ -575,19 +591,21 @@ export default function ValidacionInteligentePage() {
             onChange={(e) => setListSearch(e.target.value)}
             placeholder={t("validacionInteligente.toolbarSearchPlaceholder")}
             style={{
-              flex: "1 1 120px",
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: "120px",
               minWidth: 96,
               maxWidth: 200,
-              padding: "5px 8px",
-              borderRadius: 6,
+              padding: "6px 9px",
+              borderRadius: 8,
               border: "1px solid #334155",
               background: "#020617",
               color: "#f8fafc",
-              fontSize: 11,
+              fontSize: 13,
               boxSizing: "border-box",
             }}
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, fontSize: 11, color: "#64748b" }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("validacionInteligente.filterStatus")}</span>
             <select
               value={listFilter}
@@ -596,12 +614,12 @@ export default function ValidacionInteligentePage() {
                 setListFilter(e.target.value as ListFilter);
               }}
               style={{
-                padding: "3px 6px",
-                borderRadius: 5,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #334155",
                 background: "#020617",
                 color: "#cbd5e1",
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -612,18 +630,18 @@ export default function ValidacionInteligentePage() {
               <option value="cancelado">{t("validacionInteligente.filterCancelled")}</option>
             </select>
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, fontSize: 11, color: "#64748b" }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("validacionInteligente.filterDate")}</span>
             <select
               value={datePreset}
               onChange={(e) => setDatePreset(e.target.value as DatePreset)}
               style={{
-                padding: "3px 6px",
-                borderRadius: 5,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #334155",
                 background: "#020617",
                 color: "#cbd5e1",
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -634,18 +652,18 @@ export default function ValidacionInteligentePage() {
               <option value="mes">{t("validacionInteligente.dateMonth")}</option>
             </select>
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, fontSize: 11, color: "#64748b" }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("validacionInteligente.sortBy")}</span>
             <select
               value={listSort}
               onChange={(e) => setListSort(e.target.value as ListSort)}
               style={{
-                padding: "3px 6px",
-                borderRadius: 5,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #334155",
                 background: "#020617",
                 color: "#cbd5e1",
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -664,9 +682,9 @@ export default function ValidacionInteligentePage() {
               border: soloIncidencias ? `1px solid ${IA_DIM}` : "1px solid rgba(51, 65, 85, 0.55)",
               background: soloIncidencias ? "rgba(76, 29, 149, 0.22)" : "transparent",
               color: soloIncidencias ? "#e9d5ff" : "#6b7380",
-              padding: "3px 8px",
-              borderRadius: 5,
-              fontSize: 10,
+              padding: "6px 10px",
+              borderRadius: 8,
+              fontSize: 12,
               fontWeight: 600,
               cursor: "pointer",
               whiteSpace: "nowrap",
@@ -676,10 +694,23 @@ export default function ValidacionInteligentePage() {
           </button>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "row", overflow: "hidden", gap: 0 }}>
+        <div
+          style={{
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "row",
+            overflow: "hidden",
+            gap: 0,
+          }}
+        >
           <div
             style={{
-              flex: 1,
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: 0,
               minWidth: 0,
               display: "flex",
               flexDirection: "column",
@@ -690,18 +721,63 @@ export default function ValidacionInteligentePage() {
               boxShadow: `inset 3px 0 0 ${IA_DIM}, inset 0 1px 0 rgba(255,255,255,0.04)`,
             }}
           >
-            <div style={{ flexShrink: 0, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderBottom: "1px solid rgba(51,65,85,0.55)" }}>
-              <h3 style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("validacionInteligente.listTitle")}</h3>
-              <span style={{ fontSize: 11, color: "#64748b", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                {t("validacionInteligente.listCount", { shown: displayedRows.length, total: items.length })}
-              </span>
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                gap: 8,
+                padding: "6px 10px",
+                borderBottom: "1px solid rgba(51,65,85,0.55)",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("validacionInteligente.listTitle")}</h2>
+                <p style={OPER_PRIMARY_COUNT_META}>
+                  {t("validacionInteligente.listCount", { shown: displayedRows.length, total: items.length })}
+                </p>
+              </div>
             </div>
             {items.length === 0 ? (
-              <div style={{ flex: 1, display: "grid", placeItems: "center", color: "#94a3b8", fontSize: 13 }}>{t("validacionInteligente.emptyNone")}</div>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                }}
+              >
+                {t("validacionInteligente.emptyNone")}
+              </div>
             ) : displayedRows.length === 0 ? (
-              <div style={{ flex: 1, display: "grid", placeItems: "center", color: "#94a3b8", fontSize: 13 }}>{t("validacionInteligente.emptyFilter")}</div>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                }}
+              >
+                {t("validacionInteligente.emptyFilter")}
+              </div>
             ) : (
-              <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "linear-gradient(180deg, rgba(15,23,42,0.35) 0%, transparent 28px)" }}>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  minHeight: 0,
+                  overflow: "auto",
+                  background: "linear-gradient(180deg, rgba(15,23,42,0.35) 0%, transparent 28px)",
+                }}
+              >
                 <div
                   style={{
                     position: "sticky",
@@ -709,13 +785,13 @@ export default function ValidacionInteligentePage() {
                     zIndex: 2,
                     display: "grid",
                     gridTemplateColumns: gridCols,
-                    gap: "4px 10px",
+                    gap: "5px 8px",
                     alignItems: "center",
-                    padding: "7px 10px",
+                    padding: "6px 10px",
                     background: "linear-gradient(180deg,#1e293b 0%,#1a2332 100%)",
                     borderBottom: "1px solid rgba(51,65,85,0.65)",
                     boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-                    fontSize: 8.5,
+                    fontSize: 9.5,
                     fontWeight: 700,
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
@@ -729,19 +805,17 @@ export default function ValidacionInteligentePage() {
                     style={{
                       color: "#fef08a",
                       fontWeight: 800,
-                      margin: "-7px -2px",
-                      padding: "7px 8px",
-                      borderRadius: 6,
-                      background: "rgba(251, 191, 36, 0.08)",
-                      border: "1px solid rgba(251, 191, 36, 0.22)",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      background: "rgba(251, 191, 36, 0.06)",
+                      border: "1px solid rgba(251, 191, 36, 0.2)",
                     }}
                   >
                     {t("validacionInteligente.colYourTurn")}
                   </span>
                   <span style={{ textAlign: "right", color: "#e9d5ff", fontWeight: 800 }}>{t("validacionInteligente.colActions")}</span>
                 </div>
-                <div style={{ padding: "8px 10px 10px", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ padding: "6px 8px 8px", display: "flex", flexDirection: "column", gap: 8 }}>
                   {displayedRows.map((c) => {
                     const f = faseEconomica(c);
                     const riesgo = riesgoNivel(c, f);
@@ -785,10 +859,10 @@ export default function ValidacionInteligentePage() {
                         style={{
                           display: "grid",
                           gridTemplateColumns: gridCols,
-                          gap: "6px 10px",
+                          gap: "8px 10px",
                           alignItems: "center",
-                          padding: "9px 10px",
-                          borderRadius: 8,
+                          padding: "10px 12px",
+                          borderRadius: 10,
                           border: `1px solid ${chrome.borderColor}`,
                           background: chrome.background,
                           boxShadow: `${chrome.boxShadow}, 0 2px 10px rgba(0,0,0,0.12)`,
@@ -861,7 +935,7 @@ export default function ValidacionInteligentePage() {
                             display: "flex",
                             flexDirection: "column",
                             alignItems: "stretch",
-                            gap: 5,
+                            gap: 8,
                             minWidth: 0,
                           }}
                         >
@@ -874,10 +948,10 @@ export default function ValidacionInteligentePage() {
                             style={{
                               ...primaryStyle,
                               width: "100%",
-                              minHeight: 36,
-                              padding: "9px 10px",
-                              borderRadius: 7,
-                              fontSize: 11,
+                              minHeight: 44,
+                              padding: "11px 14px",
+                              borderRadius: 10,
+                              fontSize: 13,
                               fontWeight: 800,
                               cursor: "pointer",
                               whiteSpace: "nowrap",
@@ -898,7 +972,24 @@ export default function ValidacionInteligentePage() {
                                 e.stopPropagation();
                                 setMenuRowId((p) => (p === c.id ? null : c.id));
                               }}
-                              style={{ border: "none", background: "transparent", color: "#6b7585", padding: "4px 6px", fontSize: 14, cursor: "pointer", lineHeight: 1 }}
+                              style={{
+                                border: "1px solid rgba(71, 85, 105, 0.55)",
+                                background: "transparent",
+                                color: "#94a3b8",
+                                padding: "0 12px",
+                                minWidth: 44,
+                                minHeight: 44,
+                                fontSize: 18,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                lineHeight: 1,
+                                borderRadius: 10,
+                                boxSizing: "border-box",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                touchAction: "manipulation",
+                              }}
                             >
                               {t("validacionInteligente.actionMore")}
                             </button>
@@ -916,7 +1007,7 @@ export default function ValidacionInteligentePage() {
                                   border: "1px solid #334155",
                                   background: "#020617",
                                   boxShadow: "0 12px 28px rgba(0,0,0,0.5)",
-                                  padding: 4,
+                                  padding: 6,
                                 }}
                               >
                                 <button
@@ -931,9 +1022,9 @@ export default function ValidacionInteligentePage() {
                                     color: "#e9d5ff",
                                     textAlign: "left",
                                     width: "100%",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
-                                    fontSize: 11,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    fontSize: 12,
                                     fontWeight: 600,
                                     cursor: "pointer",
                                   }}
@@ -952,9 +1043,9 @@ export default function ValidacionInteligentePage() {
                                     color: "#cbd5e1",
                                     textAlign: "left",
                                     width: "100%",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
-                                    fontSize: 11,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    fontSize: 12,
                                     fontWeight: 600,
                                     cursor: "pointer",
                                   }}
@@ -973,9 +1064,9 @@ export default function ValidacionInteligentePage() {
                                     color: "#cbd5e1",
                                     textAlign: "left",
                                     width: "100%",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
-                                    fontSize: 11,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    fontSize: 12,
                                     fontWeight: 600,
                                     cursor: "pointer",
                                   }}
@@ -994,9 +1085,9 @@ export default function ValidacionInteligentePage() {
                                     color: "#cbd5e1",
                                     textAlign: "left",
                                     width: "100%",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
-                                    fontSize: 11,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    fontSize: 12,
                                     fontWeight: 600,
                                     cursor: "pointer",
                                   }}
@@ -1031,7 +1122,7 @@ export default function ValidacionInteligentePage() {
                 boxShadow: "inset 0 1px 0 rgba(167, 139, 250, 0.05)",
               }}
             >
-              <div style={{ flexShrink: 0, padding: "8px 10px", borderBottom: "1px solid rgba(51,65,85,0.55)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ flexShrink: 0, padding: "9px 12px", borderBottom: "1px solid rgba(51,65,85,0.55)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                 <h2 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "#ede9fe", letterSpacing: "-0.02em" }}>{t("validacionInteligente.panelTitle")}</h2>
                 <button
                   type="button"
@@ -1040,9 +1131,9 @@ export default function ValidacionInteligentePage() {
                     border: "1px solid #334155",
                     background: "#020617",
                     color: "#94a3b8",
-                    padding: "3px 8px",
-                    borderRadius: 6,
-                    fontSize: 10,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    fontSize: 12,
                     fontWeight: 600,
                     cursor: "pointer",
                   }}
@@ -1050,7 +1141,16 @@ export default function ValidacionInteligentePage() {
                   {t("validacionInteligente.panelClose")}
                 </button>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px" }}>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  padding: "10px 12px",
+                }}
+              >
                 <div style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>{t("validacionInteligente.panelDetected")}</div>
                 <div style={{ borderRadius: 8, border: "1px solid rgba(51,65,85,0.5)", background: "rgba(30, 27, 55, 0.35)", padding: "10px 12px" }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#f8fafc" }}>{panelCompra.proveedor}</div>
@@ -1085,7 +1185,7 @@ export default function ValidacionInteligentePage() {
                 </ul>
 
                 <div style={{ marginTop: 16, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("validacionInteligente.panelActions")}</div>
-                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
                   {[
                     t("validacionInteligente.actAccept"),
                     t("validacionInteligente.actChangeSupplier"),
@@ -1103,9 +1203,9 @@ export default function ValidacionInteligentePage() {
                         border: `1px solid ${IA_DIM}`,
                         background: "rgba(30, 27, 55, 0.4)",
                         color: "#e9d5ff",
-                        padding: "8px 10px",
-                        borderRadius: 8,
-                        fontSize: 11,
+                        padding: "11px 14px",
+                        borderRadius: 10,
+                        fontSize: 13,
                         fontWeight: 600,
                         cursor: "pointer",
                       }}

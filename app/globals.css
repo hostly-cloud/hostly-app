@@ -3,6 +3,17 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ------------------------------------------------------------------------ */
+  /* Hostly — base visual tokens (layout / rhythm)                             */
+  /* ------------------------------------------------------------------------ */
+  --hostly-content-max: 1180px; /* single global dashboard width */
+  --hostly-content-max-wide: 1400px; /* TPV / workbench layouts */
+  --hostly-page-pad-x: clamp(12px, 2.2vw, 22px);
+  --hostly-page-pad-y: clamp(12px, 2.2vw, 22px);
+  --hostly-radius-lg: 18px;
+  --hostly-radius-md: 14px;
+  --hostly-border-subtle: rgba(148, 163, 184, 0.14);
 }
 
 @theme inline {
@@ -23,4 +34,151 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Hostly — shared layout primitives */
+.hostly-container {
+  max-width: var(--hostly-content-max);
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: var(--hostly-page-pad-x);
+  padding-right: var(--hostly-page-pad-x);
+}
+
+.hostly-container-wide {
+  max-width: var(--hostly-content-max-wide);
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: var(--hostly-page-pad-x);
+  padding-right: var(--hostly-page-pad-x);
+}
+
+.hostly-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hostly-border-subtle);
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(10px);
+}
+
+.hostly-page-title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #f8fafc;
+  line-height: 1.1;
+}
+
+.hostly-page-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.hostly-card {
+  border-radius: var(--hostly-radius-lg);
+  border: 1px solid var(--hostly-border-subtle);
+  background: rgba(2, 6, 23, 0.55);
+  box-shadow: 0 18px 50px rgba(2,6,23,0.35);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — UX TPV táctil (solo bajo [data-hostly-touch], p. ej. /dashboard)   */
+/* -------------------------------------------------------------------------- */
+[data-hostly-touch] {
+  /* Altura mínima cómoda para dedo (≈44–48pt recomendado; Hostly usa px CSS). */
+  --hostly-touch-min: 50px;
+  --hostly-touch-gap: 14px;
+  --hostly-touch-checkbox: 24px;
+}
+
+[data-hostly-touch] button {
+  min-height: var(--hostly-touch-min) !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Enlaces con hit-area tipo botón (p. ej. nombre en fila TPV) */
+[data-hostly-touch] .hostly-tpv-row-link {
+  display: inline-flex !important;
+  align-items: center;
+  min-height: 46px;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border-radius: 10px;
+  box-sizing: border-box;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-hostly-touch] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+[data-hostly-touch] select,
+[data-hostly-touch] textarea {
+  min-height: var(--hostly-touch-min) !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-hostly-touch] input[type="checkbox"],
+[data-hostly-touch] input[type="radio"] {
+  min-width: var(--hostly-touch-checkbox) !important;
+  min-height: var(--hostly-touch-checkbox) !important;
+  width: var(--hostly-touch-checkbox);
+  height: var(--hostly-touch-checkbox);
+  flex-shrink: 0;
+}
+
+[data-hostly-touch] input[type="search"],
+[data-hostly-touch] input[type="text"],
+[data-hostly-touch] input[type="number"],
+[data-hostly-touch] input[type="email"],
+[data-hostly-touch] input[type="password"],
+[data-hostly-touch] input[type="date"],
+[data-hostly-touch] input[type="time"] {
+  font-size: 16px !important;
+}
+
+[data-hostly-touch] select {
+  font-size: 15px !important;
+}
+
+[data-hostly-touch] textarea {
+  min-height: 96px !important;
+  font-size: 16px !important;
+}
+
+[data-hostly-touch] [role="menu"] button,
+[data-hostly-touch] [role="menuitem"] {
+  min-height: var(--hostly-touch-min) !important;
+}
+
+/* Enlace “volver” al panel (ModulePageShell) */
+.hostly-touch-nav-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 52px !important;
+  padding: 12px 18px !important;
+  margin: -8px -12px !important;
+  border-radius: 10px !important;
+  box-sizing: border-box !important;
+  touch-action: manipulation;
+}
+
+/* Cabecera TPV “herramienta primero”: volver más discreto pero táctil */
+.hostly-touch-nav-link.hostly-nav-aux {
+  min-height: 36px !important;
+  padding: 6px 10px !important;
+  margin: -3px -6px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  border-radius: 8px !important;
+}
+
+.hostly-touch-nav-link.hostly-nav-aux:hover {
+  color: #94a3b8 !important;
 }

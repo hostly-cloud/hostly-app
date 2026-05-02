@@ -1,9 +1,11 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
+import { HostlyComprasCrossNavClient } from "@/components/hostly-cross-module-nav";
 import ModulePageShell from "@/components/module-page-shell";
+import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
 import {
   type CompraEstado,
   type CompraLocal,
@@ -14,6 +16,7 @@ import {
   saveCompras,
 } from "@/lib/compras-local";
 import { reconcileCompraStock, undoCompraStockEffect } from "@/lib/compras-stock-sync";
+import { syncReceivedCompraToFirestoreIfConfigured } from "@/lib/hostly/sync-received-compra-firestore";
 import type { StockProducto } from "@/lib/stock-local";
 import { loadStock, saveStock } from "@/lib/stock-local";
 
@@ -26,33 +29,34 @@ type OperationalFocus = "pendientes" | "entregas" | "sin_factura" | "sin_vincula
 const QUICK_CREATE_ESTADOS = ["pendiente", "recibido"] as const satisfies readonly CompraEstado[];
 
 const inputStyle = {
-  padding: "8px 10px",
-  borderRadius: 8,
+  padding: "12px 14px",
+  borderRadius: 10,
   border: "1px solid #334155",
   backgroundColor: "#0f172a",
   color: "#f8fafc",
-  fontSize: 13,
+  fontSize: 16,
   width: "100%",
   boxSizing: "border-box" as const,
 } satisfies CSSProperties;
 
 const labelStyle = {
   display: "block",
-  fontSize: 11,
+  fontSize: 13,
   fontWeight: 600,
   color: "#94a3b8",
-  marginBottom: 4,
+  marginBottom: 8,
 } satisfies CSSProperties;
 
-/** Select en filas del listado: secundario, no compite con importe ni proveedor. */
+/** Select en filas: control principal, táctil y claro. */
 const selectRow: CSSProperties = {
-  padding: "3px 8px",
-  fontSize: 11,
-  fontWeight: 500,
-  lineHeight: 1.25,
-  minWidth: 102,
+  padding: "14px 12px",
+  fontSize: 15,
+  fontWeight: 700,
+  lineHeight: 1.2,
+  minWidth: 120,
+  minHeight: 52,
   maxWidth: "100%",
-  borderRadius: 6,
+  borderRadius: 10,
   border: "1px solid rgba(100, 116, 139, 0.32)",
   backgroundColor: "rgba(15, 23, 42, 0.72)",
   color: "#cbd5e1",
@@ -214,19 +218,19 @@ function estadoLabelCompra(estado: CompraEstado, t: (key: string) => string): st
 
 const estadoSelectLook: Record<CompraEstado, { border: string; bg: string; color: string }> = {
   recibido: {
-    border: "rgba(51, 65, 85, 0.45)",
-    bg: "rgba(15, 23, 42, 0.55)",
-    color: "#9ca3af",
+    border: "rgba(148, 163, 184, 0.45)",
+    bg: "rgba(15, 23, 42, 0.88)",
+    color: "#e2e8f0",
   },
   pendiente: {
-    border: "rgba(234, 179, 8, 0.22)",
-    bg: "rgba(66, 32, 6, 0.22)",
-    color: "#e7d3a0",
+    border: "rgba(251, 191, 36, 0.55)",
+    bg: "rgba(66, 32, 6, 0.42)",
+    color: "#fffbeb",
   },
   cancelado: {
-    border: "rgba(248, 113, 113, 0.22)",
-    bg: "rgba(69, 10, 10, 0.2)",
-    color: "#d6a4a4",
+    border: "rgba(252, 165, 165, 0.45)",
+    bg: "rgba(69, 10, 10, 0.36)",
+    color: "#ffe4e6",
   },
 };
 
@@ -234,9 +238,9 @@ const estadoSelectLook: Record<CompraEstado, { border: string; bg: string; color
 const metaHairlineSep: CSSProperties = {
   display: "inline-block",
   width: 1,
-  height: 8,
-  margin: "0 7px",
-  background: "rgba(148, 163, 184, 0.16)",
+  height: 9,
+  margin: "0 8px",
+  background: "rgba(148, 163, 184, 0.12)",
   borderRadius: 1,
   verticalAlign: "middle",
   flexShrink: 0,
@@ -549,6 +553,16 @@ export default function ComprasPage() {
       resetQuickCreateDrafts();
     }
     window.setTimeout(() => setNotice(null), 3200);
+
+    void syncReceivedCompraToFirestoreIfConfigured(compra).then((r) => {
+      if (r.status === "synced") refreshStock();
+      if (r.status !== "error") return;
+      refreshStock();
+      setNotice(
+        r.code === "ALL_PRODUCTS_MISSING" ? t("compras.noticeFirestoreProductsMissing") : t("compras.noticeFirestoreSyncError"),
+      );
+      window.setTimeout(() => setNotice(null), 4200);
+    });
   }
 
   function removeCompra(id: string) {
@@ -578,6 +592,16 @@ export default function ComprasPage() {
     refreshStock();
     setNotice(t("compras.noticeEstadoUpdated"));
     window.setTimeout(() => setNotice(null), 2200);
+
+    void syncReceivedCompraToFirestoreIfConfigured(compra).then((r) => {
+      if (r.status === "synced") refreshStock();
+      if (r.status !== "error") return;
+      refreshStock();
+      setNotice(
+        r.code === "ALL_PRODUCTS_MISSING" ? t("compras.noticeFirestoreProductsMissing") : t("compras.noticeFirestoreSyncError"),
+      );
+      window.setTimeout(() => setNotice(null), 4200);
+    });
   }
 
   if (!hydrated) {
@@ -587,6 +611,7 @@ export default function ComprasPage() {
         subtitle={t("compras.loadingSubtitle")}
         maxWidth={1000}
         compactLayout
+        operationalFocus
         lockViewport
       >
         <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
@@ -614,49 +639,81 @@ export default function ComprasPage() {
       subtitle={t("compras.subtitleTpv")}
       maxWidth={1000}
       compactLayout
+      operationalFocus
       lockViewport
       headerRight={
         <button
           type="button"
           onClick={openCreate}
           style={{
-            border: "none",
-            background: "#22c55e",
-            color: "#fff",
-            padding: "7px 14px",
-            borderRadius: 8,
-            fontWeight: 700,
+            border: "1px solid rgba(34, 197, 94, 0.38)",
+            background: "rgba(34, 197, 94, 0.1)",
+            color: "#86efac",
+            padding: "9px 14px",
+            borderRadius: 10,
+            fontWeight: 600,
             cursor: "pointer",
             fontSize: 13,
             lineHeight: 1.2,
+            minHeight: 44,
             whiteSpace: "nowrap",
-            boxShadow: "0 2px 10px rgba(34, 197, 94, 0.3)",
           }}
         >
           {t("compras.newPurchase")}
         </button>
       }
     >
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            .hostly-compras-chip {
+              transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+              touch-action: manipulation;
+            }
+            .hostly-compras-chip.hostly-compras-chip-idle:hover {
+              border-color: rgba(148, 163, 184, 0.32) !important;
+              background: rgba(30, 41, 59, 0.68) !important;
+              color: #e2e8f0 !important;
+              box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.12);
+            }
+            .hostly-compras-chip.hostly-compras-chip-idle:active {
+              transform: scale(0.98);
+            }
+            .hostly-compras-chip.hostly-compras-chip-on:hover {
+              filter: brightness(1.07);
+            }
+            .hostly-compras-chip.hostly-compras-chip-on:active {
+              transform: scale(0.98);
+            }
+          `,
+        }}
+      />
       <div
         style={{
-          flex: 1,
+          flexGrow: 1,
+          flexShrink: 1,
+          flexBasis: 0,
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 5,
+          paddingTop: 0,
           overflow: "hidden",
         }}
       >
+        <Suspense fallback={null}>
+          <HostlyComprasCrossNavClient />
+        </Suspense>
         {notice ? (
           <div
             style={{
               flexShrink: 0,
-              padding: "4px 10px",
-              borderRadius: 8,
+              padding: "12px 14px",
+              borderRadius: 10,
               background: "rgba(59, 130, 246, 0.1)",
               border: "1px solid rgba(59, 130, 246, 0.32)",
               color: "#93c5fd",
-              fontSize: 12,
+              fontSize: 14,
               lineHeight: 1.35,
             }}
           >
@@ -669,7 +726,7 @@ export default function ComprasPage() {
             flexShrink: 0,
             display: "grid",
             gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 8,
+            gap: 6,
           }}
         >
           {[
@@ -698,33 +755,39 @@ export default function ComprasPage() {
               key={m.label}
               style={{
                 border: "1px solid rgba(51, 65, 85, 0.42)",
-                borderRadius: 8,
+                borderRadius: 10,
                 background: "linear-gradient(155deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.78) 100%)",
-                padding: "8px 10px",
+                padding: "10px 12px",
+                minHeight: 76,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                boxSizing: "border-box",
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
               }}
             >
               <div
                 style={{
-                  color: "#64748b",
-                  fontSize: 8,
+                  color: "#94a3b8",
+                  fontSize: 10,
                   fontWeight: 700,
-                  letterSpacing: "0.08em",
+                  letterSpacing: "0.07em",
                   textTransform: "uppercase",
-                  lineHeight: 1.15,
+                  lineHeight: 1.25,
                 }}
               >
                 {m.label}
               </div>
               <div
                 style={{
-                  marginTop: 2,
-                  fontSize: 20,
+                  marginTop: 4,
+                  fontSize: 22,
                   fontWeight: 800,
                   fontVariantNumeric: "tabular-nums",
                   color: m.valueColor,
-                  lineHeight: 1.05,
+                  lineHeight: 1.08,
                   letterSpacing: "-0.03em",
+                  textShadow: "0 1px 14px rgba(0,0,0,0.35)",
                 }}
               >
                 {m.value}
@@ -738,19 +801,19 @@ export default function ComprasPage() {
             flexShrink: 0,
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: 10,
             overflowX: "auto",
             overflowY: "hidden",
-            padding: "1px 0 2px",
+            padding: "5px 0 6px",
             WebkitOverflowScrolling: "touch",
           }}
         >
           <span
             style={{
-              fontSize: 8,
+              fontSize: 11,
               fontWeight: 700,
               color: "#64748b",
-              letterSpacing: "0.08em",
+              letterSpacing: "0.07em",
               textTransform: "uppercase",
               flexShrink: 0,
             }}
@@ -830,24 +893,28 @@ export default function ComprasPage() {
               <button
                 key={chip.id}
                 type="button"
+                className={`hostly-compras-chip ${active ? "hostly-compras-chip-on" : "hostly-compras-chip-idle"}`}
                 onClick={() => setOperFocus((p) => (p === chip.id ? null : chip.id))}
                 style={{
                   flexShrink: 0,
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 5,
-                  padding: "3px 9px",
-                  borderRadius: 4,
-                  fontSize: 10,
-                  fontWeight: 600,
+                  gap: 8,
+                  padding: "7px 14px",
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontWeight: 700,
                   letterSpacing: "0.01em",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
+                  minHeight: 36,
+                  boxSizing: "border-box",
+                  boxShadow: active ? undefined : "inset 0 1px 0 rgba(255,255,255,0.04)",
                   ...(active ? chip.act : chip.idle),
                 }}
               >
                 <span>{chip.label}</span>
-                <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.72, fontWeight: 600, fontSize: 9 }}>{chip.n}</span>
+                <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.78, fontWeight: 700, fontSize: 13 }}>{chip.n}</span>
               </button>
             );
           })}
@@ -858,14 +925,16 @@ export default function ComprasPage() {
           style={{
             flexShrink: 0,
             display: "flex",
-            flexWrap: "wrap",
+            flexWrap: "nowrap",
             alignItems: "center",
-            gap: 8,
-            padding: "6px 8px",
+            gap: 6,
+            padding: "5px 8px",
             borderRadius: 10,
             border: "1px solid #334155",
             background: "#0f172a",
-            rowGap: 6,
+            overflowX: "auto",
+            overflowY: "hidden",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <input
@@ -875,21 +944,25 @@ export default function ComprasPage() {
             placeholder={t("compras.searchPlaceholder")}
             aria-label={t("compras.searchPlaceholder")}
             style={{
-              flex: "1 1 160px",
-              minWidth: 120,
-              padding: "6px 10px",
-              borderRadius: 8,
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: "140px",
+              minWidth: 140,
+              minHeight: 36,
+              padding: "8px 12px",
+              borderRadius: 10,
               border: "1px solid #334155",
               background: "#020617",
               color: "#f8fafc",
-              fontSize: 12,
+              fontSize: 16,
               boxSizing: "border-box",
+              touchAction: "manipulation",
             }}
           />
           <div
             role="group"
             aria-label={t("compras.listSectionTitle")}
-            style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}
+            style={{ display: "flex", flexWrap: "nowrap", gap: 8, alignItems: "center", flexShrink: 0 }}
           >
             {(
               [
@@ -912,13 +985,16 @@ export default function ComprasPage() {
                     border: active ? "1px solid rgba(100, 116, 139, 0.28)" : "1px solid rgba(51, 65, 85, 0.55)",
                     background: active ? "rgba(30, 41, 59, 0.75)" : "transparent",
                     color: active ? "#d1d9e6" : "#7c8798",
-                    padding: "3px 9px",
-                    borderRadius: 5,
+                    padding: "7px 12px",
+                    borderRadius: 10,
                     fontWeight: 600,
-                    fontSize: 10,
+                    fontSize: 13,
                     lineHeight: 1.2,
+                    minHeight: 36,
+                    boxSizing: "border-box",
                     cursor: "pointer",
                     whiteSpace: "nowrap",
+                    touchAction: "manipulation",
                   }}
                 >
                   {label}
@@ -926,20 +1002,36 @@ export default function ComprasPage() {
               );
             })}
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#64748b", flexShrink: 0 }}>
-            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("compras.sortBy")}</span>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              color: "#64748b",
+              flexShrink: 0,
+              minHeight: 36,
+            }}
+          >
+            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+              {t("compras.sortBy")}
+            </span>
             <select
               value={listSort}
               onChange={(e) => setListSort(e.target.value as CompraListSort)}
               style={{
-                padding: "4px 8px",
-                borderRadius: 8,
+                padding: "7px 10px",
+                borderRadius: 10,
                 border: "1px solid #334155",
                 background: "#020617",
                 color: "#e2e8f0",
-                fontSize: 11,
+                fontSize: 14,
                 fontWeight: 600,
+                minHeight: 36,
+                minWidth: 0,
+                boxSizing: "border-box",
                 cursor: "pointer",
+                touchAction: "manipulation",
               }}
             >
               <option value="fecha_desc">{t("compras.sortFechaDesc")}</option>
@@ -999,14 +1091,18 @@ export default function ComprasPage() {
                 </div>
                 <div
                   style={{
-                    padding: "8px 10px",
-                    borderRadius: 8,
+                    padding: "10px 14px",
+                    borderRadius: 10,
                     border: "1px solid #334155",
                     background: "#0f172a",
                     color: selectedStockProduct ? "#e2e8f0" : "#64748b",
                     fontWeight: 700,
-                    fontSize: 13,
-                    minWidth: 52,
+                    fontSize: 14,
+                    minWidth: 56,
+                    minHeight: 48,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     textAlign: "center",
                   }}
                   title={t("compras.unitAuto")}
@@ -1101,7 +1197,7 @@ export default function ComprasPage() {
               <p style={{ color: "#fca5a5", marginTop: 12, marginBottom: 0, fontSize: 13 }}>{formError}</p>
             ) : null}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
               <button
                 type="button"
                 onClick={submitForm}
@@ -1109,12 +1205,14 @@ export default function ComprasPage() {
                   border: "none",
                   background: "#22c55e",
                   color: "#fff",
-                  padding: "10px 16px",
-                  borderRadius: 8,
+                  padding: "14px 18px",
+                  borderRadius: 10,
                   fontWeight: 800,
                   cursor: "pointer",
-                  fontSize: 14,
+                  fontSize: 15,
                   width: "100%",
+                  minHeight: 48,
+                  boxSizing: "border-box",
                   boxShadow: "0 4px 14px rgba(34, 197, 94, 0.3)",
                 }}
               >
@@ -1127,12 +1225,14 @@ export default function ComprasPage() {
                   border: "1px solid #475569",
                   background: "transparent",
                   color: "#94a3b8",
-                  padding: "8px 14px",
-                  borderRadius: 8,
+                  padding: "12px 16px",
+                  borderRadius: 10,
                   fontWeight: 600,
                   cursor: "pointer",
-                  fontSize: 13,
+                  fontSize: 14,
                   width: "100%",
+                  minHeight: 48,
+                  boxSizing: "border-box",
                 }}
               >
                 {t("common.cancel")}
@@ -1288,7 +1388,7 @@ export default function ComprasPage() {
               <p style={{ color: "#fca5a5", marginTop: 8, marginBottom: 0, fontSize: 12 }}>{formError}</p>
             ) : null}
 
-            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
               <button
                 type="button"
                 onClick={submitForm}
@@ -1296,11 +1396,13 @@ export default function ComprasPage() {
                   border: "none",
                   background: "#3b82f6",
                   color: "#fff",
-                  padding: "8px 16px",
-                  borderRadius: 8,
+                  padding: "12px 20px",
+                  borderRadius: 10,
                   fontWeight: 700,
                   cursor: "pointer",
-                  fontSize: 13,
+                  fontSize: 14,
+                  minHeight: 48,
+                  boxSizing: "border-box",
                 }}
               >
                 {t("compras.savePurchase")}
@@ -1312,11 +1414,13 @@ export default function ComprasPage() {
                   border: "1px solid #475569",
                   background: "transparent",
                   color: "#e2e8f0",
-                  padding: "8px 14px",
-                  borderRadius: 8,
+                  padding: "12px 18px",
+                  borderRadius: 10,
                   fontWeight: 600,
                   cursor: "pointer",
-                  fontSize: 13,
+                  fontSize: 14,
+                  minHeight: 48,
+                  boxSizing: "border-box",
                 }}
               >
                 {t("common.cancel")}
@@ -1327,14 +1431,17 @@ export default function ComprasPage() {
 
         <div
           style={{
-            flex: 1,
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
             minHeight: 0,
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            background: "#1e293b",
-            borderRadius: 12,
-            border: "1px solid #334155",
+            background: "linear-gradient(180deg, #1e293b 0%, #1a2332 100%)",
+            borderRadius: 14,
+            border: "1px solid rgba(51, 65, 85, 0.5)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
           }}
         >
           <div
@@ -1343,24 +1450,23 @@ export default function ComprasPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 10,
-              padding: "6px 10px",
-              borderBottom: "1px solid rgba(51, 65, 85, 0.55)",
+              gap: 8,
+              padding: "7px 10px",
+              borderBottom: "1px solid rgba(51, 65, 85, 0.4)",
             }}
           >
-            <h3
+            <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+              <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("compras.listSectionTitle")}</h2>
+            </div>
+            <span
               style={{
+                ...OPER_PRIMARY_COUNT_META,
                 margin: 0,
-                fontSize: 10,
-                fontWeight: 700,
-                color: "#64748b",
-                letterSpacing: "0.09em",
-                textTransform: "uppercase",
+                flexShrink: 0,
+                fontVariantNumeric: "tabular-nums",
+                alignSelf: "center",
               }}
             >
-              {t("compras.listSectionTitle")}
-            </h3>
-            <span style={{ fontSize: 10, fontWeight: 600, color: "#475569", fontVariantNumeric: "tabular-nums" }}>
               {displayedRows.length}/{items.length}
             </span>
           </div>
@@ -1368,7 +1474,9 @@ export default function ComprasPage() {
           {items.length === 0 ? (
             <div
               style={{
-                flex: 1,
+                flexGrow: 1,
+                flexShrink: 1,
+                flexBasis: 0,
                 padding: 24,
                 textAlign: "center",
                 color: "#94a3b8",
@@ -1386,11 +1494,13 @@ export default function ComprasPage() {
                   border: "none",
                   background: "#22c55e",
                   color: "#fff",
-                  padding: "8px 16px",
-                  borderRadius: 8,
+                  padding: "14px 24px",
+                  borderRadius: 10,
                   fontWeight: 700,
                   cursor: "pointer",
-                  fontSize: 13,
+                  fontSize: 15,
+                  minHeight: 48,
+                  boxSizing: "border-box",
                 }}
               >
                 {t("compras.createFirst")}
@@ -1399,7 +1509,9 @@ export default function ComprasPage() {
           ) : displayedRows.length === 0 ? (
             <div
               style={{
-                flex: 1,
+                flexGrow: 1,
+                flexShrink: 1,
+                flexBasis: 0,
                 padding: 20,
                 textAlign: "center",
                 color: "#94a3b8",
@@ -1414,7 +1526,9 @@ export default function ComprasPage() {
           ) : (
             <div
               style={{
-                flex: 1,
+                flexGrow: 1,
+                flexShrink: 1,
+                flexBasis: 0,
                 minHeight: 0,
                 overflowY: "auto",
                 overflowX: "auto",
@@ -1427,17 +1541,19 @@ export default function ComprasPage() {
                   top: 0,
                   zIndex: 2,
                   display: "grid",
-                  gridTemplateColumns: "40px minmax(120px, 1.45fr) 78px 88px minmax(80px, 1.05fr) 84px 156px",
-                  gap: "3px 6px",
+                  gridTemplateColumns: "44px minmax(120px, 1.45fr) 90px 112px minmax(88px, 1.05fr) 96px 196px",
+                  gap: "8px 10px",
                   alignItems: "center",
-                  padding: "5px 8px",
-                  background: "linear-gradient(180deg, #1e293b 0%, #1e293bee 100%)",
-                  borderBottom: "1px solid rgba(51, 65, 85, 0.65)",
-                  fontSize: 8,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
+                  minHeight: 36,
+                  padding: "8px 11px",
+                  background: "linear-gradient(180deg, rgba(30, 41, 59, 0.92) 0%, rgba(30, 41, 59, 0.78) 100%)",
+                  borderBottom: "1px solid rgba(51, 65, 85, 0.45)",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.09em",
                   textTransform: "uppercase",
-                  color: "#64748b",
+                  color: "#7b8a9e",
+                  boxSizing: "border-box",
                 }}
               >
                 <span>{t("compras.colDate")}</span>
@@ -1449,7 +1565,7 @@ export default function ComprasPage() {
                 <span style={{ textAlign: "right" }}>{t("compras.colActions")}</span>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "3px 5px 6px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "8px 8px 10px" }}>
                 {displayedRows.map((c) => {
                   const syncKind = stockSyncUiKind(c);
                   const tone = rowToneWithSync(c.estado, syncKind);
@@ -1468,34 +1584,47 @@ export default function ComprasPage() {
                   const showFactura = c.estado !== "cancelado";
                   const showStock =
                     c.estado !== "cancelado" && (!(c.producto_stock_id ?? "").trim() || syncKind === "not_applied");
+                  const facturaEsPrincipal = !showRecibido && showFactura;
 
                   return (
                     <div
                       key={c.id}
+                      id={`hostly-compra-row-${c.id}`}
+                      role="presentation"
+                      onClick={() => {
+                        setRowMenuOpenId(null);
+                        openEdit(c);
+                      }}
                       style={{
                         background: tone.bg,
-                        borderRadius: 7,
+                        borderRadius: 14,
                         border: `1px solid ${tone.border}`,
-                        padding: "3px 6px",
-                        boxShadow: `inset 3px 0 0 ${tone.stripe}, inset 0 1px 0 rgba(255,255,255,0.03)`,
+                        padding: "18px 16px",
+                        minHeight: 48,
+                        boxSizing: "border-box",
+                        cursor: "pointer",
+                        touchAction: "manipulation",
+                        boxShadow: `inset 3px 0 0 ${tone.stripe}, inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 14px rgba(0,0,0,0.18)`,
                       }}
                       title={notasHint ? `${c.proveedor} — ${notasHint}` : c.proveedor}
                     >
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "40px minmax(120px, 1.45fr) 78px 88px minmax(80px, 1.05fr) 84px 156px",
-                          gap: "3px 6px",
-                          alignItems: "center",
+                          gridTemplateColumns: "44px minmax(120px, 1.45fr) 90px 112px minmax(88px, 1.05fr) 96px 196px",
+                          gap: "12px 14px",
+                          alignItems: "start",
+                          minHeight: 52,
                         }}
                       >
                         <span
                           style={{
-                            fontSize: 9,
+                            fontSize: 10,
                             fontWeight: 600,
-                            color: "#64748b",
+                            color: "#8896ab",
                             fontVariantNumeric: "tabular-nums",
-                            lineHeight: 1.15,
+                            lineHeight: 1.25,
+                            paddingTop: 11,
                           }}
                         >
                           {formatFechaCorta(c.fecha, locale)}
@@ -1503,11 +1632,11 @@ export default function ComprasPage() {
                         <div style={{ minWidth: 0 }}>
                           <div
                             style={{
-                              fontSize: 15,
-                              fontWeight: 700,
+                              fontSize: 18,
+                              fontWeight: 800,
                               color: "#f8fafc",
-                              letterSpacing: "-0.02em",
-                              lineHeight: 1.15,
+                              letterSpacing: "-0.025em",
+                              lineHeight: 1.22,
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
@@ -1517,34 +1646,39 @@ export default function ComprasPage() {
                           </div>
                           <div
                             style={{
-                              marginTop: 3,
+                              marginTop: 10,
+                              paddingTop: 9,
+                              borderTop: "1px solid rgba(148, 163, 184, 0.14)",
                               display: "flex",
                               flexWrap: "wrap",
                               alignItems: "center",
-                              rowGap: 2,
-                              lineHeight: 1.25,
+                              rowGap: 5,
+                              columnGap: 2,
+                              lineHeight: 1.35,
                             }}
                           >
-                            <span style={{ fontSize: 9, color: "#a8b0be", fontWeight: 500, letterSpacing: "0.02em" }}>{typeL}</span>
+                            <span style={{ fontSize: 9.5, color: "#7c8799", fontWeight: 600, letterSpacing: "0.03em" }}>{typeL}</span>
                             <span style={metaHairlineSep} aria-hidden />
-                            <span style={{ fontSize: 9, color: "#6c7384", fontWeight: 500 }}>{itemLabel}</span>
+                            <span style={{ fontSize: 9.5, color: "#5f6b7c", fontWeight: 500 }}>{itemLabel}</span>
                             {rowHints.map((h, i) => (
                               <span key={`${c.id}-hint-${i}`} style={{ display: "inline-flex", alignItems: "center" }}>
                                 <span style={metaHairlineSep} aria-hidden />
-                                <span style={{ fontSize: 8.5, color: "#5a6270", fontWeight: 500, letterSpacing: "0.02em" }}>{h}</span>
+                                <span style={{ fontSize: 9, color: "#556070", fontWeight: 500, letterSpacing: "0.02em" }}>{h}</span>
                               </span>
                             ))}
                           </div>
                         </div>
                         <div
                           style={{
-                            fontSize: 16,
-                            fontWeight: 700,
+                            fontSize: 19,
+                            fontWeight: 800,
                             fontVariantNumeric: "tabular-nums",
-                            color: "#e2ddd0",
+                            color: "#fffbeb",
                             textAlign: "right",
-                            letterSpacing: "-0.02em",
-                            lineHeight: 1.05,
+                            letterSpacing: "-0.03em",
+                            lineHeight: 1.12,
+                            paddingTop: 8,
+                            textShadow: "0 0 24px rgba(251, 191, 36, 0.14)",
                           }}
                         >
                           {formatEuro(typeof c.total === "number" && Number.isFinite(c.total) ? c.total : 0, locale)}
@@ -1552,21 +1686,24 @@ export default function ComprasPage() {
                         <select
                           value={c.estado}
                           onChange={(e) => updateEstado(c.id, e.target.value as CompraEstado)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
                           aria-label={t("compras.ariaPurchaseStatus", { supplier: c.proveedor })}
                           style={{
                             ...selectRow,
-                            padding: "2px 5px",
-                            fontSize: 8.5,
-                            fontWeight: 500,
+                            padding: "12px 10px",
+                            fontSize: 15,
+                            fontWeight: 700,
                             textTransform: "none",
                             letterSpacing: "0.02em",
                             border: `1px solid ${look.border}`,
                             backgroundColor: look.bg,
                             color: look.color,
-                            borderRadius: 4,
+                            borderRadius: 10,
                             minWidth: 0,
                             width: "100%",
                             maxWidth: "100%",
+                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
                           }}
                         >
                           {COMPRA_ESTADOS.map((e) => (
@@ -1575,17 +1712,17 @@ export default function ComprasPage() {
                             </option>
                           ))}
                         </select>
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0, paddingTop: 6 }}>
                           <span
                             style={{
-                              fontSize: 10,
-                              fontWeight: 500,
-                              color: invLabel === t("compras.notLinked") ? "#5c6575" : "#7d8698",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: invLabel === t("compras.notLinked") ? "#6b7a8f" : "#c4cdd8",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
                               display: "block",
-                              lineHeight: 1.2,
+                              lineHeight: 1.4,
                             }}
                             title={invLabel}
                           >
@@ -1594,15 +1731,15 @@ export default function ComprasPage() {
                           {notasHint && invLabel !== notasHint ? (
                             <span
                               style={{
-                                marginTop: 3,
-                                fontSize: 8.5,
+                                marginTop: 8,
+                                fontSize: 9.5,
                                 fontWeight: 500,
-                                color: "#525a6b",
+                                color: "#5c6575",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                                 display: "block",
-                                lineHeight: 1.2,
+                                lineHeight: 1.35,
                               }}
                               title={notasHint}
                             >
@@ -1610,16 +1747,30 @@ export default function ComprasPage() {
                             </span>
                           ) : null}
                         </div>
-                        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-start",
+                            alignItems: "center",
+                            minHeight: 44,
+                            paddingTop: 6,
+                          }}
+                        >
                           {syncKind === "applied" ? (
                             <span
                               style={{
-                                fontWeight: 500,
-                                fontSize: 8,
-                                letterSpacing: "0.06em",
+                                display: "inline-block",
+                                padding: "5px 9px",
+                                borderRadius: 999,
+                                fontWeight: 600,
+                                fontSize: 9,
+                                letterSpacing: "0.04em",
                                 textTransform: "uppercase",
-                                color: "#6b7380",
+                                color: "#7dd3ce",
                                 whiteSpace: "nowrap",
+                                lineHeight: 1.2,
+                                background: "rgba(45, 212, 191, 0.08)",
+                                border: "1px solid rgba(45, 212, 191, 0.2)",
                               }}
                             >
                               {t("compras.appliedToStock")}
@@ -1627,28 +1778,39 @@ export default function ComprasPage() {
                           ) : syncKind === "not_applied" ? (
                             <span
                               style={{
-                                fontWeight: 500,
-                                fontSize: 8,
-                                letterSpacing: "0.05em",
+                                display: "inline-block",
+                                padding: "5px 9px",
+                                borderRadius: 999,
+                                fontWeight: 600,
+                                fontSize: 9,
+                                letterSpacing: "0.04em",
                                 textTransform: "uppercase",
-                                color: "#9a8460",
+                                color: "#fcd34d",
                                 whiteSpace: "nowrap",
+                                lineHeight: 1.2,
+                                background: "rgba(251, 191, 36, 0.08)",
+                                border: "1px solid rgba(251, 191, 36, 0.22)",
                               }}
                             >
                               {t("compras.notAppliedStock")}
                             </span>
                           ) : (
-                            <span style={{ fontSize: 9, fontWeight: 500, color: "#4a5160" }}>{t("common.emDash")}</span>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: "#64748b" }}>{t("common.emDash")}</span>
                           )}
                         </div>
                         <div
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
                           style={{
                             display: "flex",
                             flexWrap: "wrap",
-                            gap: 3,
+                            gap: 10,
                             justifyContent: "flex-end",
                             alignItems: "center",
+                            alignSelf: "stretch",
                             flexShrink: 0,
+                            paddingTop: 4,
+                            boxSizing: "border-box",
                           }}
                         >
                           {showRecibido ? (
@@ -1656,16 +1818,20 @@ export default function ComprasPage() {
                               type="button"
                               onClick={() => updateEstado(c.id, "recibido")}
                               style={{
-                                border: "1px solid rgba(71, 85, 105, 0.35)",
-                                background: "rgba(15, 23, 42, 0.35)",
-                                color: "#8f9fa8",
-                                padding: "2px 6px",
-                                borderRadius: 4,
+                                border: "1px solid rgba(34, 197, 94, 0.45)",
+                                background: "rgba(34, 197, 94, 0.16)",
+                                color: "#dcfce7",
+                                padding: "10px 14px",
+                                borderRadius: 10,
                                 cursor: "pointer",
-                                fontWeight: 500,
-                                fontSize: 8.5,
-                                lineHeight: 1.15,
+                                fontWeight: 700,
+                                fontSize: 13,
+                                lineHeight: 1.2,
+                                minHeight: 44,
+                                boxSizing: "border-box",
                                 whiteSpace: "nowrap",
+                                touchAction: "manipulation",
+                                boxShadow: "0 1px 0 rgba(255,255,255,0.06) inset",
                               }}
                             >
                               {t("compras.actionMarkReceived")}
@@ -1676,16 +1842,22 @@ export default function ComprasPage() {
                               type="button"
                               onClick={() => openEdit(c)}
                               style={{
-                                border: "1px solid rgba(51, 65, 85, 0.45)",
-                                background: "transparent",
-                                color: "#6f7c8c",
-                                padding: "2px 6px",
-                                borderRadius: 4,
+                                border: facturaEsPrincipal
+                                  ? "1px solid rgba(59, 130, 246, 0.5)"
+                                  : "1px solid rgba(51, 65, 85, 0.45)",
+                                background: facturaEsPrincipal ? "rgba(37, 99, 235, 0.22)" : "transparent",
+                                color: facturaEsPrincipal ? "#dbeafe" : "#94a3b8",
+                                padding: "10px 14px",
+                                borderRadius: 10,
                                 cursor: "pointer",
-                                fontWeight: 500,
-                                fontSize: 8.5,
-                                lineHeight: 1.15,
+                                fontWeight: facturaEsPrincipal ? 700 : 600,
+                                fontSize: 13,
+                                lineHeight: 1.2,
+                                minHeight: 44,
+                                boxSizing: "border-box",
                                 whiteSpace: "nowrap",
+                                touchAction: "manipulation",
+                                boxShadow: facturaEsPrincipal ? "0 1px 0 rgba(255,255,255,0.06) inset" : undefined,
                               }}
                             >
                               {t("compras.actionInvoice")}
@@ -1698,14 +1870,17 @@ export default function ComprasPage() {
                               style={{
                                 border: "1px solid rgba(51, 65, 85, 0.45)",
                                 background: "transparent",
-                                color: "#6f7c8c",
-                                padding: "2px 6px",
-                                borderRadius: 4,
+                                color: "#94a3b8",
+                                padding: "10px 14px",
+                                borderRadius: 10,
                                 cursor: "pointer",
-                                fontWeight: 500,
-                                fontSize: 8.5,
-                                lineHeight: 1.15,
+                                fontWeight: 600,
+                                fontSize: 13,
+                                lineHeight: 1.2,
+                                minHeight: 44,
+                                boxSizing: "border-box",
                                 whiteSpace: "nowrap",
+                                touchAction: "manipulation",
                               }}
                             >
                               {t("compras.actionLinkStock")}
@@ -1722,16 +1897,22 @@ export default function ComprasPage() {
                               aria-label={t("compras.menuEditDelete")}
                               aria-expanded={rowMenuOpenId === c.id}
                               style={{
-                                border: "none",
+                                border: "1px solid rgba(71, 85, 105, 0.55)",
                                 background: "transparent",
-                                color: "#5c6574",
-                                padding: "2px 5px",
-                                borderRadius: 4,
+                                color: "#94a3b8",
+                                padding: "0 12px",
+                                borderRadius: 10,
                                 cursor: "pointer",
-                                fontWeight: 500,
-                                fontSize: 12,
+                                fontWeight: 700,
+                                fontSize: 18,
                                 lineHeight: 1,
-                                minWidth: 22,
+                                minWidth: 44,
+                                minHeight: 44,
+                                boxSizing: "border-box",
+                                touchAction: "manipulation",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
                               }}
                             >
                               {t("compras.actionMore")}
@@ -1743,17 +1924,17 @@ export default function ComprasPage() {
                                 style={{
                                   position: "absolute",
                                   right: 0,
-                                  top: "calc(100% + 2px)",
+                                  top: "calc(100% + 8px)",
                                   zIndex: 30,
-                                  minWidth: 120,
-                                  borderRadius: 8,
+                                  minWidth: 212,
+                                  borderRadius: 12,
                                   border: "1px solid #334155",
                                   background: "#020617",
                                   boxShadow: "0 12px 28px rgba(0,0,0,0.5)",
-                                  padding: 4,
+                                  padding: 8,
                                   display: "flex",
                                   flexDirection: "column",
-                                  gap: 2,
+                                  gap: 6,
                                 }}
                               >
                                 <button
@@ -1767,11 +1948,13 @@ export default function ComprasPage() {
                                     background: "transparent",
                                     color: "#cbd5e1",
                                     textAlign: "left",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
+                                    padding: "14px 16px",
+                                    borderRadius: 10,
                                     cursor: "pointer",
                                     fontWeight: 600,
-                                    fontSize: 11,
+                                    fontSize: 15,
+                                    minHeight: 48,
+                                    boxSizing: "border-box",
                                   }}
                                 >
                                   {t("common.edit")}
@@ -1784,14 +1967,18 @@ export default function ComprasPage() {
                                   }}
                                   style={{
                                     border: "none",
-                                    background: "transparent",
-                                    color: "#f87171",
+                                    background: "rgba(127, 29, 29, 0.25)",
+                                    color: "#fecaca",
                                     textAlign: "left",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
+                                    padding: "14px 16px",
+                                    borderRadius: 10,
                                     cursor: "pointer",
-                                    fontWeight: 600,
-                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    fontSize: 15,
+                                    minHeight: 48,
+                                    boxSizing: "border-box",
+                                    marginTop: 4,
+                                    borderTop: "1px solid rgba(248, 113, 113, 0.25)",
                                   }}
                                 >
                                   {t("common.delete")}

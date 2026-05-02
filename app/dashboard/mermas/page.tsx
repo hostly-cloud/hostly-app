@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
 import {
   type MermaLocal,
   type MermaMotivo,
@@ -40,15 +41,16 @@ const labelStyle: CSSProperties = {
 
 /** Input de búsqueda alineado con Stock / TPV (#1e293b). */
 const tpvSearchInput: CSSProperties = {
-  padding: "7px 11px",
-  borderRadius: 8,
+  padding: "8px 11px",
+  borderRadius: 10,
   border: "1px solid #334155",
   backgroundColor: "#0f172a",
   color: "#f8fafc",
-  fontSize: 13,
+  fontSize: 14,
   width: "100%",
   boxSizing: "border-box",
   outline: "none",
+  minHeight: 40,
 };
 
 const tabularQty: CSSProperties = {
@@ -384,6 +386,7 @@ export default function MermasPage() {
         subtitle={t("mermas.loadingSubtitle")}
         maxWidth={1180}
         compactLayout
+        operationalFocus
         lockViewport
       >
         <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparing")}</p>
@@ -397,6 +400,7 @@ export default function MermasPage() {
       subtitle={t("mermas.subtitle")}
       maxWidth={1180}
       compactLayout
+      operationalFocus
       lockViewport
       headerRight={
         <button
@@ -405,23 +409,18 @@ export default function MermasPage() {
           onMouseEnter={() => setCtaHover(true)}
           onMouseLeave={() => setCtaHover(false)}
           style={{
-            border: "1px solid rgba(251, 191, 36, 0.22)",
-            background: ctaHover
-              ? "linear-gradient(180deg, #d9a066 0%, #b45309 100%)"
-              : "linear-gradient(180deg, #ca8a3c 0%, #a05612 100%)",
-            color: "#fff",
-            padding: "7px 14px",
+            border: ctaHover ? "1px solid rgba(251, 191, 36, 0.45)" : "1px solid rgba(251, 191, 36, 0.28)",
+            background: ctaHover ? "rgba(180, 83, 9, 0.35)" : "rgba(120, 53, 15, 0.28)",
+            color: "#fde68a",
+            padding: "9px 14px",
             borderRadius: 10,
             cursor: "pointer",
-            fontWeight: 700,
+            fontWeight: 600,
             fontSize: 13,
             letterSpacing: "-0.01em",
             lineHeight: 1.2,
-            boxShadow: ctaHover
-              ? "0 4px 18px rgba(160, 86, 18, 0.22)"
-              : "0 2px 12px rgba(160, 86, 18, 0.14)",
             whiteSpace: "nowrap",
-            transition: "background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+            transition: "background 0.2s ease, border-color 0.2s ease",
           }}
         >
           {t("mermas.registerMermaCta")}
@@ -434,7 +433,7 @@ export default function MermasPage() {
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: 5,
           overflow: "hidden",
         }}
       >
@@ -482,7 +481,7 @@ export default function MermasPage() {
               </p>
               <p
                 style={{
-                  margin: "4px 0 0",
+                  margin: "3px 0 0",
                   ...metricFigure,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -494,7 +493,7 @@ export default function MermasPage() {
               </p>
               <p
                 style={{
-                  margin: "4px 0 0",
+                  margin: "3px 0 0",
                   fontSize: 10,
                   color: "#94a3b8",
                   lineHeight: 1.35,
@@ -527,30 +526,19 @@ export default function MermasPage() {
           <div
             style={{
               flexShrink: 0,
-              padding: "8px 10px 6px",
+              padding: "8px 12px 6px",
               borderBottom: sorted.length > 0 ? "1px solid #334155" : undefined,
               display: "flex",
               flexWrap: "wrap",
               alignItems: "flex-end",
               justifyContent: "space-between",
-              gap: 8,
+              gap: 10,
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 200px" }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 15,
-                  fontWeight: 700,
-                  letterSpacing: "-0.02em",
-                  color: "#f8fafc",
-                  lineHeight: 1.2,
-                }}
-              >
-                {t("mermas.activityTitle")}
-              </h2>
+              <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("mermas.activityTitle")}</h2>
               {sorted.length > 0 ? (
-                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#64748b", lineHeight: 1.3 }}>
+                <p style={OPER_PRIMARY_COUNT_META}>
                   {displayedMermas.length} / {sorted.length}
                 </p>
               ) : null}
@@ -647,7 +635,7 @@ export default function MermasPage() {
             </div>
           ) : (
             <>
-              <div style={{ flexShrink: 0, padding: "6px 10px 0" }}>
+              <div style={{ flexShrink: 0, padding: "4px 8px 0" }}>
                 <input
                   type="search"
                   value={listSearch}
@@ -664,15 +652,15 @@ export default function MermasPage() {
                   flexShrink: 0,
                   display: "flex",
                   flexWrap: "wrap",
-                  gap: 6,
+                  gap: 8,
                   alignItems: "center",
-                  rowGap: 6,
-                  padding: "8px 10px 8px",
+                  rowGap: 8,
+                  padding: "6px 10px 7px",
                 }}
               >
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     fontWeight: 700,
                     color: "#64748b",
                     letterSpacing: "0.06em",
@@ -691,11 +679,11 @@ export default function MermasPage() {
                         : "1px solid #334155",
                     background: motivoListFilter === "todos" ? "rgba(59, 130, 246, 0.18)" : "#0f172a",
                     color: motivoListFilter === "todos" ? "#e2e8f0" : "#94a3b8",
-                    padding: "4px 10px",
+                    padding: "8px 14px",
                     borderRadius: 999,
                     fontWeight: 700,
                     cursor: "pointer",
-                    fontSize: 11,
+                    fontSize: 13,
                     lineHeight: 1.25,
                   }}
                 >
@@ -712,11 +700,11 @@ export default function MermasPage() {
                         border: active ? "1px solid rgba(96, 165, 250, 0.55)" : "1px solid #334155",
                         background: active ? "rgba(59, 130, 246, 0.18)" : "#0f172a",
                         color: active ? "#e2e8f0" : "#94a3b8",
-                        padding: "4px 10px",
+                        padding: "8px 14px",
                         borderRadius: 999,
                         fontWeight: 700,
                         cursor: "pointer",
-                        fontSize: 11,
+                        fontSize: 13,
                         lineHeight: 1.25,
                         maxWidth: "100%",
                       }}
@@ -732,7 +720,7 @@ export default function MermasPage() {
                   flex: 1,
                   minHeight: 0,
                   overflowY: "auto",
-                  padding: "4px 10px 10px",
+                  padding: "6px 10px 10px",
                   WebkitOverflowScrolling: "touch",
                 }}
               >
@@ -741,7 +729,7 @@ export default function MermasPage() {
                     {t("mermas.searchNoResults")}
                   </div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {displayedMermas.map((m) => {
                       const isHover = hoveredMermaId === m.id;
                       const badge = motivoBadgeStyles(m.motivo);
@@ -752,7 +740,7 @@ export default function MermasPage() {
                           onMouseLeave={() => setHoveredMermaId(null)}
                           style={{
                             borderRadius: 8,
-                            padding: "6px 10px",
+                            padding: "10px 12px",
                             background: isHover
                               ? "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.88) 100%)"
                               : "#0f172a",
@@ -761,7 +749,7 @@ export default function MermasPage() {
                             flexWrap: "wrap",
                             alignItems: "center",
                             justifyContent: "space-between",
-                            gap: 8,
+                            gap: 10,
                             transition: "border-color 0.15s ease, background 0.15s ease",
                           }}
                         >
@@ -794,9 +782,9 @@ export default function MermasPage() {
                               </span>
                               <span
                                 style={{
-                                  padding: "2px 8px",
+                                  padding: "6px 12px",
                                   borderRadius: 999,
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: 600,
                                   letterSpacing: "0.02em",
                                   background: badge.bg,
@@ -833,7 +821,7 @@ export default function MermasPage() {
                               flexWrap: "wrap",
                               alignItems: "center",
                               justifyContent: "flex-end",
-                              gap: 8,
+                              gap: 12,
                               flexShrink: 0,
                             }}
                           >
@@ -841,8 +829,8 @@ export default function MermasPage() {
                               style={{
                                 display: "flex",
                                 alignItems: "baseline",
-                                gap: 4,
-                                padding: "4px 10px",
+                                gap: 8,
+                                padding: "8px 12px",
                                 borderRadius: 8,
                                 background: "rgba(15, 23, 42, 0.9)",
                                 border: "1px solid #334155",
@@ -869,11 +857,11 @@ export default function MermasPage() {
                                 border: "1px solid #475569",
                                 background: "transparent",
                                 color: "#e2e8f0",
-                                padding: "5px 10px",
-                                borderRadius: 8,
+                                padding: "11px 16px",
+                                borderRadius: 10,
                                 cursor: "pointer",
                                 fontWeight: 600,
-                                fontSize: 11,
+                                fontSize: 13,
                                 lineHeight: 1.2,
                               }}
                             >
@@ -883,14 +871,14 @@ export default function MermasPage() {
                               type="button"
                               onClick={() => remove(m.id)}
                               style={{
-                                border: "1px solid rgba(248, 113, 113, 0.35)",
+                                border: "1px solid rgba(248, 113, 113, 0.45)",
                                 background: "transparent",
                                 color: "#f87171",
-                                padding: "5px 10px",
-                                borderRadius: 8,
+                                padding: "11px 16px",
+                                borderRadius: 10,
                                 cursor: "pointer",
                                 fontWeight: 600,
-                                fontSize: 11,
+                                fontSize: 13,
                                 lineHeight: 1.2,
                               }}
                             >

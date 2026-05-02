@@ -18,15 +18,16 @@ import {
 } from "@/lib/usuarios-local";
 
 const tpvSearchInput: CSSProperties = {
-  padding: "7px 11px",
-  borderRadius: 8,
+  padding: "12px 14px",
+  borderRadius: 10,
   border: "1px solid #334155",
   backgroundColor: "#0f172a",
   color: "#f8fafc",
-  fontSize: 13,
+  fontSize: 15,
   width: "100%",
   boxSizing: "border-box",
   outline: "none",
+  minHeight: 48,
 };
 
 const modalInput: CSSProperties = {
@@ -126,8 +127,8 @@ function modulesCountLine(count: number, t: (k: string, v?: Record<string, strin
 /** Misma rejilla en cabecera y filas (tabla operativa TPV). */
 const userRowGrid: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1.35fr) minmax(0, 1.05fr) minmax(0, 1fr) minmax(80px, auto) auto",
-  gap: 10,
+  gridTemplateColumns: "minmax(0, 1.35fr) minmax(0, 1.05fr) minmax(0, 1fr) minmax(88px, auto) auto",
+  gap: "10px 12px",
   alignItems: "center",
 };
 
@@ -573,16 +574,19 @@ export default function UsuariosPage() {
                       type="button"
                       onClick={() => setListFilter(f.id)}
                       style={{
-                        border: active ? "1px solid rgba(96, 165, 250, 0.55)" : "1px solid #334155",
-                        background: active ? "rgba(59, 130, 246, 0.18)" : "#0f172a",
+                        border: active ? "1px solid rgba(96, 165, 250, 0.55)" : "1px solid rgba(71, 85, 105, 0.55)",
+                        background: active ? "rgba(59, 130, 246, 0.18)" : "transparent",
                         color: active ? "#e2e8f0" : "#94a3b8",
-                        padding: "4px 10px",
+                        padding: "10px 16px",
                         borderRadius: 999,
                         fontWeight: 700,
                         cursor: "pointer",
-                        fontSize: 11,
+                        fontSize: 13,
                         lineHeight: 1.25,
                         maxWidth: "100%",
+                        minHeight: 44,
+                        boxSizing: "border-box",
+                        touchAction: "manipulation",
                       }}
                     >
                       {f.label}
@@ -616,7 +620,7 @@ export default function UsuariosPage() {
                     <div
                       style={{
                         ...userRowGrid,
-                        padding: "7px 10px",
+                        padding: "9px 12px",
                         background: "#1e293b",
                         borderBottom: "1px solid #334155",
                       }}
@@ -641,7 +645,7 @@ export default function UsuariosPage() {
                           onMouseLeave={() => setHoverRowId(null)}
                           style={{
                             ...userRowGrid,
-                            padding: "8px 10px",
+                            padding: "11px 12px",
                             borderBottom: isLast ? "none" : "1px solid #1e293b",
                             background: isHover ? "#172033" : "#0f172a",
                             boxShadow: u.activo ? "inset 3px 0 0 #22c55e" : "inset 3px 0 0 #64748b",
@@ -681,11 +685,12 @@ export default function UsuariosPage() {
                             </div>
                           </div>
 
-                          <div style={{ minWidth: 0 }}>
+                          <div style={{ minWidth: 0, display: "flex", alignItems: "center" }}>
                             <span
                               style={{
-                                display: "inline-block",
-                                padding: "6px 12px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "6px 11px",
                                 borderRadius: 8,
                                 fontSize: 12,
                                 fontWeight: 800,
@@ -698,6 +703,7 @@ export default function UsuariosPage() {
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
+                                boxSizing: "border-box",
                               }}
                               title={t(roleLabelKey(u.rol))}
                             >
@@ -722,30 +728,32 @@ export default function UsuariosPage() {
                             </div>
                           </div>
 
-                          <div style={{ display: "flex", justifyContent: "center" }}>
+                          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 44 }}>
                             <span
                               style={{
                                 display: "inline-flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                minWidth: 78,
-                                padding: "5px 10px",
-                                borderRadius: 6,
+                                minWidth: 76,
+                                maxWidth: "100%",
+                                padding: "7px 10px",
+                                borderRadius: 999,
                                 fontSize: 10,
                                 fontWeight: 800,
-                                letterSpacing: "0.06em",
+                                letterSpacing: "0.05em",
                                 textTransform: "uppercase",
-                                background: u.activo ? "rgba(34, 197, 94, 0.38)" : "rgba(51, 65, 85, 0.95)",
-                                border: u.activo ? "1px solid #4ade80" : "1px solid #64748b",
+                                background: u.activo ? "rgba(34, 197, 94, 0.2)" : "rgba(51, 65, 85, 0.35)",
+                                border: u.activo ? "1px solid rgba(74, 222, 128, 0.45)" : "1px solid #64748b",
                                 color: u.activo ? "#f0fdf4" : "#e2e8f0",
-                                boxShadow: u.activo ? "inset 0 1px 0 rgba(255,255,255,0.12)" : "none",
+                                boxSizing: "border-box",
+                                lineHeight: 1.15,
                               }}
                             >
                               {u.activo ? t("users.statusActive") : t("users.statusInactive")}
                             </span>
                           </div>
 
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
                             <button
                               type="button"
                               onClick={() => openEdit(u)}
@@ -753,11 +761,11 @@ export default function UsuariosPage() {
                                 border: "1px solid #475569",
                                 background: "rgba(30, 41, 59, 0.5)",
                                 color: "#e2e8f0",
-                                padding: "5px 10px",
-                                borderRadius: 8,
+                                padding: "11px 16px",
+                                borderRadius: 10,
                                 cursor: "pointer",
                                 fontWeight: 600,
-                                fontSize: 11,
+                                fontSize: 13,
                                 lineHeight: 1.2,
                               }}
                             >
@@ -770,11 +778,11 @@ export default function UsuariosPage() {
                                 border: u.activo ? "1px solid rgba(248, 113, 113, 0.45)" : "1px solid rgba(74, 222, 128, 0.45)",
                                 background: u.activo ? "rgba(127, 29, 29, 0.2)" : "rgba(6, 78, 59, 0.25)",
                                 color: u.activo ? "#fca5a5" : "#86efac",
-                                padding: "5px 10px",
-                                borderRadius: 8,
+                                padding: "11px 16px",
+                                borderRadius: 10,
                                 cursor: "pointer",
                                 fontWeight: 600,
-                                fontSize: 11,
+                                fontSize: 13,
                                 lineHeight: 1.2,
                               }}
                             >

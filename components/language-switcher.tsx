@@ -8,7 +8,7 @@ import { useI18n } from "@/components/i18n-provider";
 const wrap: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 6,
+  gap: 12,
   flexShrink: 0,
 };
 
@@ -16,23 +16,43 @@ const btnBase: CSSProperties = {
   border: "1px solid rgba(148, 163, 184, 0.45)",
   background: "rgba(15, 23, 42, 0.6)",
   color: "#e2e8f0",
-  padding: "6px 10px",
-  borderRadius: 8,
-  fontSize: 12,
+  padding: "12px 18px",
+  borderRadius: 10,
+  fontSize: 14,
   fontWeight: 700,
   cursor: "pointer",
-  lineHeight: 1,
-  minWidth: 36,
+  lineHeight: 1.15,
+  minWidth: 52,
+  minHeight: 52,
+  boxSizing: "border-box",
 };
 
-export function LanguageSwitcher({ className }: { className?: string }) {
+const btnCompact: CSSProperties = {
+  ...btnBase,
+  padding: "6px 9px",
+  borderRadius: 8,
+  fontSize: 12,
+  fontWeight: 600,
+  minWidth: 36,
+  minHeight: 36,
+  border: "1px solid rgba(71, 85, 105, 0.55)",
+  background: "rgba(15, 23, 42, 0.45)",
+  color: "#94a3b8",
+};
+
+export function LanguageSwitcher({ className, compact }: { className?: string; compact?: boolean }) {
   const { locale, setLocale, t } = useI18n();
 
   return (
-    <div className={className} style={wrap} role="group" aria-label={t("common.language")}>
+    <div className={className} style={{ ...wrap, gap: compact ? 8 : 12 }} role="group" aria-label={t("common.language")}>
       {SUPPORTED_LOCALES.map((code: Locale) => {
         const active = locale === code;
-        const borderColor: string = active ? "rgba(96, 165, 250, 0.65)" : "rgba(148, 163, 184, 0.45)";
+        const base = compact ? btnCompact : btnBase;
+        const borderColor: string = active
+          ? "rgba(96, 165, 250, 0.55)"
+          : compact
+            ? "rgba(71, 85, 105, 0.55)"
+            : "rgba(148, 163, 184, 0.45)";
         return (
           <button
             key={code}
@@ -40,10 +60,10 @@ export function LanguageSwitcher({ className }: { className?: string }) {
             onClick={() => setLocale(code)}
             aria-pressed={active}
             style={{
-              ...btnBase,
-              background: active ? "rgba(59, 130, 246, 0.35)" : "rgba(15, 23, 42, 0.6)",
+              ...base,
+              background: active ? (compact ? "rgba(59, 130, 246, 0.22)" : "rgba(59, 130, 246, 0.35)") : compact ? "rgba(15, 23, 42, 0.35)" : "rgba(15, 23, 42, 0.6)",
               borderColor,
-              color: active ? "#fff" : "#cbd5e1",
+              color: active ? (compact ? "#e2e8f0" : "#fff") : compact ? "#7c8a9e" : "#cbd5e1",
             }}
           >
             {code.toUpperCase()}

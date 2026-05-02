@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
 import {
   type StockProducto,
   type UnidadStock,
@@ -52,32 +53,32 @@ const tabularFigures = {
 const qtyFormInputStyle = {
   fontVariantNumeric: "tabular-nums" as const,
   fontFeatureSettings: '"tnum" 1',
-  fontSize: 13,
+  fontSize: 16,
   fontWeight: 600,
   letterSpacing: "-0.015em",
 } satisfies CSSProperties;
 
 const inputStyle = {
-  padding: "8px 10px",
-  borderRadius: 8,
+  padding: "12px 14px",
+  borderRadius: 10,
   border: "1px solid #334155",
   backgroundColor: "#0f172a",
   color: "#f8fafc",
-  fontSize: 13,
+  fontSize: 16,
   width: "100%",
   boxSizing: "border-box",
 } satisfies CSSProperties;
 
 const labelStyle = {
   display: "block",
-  fontSize: 11,
+  fontSize: 13,
   fontWeight: 600,
   color: "#94a3b8",
-  marginBottom: 4,
+  marginBottom: 8,
 } satisfies CSSProperties;
 
 const colHeadStyle: CSSProperties = {
-  fontSize: 9,
+  fontSize: 11,
   fontWeight: 700,
   color: "#64748b",
   letterSpacing: "0.07em",
@@ -89,7 +90,7 @@ const colHeadStyle: CSSProperties = {
 const stockRowGrid: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0, 1.55fr) minmax(72px, 0.75fr) minmax(72px, 0.75fr) minmax(92px, 0.95fr) minmax(148px, auto)",
-  gap: 8,
+  gap: 12,
   alignItems: "center",
 };
 
@@ -110,9 +111,9 @@ function statusPillStyle(tone: StatusTone): CSSProperties {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "3px 8px",
-    borderRadius: 6,
-    fontSize: 10,
+    padding: "10px 14px",
+    borderRadius: 10,
+    fontSize: 13,
     fontWeight: 800,
     letterSpacing: "0.04em",
     textTransform: "uppercase",
@@ -359,8 +360,8 @@ export default function StockPage() {
       <ModulePageShell
         title={t("stock.title")}
         subtitle={t("stock.loadingSubtitle")}
-        maxWidth={1180}
         compactLayout
+        operationalFocus
         lockViewport
       >
         <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
@@ -372,20 +373,20 @@ export default function StockPage() {
     <ModulePageShell
       title={t("stock.title")}
       subtitle={t("stock.subtitle")}
-      maxWidth={1180}
       compactLayout
+      operationalFocus
       lockViewport
       headerRight={
         <button
           type="button"
           onClick={openCreate}
           style={{
-            border: "none",
-            background: "#22c55e",
-            color: "#fff",
-            padding: "7px 14px",
+            border: "1px solid rgba(34, 197, 94, 0.38)",
+            background: "rgba(34, 197, 94, 0.1)",
+            color: "#86efac",
+            padding: "9px 14px",
             borderRadius: 10,
-            fontWeight: 700,
+            fontWeight: 600,
             cursor: "pointer",
             fontSize: 13,
             lineHeight: 1.2,
@@ -410,12 +411,12 @@ export default function StockPage() {
           <div
             style={{
               flexShrink: 0,
-              padding: "5px 10px",
-              borderRadius: 8,
+              padding: "12px 14px",
+              borderRadius: 10,
               background: "rgba(34, 197, 94, 0.12)",
               border: "1px solid rgba(34, 197, 94, 0.3)",
               color: "#bbf7d0",
-              fontSize: 12,
+              fontSize: 14,
               lineHeight: 1.35,
             }}
           >
@@ -429,12 +430,12 @@ export default function StockPage() {
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
-              padding: "5px 10px",
-              borderRadius: 8,
+              padding: "12px 14px",
+              borderRadius: 10,
               background: "rgba(245, 158, 11, 0.08)",
               border: "1px solid rgba(245, 158, 11, 0.32)",
               color: "#fcd34d",
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 600,
               lineHeight: 1.35,
             }}
@@ -447,8 +448,8 @@ export default function StockPage() {
           style={{
             flexShrink: 0,
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))",
-            gap: 6,
+            gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
+            gap: 7,
           }}
         >
           {kpiCards.map((m) => (
@@ -456,8 +457,8 @@ export default function StockPage() {
               key={m.key}
               style={{
                 background: "#1e293b",
-                borderRadius: 10,
-                padding: "8px 10px",
+                borderRadius: 12,
+                padding: "9px 11px",
                 border: "1px solid #334155",
                 boxShadow: "0 2px 12px rgba(0,0,0,0.14)",
                 borderTop: `2px solid ${m.accent}`,
@@ -520,37 +521,44 @@ export default function StockPage() {
             boxShadow: "0 2px 12px rgba(0,0,0,0.14)",
           }}
         >
-          <div
+            <div
             style={{
               flexShrink: 0,
-              padding: "8px 10px 6px",
+              padding: "8px 12px 6px",
               borderBottom: "1px solid #334155",
               display: "flex",
               flexWrap: "wrap",
               alignItems: "flex-end",
               justifyContent: "space-between",
-              gap: 8,
+              gap: 10,
             }}
           >
-            <div style={{ minWidth: 0 }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 15,
-                  fontWeight: 700,
-                  letterSpacing: "-0.02em",
-                  color: "#f8fafc",
-                  lineHeight: 1.2,
-                }}
-              >
-                {t("stock.listTitle")}
-              </h2>
+            <div style={{ minWidth: 0, flex: "1 1 200px" }}>
+              <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("stock.listTitle")}</h2>
               {items.length > 0 ? (
-                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#64748b", lineHeight: 1.3 }}>
+                <p style={OPER_PRIMARY_COUNT_META}>
                   {t("stock.listCount", { shown: displayedProducts.length, total: tierFilteredSorted.length })}
                 </p>
               ) : null}
             </div>
+            {items.length > 0 ? (
+              <input
+                type="search"
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder={t("stock.searchPlaceholder")}
+                autoComplete="off"
+                aria-label={t("stock.searchPlaceholder")}
+                style={{
+                  ...inputStyle,
+                  minWidth: 160,
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: "220px",
+                  maxWidth: 400,
+                }}
+              />
+            ) : null}
           </div>
 
           {items.length === 0 ? (
@@ -575,11 +583,11 @@ export default function StockPage() {
                   border: "none",
                   background: "#22c55e",
                   color: "#fff",
-                  padding: "8px 16px",
-                  borderRadius: 8,
+                  padding: "12px 22px",
+                  borderRadius: 10,
                   fontWeight: 700,
                   cursor: "pointer",
-                  fontSize: 13,
+                  fontSize: 15,
                 }}
               >
                 {t("stock.addFirst")}
@@ -587,34 +595,22 @@ export default function StockPage() {
             </div>
           ) : (
             <>
-              <div style={{ flexShrink: 0, padding: "6px 10px 0" }}>
-                <input
-                  type="search"
-                  value={listSearch}
-                  onChange={(e) => setListSearch(e.target.value)}
-                  placeholder={t("stock.searchPlaceholder")}
-                  autoComplete="off"
-                  aria-label={t("stock.searchPlaceholder")}
-                  style={{ ...inputStyle, padding: "7px 11px" }}
-                />
-              </div>
-
               <div
                 style={{
                   flexShrink: 0,
                   display: "flex",
                   flexWrap: "wrap",
-                  gap: 6,
+                  gap: 10,
                   alignItems: "center",
-                  rowGap: 6,
-                  padding: "8px 10px 8px",
+                  rowGap: 8,
+                  padding: "6px 10px 8px",
                 }}
               >
                 <span
                   style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: "#64748b",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: "#94a3b8",
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
                   }}
@@ -640,12 +636,13 @@ export default function StockPage() {
                         border: active ? "1px solid rgba(96, 165, 250, 0.55)" : "1px solid #334155",
                         background: active ? "rgba(59, 130, 246, 0.18)" : "#0f172a",
                         color: active ? "#e2e8f0" : "#94a3b8",
-                        padding: "4px 10px",
+                        padding: "8px 14px",
                         borderRadius: 999,
                         fontWeight: 700,
                         cursor: "pointer",
-                        fontSize: 11,
+                        fontSize: 13,
                         lineHeight: 1.25,
+                        minHeight: 38,
                       }}
                     >
                       {f.label}
@@ -674,7 +671,7 @@ export default function StockPage() {
                     style={{
                       display: "grid",
                       gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                      gap: 10,
+                      gap: 12,
                     }}
                   >
                     <div>
@@ -723,7 +720,7 @@ export default function StockPage() {
                   {formError ? (
                     <p style={{ color: "#fca5a5", marginTop: 8, marginBottom: 0, fontSize: 12 }}>{formError}</p>
                   ) : null}
-                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 14, marginTop: 14, flexWrap: "wrap" }}>
                     <button
                       type="button"
                       onClick={submitForm}
@@ -731,11 +728,11 @@ export default function StockPage() {
                         border: "none",
                         background: "#3b82f6",
                         color: "#fff",
-                        padding: "6px 12px",
-                        borderRadius: 8,
+                        padding: "12px 20px",
+                        borderRadius: 10,
                         fontWeight: 700,
                         cursor: "pointer",
-                        fontSize: 12,
+                        fontSize: 15,
                       }}
                     >
                       {t("common.saveChanges")}
@@ -747,11 +744,11 @@ export default function StockPage() {
                         border: "1px solid #475569",
                         background: "transparent",
                         color: "#e2e8f0",
-                        padding: "6px 12px",
-                        borderRadius: 8,
+                        padding: "12px 20px",
+                        borderRadius: 10,
                         fontWeight: 600,
                         cursor: "pointer",
-                        fontSize: 12,
+                        fontSize: 15,
                       }}
                     >
                       {t("common.cancel")}
@@ -766,7 +763,7 @@ export default function StockPage() {
                   minHeight: 0,
                   display: "flex",
                   flexDirection: "column",
-                  padding: "0 10px 10px",
+                  padding: "0 8px 8px",
                   overflow: "hidden",
                 }}
               >
@@ -794,7 +791,7 @@ export default function StockPage() {
                     <div
                       style={{
                         ...stockRowGrid,
-                        padding: "6px 10px",
+                        padding: "11px 14px",
                         background: "#1e293b",
                         borderBottom: "1px solid #334155",
                       }}
@@ -824,7 +821,7 @@ export default function StockPage() {
                             onMouseLeave={() => setHoverRowId(null)}
                             style={{
                               ...stockRowGrid,
-                              padding: "6px 10px",
+                              padding: "15px 14px",
                               borderBottom: isLast ? "none" : "1px solid #1e293b",
                               background: isHover ? "#172033" : "#0f172a",
                               boxShadow: `inset 3px 0 0 ${rowStripeColor(st.tone)}`,
@@ -866,7 +863,7 @@ export default function StockPage() {
                             <div style={{ display: "flex", justifyContent: "center" }}>
                               <span style={statusPillStyle(st.tone)}>{st.label}</span>
                             </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 14, justifyContent: "flex-end", alignItems: "center" }}>
                               <button
                                 type="button"
                                 onClick={() => openEdit(p)}
@@ -874,11 +871,11 @@ export default function StockPage() {
                                   border: "1px solid #475569",
                                   background: "rgba(30, 41, 59, 0.6)",
                                   color: "#e2e8f0",
-                                  padding: "4px 8px",
-                                  borderRadius: 6,
+                                  padding: "12px 16px",
+                                  borderRadius: 10,
                                   cursor: "pointer",
                                   fontWeight: 600,
-                                  fontSize: 10,
+                                  fontSize: 13,
                                   lineHeight: 1.2,
                                 }}
                               >
@@ -891,11 +888,11 @@ export default function StockPage() {
                                   border: "1px solid rgba(59, 130, 246, 0.4)",
                                   background: "rgba(59, 130, 246, 0.12)",
                                   color: "#93c5fd",
-                                  padding: "4px 8px",
-                                  borderRadius: 6,
+                                  padding: "12px 16px",
+                                  borderRadius: 10,
                                   cursor: "pointer",
                                   fontWeight: 600,
-                                  fontSize: 10,
+                                  fontSize: 13,
                                   lineHeight: 1.2,
                                 }}
                               >
@@ -905,14 +902,14 @@ export default function StockPage() {
                                 type="button"
                                 onClick={() => removeProduct(p.id)}
                                 style={{
-                                  border: "1px solid rgba(239, 68, 68, 0.35)",
-                                  background: "transparent",
-                                  color: "#f87171",
-                                  padding: "4px 8px",
-                                  borderRadius: 6,
+                                  border: "1px solid rgba(239, 68, 68, 0.45)",
+                                  background: "rgba(127, 29, 29, 0.25)",
+                                  color: "#fecaca",
+                                  padding: "12px 16px",
+                                  borderRadius: 10,
                                   cursor: "pointer",
-                                  fontWeight: 600,
-                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  fontSize: 13,
                                   lineHeight: 1.2,
                                 }}
                               >

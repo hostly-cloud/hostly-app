@@ -1,10 +1,13 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { HostlyFacturasCrossNavRestore } from "@/components/hostly-cross-module-nav";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { navigateWithCrossContext } from "@/lib/hostly/cross-module-nav";
+import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
 import {
   type CompraEstado,
   type CompraLocal,
@@ -203,30 +206,72 @@ function faseEcoSub(f: FaseEco, t: (k: string) => string): string {
   }
 }
 
-function CheckRow({ done, na, label }: { done: boolean; na?: boolean; label: string }) {
+function CheckRow({ done, na, label, last }: { done: boolean; na?: boolean; label: string; last?: boolean }) {
   return (
     <div
       style={{
         display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "7px 0",
-        borderBottom: "1px solid rgba(51, 65, 85, 0.45)",
+        alignItems: "flex-start",
+        gap: 13,
+        padding: "13px 0",
+        minHeight: 46,
+        boxSizing: "border-box",
+        borderBottom: last ? "none" : "1px solid rgba(51, 65, 85, 0.32)",
       }}
     >
       <span
         aria-hidden
         style={{
-          width: 13,
-          height: 13,
+          width: 22,
+          height: 22,
+          marginTop: 2,
           borderRadius: 999,
           flexShrink: 0,
-          border: na ? "1px dashed rgba(100,116,139,0.35)" : done ? "none" : "1px solid rgba(100,116,139,0.4)",
-          background: done ? "rgba(120, 53, 15, 0.35)" : na ? "transparent" : "transparent",
-          boxShadow: done ? `inset 0 0 0 1px ${ACCENT_DIM}` : undefined,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: na ? "1px dashed rgba(100,116,139,0.4)" : done ? "none" : "1px solid rgba(100,116,139,0.45)",
+          background: done ? "linear-gradient(145deg, rgba(245, 158, 11, 0.35) 0%, rgba(180, 83, 9, 0.45) 100%)" : na ? "transparent" : "rgba(15, 23, 42, 0.6)",
+          boxShadow: done ? `inset 0 0 0 1px rgba(251, 191, 36, 0.35)` : undefined,
+          fontSize: 11,
+          fontWeight: 800,
+          color: done ? "#fffbeb" : "transparent",
         }}
-      />
-      <span style={{ fontSize: 11, color: na ? "#525c6c" : "#94a3b8", lineHeight: 1.35, fontWeight: 500 }}>{label}</span>
+      >
+        {done ? "✓" : ""}
+      </span>
+      <span style={{ fontSize: 12, color: na ? "#525c6c" : "#e2e8f0", lineHeight: 1.5, fontWeight: 600, paddingTop: 2 }}>{label}</span>
+    </div>
+  );
+}
+
+function PanelCabinaSection({ title, children, first }: { title: string; children: ReactNode; first?: boolean }) {
+  return (
+    <div
+      style={{
+        marginTop: first ? 0 : 14,
+        padding: "14px 15px 15px",
+        borderRadius: 12,
+        border: "1px solid rgba(100, 116, 139, 0.38)",
+        background: "linear-gradient(168deg, rgba(26, 35, 58, 0.98) 0%, rgba(8, 12, 28, 0.9) 100%)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.055), 0 6px 20px rgba(0,0,0,0.28)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 9,
+          fontWeight: 800,
+          color: "#94a3b8",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          marginBottom: 12,
+          paddingBottom: 8,
+          borderBottom: "1px solid rgba(51, 65, 85, 0.45)",
+        }}
+      >
+        {title}
+      </div>
+      {children}
     </div>
   );
 }
@@ -260,6 +305,39 @@ export default function FacturasCostesPage() {
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [menuRowId]);
+
+  const handleFacturasCrossNavRestore = useCallback((focusId: string, openPanel: boolean) => {
+    if (openPanel) setPanelId(focusId);
+    else setPanelId(null);
+    const run = () =>
+      document.getElementById(`hostly-fc-row-${focusId}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    requestAnimationFrame(run);
+    setTimeout(run, 120);
+    setTimeout(run, 400);
+  }, []);
+
+  const openComprasFromFacturas = useCallback(
+    (compraId: string) => {
+      navigateWithCrossContext(router.push, {
+        targetPath: "/dashboard/compras",
+        sourceModule: "facturas-costes",
+        returnTo: "/dashboard/facturas-costes",
+        focusId: compraId,
+        openPanel: panelId === compraId,
+      });
+    },
+    [router, panelId],
+  );
+
+  const openComprasFromFacturasHeader = useCallback(() => {
+    navigateWithCrossContext(router.push, {
+      targetPath: "/dashboard/compras",
+      sourceModule: "facturas-costes",
+      returnTo: "/dashboard/facturas-costes",
+      focusId: panelId ?? "",
+      openPanel: !!panelId,
+    });
+  }, [router, panelId]);
 
   const today = useMemo(() => todayIsoLocal(), []);
   const weekStart = useMemo(() => subtractDaysIso(today, 7), [today]);
@@ -344,11 +422,18 @@ export default function FacturasCostesPage() {
 
   const panelCompra = useMemo(() => (panelId ? items.find((c) => c.id === panelId) ?? null : null), [panelId, items]);
 
-  const gridCols = "32px minmax(100px,1.22fr) minmax(54px,0.48fr) minmax(70px,0.62fr) 66px minmax(118px,1.08fr) 58px 128px";
+  const gridCols = "32px minmax(100px,1.22fr) minmax(54px,0.48fr) minmax(70px,0.62fr) 66px minmax(118px,1.08fr) 58px minmax(148px,auto)";
 
   if (!hydrated) {
     return (
-      <ModulePageShell title={t("facturasCostes.title")} subtitle={t("facturasCostes.loadingSubtitle")} compactLayout lockViewport maxWidth={1200}>
+      <ModulePageShell
+        title={t("facturasCostes.title")}
+        subtitle={t("facturasCostes.loadingSubtitle")}
+        compactLayout
+        operationalFocus
+        lockViewport
+        maxWidth={1200}
+      >
         <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
@@ -360,36 +445,50 @@ export default function FacturasCostesPage() {
       subtitle={t("facturasCostes.subtitle")}
       maxWidth={1200}
       compactLayout
+      operationalFocus
       lockViewport
       headerRight={
         <button
           type="button"
-          onClick={() => router.push("/dashboard/compras")}
+          onClick={openComprasFromFacturasHeader}
           style={{
-            border: "none",
-            background: `linear-gradient(180deg, #d97706 0%, #b45309 100%)`,
-            color: "#fffbeb",
-            padding: "7px 14px",
-            borderRadius: 8,
-            fontWeight: 700,
+            border: "1px solid rgba(245, 158, 11, 0.42)",
+            background: "rgba(69, 26, 3, 0.35)",
+            color: "#fde68a",
+            padding: "9px 14px",
+            borderRadius: 10,
+            fontWeight: 600,
             cursor: "pointer",
             fontSize: 13,
             lineHeight: 1.2,
             whiteSpace: "nowrap",
-            boxShadow: "0 2px 12px rgba(217, 119, 6, 0.28)",
           }}
         >
           {t("facturasCostes.ctaUpload")}
         </button>
       }
     >
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+      <div
+        style={{
+          flexGrow: 1,
+          flexShrink: 1,
+          flexBasis: 0,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 5,
+          overflow: "hidden",
+        }}
+      >
+        <Suspense fallback={null}>
+          <HostlyFacturasCrossNavRestore onRestore={handleFacturasCrossNavRestore} />
+        </Suspense>
         <div
           style={{
             flexShrink: 0,
             display: "grid",
             gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 8,
+            gap: 6,
           }}
         >
           {[
@@ -409,10 +508,10 @@ export default function FacturasCostesPage() {
               }}
             >
               <div style={{ fontSize: 8.5, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" }}>{k.label}</div>
-              <div style={{ marginTop: 3, fontSize: 18, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: k.color, letterSpacing: "-0.03em" }}>
+              <div style={{ marginTop: 2, fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: k.color, letterSpacing: "-0.03em" }}>
                 {k.v}
               </div>
-              <div style={{ fontSize: 9.5, color: "#64748b", marginTop: 2, lineHeight: 1.3 }}>{k.sub}</div>
+              <div style={{ fontSize: 9.5, color: "#64748b", marginTop: 1, lineHeight: 1.3 }}>{k.sub}</div>
             </div>
           ))}
         </div>
@@ -422,7 +521,7 @@ export default function FacturasCostesPage() {
             flexShrink: 0,
             display: "flex",
             alignItems: "stretch",
-            gap: 8,
+            gap: 6,
             overflowX: "auto",
             padding: "5px 8px",
             borderRadius: 8,
@@ -446,7 +545,17 @@ export default function FacturasCostesPage() {
             </span>
             <span style={{ fontSize: 8, color: "#5c6574", fontWeight: 600, marginTop: 2, lineHeight: 1.25, maxWidth: 128 }}>{t("facturasCostes.ecoSubtitle")}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: 0,
+              minWidth: 0,
+            }}
+          >
             {(
               [
                 { id: "sin_factura" as const, label: t("facturasCostes.ecoNoInvoice"), n: ecoCounts.sinFactura },
@@ -467,10 +576,10 @@ export default function FacturasCostesPage() {
                     flexShrink: 0,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 5,
-                    padding: "3px 8px",
-                    borderRadius: 5,
-                    fontSize: 10,
+                    gap: 6,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    fontSize: 11,
                     fontWeight: 600,
                     cursor: "pointer",
                     whiteSpace: "nowrap",
@@ -482,15 +591,15 @@ export default function FacturasCostesPage() {
                   <span
                     aria-hidden
                     style={{
-                      width: 5,
-                      height: 5,
+                      width: 6,
+                      height: 6,
                       borderRadius: 999,
                       flexShrink: 0,
                       background: open ? ACCENT : "rgba(51, 65, 85, 0.85)",
                     }}
                   />
                   <span>{chip.label}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.8, fontSize: 9, fontWeight: 700 }}>{chip.n}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.8, fontSize: 10, fontWeight: 700 }}>{chip.n}</span>
                 </button>
               );
             })}
@@ -503,8 +612,8 @@ export default function FacturasCostesPage() {
             display: "flex",
             flexWrap: "nowrap",
             alignItems: "center",
-            gap: 8,
-            padding: "4px 8px",
+            gap: 6,
+            padding: "5px 8px",
             borderRadius: 8,
             border: "1px solid #334155",
             background: "#0f172a",
@@ -517,19 +626,21 @@ export default function FacturasCostesPage() {
             onChange={(e) => setListSearch(e.target.value)}
             placeholder={t("facturasCostes.toolbarSearchPlaceholder")}
             style={{
-              flex: "1 1 120px",
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: "120px",
               minWidth: 96,
               maxWidth: 200,
-              padding: "4px 8px",
-              borderRadius: 6,
+              padding: "6px 9px",
+              borderRadius: 8,
               border: "1px solid #334155",
               background: "#020617",
               color: "#f8fafc",
-              fontSize: 11,
+              fontSize: 13,
               boxSizing: "border-box",
             }}
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, fontSize: 11, color: "#64748b" }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("facturasCostes.filterStatus")}</span>
             <select
               value={listFilter}
@@ -538,12 +649,12 @@ export default function FacturasCostesPage() {
                 setListFilter(e.target.value as ListFilter);
               }}
               style={{
-                padding: "3px 6px",
-                borderRadius: 5,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #334155",
                 background: "#020617",
                 color: "#cbd5e1",
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -554,18 +665,18 @@ export default function FacturasCostesPage() {
               <option value="cancelado">{t("facturasCostes.filterCancelled")}</option>
             </select>
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, fontSize: 11, color: "#64748b" }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("facturasCostes.filterDate")}</span>
             <select
               value={datePreset}
               onChange={(e) => setDatePreset(e.target.value as DatePreset)}
               style={{
-                padding: "3px 6px",
-                borderRadius: 5,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #334155",
                 background: "#020617",
                 color: "#cbd5e1",
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -576,18 +687,18 @@ export default function FacturasCostesPage() {
               <option value="mes">{t("facturasCostes.dateMonth")}</option>
             </select>
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 10, color: "#64748b" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, fontSize: 11, color: "#64748b" }}>
             <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("facturasCostes.sortBy")}</span>
             <select
               value={listSort}
               onChange={(e) => setListSort(e.target.value as ListSort)}
               style={{
-                padding: "3px 6px",
-                borderRadius: 5,
+                padding: "6px 8px",
+                borderRadius: 8,
                 border: "1px solid #334155",
                 background: "#020617",
                 color: "#cbd5e1",
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -606,9 +717,9 @@ export default function FacturasCostesPage() {
               border: soloDiferencias ? `1px solid ${ACCENT_DIM}` : "1px solid rgba(51, 65, 85, 0.55)",
               background: soloDiferencias ? "rgba(69, 26, 3, 0.2)" : "transparent",
               color: soloDiferencias ? "#fde68a" : "#6b7380",
-              padding: "3px 8px",
-              borderRadius: 5,
-              fontSize: 10,
+              padding: "6px 10px",
+              borderRadius: 8,
+              fontSize: 12,
               fontWeight: 600,
               cursor: "pointer",
               whiteSpace: "nowrap",
@@ -618,10 +729,23 @@ export default function FacturasCostesPage() {
           </button>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "row", overflow: "hidden", gap: 0 }}>
+        <div
+          style={{
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "row",
+            overflow: "hidden",
+            gap: 0,
+          }}
+        >
           <div
             style={{
-              flex: 1,
+              flexGrow: 1,
+              flexShrink: 1,
+              flexBasis: 0,
               minWidth: 0,
               display: "flex",
               flexDirection: "column",
@@ -632,20 +756,54 @@ export default function FacturasCostesPage() {
               boxShadow: `inset 3px 0 0 ${ACCENT_DIM}`,
             }}
           >
-            <div style={{ flexShrink: 0, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderBottom: "1px solid rgba(51,65,85,0.55)" }}>
-              <h3 style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                {t("facturasCostes.listTitle")}
-              </h3>
-              <span style={{ fontSize: 11, color: "#64748b", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                {t("facturasCostes.listCount", { shown: displayedRows.length, total: items.length })}
-              </span>
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                gap: 8,
+                padding: "6px 10px",
+                borderBottom: "1px solid rgba(51,65,85,0.55)",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("facturasCostes.listTitle")}</h2>
+                <p style={OPER_PRIMARY_COUNT_META}>
+                  {t("facturasCostes.listCount", { shown: displayedRows.length, total: items.length })}
+                </p>
+              </div>
             </div>
             {items.length === 0 ? (
-              <div style={{ flex: 1, display: "grid", placeItems: "center", color: "#94a3b8", fontSize: 13 }}>{t("facturasCostes.emptyNone")}</div>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                }}
+              >
+                {t("facturasCostes.emptyNone")}
+              </div>
             ) : displayedRows.length === 0 ? (
-              <div style={{ flex: 1, display: "grid", placeItems: "center", color: "#94a3b8", fontSize: 13 }}>{t("facturasCostes.emptyFilter")}</div>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                }}
+              >
+                {t("facturasCostes.emptyFilter")}
+              </div>
             ) : (
-              <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+              <div style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, overflow: "auto" }}>
                 <div
                   style={{
                     position: "sticky",
@@ -653,12 +811,12 @@ export default function FacturasCostesPage() {
                     zIndex: 2,
                     display: "grid",
                     gridTemplateColumns: gridCols,
-                    gap: "4px 8px",
+                    gap: "5px 8px",
                     alignItems: "center",
                     padding: "6px 10px",
                     background: "linear-gradient(180deg,#1e293b 0%,#1e293bee 100%)",
                     borderBottom: "1px solid rgba(51,65,85,0.65)",
-                    fontSize: 8.5,
+                    fontSize: 9.5,
                     fontWeight: 700,
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
@@ -674,37 +832,48 @@ export default function FacturasCostesPage() {
                   <span style={{ color: "#a8a29e", fontWeight: 800 }}>{t("facturasCostes.colDiff")}</span>
                   <span style={{ textAlign: "right", color: "#94a3b8" }}>{t("facturasCostes.colActions")}</span>
                 </div>
-                <div style={{ padding: "6px 8px 8px", display: "flex", flexDirection: "column", gap: 5 }}>
+                <div style={{ padding: "6px 8px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
                   {displayedRows.map((c) => {
                     const fase = faseEconomica(c);
                     const diff = hasDiferenciaNotas(c);
                     const sinF = compraSinFacturaDoc(c);
+                    const linked = !!(c.producto_stock_id ?? "").trim();
+                    const stk = stockSyncUiKind(c);
                     const orderRecv = `${c.id.slice(-6)} · ${estadoCompraLabel(c.estado, t)}`;
                     const meta = buildEconMeta(c, t);
                     const faseAccent = FASE_ACCENT[fase];
+                    const urgentRow =
+                      sinF ||
+                      diff ||
+                      (c.estado === "recibido" && !linked) ||
+                      stk === "not_applied" ||
+                      fase === "revision";
                     const rowInset =
-                      fase === "revision"
-                        ? "inset 2px 0 0 rgba(248, 113, 113, 0.35)"
+                      urgentRow
+                        ? "inset 3px 0 0 rgba(251, 191, 36, 0.75)"
                         : fase === "lista_cierre"
-                          ? "inset 2px 0 0 rgba(52, 211, 153, 0.28)"
-                          : fase === "validada"
-                            ? "inset 2px 0 0 rgba(56, 189, 248, 0.28)"
-                            : undefined;
+                          ? "inset 2px 0 0 rgba(52, 211, 153, 0.35)"
+                          : undefined;
                     const needsReview = fase === "revision" || fase === "validada" || fase === "pendiente";
 
                     return (
                       <div
                         key={c.id}
+                        id={`hostly-fc-row-${c.id}`}
                         style={{
                           display: "grid",
                           gridTemplateColumns: gridCols,
-                          gap: "4px 8px",
+                          gap: "6px 10px",
                           alignItems: "center",
-                          padding: "7px 10px",
-                          borderRadius: 7,
-                          border: "1px solid rgba(51, 65, 85, 0.42)",
-                          background: diff ? "rgba(45, 15, 18, 0.28)" : "rgba(15, 23, 42, 0.36)",
-                          ...(rowInset ? { boxShadow: rowInset } : {}),
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: urgentRow ? "1px solid rgba(251, 191, 36, 0.22)" : "1px solid rgba(51, 65, 85, 0.42)",
+                          background: urgentRow
+                            ? "linear-gradient(90deg, rgba(69, 26, 3, 0.32) 0%, rgba(45, 15, 18, 0.22) 38%, rgba(15, 23, 42, 0.4) 100%)"
+                            : diff
+                              ? "rgba(45, 15, 18, 0.28)"
+                              : "rgba(15, 23, 42, 0.36)",
+                          boxShadow: rowInset ? `${rowInset}, 0 2px 12px rgba(0,0,0,0.18)` : "0 2px 10px rgba(0,0,0,0.14)",
                         }}
                       >
                         <span style={{ fontSize: 9, color: "#5c6574", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{formatFechaCorta(c.fecha, locale)}</span>
@@ -770,10 +939,7 @@ export default function FacturasCostesPage() {
                           title={[faseEcoLabel(fase, t), faseEcoSub(fase, t)].filter(Boolean).join(" — ")}
                           style={{
                             minWidth: 0,
-                            padding: "5px 8px 5px 9px",
-                            borderRadius: 6,
-                            border: "1px solid rgba(71, 85, 105, 0.55)",
-                            background: "rgba(15, 23, 42, 0.65)",
+                            padding: "4px 0 4px 11px",
                             borderLeft: `3px solid ${faseAccent}`,
                           }}
                         >
@@ -782,82 +948,101 @@ export default function FacturasCostesPage() {
                             <div style={{ fontSize: 8, fontWeight: 600, color: "#7c8a9e", marginTop: 2, lineHeight: 1.25 }}>{faseEcoSub(fase, t)}</div>
                           ) : null}
                         </div>
-                        <div
-                          style={{
-                            padding: "5px 6px",
-                            borderRadius: 6,
-                            border: diff ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(51, 65, 85, 0.28)",
-                            background: diff ? "rgba(55, 18, 22, 0.45)" : "rgba(15, 23, 42, 0.25)",
-                            textAlign: "center",
-                            lineHeight: 1.25,
-                            minHeight: 30,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", minWidth: 0 }}>
                           <span
                             style={{
+                              display: "inline-block",
+                              padding: "5px 9px",
+                              borderRadius: 999,
                               fontSize: 9,
                               fontWeight: 800,
-                              letterSpacing: "0.05em",
-                              color: diff ? "#fecaca" : c.estado === "cancelado" ? "#575e6b" : "#6b7c8c",
+                              letterSpacing: "0.04em",
+                              textTransform: "uppercase",
+                              lineHeight: 1.2,
+                              ...(diff
+                                ? {
+                                    color: "#fecaca",
+                                    background: "rgba(248, 113, 113, 0.1)",
+                                    border: "1px solid rgba(248, 113, 113, 0.28)",
+                                  }
+                                : c.estado === "cancelado"
+                                  ? { color: "#64748b", background: "transparent", border: "1px solid rgba(71, 85, 105, 0.35)" }
+                                  : {
+                                      color: "#94b8c9",
+                                      background: "rgba(56, 189, 248, 0.06)",
+                                      border: "1px solid rgba(56, 189, 248, 0.18)",
+                                    }),
                             }}
                           >
                             {diff ? t("facturasCostes.diffNoMatch") : c.estado === "cancelado" ? "—" : t("facturasCostes.diffMatch")}
                           </span>
                         </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
                           <button
                             type="button"
                             onClick={() => setPanelId(c.id)}
                             style={{
-                              border: `1px solid ${ACCENT_DIM}`,
-                              background: "rgba(30, 20, 8, 0.4)",
-                              color: "#fde68a",
-                              padding: "5px 9px",
-                              borderRadius: 5,
-                              fontSize: 9.5,
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {t("facturasCostes.actionView")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPanelId(c.id)}
-                            style={{
-                              border: needsReview ? `1px solid rgba(251, 191, 36, 0.5)` : "1px solid rgba(51, 65, 85, 0.5)",
-                              background: needsReview ? "rgba(69, 26, 3, 0.38)" : "rgba(15, 23, 42, 0.4)",
-                              color: needsReview ? "#fef08a" : "#7c8694",
-                              padding: "5px 9px",
-                              borderRadius: 5,
-                              fontSize: 9.5,
+                              border: needsReview ? "none" : "1px solid rgba(71, 85, 105, 0.45)",
+                              background: needsReview
+                                ? "linear-gradient(180deg, rgba(251, 191, 36, 0.95) 0%, rgba(217, 119, 6, 0.92) 100%)"
+                                : "rgba(30, 27, 19, 0.55)",
+                              color: needsReview ? "#1c1917" : "#a8a29e",
+                              padding: needsReview ? "11px 16px" : "8px 12px",
+                              borderRadius: 10,
+                              fontSize: needsReview ? 13 : 12,
                               fontWeight: 800,
                               cursor: "pointer",
                               lineHeight: 1.2,
+                              minHeight: 44,
+                              boxSizing: "border-box",
+                              touchAction: "manipulation",
+                              boxShadow: needsReview ? "0 3px 14px rgba(245, 158, 11, 0.35), inset 0 1px 0 rgba(255,255,255,0.25)" : "none",
                             }}
                           >
                             {t("facturasCostes.actionValidate")}
                           </button>
                           <button
                             type="button"
-                            onClick={() => router.push("/dashboard/compras")}
+                            onClick={() => openComprasFromFacturas(c.id)}
                             style={{
-                              border: "1px solid rgba(56, 189, 248, 0.22)",
-                              background: "rgba(8, 47, 73, 0.2)",
-                              color: "#9ecae0",
-                              padding: "5px 9px",
-                              borderRadius: 5,
-                              fontSize: 9.5,
-                              fontWeight: 600,
+                              border: "1px solid rgba(56, 189, 248, 0.28)",
+                              background: "rgba(8, 47, 73, 0.25)",
+                              color: "#bae6fd",
+                              padding: "8px 12px",
+                              borderRadius: 10,
+                              fontSize: 12,
+                              fontWeight: 700,
                               cursor: "pointer",
                               lineHeight: 1.2,
+                              minHeight: 40,
+                              boxSizing: "border-box",
+                              touchAction: "manipulation",
                             }}
                           >
                             {t("facturasCostes.actionLink")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPanelId(c.id)}
+                            style={{
+                              border: "1px solid transparent",
+                              background: "transparent",
+                              color: "#7c8694",
+                              padding: "8px 10px",
+                              borderRadius: 8,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              lineHeight: 1.2,
+                              minHeight: 40,
+                              boxSizing: "border-box",
+                              touchAction: "manipulation",
+                              textDecoration: "underline",
+                              textDecorationColor: "rgba(148, 163, 184, 0.35)",
+                              textUnderlineOffset: 3,
+                            }}
+                          >
+                            {t("facturasCostes.actionView")}
                           </button>
                           <div style={{ position: "relative", display: "inline-flex" }}>
                             <button
@@ -868,13 +1053,22 @@ export default function FacturasCostesPage() {
                                 setMenuRowId((p) => (p === c.id ? null : c.id));
                               }}
                               style={{
-                                border: "none",
-                                background: "transparent",
-                                color: "#6b7585",
-                                padding: "4px 6px",
-                                fontSize: 14,
+                                border: "1px solid rgba(51, 65, 85, 0.5)",
+                                background: "rgba(15, 23, 42, 0.4)",
+                                color: "#64748b",
+                                padding: "0 8px",
+                                minWidth: 36,
+                                minHeight: 36,
+                                fontSize: 16,
+                                fontWeight: 700,
                                 cursor: "pointer",
                                 lineHeight: 1,
+                                borderRadius: 8,
+                                boxSizing: "border-box",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                touchAction: "manipulation",
                               }}
                             >
                               {t("facturasCostes.actionMore")}
@@ -893,14 +1087,14 @@ export default function FacturasCostesPage() {
                                   border: "1px solid #334155",
                                   background: "#020617",
                                   boxShadow: "0 12px 28px rgba(0,0,0,0.5)",
-                                  padding: 4,
+                                  padding: 6,
                                 }}
                               >
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setMenuRowId(null);
-                                    router.push("/dashboard/compras");
+                                    openComprasFromFacturas(c.id);
                                   }}
                                   style={{
                                     border: "none",
@@ -908,9 +1102,9 @@ export default function FacturasCostesPage() {
                                     color: "#cbd5e1",
                                     textAlign: "left",
                                     width: "100%",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
-                                    fontSize: 11,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    fontSize: 12,
                                     fontWeight: 600,
                                     cursor: "pointer",
                                   }}
@@ -929,9 +1123,9 @@ export default function FacturasCostesPage() {
                                     color: "#cbd5e1",
                                     textAlign: "left",
                                     width: "100%",
-                                    padding: "6px 8px",
-                                    borderRadius: 6,
-                                    fontSize: 11,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    fontSize: 12,
                                     fontWeight: 600,
                                     cursor: "pointer",
                                   }}
@@ -953,30 +1147,42 @@ export default function FacturasCostesPage() {
           {panelCompra ? (
             <aside
               style={{
-                width: 292,
+                width: 316,
                 flexShrink: 0,
                 display: "flex",
                 flexDirection: "column",
-                border: `1px solid ${ACCENT_DIM}`,
-                borderRadius: 10,
-                marginLeft: 8,
-                background: "#0f172a",
+                border: "1px solid rgba(251, 191, 36, 0.22)",
+                borderRadius: 12,
+                marginLeft: 10,
+                background: "linear-gradient(180deg, rgba(17, 24, 39, 0.98) 0%, rgba(2, 6, 23, 0.96) 55%, rgba(15, 23, 42, 0.99) 100%)",
                 overflow: "hidden",
-                boxShadow: "inset 0 1px 0 rgba(245, 158, 11, 0.04)",
+                boxShadow:
+                  "0 0 0 1px rgba(0,0,0,0.35), 0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(253, 230, 138, 0.06)",
               }}
             >
-              <div style={{ flexShrink: 0, padding: "7px 10px", borderBottom: "1px solid rgba(51,65,85,0.55)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                <h2 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "#fef3c7", letterSpacing: "-0.02em" }}>{t("facturasCostes.panelTitle")}</h2>
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: "11px 14px",
+                  borderBottom: "1px solid rgba(51,65,85,0.55)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 10,
+                  background: "linear-gradient(90deg, rgba(120, 53, 15, 0.14) 0%, transparent 55%)",
+                }}
+              >
+                <h2 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#fef3c7", letterSpacing: "-0.02em" }}>{t("facturasCostes.panelTitle")}</h2>
                 <button
                   type="button"
                   onClick={() => setPanelId(null)}
                   style={{
-                    border: "1px solid #334155",
-                    background: "#020617",
-                    color: "#94a3b8",
-                    padding: "3px 8px",
-                    borderRadius: 6,
-                    fontSize: 10,
+                    border: "1px solid rgba(71, 85, 105, 0.4)",
+                    background: "transparent",
+                    color: "#64748b",
+                    padding: "5px 10px",
+                    borderRadius: 8,
+                    fontSize: 11,
                     fontWeight: 600,
                     cursor: "pointer",
                   }}
@@ -984,87 +1190,183 @@ export default function FacturasCostesPage() {
                   {t("facturasCostes.panelClose")}
                 </button>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>{t("facturasCostes.panelSummary")}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#f8fafc", marginBottom: 4 }}>{panelCompra.proveedor}</div>
-                <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
-                  {formatFechaCorta(panelCompra.fecha, locale)} · {formatEuro(typeof panelCompra.total === "number" ? panelCompra.total : 0, locale)}
-                </div>
-                <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 8, fontWeight: 800, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" }}>{t("facturasCostes.panelPhaseLabel")}</span>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 800,
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                      border: `1px solid ${FASE_ACCENT[faseEconomica(panelCompra)]}`,
-                      background: "rgba(15, 23, 42, 0.8)",
-                      color: "#fef3c7",
-                    }}
-                  >
-                    {faseEcoLabel(faseEconomica(panelCompra), t)}
-                  </span>
-                  <span style={{ fontSize: 9, color: "#64748b", fontWeight: 600 }}>{faseEcoSub(faseEconomica(panelCompra), t)}</span>
-                </div>
-
-                <div style={{ marginTop: 12, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("facturasCostes.panelOcr")}</div>
+              <div
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  padding: "12px 14px 14px",
+                }}
+              >
                 <div
                   style={{
-                    marginTop: 5,
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px dashed rgba(100, 116, 139, 0.35)",
-                    background: "rgba(15, 23, 42, 0.6)",
-                    fontSize: 10,
-                    color: "#787f8f",
-                    lineHeight: 1.45,
+                    marginBottom: 14,
+                    padding: "11px 12px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(51, 65, 85, 0.5)",
+                    background: "rgba(15, 23, 42, 0.55)",
                   }}
                 >
-                  {compraSinFacturaDoc(panelCompra) ? t("facturasCostes.panelOcrPending") : t("facturasCostes.panelOcrPlaceholder")}
+                  <div style={{ fontSize: 9, fontWeight: 800, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+                    {t("facturasCostes.panelSummary")}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#f8fafc", marginBottom: 4, lineHeight: 1.25 }}>{panelCompra.proveedor}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.5, fontWeight: 600 }}>
+                    {formatFechaCorta(panelCompra.fecha, locale)} · {formatEuro(typeof panelCompra.total === "number" ? panelCompra.total : 0, locale)}
+                  </div>
                 </div>
 
-                <div style={{ marginTop: 12, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("facturasCostes.panelRelated")}</div>
-                <div style={{ marginTop: 5, fontSize: 11, color: "#cbd5e1", fontWeight: 600 }}>
-                  {t("facturasCostes.panelRelatedLine", { id: panelCompra.id.slice(-8), estado: estadoCompraLabel(panelCompra.estado, t) })}
-                </div>
+                {(() => {
+                  const pf = faseEconomica(panelCompra);
+                  const statusKind: "neutral" | "alert" | "ready" =
+                    panelCompra.estado === "cancelado"
+                      ? "neutral"
+                      : panelCompra.estado === "pendiente" || pendienteCierreEconomico(panelCompra)
+                        ? "alert"
+                        : "ready";
+                  const statusText =
+                    panelCompra.estado === "pendiente"
+                      ? t("facturasCostes.metaAwaitingRecv")
+                      : statusKind === "ready"
+                        ? t("facturasCostes.panelStatusReady")
+                        : statusKind === "alert"
+                          ? t("facturasCostes.panelStatusAlert")
+                          : "—";
+                  return (
+                    <PanelCabinaSection title={t("facturasCostes.panelSectionState")} first>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "8px 10px" }}>
+                          <span
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 800,
+                              padding: "5px 11px",
+                              borderRadius: 8,
+                              border: `1px solid ${FASE_ACCENT[pf]}`,
+                              background: "rgba(15, 23, 42, 0.92)",
+                              color: "#fef3c7",
+                              letterSpacing: "-0.02em",
+                            }}
+                          >
+                            {faseEcoLabel(pf, t)}
+                          </span>
+                          <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, lineHeight: 1.4, flex: "1 1 140px" }}>{faseEcoSub(pf, t)}</span>
+                        </div>
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 9,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            lineHeight: 1.45,
+                            border:
+                              statusKind === "ready"
+                                ? "1px solid rgba(52, 211, 153, 0.28)"
+                                : statusKind === "alert"
+                                  ? "1px solid rgba(251, 191, 36, 0.35)"
+                                  : "1px solid rgba(71, 85, 105, 0.45)",
+                            background:
+                              statusKind === "ready"
+                                ? "rgba(6, 78, 59, 0.22)"
+                                : statusKind === "alert"
+                                  ? "rgba(69, 26, 3, 0.35)"
+                                  : "rgba(15, 23, 42, 0.5)",
+                            color: statusKind === "ready" ? "#a7f3d0" : statusKind === "alert" ? "#fde68a" : "#64748b",
+                          }}
+                        >
+                          {statusText}
+                        </div>
+                      </div>
+                    </PanelCabinaSection>
+                  );
+                })()}
 
-                <div style={{ marginTop: 12, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("facturasCostes.panelEconDiff")}</div>
-                <div style={{ marginTop: 5, fontSize: 11, color: hasDiferenciaNotas(panelCompra) ? ACCENT : "#64748b", fontWeight: 600 }}>
-                  {hasDiferenciaNotas(panelCompra) ? t("facturasCostes.panelDiffDetected") : t("facturasCostes.panelDiffNone")}
-                </div>
+                <PanelCabinaSection title={t("facturasCostes.panelSectionIssues")}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#787f8f", marginBottom: 6 }}>{t("facturasCostes.panelOcr")}</div>
+                      <div
+                        style={{
+                          padding: "9px 11px",
+                          borderRadius: 8,
+                          border: "1px dashed rgba(100, 116, 139, 0.4)",
+                          background: "rgba(15, 23, 42, 0.65)",
+                          fontSize: 10,
+                          color: compraSinFacturaDoc(panelCompra) ? "#fcd34d" : "#787f8f",
+                          lineHeight: 1.5,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {compraSinFacturaDoc(panelCompra) ? t("facturasCostes.panelOcrPending") : t("facturasCostes.panelOcrPlaceholder")}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#787f8f", marginBottom: 6 }}>{t("facturasCostes.panelEconDiff")}</div>
+                      <div style={{ fontSize: 11, color: hasDiferenciaNotas(panelCompra) ? "#fcd34d" : "#94a3b8", fontWeight: 600, lineHeight: 1.45 }}>
+                        {hasDiferenciaNotas(panelCompra) ? t("facturasCostes.panelDiffDetected") : t("facturasCostes.panelDiffNone")}
+                      </div>
+                    </div>
+                  </div>
+                </PanelCabinaSection>
 
-                <div style={{ marginTop: 14, fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("facturasCostes.panelChecklist")}</div>
-                <div style={{ marginTop: 4 }}>
-                  <CheckRow done={!compraSinFacturaDoc(panelCompra)} na={panelCompra.estado !== "recibido"} label={t("facturasCostes.checkDoc")} />
-                  <CheckRow done={!hasDiferenciaNotas(panelCompra)} na={panelCompra.estado === "cancelado"} label={t("facturasCostes.checkAmount")} />
-                  <CheckRow
-                    done={!!(panelCompra.producto_stock_id ?? "").trim()}
-                    na={panelCompra.estado === "cancelado"}
-                    label={t("facturasCostes.checkLink")}
-                  />
-                  <CheckRow
-                    done={stockSyncUiKind(panelCompra) !== "not_applied"}
-                    na={panelCompra.estado !== "recibido" || stockSyncUiKind(panelCompra) === "neutral"}
-                    label={t("facturasCostes.checkStock")}
-                  />
-                </div>
+                <PanelCabinaSection title={t("facturasCostes.panelSectionCross")}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ fontSize: 11, color: "#e2e8f0", fontWeight: 600, lineHeight: 1.45 }}>
+                      {t("facturasCostes.panelRelatedLine", { id: panelCompra.id.slice(-8), estado: estadoCompraLabel(panelCompra.estado, t) })}
+                    </div>
+                    <div style={{ height: 1, background: "rgba(51, 65, 85, 0.5)", margin: "2px 0" }} />
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#787f8f", marginBottom: 2 }}>{t("facturasCostes.panelEconStateLine")}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "#fef3c7" }}>{faseEcoLabel(faseEconomica(panelCompra), t)}</span>
+                      <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>{faseEcoSub(faseEconomica(panelCompra), t)}</span>
+                    </div>
+                  </div>
+                </PanelCabinaSection>
 
+                <PanelCabinaSection title={t("facturasCostes.panelChecklist")}>
+                  <div style={{ marginTop: -4 }}>
+                    <CheckRow done={!compraSinFacturaDoc(panelCompra)} na={panelCompra.estado !== "recibido"} label={t("facturasCostes.checkDoc")} />
+                    <CheckRow done={!hasDiferenciaNotas(panelCompra)} na={panelCompra.estado === "cancelado"} label={t("facturasCostes.checkAmount")} />
+                    <CheckRow
+                      done={!!(panelCompra.producto_stock_id ?? "").trim()}
+                      na={panelCompra.estado === "cancelado"}
+                      label={t("facturasCostes.checkLink")}
+                    />
+                    <CheckRow
+                      done={stockSyncUiKind(panelCompra) !== "not_applied"}
+                      na={panelCompra.estado !== "recibido" || stockSyncUiKind(panelCompra) === "neutral"}
+                      label={t("facturasCostes.checkStock")}
+                      last
+                    />
+                  </div>
+                </PanelCabinaSection>
+              </div>
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: "12px 14px 14px",
+                  borderTop: "1px solid rgba(51, 65, 85, 0.55)",
+                  background: "linear-gradient(180deg, rgba(15, 23, 42, 0.4) 0%, rgba(2, 6, 23, 0.95) 100%)",
+                  boxShadow: "0 -8px 24px rgba(0,0,0,0.35)",
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => setPanelId(null)}
                   style={{
-                    marginTop: 14,
                     width: "100%",
-                    border: `1px solid ${ACCENT_DIM}`,
-                    background: "linear-gradient(180deg, rgba(120, 53, 15, 0.35) 0%, rgba(15, 23, 42, 0.9) 100%)",
-                    color: "#fef3c7",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    fontWeight: 700,
-                    fontSize: 12,
+                    border: "none",
+                    background: "linear-gradient(180deg, rgba(251, 191, 36, 0.98) 0%, rgba(217, 119, 6, 0.95) 100%)",
+                    color: "#1c1917",
+                    padding: "14px 16px",
+                    borderRadius: 11,
+                    fontWeight: 800,
+                    fontSize: 14,
                     cursor: "pointer",
-                    boxShadow: "0 2px 10px rgba(217, 119, 6, 0.12)",
+                    boxShadow: "0 4px 22px rgba(245, 158, 11, 0.4), inset 0 1px 0 rgba(255,255,255,0.35)",
+                    letterSpacing: "-0.01em",
                   }}
                 >
                   {t("facturasCostes.panelValidateCta")}

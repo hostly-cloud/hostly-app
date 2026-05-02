@@ -154,8 +154,15 @@ export function loadCompras(): CompraLocal[] {
       const unidad = parseUnidad(r.unidad);
       const cantidad_recibida = parseCantidadRecibida(r.cantidad_recibida);
       const rawStockAplicado = r.stock_aplicado;
+      /** Alias Firestore / futuro sync remoto */
+      const rawAplicadoFs = r.aplicadoStock;
       let stock_aplicado: boolean;
-      if (rawStockAplicado === true || rawStockAplicado === "true") {
+      if (
+        rawStockAplicado === true ||
+        rawStockAplicado === "true" ||
+        rawAplicadoFs === true ||
+        rawAplicadoFs === "true"
+      ) {
         stock_aplicado = true;
       } else if (rawStockAplicado === false || rawStockAplicado === "false") {
         stock_aplicado = false;
