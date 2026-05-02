@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
-import { supabase } from "@/lib/supabase";
 import { mockInventarioProductos } from "@/lib/inventario-productos";
 
 type Unidad = "kg" | "g" | "l" | "ml" | "ud";
@@ -67,76 +66,24 @@ export default function InventarioStockSection() {
   async function cargar() {
     setLoading(true);
     setError(null);
-    setUsingMock(false);
+    setUsingMock(true);
 
-    if (!supabase) {
-      setUsingMock(true);
-      const rows = mockInventarioProductos() as ProductoRow[];
-      setItems(rows);
-      setDrafts(() => {
-        const next: DraftById = {};
-        for (const r of rows) {
-          next[String(r.id)] = {
-            nombre: r.nombre ?? "",
-            unidad: r.unidad ?? "kg",
-            stock_actual: r.stock_actual == null ? "" : String(roundTo(r.stock_actual, 3)),
-            coste_unitario: r.coste_unitario == null ? "" : String(roundTo(r.coste_unitario, 2)),
-            stock_minimo: r.stock_minimo == null ? "" : String(roundTo(r.stock_minimo, 3)),
-          };
-        }
-        return next;
-      });
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("inventario_productos")
-        .select("id, nombre, unidad, stock_actual, coste_unitario, stock_minimo")
-        .order("nombre", { ascending: true, nullsFirst: false });
-
-      if (error) throw error;
-
-      const rows = (data ?? []) as ProductoRow[];
-      setItems(rows);
-      setDrafts((prev) => {
-        const next: DraftById = { ...prev };
-        for (const r of rows) {
-          const key = String(r.id);
-          if (!next[key]) {
-            next[key] = {
-              nombre: r.nombre ?? "",
-              unidad: r.unidad ?? "kg",
-              stock_actual: r.stock_actual == null ? "" : String(roundTo(r.stock_actual, 3)),
-              coste_unitario: r.coste_unitario == null ? "" : String(roundTo(r.coste_unitario, 2)),
-              stock_minimo: r.stock_minimo == null ? "" : String(roundTo(r.stock_minimo, 3)),
-            };
-          }
-        }
-        return next;
-      });
-    } catch (e) {
-      setUsingMock(true);
-      const rows = mockInventarioProductos() as ProductoRow[];
-      setItems(rows);
-      setDrafts(() => {
-        const next: DraftById = {};
-        for (const r of rows) {
-          next[String(r.id)] = {
-            nombre: r.nombre ?? "",
-            unidad: r.unidad ?? "kg",
-            stock_actual: r.stock_actual == null ? "" : String(roundTo(r.stock_actual, 3)),
-            coste_unitario: r.coste_unitario == null ? "" : String(roundTo(r.coste_unitario, 2)),
-            stock_minimo: r.stock_minimo == null ? "" : String(roundTo(r.stock_minimo, 3)),
-          };
-        }
-        return next;
-      });
-      setError(e instanceof Error ? e.message : t("inventory.errorLoadMock"));
-    } finally {
-      setLoading(false);
-    }
+    const rows = mockInventarioProductos() as ProductoRow[];
+    setItems(rows);
+    setDrafts(() => {
+      const next: DraftById = {};
+      for (const r of rows) {
+        next[String(r.id)] = {
+          nombre: r.nombre ?? "",
+          unidad: r.unidad ?? "kg",
+          stock_actual: r.stock_actual == null ? "" : String(roundTo(r.stock_actual, 3)),
+          coste_unitario: r.coste_unitario == null ? "" : String(roundTo(r.coste_unitario, 2)),
+          stock_minimo: r.stock_minimo == null ? "" : String(roundTo(r.stock_minimo, 3)),
+        };
+      }
+      return next;
+    });
+    setLoading(false);
   }
 
   function updateDraft(id: string | number, patch: Partial<DraftById[string]>) {
@@ -186,55 +133,7 @@ export default function InventarioStockSection() {
         stock_minimo: parseNumber(draft.stock_minimo, 0),
       };
 
-      // Modo mock: solo memoria
-      if (usingMock || !supabase) {
-        setItems((prev) =>
-          prev.map((r) =>
-            String(r.id) === key
-              ? {
-                  ...r,
-                  ...payload,
-                  stock_actual: roundTo(payload.stock_actual, 3),
-                  coste_unitario: roundTo(payload.coste_unitario, 2),
-                  stock_minimo: roundTo(payload.stock_minimo, 3),
-                }
-              : r,
-          ),
-        );
-        return;
-      }
-
-      // Supabase: insert si tmp_ / update si existente
-      if (key.startsWith("tmp_")) {
-        const { data, error } = await supabase
-          .from("inventario_productos")
-          .insert(payload)
-          .select("id, nombre, unidad, stock_actual, coste_unitario, stock_minimo")
-          .maybeSingle();
-        if (error) throw error;
-
-        const inserted = (data ?? null) as ProductoRow | null;
-        if (!inserted) throw new Error(t("inventory.errorCreateProduct"));
-
-        setItems((prev) => prev.map((r) => (String(r.id) === key ? inserted : r)));
-        setDrafts((prev) => {
-          const next = { ...prev };
-          delete next[key];
-          next[String(inserted.id)] = {
-            nombre: inserted.nombre ?? "",
-            unidad: inserted.unidad ?? "kg",
-            stock_actual: inserted.stock_actual == null ? "" : String(roundTo(inserted.stock_actual, 3)),
-            coste_unitario: inserted.coste_unitario == null ? "" : String(roundTo(inserted.coste_unitario, 2)),
-            stock_minimo: inserted.stock_minimo == null ? "" : String(roundTo(inserted.stock_minimo, 3)),
-          };
-          return next;
-        });
-        return;
-      }
-
-      const { error } = await supabase.from("inventario_productos").update(payload).eq("id", id);
-      if (error) throw error;
-
+      // Solo memoria (sin backend SQL)
       setItems((prev) =>
         prev.map((r) =>
           String(r.id) === key
@@ -262,19 +161,6 @@ export default function InventarioStockSection() {
     setDeletingById((prev) => ({ ...prev, [key]: true }));
 
     try {
-      if (usingMock || !supabase || key.startsWith("tmp_")) {
-        setItems((prev) => prev.filter((r) => String(r.id) !== key));
-        setDrafts((prev) => {
-          const next = { ...prev };
-          delete next[key];
-          return next;
-        });
-        return;
-      }
-
-      const { error } = await supabase.from("inventario_productos").delete().eq("id", id);
-      if (error) throw error;
-
       setItems((prev) => prev.filter((r) => String(r.id) !== key));
       setDrafts((prev) => {
         const next = { ...prev };

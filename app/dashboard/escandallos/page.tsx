@@ -9,7 +9,6 @@ import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
 import { OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
 import { fetchEscandalloMergedRowsForBrowser } from "@/lib/platos-escandallo-bridge";
 import { syncPlatoPrecioFromEscandalloSave } from "@/lib/platos-local";
-import { supabase } from "@/lib/supabase";
 
 type EscandalloRow = {
   id: string | number;
@@ -361,34 +360,19 @@ export default function EscandallosPage() {
       const coste_total = parseNullableNumber(draft.coste_total);
       const precio_venta = parseNullableNumber(draft.precio_venta);
 
-      if (!supabase) {
-        setError("Supabase no configurado");
-        return;
-      }
-
-      const { error } = await supabase
-        .from("escandallos")
-        .update({ coste_total, precio_venta })
-        .eq("id", id);
-
-      if (error) {
-        setError(error.message);
-        return;
-      }
-
       syncPlatoPrecioFromEscandalloSave(getBrowserRestauranteId(), Number(id), precio_venta);
 
-      if (coste_total != null) {
-        try {
-          const raw = localStorage.getItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY);
-          const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
-          if (parsed[key] != null) {
-            delete parsed[key];
-            localStorage.setItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY, JSON.stringify(parsed));
-          }
-        } catch {
-          // noop
+      try {
+        const raw = localStorage.getItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY);
+        const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+        if (coste_total != null && Number.isFinite(coste_total)) {
+          parsed[key] = coste_total;
+        } else if (parsed[key] != null) {
+          delete parsed[key];
         }
+        localStorage.setItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY, JSON.stringify(parsed));
+      } catch {
+        // noop
       }
 
       setItems((prev) =>

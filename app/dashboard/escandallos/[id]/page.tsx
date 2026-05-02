@@ -1,26 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import ModulePageShell from "@/components/module-page-shell";
 import { useI18n } from "@/components/i18n-provider";
-import { supabase } from "@/lib/supabase";
 
 type Escandallo = {
   id: string | number;
   nombre_plato: string | null;
   coste_total: number | null;
   precio_venta: number | null;
-};
-
-/** Fila en public.escandallo_ingredientes */
-type EscandalloIngredienteRow = {
-  id: string | number;
-  escandallo_id: number;
-  producto_id: number;
-  cantidad: number;
-  unidad: string;
-  created_at?: string;
 };
 
 /** public.productos — columnas de coste opcionales según esquema real */
@@ -40,8 +29,6 @@ type IngredientDraftRow = {
   cantidad: string;
   unidad: string;
 };
-
-const ING_SELECT = "id, escandallo_id, producto_id, cantidad, unidad, created_at";
 
 function formatMoneyOrDash(value: number | null | undefined): string {
   if (value == null) return "-";
@@ -81,15 +68,6 @@ function unitCostFromProductoRow(p: ProductoRow | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function dbRowsToDraft(rows: EscandalloIngredienteRow[]): IngredientDraftRow[] {
-  return rows.map((row) => ({
-    clientRowId: `db-${String(row.id)}`,
-    producto_id: String(row.producto_id),
-    cantidad: String(row.cantidad),
-    unidad: row.unidad ?? "",
-  }));
-}
-
 function classifyRows(rows: IngredientDraftRow[]): {
   incomplete: boolean;
   valid: { producto_id: number; cantidad: number; unidad: string }[];
@@ -119,19 +97,7 @@ function lineCostEuro(r: IngredientDraftRow, byId: Map<number, ProductoRow>): nu
 }
 
 async function fetchProductosCatalog(): Promise<{ productos: ProductoRow[]; errorMessage: string | null }> {
-  if (!supabase) return { productos: [], errorMessage: null };
-
-  const selectors = ["id, nombre, unidad, coste_unitario", "id, nombre, unidad, coste", "id, nombre, unidad"];
-  let lastMsg: string | null = null;
-  for (const sel of selectors) {
-    const { data, error } = await supabase
-      .from("productos")
-      .select(sel)
-      .order("nombre", { ascending: true, nullsFirst: false });
-    if (!error) return { productos: (data ?? []) as unknown as ProductoRow[], errorMessage: null };
-    lastMsg = error.message;
-  }
-  return { productos: [], errorMessage: lastMsg };
+  return { productos: [], errorMessage: null };
 }
 
 export default function EscandalloDetallePage() {
@@ -173,20 +139,6 @@ export default function EscandalloDetallePage() {
     };
   }, []);
 
-  const loadIngredientes = useCallback(async (): Promise<{ ok: boolean; rows: IngredientDraftRow[] }> => {
-    if (!supabase) return { ok: true, rows: [] };
-
-    const { data, error: ingError } = await supabase
-      .from("escandallo_ingredientes")
-      .select(ING_SELECT)
-      .eq("escandallo_id", idNum)
-      .order("created_at", { ascending: true });
-    if (ingError) {
-      return { ok: false, rows: [] };
-    }
-    return { ok: true, rows: dbRowsToDraft((data ?? []) as EscandalloIngredienteRow[]) };
-  }, [idNum]);
-
   useEffect(() => {
     let alive = true;
 
@@ -205,46 +157,9 @@ export default function EscandalloDetallePage() {
       setSaveMsg(null);
 
       try {
-        if (!supabase) {
-          setError("Supabase no configurado");
-          setPlato(null);
-          setIngredientes([]);
-          return;
-        }
-
-        const { data: platoData, error: platoError } = await supabase
-          .from("escandallos")
-          .select("id, nombre_plato, coste_total, precio_venta")
-          .eq("id", idNum)
-          .maybeSingle();
-
-        if (!alive) return;
-
-        if (platoError) {
-          setError(platoError.message);
-          setPlato(null);
-          setIngredientes([]);
-          return;
-        }
-
-        const platoRow = (platoData ?? null) as Escandallo | null;
-        setPlato(platoRow);
-
-        const { data: ingData, error: ingError } = await supabase
-          .from("escandallo_ingredientes")
-          .select(ING_SELECT)
-          .eq("escandallo_id", idNum)
-          .order("created_at", { ascending: true });
-
-        if (!alive) return;
-
-        if (ingError) {
-          setError(ingError.message);
-          setIngredientes([]);
-          return;
-        }
-
-        setIngredientes(dbRowsToDraft((ingData ?? []) as EscandalloIngredienteRow[]));
+        setError(null);
+        setPlato(null);
+        setIngredientes([]);
       } catch (e) {
         if (!alive) return;
         setError(e instanceof Error ? e.message : t("escandalloDetail.unexpectedError"));
@@ -316,57 +231,15 @@ export default function EscandalloDetallePage() {
       return;
     }
 
-    const { incomplete, valid } = classifyRows(ingredientes);
+    const { incomplete } = classifyRows(ingredientes);
     if (incomplete) {
       setError(t("escandalloDetail.errorRowIncomplete"));
       return;
     }
 
-    const costeTotalParaGuardar = ingredientes.reduce((acc, r) => acc + lineCostEuro(r, productosById), 0);
-
     setSaving(true);
     try {
-      if (!supabase) {
-        setError("Supabase no configurado");
-        return;
-      }
-
-      const { error: delErr } = await supabase.from("escandallo_ingredientes").delete().eq("escandallo_id", idNum);
-      if (delErr) throw delErr;
-
-      if (valid.length > 0) {
-        const payload = valid.map((v) => ({
-          escandallo_id: idNum,
-          producto_id: v.producto_id,
-          cantidad: v.cantidad,
-          unidad: v.unidad,
-        }));
-        const { error: insErr } = await supabase.from("escandallo_ingredientes").insert(payload);
-        if (insErr) throw insErr;
-      }
-
-      const reloaded = await loadIngredientes();
-      if (!reloaded.ok) {
-        throw new Error(t("escandalloDetail.errorReloadIngredients"));
-      }
-      setIngredientes(reloaded.rows);
-
-      const { error: upCostErr } = await supabase
-        .from("escandallos")
-        .update({ coste_total: costeTotalParaGuardar })
-        .eq("id", idNum);
-
-      if (upCostErr) {
-        setError(`${t("escandalloDetail.errorUpdateCosteTotal")} ${upCostErr.message}`);
-        setSaveMsg(t("escandalloDetail.msgIngredientsSavedCostUpdateFail"));
-        return;
-      }
-
-      setPlato((prev) => (prev ? { ...prev, coste_total: costeTotalParaGuardar } : prev));
-      setSaveMsg(t("escandalloDetail.msgSaved"));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : t("escandalloDetail.errorSave");
-      setError(msg);
+      setError(t("escandalloDetail.errorSave"));
       setSaveMsg(null);
     } finally {
       setSaving(false);

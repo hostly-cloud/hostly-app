@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getHostlyFirestore } from "@/lib/firebase/admin";
 import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
-import { supabase } from "@/lib/supabase";
 
 type CatalogoVentaDoc = {
   restauranteId: string;
@@ -22,69 +21,14 @@ function badRequest(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
 }
 
-async function bootstrapFromEscandallosIfEmpty(restauranteId: string, db: FirebaseFirestore.Firestore) {
-  if (!supabase) return;
-
-  const coll = db.collection("restaurantes").doc(restauranteId).collection("catalogoVenta");
-  const existing = await coll.limit(1).get();
-  if (!existing.empty) return;
-
-  const { data, error } = await supabase
-    .from("escandallos")
-    .select("id, nombre_plato, precio_venta")
-    .order("nombre_plato", { ascending: true, nullsFirst: false });
-
-  if (error || !data?.length) return;
-
-  const now = new Date().toISOString();
-  const batch = db.batch();
-  let wrote = 0;
-  for (const row of data) {
-    const escId = typeof row.id === "number" ? row.id : Number(row.id);
-    if (!Number.isFinite(escId)) continue;
-    const nombre =
-      typeof row.nombre_plato === "string" && row.nombre_plato.trim() ? row.nombre_plato.trim() : null;
-    if (!nombre) continue;
-    const pv =
-      row.precio_venta != null && Number.isFinite(Number(row.precio_venta)) ? Number(row.precio_venta) : 0;
-
-    const docId = `esc-${escId}`;
-    const ref = coll.doc(docId);
-    const payload: CatalogoVentaDoc = {
-      restauranteId,
-      nombre,
-      tipoVenta: "plato",
-      categoria: "General",
-      precioVenta: Math.max(0, pv),
-      activo: true,
-      escandalloSupabaseId: escId,
-      createdAt: now,
-      updatedAt: now,
-    };
-    batch.set(ref, payload, { merge: true });
-    wrote++;
-    if (wrote >= 500) break;
-  }
-  if (wrote > 0) await batch.commit();
-}
-
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
   if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
   assertServerRestauranteAllowed(restauranteId);
 
-  if (!supabase) {
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
   const db = getHostlyFirestore();
   if (!db) return badRequest("FIRESTORE_NOT_CONFIGURED", 501);
-
-  await bootstrapFromEscandallosIfEmpty(restauranteId, db as any);
 
   const snap = await db
     .collection("restaurantes")
@@ -159,4 +103,3 @@ export async function PATCH(req: Request) {
   const next = await ref.get();
   return NextResponse.json({ ok: true, item: { id: next.id, ...(next.data() as CatalogoVentaDoc) } });
 }
-

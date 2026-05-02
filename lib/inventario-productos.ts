@@ -1,5 +1,3 @@
-import { supabase } from "@/lib/supabase";
-
 export type InventarioProducto = {
   id: string | number;
   nombre: string | null;
@@ -19,21 +17,7 @@ export function mockInventarioProductos(): InventarioProducto[] {
   ];
 }
 
-/** Carga inventario desde Supabase; si falla, devuelve el mismo mock que /dashboard/inventario. */
+/** Inventario local de demostración (sin backend SQL). */
 export async function fetchInventarioProductos(): Promise<{ productos: InventarioProducto[]; usingMock: boolean }> {
-  if (!supabase) {
-    return { productos: mockInventarioProductos(), usingMock: true };
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from("inventario_productos")
-      .select("id, nombre, unidad, stock_actual, coste_unitario, stock_minimo")
-      .order("nombre", { ascending: true, nullsFirst: false });
-
-    if (error) throw error;
-    return { productos: (data ?? []) as InventarioProducto[], usingMock: false };
-  } catch {
-    return { productos: mockInventarioProductos(), usingMock: true };
-  }
+  return { productos: mockInventarioProductos(), usingMock: true };
 }
