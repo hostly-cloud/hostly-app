@@ -46,6 +46,17 @@ export default function RootLayout({
         <SelectedTableProvider>
           <Providers>{children}</Providers>
         </SelectedTableProvider>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js');
+        });
+      }
+    `,
+          }}
+        />
       </body>
     </html>
   );
