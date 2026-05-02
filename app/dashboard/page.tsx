@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { useAuth } from "@/components/auth/auth-context";
@@ -217,6 +217,15 @@ const controlPanelStyle: CSSProperties = {
 };
 
 export default function DashboardPage() {
+  const [mobileScroll, setMobileScroll] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setMobileScroll(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
   console.log("DEPLOY TEST HOSTLY");
   const router = useRouter();
   const { t, locale } = useI18n();
@@ -442,18 +451,30 @@ export default function DashboardPage() {
       subtitle={t("dashboard.subtitle")}
       maxWidth={1280}
       compactLayout
-      lockViewport
+      lockViewport={!mobileScroll}
       hideBackLink
     >
       <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          overflow: "hidden",
-        }}
+        style={
+          mobileScroll
+            ? {
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                minHeight: "min(100%, 100dvh)",
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
+                paddingBottom: "6rem",
+              }
+            : {
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                overflow: "hidden",
+              }
+        }
       >
         {role === "owner" && restaurantId && isFirebaseConfigured ? (
           <div
