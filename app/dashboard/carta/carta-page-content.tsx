@@ -1116,7 +1116,7 @@ export function CartaPageContent({
   const [error, setError] = useState(false);
 
   const [tablesList, setTablesList] = useState<Table[]>([]);
-  /** Nombre de categoría de carta resaltada, o `null` = todas. */
+  /** Nombre de categoría de carta resaltada; null si aún no hay categorías en el grupo (comida/bebida). */
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   /**
    * Primer nivel del TPV: solo categorías de ese grupo.
@@ -3316,17 +3316,6 @@ export function CartaPageContent({
     setOrder([]);
   };
 
-  const filteredProducts = useMemo(() => {
-    const inGroup = products.filter(
-      (p) =>
-        categoryMenuGroup(p.categoria || "Sin categoría") === menuGroup,
-    );
-    if (!selectedCategory) return inGroup;
-    return inGroup.filter(
-      (p) => (p.categoria || "Sin categoría") === selectedCategory,
-    );
-  }, [products, menuGroup, selectedCategory]);
-
   const categoryTabNames = useMemo(() => {
     const set = new Set<string>();
     for (const p of products) {
@@ -3336,15 +3325,36 @@ export function CartaPageContent({
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
   }, [products, menuGroup]);
 
+  /** Categoría aplicada al grid: la seleccionada o la primera real (sin chip "Todos"). */
+  const effectiveSelectedCategory = useMemo(() => {
+    if (categoryTabNames.length === 0) return null;
+    if (
+      selectedCategory != null &&
+      categoryTabNames.includes(selectedCategory)
+    ) {
+      return selectedCategory;
+    }
+    return categoryTabNames[0];
+  }, [selectedCategory, categoryTabNames]);
+
   useEffect(() => {
     setSelectedCategory((prev) => {
-      if (prev === null) return null;
-      if (!categoryTabNames.includes(prev)) {
-        return categoryTabNames[0] ?? null;
-      }
-      return prev;
+      if (categoryTabNames.length === 0) return null;
+      if (prev !== null && categoryTabNames.includes(prev)) return prev;
+      return categoryTabNames[0];
     });
   }, [menuGroup, categoryTabNames]);
+
+  const filteredProducts = useMemo(() => {
+    const inGroup = products.filter(
+      (p) =>
+        categoryMenuGroup(p.categoria || "Sin categoría") === menuGroup,
+    );
+    if (!effectiveSelectedCategory) return inGroup;
+    return inGroup.filter(
+      (p) => (p.categoria || "Sin categoría") === effectiveSelectedCategory,
+    );
+  }, [products, menuGroup, effectiveSelectedCategory]);
 
   const groupedProducts = useMemo(
     () =>
@@ -4406,76 +4416,9 @@ export function CartaPageContent({
     }, 0);
   }, [order]);
 
-  /**
-   * Etiqueta legible del pase activo, derivada de `activeCourse`.
-   * Sin estado, sin handlers; solo se usa para mostrarla en UI
-   * (botón "Comanda", aria-labels, etc.). Coherente con el mapa
-   * `ACTIVE_COURSE_TO_NUM` (starter→1, main→2, dessert→3).
-   */
-  const activeCourseLabel =
-    activeCourse === "starter"
-      ? "Entrantes"
-      : activeCourse === "main"
-        ? "Segundos"
-        : "Postres";
-  /** Pase activo en su forma numérica (1-3), reutilizado tanto por
-      el contador del selector como por el resaltado en la lista de
+  /** Pase activo en su forma numérica (1-3), usado por el resaltado en la lista de
       comanda (`isActiveCourseLine` en `renderComandaLine`). */
   const activeCourseNum = ACTIVE_COURSE_TO_NUM[activeCourse];
-
-  /**
-   * Cuántas unidades pendientes hay en el pase activo. Se usa para el
-   * contador `"N en <pase>"` que aparece bajo el selector. Las líneas
-   * sin `course` explícito se cuentan como pase 1 (Entrantes), igual
-   * que en `pendingSummaryByCourse`, `handleQuickAdd` y el resaltado
-   * de filas. Memoizado en `[order, activeCourseNum]`.
-   */
-  const activeCoursePendingCount = useMemo(() => {
-    return order.reduce((sum, line) => {
-      if (line.status !== "pending") return sum;
-      const lineCourse =
-        normalizeComandaCourseForStorage(line.course) ?? 1;
-      if (lineCourse !== activeCourseNum) return sum;
-      return sum + (Number(line.quantity) || 0);
-    }, 0);
-  }, [order, activeCourseNum]);
-
-  /**
-   * Mini-resumen de las líneas pendientes AGRUPADAS por pase
-   * (1 Entrantes, 2 Segundos, 3 Postres). Para cada pase se muestran
-   * como mucho 2 líneas. Solo UI; deriva de `order` (sin Firestore).
-   * El campo del nombre en `Product` es `nombre` (no `name`).
-   */
-  const pendingSummaryByCourse = useMemo(() => {
-    const groups: Record<number, string[]> = {
-      1: [],
-      2: [],
-      3: [],
-    };
-
-    for (const line of order) {
-      if (line.status !== "pending") continue;
-      const course = normalizeComandaCourseForStorage(line.course) || 1;
-      if (!groups[course]) continue;
-      groups[course].push(
-        `${Number(line.quantity) || 0}× ${
-          line.product?.nombre?.trim() || "Producto"
-        }`,
-      );
-    }
-
-    return [
-      groups[1]!.length > 0
-        ? `Entrantes: ${groups[1]!.slice(0, 2).join(" · ")}`
-        : null,
-      groups[2]!.length > 0
-        ? `Segundos: ${groups[2]!.slice(0, 2).join(" · ")}`
-        : null,
-      groups[3]!.length > 0
-        ? `Postres: ${groups[3]!.slice(0, 2).join(" · ")}`
-        : null,
-    ].filter(Boolean) as string[];
-  }, [order]);
 
   const cocinaItems = useMemo(() => {
     return order
@@ -4519,6 +4462,10 @@ export function CartaPageContent({
     () => order.some((l) => l.status === "pending"),
     [order],
   );
+
+  /** Panel comanda: oculto en TPV normal sin líneas (prioridad a la carta). En Barra siempre visible. */
+  const hasItems = order.length > 0;
+  const showComandaAside = viewMode !== "normal" || hasItems;
 
   const lineEditorTarget =
     comandaLineEditorId == null
@@ -4575,8 +4522,7 @@ export function CartaPageContent({
        sutilmente la fila y oscurecer su badge inline, ayudando al
        camarero a localizar visualmente las líneas del pase actual.
        Las líneas SIN `course` explícito se tratan como pase 1
-       (Entrantes), igual que en `pendingSummaryByCourse` y en el
-       fallback `|| 1` de `handleQuickAdd`.
+       (Entrantes), igual que en el fallback `|| 1` de `handleQuickAdd`.
        `activeCourseNum` viene del ámbito del componente. */
     const lineCourseNumForActiveHighlight = courseForBadge ?? 1;
     const isActiveCourseLine =
@@ -5231,6 +5177,11 @@ export function CartaPageContent({
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+}
+
+/* Vista TPV con grid + comanda: el scroll va dentro de productos/comanda, no en el page-main. */
+.carta-page-main:not(.carta-page-main--map) {
+  overflow: hidden;
 }
 
 .carta-page-main--map {
@@ -5992,25 +5943,35 @@ export function CartaPageContent({
 
 .carta-layout {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
   min-width: 0;
   min-height: 0;
   flex: 1;
   box-sizing: border-box;
   overflow: hidden;
+  height: 100%;
 }
 
+/* Panel comanda abajo (orden DOM: aside primero, main segundo → order invierte visual). */
 .carta-aside {
-  flex: 0 0 420px;
-  width: 420px;
-  min-width: 320px;
-  max-width: 520px;
+  order: 2;
+  flex: 0 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   min-height: 0;
-  height: 100%;
+  max-height: 45vh;
+  height: auto;
   align-self: stretch;
-  max-height: 100%;
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
 }
 
 .carta-aside-scroll {
@@ -6510,6 +6471,7 @@ export function CartaPageContent({
 }
 
 .carta-main {
+  order: 1;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
@@ -6631,36 +6593,11 @@ export function CartaPageContent({
 }
 
 /* Botón "Comanda" cuando hay unidades pendientes de enviar.
-   El botón usa estilos inline (gradient + boxShadow), por lo que para
-   imponer el rojo se necesita !important en background y box-shadow.
-   El sufijo " · pendiente" se inyecta vía ::after, no toca el texto. */
+   El fondo base es inline (#111827); con pendientes se fuerza rojo vía !important. */
 .carta-comanda-button.has-pending-items {
   background: #dc2626 !important;
   color: white;
   box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18) !important;
-}
-
-.carta-comanda-button.has-pending-items::after {
-  content: " · pendiente";
-}
-
-/* Mini-resumen bajo el botón "Comanda": primeras 3 líneas pendientes
-   con formato "Nx Producto · Nx Producto · ...". Solo UI; deriva de
-   order y se oculta cuando no hay pendientes. */
-.carta-pending-summary {
-  margin-top: 4px;
-  font-size: 11px;
-  color: #dc2626;
-  font-weight: 600;
-  text-align: center;
-  line-height: 1.2;
-  padding: 0 4px;
-  /* Dos líneas máx para no hinchar el dock con resúmenes muy largos. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
 }
 
 /* Indicador global de unidades pendientes de enviar a cocina/barra.
@@ -6735,143 +6672,24 @@ export function CartaPageContent({
   box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25);
 }
 
-/* Selector de pase activo (Entrantes / Segundos / Postres). Aparece una
-   sola vez sobre toda la grid de productos, no por categoría.
-   Sticky dentro de .carta-products-scroll (que es el ancestro con
-   overflow-y: auto + min-height: 0), así permanece visible mientras
-   el usuario hace scroll en la lista de productos. */
-.carta-course-selector {
-  display: flex;
-  gap: 6px;
-  /* Sin overlays: separación mínima respecto a la primera categoría /
-     fila de productos. Cuando aparece el contador o el flash se
-     aplica .has-course-overlays (abajo) que abre el "carril" de
-     72 px para que ningún overlay tape la grid. */
-  margin-bottom: 10px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  padding: 4px;
-  border-radius: 10px;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-  /* Suaviza la apertura/cierre del carril cuando aparecen o
-     desaparecen los overlays para que la grid no salte de golpe. */
-  transition: margin-bottom 120ms ease-out;
-  will-change: margin-bottom;
-}
-
-.carta-course-selector.has-course-overlays {
-  /* Carril ampliado para acoger:
-       - .carta-course-active-count (bottom -22 px, alto ≈ 18 px)
-       - .carta-course-flash       (bottom -46 px, alto ≈ 22 px,
-                                    + box-shadow ≈ 6 px)
-     72 px deja todo dentro del hueco sin pisar la grid. */
-  margin-bottom: 72px;
-}
-
-.carta-course-selector button {
-  flex: 1;
-  /* Área táctil ampliada para uso TPV con dedos: ≥ 42 px de alto y
-     padding holgado para que el target de tap cubra toda la pildora. */
-  min-height: 42px;
-  padding: 9px 8px;
-  font-size: 13px;
-  line-height: 1.1;
-  border-radius: 6px;
-  background: #eee;
-  color: #111;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  cursor: pointer;
-  font-weight: 700;
-  transition: background-color 120ms ease, color 120ms ease,
-    box-shadow 120ms ease;
-}
-
-.carta-course-selector button.active {
-  background: #111827;
-  color: white;
-  border-color: #111827;
-  box-shadow: 0 4px 10px rgba(17, 24, 39, 0.2);
-}
-
-/* Flash de confirmación al cambiar de pase. Se ancla por debajo del
-   .carta-course-selector (que ya es position: sticky, válido como
-   ancestro positioned), así NO ocupa hueco en el flujo y la grid de
-   productos no se desplaza al aparecer/desaparecer.
-   En móvil convive con .carta-course-active-count: el contador queda
-   justo debajo del selector (bottom: -22px) y el flash baja una fila
-   más (bottom: -46px), ocupando el ancho completo entre left: 8px
-   y right: 8px para que el texto centrado no choque con el contador. */
-.carta-course-flash {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: -46px;
-  transform: none;
-  text-align: center;
-  background: #111827;
-  color: white;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
-  z-index: 11;
-  animation: cartaCourseFlash 700ms ease both;
-}
-
-@keyframes cartaCourseFlash {
-  0%   { opacity: 0; transform: translateY(-4px); }
-  20%  { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-2px); }
-}
-
-/* Contador permanente del pase activo: cuántas unidades pendientes
-   pertenecen al pase seleccionado en el selector. Descuelga abajo a la
-   derecha del selector y, como .carta-course-flash, NO ocupa hueco en
-   el flujo (la grid de productos no se desplaza). */
-.carta-course-active-count {
-  position: absolute;
-  right: 8px;
-  bottom: -22px;
-  background: #dc2626;
-  color: white;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 3px 7px;
-  border-radius: 999px;
-  pointer-events: none;
-  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.18);
-  white-space: nowrap;
-  z-index: 11;
-}
-
 .carta-product-media {
   max-width: 74px;
   height: 50px;
 }
 
 @media (min-width: 768px) {
-  .carta-aside { flex-basis: 400px; width: 400px; min-width: 400px; max-width: 400px; }
   .carta-product-grid { grid-template-columns: repeat(5, 1fr); }
   .carta-product-card { height: 120px; min-height: 120px; padding: 8px; gap: 4px; }
   .carta-product-media { max-width: 82px; height: 56px; }
 }
 
 @media (min-width: 1024px) {
-  .carta-aside { flex-basis: 460px; width: 460px; min-width: 460px; max-width: 460px; }
   .carta-product-grid { grid-template-columns: repeat(6, 1fr); }
   .carta-product-card { height: 120px; min-height: 120px; padding: 8px; gap: 4px; }
   .carta-product-media { max-width: 86px; height: 60px; }
 }
 
 @media (min-width: 1280px) {
-  .carta-aside { flex-basis: 500px; width: 500px; min-width: 500px; max-width: 500px; }
   .carta-product-grid { grid-template-columns: repeat(6, 1fr); }
 }
 
@@ -6880,56 +6698,39 @@ export function CartaPageContent({
 }
 
 @media (max-width: 767.98px) {
-  /* === Comanda siempre visible: aside sticky arriba, productos abajo === */
   .carta-layout {
-    flex-direction: column;
     gap: 12px;
   }
   .carta-aside {
     width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
-    flex: 0 0 auto !important;
+    flex: 0 1 auto !important;
+    max-height: 45vh !important;
     height: auto !important;
-    /* sticky en el scroller del padre: en standalone (page scroll) se queda
-       pegada arriba; en embedded (viewport locked) actúa como bloque normal
-       gracias al sizing por max-height. */
     position: sticky;
-    top: 0;
-    /* Lista comanda como mucho 40vh; header + total + botones quedan dentro. */
-    max-height: 40vh !important;
-    align-self: flex-start;
-    z-index: 5;
-    /* La aside ya es overflow:hidden inline; .carta-aside-scroll mantiene su
-       scroll interno (flex:1; min-height:0; overflow-y:auto). */
+    bottom: 0;
+    top: auto !important;
+    align-self: stretch;
+    z-index: 20;
   }
   .carta-main {
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
-    height: auto;
-    overflow: visible;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
   }
   .carta-products-scroll {
-    overflow: visible;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
-/* === Desktop / tablet: productos a la izquierda, comanda a la derecha === */
-@media (min-width: 768px) {
-  .carta-layout { flex-direction: row; }
-  .carta-main { order: 1; }
-  .carta-aside {
-    order: 2;
-    /* En desktop ya ocupa height:100% del flex row; sticky es un seguro extra
-       por si el contenedor padre llegara a tener scroll (no debería en
-       lockViewport, pero no estorba). */
-    position: sticky;
-    top: 0;
-  }
-}
+/* (Antes: desktop en dos columnas; ahora siempre columna productos arriba + comanda abajo.) */
 
 /* === Mobile + embedded en Operación: viewport locked, productos con
    scroll propio para evitar el clip por overflow:hidden de los padres === */
@@ -7463,23 +7264,21 @@ export function CartaPageContent({
             </div>
           ) : (
           <div className="carta-layout">
+        {showComandaAside ? (
         <aside
-          className="carta-aside relative"
+          className="carta-aside carta-comanda relative"
           style={{
             boxSizing: "border-box",
-            background:
-              "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)",
             color: "#0f172a",
             padding: 16,
             display: "flex",
             flexDirection: "column",
             alignSelf: "stretch",
             minHeight: 0,
-            maxHeight: "100%",
             overflow: "hidden",
-            borderRadius: 18,
+            borderRadius: "18px 18px 0 0",
             boxShadow:
-              "0 18px 50px rgba(2,6,23,0.45), inset 0 0 0 1px rgba(148,163,184,0.35)",
+              "0 -8px 28px rgba(2,6,23,0.12), inset 0 0 0 1px rgba(148,163,184,0.2)",
           }}
         >
         <div className="carta-top-shell">
@@ -7928,7 +7727,7 @@ export function CartaPageContent({
                   style={{
                     width: "100%",
                     padding: "12px 14px",
-                    fontWeight: 950,
+                    fontWeight: 700,
                     fontSize: 15,
                     cursor:
                       isComandaSending ||
@@ -7938,10 +7737,9 @@ export function CartaPageContent({
                         ? "not-allowed"
                         : "pointer",
                     borderRadius: 14,
-                    border: "1px solid rgba(15, 23, 42, 0.22)",
-                    background:
-                      "linear-gradient(180deg, rgba(17,24,39,1) 0%, rgba(2,6,23,1) 100%)",
-                    color: "#fff",
+                    border: "1px solid rgba(15, 23, 42, 0.35)",
+                    background: "#111827",
+                    color: "#ffffff",
                     minHeight: 44,
                     opacity:
                       isComandaSending ||
@@ -7955,9 +7753,7 @@ export function CartaPageContent({
                     boxShadow: "0 10px 22px rgba(2,6,23,0.28)",
                   }}
                 >
-                  {comandaSentFlash
-                    ? "Comanda enviada"
-                    : `Comanda · ${activeCourseLabel}`}
+                  {comandaSentFlash ? "Comanda enviada" : "Comanda"}
                 </button>
                 <div style={{ minWidth: 0, display: "flex" }}>
                   <button
@@ -7970,15 +7766,6 @@ export function CartaPageContent({
                   </button>
                 </div>
               </div>
-
-              {pendingSummaryByCourse.length > 0 ? (
-                <div
-                  className="carta-pending-summary"
-                  aria-label="Resumen de productos pendientes de enviar por pase"
-                >
-                  {pendingSummaryByCourse.join(" / ")}
-                </div>
-              ) : null}
 
               <div
                 style={{
@@ -8065,6 +7852,7 @@ export function CartaPageContent({
           </div>
         ) : null}
         </aside>
+        ) : null}
         <style jsx global>{`
           @media print {
             body * {
@@ -9983,7 +9771,7 @@ export function CartaPageContent({
         )}
         {viewMode === "normal" && (
           <main
-            className="carta-main"
+            className="carta-main carta-products"
             style={{
               padding: 18,
               boxSizing: "border-box",
@@ -10060,32 +9848,8 @@ export function CartaPageContent({
                       gap: 8,
                     }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCategory(null)}
-                      className={selectedCategory === null ? "carta-cat-btn-active" : undefined}
-                      style={{
-                        minWidth: 84,
-                        padding: "8px 12px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(148,163,184,0.28)",
-                        background:
-                          selectedCategory === null
-                            ? "rgba(56,189,248,0.18)"
-                            : "rgba(2,6,23,0.15)",
-                        color: selectedCategory === null ? "#bae6fd" : "#cbd5e1",
-                        fontSize: 12,
-                        fontWeight: 800,
-                        cursor: "pointer",
-                        boxSizing: "border-box",
-                        lineHeight: 1.1,
-                        minHeight: 34,
-                      }}
-                    >
-                      Todos
-                    </button>
                     {categoryTabNames.map((name) => {
-                      const isSelected = selectedCategory === name;
+                      const isSelected = effectiveSelectedCategory === name;
                       return (
                         <button
                           key={name}
@@ -10121,8 +9885,8 @@ export function CartaPageContent({
             </div>
 
             <div className="carta-products-scroll">
-              {selectedCategory ? (
-                <div className="carta-current-cat-title">{selectedCategory}</div>
+              {effectiveSelectedCategory ? (
+                <div className="carta-current-cat-title">{effectiveSelectedCategory}</div>
               ) : null}
               {(showAuthSpinner || showProductsSpinner) && <p>Cargando...</p>}
               {!showAuthSpinner &&
@@ -10141,74 +9905,25 @@ export function CartaPageContent({
               {!showAuthSpinner &&
                 !showProductsSpinner &&
                 !error &&
-                products.length === 0 && <p>No hay productos activos</p>}
+                products.length === 0 && (
+                  <div
+                    style={{
+                      fontSize: 14,
+                      opacity: 0.7,
+                      padding: 16,
+                      textAlign: "center",
+                      margin: 0,
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    No hay productos activos
+                  </div>
+                )}
               {!showAuthSpinner &&
                 !showProductsSpinner &&
                 !error &&
                 products.length > 0 && (
                   <div>
-                    {/* Selector de pase activo: aplica `course` a las
-                        nuevas líneas que se añadan desde la grid. UI puro. */}
-                    <div
-                      className={`carta-course-selector${
-                        activeCoursePendingCount > 0 || courseFlash
-                          ? " has-course-overlays"
-                          : ""
-                      }`}
-                      role="tablist"
-                      aria-label="Pase activo"
-                    >
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={activeCourse === "starter"}
-                        className={activeCourse === "starter" ? "active" : ""}
-                        onClick={() => handleSelectCourse("starter")}
-                      >
-                        Entrantes
-                      </button>
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={activeCourse === "main"}
-                        className={activeCourse === "main" ? "active" : ""}
-                        onClick={() => handleSelectCourse("main")}
-                      >
-                        Segundos
-                      </button>
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={activeCourse === "dessert"}
-                        className={activeCourse === "dessert" ? "active" : ""}
-                        onClick={() => handleSelectCourse("dessert")}
-                      >
-                        Postres
-                      </button>
-                      {activeCoursePendingCount > 0 ? (
-                        <div
-                          className="carta-course-active-count"
-                          aria-label={`${activeCoursePendingCount} unidades pendientes en ${activeCourseLabel}`}
-                        >
-                          {activeCoursePendingCount} en {activeCourseLabel}
-                        </div>
-                      ) : null}
-                      {courseFlash ? (
-                        <div
-                          key={courseFlash}
-                          className="carta-course-flash"
-                          role="status"
-                          aria-live="polite"
-                        >
-                          Añadiendo en{" "}
-                          {courseFlash === "starter"
-                            ? "Entrantes"
-                            : courseFlash === "main"
-                              ? "Segundos"
-                              : "Postres"}
-                        </div>
-                      ) : null}
-                    </div>
                     {Object.keys(groupedProducts)
                       .sort((a, b) => a.localeCompare(b, "es"))
                       .map((catName) => {
@@ -10217,7 +9932,7 @@ export function CartaPageContent({
 
                         return (
                           <div key={catName} style={{ marginBottom: 24 }}>
-                            {selectedCategory == null ? (
+                            {effectiveSelectedCategory == null ? (
                               <h3
                                 style={{
                                   margin: "0 0 10px",
