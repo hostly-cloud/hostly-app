@@ -22,6 +22,8 @@ const DEFAULT_MIN = 0.6;
 const DEFAULT_MAX = 2.5;
 const PAN_THRESHOLD_PX = 6;
 const POST_PAN_CLICK_BLOCK_MS = 80;
+/** Margen extra (px de pantalla) que se permite arrastrar más allá del borde natural. */
+const PAN_PADDING = 80;
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -56,6 +58,7 @@ export function PinchZoomMap({
   children,
 }: PinchZoomMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const transformRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState<number>(initialZoom);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -104,6 +107,72 @@ export function PinchZoomMap({
       }
     };
   }, []);
+
+  /**
+   * Mide el contenido real (sin escalar) del transform layer iterando sus hijos
+   * directos y cogiendo `offsetLeft + offsetWidth` / `offsetTop + offsetHeight`.
+   * No usamos `scrollWidth/scrollHeight` porque el transform layer tiene
+   * `inset: 0` y por tanto su scroll size mínimo es el del contenedor, lo que
+   * impediría detectar el caso "contenido más pequeño que el contenedor".
+   */
+  const measureContent = useCallback((): { w: number; h: number } => {
+    const layer = transformRef.current;
+    if (!layer) return { w: 0, h: 0 };
+    let maxR = 0;
+    let maxB = 0;
+    for (const node of Array.from(layer.children)) {
+      const el = node as HTMLElement;
+      const r = el.offsetLeft + el.offsetWidth;
+      const b = el.offsetTop + el.offsetHeight;
+      if (r > maxR) maxR = r;
+      if (b > maxB) maxB = b;
+    }
+    return { w: maxR, h: maxB };
+  }, []);
+
+  /**
+   * Limita `nextPan` al rango natural según el zoom y el tamaño del contenedor:
+   * - Si el contenido escalado es menor que el contenedor → centrado ±PAN_PADDING.
+   * - Si es mayor → permite arrastrar todo el rango necesario para verlo entero,
+   *   con `PAN_PADDING` extra a cada lado para no notar bordes duros.
+   */
+  const clampPan = useCallback(
+    (next: { x: number; y: number }, zoomValue: number): { x: number; y: number } => {
+      const container = containerRef.current;
+      if (!container) return next;
+      const cW = container.clientWidth;
+      const cH = container.clientHeight;
+      const { w: contentW, h: contentH } = measureContent();
+      if (cW <= 0 || cH <= 0 || contentW <= 0 || contentH <= 0) return next;
+      const W = contentW * zoomValue;
+      const H = contentH * zoomValue;
+      let minX: number;
+      let maxX: number;
+      let minY: number;
+      let maxY: number;
+      if (W <= cW) {
+        const center = (cW - W) / 2;
+        minX = center - PAN_PADDING;
+        maxX = center + PAN_PADDING;
+      } else {
+        minX = cW - W - PAN_PADDING;
+        maxX = PAN_PADDING;
+      }
+      if (H <= cH) {
+        const center = (cH - H) / 2;
+        minY = center - PAN_PADDING;
+        maxY = center + PAN_PADDING;
+      } else {
+        minY = cH - H - PAN_PADDING;
+        maxY = PAN_PADDING;
+      }
+      return {
+        x: clamp(next.x, minX, maxX),
+        y: clamp(next.y, minY, maxY),
+      };
+    },
+    [measureContent],
+  );
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -182,7 +251,7 @@ export function PinchZoomMap({
           y: mid.y - pinchRef.current.startMidLocal.y * newZoom,
         };
         setZoom(newZoom);
-        setPan(newPan);
+        setPan(clampPan(newPan, newZoom));
         e.preventDefault();
         return;
       }
@@ -202,15 +271,20 @@ export function PinchZoomMap({
           }
         }
         if (session.isPanning) {
-          setPan({
-            x: session.startPan.x + dx,
-            y: session.startPan.y + dy,
-          });
+          setPan(
+            clampPan(
+              {
+                x: session.startPan.x + dx,
+                y: session.startPan.y + dy,
+              },
+              zoomRef.current,
+            ),
+          );
           e.preventDefault();
         }
       }
     },
-    [enabled, minZoom, maxZoom],
+    [enabled, minZoom, maxZoom, clampPan],
   );
 
   const endPointer = useCallback(
@@ -289,6 +363,7 @@ export function PinchZoomMap({
       }}
     >
       <div
+        ref={transformRef}
         style={{
           position: "absolute",
           inset: 0,
