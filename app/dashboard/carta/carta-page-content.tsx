@@ -3726,9 +3726,15 @@ export function CartaPageContent({
       const qs = new URLSearchParams();
       qs.set("tableId", id);
       if (entry === "summary") qs.set("tpvView", "summary");
-      router.push(`/dashboard/carta?${qs.toString()}`);
+      // Mantener la ruta embebida cuando estamos dentro de /dashboard/operacion/tpv
+      // para no desmontar el OperacionModuleShell (eso era lo que provocaba el "paso
+      // intermedio" / loader visible al tocar una mesa en móvil).
+      const basePath = embeddedInOperacion
+        ? "/dashboard/operacion/tpv"
+        : "/dashboard/carta";
+      router.push(`${basePath}?${qs.toString()}`);
     },
-    [router],
+    [router, embeddedInOperacion],
   );
 
   const persistGuestCount = useCallback(
