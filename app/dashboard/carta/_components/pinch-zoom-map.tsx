@@ -24,6 +24,8 @@ const PAN_THRESHOLD_PX = 6;
 const POST_PAN_CLICK_BLOCK_MS = 80;
 /** Margen extra (px de pantalla) que se permite arrastrar más allá del borde natural. */
 const PAN_PADDING = 80;
+/** Pon a `true` para volcar en consola cada cálculo de límites de pan. */
+const PAN_DEBUG = false;
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -131,7 +133,17 @@ export function PinchZoomMap({
   }, []);
 
   /**
-   * Limita `nextPan` al rango natural según el zoom y el tamaño del contenedor:
+   * Limita `nextPan` al rango natural según el zoom y el tamaño del contenedor.
+   *
+   * GARANTÍA: NUNCA devuelve un pan sin clamp. Aunque la medida del contenido
+   * sea 0 o el contenedor aún no esté layouteado, se aplican límites razonables
+   * usando un fallback en cascada:
+   *   contenido medido > 0  →  usa el contenido medido
+   *   contenido medido = 0  →  usa el tamaño del contenedor
+   *   contenedor = 0        →  usa `window.innerWidth/Height`
+   *   sin window (SSR)      →  usa 800x600 como último recurso
+   *
+   * Reglas:
    * - Si el contenido escalado es menor que el contenedor → centrado ±PAN_PADDING.
    * - Si es mayor → permite arrastrar todo el rango necesario para verlo entero,
    *   con `PAN_PADDING` extra a cada lado para no notar bordes duros.
@@ -139,13 +151,34 @@ export function PinchZoomMap({
   const clampPan = useCallback(
     (next: { x: number; y: number }, zoomValue: number): { x: number; y: number } => {
       const container = containerRef.current;
-      if (!container) return next;
-      const cW = container.clientWidth;
-      const cH = container.clientHeight;
-      const { w: contentW, h: contentH } = measureContent();
-      if (cW <= 0 || cH <= 0 || contentW <= 0 || contentH <= 0) return next;
+      const winW =
+        typeof window !== "undefined" && Number.isFinite(window.innerWidth)
+          ? window.innerWidth
+          : 0;
+      const winH =
+        typeof window !== "undefined" && Number.isFinite(window.innerHeight)
+          ? window.innerHeight
+          : 0;
+      const cW =
+        (container?.clientWidth ?? 0) > 0
+          ? container!.clientWidth
+          : winW > 0
+            ? winW
+            : 800;
+      const cH =
+        (container?.clientHeight ?? 0) > 0
+          ? container!.clientHeight
+          : winH > 0
+            ? winH
+            : 600;
+
+      const measured = measureContent();
+      const contentW = measured.w > 0 ? measured.w : cW;
+      const contentH = measured.h > 0 ? measured.h : cH;
+
       const W = contentW * zoomValue;
       const H = contentH * zoomValue;
+
       let minX: number;
       let maxX: number;
       let minY: number;
@@ -166,10 +199,31 @@ export function PinchZoomMap({
         minY = cH - H - PAN_PADDING;
         maxY = PAN_PADDING;
       }
-      return {
+
+      const clampedPan = {
         x: clamp(next.x, minX, maxX),
         y: clamp(next.y, minY, maxY),
       };
+
+      if (PAN_DEBUG) {
+        // eslint-disable-next-line no-console
+        console.log("PAN CLAMP DEBUG", {
+          containerWidth: cW,
+          containerHeight: cH,
+          contentWidth: contentW,
+          contentHeight: contentH,
+          measured,
+          zoom: zoomValue,
+          nextPan: next,
+          clampedPan,
+          minPanX: minX,
+          maxPanX: maxX,
+          minPanY: minY,
+          maxPanY: maxY,
+        });
+      }
+
+      return clampedPan;
     },
     [measureContent],
   );
