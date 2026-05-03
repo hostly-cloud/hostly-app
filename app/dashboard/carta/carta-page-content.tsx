@@ -263,6 +263,18 @@ function normalizeComandaCourseForStorage(raw: unknown): number | undefined {
   return Math.min(4, Math.max(1, Math.floor(n)));
 }
 
+/**
+ * Mapea el pase de UI (string) al campo numérico `course` que ya usan
+ * `CartOrderLine`, cocina y comanda. NO se introduce ningún campo nuevo
+ * en la estructura ni en Firestore: solo se traduce.
+ */
+type ActiveCourseUi = "starter" | "main" | "dessert";
+const ACTIVE_COURSE_TO_NUM: Record<ActiveCourseUi, number> = {
+  starter: 1,
+  main: 2,
+  dessert: 3,
+};
+
 function lineCourseToPaseDraft(line: CartOrderLine): 0 | 1 | 2 | 3 | 4 {
   const u = normalizeComandaCourseForStorage(line.course);
   if (u == null) return 0;
@@ -1122,6 +1134,57 @@ export function CartaPageContent({
   const holdIntervalRef = useRef<number | null>(null);
   const holdActiveProductIdRef = useRef<string | null>(null);
   const holdDidRepeatRef = useRef(false);
+  /** Barrido táctil entre tarjetas: el dedo sigue pulsado y entra en
+   * otras `.carta-product-card` → se añade cada producto al cruzar.
+   * `dragVisitedProductsRef` evita dos `handleQuickAdd` del mismo id en
+   * un solo gesto si el dedo repasa la misma tarjeta. No usa capture;
+   * se limpia el Set en pointerUp del botón o del grid. */
+  const dragAddActiveRef = useRef(false);
+  const dragVisitedProductsRef = useRef<Set<string>>(new Set());
+  /** Pulso visual breve en cada tarjeta al añadir durante barrido
+   * (pointerEnter con dedo pulsado). Solo UI; no afecta a order. */
+  const [dragAddingProductId, setDragAddingProductId] = useState<string | null>(
+    null,
+  );
+  /* Long-press en la grid de productos para QUITAR 1 unidad (reutiliza
+     `handleDecrementLine`, que solo opera sobre líneas locales `pending`). */
+  const removeHoldTimeoutRef = useRef<number | null>(null);
+  const removeHoldClassTimeoutRef = useRef<number | null>(null);
+  const removeIsHoldingRef = useRef(false);
+  const [holdingProductId, setHoldingProductId] = useState<string | null>(null);
+  /* Hold-to-repeat-add (mantener pulsado para añadir varias unidades).
+     Empieza a 200 ms y se cancela cuando el long-press de remove se
+     activa a 400 ms (el remove tiene prioridad). */
+  const removeRepeatAddIntervalRef = useRef<number | null>(null);
+  const [repeatingProductId, setRepeatingProductId] = useState<string | null>(
+    null,
+  );
+  /**
+   * Pase activo en la grid TPV. Es UI puro: se mapea al campo numérico
+   * `course` (1-4) que YA existe en `CartOrderLine` y que ya consume
+   * cocina/comanda. No se persiste ningún string nuevo en Firestore.
+   */
+  const [activeCourse, setActiveCourse] = useState<
+    "starter" | "main" | "dessert"
+  >("starter");
+  /* Flash visual breve al cambiar de pase para confirmar la selección.
+     Solo UI local: el valor refleja el pase recién elegido y se borra
+     a los 700 ms con un timer; no afecta a `order` ni a Firestore. */
+  const [courseFlash, setCourseFlash] = useState<
+    "starter" | "main" | "dessert" | null
+  >(null);
+  const courseFlashTimeoutRef = useRef<number | null>(null);
+  const handleSelectCourse = (course: "starter" | "main" | "dessert") => {
+    setActiveCourse(course);
+    setCourseFlash(course);
+    if (courseFlashTimeoutRef.current != null) {
+      window.clearTimeout(courseFlashTimeoutRef.current);
+    }
+    courseFlashTimeoutRef.current = window.setTimeout(() => {
+      setCourseFlash(null);
+      courseFlashTimeoutRef.current = null;
+    }, 700);
+  };
   const [hoveredComandaLineIndex, setHoveredComandaLineIndex] = useState<
     number | null
   >(null);
@@ -2473,7 +2536,10 @@ export function CartaPageContent({
     });
   }, [orderIdFromUrl, order]);
 
-  const handleQuickAdd = (product: Product) => {
+  const handleQuickAdd = (
+    product: Product,
+    options?: { course?: ActiveCourseUi },
+  ) => {
     // Feedback instantáneo (antes de cualquier otra lógica).
     setIsAddingByProductId((prev) => ({
       ...prev,
@@ -2490,6 +2556,12 @@ export function CartaPageContent({
       });
     }, 420);
 
+    /* Pase activo en UI traducido al campo numérico `course` (1-4) que ya
+       existe en `CartOrderLine`. Si quien llama no pasa nada, usamos
+       `activeCourse` actual (por defecto "starter" → 1). */
+    const courseUi: ActiveCourseUi = options?.course ?? activeCourse;
+    const courseNum = ACTIVE_COURSE_TO_NUM[courseUi];
+
     updateCurrentTableOrder((prev) => {
       const audio = new Audio("/sounds/click.mp3");
       audio.volume = 0.3;
@@ -2502,7 +2574,12 @@ export function CartaPageContent({
           !i.lineNote &&
           !i.extras &&
           !i.variantLabel &&
-          !i.lineExtra,
+          !i.lineExtra &&
+          /* Solo merge si comparten pase: si el usuario ha cambiado el
+             pase activo entre tap y tap, queremos líneas separadas para
+             que cocina respete los cursos. Si la línea existente no tiene
+             course, se considera equivalente al pase 1 (starter). */
+          (normalizeComandaCourseForStorage(i.course) ?? 1) === courseNum,
       );
 
       if (existingIndex !== -1) {
@@ -2521,6 +2598,7 @@ export function CartaPageContent({
           status: "pending",
           addedAt: Date.now(),
           createdAt: Date.now(),
+          course: courseNum,
         },
       ];
     });
@@ -3037,6 +3115,52 @@ export function CartaPageContent({
     );
   };
 
+  /**
+   * Long-press desde la grid: quita 1 unidad del producto.
+   * Reutiliza `handleDecrementLine` (estado local) y SOLO toca líneas con
+   * status `pending` para no chocar con líneas ya enviadas a Firestore.
+   * Devuelve `true` si encontró línea pendiente y decrementó.
+   */
+  const handleQuickRemoveOne = (product: Product): boolean => {
+    let target: CartOrderLine | null = null;
+    let targetAt = -1;
+    for (const line of order) {
+      if (line.product?.id !== product.id) continue;
+      if (line.status !== "pending") continue;
+      const at = Number(line.addedAt) || Number(line.createdAt) || 0;
+      if (at >= targetAt) {
+        target = line;
+        targetAt = at;
+      }
+    }
+    if (!target) return false;
+    handleDecrementLine(target.id);
+    return true;
+  };
+
+  /**
+   * Limpia TODOS los timers/intervalos del gesto de presión sostenida
+   * (tap-and-hold) sobre una tarjeta de producto y resetea el feedback
+   * visual (clases `repeating` y `holding`). Se invoca al soltar, salir
+   * de la tarjeta o cancelar el puntero.
+   */
+  const clearRepeatAndHoldGesture = () => {
+    if (removeHoldTimeoutRef.current != null) {
+      window.clearTimeout(removeHoldTimeoutRef.current);
+      removeHoldTimeoutRef.current = null;
+    }
+    if (removeHoldClassTimeoutRef.current != null) {
+      window.clearTimeout(removeHoldClassTimeoutRef.current);
+      removeHoldClassTimeoutRef.current = null;
+    }
+    if (removeRepeatAddIntervalRef.current != null) {
+      window.clearInterval(removeRepeatAddIntervalRef.current);
+      removeRepeatAddIntervalRef.current = null;
+    }
+    setHoldingProductId(null);
+    setRepeatingProductId(null);
+  };
+
   const handleRemoveLine = (lineId: string) => {
     updateCurrentTableOrder((prev) =>
       prev.filter((item) => !(item.id === lineId && item.status === "pending")),
@@ -3139,6 +3263,12 @@ export function CartaPageContent({
         await batch.commit();
       }
 
+      /* Tras enviar entrantes con éxito, pasar el selector a Segundos para
+         acelerar el flujo real del camarero (sin tocar order ni Firestore). */
+      if (activeCourse === "starter") {
+        setActiveCourse("main");
+      }
+
       setComandaSentFlash(true);
       if (comandaFlashTimeoutRef.current != null) {
         window.clearTimeout(comandaFlashTimeoutRef.current);
@@ -3164,6 +3294,7 @@ export function CartaPageContent({
     updateCurrentTableOrder,
     orderIdFromUrl,
     openOrderIdsForTable,
+    activeCourse,
   ]);
 
   const handleGuardarComandaLocal = () => {
@@ -4260,6 +4391,92 @@ export function CartaPageContent({
     comandaHeaderNow,
   ]);
 
+  /**
+   * Total de unidades en estado `pending` (aún sin enviar a cocina/barra).
+   * Se calcula derivando del estado local `order`. Sin Firestore, sin
+   * lectura adicional ni handlers nuevos. Se memoriza para no recalcular
+   * en cada render que no afecte a `order`.
+   */
+  const totalPendingItems = useMemo(() => {
+    return order.reduce((sum, line) => {
+      if (line.status === "pending") {
+        return sum + (Number(line.quantity) || 0);
+      }
+      return sum;
+    }, 0);
+  }, [order]);
+
+  /**
+   * Etiqueta legible del pase activo, derivada de `activeCourse`.
+   * Sin estado, sin handlers; solo se usa para mostrarla en UI
+   * (botón "Comanda", aria-labels, etc.). Coherente con el mapa
+   * `ACTIVE_COURSE_TO_NUM` (starter→1, main→2, dessert→3).
+   */
+  const activeCourseLabel =
+    activeCourse === "starter"
+      ? "Entrantes"
+      : activeCourse === "main"
+        ? "Segundos"
+        : "Postres";
+  /** Pase activo en su forma numérica (1-3), reutilizado tanto por
+      el contador del selector como por el resaltado en la lista de
+      comanda (`isActiveCourseLine` en `renderComandaLine`). */
+  const activeCourseNum = ACTIVE_COURSE_TO_NUM[activeCourse];
+
+  /**
+   * Cuántas unidades pendientes hay en el pase activo. Se usa para el
+   * contador `"N en <pase>"` que aparece bajo el selector. Las líneas
+   * sin `course` explícito se cuentan como pase 1 (Entrantes), igual
+   * que en `pendingSummaryByCourse`, `handleQuickAdd` y el resaltado
+   * de filas. Memoizado en `[order, activeCourseNum]`.
+   */
+  const activeCoursePendingCount = useMemo(() => {
+    return order.reduce((sum, line) => {
+      if (line.status !== "pending") return sum;
+      const lineCourse =
+        normalizeComandaCourseForStorage(line.course) ?? 1;
+      if (lineCourse !== activeCourseNum) return sum;
+      return sum + (Number(line.quantity) || 0);
+    }, 0);
+  }, [order, activeCourseNum]);
+
+  /**
+   * Mini-resumen de las líneas pendientes AGRUPADAS por pase
+   * (1 Entrantes, 2 Segundos, 3 Postres). Para cada pase se muestran
+   * como mucho 2 líneas. Solo UI; deriva de `order` (sin Firestore).
+   * El campo del nombre en `Product` es `nombre` (no `name`).
+   */
+  const pendingSummaryByCourse = useMemo(() => {
+    const groups: Record<number, string[]> = {
+      1: [],
+      2: [],
+      3: [],
+    };
+
+    for (const line of order) {
+      if (line.status !== "pending") continue;
+      const course = normalizeComandaCourseForStorage(line.course) || 1;
+      if (!groups[course]) continue;
+      groups[course].push(
+        `${Number(line.quantity) || 0}× ${
+          line.product?.nombre?.trim() || "Producto"
+        }`,
+      );
+    }
+
+    return [
+      groups[1]!.length > 0
+        ? `Entrantes: ${groups[1]!.slice(0, 2).join(" · ")}`
+        : null,
+      groups[2]!.length > 0
+        ? `Segundos: ${groups[2]!.slice(0, 2).join(" · ")}`
+        : null,
+      groups[3]!.length > 0
+        ? `Postres: ${groups[3]!.slice(0, 2).join(" · ")}`
+        : null,
+    ].filter(Boolean) as string[];
+  }, [order]);
+
   const cocinaItems = useMemo(() => {
     return order
       .filter((it) => it.status === "sent")
@@ -4342,10 +4559,34 @@ export function CartaPageContent({
     const firstPendingId = linesPending[0]?.id;
     const nm = item.product.nombre;
     const courseForBadge = normalizeComandaCourseForStorage(item.course);
+    /* Etiqueta breve y singular del pase para mostrar inline junto al
+       nombre del producto. Reutiliza `courseForBadge` (ya normalizado a
+       1-4 o undefined) para no llamar 3 veces a la función. Coherente
+       con `ACTIVE_COURSE_TO_NUM` (starter→1, main→2, dessert→3). */
+    const lineCourseLabel =
+      courseForBadge === 1
+        ? "Entrante"
+        : courseForBadge === 2
+          ? "Segundo"
+          : courseForBadge === 3
+            ? "Postre"
+            : null;
+    /* ¿Esta línea pertenece al pase activo? Sirve para resaltar
+       sutilmente la fila y oscurecer su badge inline, ayudando al
+       camarero a localizar visualmente las líneas del pase actual.
+       Las líneas SIN `course` explícito se tratan como pase 1
+       (Entrantes), igual que en `pendingSummaryByCourse` y en el
+       fallback `|| 1` de `handleQuickAdd`.
+       `activeCourseNum` viene del ámbito del componente. */
+    const lineCourseNumForActiveHighlight = courseForBadge ?? 1;
+    const isActiveCourseLine =
+      lineCourseNumForActiveHighlight === activeCourseNum;
     return (
       <li
         key={`line-${item.id}`}
-        className="carta-comanda-line"
+        className={`carta-comanda-line${
+          isActiveCourseLine ? " is-active-course-line" : ""
+        }`}
         ref={
           opts.attachFirstPendingRef &&
           orderIdFromUrl &&
@@ -4387,6 +4628,14 @@ export function CartaPageContent({
                 >
                   {nm}
                 </span>
+                {lineCourseLabel ? (
+                  <span
+                    className="carta-line-course-badge"
+                    aria-label={`Pase: ${lineCourseLabel}`}
+                  >
+                    {lineCourseLabel}
+                  </span>
+                ) : null}
                 {item.status !== "pending" ? (
                   <span
                     className="carta-comanda-qty-inline"
@@ -4454,18 +4703,6 @@ export function CartaPageContent({
                 </span>
               </div>
             </div>
-            {courseForBadge != null ? (
-              <div
-                className="carta-comanda-line-course-wrap"
-                style={{ marginTop: 1, marginBottom: 1, lineHeight: 1.15 }}
-              >
-                <span
-                  className={`inline-block text-[10px] px-2 py-0.5 rounded font-bold ${getCourseClass(courseForBadge)}`}
-                >
-                  {getCourseLabel(courseForBadge)}
-                </span>
-              </div>
-            ) : null}
             <div
               className="carta-comanda-line-pricing"
               style={{ color: opts.strike ? "#94a3b8" : undefined }}
@@ -5850,6 +6087,39 @@ export function CartaPageContent({
   gap: 2px;
 }
 
+/* Badge de pase inline en la línea de comanda. Se muestra entre el
+   nombre del producto y la cantidad (cuando no está en `pending`).
+   Lectura derivada de `line.course` ya existente en CartOrderLine. */
+.carta-line-course-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.08);
+  color: #111827;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+/* Resaltado sutil de las líneas que pertenecen al pase actualmente
+   activo en el selector. Solo afecta al fondo y al borde inferior, y
+   oscurece el badge inline para que destaque sin reescribir colores
+   de estado (Pendiente / Enviado / etc.). */
+.carta-comanda-line.is-active-course-line {
+  border-color: rgba(17, 24, 39, 0.24);
+  background: rgba(17, 24, 39, 0.04);
+}
+
+.carta-comanda-line.is-active-course-line .carta-line-course-badge {
+  background: #111827;
+  color: white;
+}
+
 .carta-comanda-line-badges {
   display: flex;
   flex-shrink: 0;
@@ -6304,6 +6574,293 @@ export function CartaPageContent({
   animation: cartaProductAddFlash 160ms ease-out both;
 }
 
+/* === Feedback táctil al tocar producto (mobile-first, válido también en
+   desktop con clic). Override de transition/will-change/touch-action y un
+   flash verde rápido en :active. NO altera handlers ni JSX, solo CSS. === */
+.carta-product-card {
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  will-change: transform;
+  touch-action: manipulation;
+}
+
+.carta-product-card:active {
+  transform: scale(0.96);
+  animation: productTapFlash 0.2s ease;
+}
+
+@keyframes productTapFlash {
+  0%   { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+  50%  { box-shadow: 0 0 0 4px rgba(0, 200, 120, 0.25); }
+  100% { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+}
+
+/* Badge de cantidad: muestra cuántas unidades del producto hay ya en la
+   comanda (suma de líneas no canceladas). Solo lectura del estado existente. */
+.carta-product-qty-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: #16a34a;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 6px;
+  min-width: 20px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  line-height: 1;
+  z-index: 2;
+}
+
+/* Producto con unidades pendientes Y enviadas a la vez: ámbar para
+   distinguirlo del verde (todo pendiente) o del verde + opacidad 0.6 que
+   ya da `.has-sent` (todo enviado). El número se muestra como "P+E". */
+.carta-product-qty-badge.mixed {
+  background: #f59e0b;
+}
+
+/* Badge de pase (curso) en la esquina inferior derecha. Convive con el
+   badge de cantidad de la esquina superior derecha. Lectura derivada del
+   campo numérico `course` (1 E, 2 S, 3 P) ya existente en CartOrderLine. */
+.carta-product-course-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: #111;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 4px;
+  pointer-events: none;
+  opacity: 0.9;
+  line-height: 1;
+  z-index: 2;
+}
+
+/* Botón "Comanda" cuando hay unidades pendientes de enviar.
+   El botón usa estilos inline (gradient + boxShadow), por lo que para
+   imponer el rojo se necesita `!important` en background y box-shadow.
+   El sufijo " · pendiente" se inyecta vía ::after, no toca el texto. */
+.carta-comanda-button.has-pending-items {
+  background: #dc2626 !important;
+  color: white;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18) !important;
+}
+
+.carta-comanda-button.has-pending-items::after {
+  content: " · pendiente";
+}
+
+/* Mini-resumen bajo el botón "Comanda": primeras 3 líneas pendientes
+   con formato "Nx Producto · Nx Producto · ...". Solo UI; deriva de
+   `order` y se oculta cuando no hay pendientes. */
+.carta-pending-summary {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #dc2626;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+  padding: 0 4px;
+  /* Dos líneas máx para no hinchar el dock con resúmenes muy largos. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* Indicador global de unidades pendientes de enviar a cocina/barra.
+   Se inserta en la zona "mesa / tiempo" del header de la comanda y
+   solo se muestra cuando hay al menos 1 unidad en estado `pending`. */
+.carta-pending-indicator {
+  display: inline-block;
+  vertical-align: middle;
+  background: #dc2626;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+  animation: pulsePending 1.2s infinite;
+}
+
+@keyframes pulsePending {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* "Ya enviado a cocina/barra": baja opacidad para distinguir el producto
+   y un check en la esquina superior izquierda. NO oculta nada y no
+   interfiere con qty (sup. derecha) ni course (inf. derecha). */
+.carta-product-card.has-sent {
+  opacity: 0.6;
+}
+
+.carta-product-card.has-sent::after {
+  content: "✓";
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 999px;
+  padding: 2px 5px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Feedback visual mientras se mantiene pulsada la tarjeta para quitar 1
+   unidad (long-press). La clase `holding` se añade a los 200 ms y se
+   retira al soltar/cancelar. El color rojo señala "vas a quitar". */
+.carta-product-card.holding {
+  transform: scale(0.92);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25);
+}
+
+/* Mientras se está añadiendo en bucle (hold-to-repeat-add): aro verde
+   para señalar "añadiendo varias unidades". Se mantiene desde los 200 ms
+   hasta que se suelta o hasta que `holding` (rojo) toma el relevo a 400 ms
+   si el remove encuentra una línea pendiente. */
+.carta-product-card.repeating {
+  transform: scale(0.94);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
+}
+
+/* Pulso corto al cruzar una tarjeta durante “arrastre para añadir”
+   (clase `drag-adding`): escala + halo verde coherente con repeat-add. */
+.carta-product-card.drag-adding {
+  transform: scale(0.96);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+}
+
+/* Selector de pase activo (Entrantes / Segundos / Postres). Aparece una
+   sola vez sobre toda la grid de productos, no por categoría.
+   Sticky dentro de `.carta-products-scroll` (que es el ancestro con
+   `overflow-y: auto` + `min-height: 0`), así permanece visible mientras
+   el usuario hace scroll en la lista de productos. */
+.carta-course-selector {
+  display: flex;
+  gap: 6px;
+  /* Sin overlays: separación mínima respecto a la primera categoría /
+     fila de productos. Cuando aparece el contador o el flash se
+     aplica `.has-course-overlays` (abajo) que abre el "carril" de
+     72 px para que ningún overlay tape la grid. */
+  margin-bottom: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 4px;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  /* Suaviza la apertura/cierre del carril cuando aparecen o
+     desaparecen los overlays para que la grid no salte de golpe. */
+  transition: margin-bottom 120ms ease-out;
+  will-change: margin-bottom;
+}
+
+.carta-course-selector.has-course-overlays {
+  /* Carril ampliado para acoger:
+       - .carta-course-active-count (bottom -22 px, alto ≈ 18 px)
+       - .carta-course-flash       (bottom -46 px, alto ≈ 22 px,
+                                    + box-shadow ≈ 6 px)
+     72 px deja todo dentro del hueco sin pisar la grid. */
+  margin-bottom: 72px;
+}
+
+.carta-course-selector button {
+  flex: 1;
+  /* Área táctil ampliada para uso TPV con dedos: ≥ 42 px de alto y
+     padding holgado para que el target de tap cubra toda la pildora. */
+  min-height: 42px;
+  padding: 9px 8px;
+  font-size: 13px;
+  line-height: 1.1;
+  border-radius: 6px;
+  background: #eee;
+  color: #111;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+  font-weight: 700;
+  transition: background-color 120ms ease, color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.carta-course-selector button.active {
+  background: #111827;
+  color: white;
+  border-color: #111827;
+  box-shadow: 0 4px 10px rgba(17, 24, 39, 0.2);
+}
+
+/* Flash de confirmación al cambiar de pase. Se ancla por debajo del
+   `.carta-course-selector` (que ya es `position: sticky`, válido como
+   ancestro positioned), así NO ocupa hueco en el flujo y la grid de
+   productos no se desplaza al aparecer/desaparecer.
+   En móvil convive con `.carta-course-active-count`: el contador queda
+   justo debajo del selector (bottom: -22px) y el flash baja una fila
+   más (bottom: -46px), ocupando el ancho completo entre `left: 8px`
+   y `right: 8px` para que el texto centrado no choque con el contador. */
+.carta-course-flash {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -46px;
+  transform: none;
+  text-align: center;
+  background: #111827;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
+  z-index: 11;
+  animation: cartaCourseFlash 700ms ease both;
+}
+
+@keyframes cartaCourseFlash {
+  0%   { opacity: 0; transform: translateY(-4px); }
+  20%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-2px); }
+}
+
+/* Contador permanente del pase activo: cuántas unidades pendientes
+   pertenecen al pase seleccionado en el selector. Descuelga abajo a la
+   derecha del selector y, como `.carta-course-flash`, NO ocupa hueco en
+   el flujo (la grid de productos no se desplaza). */
+.carta-course-active-count {
+  position: absolute;
+  right: 8px;
+  bottom: -22px;
+  background: #dc2626;
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 7px;
+  border-radius: 999px;
+  pointer-events: none;
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.18);
+  white-space: nowrap;
+  z-index: 11;
+}
+
 .carta-product-media {
   max-width: 74px;
   height: 50px;
@@ -6333,23 +6890,77 @@ export function CartaPageContent({
 }
 
 @media (max-width: 767.98px) {
-  .carta-layout { flex-direction: column; }
+  /* === Comanda siempre visible: aside sticky arriba, productos abajo === */
+  .carta-layout {
+    flex-direction: column;
+    gap: 12px;
+  }
   .carta-aside {
-    width: 100%;
-    min-width: 0;
-    max-width: none;
-    flex: 0 0 auto;
-    height: auto;
-    position: relative;
-    top: auto;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 0 0 auto !important;
+    height: auto !important;
+    /* sticky en el scroller del padre: en standalone (page scroll) se queda
+       pegada arriba; en embedded (viewport locked) actúa como bloque normal
+       gracias al sizing por max-height. */
+    position: sticky;
+    top: 0;
+    /* Lista comanda como mucho 40vh; header + total + botones quedan dentro. */
+    max-height: 40vh !important;
+    align-self: flex-start;
+    z-index: 5;
+    /* La aside ya es overflow:hidden inline; .carta-aside-scroll mantiene su
+       scroll interno (flex:1; min-height:0; overflow-y:auto). */
   }
   .carta-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
     height: auto;
     overflow: visible;
+    display: flex;
+    flex-direction: column;
   }
   .carta-products-scroll {
     overflow: visible;
   }
+}
+
+/* === Desktop / tablet: productos a la izquierda, comanda a la derecha === */
+@media (min-width: 768px) {
+  .carta-layout { flex-direction: row; }
+  .carta-main { order: 1; }
+  .carta-aside {
+    order: 2;
+    /* En desktop ya ocupa height:100% del flex row; sticky es un seguro extra
+       por si el contenedor padre llegara a tener scroll (no debería en
+       lockViewport, pero no estorba). */
+    position: sticky;
+    top: 0;
+  }
+}
+
+/* === Mobile + embedded en Operación: viewport locked, productos con
+   scroll propio para evitar el clip por overflow:hidden de los padres === */
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-layout {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes fade-in {
@@ -6954,6 +7565,14 @@ export function CartaPageContent({
                         {tpvComandaHeaderTime.label}
                       </span>
                     ) : null}
+                    {totalPendingItems > 0 ? (
+                      <span
+                        className="carta-pending-indicator"
+                        aria-label={`${totalPendingItems} unidades pendientes de enviar`}
+                      >
+                        {totalPendingItems} pendientes
+                      </span>
+                    ) : null}
                   </div>
                   <div className="flex justify-end">
                     {!orderIdFromUrl &&
@@ -7303,6 +7922,9 @@ export function CartaPageContent({
               >
                 <button
                   type="button"
+                  className={`carta-comanda-button${
+                    totalPendingItems > 0 ? " has-pending-items" : ""
+                  }`}
                   onClick={() => {
                     if (!hasPendingItems) return;
                     void handleComandaAndExit();
@@ -7343,7 +7965,9 @@ export function CartaPageContent({
                     boxShadow: "0 10px 22px rgba(2,6,23,0.28)",
                   }}
                 >
-                  {comandaSentFlash ? "Comanda enviada" : "Comanda"}
+                  {comandaSentFlash
+                    ? "Comanda enviada"
+                    : `Comanda · ${activeCourseLabel}`}
                 </button>
                 <div style={{ minWidth: 0, display: "flex" }}>
                   <button
@@ -7356,6 +7980,15 @@ export function CartaPageContent({
                   </button>
                 </div>
               </div>
+
+              {pendingSummaryByCourse.length > 0 ? (
+                <div
+                  className="carta-pending-summary"
+                  aria-label="Resumen de productos pendientes de enviar por pase"
+                >
+                  {pendingSummaryByCourse.join(" / ")}
+                </div>
+              ) : null}
 
               <div
                 style={{
@@ -9524,6 +10157,68 @@ export function CartaPageContent({
                 !error &&
                 products.length > 0 && (
                   <div>
+                    {/* Selector de pase activo: aplica `course` a las
+                        nuevas líneas que se añadan desde la grid. UI puro. */}
+                    <div
+                      className={`carta-course-selector${
+                        activeCoursePendingCount > 0 || courseFlash
+                          ? " has-course-overlays"
+                          : ""
+                      }`}
+                      role="tablist"
+                      aria-label="Pase activo"
+                    >
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeCourse === "starter"}
+                        className={activeCourse === "starter" ? "active" : ""}
+                        onClick={() => handleSelectCourse("starter")}
+                      >
+                        Entrantes
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeCourse === "main"}
+                        className={activeCourse === "main" ? "active" : ""}
+                        onClick={() => handleSelectCourse("main")}
+                      >
+                        Segundos
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeCourse === "dessert"}
+                        className={activeCourse === "dessert" ? "active" : ""}
+                        onClick={() => handleSelectCourse("dessert")}
+                      >
+                        Postres
+                      </button>
+                      {activeCoursePendingCount > 0 ? (
+                        <div
+                          className="carta-course-active-count"
+                          aria-label={`${activeCoursePendingCount} unidades pendientes en ${activeCourseLabel}`}
+                        >
+                          {activeCoursePendingCount} en {activeCourseLabel}
+                        </div>
+                      ) : null}
+                      {courseFlash ? (
+                        <div
+                          key={courseFlash}
+                          className="carta-course-flash"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          Añadiendo en{" "}
+                          {courseFlash === "starter"
+                            ? "Entrantes"
+                            : courseFlash === "main"
+                              ? "Segundos"
+                              : "Postres"}
+                        </div>
+                      ) : null}
+                    </div>
                     {Object.keys(groupedProducts)
                       .sort((a, b) => a.localeCompare(b, "es"))
                       .map((catName) => {
@@ -9548,18 +10243,73 @@ export function CartaPageContent({
                               </h3>
                             ) : null}
 
-                            <div className="carta-product-grid">
+                            <div
+                              className="carta-product-grid"
+                              onPointerUp={() => {
+                                dragAddActiveRef.current = false;
+                                dragVisitedProductsRef.current.clear();
+                              }}
+                              onPointerCancel={() => {
+                                dragAddActiveRef.current = false;
+                                dragVisitedProductsRef.current.clear();
+                              }}
+                            >
                               {items.map((product) => {
                                 const hasImg = Boolean(product.imageUrl?.trim());
                                 const isAdding = Boolean(isAddingByProductId[product.id]);
                                 const showPrecio = Number.isFinite(product.precio);
                                 const isActive = activeProductId === product.id;
+                                let qty = 0;
+                                let pendingQty = 0;
+                                let sentQty = 0;
+                                let courseLatest: number | null = null;
+                                let courseLatestAt = -1;
+                                let hasSent = false;
+                                for (const line of order) {
+                                  if (line.product?.id !== product.id) continue;
+                                  /* "Enviado" = ya salió del bucket pendiente
+                                     y está en cocina/barra o ya servido.
+                                     Cancelado NO cuenta como enviado. */
+                                  if (
+                                    line.status !== "pending" &&
+                                    line.status !== "cancelled"
+                                  ) {
+                                    hasSent = true;
+                                  }
+                                  if (line.status === "cancelled") continue;
+                                  const q = Number(line.quantity) || 0;
+                                  qty += q;
+                                  if (line.status === "pending") {
+                                    pendingQty += q;
+                                  } else {
+                                    sentQty += q;
+                                  }
+                                  const at =
+                                    Number(line.addedAt) ||
+                                    Number(line.createdAt) ||
+                                    0;
+                                  if (at >= courseLatestAt) {
+                                    courseLatestAt = at;
+                                    courseLatest =
+                                      normalizeComandaCourseForStorage(
+                                        line.course,
+                                      ) ?? null;
+                                  }
+                                }
+                                const course = courseLatest;
+                                const isMixedQty = pendingQty > 0 && sentQty > 0;
                                 return (
                                   <button
                                     key={product.id}
                                     className={`carta-product-card transition transform duration-100${
                                       isAdding ? " carta-product-card--adding" : ""
-                                    }${isActive ? " scale-95 bg-gray-200" : ""}`}
+                                    }${isActive ? " scale-95 bg-gray-200" : ""}${
+                                      holdingProductId === product.id ? " holding" : ""
+                                    }${
+                                      repeatingProductId === product.id ? " repeating" : ""
+                                    }${hasSent ? " has-sent" : ""}${
+                                      dragAddingProductId === product.id ? " drag-adding" : ""
+                                    }`}
                                     type="button"
                                     onClick={() => {
                                       const suppressUntil =
@@ -9574,10 +10324,102 @@ export function CartaPageContent({
                                       if (activeProductTimeoutRef.current != null) {
                                         window.clearTimeout(activeProductTimeoutRef.current);
                                       }
-                                      handleQuickAdd(product);
+                                      handleQuickAdd(product, { course: activeCourse });
                                       activeProductTimeoutRef.current = window.setTimeout(() => {
                                         setActiveProductId(null);
                                       }, 120);
+                                    }}
+                                    onPointerDown={(e) => {
+                                      if (e.pointerType === "mouse" && e.button !== 0) return;
+                                      dragAddActiveRef.current = true;
+                                      dragVisitedProductsRef.current.clear();
+                                      dragVisitedProductsRef.current.add(product.id);
+                                      suppressClickUntilByProductIdRef.current[product.id] =
+                                        Date.now() + 400;
+                                      handleQuickAdd(product, { course: activeCourse });
+                                      setDragAddingProductId(product.id);
+                                      window.setTimeout(() => setDragAddingProductId(null), 180);
+                                      removeIsHoldingRef.current = false;
+                                      clearRepeatAndHoldGesture();
+                                      // 200 ms: empieza modo HOLD-TO-REPEAT-ADD.
+                                      // Reutiliza handleQuickAdd (sin tocarlo).
+                                      removeHoldClassTimeoutRef.current = window.setTimeout(
+                                        () => {
+                                          stopHoldAdd();
+                                          setRepeatingProductId(product.id);
+                                          if (removeRepeatAddIntervalRef.current != null) {
+                                            window.clearInterval(
+                                              removeRepeatAddIntervalRef.current,
+                                            );
+                                          }
+                                          removeRepeatAddIntervalRef.current = window.setInterval(
+                                            () => {
+                                              suppressClickUntilByProductIdRef.current[product.id] =
+                                                Date.now() + 300;
+                                              handleQuickAdd(product, { course: activeCourse });
+                                            },
+                                            120,
+                                          );
+                                        },
+                                        200,
+                                      );
+                                      // 400 ms: REMOVE tiene PRIORIDAD. Si encuentra
+                                      // línea pendiente, quita 1 y CANCELA el repeat-add.
+                                      removeHoldTimeoutRef.current = window.setTimeout(() => {
+                                        const removed = handleQuickRemoveOne(product);
+                                        if (removed) {
+                                          removeIsHoldingRef.current = true;
+                                          if (removeRepeatAddIntervalRef.current != null) {
+                                            window.clearInterval(
+                                              removeRepeatAddIntervalRef.current,
+                                            );
+                                            removeRepeatAddIntervalRef.current = null;
+                                          }
+                                          setRepeatingProductId(null);
+                                          setHoldingProductId(product.id);
+                                          suppressClickUntilByProductIdRef.current[product.id] =
+                                            Date.now() + 600;
+                                        }
+                                      }, 400);
+                                    }}
+                                    onPointerEnter={(e) => {
+                                      if (!dragAddActiveRef.current) return;
+                                      if (e.pointerType === "mouse" && e.buttons === 0) return;
+                                      if (dragVisitedProductsRef.current.has(product.id)) return;
+                                      dragVisitedProductsRef.current.add(product.id);
+                                      suppressClickUntilByProductIdRef.current[product.id] =
+                                        Date.now() + 400;
+                                      handleQuickAdd(product, { course: activeCourse });
+                                      setDragAddingProductId(product.id);
+                                      window.setTimeout(() => setDragAddingProductId(null), 180);
+                                    }}
+                                    onPointerUp={() => {
+                                      dragAddActiveRef.current = false;
+                                      dragVisitedProductsRef.current.clear();
+                                      if (removeIsHoldingRef.current) {
+                                        suppressClickUntilByProductIdRef.current[product.id] =
+                                          Date.now() + 500;
+                                      }
+                                      clearRepeatAndHoldGesture();
+                                      removeIsHoldingRef.current = false;
+                                    }}
+                                    onPointerLeave={() => {
+                                      if (removeIsHoldingRef.current) {
+                                        suppressClickUntilByProductIdRef.current[product.id] =
+                                          Date.now() + 500;
+                                      }
+                                      clearRepeatAndHoldGesture();
+                                      removeIsHoldingRef.current = false;
+                                    }}
+                                    onPointerCancel={() => {
+                                      dragAddActiveRef.current = false;
+                                      dragVisitedProductsRef.current.clear();
+                                      if (removeIsHoldingRef.current) {
+                                        suppressClickUntilByProductIdRef.current[product.id] =
+                                          Date.now() + 500;
+                                      }
+                                      clearRepeatAndHoldGesture();
+                                      removeIsHoldingRef.current = false;
                                     }}
                                     onMouseDown={(e) => {
                                       if (e.button !== 0) return;
@@ -9587,10 +10429,10 @@ export function CartaPageContent({
                                       holdTimeoutRef.current = window.setTimeout(() => {
                                         if (holdActiveProductIdRef.current !== product.id) return;
                                         holdDidRepeatRef.current = true;
-                                        handleQuickAdd(product);
+                                        handleQuickAdd(product, { course: activeCourse });
                                         holdIntervalRef.current = window.setInterval(() => {
                                           if (holdActiveProductIdRef.current !== product.id) return;
-                                          handleQuickAdd(product);
+                                          handleQuickAdd(product, { course: activeCourse });
                                         }, 120);
                                       }, 300);
                                     }}
@@ -9607,7 +10449,7 @@ export function CartaPageContent({
                                           lastClickAtByProductIdRef.current[product.id] ?? 0;
                                         if (now - last < 120) return;
                                         lastClickAtByProductIdRef.current[product.id] = now;
-                                        handleQuickAdd(product);
+                                        handleQuickAdd(product, { course: activeCourse });
                                       }
                                     }}
                                     style={{
@@ -9622,6 +10464,44 @@ export function CartaPageContent({
                                       >
                                         +1
                                       </span>
+                                    ) : null}
+                                    {qty > 0 ? (
+                                      <div
+                                        className={`carta-product-qty-badge${
+                                          isMixedQty ? " mixed" : ""
+                                        }`}
+                                        aria-label={
+                                          isMixedQty
+                                            ? `Cantidad: ${pendingQty} pendientes y ${sentQty} enviadas`
+                                            : `Cantidad en comanda: ${qty}`
+                                        }
+                                      >
+                                        {isMixedQty
+                                          ? `${pendingQty}+${sentQty}`
+                                          : qty}
+                                      </div>
+                                    ) : null}
+                                    {course ? (
+                                      <div
+                                        className="carta-product-course-badge"
+                                        aria-label={
+                                          course === 1
+                                            ? "Pase: Entrante"
+                                            : course === 2
+                                              ? "Pase: Segundo"
+                                              : course === 3
+                                                ? "Pase: Postre"
+                                                : `Pase ${course}`
+                                        }
+                                      >
+                                        {course === 1
+                                          ? "E"
+                                          : course === 2
+                                            ? "S"
+                                            : course === 3
+                                              ? "P"
+                                              : ""}
+                                      </div>
                                     ) : null}
                                     <div className="h-10 shrink-0 flex items-center justify-center w-full">
                                       {hasImg ? (
