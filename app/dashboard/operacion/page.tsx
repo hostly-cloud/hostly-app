@@ -26,29 +26,70 @@ const KNOWN_SLUGS: OperacionModuleSlug[] = [
 
 const menuGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 14,
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 16,
   width: "100%",
-  marginTop: 16,
+  marginTop: 20,
 };
 
 const menuLinkStyle: CSSProperties = {
-  padding: "32px 16px",
-  borderRadius: 16,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.55)",
+  padding: "36px 20px",
+  borderRadius: 22,
+  border: "1px solid rgba(148, 163, 184, 0.24)",
+  background:
+    "linear-gradient(180deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.78) 100%)",
   color: "#e0f2fe",
   fontWeight: 700,
-  fontSize: 18,
-  letterSpacing: "-0.02em",
+  fontSize: 22,
+  letterSpacing: "-0.01em",
   cursor: "pointer",
-  minHeight: 110,
+  minHeight: 120,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   textAlign: "center",
   textDecoration: "none",
+  boxShadow:
+    "0 1px 0 rgba(148, 163, 184, 0.08) inset, 0 12px 32px rgba(2, 6, 23, 0.35)",
+  transition:
+    "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease",
+  WebkitTapHighlightColor: "transparent",
 };
+
+const menuResponsiveCss = `
+.op-menu-link:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.18) 0%, rgba(15, 23, 42, 0.78) 100%);
+}
+.op-menu-link:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.08) inset, 0 6px 18px rgba(2, 6, 23, 0.45);
+}
+.op-menu-link:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.7);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .op-menu-grid > .op-menu-link:nth-child(odd):last-child {
+    grid-column: 1 / -1;
+    width: calc(50% - 8px);
+    justify-self: center;
+  }
+}
+
+@media (min-width: 768px) {
+  .op-menu-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .op-menu-link {
+    min-height: 140px;
+    font-size: 24px;
+    padding: 44px 20px;
+    border-radius: 24px;
+  }
+}
+`;
 
 function isKnownSlug(value: string | null): value is OperacionModuleSlug {
   return value !== null && (KNOWN_SLUGS as string[]).includes(value);
@@ -79,11 +120,17 @@ export default function OperacionMenuPage() {
       maxWidth={1400}
       compactLayout
     >
-      <nav aria-label="Módulos de operación" style={menuGridStyle}>
+      <style dangerouslySetInnerHTML={{ __html: menuResponsiveCss }} />
+      <nav
+        aria-label="Módulos de operación"
+        className="op-menu-grid"
+        style={menuGridStyle}
+      >
         {MODULES.map((m) => (
           <Link
             key={m.slug}
             href={`/dashboard/operacion/${m.slug}`}
+            className="op-menu-link"
             style={menuLinkStyle}
           >
             {m.label}

@@ -4942,6 +4942,45 @@ export function CartaPageContent({
   overflow: visible !important;
 }
 
+/* Embedded en Operación + viewport móvil: el mapa debe llenar el alto disponible.
+   Estas reglas tienen mayor especificidad (0,4,0) y van después de las reglas
+   mobile-only (0,3,0), así que vencen tanto por especificidad como por orden. */
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-page-main,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-page-main--map {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-page-fill {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-table-map-shell {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-table-map-grid {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  width: 100% !important;
+  overflow: auto !important;
+}
+
 .carta-page-main {
   flex: 1 1 auto;
   min-height: 0;
@@ -6603,7 +6642,7 @@ export function CartaPageContent({
                 ref={mapRef}
                 className="carta-table-map-grid"
                 style={
-                  cartaHeaderMobile
+                  cartaHeaderMobile && !embeddedInOperacion
                     ? {
                         position: "relative",
                         width: "100%",
@@ -6617,6 +6656,7 @@ export function CartaPageContent({
                         flex: 1,
                         minHeight: 0,
                         width: "100%",
+                        height: "100%",
                         overflow: "hidden",
                         cursor: "default",
                       }
