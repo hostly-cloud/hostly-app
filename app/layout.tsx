@@ -41,7 +41,7 @@ export default function RootLayout({
     >
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
-        <meta name="theme-color" content="#000000" />
+        <meta name="theme-color" content="#0B1220" />
       </head>
       <body className="min-h-full flex flex-col">
         <SelectedTableProvider>
