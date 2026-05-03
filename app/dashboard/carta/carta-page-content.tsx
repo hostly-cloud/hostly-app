@@ -54,6 +54,7 @@ import {
 } from "@/lib/firestore/tables";
 import { getUsersByRestaurant } from "@/lib/firestore/users";
 import { EditableFloorMap } from "@/components/map/EditableFloorMap";
+import { PinchZoomMap } from "./_components/pinch-zoom-map";
 import { ElementCard } from "@/components/map/element-map-card";
 import {
   listenReservationsForDate,
@@ -6667,8 +6668,10 @@ export function CartaPageContent({
                   style={{
                     position: "relative",
                     width: "100%",
-                    height: cartaHeaderMobile ? "auto" : "100%",
-                    minHeight: cartaHeaderMobile ? "420px" : 0,
+                    height:
+                      cartaHeaderMobile && !embeddedInOperacion ? "auto" : "100%",
+                    minHeight:
+                      cartaHeaderMobile && !embeddedInOperacion ? "420px" : 0,
                   }}
                 >
                 {tablesVisibleOnMap.length === 0 ? (
@@ -6694,6 +6697,12 @@ export function CartaPageContent({
                     No hay mesas para este filtro de camarero.
                   </p>
                 ) : (
+                  <PinchZoomMap
+                    enabled={cartaHeaderMobile && embeddedInOperacion}
+                    minZoom={0.6}
+                    maxZoom={2.5}
+                    initialZoom={1}
+                  >
                   <EditableFloorMap
                     editable={false}
                     elements={mapTablesOrderedByVisualPriority}
@@ -6840,6 +6849,7 @@ export function CartaPageContent({
                       );
                     }}
                   />
+                  </PinchZoomMap>
                 )}
                 </div>
               </div>
