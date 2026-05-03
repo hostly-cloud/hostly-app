@@ -6088,8 +6088,8 @@ export function CartaPageContent({
 }
 
 /* Badge de pase inline en la línea de comanda. Se muestra entre el
-   nombre del producto y la cantidad (cuando no está en `pending`).
-   Lectura derivada de `line.course` ya existente en CartOrderLine. */
+   nombre del producto y la cantidad (cuando no está en pending).
+   Lectura derivada de line.course ya existente en CartOrderLine. */
 .carta-line-course-badge {
   display: inline-flex;
   align-items: center;
@@ -6562,31 +6562,21 @@ export function CartaPageContent({
   box-shadow: 0 6px 14px rgba(2,6,23,0.08);
   transform: scale(1);
   transform-origin: center center;
-  transition: transform 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
-  width: 100%;
-}
-
-.carta-product-card:active {
-  transform: scale(0.96);
-}
-
-.carta-product-card--adding {
-  animation: cartaProductAddFlash 160ms ease-out both;
-}
-
-/* === Feedback táctil al tocar producto (mobile-first, válido también en
-   desktop con clic). Override de transition/will-change/touch-action y un
-   flash verde rápido en :active. NO altera handlers ni JSX, solo CSS. === */
-.carta-product-card {
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
   will-change: transform;
-  touch-action: manipulation;
+  transition: transform 80ms ease, box-shadow 80ms ease, background-color 120ms ease;
+  width: 100%;
 }
 
 .carta-product-card:active {
   transform: scale(0.96);
   animation: productTapFlash 0.2s ease;
 }
+
+.carta-product-card--adding {
+  animation: cartaProductAddFlash 160ms ease-out both;
+}
+
+/* === Feedback táctil en :active (productTapFlash). Base consolidada arriba. === */
 
 @keyframes productTapFlash {
   0%   { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
@@ -6616,14 +6606,14 @@ export function CartaPageContent({
 
 /* Producto con unidades pendientes Y enviadas a la vez: ámbar para
    distinguirlo del verde (todo pendiente) o del verde + opacidad 0.6 que
-   ya da `.has-sent` (todo enviado). El número se muestra como "P+E". */
+   ya da .has-sent (todo enviado). El número se muestra como "P+E". */
 .carta-product-qty-badge.mixed {
   background: #f59e0b;
 }
 
 /* Badge de pase (curso) en la esquina inferior derecha. Convive con el
    badge de cantidad de la esquina superior derecha. Lectura derivada del
-   campo numérico `course` (1 E, 2 S, 3 P) ya existente en CartOrderLine. */
+   campo numérico course (1 E, 2 S, 3 P) ya existente en CartOrderLine. */
 .carta-product-course-badge {
   position: absolute;
   bottom: 6px;
@@ -6642,7 +6632,7 @@ export function CartaPageContent({
 
 /* Botón "Comanda" cuando hay unidades pendientes de enviar.
    El botón usa estilos inline (gradient + boxShadow), por lo que para
-   imponer el rojo se necesita `!important` en background y box-shadow.
+   imponer el rojo se necesita !important en background y box-shadow.
    El sufijo " · pendiente" se inyecta vía ::after, no toca el texto. */
 .carta-comanda-button.has-pending-items {
   background: #dc2626 !important;
@@ -6656,7 +6646,7 @@ export function CartaPageContent({
 
 /* Mini-resumen bajo el botón "Comanda": primeras 3 líneas pendientes
    con formato "Nx Producto · Nx Producto · ...". Solo UI; deriva de
-   `order` y se oculta cuando no hay pendientes. */
+   order y se oculta cuando no hay pendientes. */
 .carta-pending-summary {
   margin-top: 4px;
   font-size: 11px;
@@ -6675,7 +6665,7 @@ export function CartaPageContent({
 
 /* Indicador global de unidades pendientes de enviar a cocina/barra.
    Se inserta en la zona "mesa / tiempo" del header de la comanda y
-   solo se muestra cuando hay al menos 1 unidad en estado `pending`. */
+   solo se muestra cuando hay al menos 1 unidad en estado pending. */
 .carta-pending-indicator {
   display: inline-block;
   vertical-align: middle;
@@ -6721,41 +6711,41 @@ export function CartaPageContent({
   z-index: 2;
 }
 
-/* Feedback visual mientras se mantiene pulsada la tarjeta para quitar 1
-   unidad (long-press). La clase `holding` se añade a los 200 ms y se
-   retira al soltar/cancelar. El color rojo señala "vas a quitar". */
-.carta-product-card.holding {
-  transform: scale(0.92);
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25);
+/* Pulso corto al cruzar una tarjeta durante “arrastre para añadir”
+   (clase drag-adding): escala + halo verde coherente con repeat-add. */
+.carta-product-card.drag-adding {
+  transform: scale(0.96);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
 }
 
 /* Mientras se está añadiendo en bucle (hold-to-repeat-add): aro verde
    para señalar "añadiendo varias unidades". Se mantiene desde los 200 ms
-   hasta que se suelta o hasta que `holding` (rojo) toma el relevo a 400 ms
+   hasta que se suelta o hasta que holding (rojo) toma el relevo a 400 ms
    si el remove encuentra una línea pendiente. */
 .carta-product-card.repeating {
   transform: scale(0.94);
   box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
 }
 
-/* Pulso corto al cruzar una tarjeta durante “arrastre para añadir”
-   (clase `drag-adding`): escala + halo verde coherente con repeat-add. */
-.carta-product-card.drag-adding {
-  transform: scale(0.96);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+/* Feedback visual mientras se mantiene pulsada la tarjeta para quitar 1
+   unidad (long-press). La clase holding se añade a los 200 ms y se
+   retira al soltar/cancelar. El color rojo señala "vas a quitar". */
+.carta-product-card.holding {
+  transform: scale(0.92);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25);
 }
 
 /* Selector de pase activo (Entrantes / Segundos / Postres). Aparece una
    sola vez sobre toda la grid de productos, no por categoría.
-   Sticky dentro de `.carta-products-scroll` (que es el ancestro con
-   `overflow-y: auto` + `min-height: 0`), así permanece visible mientras
+   Sticky dentro de .carta-products-scroll (que es el ancestro con
+   overflow-y: auto + min-height: 0), así permanece visible mientras
    el usuario hace scroll en la lista de productos. */
 .carta-course-selector {
   display: flex;
   gap: 6px;
   /* Sin overlays: separación mínima respecto a la primera categoría /
      fila de productos. Cuando aparece el contador o el flash se
-     aplica `.has-course-overlays` (abajo) que abre el "carril" de
+     aplica .has-course-overlays (abajo) que abre el "carril" de
      72 px para que ningún overlay tape la grid. */
   margin-bottom: 10px;
   position: sticky;
@@ -6808,13 +6798,13 @@ export function CartaPageContent({
 }
 
 /* Flash de confirmación al cambiar de pase. Se ancla por debajo del
-   `.carta-course-selector` (que ya es `position: sticky`, válido como
+   .carta-course-selector (que ya es position: sticky, válido como
    ancestro positioned), así NO ocupa hueco en el flujo y la grid de
    productos no se desplaza al aparecer/desaparecer.
-   En móvil convive con `.carta-course-active-count`: el contador queda
+   En móvil convive con .carta-course-active-count: el contador queda
    justo debajo del selector (bottom: -22px) y el flash baja una fila
-   más (bottom: -46px), ocupando el ancho completo entre `left: 8px`
-   y `right: 8px` para que el texto centrado no choque con el contador. */
+   más (bottom: -46px), ocupando el ancho completo entre left: 8px
+   y right: 8px para que el texto centrado no choque con el contador. */
 .carta-course-flash {
   position: absolute;
   left: 8px;
@@ -6843,7 +6833,7 @@ export function CartaPageContent({
 
 /* Contador permanente del pase activo: cuántas unidades pendientes
    pertenecen al pase seleccionado en el selector. Descuelga abajo a la
-   derecha del selector y, como `.carta-course-flash`, NO ocupa hueco en
+   derecha del selector y, como .carta-course-flash, NO ocupa hueco en
    el flujo (la grid de productos no se desplaza). */
 .carta-course-active-count {
   position: absolute;
