@@ -4463,9 +4463,8 @@ export function CartaPageContent({
     [order],
   );
 
-  /** Panel comanda: oculto en TPV normal sin líneas (prioridad a la carta). En Barra siempre visible. */
-  const hasItems = order.length > 0;
-  const showComandaAside = viewMode !== "normal" || hasItems;
+  const showComandaAside =
+    viewMode !== "normal" || Boolean(selectedTableId || orderIdFromUrl);
 
   const lineEditorTarget =
     comandaLineEditorId == null
@@ -5953,9 +5952,12 @@ export function CartaPageContent({
   height: 100%;
 }
 
-/* Columna comanda (izquierda). */
-.carta-aside {
+/* Columna comanda (izquierda en escritorio; arriba en móvil). */
+.carta-aside,
+.carta-comanda {
   flex-shrink: 0;
+  width: 35%;
+  min-width: 320px;
   min-height: 0;
   height: auto;
   align-self: stretch;
@@ -5964,11 +5966,6 @@ export function CartaPageContent({
   background: #ffffff;
   border-right: 1px solid rgba(0, 0, 0, 0.08);
   box-sizing: border-box;
-}
-
-.carta-comanda {
-  width: 35%;
-  min-width: 320px;
 }
 
 .carta-aside-scroll {
@@ -6511,19 +6508,18 @@ export function CartaPageContent({
   white-space: nowrap;
 }
 
-.carta-main {
-  flex: 1 1 auto;
+.carta-main,
+.carta-productos {
+  flex: 1;
   min-width: 0;
+}
+
+.carta-main {
   min-height: 0;
   overflow: hidden;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.carta-productos {
-  flex: 1;
-  min-width: 0;
 }
 
 .carta-main-fixed {
@@ -6740,7 +6736,22 @@ export function CartaPageContent({
 
 @media (max-width: 767.98px) {
   .carta-layout {
+    flex-direction: column;
     gap: 10px;
+  }
+  .carta-aside,
+  .carta-comanda {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex-shrink: 0;
+    border-right: none;
+  }
+  .carta-main,
+  .carta-productos {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
   }
   .carta-products-scroll {
     flex: 1 1 auto;
