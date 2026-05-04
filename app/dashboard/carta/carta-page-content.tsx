@@ -5512,6 +5512,55 @@ export function CartaPageContent({
   margin-left: auto;
 }
 
+.carta-header-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.carta-comensales {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.carta-comensales--pill {
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+}
+
+.carta-estados {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.carta-estados span {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 6px;
+  border-radius: 6px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .carta-active-mesa {
   flex: 1 1 auto;
   min-width: 0;
@@ -6761,6 +6810,13 @@ export function CartaPageContent({
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
   }
+  .carta-tpv-payment-dock .carta-tpv-dock-pre-ticket-wrap,
+  .carta-tpv-payment-dock .carta-tpv-dock-cobrar-wrap {
+    display: none !important;
+  }
+  .carta-tpv-payment-dock .carta-tpv-payment-dock-grid {
+    grid-template-columns: 1fr !important;
+  }
   .carta-tpv-payment-dock {
     flex-shrink: 0;
   }
@@ -6775,6 +6831,56 @@ export function CartaPageContent({
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .carta-comanda-header-compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .carta-comensales-compact.carta-comensales--pill {
+    font-size: 12px;
+    padding: 4px 8px;
+    min-height: 28px;
+    box-sizing: border-box;
+  }
+
+  .carta-comensales-compact.carta-comensales--pill button {
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    border-radius: 5px !important;
+  }
+
+  .carta-comensales-compact.carta-comensales--pill .carta-comensales-label,
+  .carta-comensales-compact.carta-comensales--pill .carta-comensales-count {
+    font-size: 11px !important;
+    line-height: 1 !important;
+  }
+
+  .carta-comanda-status-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
+    flex: 1;
+    justify-content: flex-end;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .carta-comanda-status-row span,
+  .carta-comanda-status-row button,
+  .carta-comanda-status-row div {
+    font-size: 10px !important;
+    padding: 3px 5px !important;
+    line-height: 1 !important;
+    white-space: nowrap;
   }
 }
 
@@ -7462,134 +7568,110 @@ export function CartaPageContent({
             </div>
           </div>
           {viewMode === "normal" && (
-            <div
-              style={{
-                marginTop: 16,
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 4,
-                alignItems: "center",
-              }}
-            >
-              {selectedTableId ? (
-                <div
+            <div className="carta-header-compact carta-comanda-header-compact">
+              <div
+                className={
+                  selectedTableId
+                    ? "carta-comensales carta-comensales--pill carta-comensales-compact"
+                    : "carta-comensales carta-comensales-compact"
+                }
+              >
+                {selectedTableId ? (
+                  <>
+                    <span className="carta-comensales-label" style={{ whiteSpace: "nowrap" }}>
+                      Comensales:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void persistGuestCount(guestCount - 1)}
+                      disabled={guestCount <= 0}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        border: "1px solid rgba(15,23,42,0.12)",
+                        background: "#fff",
+                        cursor: guestCount <= 0 ? "not-allowed" : "pointer",
+                        opacity: guestCount <= 0 ? 0.6 : 1,
+                        fontWeight: 500,
+                        fontSize: 13,
+                        lineHeight: "20px",
+                        padding: 0,
+                      }}
+                    >
+                      -
+                    </button>
+                    <span
+                      className="carta-comensales-count"
+                      style={{
+                        minWidth: 12,
+                        textAlign: "center",
+                        fontSize: 13,
+                        fontWeight: 500,
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {guestCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void persistGuestCount(guestCount + 1)}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        border: "1px solid rgba(37, 99, 235, 0.25)",
+                        background: "rgba(59,130,246,0.12)",
+                        cursor: "pointer",
+                        fontWeight: 500,
+                        fontSize: 13,
+                        lineHeight: "20px",
+                        padding: 0,
+                      }}
+                    >
+                      +
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              <div className="carta-estados carta-comanda-status-row">
+                <span
                   style={{
-                    fontSize: 10,
-                    fontWeight: 500,
                     color: "#0f172a",
                     background: "rgba(15,23,42,0.06)",
                     border: "1px solid rgba(15,23,42,0.12)",
-                    padding: "3px 8px",
-                    borderRadius: 999,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
                   }}
                 >
-                  <span style={{ whiteSpace: "nowrap" }}>Comensales:</span>
-                  <button
-                    type="button"
-                    onClick={() => void persistGuestCount(guestCount - 1)}
-                    disabled={guestCount <= 0}
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 8,
-                      border: "1px solid rgba(15,23,42,0.12)",
-                      background: "#fff",
-                      cursor: guestCount <= 0 ? "not-allowed" : "pointer",
-                      opacity: guestCount <= 0 ? 0.6 : 1,
-                      fontWeight: 500,
-                      lineHeight: "24px",
-                    }}
-                  >
-                    -
-                  </button>
-                  <span
-                    style={{
-                      minWidth: 12,
-                      textAlign: "center",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      lineHeight: 1.1,
-                    }}
-                  >
-                    {guestCount}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void persistGuestCount(guestCount + 1)}
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 8,
-                      border: "1px solid rgba(37, 99, 235, 0.25)",
-                      background: "rgba(59,130,246,0.12)",
-                      cursor: "pointer",
-                      fontWeight: 500,
-                      lineHeight: "24px",
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
-              ) : null}
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  color: "#0f172a",
-                  background: "rgba(15,23,42,0.06)",
-                  border: "1px solid rgba(15,23,42,0.12)",
-                  padding: "3px 8px",
-                  borderRadius: 999,
-                  lineHeight: 1.1,
-                }}
-              >
-                Pendiente {linesPending.length}
-              </span>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  color: "#1e3a8a",
-                  background: "rgba(59,130,246,0.14)",
-                  border: "1px solid rgba(37, 99, 235, 0.25)",
-                  padding: "3px 8px",
-                  borderRadius: 999,
-                  lineHeight: 1.1,
-                }}
-              >
-                Enviado {linesSent.length}
-              </span>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  color: "#9a3412",
-                  background: "rgba(245,158,11,0.14)",
-                  border: "1px solid rgba(245, 158, 11, 0.25)",
-                  padding: "3px 8px",
-                  borderRadius: 999,
-                  lineHeight: 1.1,
-                }}
-              >
-                Preparado {linesPrepared.length}
-              </span>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  color: "#166534",
-                  background: "rgba(34,197,94,0.14)",
-                  border: "1px solid rgba(34, 197, 94, 0.25)",
-                  padding: "3px 8px",
-                  borderRadius: 999,
-                  lineHeight: 1.1,
-                }}
-              >
-                Servido {linesServed.length}
-              </span>
+                  Pendiente {linesPending.length}
+                </span>
+                <span
+                  style={{
+                    color: "#1e3a8a",
+                    background: "rgba(59,130,246,0.14)",
+                    border: "1px solid rgba(37, 99, 235, 0.25)",
+                  }}
+                >
+                  Enviado {linesSent.length}
+                </span>
+                <span
+                  style={{
+                    color: "#9a3412",
+                    background: "rgba(245,158,11,0.14)",
+                    border: "1px solid rgba(245, 158, 11, 0.25)",
+                  }}
+                >
+                  Preparado {linesPrepared.length}
+                </span>
+                <span
+                  style={{
+                    color: "#166534",
+                    background: "rgba(34,197,94,0.14)",
+                    border: "1px solid rgba(34, 197, 94, 0.25)",
+                  }}
+                >
+                  Servido {linesServed.length}
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -7747,6 +7829,7 @@ export function CartaPageContent({
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div
+                className="carta-tpv-payment-dock-grid"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
@@ -7799,11 +7882,14 @@ export function CartaPageContent({
                 >
                   {comandaSentFlash ? "Comanda enviada" : "Comanda"}
                 </button>
-                <div style={{ minWidth: 0, display: "flex" }}>
+                <div
+                  className="carta-tpv-dock-pre-ticket-wrap"
+                  style={{ minWidth: 0, display: "flex" }}
+                >
                   <button
                     type="button"
                     onClick={handlePrintPreTicket}
-                    className="w-full bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-xl text-sm font-medium transition"
+                    className="carta-tpv-dock-pre-ticket w-full bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-xl text-sm font-medium transition"
                     style={{ minHeight: 44 }}
                   >
                     Pre-ticket
@@ -7812,6 +7898,7 @@ export function CartaPageContent({
               </div>
 
               <div
+                className="carta-tpv-payment-dock-grid"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
@@ -7842,10 +7929,14 @@ export function CartaPageContent({
                   </div>
                 </div>
 
-                <div style={{ minWidth: 0, display: "flex" }}>
+                <div
+                  className="carta-tpv-dock-cobrar-wrap"
+                  style={{ minWidth: 0, display: "flex" }}
+                >
                   {selectedTableId ? (
                     <button
                       type="button"
+                      className="carta-tpv-dock-cobrar"
                       onClick={() => setIsPaymentOpen(true)}
                       disabled={
                         isPayTableOrderSending ||
