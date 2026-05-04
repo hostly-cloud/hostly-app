@@ -4248,60 +4248,62 @@ export function CartaPageContent({
     return "#e8f5e9"; // verde suave
   };
 
-  const linesPending = useMemo(
+  const visibleOrderLines = useMemo(
     () =>
-      order
-        .filter((l) => l.status === "pending")
-        .slice()
-        .sort((a, b) => {
-          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
-          if (d !== 0) return d;
-          return a.id.localeCompare(b.id);
-        }),
-    [order],
-  );
-  const linesSent = useMemo(
-    () =>
-      order
-        .filter((l) => l.status === "sent")
-        .slice()
-        .sort((a, b) => {
-          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
-          if (d !== 0) return d;
-          return a.id.localeCompare(b.id);
-        }),
-    [order],
-  );
-  const linesPrepared = useMemo(
-    () =>
-      order
-        .filter((l) => l.status === "prepared")
-        .slice()
-        .sort((a, b) => {
-          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
-          if (d !== 0) return d;
-          return a.id.localeCompare(b.id);
-        }),
-    [order],
-  );
-  const linesServed = useMemo(
-    () =>
-      order
-        .filter((l) => l.status === "served")
-        .slice()
-        .sort((a, b) => {
-          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
-          if (d !== 0) return d;
-          return a.id.localeCompare(b.id);
-        }),
+      order.filter(
+        (line) => normalizeOrderLineStatus(line.status) !== "cancelled",
+      ),
     [order],
   );
 
-  const visibleLinesDebug = useMemo(() => {
-    const visible = [...linesPending, ...linesSent, ...linesPrepared, ...linesServed];
-    console.log("COMANDA VISIBLE LINES DEBUG", visible);
-    return visible;
-  }, [linesPending, linesSent, linesPrepared, linesServed]);
+  const linesPending = useMemo(
+    () =>
+      visibleOrderLines
+        .filter((l) => normalizeOrderLineStatus(l.status) === "pending")
+        .slice()
+        .sort((a, b) => {
+          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
+          if (d !== 0) return d;
+          return a.id.localeCompare(b.id);
+        }),
+    [visibleOrderLines],
+  );
+  const linesSent = useMemo(
+    () =>
+      visibleOrderLines
+        .filter((l) => normalizeOrderLineStatus(l.status) === "sent")
+        .slice()
+        .sort((a, b) => {
+          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
+          if (d !== 0) return d;
+          return a.id.localeCompare(b.id);
+        }),
+    [visibleOrderLines],
+  );
+  const linesPrepared = useMemo(
+    () =>
+      visibleOrderLines
+        .filter((l) => normalizeOrderLineStatus(l.status) === "prepared")
+        .slice()
+        .sort((a, b) => {
+          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
+          if (d !== 0) return d;
+          return a.id.localeCompare(b.id);
+        }),
+    [visibleOrderLines],
+  );
+  const linesServed = useMemo(
+    () =>
+      visibleOrderLines
+        .filter((l) => normalizeOrderLineStatus(l.status) === "served")
+        .slice()
+        .sort((a, b) => {
+          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
+          if (d !== 0) return d;
+          return a.id.localeCompare(b.id);
+        }),
+    [visibleOrderLines],
+  );
 
   const orderDocIsPaid = useMemo(() => {
     if (
@@ -6746,6 +6748,16 @@ export function CartaPageContent({
     max-width: none !important;
     flex-shrink: 0;
     border-right: none;
+    display: flex;
+    flex-direction: column;
+  }
+  .carta-aside-scroll {
+    flex: 0 1 auto;
+    min-height: 120px;
+    max-height: 260px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
   }
   .carta-main,
   .carta-productos {
@@ -7676,7 +7688,7 @@ export function CartaPageContent({
             </div>
           ) : (
             <>
-              {order.length === 0 ? (
+              {visibleOrderLines.length === 0 ? (
                 <div
                   style={{
                     padding: "28px 12px",
@@ -7698,7 +7710,6 @@ export function CartaPageContent({
                       listStyle: "none",
                     }}
                   >
-                    {visibleLinesDebug.length === -1 ? null : null}
                     {linesPending.map((item, idx) =>
                       renderComandaLine(item, "Pendiente", {
                         attachFirstPendingRef: idx === 0,
