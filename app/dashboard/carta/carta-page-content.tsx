@@ -6750,14 +6750,19 @@ export function CartaPageContent({
     border-right: none;
     display: flex;
     flex-direction: column;
+    max-height: 48vh;
+    overflow: hidden;
   }
   .carta-aside-scroll {
-    flex: 0 1 auto;
-    min-height: 120px;
-    max-height: 260px;
+    flex: 1 1 auto;
+    min-height: 110px;
+    max-height: 220px;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+  }
+  .carta-tpv-payment-dock {
+    flex-shrink: 0;
   }
   .carta-main,
   .carta-productos {
