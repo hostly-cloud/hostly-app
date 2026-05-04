@@ -6788,7 +6788,7 @@ export function CartaPageContent({
 @media (max-width: 767.98px) {
   .carta-layout {
     flex-direction: column;
-    gap: 10px;
+    gap: 8px !important;
   }
   .carta-aside,
   .carta-comanda {
@@ -6801,6 +6801,7 @@ export function CartaPageContent({
     flex-direction: column;
     max-height: 48vh;
     overflow: hidden;
+    margin-bottom: 0 !important;
   }
   .carta-aside-scroll {
     flex: 1 1 auto;
@@ -6842,45 +6843,104 @@ export function CartaPageContent({
   }
 
   .carta-comensales-compact.carta-comensales--pill {
-    font-size: 12px;
-    padding: 4px 8px;
-    min-height: 28px;
+    font-size: 11px;
+    padding: 3px 6px;
+    min-height: 24px;
+    gap: 4px;
     box-sizing: border-box;
   }
 
-  .carta-comensales-compact.carta-comensales--pill button {
-    width: 20px !important;
-    height: 20px !important;
+  .carta-comensales-compact button {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
     font-size: 10px !important;
     line-height: 1 !important;
-    border-radius: 5px !important;
+    padding: 0 !important;
+    border-radius: 4px !important;
   }
 
-  .carta-comensales-compact.carta-comensales--pill .carta-comensales-label,
-  .carta-comensales-compact.carta-comensales--pill .carta-comensales-count {
-    font-size: 11px !important;
+  .carta-comensales-label {
+    font-size: 11px;
+    line-height: 1 !important;
+  }
+
+  .carta-comensales-count {
+    font-size: 12px !important;
+    min-width: 14px;
     line-height: 1 !important;
   }
 
   .carta-comanda-status-row {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     flex-wrap: nowrap;
     flex: 1;
     justify-content: flex-end;
     min-width: 0;
     overflow-x: auto;
+    scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .carta-comanda-status-row::-webkit-scrollbar {
+    display: none;
   }
 
   .carta-comanda-status-row span,
   .carta-comanda-status-row button,
   .carta-comanda-status-row div {
-    font-size: 10px !important;
-    padding: 3px 5px !important;
+    font-size: 9px !important;
+    padding: 2px 4px !important;
     line-height: 1 !important;
+    border-radius: 999px !important;
     white-space: nowrap;
+  }
+
+  .carta-comanda-line {
+    padding: 6px 8px !important;
+    min-height: 46px;
+    box-sizing: border-box;
+  }
+
+  .carta-comanda-name {
+    font-size: 13px !important;
+    max-width: 110px;
+  }
+
+  .carta-comanda-line-pricing {
+    font-size: 11px !important;
+  }
+
+  .carta-line-course-badge {
+    font-size: 9px !important;
+    padding: 2px 5px !important;
+  }
+
+  .carta-comanda-qty-controls {
+    gap: 4px !important;
+  }
+
+  .carta-comanda-qty-btn {
+    min-width: 30px !important;
+    min-height: 30px !important;
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+  }
+
+  .carta-comanda-button {
+    min-height: 46px !important;
+    font-size: 15px !important;
+    border-radius: 12px !important;
+  }
+
+  .carta-tpv-payment-dock-total {
+    min-height: 58px !important;
+    padding: 10px 14px !important;
+    box-sizing: border-box !important;
   }
 }
 
