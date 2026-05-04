@@ -5501,22 +5501,56 @@ export function CartaPageContent({
   min-width: 0;
 }
 
-.carta-comensales {
-  display: flex;
+.carta-comensales-compact.carta-comensales--pill {
+  max-width: 180px;
+  height: 36px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.2;
-  color: #0f172a;
+  gap: 6px;
+  overflow: visible;
+  background: #f9fafb;
+  border: 1px solid rgba(15, 23, 42, 0.12);
 }
 
-.carta-comensales--pill {
-  padding: 6px 10px;
-  background: rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 999px;
+.carta-comensales-label {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.carta-comensales-count {
+  font-size: 14px;
+  font-weight: 800;
+  min-width: 18px;
+  text-align: center;
+}
+
+.carta-comensales-compact button {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  font-size: 14px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  padding: 0;
+  cursor: pointer;
+}
+
+.carta-comensales-compact button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .carta-estados {
@@ -6605,8 +6639,8 @@ export function CartaPageContent({
 
 .carta-product-card {
   height: 120px;
-  min-height: 120px;
-  padding: 8px;
+  min-height: 72px;
+  padding: 12px !important;
   gap: 4px;
   display: flex;
   flex-direction: column;
@@ -6627,25 +6661,21 @@ export function CartaPageContent({
   transform: scale(1);
   transform-origin: center center;
   will-change: transform;
-  transition: transform 80ms ease, box-shadow 80ms ease, background-color 120ms ease;
+  transition: transform 80ms ease, box-shadow 120ms ease;
   width: 100%;
 }
 
+.carta-product-card * {
+  pointer-events: none;
+}
+
 .carta-product-card:active {
-  transform: scale(0.96);
-  animation: productTapFlash 0.2s ease;
+  transform: scale(0.97);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22);
 }
 
 .carta-product-card--adding {
   animation: cartaProductAddFlash 160ms ease-out both;
-}
-
-/* === Feedback táctil en :active (productTapFlash). Base consolidada arriba. === */
-
-@keyframes productTapFlash {
-  0%   { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
-  50%  { box-shadow: 0 0 0 4px rgba(0, 200, 120, 0.25); }
-  100% { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
 }
 
 /* Badge de cantidad: muestra cuántas unidades del producto hay ya en la
@@ -6770,13 +6800,13 @@ export function CartaPageContent({
 
 @media (min-width: 768px) {
   .carta-product-grid { grid-template-columns: repeat(5, 1fr); }
-  .carta-product-card { height: 120px; min-height: 120px; padding: 8px; gap: 4px; }
+  .carta-product-card { height: 120px; min-height: 72px; padding: 12px !important; gap: 4px; }
   .carta-product-media { max-width: 82px; height: 56px; }
 }
 
 @media (min-width: 1024px) {
   .carta-product-grid { grid-template-columns: repeat(6, 1fr); }
-  .carta-product-card { height: 120px; min-height: 120px; padding: 8px; gap: 4px; }
+  .carta-product-card { height: 120px; min-height: 72px; padding: 12px !important; gap: 4px; }
   .carta-product-media { max-width: 86px; height: 60px; }
 }
 
@@ -6863,49 +6893,6 @@ export function CartaPageContent({
     display: flex;
     align-items: center;
     gap: 6px;
-  }
-
-  .carta-comensales-compact.carta-comensales--pill {
-    max-width: 170px !important;
-    height: 34px !important;
-    min-height: 34px !important;
-    padding: 3px 6px !important;
-    border-radius: 12px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    overflow: visible !important;
-  }
-
-  .carta-comensales-label {
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    white-space: nowrap !important;
-  }
-
-  .carta-comensales-count {
-    font-size: 13px !important;
-    font-weight: 800 !important;
-    min-width: 16px !important;
-    text-align: center !important;
-  }
-
-  .carta-comensales-compact button {
-    width: 24px !important;
-    height: 24px !important;
-    min-width: 24px !important;
-    min-height: 24px !important;
-    border-radius: 8px !important;
-    background: #ffffff !important;
-    color: #111827 !important;
-    border: 1px solid rgba(15, 23, 42, 0.18) !important;
-    font-size: 13px !important;
-    font-weight: 900 !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    line-height: 1 !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
   }
 
   .carta-comanda-status-row {
@@ -7685,65 +7672,25 @@ export function CartaPageContent({
           </div>
           {viewMode === "normal" && (
             <div className="carta-header-compact carta-comanda-header-compact">
-              <div
-                className={
-                  selectedTableId
-                    ? "carta-comensales carta-comensales--pill carta-comensales-compact"
-                    : "carta-comensales carta-comensales-compact"
-                }
-              >
+              <div className="carta-comensales-compact carta-comensales--pill">
                 {selectedTableId ? (
                   <>
-                    <span className="carta-comensales-label" style={{ whiteSpace: "nowrap" }}>
+                    <span className="carta-comensales-label">
                       Comensales:
                     </span>
                     <button
                       type="button"
                       onClick={() => void persistGuestCount(guestCount - 1)}
                       disabled={guestCount <= 0}
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 6,
-                        border: "1px solid rgba(15,23,42,0.12)",
-                        background: "#fff",
-                        cursor: guestCount <= 0 ? "not-allowed" : "pointer",
-                        opacity: guestCount <= 0 ? 0.6 : 1,
-                        fontWeight: 500,
-                        fontSize: 13,
-                        lineHeight: "20px",
-                        padding: 0,
-                      }}
                     >
                       -
                     </button>
-                    <span
-                      className="carta-comensales-count"
-                      style={{
-                        minWidth: 12,
-                        textAlign: "center",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        lineHeight: 1.1,
-                      }}
-                    >
+                    <span className="carta-comensales-count">
                       {guestCount}
                     </span>
                     <button
                       type="button"
                       onClick={() => void persistGuestCount(guestCount + 1)}
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 6,
-                        border: "1px solid rgba(37, 99, 235, 0.25)",
-                        background: "rgba(59,130,246,0.12)",
-                        cursor: "pointer",
-                        fontWeight: 500,
-                        fontSize: 13,
-                        lineHeight: "20px",
-                        padding: 0,
-                      }}
                     >
                       +
                     </button>
