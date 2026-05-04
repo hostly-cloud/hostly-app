@@ -6837,15 +6837,13 @@ export function CartaPageContent({
   .carta-comanda-header-compact {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 6px;
-    margin-top: 4px;
-    min-width: 0;
   }
 
   .carta-comensales-compact {
     flex: 0 0 auto !important;
-    max-width: 140px;
+    width: auto;
+    max-width: 120px;
     overflow: hidden;
   }
 
@@ -6888,8 +6886,8 @@ export function CartaPageContent({
     gap: 3px;
     flex-wrap: nowrap;
     flex: 1 1 auto;
-    justify-content: flex-end;
     min-width: 0;
+    justify-content: flex-end;
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
@@ -6900,8 +6898,9 @@ export function CartaPageContent({
   }
 
   .carta-comanda-status-row span,
-  .carta-comanda-status-row button,
-  .carta-comanda-status-row div {
+  .carta-comanda-status-row div,
+  .carta-comanda-status-row button {
+    flex: 0 0 auto;
     font-size: 9px !important;
     padding: 2px 4px !important;
     line-height: 1 !important;
