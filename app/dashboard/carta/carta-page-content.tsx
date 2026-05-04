@@ -281,17 +281,17 @@ function lineCourseToPaseDraft(line: CartOrderLine): 0 | 1 | 2 | 3 | 4 {
   return u as 0 | 1 | 2 | 3 | 4;
 }
 
-/** Etiqueta de pase en línea TPV (`course` numérico 1–4 en datos). */
+/** Etiqueta de pase en editor TPV (`course` numérico 1–4). */
 function getCourseLabel(course: number): string {
   switch (course) {
     case 1:
-      return "ENTRANTE";
+      return "Entrante";
     case 2:
-      return "PRIMERO";
+      return "Primero";
     case 3:
-      return "SEGUNDO";
+      return "Segundo";
     case 4:
-      return "POSTRE";
+      return "Postre";
     default:
       return "";
   }
@@ -312,21 +312,24 @@ function getCourseClass(course: number): string {
   }
 }
 
-/** Pase en tarjetas vista Cocina integrada (TPV). */
+/** Pase en tarjetas vista Cocina integrada (TPV). course 1–4 en datos. */
 function getCocinaCardCourseLabel(course?: number): string {
-  if (course === 1) return "Entrante";
-  if (course === 2) return "Segundo";
-  if (course === 3) return "Postre";
+  const c = normalizeComandaCourseForStorage(course);
+  if (c === 1) return "Entrante";
+  if (c === 2) return "Primero";
+  if (c === 3) return "Segundo";
+  if (c === 4) return "Postre";
   return "";
 }
 
-type CocinaCourseBucket = 0 | 1 | 2 | 3;
+type CocinaCourseBucket = 0 | 1 | 2 | 3 | 4;
 
 function cocinaCourseBucket(line: CartOrderLine): CocinaCourseBucket {
   const c = normalizeComandaCourseForStorage(line.course);
   if (c === 1) return 1;
   if (c === 2) return 2;
-  if (c === 3 || c === 4) return 3;
+  if (c === 3) return 3;
+  if (c === 4) return 4;
   return 0;
 }
 
@@ -335,13 +338,15 @@ function cocinaCourseSortOrder(line: CartOrderLine): number {
   if (b === 1) return 1;
   if (b === 2) return 2;
   if (b === 3) return 3;
+  if (b === 4) return 4;
   return 999;
 }
 
 function getCocinaSectionTitle(bucket: CocinaCourseBucket): string {
   if (bucket === 1) return "ENTRANTES";
-  if (bucket === 2) return "SEGUNDOS";
-  if (bucket === 3) return "POSTRES";
+  if (bucket === 2) return "PRIMEROS";
+  if (bucket === 3) return "SEGUNDOS";
+  if (bucket === 4) return "POSTRES";
   return "SIN PASE";
 }
 
@@ -4400,8 +4405,7 @@ export function CartaPageContent({
     }, 0);
   }, [order]);
 
-  /** Pase activo en su forma numérica (1-3), usado por el resaltado en la lista de
-      comanda (`isActiveCourseLine` en `renderComandaLine`). */
+  /** Pase activo en forma numérica (1–4 según toolbar), para resaltar líneas en comanda. */
   const activeCourseNum = ACTIVE_COURSE_TO_NUM[activeCourse];
 
   const cocinaItems = useMemo(() => {
@@ -4432,7 +4436,7 @@ export function CartaPageContent({
       if (rd !== 0) return rd;
       return (a.createdAt || 0) - (b.createdAt || 0);
     });
-    const keys: CocinaCourseBucket[] = [1, 2, 3, 0];
+    const keys: CocinaCourseBucket[] = [1, 2, 3, 4, 0];
     return keys
       .map((key) => ({
         key,
@@ -4489,18 +4493,18 @@ export function CartaPageContent({
     const firstPendingId = linesPending[0]?.id;
     const nm = item.product.nombre;
     const courseForBadge = normalizeComandaCourseForStorage(item.course);
-    /* Etiqueta breve y singular del pase para mostrar inline junto al
-       nombre del producto. Reutiliza `courseForBadge` (ya normalizado a
-       1-4 o undefined) para no llamar 3 veces a la función. Coherente
-       con `ACTIVE_COURSE_TO_NUM` (starter→1, main→2, dessert→3). */
+    /* Etiqueta breve del pase (`course` 1–4 en línea). Coherente con el editor:
+       1 Entrante, 2 Primero, 3 Segundo, 4 Postre. */
     const lineCourseLabel =
       courseForBadge === 1
         ? "Entrante"
         : courseForBadge === 2
-          ? "Segundo"
+          ? "Primero"
           : courseForBadge === 3
-            ? "Postre"
-            : null;
+            ? "Segundo"
+            : courseForBadge === 4
+              ? "Postre"
+              : null;
     /* ¿Esta línea pertenece al pase activo? Sirve para resaltar
        sutilmente la fila y oscurecer su badge inline, ayudando al
        camarero a localizar visualmente las líneas del pase actual.
@@ -6710,7 +6714,7 @@ export function CartaPageContent({
 
 /* Badge de pase (curso) en la esquina inferior derecha. Convive con el
    badge de cantidad de la esquina superior derecha. Lectura derivada del
-   campo numérico course (1 E, 2 S, 3 P) ya existente en CartOrderLine. */
+   campo numérico course (1 E, 2 P, 3 S, 4 D) ya existente en CartOrderLine. */
 .carta-product-course-badge {
   position: absolute;
   bottom: 6px;
@@ -10458,19 +10462,23 @@ export function CartaPageContent({
                                           course === 1
                                             ? "Pase: Entrante"
                                             : course === 2
-                                              ? "Pase: Segundo"
+                                              ? "Pase: Primero"
                                               : course === 3
-                                                ? "Pase: Postre"
-                                                : `Pase ${course}`
+                                                ? "Pase: Segundo"
+                                                : course === 4
+                                                  ? "Pase: Postre"
+                                                  : `Pase ${course}`
                                         }
                                       >
                                         {course === 1
                                           ? "E"
                                           : course === 2
-                                            ? "S"
+                                            ? "P"
                                             : course === 3
-                                              ? "P"
-                                              : ""}
+                                              ? "S"
+                                              : course === 4
+                                                ? "D"
+                                                : ""}
                                       </div>
                                     ) : null}
                                     <div className="h-10 shrink-0 flex items-center justify-center w-full">
