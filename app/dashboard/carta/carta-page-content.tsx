@@ -1134,18 +1134,6 @@ export function CartaPageContent({
   const holdIntervalRef = useRef<number | null>(null);
   const holdActiveProductIdRef = useRef<string | null>(null);
   const holdDidRepeatRef = useRef(false);
-  /** Barrido táctil entre tarjetas: el dedo sigue pulsado y entra en
-   * otras `.carta-product-card` → se añade cada producto al cruzar.
-   * `dragVisitedProductsRef` evita dos `handleQuickAdd` del mismo id en
-   * un solo gesto si el dedo repasa la misma tarjeta. No usa capture;
-   * se limpia el Set en pointerUp del botón o del grid. */
-  const dragAddActiveRef = useRef(false);
-  const dragVisitedProductsRef = useRef<Set<string>>(new Set());
-  /** Pulso visual breve en cada tarjeta al añadir durante barrido
-   * (pointerEnter con dedo pulsado). Solo UI; no afecta a order. */
-  const [dragAddingProductId, setDragAddingProductId] = useState<string | null>(
-    null,
-  );
   /* Long-press en la grid de productos para QUITAR 1 unidad (reutiliza
      `handleDecrementLine`, que solo opera sobre líneas locales `pending`). */
   const removeHoldTimeoutRef = useRef<number | null>(null);
@@ -6772,13 +6760,6 @@ export function CartaPageContent({
   z-index: 2;
 }
 
-/* Pulso corto al cruzar una tarjeta durante “arrastre para añadir”
-   (clase drag-adding): escala + halo verde coherente con repeat-add. */
-.carta-product-card.drag-adding {
-  transform: scale(0.96);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
-}
-
 /* Mientras se está añadiendo en bucle (hold-to-repeat-add): aro verde
    para señalar "añadiendo varias unidades". Se mantiene desde los 200 ms
    hasta que se suelta o hasta que holding (rojo) toma el relevo a 400 ms
@@ -6872,19 +6853,28 @@ export function CartaPageContent({
     flex: 1 1 auto;
     display: flex !important;
     flex-direction: column !important;
-    height: calc(100dvh - 520px) !important;
-    min-height: 280px !important;
+    height: 42vh !important;
+    min-height: 300px !important;
+    max-height: 46vh !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-y !important;
+  }
+
+  .carta-main-fixed {
+    flex: 0 0 auto !important;
   }
 
   .carta-products-scroll {
     overflow: visible !important;
     height: auto !important;
     max-height: none !important;
-    flex: 0 1 auto !important;
     min-height: 0 !important;
+  }
+
+  .carta-product-card {
+    touch-action: pan-y !important;
   }
 
   .carta-comanda-header-compact {
@@ -6906,8 +6896,8 @@ export function CartaPageContent({
 
   .carta-comensales-compact.carta-comensales--pill {
     max-width: 150px !important;
-    min-height: 34px !important;
-    height: 34px !important;
+    min-height: 36px !important;
+    height: 36px !important;
     padding: 4px 6px !important;
     border-radius: 999px !important;
     display: inline-flex !important;
@@ -6918,13 +6908,21 @@ export function CartaPageContent({
   }
 
   .carta-comensales-compact button {
-    width: 26px !important;
-    height: 26px !important;
-    min-width: 26px !important;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
     border-radius: 999px !important;
-    font-size: 12px !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    border: 1px solid rgba(15, 23, 42, 0.14) !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     line-height: 1 !important;
     padding: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .carta-comensales-label {
@@ -7058,11 +7056,13 @@ export function CartaPageContent({
 
 @media (max-width: 767.98px) {
   .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos {
-    height: calc(100dvh - 520px) !important;
-    min-height: 280px !important;
+    height: 42vh !important;
+    min-height: 300px !important;
+    max-height: 46vh !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-y !important;
   }
 
   .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-scroll {
@@ -10260,17 +10260,7 @@ export function CartaPageContent({
                               </h3>
                             ) : null}
 
-                            <div
-                              className="carta-product-grid"
-                              onPointerUp={() => {
-                                dragAddActiveRef.current = false;
-                                dragVisitedProductsRef.current.clear();
-                              }}
-                              onPointerCancel={() => {
-                                dragAddActiveRef.current = false;
-                                dragVisitedProductsRef.current.clear();
-                              }}
-                            >
+                            <div className="carta-product-grid">
                               {items.map((product) => {
                                 const hasImg = Boolean(product.imageUrl?.trim());
                                 const isAdding = Boolean(isAddingByProductId[product.id]);
@@ -10324,9 +10314,7 @@ export function CartaPageContent({
                                       holdingProductId === product.id ? " holding" : ""
                                     }${
                                       repeatingProductId === product.id ? " repeating" : ""
-                                    }${hasSent ? " has-sent" : ""}${
-                                      dragAddingProductId === product.id ? " drag-adding" : ""
-                                    }`}
+                                    }${hasSent ? " has-sent" : ""}`}
                                     type="button"
                                     onClick={() => {
                                       const suppressUntil =
@@ -10348,14 +10336,9 @@ export function CartaPageContent({
                                     }}
                                     onPointerDown={(e) => {
                                       if (e.pointerType === "mouse" && e.button !== 0) return;
-                                      dragAddActiveRef.current = true;
-                                      dragVisitedProductsRef.current.clear();
-                                      dragVisitedProductsRef.current.add(product.id);
                                       suppressClickUntilByProductIdRef.current[product.id] =
                                         Date.now() + 400;
                                       handleQuickAdd(product, { course: activeCourse });
-                                      setDragAddingProductId(product.id);
-                                      window.setTimeout(() => setDragAddingProductId(null), 180);
                                       removeIsHoldingRef.current = false;
                                       clearRepeatAndHoldGesture();
                                       // 200 ms: empieza modo HOLD-TO-REPEAT-ADD.
@@ -10399,20 +10382,7 @@ export function CartaPageContent({
                                         }
                                       }, 400);
                                     }}
-                                    onPointerEnter={(e) => {
-                                      if (!dragAddActiveRef.current) return;
-                                      if (e.pointerType === "mouse" && e.buttons === 0) return;
-                                      if (dragVisitedProductsRef.current.has(product.id)) return;
-                                      dragVisitedProductsRef.current.add(product.id);
-                                      suppressClickUntilByProductIdRef.current[product.id] =
-                                        Date.now() + 400;
-                                      handleQuickAdd(product, { course: activeCourse });
-                                      setDragAddingProductId(product.id);
-                                      window.setTimeout(() => setDragAddingProductId(null), 180);
-                                    }}
                                     onPointerUp={() => {
-                                      dragAddActiveRef.current = false;
-                                      dragVisitedProductsRef.current.clear();
                                       if (removeIsHoldingRef.current) {
                                         suppressClickUntilByProductIdRef.current[product.id] =
                                           Date.now() + 500;
@@ -10429,8 +10399,6 @@ export function CartaPageContent({
                                       removeIsHoldingRef.current = false;
                                     }}
                                     onPointerCancel={() => {
-                                      dragAddActiveRef.current = false;
-                                      dragVisitedProductsRef.current.clear();
                                       if (removeIsHoldingRef.current) {
                                         suppressClickUntilByProductIdRef.current[product.id] =
                                           Date.now() + 500;
