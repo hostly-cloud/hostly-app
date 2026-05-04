@@ -1139,6 +1139,15 @@ export function CartaPageContent({
   const removeHoldTimeoutRef = useRef<number | null>(null);
   const removeIsHoldingRef = useRef(false);
   const [holdingProductId, setHoldingProductId] = useState<string | null>(null);
+  /** Evita disparar `onClick` → add si el dedo se movió (scroll / arrastre). */
+  const productPointerStartRef = useRef<{
+    productId: string;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
+  /** Tras pointerUp `start` es null antes del click; esto conserva si hubo scroll en la tarjeta. */
+  const productPointerMovedClickBlockRef = useRef<string | null>(null);
   /**
    * Pase activo en la grid TPV. Es UI puro: se mapea al campo numérico
    * `course` (1-4) que YA existe en `CartOrderLine` y que ya consume
@@ -6574,6 +6583,10 @@ export function CartaPageContent({
   flex: 0 0 auto;
 }
 
+.carta-mobile-products-scroll-shell {
+  display: contents;
+}
+
 .carta-products-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -6821,23 +6834,21 @@ export function CartaPageContent({
     flex-shrink: 0;
   }
   .carta-main.carta-productos {
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
     height: 42vh !important;
-    min-height: 300px !important;
-    max-height: 42vh !important;
+  }
+
+  .carta-mobile-products-scroll-shell {
+    flex: 1 !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-y !important;
-    display: flex !important;
-    flex-direction: column !important;
   }
 
   .carta-products-scroll {
     overflow: visible !important;
-    height: auto !important;
-    max-height: none !important;
-    min-height: 0 !important;
-    flex: 0 0 auto !important;
   }
 
   .carta-main-fixed {
@@ -6854,40 +6865,22 @@ export function CartaPageContent({
     gap: 6px;
   }
 
-  .carta-comensales-compact {
+  .carta-comensales-compact.carta-comensales--pill {
+    max-width: 170px !important;
     height: 34px !important;
     min-height: 34px !important;
-    max-width: 155px !important;
-    padding: 3px 5px !important;
-    gap: 5px !important;
-  }
-
-  .carta-comensales-compact span {
-    white-space: nowrap;
-  }
-
-  .carta-comensales-compact button {
-    width: 28px !important;
-    height: 28px !important;
-    min-width: 28px !important;
-    min-height: 28px !important;
-    border-radius: 999px !important;
-    background: #ffffff !important;
-    color: #111827 !important;
-    border: 1px solid rgba(15, 23, 42, 0.18) !important;
-    font-size: 14px !important;
-    font-weight: 900 !important;
+    padding: 3px 6px !important;
+    border-radius: 12px !important;
     display: inline-flex !important;
     align-items: center !important;
-    justify-content: center !important;
-    line-height: 1 !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+    gap: 6px !important;
+    overflow: visible !important;
   }
 
   .carta-comensales-label {
     font-size: 11px !important;
     font-weight: 700 !important;
-    line-height: 1 !important;
+    white-space: nowrap !important;
   }
 
   .carta-comensales-count {
@@ -6895,7 +6888,24 @@ export function CartaPageContent({
     font-weight: 800 !important;
     min-width: 16px !important;
     text-align: center !important;
+  }
+
+  .carta-comensales-compact button {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    border: 1px solid rgba(15, 23, 42, 0.18) !important;
+    font-size: 13px !important;
+    font-weight: 900 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     line-height: 1 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
   }
 
   .carta-comanda-status-row {
@@ -7009,31 +7019,7 @@ export function CartaPageContent({
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-scroll {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 767.98px) {
-  .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos {
-    height: 42vh !important;
-    min-height: 300px !important;
-    max-height: 42vh !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y !important;
-    display: flex !important;
-    flex-direction: column !important;
-  }
-
-  .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-scroll {
-    overflow: visible !important;
-    height: auto !important;
-    max-height: none !important;
-    min-height: 0 !important;
-    flex: 0 0 auto !important;
-    overflow-x: hidden !important;
-  }
+  overflow: visible !important;
 }
 
 @keyframes fade-in {
@@ -10055,7 +10041,8 @@ export function CartaPageContent({
               minHeight: 0,
             }}
           >
-            <div className="carta-main-fixed">
+            <div className="carta-mobile-products-scroll-shell">
+              <div className="carta-main-fixed">
               {!showAuthSpinner &&
                 !showProductsSpinner &&
                 !error &&
@@ -10155,9 +10142,9 @@ export function CartaPageContent({
                 )}
 
               {displayMesas.length > 0 ? null : null}
-            </div>
+              </div>
 
-            <div className="carta-products-scroll">
+              <div className="carta-products-scroll">
               {effectiveSelectedCategory ? (
                 <div className="carta-current-cat-title">{effectiveSelectedCategory}</div>
               ) : null}
@@ -10275,7 +10262,29 @@ export function CartaPageContent({
                                       holdingProductId === product.id ? " holding" : ""
                                     }${hasSent ? " has-sent" : ""}`}
                                     type="button"
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                      const start = productPointerStartRef.current;
+
+                                      console.log("CLICK PRODUCT", {
+                                        moved: start?.moved,
+                                        id: product.id,
+                                      });
+
+                                      if (
+                                        productPointerMovedClickBlockRef.current ===
+                                          product.id ||
+                                        (start?.productId === product.id && start.moved)
+                                      ) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        productPointerMovedClickBlockRef.current = null;
+                                        productPointerStartRef.current = null;
+                                        return;
+                                      }
+
+                                      productPointerMovedClickBlockRef.current = null;
+                                      productPointerStartRef.current = null;
+
                                       const suppressUntil =
                                         suppressClickUntilByProductIdRef.current[product.id] ?? 0;
                                       if (suppressUntil > Date.now()) return;
@@ -10295,6 +10304,13 @@ export function CartaPageContent({
                                     }}
                                     onPointerDown={(e) => {
                                       if (e.pointerType === "mouse" && e.button !== 0) return;
+                                      productPointerMovedClickBlockRef.current = null;
+                                      productPointerStartRef.current = {
+                                        productId: product.id,
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        moved: false,
+                                      };
                                       removeIsHoldingRef.current = false;
                                       clearRepeatAndHoldGesture();
                                       removeHoldTimeoutRef.current = window.setTimeout(() => {
@@ -10307,7 +10323,23 @@ export function CartaPageContent({
                                         }
                                       }, 400);
                                     }}
+                                    onPointerMove={(e) => {
+                                      const start = productPointerStartRef.current;
+                                      if (!start || start.productId !== product.id) return;
+                                      const dx = Math.abs(e.clientX - start.x);
+                                      const dy = Math.abs(e.clientY - start.y);
+                                      if (dx > 8 || dy > 8) {
+                                        start.moved = true;
+                                      }
+                                    }}
                                     onPointerUp={() => {
+                                      const start = productPointerStartRef.current;
+                                      if (start?.productId === product.id) {
+                                        productPointerMovedClickBlockRef.current =
+                                          start.moved ? product.id : null;
+                                      }
+                                      productPointerStartRef.current = null;
+
                                       if (removeIsHoldingRef.current) {
                                         suppressClickUntilByProductIdRef.current[product.id] =
                                           Date.now() + 500;
@@ -10316,6 +10348,13 @@ export function CartaPageContent({
                                       removeIsHoldingRef.current = false;
                                     }}
                                     onPointerLeave={() => {
+                                      const start = productPointerStartRef.current;
+                                      if (start?.productId === product.id) {
+                                        productPointerMovedClickBlockRef.current =
+                                          start.moved ? product.id : null;
+                                      }
+                                      productPointerStartRef.current = null;
+
                                       if (removeIsHoldingRef.current) {
                                         suppressClickUntilByProductIdRef.current[product.id] =
                                           Date.now() + 500;
@@ -10324,6 +10363,11 @@ export function CartaPageContent({
                                       removeIsHoldingRef.current = false;
                                     }}
                                     onPointerCancel={() => {
+                                      const start = productPointerStartRef.current;
+                                      if (start?.productId === product.id && start.moved) {
+                                        productPointerMovedClickBlockRef.current = product.id;
+                                      }
+                                      productPointerStartRef.current = null;
                                       if (removeIsHoldingRef.current) {
                                         suppressClickUntilByProductIdRef.current[product.id] =
                                           Date.now() + 500;
@@ -10477,6 +10521,7 @@ export function CartaPageContent({
                       })}
                   </div>
                 )}
+              </div>
             </div>
         </main>
       )}
