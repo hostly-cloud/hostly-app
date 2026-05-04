@@ -268,11 +268,12 @@ function normalizeComandaCourseForStorage(raw: unknown): number | undefined {
  * `CartOrderLine`, cocina y comanda. NO se introduce ningún campo nuevo
  * en la estructura ni en Firestore: solo se traduce.
  */
-type ActiveCourseUi = "starter" | "main" | "dessert";
+type ActiveCourseUi = "starter" | "first" | "main" | "dessert";
 const ACTIVE_COURSE_TO_NUM: Record<ActiveCourseUi, number> = {
   starter: 1,
-  main: 2,
-  dessert: 3,
+  first: 2,
+  main: 3,
+  dessert: 4,
 };
 
 function lineCourseToPaseDraft(line: CartOrderLine): 0 | 1 | 2 | 3 | 4 {
@@ -1162,16 +1163,18 @@ export function CartaPageContent({
    * cocina/comanda. No se persiste ningún string nuevo en Firestore.
    */
   const [activeCourse, setActiveCourse] = useState<
-    "starter" | "main" | "dessert"
+    "starter" | "first" | "main" | "dessert"
   >("starter");
   /* Flash visual breve al cambiar de pase para confirmar la selección.
      Solo UI local: el valor refleja el pase recién elegido y se borra
      a los 700 ms con un timer; no afecta a `order` ni a Firestore. */
   const [courseFlash, setCourseFlash] = useState<
-    "starter" | "main" | "dessert" | null
+    "starter" | "first" | "main" | "dessert" | null
   >(null);
   const courseFlashTimeoutRef = useRef<number | null>(null);
-  const handleSelectCourse = (course: "starter" | "main" | "dessert") => {
+  const handleSelectCourse = (
+    course: "starter" | "first" | "main" | "dessert",
+  ) => {
     setActiveCourse(course);
     setCourseFlash(course);
     if (courseFlashTimeoutRef.current != null) {
@@ -3250,9 +3253,11 @@ export function CartaPageContent({
         await batch.commit();
       }
 
-      /* Tras enviar entrantes con éxito, pasar el selector a Segundos para
-         acelerar el flujo real del camarero (sin tocar order ni Firestore). */
+      /* Tras enviar comanda con éxito: avanzar pase activo Entrante → Primero → Segundo
+         (sin salto automático a Postre; no toca order ni Firestore). */
       if (activeCourse === "starter") {
+        setActiveCourse("first");
+      } else if (activeCourse === "first") {
         setActiveCourse("main");
       }
 
@@ -4292,6 +4297,27 @@ export function CartaPageContent({
     [visibleOrderLines],
   );
 
+  const groupedLines = useMemo(() => {
+    const buckets: Record<1 | 2 | 3 | 4, CartOrderLine[]> = {
+      1: [],
+      2: [],
+      3: [],
+      4: [],
+    };
+    const pushByCourse = (line: CartOrderLine) => {
+      const course = (normalizeComandaCourseForStorage(line.course) ??
+        1) as 1 | 2 | 3 | 4;
+      buckets[course].push(line);
+    };
+    linesPending.forEach(pushByCourse);
+    linesSent.forEach(pushByCourse);
+    linesPrepared.forEach(pushByCourse);
+    if (viewMode === "normal") {
+      linesServed.forEach(pushByCourse);
+    }
+    return buckets;
+  }, [linesPending, linesSent, linesPrepared, linesServed, viewMode]);
+
   const orderDocIsPaid = useMemo(() => {
     if (
       orderIdFromUrl &&
@@ -4407,6 +4433,7 @@ export function CartaPageContent({
 
   /** Pase activo en forma numérica (1–4 según toolbar), para resaltar líneas en comanda. */
   const activeCourseNum = ACTIVE_COURSE_TO_NUM[activeCourse];
+  const activeCourseLabel = getCourseLabel(activeCourseNum);
 
   const cocinaItems = useMemo(() => {
     return order
@@ -5725,6 +5752,58 @@ export function CartaPageContent({
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28);
 }
 
+.carta-active-course-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  font-size: 14px;
+  font-weight: 900;
+  margin-bottom: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+}
+
+.carta-course-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.carta-course-selector button {
+  flex: 1;
+  min-width: 76px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(2, 6, 23, 0.15);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-sizing: border-box;
+  line-height: 1.1;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.carta-course-selector button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.28);
+}
+
+.carta-course-selector button.active {
+  background: #111827 !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  transform: scale(1.04);
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.25);
+}
+
 .carta-cats-wrap {
   padding-bottom: 12px;
   margin-bottom: 14px;
@@ -6089,6 +6168,17 @@ export function CartaPageContent({
   border-radius: 2px;
   background: #3b82f6;
   pointer-events: none;
+}
+
+.carta-comanda-group {
+  margin-bottom: 10px;
+}
+
+.carta-comanda-group-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #6b7280;
+  margin: 6px 0 4px;
 }
 
 .carta-comanda-line-grid {
@@ -7920,28 +8010,55 @@ export function CartaPageContent({
                 </div>
               ) : (
                 <>
-                  <ul
+                  <div
                     style={{
                       margin: 0,
                       padding: 0,
-                      listStyle: "none",
                     }}
                   >
-                    {linesPending.map((item, idx) =>
-                      renderComandaLine(item, "Pendiente", {
-                        attachFirstPendingRef: idx === 0,
-                      }),
-                    )}
-                    {linesSent.map((item) => renderComandaLine(item, "Enviado", {}))}
-                    {linesPrepared.map((item) =>
-                      renderComandaLine(item, "Preparado", {}),
-                    )}
-                    {viewMode === "normal"
-                      ? linesServed.map((item) =>
-                          renderComandaLine(item, "Servido", { strike: true }),
-                        )
-                      : null}
-                  </ul>
+                    {([1, 2, 3, 4] as const).map((course) => {
+                      const lines = groupedLines[course];
+                      if (!lines.length) return null;
+
+                      return (
+                        <div key={course} className="carta-comanda-group">
+                          <div className="carta-comanda-group-title">
+                            {getCourseLabel(course).toUpperCase()}
+                          </div>
+
+                          <ul
+                            style={{
+                              margin: 0,
+                              padding: 0,
+                              listStyle: "none",
+                            }}
+                          >
+                            {lines.map((line) => {
+                              const st = normalizeOrderLineStatus(line.status);
+                              if (st === "pending") {
+                                return renderComandaLine(line, "Pendiente", {
+                                  attachFirstPendingRef:
+                                    line.id === linesPending[0]?.id,
+                                });
+                              }
+                              if (st === "sent") {
+                                return renderComandaLine(line, "Enviado", {});
+                              }
+                              if (st === "prepared") {
+                                return renderComandaLine(line, "Preparado", {});
+                              }
+                              if (st === "served") {
+                                return renderComandaLine(line, "Servido", {
+                                  strike: true,
+                                });
+                              }
+                              return renderComandaLine(line, "Pendiente", {});
+                            })}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
 
                 </>
               )}
@@ -10054,6 +10171,34 @@ export function CartaPageContent({
                 !error &&
                 products.length > 0 && (
                   <>
+                    <div className="carta-active-course-indicator">
+                      {activeCourseLabel}
+                    </div>
+                    <div
+                      className="carta-course-selector"
+                      role="tablist"
+                      aria-label="Pase de comanda"
+                    >
+                      {(
+                        [
+                          { key: "starter" as const, label: "Entrante" },
+                          { key: "first" as const, label: "Primero" },
+                          { key: "main" as const, label: "Segundo" },
+                          { key: "dessert" as const, label: "Postre" },
+                        ] as const
+                      ).map(({ key, label }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          role="tab"
+                          aria-selected={activeCourse === key}
+                          className={activeCourse === key ? "active" : undefined}
+                          onClick={() => handleSelectCourse(key)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                     <div
                       role="tablist"
                       aria-label={t("cartaTpv.menuGroupAria")}
