@@ -4685,7 +4685,7 @@ export function CartaPageContent({
             </div>
           </div>
           {item.status === "pending" ? (
-            <div className="ml-auto flex items-center gap-1">
+            <div className="carta-comanda-qty-controls ml-auto">
               <button
                 type="button"
                 onClick={(e) => {
@@ -4693,7 +4693,7 @@ export function CartaPageContent({
                   e.stopPropagation();
                   handleDecrementLine(item.id);
                 }}
-                className="w-6 h-6 flex items-center justify-center rounded bg-gray-100 text-sm"
+                className="carta-comanda-qty-btn"
               >
                 -
               </button>
@@ -4707,7 +4707,7 @@ export function CartaPageContent({
                   e.stopPropagation();
                   handleIncrementLine(item.id);
                 }}
-                className="w-6 h-6 flex items-center justify-center rounded bg-gray-100 text-sm"
+                className="carta-comanda-qty-btn"
               >
                 +
               </button>
@@ -4719,7 +4719,7 @@ export function CartaPageContent({
                   e.stopPropagation();
                   handleRemoveLine(item.id);
                 }}
-                className="w-6 h-6 flex items-center justify-center rounded bg-gray-100 text-sm text-gray-500 hover:text-red-600"
+                className="carta-comanda-qty-btn carta-comanda-qty-btn--remove"
                 title="Eliminar línea"
                 aria-label="Eliminar línea"
               >
@@ -5085,7 +5085,7 @@ export function CartaPageContent({
   min-height: 100dvh;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-bottom: 6rem;
+  padding-bottom: 0;
 }
 
 .carta-root[data-carta-mobile="true"] .hostly-page-header {
@@ -5555,9 +5555,7 @@ export function CartaPageContent({
 }
 
 .carta-tpv-payment-dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
+  position: relative;
   flex-shrink: 0;
   width: 100%;
   box-sizing: border-box;
@@ -5943,7 +5941,7 @@ export function CartaPageContent({
 
 .carta-layout {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: stretch;
   gap: 12px;
   width: 100%;
@@ -5955,23 +5953,22 @@ export function CartaPageContent({
   height: 100%;
 }
 
-/* Panel comanda abajo (orden DOM: aside primero, main segundo → order invierte visual). */
+/* Columna comanda (izquierda). */
 .carta-aside {
-  order: 2;
-  flex: 0 1 auto;
-  width: 100%;
-  min-width: 0;
-  max-width: none;
+  flex-shrink: 0;
   min-height: 0;
-  max-height: 45vh;
   height: auto;
   align-self: stretch;
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
+  position: relative;
+  z-index: 1;
   background: #ffffff;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
   box-sizing: border-box;
+}
+
+.carta-comanda {
+  width: 35%;
+  min-width: 320px;
 }
 
 .carta-aside-scroll {
@@ -6267,6 +6264,50 @@ export function CartaPageContent({
   align-items: center;
 }
 
+/* Botones táctiles − / + / × en líneas de comanda (pending). */
+.carta-comanda-qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.carta-comanda-qty-btn {
+  box-sizing: border-box;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: #f3f4f6;
+  color: #111827;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.carta-comanda-qty-btn:hover {
+  background: #e5e7eb;
+}
+
+.carta-comanda-qty-btn:active {
+  background: #d1d5db;
+}
+
+.carta-comanda-qty-btn--remove {
+  color: #6b7280;
+}
+
+.carta-comanda-qty-btn--remove:hover {
+  color: #dc2626;
+}
+
 .carta-line-editor-backdrop {
   position: fixed;
   inset: 0;
@@ -6471,7 +6512,6 @@ export function CartaPageContent({
 }
 
 .carta-main {
-  order: 1;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
@@ -6479,6 +6519,11 @@ export function CartaPageContent({
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.carta-productos {
+  flex: 1;
+  min-width: 0;
 }
 
 .carta-main-fixed {
@@ -6592,12 +6637,8 @@ export function CartaPageContent({
   z-index: 2;
 }
 
-/* Botón "Comanda" cuando hay unidades pendientes de enviar.
-   El fondo base es inline (#111827); con pendientes se fuerza rojo vía !important. */
-.carta-comanda-button.has-pending-items {
-  background: #dc2626 !important;
-  color: white;
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18) !important;
+.carta-comanda-button:hover:not(:disabled) {
+  background: #d1d5db !important;
 }
 
 /* Indicador global de unidades pendientes de enviar a cocina/barra.
@@ -6699,28 +6740,7 @@ export function CartaPageContent({
 
 @media (max-width: 767.98px) {
   .carta-layout {
-    gap: 12px;
-  }
-  .carta-aside {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    flex: 0 1 auto !important;
-    max-height: 45vh !important;
-    height: auto !important;
-    position: sticky;
-    bottom: 0;
-    top: auto !important;
-    align-self: stretch;
-    z-index: 20;
-  }
-  .carta-main {
-    flex: 1 1 auto;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    gap: 10px;
   }
   .carta-products-scroll {
     flex: 1 1 auto;
@@ -6729,8 +6749,6 @@ export function CartaPageContent({
     -webkit-overflow-scrolling: touch;
   }
 }
-
-/* (Antes: desktop en dos columnas; ahora siempre columna productos arriba + comanda abajo.) */
 
 /* === Mobile + embedded en Operación: viewport locked, productos con
    scroll propio para evitar el clip por overflow:hidden de los padres === */
@@ -7276,9 +7294,9 @@ export function CartaPageContent({
             alignSelf: "stretch",
             minHeight: 0,
             overflow: "hidden",
-            borderRadius: "18px 18px 0 0",
+            borderRadius: 18,
             boxShadow:
-              "0 -8px 28px rgba(2,6,23,0.12), inset 0 0 0 1px rgba(148,163,184,0.2)",
+              "4px 0 24px rgba(2,6,23,0.06), inset 0 0 0 1px rgba(148,163,184,0.2)",
           }}
         >
         <div className="carta-top-shell">
@@ -7711,9 +7729,7 @@ export function CartaPageContent({
               >
                 <button
                   type="button"
-                  className={`carta-comanda-button${
-                    totalPendingItems > 0 ? " has-pending-items" : ""
-                  }`}
+                  className="carta-comanda-button"
                   onClick={() => {
                     if (!hasPendingItems) return;
                     void handleComandaAndExit();
@@ -7737,9 +7753,9 @@ export function CartaPageContent({
                         ? "not-allowed"
                         : "pointer",
                     borderRadius: 14,
-                    border: "1px solid rgba(15, 23, 42, 0.35)",
-                    background: "#111827",
-                    color: "#ffffff",
+                    border: "1px solid rgba(15, 23, 42, 0.12)",
+                    background: "#e5e7eb",
+                    color: "#111827",
                     minHeight: 44,
                     opacity:
                       isComandaSending ||
@@ -7748,9 +7764,10 @@ export function CartaPageContent({
                       !hasPendingItems
                         ? 0.5
                         : 1,
-                    filter: comandaSentFlash ? "brightness(1.12)" : "none",
-                    transition: "filter 120ms ease, opacity 120ms ease",
-                    boxShadow: "0 10px 22px rgba(2,6,23,0.28)",
+                    filter: comandaSentFlash ? "brightness(1.06)" : "none",
+                    transition:
+                      "filter 120ms ease, opacity 120ms ease, background-color 120ms ease",
+                    boxShadow: "0 1px 2px rgba(2,6,23,0.06)",
                   }}
                 >
                   {comandaSentFlash ? "Comanda enviada" : "Comanda"}
@@ -9771,7 +9788,7 @@ export function CartaPageContent({
         )}
         {viewMode === "normal" && (
           <main
-            className="carta-main carta-products"
+            className="carta-main carta-productos"
             style={{
               padding: 18,
               boxSizing: "border-box",
