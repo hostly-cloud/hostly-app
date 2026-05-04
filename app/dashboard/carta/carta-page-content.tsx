@@ -6864,25 +6864,35 @@ export function CartaPageContent({
     flex-shrink: 0;
   }
   .carta-main.carta-productos {
+    height: 42vh !important;
+    min-height: 300px !important;
+    max-height: 42vh !important;
     overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
-    height: 42vh !important;
   }
 
   .carta-mobile-products-scroll-shell {
-    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100% !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
-  }
-
-  .carta-products-scroll {
-    overflow: visible !important;
+    touch-action: pan-y !important;
   }
 
   .carta-main-fixed {
     flex: 0 0 auto !important;
+  }
+
+  .carta-products-scroll {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
   }
 
   .carta-product-card {
@@ -6893,6 +6903,48 @@ export function CartaPageContent({
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+
+  .carta-comensales-compact.carta-comensales--pill {
+    display: grid !important;
+    grid-template-columns: auto 1fr auto auto !important;
+    align-items: center !important;
+    gap: 4px !important;
+
+    height: 34px !important;
+    padding: 2px 6px !important;
+    border-radius: 10px !important;
+    max-width: 180px !important;
+  }
+
+  .carta-comensales-label {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+  }
+
+  .carta-comensales-count {
+    font-size: 13px !important;
+    font-weight: 900 !important;
+    text-align: center !important;
+  }
+
+  .carta-comensales-compact button {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.15) !important;
   }
 
   .carta-comanda-status-row {
