@@ -4533,7 +4533,7 @@ export function CartaPageContent({
         key={`line-${item.id}`}
         className={`carta-comanda-line${
           isActiveCourseLine ? " is-active-course-line" : ""
-        }`}
+        }${item.status === "pending" ? " is-pending" : ""}`}
         ref={
           opts.attachFirstPendingRef &&
           orderIdFromUrl &&
@@ -5616,6 +5616,12 @@ export function CartaPageContent({
   box-shadow: none;
 }
 
+.carta-tpv-payment-dock-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .carta-tpv-payment-dock-total {
   margin-bottom: 10px;
 }
@@ -6042,6 +6048,27 @@ export function CartaPageContent({
   border-radius: 6px;
   border-bottom: 1px solid #eeeeee;
   transition: background-color 0.1s ease;
+}
+
+.carta-comanda-line.is-pending {
+  position: relative;
+  padding-left: 14px !important;
+  background: rgba(59, 130, 246, 0.06) !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+}
+
+.carta-comanda-line.is-pending::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: calc(100% - 10px);
+  max-height: 36px;
+  border-radius: 2px;
+  background: #3b82f6;
+  pointer-events: none;
 }
 
 .carta-comanda-line-grid {
@@ -6688,6 +6715,15 @@ export function CartaPageContent({
   background: #d1d5db !important;
 }
 
+.carta-comanda-button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  background: #e5e7eb !important;
+  color: #6b7280 !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
 /* Indicador global de unidades pendientes de enviar a cocina/barra.
    Se inserta en la zona "mesa / tiempo" del header de la comanda y
    solo se muestra cuando hay al menos 1 unidad en estado pending. */
@@ -6815,9 +6851,18 @@ export function CartaPageContent({
   .carta-tpv-payment-dock .carta-tpv-dock-cobrar-wrap {
     display: none !important;
   }
-  .carta-tpv-payment-dock .carta-tpv-payment-dock-grid {
-    grid-template-columns: 1fr !important;
+
+  .carta-tpv-payment-dock-stack {
+    display: grid !important;
+    grid-template-columns: 1fr 130px !important;
+    gap: 8px !important;
+    align-items: stretch !important;
   }
+
+  .carta-tpv-payment-dock-stack > .carta-tpv-payment-dock-grid {
+    display: contents !important;
+  }
+
   .carta-tpv-payment-dock {
     flex-shrink: 0;
   }
@@ -6826,12 +6871,19 @@ export function CartaPageContent({
     width: 100%;
     min-width: 0;
     flex: 1 1 auto;
-  }
-  .carta-products-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .carta-products-scroll {
+    flex: 0 1 auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    overflow-x: hidden !important;
   }
 
   .carta-comanda-header-compact {
@@ -6917,6 +6969,10 @@ export function CartaPageContent({
     gap: 6px;
   }
 
+  .carta-comanda-line.is-pending {
+    padding: 6px 8px 6px 14px !important;
+  }
+
   .carta-comanda-line > div:first-child {
     min-width: 0;
     flex: 1;
@@ -6950,15 +7006,22 @@ export function CartaPageContent({
   }
 
   .carta-comanda-button {
-    min-height: 46px !important;
+    width: 100% !important;
+    min-height: 56px !important;
     font-size: 15px !important;
     border-radius: 12px !important;
   }
 
   .carta-tpv-payment-dock-total {
-    min-height: 58px !important;
-    padding: 10px 14px !important;
+    margin-bottom: 0 !important;
+    min-height: 56px !important;
+    padding: 8px 10px !important;
     box-sizing: border-box !important;
+  }
+
+  .carta-tpv-payment-dock-total strong,
+  .carta-tpv-payment-dock-total .total-amount {
+    font-size: 24px !important;
   }
 }
 
@@ -6982,6 +7045,21 @@ export function CartaPageContent({
   min-height: 0 !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767.98px) {
+  .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-scroll {
+    flex: 0 1 auto !important;
+    overflow: visible !important;
+    overflow-x: hidden !important;
+    min-height: 0 !important;
+  }
 }
 
 @keyframes fade-in {
@@ -7720,7 +7798,9 @@ export function CartaPageContent({
                     border: "1px solid rgba(15,23,42,0.12)",
                   }}
                 >
-                  Pendiente {linesPending.length}
+                  {cartaHeaderMobile
+                    ? `Pen ${linesPending.length}`
+                    : `Pendiente ${linesPending.length}`}
                 </span>
                 <span
                   style={{
@@ -7729,7 +7809,9 @@ export function CartaPageContent({
                     border: "1px solid rgba(37, 99, 235, 0.25)",
                   }}
                 >
-                  Enviado {linesSent.length}
+                  {cartaHeaderMobile
+                    ? `Env ${linesSent.length}`
+                    : `Enviado ${linesSent.length}`}
                 </span>
                 <span
                   style={{
@@ -7738,7 +7820,9 @@ export function CartaPageContent({
                     border: "1px solid rgba(245, 158, 11, 0.25)",
                   }}
                 >
-                  Preparado {linesPrepared.length}
+                  {cartaHeaderMobile
+                    ? `Prep ${linesPrepared.length}`
+                    : `Preparado ${linesPrepared.length}`}
                 </span>
                 <span
                   style={{
@@ -7747,7 +7831,9 @@ export function CartaPageContent({
                     border: "1px solid rgba(34, 197, 94, 0.25)",
                   }}
                 >
-                  Servido {linesServed.length}
+                  {cartaHeaderMobile
+                    ? `Ser ${linesServed.length}`
+                    : `Servido ${linesServed.length}`}
                 </span>
               </div>
             </div>
@@ -7905,7 +7991,7 @@ export function CartaPageContent({
             ref={tpvBillScrollAnchorRef}
             className="carta-tpv-payment-dock"
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div className="carta-tpv-payment-dock-stack">
               <div
                 className="carta-tpv-payment-dock-grid"
                 style={{
@@ -8001,7 +8087,7 @@ export function CartaPageContent({
                   }}
                 >
                   <div className="carta-tpv-payment-dock-total-label">Total</div>
-                  <div className="carta-tpv-payment-dock-total-value">
+                  <div className="carta-tpv-payment-dock-total-value total-amount">
                     {Number.isFinite(total) ? total.toFixed(2) : "0.00"}{" "}
                     <span className="carta-tpv-payment-dock-total-eur">€</span>
                   </div>
