@@ -6866,24 +6866,25 @@ export function CartaPageContent({
   .carta-tpv-payment-dock {
     flex-shrink: 0;
   }
-  .carta-main,
-  .carta-productos {
+  .carta-main.carta-productos {
     width: 100%;
     min-width: 0;
     flex: 1 1 auto;
-    min-height: 0 !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
     display: flex !important;
     flex-direction: column !important;
+    height: calc(100dvh - 520px) !important;
+    min-height: 280px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   .carta-products-scroll {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
     flex: 0 1 auto !important;
     min-height: 0 !important;
-    overflow: visible !important;
-    overflow-x: hidden !important;
   }
 
   .carta-comanda-header-compact {
@@ -6895,7 +6896,7 @@ export function CartaPageContent({
   .carta-comensales-compact {
     flex: 0 0 auto !important;
     width: auto;
-    max-width: 120px;
+    max-width: 150px;
     overflow: hidden;
   }
 
@@ -6904,31 +6905,39 @@ export function CartaPageContent({
   }
 
   .carta-comensales-compact.carta-comensales--pill {
-    font-size: 11px;
-    padding: 3px 6px;
-    min-height: 24px;
-    gap: 4px;
+    max-width: 150px !important;
+    min-height: 34px !important;
+    height: 34px !important;
+    padding: 4px 6px !important;
+    border-radius: 999px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
     box-sizing: border-box;
+    font-size: 11px;
   }
 
   .carta-comensales-compact button {
-    width: 18px !important;
-    height: 18px !important;
-    min-width: 18px !important;
-    font-size: 10px !important;
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    border-radius: 999px !important;
+    font-size: 12px !important;
     line-height: 1 !important;
     padding: 0 !important;
-    border-radius: 4px !important;
   }
 
   .carta-comensales-label {
-    font-size: 11px;
+    font-size: 11px !important;
+    font-weight: 700 !important;
     line-height: 1 !important;
   }
 
   .carta-comensales-count {
-    font-size: 12px !important;
-    min-width: 14px;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    min-width: 16px !important;
+    text-align: center !important;
     line-height: 1 !important;
   }
 
@@ -7049,6 +7058,8 @@ export function CartaPageContent({
 
 @media (max-width: 767.98px) {
   .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos {
+    height: calc(100dvh - 520px) !important;
+    min-height: 280px !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
@@ -7057,8 +7068,10 @@ export function CartaPageContent({
   .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-scroll {
     flex: 0 1 auto !important;
     overflow: visible !important;
-    overflow-x: hidden !important;
+    height: auto !important;
+    max-height: none !important;
     min-height: 0 !important;
+    overflow-x: hidden !important;
   }
 }
 
