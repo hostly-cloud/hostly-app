@@ -1148,6 +1148,9 @@ export function CartaPageContent({
   } | null>(null);
   /** Tras pointerUp `start` es null antes del click; esto conserva si hubo scroll en la tarjeta. */
   const productPointerMovedClickBlockRef = useRef<string | null>(null);
+  /** Solo móvil: evita click sintético tras deslizar el dedo (scroll sobre la rejilla). */
+  const touchMovedRef = useRef(false);
+  const touchStartYRef = useRef(0);
   /**
    * Pase activo en la grid TPV. Es UI puro: se mapea al campo numérico
    * `course` (1-4) que YA existe en `CartOrderLine` y que ya consume
@@ -6896,7 +6899,7 @@ export function CartaPageContent({
   }
 
   .carta-product-card {
-    touch-action: pan-y !important;
+    touch-action: manipulation !important;
   }
 
   .carta-comanda-header-compact {
@@ -10262,6 +10265,8 @@ export function CartaPageContent({
                                     }${hasSent ? " has-sent" : ""}`}
                                     type="button"
                                     onClick={(e) => {
+                                      if (touchMovedRef.current) return;
+
                                       const start = productPointerStartRef.current;
 
                                       console.log("CLICK PRODUCT", {
@@ -10300,6 +10305,18 @@ export function CartaPageContent({
                                       activeProductTimeoutRef.current = window.setTimeout(() => {
                                         setActiveProductId(null);
                                       }, 120);
+                                    }}
+                                    onTouchStart={(e) => {
+                                      touchMovedRef.current = false;
+                                      touchStartYRef.current = e.touches[0]?.clientY ?? 0;
+                                    }}
+                                    onTouchMove={(e) => {
+                                      const y = e.touches[0]?.clientY;
+                                      if (y == null) return;
+                                      const diff = Math.abs(y - touchStartYRef.current);
+                                      if (diff > 10) {
+                                        touchMovedRef.current = true;
+                                      }
                                     }}
                                     onPointerDown={(e) => {
                                       if (e.pointerType === "mouse" && e.button !== 0) return;
