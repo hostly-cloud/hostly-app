@@ -6840,6 +6840,17 @@ export function CartaPageContent({
     justify-content: space-between;
     gap: 6px;
     margin-top: 4px;
+    min-width: 0;
+  }
+
+  .carta-comensales-compact {
+    flex: 0 0 auto !important;
+    max-width: 140px;
+    overflow: hidden;
+  }
+
+  .carta-comensales-compact span {
+    white-space: nowrap;
   }
 
   .carta-comensales-compact.carta-comensales--pill {
@@ -6876,7 +6887,7 @@ export function CartaPageContent({
     align-items: center;
     gap: 3px;
     flex-wrap: nowrap;
-    flex: 1;
+    flex: 1 1 auto;
     justify-content: flex-end;
     min-width: 0;
     overflow-x: auto;
@@ -6902,6 +6913,14 @@ export function CartaPageContent({
     padding: 6px 8px !important;
     min-height: 46px;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .carta-comanda-line > div:first-child {
+    min-width: 0;
+    flex: 1;
   }
 
   .carta-comanda-name {
@@ -6919,16 +6938,16 @@ export function CartaPageContent({
   }
 
   .carta-comanda-qty-controls {
-    gap: 4px !important;
+    gap: 3px !important;
   }
 
   .carta-comanda-qty-btn {
-    min-width: 30px !important;
-    min-height: 30px !important;
-    width: 30px !important;
-    height: 30px !important;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
     border-radius: 8px !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
   }
 
   .carta-comanda-button {
