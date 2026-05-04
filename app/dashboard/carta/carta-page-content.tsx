@@ -1137,16 +1137,8 @@ export function CartaPageContent({
   /* Long-press en la grid de productos para QUITAR 1 unidad (reutiliza
      `handleDecrementLine`, que solo opera sobre líneas locales `pending`). */
   const removeHoldTimeoutRef = useRef<number | null>(null);
-  const removeHoldClassTimeoutRef = useRef<number | null>(null);
   const removeIsHoldingRef = useRef(false);
   const [holdingProductId, setHoldingProductId] = useState<string | null>(null);
-  /* Hold-to-repeat-add (mantener pulsado para añadir varias unidades).
-     Empieza a 200 ms y se cancela cuando el long-press de remove se
-     activa a 400 ms (el remove tiene prioridad). */
-  const removeRepeatAddIntervalRef = useRef<number | null>(null);
-  const [repeatingProductId, setRepeatingProductId] = useState<string | null>(
-    null,
-  );
   /**
    * Pase activo en la grid TPV. Es UI puro: se mapea al campo numérico
    * `course` (1-4) que YA existe en `CartOrderLine` y que ya consume
@@ -3127,26 +3119,16 @@ export function CartaPageContent({
   };
 
   /**
-   * Limpia TODOS los timers/intervalos del gesto de presión sostenida
-   * (tap-and-hold) sobre una tarjeta de producto y resetea el feedback
-   * visual (clases `repeating` y `holding`). Se invoca al soltar, salir
-   * de la tarjeta o cancelar el puntero.
+   * Limpia timers del long-press de quitar sobre una tarjeta de producto
+   * y resetea el feedback visual `holding`. Se invoca al soltar, salir o
+   * cancelar el puntero.
    */
   const clearRepeatAndHoldGesture = () => {
     if (removeHoldTimeoutRef.current != null) {
       window.clearTimeout(removeHoldTimeoutRef.current);
       removeHoldTimeoutRef.current = null;
     }
-    if (removeHoldClassTimeoutRef.current != null) {
-      window.clearTimeout(removeHoldClassTimeoutRef.current);
-      removeHoldClassTimeoutRef.current = null;
-    }
-    if (removeRepeatAddIntervalRef.current != null) {
-      window.clearInterval(removeRepeatAddIntervalRef.current);
-      removeRepeatAddIntervalRef.current = null;
-    }
     setHoldingProductId(null);
-    setRepeatingProductId(null);
   };
 
   const handleRemoveLine = (lineId: string) => {
@@ -6760,15 +6742,6 @@ export function CartaPageContent({
   z-index: 2;
 }
 
-/* Mientras se está añadiendo en bucle (hold-to-repeat-add): aro verde
-   para señalar "añadiendo varias unidades". Se mantiene desde los 200 ms
-   hasta que se suelta o hasta que holding (rojo) toma el relevo a 400 ms
-   si el remove encuentra una línea pendiente. */
-.carta-product-card.repeating {
-  transform: scale(0.94);
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
-}
-
 /* Feedback visual mientras se mantiene pulsada la tarjeta para quitar 1
    unidad (long-press). La clase holding se añade a los 200 ms y se
    retira al soltar/cancelar. El color rojo señala "vas a quitar". */
@@ -6848,22 +6821,15 @@ export function CartaPageContent({
     flex-shrink: 0;
   }
   .carta-main.carta-productos {
-    width: 100%;
-    min-width: 0;
-    flex: 1 1 auto;
-    display: flex !important;
-    flex-direction: column !important;
     height: 42vh !important;
     min-height: 300px !important;
-    max-height: 46vh !important;
+    max-height: 42vh !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y !important;
-  }
-
-  .carta-main-fixed {
-    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   .carta-products-scroll {
@@ -6871,6 +6837,11 @@ export function CartaPageContent({
     height: auto !important;
     max-height: none !important;
     min-height: 0 !important;
+    flex: 0 0 auto !important;
+  }
+
+  .carta-main-fixed {
+    flex: 0 0 auto !important;
   }
 
   .carta-product-card {
@@ -6884,45 +6855,33 @@ export function CartaPageContent({
   }
 
   .carta-comensales-compact {
-    flex: 0 0 auto !important;
-    width: auto;
-    max-width: 150px;
-    overflow: hidden;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-width: 155px !important;
+    padding: 3px 5px !important;
+    gap: 5px !important;
   }
 
   .carta-comensales-compact span {
     white-space: nowrap;
   }
 
-  .carta-comensales-compact.carta-comensales--pill {
-    max-width: 150px !important;
-    min-height: 36px !important;
-    height: 36px !important;
-    padding: 4px 6px !important;
-    border-radius: 999px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    box-sizing: border-box;
-    font-size: 11px;
-  }
-
   .carta-comensales-compact button {
     width: 28px !important;
     height: 28px !important;
     min-width: 28px !important;
+    min-height: 28px !important;
     border-radius: 999px !important;
     background: #ffffff !important;
     color: #111827 !important;
-    border: 1px solid rgba(15, 23, 42, 0.14) !important;
+    border: 1px solid rgba(15, 23, 42, 0.18) !important;
     font-size: 14px !important;
-    font-weight: 800 !important;
+    font-weight: 900 !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     line-height: 1 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
   }
 
   .carta-comensales-label {
@@ -7058,19 +7017,21 @@ export function CartaPageContent({
   .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos {
     height: 42vh !important;
     min-height: 300px !important;
-    max-height: 46vh !important;
+    max-height: 42vh !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-scroll {
-    flex: 0 1 auto !important;
     overflow: visible !important;
     height: auto !important;
     max-height: none !important;
     min-height: 0 !important;
+    flex: 0 0 auto !important;
     overflow-x: hidden !important;
   }
 }
@@ -10312,8 +10273,6 @@ export function CartaPageContent({
                                       isAdding ? " carta-product-card--adding" : ""
                                     }${isActive ? " scale-95 bg-gray-200" : ""}${
                                       holdingProductId === product.id ? " holding" : ""
-                                    }${
-                                      repeatingProductId === product.id ? " repeating" : ""
                                     }${hasSent ? " has-sent" : ""}`}
                                     type="button"
                                     onClick={() => {
@@ -10336,46 +10295,12 @@ export function CartaPageContent({
                                     }}
                                     onPointerDown={(e) => {
                                       if (e.pointerType === "mouse" && e.button !== 0) return;
-                                      suppressClickUntilByProductIdRef.current[product.id] =
-                                        Date.now() + 400;
-                                      handleQuickAdd(product, { course: activeCourse });
                                       removeIsHoldingRef.current = false;
                                       clearRepeatAndHoldGesture();
-                                      // 200 ms: empieza modo HOLD-TO-REPEAT-ADD.
-                                      // Reutiliza handleQuickAdd (sin tocarlo).
-                                      removeHoldClassTimeoutRef.current = window.setTimeout(
-                                        () => {
-                                          stopHoldAdd();
-                                          setRepeatingProductId(product.id);
-                                          if (removeRepeatAddIntervalRef.current != null) {
-                                            window.clearInterval(
-                                              removeRepeatAddIntervalRef.current,
-                                            );
-                                          }
-                                          removeRepeatAddIntervalRef.current = window.setInterval(
-                                            () => {
-                                              suppressClickUntilByProductIdRef.current[product.id] =
-                                                Date.now() + 300;
-                                              handleQuickAdd(product, { course: activeCourse });
-                                            },
-                                            120,
-                                          );
-                                        },
-                                        200,
-                                      );
-                                      // 400 ms: REMOVE tiene PRIORIDAD. Si encuentra
-                                      // línea pendiente, quita 1 y CANCELA el repeat-add.
                                       removeHoldTimeoutRef.current = window.setTimeout(() => {
                                         const removed = handleQuickRemoveOne(product);
                                         if (removed) {
                                           removeIsHoldingRef.current = true;
-                                          if (removeRepeatAddIntervalRef.current != null) {
-                                            window.clearInterval(
-                                              removeRepeatAddIntervalRef.current,
-                                            );
-                                            removeRepeatAddIntervalRef.current = null;
-                                          }
-                                          setRepeatingProductId(null);
                                           setHoldingProductId(product.id);
                                           suppressClickUntilByProductIdRef.current[product.id] =
                                             Date.now() + 600;
