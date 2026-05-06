@@ -2,9 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { OperationFilterProvider } from "@/components/kds/operation-filter-context";
-import OperacionStationStatusStrip from "./_components/operacion-station-status-strip";
 
 /**
  * Comparte el `OperationFilterProvider` entre la pantalla menú y todos los módulos hijos
@@ -18,8 +17,6 @@ export default function OperacionLayout({
   children: ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const hideStationStatusStripForTpv = pathname === "/dashboard/operacion/tpv";
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -52,7 +49,6 @@ export default function OperacionLayout({
 
   return (
     <OperationFilterProvider>
-      {hideStationStatusStripForTpv ? null : <OperacionStationStatusStrip />}
       {children}
     </OperationFilterProvider>
   );

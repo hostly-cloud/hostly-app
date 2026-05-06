@@ -131,7 +131,7 @@ export const ElementCard = memo(
     badgeTier: _badgeTier,
     isCriticalTable,
     ariaLabel,
-    mapLibreLabel: _mapLibreLabel,
+    mapLibreLabel,
     onTableClick,
     occupancyStart: _occupancyStart,
     priority: _priority,
@@ -322,6 +322,8 @@ export const ElementCard = memo(
       [busy, reservationBadge, reservationPressure],
     );
 
+    const paxOrLibreLabel = mapLibreLabel.trim();
+
     const baseTileShadow = "0 2px 8px rgba(15, 23, 42, 0.06)";
     const occupiedHoverShadow = "0 4px 12px rgba(15, 23, 42, 0.11)";
 
@@ -482,6 +484,38 @@ export const ElementCard = memo(
           >
             {statusLabel}
           </span>
+          {paxOrLibreLabel ? (
+            <span
+              className="hostly-map-table-pax"
+              style={{
+                color: "#4b5563",
+                fontSize: "9px",
+                fontWeight: 600,
+                lineHeight: 1.1,
+                textAlign: "center",
+                maxWidth: "100%",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {paxOrLibreLabel}
+            </span>
+          ) : null}
+          {!busy && reservationBadge?.subLabel ? (
+            <span
+              className="hostly-map-table-res-time"
+              style={{
+                color: "#a16207",
+                fontSize: "9px",
+                fontWeight: 700,
+                lineHeight: 1.1,
+                textAlign: "center",
+              }}
+            >
+              {reservationBadge.subLabel}
+            </span>
+          ) : null}
         </div>
       </div>
     );

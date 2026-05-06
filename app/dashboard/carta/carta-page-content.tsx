@@ -1462,9 +1462,6 @@ export function CartaPageContent({
   const [isOffline, setIsOffline] = useState(false);
   const [isComandaSending, setIsComandaSending] = useState(false);
   const [comandaSentFlash, setComandaSentFlash] = useState(false);
-  const [isMarcharModalOpen, setIsMarcharModalOpen] = useState(false);
-  const [isMarcharSegundosOpen, setIsMarcharSegundosOpen] = useState(false);
-  const [isMarchandoSegundos, setIsMarchandoSegundos] = useState(false);
   const [sentFeedbackMessage, setSentFeedbackMessage] = useState<string | null>(null);
   const [isPayTableOrderSending, setIsPayTableOrderSending] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
@@ -4828,7 +4825,7 @@ export function CartaPageContent({
   );
 
   const handleComanda = useCallback(async (): Promise<boolean> => {
-    if (isComandaSending || isMarchandoSegundos) {
+    if (isComandaSending) {
       return false;
     }
     if (!selectedTableId) return false;
@@ -4836,25 +4833,7 @@ export function CartaPageContent({
     if (order.length === 0) return false;
     if (!order.some((l) => l.status === "pending")) return false;
 
-    const pendingLines = order.filter((l) => l.status === "pending");
-    const linesToSend = pendingLines.filter((line) => {
-      const course = normalizeComandaCourseForStorage(line.course) ?? 1;
-      const isDrinkOrBar = isBarProduct(line.product);
-      return isDrinkOrBar || course === 1;
-    });
-
-    if (linesToSend.length === 0) {
-      if (pendingPrimerosSegundos.length > 0) {
-        setIsMarcharSegundosOpen(true);
-        return false;
-      }
-      if (pendingDessertLines.length > 0) {
-        setIsMarcharModalOpen(true);
-        return false;
-      }
-      return false;
-    }
-
+    const linesToSend = order.filter((l) => l.status === "pending");
     const ok = await sendLinesToComanda(linesToSend);
     if (ok) {
       showSentFeedback("Comanda enviada");
@@ -4866,9 +4845,6 @@ export function CartaPageContent({
     isFirebaseConfigured,
     order,
     isComandaSending,
-    isMarchandoSegundos,
-    pendingPrimerosSegundos.length,
-    pendingDessertLines.length,
     sendLinesToComanda,
   ]);
 
@@ -4880,50 +4856,11 @@ export function CartaPageContent({
     }, 1500);
   };
 
-  const handleMarcharCourse = useCallback(
-    async (course: 2 | 3 | 4) => {
-      const lines = linesPending.filter(
-        (l) => (normalizeComandaCourseForStorage(l.course) ?? 1) === course,
-      );
-      const ok = await sendLinesToComanda(lines);
-      if (ok) {
-        setIsMarcharModalOpen(false);
-        if (course === 4) {
-          showSentFeedback("Postres enviados");
-        }
-      }
-    },
-    [linesPending, sendLinesToComanda],
-  );
-
-  const handleMarcharSegundos = useCallback(async () => {
-    const lines = linesPending.filter((l) => {
-      const c = normalizeComandaCourseForStorage(l.course) ?? 1;
-      return c === 2 || c === 3;
-    });
-    if (lines.length === 0) return;
-    setIsMarchandoSegundos(true);
-    try {
-      const ok = await sendLinesToComanda(lines);
-      if (ok) {
-        setIsMarcharSegundosOpen(false);
-        showSentFeedback("Pase enviado");
-      }
-    } finally {
-      setIsMarchandoSegundos(false);
-    }
-  }, [linesPending, sendLinesToComanda]);
-
   const handleComandaAndExit = useCallback(async () => {
     if (!order.some((l) => l.status === "pending")) return;
     const ok = await handleComanda();
     if (!ok) {
-      const marchablePending = order.some((l) => {
-        if (l.status !== "pending") return false;
-        const course = normalizeComandaCourseForStorage(l.course) ?? 1;
-        return isBarProduct(l.product) || course === 1;
-      });
-      if (marchablePending) {
+      if (order.some((l) => l.status === "pending")) {
         window.alert("No se pudo enviar la comanda. Inténtalo otra vez.");
       }
       return;
@@ -5929,47 +5866,6 @@ export function CartaPageContent({
 .carta-kitchen-card--preparing .carta-kitchen-qty {
   background: rgba(245, 158, 11, 0.25);
   border-color: rgba(245, 158, 11, 0.40);
-}
-
-/* Modal marchar primeros / segundos / postres */
-.carta-marchar-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-.carta-marchar-modal {
-  width: min(360px, 100%);
-  background: white;
-  border-radius: 18px;
-  padding: 18px;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
-}
-
-.carta-marchar-modal h3 {
-  font-size: 18px;
-  font-weight: 800;
-  margin-bottom: 12px;
-}
-
-.carta-marchar-modal button {
-  width: 100%;
-  min-height: 44px;
-  border-radius: 12px;
-  font-weight: 800;
-  margin-top: 8px;
-  background: #111827;
-  color: white;
-}
-
-.carta-marchar-modal button:last-child {
-  background: #e5e7eb;
-  color: #111827;
 }
 
 /* Modal mapa: juntar / separar mesas (producción) */
@@ -8852,7 +8748,9 @@ export function CartaPageContent({
                         minutesOccupied >= 45 &&
                         activeLineCount >= 8;
                       const ariaTileBusy = busy
-                        ? `${String(stableTable.name ?? "").trim()}${durationLabel ? `, ${durationLabel}` : ""}${showProductCount ? ` (${activeLineCount})` : ""}, ${t("cartaTpv.mapOcupada")}`
+                        ? cartaHeaderMobile
+                          ? `${String(stableTable.name ?? "").trim()}, ${t("cartaTpv.mapOcupada")}`
+                          : `${String(stableTable.name ?? "").trim()}${durationLabel ? `, ${durationLabel}` : ""}${showProductCount ? ` (${activeLineCount})` : ""}, ${t("cartaTpv.mapOcupada")}`
                         : "";
 
                       const total = orderTotalsByTable[tableId];
@@ -9369,7 +9267,7 @@ export function CartaPageContent({
                 <button
                   type="button"
                   className={`carta-comanda-button${
-                    isComandaSending || isMarchandoSegundos
+                    isComandaSending
                       ? " opacity-60 cursor-not-allowed"
                       : ""
                   }`}
@@ -9379,9 +9277,6 @@ export function CartaPageContent({
                   }}
                   disabled={
                     isComandaSending ||
-                    isMarchandoSegundos ||
-                    isMarcharSegundosOpen ||
-                    isMarcharModalOpen ||
                     order.length === 0 ||
                     !selectedTableId ||
                     !hasPendingItems
@@ -9393,9 +9288,6 @@ export function CartaPageContent({
                     fontSize: 15,
                     cursor:
                       isComandaSending ||
-                      isMarchandoSegundos ||
-                      isMarcharSegundosOpen ||
-                      isMarcharModalOpen ||
                       order.length === 0 ||
                       !selectedTableId ||
                       !hasPendingItems
@@ -9407,11 +9299,9 @@ export function CartaPageContent({
                     color: "#111827",
                     minHeight: 44,
                     opacity:
-                      isComandaSending || isMarchandoSegundos
+                      isComandaSending
                         ? 0.6
-                        : isMarcharSegundosOpen ||
-                            isMarcharModalOpen ||
-                            order.length === 0 ||
+                        : order.length === 0 ||
                             !selectedTableId ||
                             !hasPendingItems
                           ? 0.5
@@ -12358,82 +12248,6 @@ export function CartaPageContent({
                 </button>
               ) : null}
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {isMarcharSegundosOpen ? (
-        <div
-          className="fixed inset-0 z-[82] flex items-center justify-center bg-black/45 p-4"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !isMarchandoSegundos && !isComandaSending) {
-              setIsMarcharSegundosOpen(false);
-            }
-          }}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white text-gray-900 p-5 shadow-2xl border border-gray-200"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="carta-marchar-segundos-title"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <h3 id="carta-marchar-segundos-title" className="text-lg font-bold">
-              ¿Marchar segundos?
-            </h3>
-            <p className="text-sm text-gray-600 mt-2 leading-snug">
-              Ya no hay entrantes pendientes. Puedes marchar primeros y segundos a cocina.
-            </p>
-            <button
-              type="button"
-              className="mt-4 w-full min-h-[44px] rounded-xl bg-gray-200 text-gray-900 font-bold hover:bg-gray-300 disabled:opacity-60"
-              disabled={isMarchandoSegundos || isComandaSending}
-              onClick={() => setIsMarcharSegundosOpen(false)}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="mt-2 w-full min-h-[44px] rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 disabled:opacity-60"
-              disabled={isMarchandoSegundos || isComandaSending}
-              onClick={() => void handleMarcharSegundos()}
-            >
-              {isMarchandoSegundos || isComandaSending ? "Marchando…" : "Marchar segundos"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {isMarcharModalOpen ? (
-        <div
-          className="carta-marchar-modal-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setIsMarcharModalOpen(false);
-          }}
-        >
-          <div
-            className="carta-marchar-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="carta-marchar-modal-title"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <h3 id="carta-marchar-modal-title">Marchar pase</h3>
-
-            {pendingDessertLines.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => void handleMarcharCourse(4)}
-              >
-                Marchar postres
-              </button>
-            ) : null}
-
-            <button type="button" onClick={() => setIsMarcharModalOpen(false)}>
-              Cancelar
-            </button>
           </div>
         </div>
       ) : null}
