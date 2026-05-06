@@ -14,6 +14,13 @@ import {
   type PlanElementType,
   type Table,
 } from "@/lib/firestore/tables";
+import {
+  MAP_TABLE_CHAIR_BORDER,
+  MAP_TABLE_CHAIR_FILL,
+  MAP_TABLE_CHAIR_SHADOW,
+  mapTableChairLayouts,
+  mapTableSeatCount,
+} from "./map-table-chairs-visual";
 
 export const DEFAULT_MAP_TILE_WIDTH =
   getDefaultSizeForPlanElementType("table").width;
@@ -1021,6 +1028,44 @@ export function EditableFloorMap({
                 });
               }}
             >
+              {editorPlanSurface && element.type === "table" ? (
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 0,
+                    borderRadius: chrome.borderRadius,
+                    overflow: "hidden",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {mapTableChairLayouts(
+                    mapTileWidth,
+                    mapTileHeight,
+                    element.tableShape,
+                    mapTableSeatCount(element),
+                  ).map((layout, chairIdx) => (
+                    <span
+                      key={chairIdx}
+                      style={{
+                        position: "absolute",
+                        left: layout.left,
+                        top: layout.top,
+                        width: layout.width,
+                        height: layout.height,
+                        boxSizing: "border-box",
+                        borderRadius: 999,
+                        background: MAP_TABLE_CHAIR_FILL,
+                        border: MAP_TABLE_CHAIR_BORDER,
+                        boxShadow: MAP_TABLE_CHAIR_SHADOW,
+                        transform: `rotate(${layout.rotation}deg)`,
+                        transformOrigin: "center center",
+                      }}
+                    />
+                  ))}
+                </span>
+              ) : null}
               {zoneDisplayName ? (
                 <span
                   style={{

@@ -1146,6 +1146,8 @@ export type CartaPageContentProps = {
     isGroupedTable: (tableId: string) => boolean;
     /** Mesa unida a otra: no se pinta en mapa como ficha propia. */
     isJoinedSecondaryTable?: (tableId: string) => boolean;
+    /** Mesa principal con al menos una secundaria en el grupo. */
+    isGroupedPrimaryTable?: (tableId: string) => boolean;
     getGroupedBadgeText: (tableId: string) => string | null;
     joinTables?: (mainTableId: string, secondaryTableId: string) => void;
     separateTable?: (tableId: string) => void;
@@ -8861,6 +8863,40 @@ export function CartaPageContent({
                             groupedTablesMapHandlers?.joinTables,
                           )}
                           onMapTableJoinDrop={handleMapTableJoinDrop}
+                          showVisualChairs={true}
+                          isMapGroupedPrimary={
+                            stableTable.type === "table" &&
+                            Boolean(
+                              groupedTablesMapHandlers?.isGroupedPrimaryTable?.(
+                                tableId,
+                              ),
+                            )
+                          }
+                          onRequestSeparateGroupedTables={
+                            groupedTablesMapHandlers?.separateTable
+                              ? (tid: string) => {
+                                  if (process.env.NODE_ENV === "development") {
+                                    console.log(
+                                      "[separate] request from card",
+                                      tid,
+                                    );
+                                  }
+                                  const mainId =
+                                    groupedTablesMapHandlers?.resolveMainTableId?.(
+                                      tid,
+                                    ) ?? tid;
+                                  if (process.env.NODE_ENV === "development") {
+                                    console.log(
+                                      "[separate] resolved main",
+                                      mainId,
+                                    );
+                                  }
+                                  groupedTablesMapHandlers.separateTable?.(
+                                    mainId,
+                                  );
+                                }
+                              : undefined
+                          }
                         />
                       );
                     }}

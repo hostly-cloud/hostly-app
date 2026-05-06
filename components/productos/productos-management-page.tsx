@@ -490,7 +490,14 @@ function ProductRowActions({
   );
 }
 
-export default function ProductosManagementPage() {
+export type ProductosManagementPageProps = {
+  /** Dentro del layout Config (franja superior); el shell usa altura flexible en lugar de 100dvh. */
+  lockViewportFillParent?: boolean;
+};
+
+export default function ProductosManagementPage({
+  lockViewportFillParent = false,
+}: ProductosManagementPageProps = {}) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
@@ -1097,6 +1104,7 @@ export default function ProductosManagementPage() {
         operationalFocus
         denseWorkbench
         lockViewport
+        lockViewportFillParent={lockViewportFillParent}
       >
         <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
@@ -1113,89 +1121,131 @@ export default function ProductosManagementPage() {
       operationalFocus
       denseWorkbench
       lockViewport
-      headerRight={
-        <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <Link
-            href="/dashboard/carta/categorias"
+      lockViewportFillParent={lockViewportFillParent}
+      headerBelow={
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
+          }}
+        >
+          <nav
+            aria-label={t("productos.subtitle")}
             style={{
-              border: "1px solid rgba(148, 163, 184, 0.35)",
-              background: "rgba(30, 41, 59, 0.5)",
-              color: "#e2e8f0",
-              padding: "8px 10px",
-              borderRadius: 999,
-              fontWeight: 800,
-              fontSize: 12,
-              lineHeight: 1.1,
-              minHeight: 34,
-              whiteSpace: "nowrap",
-              textDecoration: "none",
-              display: "inline-flex",
+              display: "flex",
+              flexWrap: "wrap",
               alignItems: "center",
+              gap: 6,
+              width: "100%",
+              minWidth: 0,
             }}
           >
-            {t("cartaCategories.manageLink")}
-          </Link>
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard/carta/modificadores")}
+            <Link
+              href="/dashboard/carta/categorias"
+              style={{
+                border: "1px solid rgba(148, 163, 184, 0.28)",
+                background: "rgba(30, 41, 59, 0.35)",
+                color: "#cbd5e1",
+                padding: "6px 12px",
+                borderRadius: 999,
+                fontWeight: 640,
+                fontSize: 12,
+                lineHeight: 1.2,
+                minHeight: 30,
+                whiteSpace: "nowrap",
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                letterSpacing: "-0.01em",
+                maxWidth: "100%",
+                boxSizing: "border-box",
+              }}
+            >
+              {t("cartaCategories.manageLink")}
+            </Link>
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard/carta/modificadores")}
+              style={{
+                border: "1px solid rgba(56, 189, 248, 0.22)",
+                background: "rgba(8,47,73,0.12)",
+                color: "#93c5fd",
+                padding: "6px 12px",
+                borderRadius: 999,
+                fontWeight: 650,
+                cursor: "pointer",
+                fontSize: 12,
+                lineHeight: 1.2,
+                minHeight: 30,
+                whiteSpace: "nowrap",
+                letterSpacing: "-0.01em",
+                maxWidth: "100%",
+                boxSizing: "border-box",
+              }}
+            >
+              {t("carta.ctaModifiers")}
+            </button>
+          </nav>
+          <div
             style={{
-              border: "1px solid rgba(56, 189, 248, 0.28)",
-              background: "rgba(8,47,73,0.18)",
-              color: "#7dd3fc",
-              padding: "8px 10px",
-              borderRadius: 999,
-              fontWeight: 900,
-              cursor: "pointer",
-              fontSize: 12,
-              lineHeight: 1.1,
-              minHeight: 34,
-              whiteSpace: "nowrap",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 8,
+              width: "100%",
+              minWidth: 0,
             }}
           >
-            {t("carta.ctaModifiers")}
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              router.push("/dashboard/carta/importar");
-            }}
-            style={{
-              border: "1px solid rgba(251, 191, 36, 0.34)",
-              background: "rgba(120, 53, 15, 0.18)",
-              color: "#fde68a",
-              padding: "8px 10px",
-              borderRadius: 999,
-              fontWeight: 800,
-              cursor: "pointer",
-              fontSize: 12,
-              lineHeight: 1.1,
-              minHeight: 34,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {t("carta.ctaImportMenu")}
-          </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            style={{
-              border: "1px solid rgba(34, 197, 94, 0.4)",
-              background: "rgba(6, 78, 59, 0.16)",
-              color: "#86efac",
-              padding: "8px 12px",
-              borderRadius: 999,
-              fontWeight: 950,
-              cursor: "pointer",
-              fontSize: 12,
-              lineHeight: 1.1,
-              minHeight: 34,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {t("carta.ctaNew")}
-          </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push("/dashboard/carta/importar");
+              }}
+              style={{
+                border: "1px solid rgba(251, 191, 36, 0.34)",
+                background: "rgba(120, 53, 15, 0.18)",
+                color: "#fde68a",
+                padding: "7px 12px",
+                borderRadius: 999,
+                fontWeight: 750,
+                cursor: "pointer",
+                fontSize: 12,
+                lineHeight: 1.2,
+                minHeight: 32,
+                whiteSpace: "nowrap",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {t("carta.ctaImportMenu")}
+            </button>
+            <button
+              type="button"
+              onClick={openCreate}
+              style={{
+                border: "1px solid rgba(34, 197, 94, 0.4)",
+                background: "rgba(6, 78, 59, 0.16)",
+                color: "#86efac",
+                padding: "7px 12px",
+                borderRadius: 999,
+                fontWeight: 780,
+                cursor: "pointer",
+                fontSize: 12,
+                lineHeight: 1.2,
+                minHeight: 32,
+                whiteSpace: "nowrap",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {t("carta.ctaNew")}
+            </button>
+          </div>
         </div>
       }
     >

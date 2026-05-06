@@ -1,7 +1,23 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import type { Table, TableMapStatus } from "@/lib/firestore/tables";
+import {
+  MAP_TABLE_CHAIR_BORDER,
+  MAP_TABLE_CHAIR_FILL,
+  MAP_TABLE_CHAIR_SHADOW,
+  mapTableChairLayouts,
+  mapTableSeatCount,
+} from "./map-table-chairs-visual";
 
 export type ElementMapCardProps = {
   table: Table;
@@ -42,6 +58,11 @@ export type ElementMapCardProps = {
   groupedBadgeText?: string | null;
   mapJoinDragEnabled?: boolean;
   onMapTableJoinDrop?: (draggedTableId: string, targetTableId: string) => void;
+  /** false: no dibujar sillas decorativas (p. ej. móvil). Por defecto true. */
+  showVisualChairs?: boolean;
+  /** Mesa principal con al menos una secundaria (long-press → separar grupo). */
+  isMapGroupedPrimary?: boolean;
+  onRequestSeparateGroupedTables?: (mainTableId: string) => void;
 };
 
 type MapBaseSurfaceClass =
@@ -59,6 +80,9 @@ const SURFACE_TOKENS: Record<
   "hostly-map-table--occupied": { background: "#7dd3fc", color: "#1e40af" },
   "hostly-map-table--reserved": { background: "#f3e8ff", color: "#7e22ce" },
 };
+
+const LONG_PRESS_GROUP_MS = 1000;
+const LONG_PRESS_MOVE_PX_SQ = 64;
 
 const ALERT_DOT_COLORS: Record<MapAlertDotClass, string> = {
   critical: "#ef4444",
@@ -131,7 +155,7 @@ export const ElementCard = memo(
     badgeTier: _badgeTier,
     isCriticalTable,
     ariaLabel,
-    mapLibreLabel,
+    mapLibreLabel: _mapLibreLabel,
     onTableClick,
     occupancyStart: _occupancyStart,
     priority: _priority,
@@ -159,6 +183,9 @@ export const ElementCard = memo(
     groupedBadgeText,
     mapJoinDragEnabled = false,
     onMapTableJoinDrop,
+    showVisualChairs = true,
+    isMapGroupedPrimary = false,
+    onRequestSeparateGroupedTables,
   }: ElementMapCardProps) {
     const joinDragStateRef = useRef<{
       startX: number;
@@ -167,9 +194,44 @@ export const ElementCard = memo(
       active: boolean;
     } | null>(null);
     const joinSuppressClickRef = useRef(false);
+    const longPressMenuSuppressClickRef = useRef(false);
+    const longPressTimerRef = useRef<number | null>(null);
+    const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+    const tileElRef = useRef<HTMLDivElement | null>(null);
+    const groupMenuPanelRef = useRef<HTMLDivElement | null>(null);
     const pressResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isHovered, setIsHovered] = useState(false);
     const [isPressedPulse, setIsPressedPulse] = useState(false);
+    const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+    const [groupMenuPos, setGroupMenuPos] = useState<{
+      top: number;
+      left: number;
+    } | null>(null);
+
+    const separateGroupButtonRef = useRef<HTMLButtonElement | null>(null);
+    const onRequestSeparateGroupedTablesRef = useRef(
+      onRequestSeparateGroupedTables,
+    );
+    onRequestSeparateGroupedTablesRef.current = onRequestSeparateGroupedTables;
+
+    /** Clic nativo en captura: la delegación de React al root a veces no recibe el click del portal. */
+    useLayoutEffect(() => {
+      if (!groupMenuOpen) return;
+      const btn = separateGroupButtonRef.current;
+      if (!btn) return;
+      const handler = (ev: MouseEvent) => {
+        if (process.env.NODE_ENV === "development") {
+          console.log("[separate] button clicked", tableId);
+        }
+        ev.preventDefault();
+        ev.stopPropagation();
+        onRequestSeparateGroupedTablesRef.current?.(tableId);
+        setGroupMenuOpen(false);
+        setGroupMenuPos(null);
+      };
+      btn.addEventListener("click", handler, true);
+      return () => btn.removeEventListener("click", handler, true);
+    }, [groupMenuOpen, tableId]);
 
     const animationsOff = prefersReducedMotion || isUltraFastMode;
 
@@ -192,6 +254,27 @@ export const ElementCard = memo(
         }
       };
     }, []);
+
+    const clearLongPressTimer = useCallback(() => {
+      if (longPressTimerRef.current != null) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }, []);
+
+    useEffect(() => {
+      return () => {
+        clearLongPressTimer();
+      };
+    }, [clearLongPressTimer]);
+
+    const mergedTileRef = useCallback(
+      (el: HTMLDivElement | null) => {
+        tileElRef.current = el;
+        setNodeRef?.(el);
+      },
+      [setNodeRef],
+    );
 
     const handleJoinPointerDown = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
@@ -235,11 +318,19 @@ export const ElementCard = memo(
         if (!st?.armed) return;
         if (st.active) {
           joinSuppressClickRef.current = true;
-          const els = document.elementsFromPoint(e.clientX, e.clientY);
+          const rootEl = e.currentTarget as HTMLElement;
+          const prevPe = rootEl.style.pointerEvents;
+          rootEl.style.pointerEvents = "none";
+          let els: Element[];
+          try {
+            els = document.elementsFromPoint(e.clientX, e.clientY);
+          } finally {
+            rootEl.style.pointerEvents = prevPe;
+          }
           for (const node of els) {
             if (!(node instanceof HTMLElement)) continue;
             const host = node.closest("[data-hostly-map-table]");
-            if (!host) continue;
+            if (!host || host === rootEl) continue;
             const tid = host.getAttribute("data-hostly-map-table")?.trim();
             if (tid && tid !== tableId) {
               onMapTableJoinDrop?.(tableId, tid);
@@ -259,6 +350,12 @@ export const ElementCard = memo(
           e.stopPropagation();
           return;
         }
+        if (longPressMenuSuppressClickRef.current) {
+          longPressMenuSuppressClickRef.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         onTableClick(tableId);
       },
       [onTableClick, tableId],
@@ -266,11 +363,100 @@ export const ElementCard = memo(
 
     const handleTilePointerDown = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
+        setGroupMenuOpen(false);
+        setGroupMenuPos(null);
         if (e.button === 0) armPressBurst();
         handleJoinPointerDown(e);
+        clearLongPressTimer();
+        longPressStartRef.current = null;
+        if (
+          e.button === 0 &&
+          isMapGroupedPrimary &&
+          onRequestSeparateGroupedTables
+        ) {
+          longPressStartRef.current = { x: e.clientX, y: e.clientY };
+          longPressTimerRef.current = window.setTimeout(() => {
+            longPressTimerRef.current = null;
+            longPressStartRef.current = null;
+            const el = tileElRef.current;
+            if (el && typeof document !== "undefined") {
+              const r = el.getBoundingClientRect();
+              setGroupMenuPos({
+                top: r.bottom + 8,
+                left: r.left + r.width / 2,
+              });
+            } else {
+              setGroupMenuPos({ top: e.clientY + 8, left: e.clientX });
+            }
+            longPressMenuSuppressClickRef.current = true;
+            setGroupMenuOpen(true);
+          }, LONG_PRESS_GROUP_MS);
+        }
       },
-      [armPressBurst, handleJoinPointerDown],
+      [
+        armPressBurst,
+        handleJoinPointerDown,
+        clearLongPressTimer,
+        isMapGroupedPrimary,
+        onRequestSeparateGroupedTables,
+      ],
     );
+
+    const handleTilePointerMove = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        const lpStart = longPressStartRef.current;
+        if (lpStart != null && longPressTimerRef.current != null) {
+          const dx = e.clientX - lpStart.x;
+          const dy = e.clientY - lpStart.y;
+          if (dx * dx + dy * dy > LONG_PRESS_MOVE_PX_SQ) {
+            clearLongPressTimer();
+            longPressStartRef.current = null;
+          }
+        }
+        handleJoinPointerMove(e);
+        const st = joinDragStateRef.current;
+        if (st?.active) {
+          clearLongPressTimer();
+          longPressStartRef.current = null;
+        }
+      },
+      [clearLongPressTimer, handleJoinPointerMove],
+    );
+
+    const handleTilePointerUp = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        clearLongPressTimer();
+        longPressStartRef.current = null;
+        handleJoinPointerUp(e);
+      },
+      [clearLongPressTimer, handleJoinPointerUp],
+    );
+
+    useEffect(() => {
+      if (!groupMenuOpen) return;
+      const onDown = (ev: MouseEvent | TouchEvent) => {
+        const t = ev.target;
+        if (!(t instanceof Node)) return;
+        if (groupMenuPanelRef.current?.contains(t)) return;
+        if (tileElRef.current?.contains(t)) return;
+        setGroupMenuOpen(false);
+        setGroupMenuPos(null);
+      };
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key === "Escape") {
+          setGroupMenuOpen(false);
+          setGroupMenuPos(null);
+        }
+      };
+      document.addEventListener("mousedown", onDown);
+      document.addEventListener("touchstart", onDown, { passive: true });
+      document.addEventListener("keydown", onKey);
+      return () => {
+        document.removeEventListener("mousedown", onDown);
+        document.removeEventListener("touchstart", onDown);
+        document.removeEventListener("keydown", onKey);
+      };
+    }, [groupMenuOpen]);
 
     const planType = table.type;
     const tileBorderRadius =
@@ -322,7 +508,19 @@ export const ElementCard = memo(
       [busy, reservationBadge, reservationPressure],
     );
 
-    const paxOrLibreLabel = mapLibreLabel.trim();
+    const reservationTimeDisplay = useMemo(() => {
+      if (statusLabel === "RETRASADA") {
+        if (reservationPressure?.type !== "late") return null;
+        const t = reservationPressure.time.trim();
+        return t || null;
+      }
+      if (statusLabel === "RESERVADA") {
+        const raw = reservationBadge?.subLabel?.trim() ?? "";
+        if (!raw || /^libre$/i.test(raw)) return null;
+        return raw;
+      }
+      return null;
+    }, [statusLabel, reservationPressure, reservationBadge]);
 
     const baseTileShadow = "0 2px 8px rgba(15, 23, 42, 0.06)";
     const occupiedHoverShadow = "0 4px 12px rgba(15, 23, 42, 0.11)";
@@ -354,11 +552,71 @@ export const ElementCard = memo(
       ? "none"
       : "transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease";
 
+    const visualChairLayouts = useMemo(() => {
+      if (!showVisualChairs || planType !== "table") return [];
+      const n = mapTableSeatCount(table);
+      return mapTableChairLayouts(
+        mapTileWidth,
+        mapTileHeight,
+        table.tableShape,
+        n,
+      );
+    }, [showVisualChairs, planType, table, mapTileWidth, mapTileHeight]);
+
+    const groupMenuPortal =
+      groupMenuOpen &&
+      groupMenuPos &&
+      typeof document !== "undefined" &&
+      onRequestSeparateGroupedTables
+        ? createPortal(
+            <div
+              ref={groupMenuPanelRef}
+              role="dialog"
+              aria-label="Mesa agrupada"
+              style={{
+                position: "fixed",
+                top: groupMenuPos.top,
+                left: groupMenuPos.left,
+                transform: "translateX(-50%)",
+                zIndex: 10000,
+                minWidth: 160,
+                padding: 8,
+                borderRadius: 10,
+                background: "rgba(255,255,255,0.98)",
+                border: "1px solid rgba(148, 163, 184, 0.35)",
+                boxShadow: "0 8px 24px rgba(15,23,42,0.15)",
+              }}
+            >
+              <button
+                ref={separateGroupButtonRef}
+                type="button"
+                className="hostly-map-separate-group-btn"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: "rgba(241, 245, 249, 0.95)",
+                  color: "#0f172a",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textAlign: "center",
+                }}
+              >
+                Separar mesas
+              </button>
+            </div>,
+            document.body,
+          )
+        : null;
+
     return (
+      <>
       <div
         role="button"
         tabIndex={0}
-        ref={setNodeRef}
+        ref={mergedTileRef}
         data-hostly-map-table={tableId}
         className={`hostly-map-table ${baseSurface}`}
         aria-label={ariaLabel}
@@ -375,9 +633,9 @@ export const ElementCard = memo(
         onMouseLeave={() => {
           setIsHovered(false);
         }}
-        onPointerMove={handleJoinPointerMove}
-        onPointerUp={handleJoinPointerUp}
-        onPointerCancel={handleJoinPointerUp}
+        onPointerMove={handleTilePointerMove}
+        onPointerUp={handleTilePointerUp}
+        onPointerCancel={handleTilePointerUp}
         onClick={handleRootClick}
         style={{
           position: "absolute",
@@ -401,6 +659,40 @@ export const ElementCard = memo(
           boxShadow,
         }}
       >
+        {planType === "table" && showVisualChairs ? (
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 0,
+              borderRadius: tileBorderRadius,
+              overflow: "hidden",
+              pointerEvents: "none",
+            }}
+          >
+            {visualChairLayouts.map((layout, chairIdx) => (
+              <span
+                key={chairIdx}
+                style={{
+                  position: "absolute",
+                  left: layout.left,
+                  top: layout.top,
+                  width: layout.width,
+                  height: layout.height,
+                  boxSizing: "border-box",
+                  borderRadius: 999,
+                  background: MAP_TABLE_CHAIR_FILL,
+                  border: MAP_TABLE_CHAIR_BORDER,
+                  boxShadow: MAP_TABLE_CHAIR_SHADOW,
+                  transform: `rotate(${layout.rotation}deg)`,
+                  transformOrigin: "center center",
+                  pointerEvents: "none",
+                }}
+              />
+            ))}
+          </span>
+        ) : null}
         {alertDot ? (
           <span
             aria-hidden
@@ -436,6 +728,7 @@ export const ElementCard = memo(
               opacity: 0.55,
               pointerEvents: "none",
               lineHeight: 1,
+              zIndex: 1,
             }}
           >
             {groupCorner}
@@ -451,6 +744,8 @@ export const ElementCard = memo(
             minWidth: 0,
             maxWidth: "100%",
             pointerEvents: "none",
+            position: "relative",
+            zIndex: 1,
           }}
         >
           <div
@@ -484,11 +779,11 @@ export const ElementCard = memo(
           >
             {statusLabel}
           </span>
-          {paxOrLibreLabel ? (
+          {reservationTimeDisplay ? (
             <span
-              className="hostly-map-table-pax"
+              className="hostly-map-table-res-time"
               style={{
-                color: "#4b5563",
+                color: "#78716c",
                 fontSize: "9px",
                 fontWeight: 600,
                 lineHeight: 1.1,
@@ -499,25 +794,13 @@ export const ElementCard = memo(
                 whiteSpace: "nowrap",
               }}
             >
-              {paxOrLibreLabel}
-            </span>
-          ) : null}
-          {!busy && reservationBadge?.subLabel ? (
-            <span
-              className="hostly-map-table-res-time"
-              style={{
-                color: "#a16207",
-                fontSize: "9px",
-                fontWeight: 700,
-                lineHeight: 1.1,
-                textAlign: "center",
-              }}
-            >
-              {reservationBadge.subLabel}
+              {reservationTimeDisplay}
             </span>
           ) : null}
         </div>
       </div>
+      {groupMenuPortal}
+      </>
     );
   },
   (prev, next) => {
@@ -526,6 +809,13 @@ export const ElementCard = memo(
     if (a.id !== b.id) return false;
     if (a.type !== b.type) return false;
     if (a.name !== b.name) return false;
+    if (a.seats !== b.seats) return false;
+    if (a.tableShape !== b.tableShape) return false;
+    if (
+      (a as Table & { capacity?: number }).capacity !==
+      (b as Table & { capacity?: number }).capacity
+    )
+      return false;
     if (prev.busy !== next.busy) return false;
     if (prev.tileVisual !== next.tileVisual) return false;
     if (prev.isCriticalTable !== next.isCriticalTable) return false;
@@ -550,11 +840,18 @@ export const ElementCard = memo(
     const pa = prev.reservationPressure;
     const pb = next.reservationPressure;
     if ((pa?.type ?? "") !== (pb?.type ?? "")) return false;
+    if ((pa?.time ?? "") !== (pb?.time ?? "")) return false;
     if (prev.readyToClose !== next.readyToClose) return false;
     if ((prev.groupedBadgeText ?? "") !== (next.groupedBadgeText ?? ""))
       return false;
     if (prev.mapJoinDragEnabled !== next.mapJoinDragEnabled) return false;
     if (prev.onMapTableJoinDrop !== next.onMapTableJoinDrop) return false;
+    if ((prev.showVisualChairs ?? true) !== (next.showVisualChairs ?? true))
+      return false;
+    if ((prev.isMapGroupedPrimary ?? false) !== (next.isMapGroupedPrimary ?? false))
+      return false;
+    if (prev.onRequestSeparateGroupedTables !== next.onRequestSeparateGroupedTables)
+      return false;
     return true;
   },
 );

@@ -130,7 +130,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
                 groups: {},
                 updatedAt: Date.now(),
               },
-              { merge: true },
+              { merge: false },
             );
           } catch (e) {
             console.error("tableGroups:initDoc", e);
@@ -183,6 +183,17 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
     [groupedTables],
   );
 
+  /** true si `tableId` es clave principal con al menos una mesa unida. */
+  const isGroupedPrimaryTable = useCallback(
+    (tableId: string): boolean => {
+      const id = String(tableId).trim();
+      if (!id) return false;
+      const sec = groupedTables[id];
+      return Array.isArray(sec) && sec.length > 0;
+    },
+    [groupedTables],
+  );
+
   const queuePersist = useCallback(
     (next: Record<string, string[]>) => {
       if (!restaurantIdTrimmed || !isFirebaseConfigured) return;
@@ -229,8 +240,22 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
       const id = String(tableId).trim();
       if (!id) return;
 
+      const dev = process.env.NODE_ENV === "development";
+      if (dev) {
+        console.log("[separate] hook input", id);
+      }
+
       setGroupedTables((prev) => {
-        if (!isTableGroupedInMap(prev, id)) return prev;
+        if (dev) {
+          console.log("[separate] prev groups", { ...prev });
+        }
+
+        if (!isTableGroupedInMap(prev, id)) {
+          if (dev) {
+            console.warn("[separate] no group found for", id);
+          }
+          return prev;
+        }
 
         let next: Record<string, string[]>;
 
@@ -253,8 +278,20 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
             updated = pruneEmptyPrincipalEntries(n);
             break;
           }
-          if (updated == null) return prev;
+          if (updated == null) {
+            if (dev) {
+              console.warn("[separate] no group found for", id);
+            }
+            return prev;
+          }
           next = updated;
+        }
+
+        if (dev) {
+          console.log("[separate] next groups", { ...next });
+          if (JSON.stringify(next) === JSON.stringify(prev)) {
+            console.warn("[separate] next equals prev for", id);
+          }
         }
 
         queuePersist(next);
@@ -269,6 +306,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
       resolveMainTableId: getMainTableId,
       isGroupedTable,
       isJoinedSecondaryTable,
+      isGroupedPrimaryTable,
       getGroupedBadgeText,
       joinTables,
       separateTable,
@@ -277,6 +315,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
       getMainTableId,
       isGroupedTable,
       isJoinedSecondaryTable,
+      isGroupedPrimaryTable,
       getGroupedBadgeText,
       joinTables,
       separateTable,
@@ -288,6 +327,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
     getMainTableId,
     isGroupedTable,
     isJoinedSecondaryTable,
+    isGroupedPrimaryTable,
     getGroupedBadgeText,
     joinTables,
     separateTable,

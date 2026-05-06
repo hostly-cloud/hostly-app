@@ -16,6 +16,8 @@ export type ModulePageShellProps = {
   maxWidth?: number;
   /** Acciones alineadas a la derecha del título (p. ej. Recargar). */
   headerRight?: ReactNode;
+  /** Segunda franja bajo título/subtítulo: contexto o controles a ancho completo. */
+  headerBelow?: ReactNode;
   backHref?: string;
   backLabel?: ReactNode;
   /** Suma px al padding superior del &lt;main&gt; (más aire bajo el borde de ventana). */
@@ -26,6 +28,8 @@ export type ModulePageShellProps = {
   denseWorkbench?: boolean;
   /** Ocupa el viewport sin scroll del documento; el contenido hijo debe gestionar scroll interno. */
   lockViewport?: boolean;
+  /** Con lockViewport: altura 100% del contenedor en lugar de 100dvh (p. ej. bajo franja de navegación). */
+  lockViewportFillParent?: boolean;
   /** Oculta el enlace superior (p. ej. en la raíz `/dashboard`). El selector de idioma se mantiene alineado a la derecha. */
   hideBackLink?: boolean;
   /** Prioriza el bloque operativo: cabecera de módulo más discreta, más aire útil abajo. */
@@ -42,12 +46,14 @@ export default function ModulePageShell({
   children,
   maxWidth = DEFAULT_MAX,
   headerRight,
+  headerBelow,
   backHref = "/dashboard",
   backLabel,
   mainPaddingTopExtraPx,
   compactLayout,
   denseWorkbench,
   lockViewport,
+  lockViewportFillParent,
   hideBackLink,
   operationalFocus,
   fitLaptopViewport,
@@ -65,6 +71,7 @@ export default function ModulePageShell({
   const resolvedBack = backLabel ?? t("common.backToDashboard");
   const effectiveLockViewport = Boolean(lockViewport && !isMobile);
   const laptopFit = Boolean(effectiveLockViewport && fitLaptopViewport && compactLayout && operationalFocus);
+  const lockFill = Boolean(effectiveLockViewport && lockViewportFillParent);
   const pad = laptopFit
     ? "clamp(4px, 0.8vw, 10px)"
     : compactLayout && operationalFocus
@@ -98,9 +105,25 @@ export default function ModulePageShell({
             }
           : {
               paddingBottom: pad,
-              minHeight: effectiveLockViewport ? "100dvh" : "100vh",
-              height: effectiveLockViewport ? (laptopFit ? "calc(100dvh - 2px)" : "100dvh") : undefined,
-              maxHeight: effectiveLockViewport ? (laptopFit ? "calc(100dvh - 2px)" : "100dvh") : undefined,
+              minHeight: effectiveLockViewport ? (lockFill ? 0 : "100dvh") : "100vh",
+              height: effectiveLockViewport
+                ? lockFill
+                  ? laptopFit
+                    ? "calc(100% - 2px)"
+                    : "100%"
+                  : laptopFit
+                    ? "calc(100dvh - 2px)"
+                    : "100dvh"
+                : undefined,
+              maxHeight: effectiveLockViewport
+                ? lockFill
+                  ? laptopFit
+                    ? "calc(100% - 2px)"
+                    : "100%"
+                  : laptopFit
+                    ? "calc(100dvh - 2px)"
+                    : "100dvh"
+                : undefined,
               overflow: effectiveLockViewport ? "hidden" : undefined,
               display: effectiveLockViewport ? "flex" : undefined,
               flexDirection: effectiveLockViewport ? "column" : undefined,
@@ -118,6 +141,7 @@ export default function ModulePageShell({
         }
         title={title}
         subtitle={subtitle}
+        below={headerBelow}
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             {headerRight}

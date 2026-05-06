@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import ConfigMesasPage from "@/app/dashboard/config/mesas/page";
 import ProductosManagementPage from "@/components/productos/productos-management-page";
 import ModulePageShell from "@/components/module-page-shell";
@@ -25,6 +25,23 @@ const tabBarStyle: CSSProperties = {
   borderRadius: 12,
   border: "1px solid rgba(148, 163, 184, 0.22)",
   background: "rgba(15, 23, 42, 0.55)",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+/** Fila 1: módulo Config — más protagonista. */
+const tabBarPrimaryStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "stretch",
+  gap: 4,
+  padding: 5,
+  borderRadius: 14,
+  border: "1px solid rgba(148, 163, 184, 0.24)",
+  background: "rgba(15, 23, 42, 0.72)",
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+  maxWidth: "100%",
+  boxSizing: "border-box",
 };
 
 function tabButtonStyle(active: boolean): CSSProperties {
@@ -39,6 +56,23 @@ function tabButtonStyle(active: boolean): CSSProperties {
     fontSize: 14,
     letterSpacing: "-0.02em",
     cursor: "pointer",
+    lineHeight: 1.2,
+  };
+}
+
+function tabButtonPrimaryStyle(active: boolean): CSSProperties {
+  return {
+    minWidth: 76,
+    padding: "10px 15px",
+    borderRadius: 10,
+    border: "none",
+    background: active ? "rgba(56, 189, 248, 0.24)" : "transparent",
+    color: active ? "#f0f9ff" : "#94a3b8",
+    fontWeight: active ? 650 : 590,
+    fontSize: 14.5,
+    letterSpacing: "-0.021em",
+    cursor: "pointer",
+    lineHeight: 1.2,
   };
 }
 
@@ -59,23 +93,85 @@ const placeholderStyle: CSSProperties = {
   lineHeight: 1.5,
 };
 
+function configStackRootStyle(isMobile: boolean): CSSProperties {
+  return {
+    display: "flex",
+    flexDirection: "column",
+    boxSizing: "border-box",
+    minHeight: "100dvh",
+    background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
+    ...(isMobile
+      ? { overflow: "visible", height: "auto" }
+      : { height: "100dvh", overflow: "hidden" }),
+  };
+}
+
+const configPrimaryRow: CSSProperties = {
+  flexShrink: 0,
+  width: "100%",
+  minWidth: 0,
+  padding: "12px clamp(12px, 3vw, 28px) 0",
+  boxSizing: "border-box",
+};
+
+const configPrimaryDivider: CSSProperties = {
+  flexShrink: 0,
+  height: 1,
+  margin: "12px clamp(12px, 3vw, 28px) 0",
+  background: "rgba(148, 163, 184, 0.2)",
+};
+
+const configPrimaryBreather: CSSProperties = {
+  flexShrink: 0,
+  height: 14,
+};
+
+const configBodyFill: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+};
+
 export default function ConfiguracionPage() {
   const [tab, setTab] = useState<ConfigTab>("carta");
+  const [isMobile, setIsMobile] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   if (tab === "carta") {
     return (
-      <div style={{ position: "relative", minHeight: "100dvh" }}>
-        <ProductosManagementPage />
-        <FloatingTabs active={tab} onChange={setTab} />
+      <div style={configStackRootStyle(isMobile)}>
+        <header style={configPrimaryRow}>
+          <ConfigTabsBar active={tab} onChange={setTab} variant="primary" />
+        </header>
+        <div style={configPrimaryDivider} aria-hidden />
+        <div style={configPrimaryBreather} aria-hidden />
+        <div style={configBodyFill}>
+          <ProductosManagementPage lockViewportFillParent />
+        </div>
       </div>
     );
   }
 
   if (tab === "mesas") {
     return (
-      <div style={{ position: "relative", minHeight: "100dvh" }}>
-        <ConfigMesasPage />
-        <FloatingTabs active={tab} onChange={setTab} />
+      <div style={configStackRootStyle(isMobile)}>
+        <header style={configPrimaryRow}>
+          <ConfigTabsBar active={tab} onChange={setTab} variant="primary" />
+        </header>
+        <div style={configPrimaryDivider} aria-hidden />
+        <div style={configPrimaryBreather} aria-hidden />
+        <div style={configBodyFill}>
+          <ConfigMesasPage lockViewportFillParent />
+        </div>
       </div>
     );
   }
@@ -95,11 +191,11 @@ export default function ConfiguracionPage() {
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 16,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <ConfigTabsBar active={tab} onChange={setTab} />
+        <div style={{ display: "flex", justifyContent: "flex-start", flexWrap: "wrap" }}>
+          <ConfigTabsBar active={tab} onChange={setTab} variant="primary" />
         </div>
 
         {tab === "zonas" ? <ZonasManagement /> : null}
@@ -117,12 +213,17 @@ export default function ConfiguracionPage() {
 function ConfigTabsBar({
   active,
   onChange,
+  variant = "default",
 }: {
   active: ConfigTab;
   onChange: (t: ConfigTab) => void;
+  variant?: "default" | "primary";
 }) {
+  const bar = variant === "primary" ? tabBarPrimaryStyle : tabBarStyle;
+  const btn = variant === "primary" ? tabButtonPrimaryStyle : tabButtonStyle;
+
   return (
-    <div role="tablist" aria-label="Secciones de configuración" style={tabBarStyle}>
+    <div role="tablist" aria-label="Secciones de configuración" style={bar}>
       {TABS.map((t) => (
         <button
           key={t.id}
@@ -130,33 +231,11 @@ function ConfigTabsBar({
           role="tab"
           aria-selected={active === t.id}
           onClick={() => onChange(t.id)}
-          style={tabButtonStyle(active === t.id)}
+          style={btn(active === t.id)}
         >
           {t.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-function FloatingTabs({
-  active,
-  onChange,
-}: {
-  active: ConfigTab;
-  onChange: (t: ConfigTab) => void;
-}) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: 12,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 50,
-      }}
-    >
-      <ConfigTabsBar active={active} onChange={onChange} />
     </div>
   );
 }

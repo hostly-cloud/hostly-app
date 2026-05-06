@@ -15,6 +15,7 @@ import type { CSSProperties } from "react";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -75,22 +76,6 @@ const readOnlyStyle: CSSProperties = {
   cursor: "default",
 };
 
-const btnToolbar: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minWidth: 72,
-  padding: "7px 12px",
-  borderRadius: 8,
-  border: "none",
-  background: "transparent",
-  color: "#e2e8f0",
-  fontWeight: 600,
-  fontSize: 13,
-  cursor: "pointer",
-  letterSpacing: "-0.02em",
-};
-
 const btnDanger: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -107,16 +92,6 @@ const btnDanger: CSSProperties = {
   marginTop: 4,
 };
 
-const toolbarGroupStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "stretch",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.55)",
-  padding: 3,
-  gap: 2,
-};
-
 const zoneLegendStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -126,7 +101,7 @@ const zoneLegendStyle: CSSProperties = {
   border: "1px solid rgba(148, 163, 184, 0.22)",
   background: "rgba(15, 23, 42, 0.45)",
   flexWrap: "wrap",
-  maxWidth: 360,
+  maxWidth: "min(360px, 100%)",
 };
 
 const zoneLegendItemStyle: CSSProperties = {
@@ -203,24 +178,109 @@ const unsavedBadgeStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+/** Barra principal del editor: acciones colocar + guardar. */
+const editorTopBarStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: 8,
+  rowGap: 8,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(148, 163, 184, 0.22)",
+  background: "rgba(15, 23, 42, 0.55)",
+  marginBottom: 8,
+  boxSizing: "border-box",
+};
+
+/** Herramientas de zona, vista y selección (menos protagonistas). */
+const editorSecondaryStripStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: 6,
+  rowGap: 6,
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(148, 163, 184, 0.14)",
+  background: "rgba(15, 23, 42, 0.32)",
+  marginBottom: 12,
+  boxSizing: "border-box",
+};
+
+const topBarMesaBtn: CSSProperties = {
+  padding: "6px 12px",
+  borderRadius: 8,
+  border: "1px solid rgba(56, 189, 248, 0.38)",
+  background: "rgba(56, 189, 248, 0.16)",
+  color: "#e0f2fe",
+  fontWeight: 700,
+  fontSize: 12,
+  letterSpacing: "-0.02em",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const topBarMesaBtnActive: CSSProperties = {
+  ...topBarMesaBtn,
+  background: "rgba(56, 189, 248, 0.28)",
+  boxShadow: "inset 0 0 0 1px rgba(56, 189, 248, 0.25)",
+};
+
+const decorativeSelectStyle: CSSProperties = {
+  ...zoneHighlightSelectStyle,
+  minWidth: 148,
+  fontSize: 12,
+  padding: "6px 24px 6px 10px",
+};
+
+const miniToolBtn: CSSProperties = {
+  padding: "5px 9px",
+  borderRadius: 8,
+  border: "1px solid rgba(148, 163, 184, 0.28)",
+  background: "rgba(15, 23, 42, 0.4)",
+  color: "#e2e8f0",
+  fontWeight: 600,
+  fontSize: 12,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const miniToolBtnDanger: CSSProperties = {
+  ...miniToolBtn,
+  border: "1px solid rgba(248, 113, 113, 0.35)",
+  background: "rgba(248, 113, 113, 0.1)",
+  color: "#fecaca",
+};
+
+const miniToolBtnActive: CSSProperties = {
+  ...miniToolBtn,
+  border: "1px solid rgba(56, 189, 248, 0.35)",
+  background: "rgba(56, 189, 248, 0.14)",
+  color: "#e0f2fe",
+  fontWeight: 700,
+};
+
 const sidePanelStyle: CSSProperties = {
-  flex: "0 0 320px",
-  width: 320,
+  flex: "0 0 270px",
+  width: 270,
   maxWidth: "100%",
-  minWidth: 280,
+  minWidth: 240,
   boxSizing: "border-box",
   display: "flex",
   flexDirection: "column",
-  padding: "12px 12px 10px",
+  padding: "11px 11px 10px",
   borderRadius: "var(--hostly-radius-md)",
   alignSelf: "stretch",
   overflow: "hidden",
 };
 
 const sidePanelTitleStyle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  color: "#e2e8f0",
+  fontSize: 11,
+  fontWeight: 750,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: "#94a3b8",
   marginBottom: 10,
 };
 
@@ -322,7 +382,13 @@ function cloneElementList(els: FloorElement[]): FloorElement[] {
   return els.map((e) => ({ ...e }));
 }
 
-export default function ConfigMesasPage() {
+export type ConfigMesasPageProps = {
+  lockViewportFillParent?: boolean;
+};
+
+export default function ConfigMesasPage({
+  lockViewportFillParent = false,
+}: ConfigMesasPageProps = {}) {
   const router = useRouter();
   const { user, restaurantId: profileRestaurantId, ready: authReady } =
     useAuth();
@@ -362,6 +428,8 @@ export default function ConfigMesasPage() {
   const [clipboardElements, setClipboardElements] = useState<
     FloorElement[] | null
   >(null);
+
+  const [editorLayoutNarrow, setEditorLayoutNarrow] = useState(false);
 
   const [nameDraft, setNameDraft] = useState("");
   const [dimDraft, setDimDraft] = useState({
@@ -700,6 +768,11 @@ export default function ConfigMesasPage() {
       (el) => String(el.id).trim() === String(selectedElement.id).trim(),
     );
   }, [elements, selectedElement]);
+
+  const showSideInspector = useMemo(
+    () => editingZones || selectedIds.length > 0,
+    [editingZones, selectedIds],
+  );
 
   useEffect(() => {
     if (!selectedElement) {
@@ -1806,6 +1879,14 @@ export default function ConfigMesasPage() {
     [elements],
   );
 
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const sync = () => setEditorLayoutNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
   const handleUnlockAllElements = useCallback(() => {
     if (!window.confirm("¿Desbloquear todos los elementos?")) return;
     commitElements((prev) => prev.map((el) => ({ ...el, locked: false })));
@@ -1818,44 +1899,138 @@ export default function ConfigMesasPage() {
     visibleElements.length === 0;
 
   const editorToolbar = (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        padding: "8px 10px",
-        borderRadius: 14,
-        border: "1px solid rgba(148, 163, 184, 0.18)",
-        background: "rgba(15, 23, 42, 0.35)",
-        marginBottom: 10,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 8,
-          rowGap: 8,
-          justifyContent: "space-between",
-          columnGap: 10,
-          width: "100%",
-        }}
-      >
+    <>
+      <div style={editorTopBarStyle}>
         <div
           style={{
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
             gap: 8,
-            rowGap: 8,
             flex: "1 1 220px",
             minWidth: 0,
           }}
         >
+          <button
+            type="button"
+            style={
+              activeCreateType === "table" ? topBarMesaBtnActive : topBarMesaBtn
+            }
+            onClick={() => setActiveCreateType("table")}
+            disabled={editingZones}
+          >
+            Añadir mesa
+          </button>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: "#64748b",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Añadir elemento
+            </span>
+            <select
+              id="hostly-decorative-place-type"
+              aria-label="Tipo de elemento decorativo a colocar"
+              value={activeCreateType === "table" ? "" : activeCreateType}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (
+                  v === "sunbed" ||
+                  v === "bed" ||
+                  v === "wall" ||
+                  v === "bar" ||
+                  v === "column" ||
+                  v === "pool"
+                ) {
+                  setActiveCreateType(v);
+                }
+              }}
+              disabled={editingZones}
+              style={decorativeSelectStyle}
+            >
+              <option value="">Elige tipo…</option>
+              <option value="sunbed">{planTypeLabelEs("sunbed")}</option>
+              <option value="bed">{planTypeLabelEs("bed")}</option>
+              <option value="wall">{planTypeLabelEs("wall")}</option>
+              <option value="bar">{planTypeLabelEs("bar")}</option>
+              <option value="column">{planTypeLabelEs("column")}</option>
+              <option value="pool">{planTypeLabelEs("pool")}</option>
+            </select>
+          </div>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 8,
+            justifyContent: "flex-end",
+            flex: "1 1 160px",
+            marginLeft: "auto",
+          }}
+        >
+          {hasUnsavedChanges ? (
+            <span style={unsavedBadgeStyle}>Sin guardar</span>
+          ) : null}
+          <button
+            type="button"
+            style={{
+              ...primaryBtn,
+              fontSize: 12,
+              padding: "6px 12px",
+              opacity: hasUnsavedChanges ? 1 : 0.5,
+              cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+            }}
+            onClick={() => void handleSavePlanChanges()}
+            disabled={!hasUnsavedChanges}
+          >
+            Guardar
+          </button>
+          <button
+            type="button"
+            style={{
+              ...smallBtn,
+              fontSize: 12,
+              padding: "6px 12px",
+              opacity: hasUnsavedChanges ? 1 : 0.5,
+              cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+            }}
+            onClick={handleDiscardPlanChanges}
+            disabled={!hasUnsavedChanges}
+          >
+            Restablecer
+          </button>
+        </div>
+      </div>
+
+      <div style={editorSecondaryStripStyle}>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 750,
+            color: "#475569",
+            textTransform: "uppercase",
+            letterSpacing: "0.07em",
+            marginRight: 4,
+          }}
+        >
+          Zonas y selección
+        </span>
         <button
           type="button"
-          style={editingZones ? smallBtnActive : smallBtn}
+          style={editingZones ? miniToolBtnActive : miniToolBtn}
           onClick={() => {
             setEditingZones((v) => {
               const next = !v;
@@ -1865,11 +2040,11 @@ export default function ConfigMesasPage() {
             });
           }}
         >
-          {editingZones ? "Salir edición de zonas" : "Editar zonas"}
+          {editingZones ? "Salir zonas" : "Editar zonas"}
         </button>
         <button
           type="button"
-          style={smallBtn}
+          style={miniToolBtn}
           onClick={() => void handleCreateZoneVisual()}
           disabled={zones.length === 0}
         >
@@ -1879,7 +2054,7 @@ export default function ConfigMesasPage() {
           <select
             value={zoneHighlight}
             onChange={(e) => setZoneHighlight(e.target.value)}
-            style={zoneHighlightSelectStyle}
+            style={{ ...zoneHighlightSelectStyle, fontSize: 12, minWidth: 140 }}
             aria-label="Resaltar zona"
           >
             <option value="all">Todas las zonas</option>
@@ -1896,7 +2071,7 @@ export default function ConfigMesasPage() {
         {hasAnyLockedElement ? (
           <button
             type="button"
-            style={smallBtn}
+            style={miniToolBtn}
             onClick={() => void handleUnlockAllElements()}
             disabled={editingZones}
           >
@@ -1907,28 +2082,28 @@ export default function ConfigMesasPage() {
           <>
             <button
               type="button"
-              style={smallBtn}
+              style={miniToolBtn}
               onClick={() => void handleDuplicateSelection()}
               disabled={editingZones}
             >
-              Duplicar selección
+              Duplicar
             </button>
             <button
               type="button"
-              style={smallBtnDanger}
+              style={miniToolBtnDanger}
               onClick={() => void handleDeleteSelection()}
               disabled={editingZones}
             >
-              Eliminar selección
+              Eliminar
             </button>
             {selectedFloorPlanId ? (
               <button
                 type="button"
-                style={smallBtn}
+                style={miniToolBtn}
                 onClick={() => void handleMoveSelectionToActiveFloorPlan()}
                 disabled={editingZones}
               >
-                Mover a este plano
+                A este plano
               </button>
             ) : null}
           </>
@@ -1940,15 +2115,15 @@ export default function ConfigMesasPage() {
                 display: "inline-flex",
                 flexWrap: "wrap",
                 alignItems: "center",
-                gap: 6,
+                gap: 4,
               }}
               role="group"
               aria-label="Alinear elementos"
             >
               <span
                 style={{
-                  fontSize: 11,
-                  color: "#94a3b8",
+                  fontSize: 10,
+                  color: "#64748b",
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
@@ -1958,51 +2133,57 @@ export default function ConfigMesasPage() {
               </span>
               <button
                 type="button"
-                style={smallBtn}
+                style={miniToolBtn}
                 disabled={editingZones}
+                title="Alinear a la izquierda"
                 onClick={() => alignSelectedElements("left")}
               >
-                Izquierda
+                ←
               </button>
               <button
                 type="button"
-                style={smallBtn}
+                style={miniToolBtn}
                 disabled={editingZones}
+                title="Centrar horizontalmente"
                 onClick={() => alignSelectedElements("centerH")}
               >
-                Centro H
+                H
               </button>
               <button
                 type="button"
-                style={smallBtn}
+                style={miniToolBtn}
                 disabled={editingZones}
+                title="Alinear a la derecha"
                 onClick={() => alignSelectedElements("right")}
               >
-                Derecha
+                →
               </button>
               <button
                 type="button"
-                style={smallBtn}
+                style={miniToolBtn}
                 disabled={editingZones}
+                title="Alinear arriba"
                 onClick={() => alignSelectedElements("top")}
               >
-                Arriba
+                ↑
               </button>
               <button
                 type="button"
-                style={smallBtn}
+                style={miniToolBtn}
                 disabled={editingZones}
+                title="Centrar verticalmente"
                 onClick={() => alignSelectedElements("centerV")}
               >
-                Centro V
+                V
               </button>
               <button
                 type="button"
-                style={smallBtn}
+                style={miniToolBtn}
                 disabled={editingZones}
+                title="Alinear abajo"
                 onClick={() => alignSelectedElements("bottom")}
               >
-                Abajo
+                ↓
               </button>
             </div>
             {selectedIds.length >= 3 ? (
@@ -2011,199 +2192,47 @@ export default function ConfigMesasPage() {
                   display: "inline-flex",
                   flexWrap: "wrap",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 4,
                 }}
                 role="group"
                 aria-label="Distribuir elementos"
               >
                 <span
                   style={{
-                    fontSize: 11,
-                    color: "#94a3b8",
+                    fontSize: 10,
+                    color: "#64748b",
                     fontWeight: 700,
                     textTransform: "uppercase",
                     letterSpacing: "0.04em",
                   }}
                 >
-                  Distribuir
+                  Repartir
                 </span>
                 <button
                   type="button"
-                  style={smallBtn}
+                  style={miniToolBtn}
                   disabled={editingZones}
                   onClick={() => distributeSelectedElements("horizontal")}
                 >
-                  Distribuir horizontal
+                  Horizontal
                 </button>
                 <button
                   type="button"
-                  style={smallBtn}
+                  style={miniToolBtn}
                   disabled={editingZones}
                   onClick={() => distributeSelectedElements("vertical")}
                 >
-                  Distribuir vertical
+                  Vertical
                 </button>
               </div>
             ) : null}
           </>
         ) : null}
-        </div>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            flex: "0 0 auto",
-            marginLeft: "auto",
-          }}
-        >
-          <div style={toolbarGroupStyle} role="group" aria-label="Añadir elemento al plano">
-            <button
-              type="button"
-              style={{
-                ...btnToolbar,
-                ...(activeCreateType === "table"
-                  ? {
-                      background: "rgba(56, 189, 248, 0.14)",
-                      color: "#e0f2fe",
-                      fontWeight: 800,
-                    }
-                  : {}),
-              }}
-              onClick={() => setActiveCreateType("table")}
-              disabled={editingZones}
-            >
-              Mesa
-            </button>
-            <button
-              type="button"
-              style={{
-                ...btnToolbar,
-                ...(activeCreateType === "sunbed"
-                  ? {
-                      background: "rgba(56, 189, 248, 0.14)",
-                      color: "#e0f2fe",
-                      fontWeight: 800,
-                    }
-                  : {}),
-              }}
-              onClick={() => setActiveCreateType("sunbed")}
-              disabled={editingZones}
-            >
-              Hamaca
-            </button>
-            <button
-              type="button"
-              style={{
-                ...btnToolbar,
-                ...(activeCreateType === "bed"
-                  ? {
-                      background: "rgba(56, 189, 248, 0.14)",
-                      color: "#e0f2fe",
-                      fontWeight: 800,
-                    }
-                  : {}),
-              }}
-              onClick={() => setActiveCreateType("bed")}
-              disabled={editingZones}
-            >
-              Cama
-            </button>
-            <button
-              type="button"
-              style={{
-                ...btnToolbar,
-                ...(activeCreateType === "wall"
-                  ? {
-                      background: "rgba(56, 189, 248, 0.14)",
-                      color: "#e0f2fe",
-                      fontWeight: 800,
-                    }
-                  : {}),
-              }}
-              onClick={() => setActiveCreateType("wall")}
-              disabled={editingZones}
-            >
-              Pared
-            </button>
-            <button
-              type="button"
-              style={{
-                ...btnToolbar,
-                ...(activeCreateType === "bar"
-                  ? {
-                      background: "rgba(56, 189, 248, 0.14)",
-                      color: "#e0f2fe",
-                      fontWeight: 800,
-                    }
-                  : {}),
-              }}
-              onClick={() => setActiveCreateType("bar")}
-              disabled={editingZones}
-            >
-              Barra
-            </button>
-            <button
-              type="button"
-              style={{
-                ...btnToolbar,
-                ...(activeCreateType === "column"
-                  ? {
-                      background: "rgba(56, 189, 248, 0.14)",
-                      color: "#e0f2fe",
-                      fontWeight: 800,
-                    }
-                  : {}),
-              }}
-              onClick={() => setActiveCreateType("column")}
-              disabled={editingZones}
-            >
-              Columna
-            </button>
-            <button
-              type="button"
-              style={{
-                ...btnToolbar,
-                ...(activeCreateType === "pool"
-                  ? {
-                      background: "rgba(56, 189, 248, 0.14)",
-                      color: "#e0f2fe",
-                      fontWeight: 800,
-                    }
-                  : {}),
-              }}
-              onClick={() => setActiveCreateType("pool")}
-              disabled={editingZones}
-            >
-              Piscina
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 8,
-          rowGap: 6,
-          justifyContent: "flex-end",
-          width: "100%",
-        }}
-      >
-        {hasUnsavedChanges ? <span style={unsavedBadgeStyle}>Cambios sin guardar</span> : null}
-        {hasUnsavedChanges ? (
-          <>
-            <button type="button" style={primaryBtn} onClick={() => void handleSavePlanChanges()}>
-              Guardar cambios
-            </button>
-            <button type="button" style={smallBtn} onClick={handleDiscardPlanChanges}>
-              Descartar cambios
-            </button>
-          </>
-        ) : null}
         {zones.length > 0 ? (
-          <div style={zoneLegendStyle} aria-label="Leyenda de zonas">
+          <div
+            style={{ ...zoneLegendStyle, marginLeft: "auto", maxWidth: 360 }}
+            aria-label="Leyenda de zonas"
+          >
             {zones.map((z) => (
               <span key={z.id} style={zoneLegendItemStyle}>
                 <span
@@ -2223,7 +2252,7 @@ export default function ConfigMesasPage() {
           </div>
         ) : null}
       </div>
-    </div>
+    </>
   );
 
   return (
@@ -2233,34 +2262,48 @@ export default function ConfigMesasPage() {
       compactLayout
       operationalFocus
       lockViewport
+      lockViewportFillParent={lockViewportFillParent}
       backLabel="Volver"
     >
       {restaurantId && isFirebaseConfigured ? (
-        <div style={{ marginBottom: 10 }}>
-          <h3
+        <div
+          style={{
+            marginBottom: 12,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "8px 12px",
+            minWidth: 0,
+          }}
+        >
+          <span
             style={{
-              margin: "0 0 8px",
-              fontSize: 16,
+              fontSize: 13,
               fontWeight: 700,
               color: "#e2e8f0",
+              letterSpacing: "-0.02em",
             }}
           >
-            Plano: {selectedFloorPlanName ?? "—"}
-          </h3>
+            {selectedFloorPlanName ?? "—"}
+          </span>
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: 10,
               flexWrap: "wrap",
+              alignItems: "center",
+              gap: 8,
+              flex: "1 1 200px",
+              minWidth: 0,
             }}
           >
             <label
               htmlFor="hostly-floor-plan-select"
               style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "#94a3b8",
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
                 whiteSpace: "nowrap",
               }}
             >
@@ -2277,8 +2320,11 @@ export default function ConfigMesasPage() {
               style={{
                 ...inputStyle,
                 width: "auto",
-                minWidth: 180,
+                minWidth: 160,
+                maxWidth: "100%",
                 cursor: "pointer",
+                fontSize: 12,
+                padding: "6px 10px",
               }}
             >
               {floorPlans.map((p) => (
@@ -2289,7 +2335,7 @@ export default function ConfigMesasPage() {
             </select>
             <button
               type="button"
-              style={smallBtn}
+              style={{ ...smallBtn, fontSize: 12, padding: "5px 10px" }}
               onClick={() => void handleCreateNewFloorPlan()}
             >
               Nuevo plano
@@ -2302,24 +2348,26 @@ export default function ConfigMesasPage() {
         style={{
           flex: 1,
           minHeight: 0,
+          minWidth: 0,
           width: "100%",
           display: "flex",
-          flexDirection: "row",
+          flexDirection: editorLayoutNarrow ? "column" : "row",
           alignItems: "stretch",
-          gap: 12,
+          gap: editorLayoutNarrow ? 14 : 16,
         }}
       >
         <div
           className="hostly-card"
           style={{
-            flex: "1 1 auto",
+            flex: "1 1 0%",
             minWidth: 0,
-            minHeight: 0,
+            minHeight: editorLayoutNarrow ? 320 : 0,
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             padding: 0,
             borderRadius: "var(--hostly-radius-md)",
+            order: editorLayoutNarrow ? 1 : undefined,
           }}
         >
           {loading ? (
@@ -2345,6 +2393,8 @@ export default function ConfigMesasPage() {
                 minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
+                padding: "14px 16px 16px",
+                boxSizing: "border-box",
               }}
             >
               {showMapEmptyHint ? (
@@ -2417,9 +2467,25 @@ export default function ConfigMesasPage() {
           )}
         </div>
 
-        <aside className="hostly-card" style={sidePanelStyle}>
+        {showSideInspector ? (
+        <aside
+          className="hostly-card"
+          style={{
+            ...sidePanelStyle,
+            ...(editorLayoutNarrow
+              ? {
+                  flex: "0 0 auto",
+                  width: "100%",
+                  maxWidth: "100%",
+                  minWidth: 0,
+                  maxHeight: "min(44vh, 420px)",
+                  order: 2,
+                }
+              : {}),
+          }}
+        >
           <div style={sidePanelTitleStyle}>
-            {editingZones ? "Zona" : "Elemento"}
+            {editingZones ? "Zona" : "Detalle"}
           </div>
 
           {editingZones ? (
@@ -2852,6 +2918,7 @@ export default function ConfigMesasPage() {
             </div>
           )}
         </aside>
+        ) : null}
       </div>
     </ModulePageShell>
   );

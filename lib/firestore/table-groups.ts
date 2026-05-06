@@ -45,6 +45,9 @@ export function normalizeTableGroups(rawGroups: unknown): Record<string, string[
 
 /**
  * Persiste grupos tras actualización optimista en cliente.
+ * IMPORTANTE: `groups` debe sustituirse entero en Firestore. Con `setDoc(..., { merge: true })`
+ * un valor `groups: {}` NO borra claves anidadas que ya existían en el mapa.
+ * Por eso aquí usamos `merge: false` y el documento queda solo en `{ groups, updatedAt }`.
  * Fallos solo se registran en consola; no relanza.
  */
 export async function persistTableGroups(
@@ -62,7 +65,7 @@ export async function persistTableGroups(
         groups: normalized,
         updatedAt: Date.now(),
       },
-      { merge: true },
+      { merge: false },
     );
   } catch (e) {
     console.error("persistTableGroups", e);
