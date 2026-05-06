@@ -1,5 +1,10 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { OperationFilterProvider } from "@/components/kds/operation-filter-context";
+import OperacionStationStatusStrip from "./_components/operacion-station-status-strip";
 
 /**
  * Comparte el `OperationFilterProvider` entre la pantalla menú y todos los módulos hijos
@@ -12,5 +17,43 @@ export default function OperacionLayout({
 }: {
   children: ReactNode;
 }) {
-  return <OperationFilterProvider>{children}</OperationFilterProvider>;
+  const router = useRouter();
+  const pathname = usePathname();
+  const hideStationStatusStripForTpv = pathname === "/dashboard/operacion/tpv";
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+
+      const key = e.key.toLowerCase();
+
+      if (key === "c") {
+        router.push("/dashboard/operacion/cocina");
+      }
+
+      if (key === "b") {
+        router.push("/dashboard/operacion/barra");
+      }
+
+      if (key === "s") {
+        router.push("/dashboard/operacion/sala");
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+
+    return () => {
+      window.removeEventListener("keydown", handler);
+    };
+  }, []);
+
+  return (
+    <OperationFilterProvider>
+      {hideStationStatusStripForTpv ? null : <OperacionStationStatusStrip />}
+      {children}
+    </OperationFilterProvider>
+  );
 }

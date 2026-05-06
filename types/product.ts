@@ -5,6 +5,8 @@ export type Product = {
   /** Id del documento de categoría en Firestore, si existe en el documento. */
   categoryId?: string;
   precio: number;
+  /** Pase / curso del catálogo (1–4: entrante…postre). Opcional en datos legados. */
+  course?: number;
   /** Área operativa donde se prepara el producto (p. ej. cocina, barra, cocteleria). */
   preparationArea?: string;
   createdAt?: number;

@@ -1,19 +1,7 @@
 "use client";
 
-import { memo } from "react";
-import {
-  TABLE_MAP_STATUS_OCCUPIED,
-  type Table,
-  type TableMapStatus,
-} from "@/lib/firestore/tables";
-
-function formatOrderOpenDurationLabel(totalMinutes: number): string {
-  const m = Math.max(0, Math.floor(totalMinutes));
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  const rm = m % 60;
-  return `${h}h ${rm}m`;
-}
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Table, TableMapStatus } from "@/lib/firestore/tables";
 
 export type ElementMapCardProps = {
   table: Table;
@@ -50,21 +38,100 @@ export type ElementMapCardProps = {
   billRequested?: boolean;
   reservationBadge?: { label: string; subLabel?: string } | null;
   reservationPressure?: { type: "upcoming" | "late"; time: string } | null;
+  readyToClose?: boolean;
+  groupedBadgeText?: string | null;
+  mapJoinDragEnabled?: boolean;
+  onMapTableJoinDrop?: (draggedTableId: string, targetTableId: string) => void;
 };
+
+type MapBaseSurfaceClass =
+  | "hostly-map-table--free"
+  | "hostly-map-table--occupied"
+  | "hostly-map-table--reserved";
+
+type MapAlertDotClass = "critical" | "attention";
+
+const SURFACE_TOKENS: Record<
+  MapBaseSurfaceClass,
+  { background: string; color: string }
+> = {
+  "hostly-map-table--free": { background: "#bbf7d0", color: "#166534" },
+  "hostly-map-table--occupied": { background: "#7dd3fc", color: "#1e40af" },
+  "hostly-map-table--reserved": { background: "#f3e8ff", color: "#7e22ce" },
+};
+
+const ALERT_DOT_COLORS: Record<MapAlertDotClass, string> = {
+  critical: "#ef4444",
+  attention: "#f59e0b",
+};
+
+/** Superficie base: solo libre / ocupada / reservada (sin urgencia en el fondo). */
+function resolveBaseSurface(
+  busy: boolean,
+  reservationBadge: { label: string; subLabel?: string } | null | undefined,
+): MapBaseSurfaceClass {
+  if (!busy && reservationBadge) return "hostly-map-table--reserved";
+  if (!busy) return "hostly-map-table--free";
+  return "hostly-map-table--occupied";
+}
+
+/** Indicador discreto: crítico tiene prioridad sobre atención. */
+function resolveAlertDot(
+  isCriticalTable: boolean,
+  priorityLevel: number,
+  readyToClose: boolean,
+  reservationPressure: { type: "upcoming" | "late" } | null | undefined,
+): MapAlertDotClass | null {
+  if (isCriticalTable || priorityLevel >= 3) return "critical";
+  if (
+    priorityLevel === 1 ||
+    priorityLevel === 2 ||
+    readyToClose ||
+    reservationPressure?.type === "late"
+  ) {
+    return "attention";
+  }
+  return null;
+}
+
+/** Leyenda inferior de la tesela (no altera superficie/colores ni reglas Firestore). */
+function resolveMapTableStatusLabel(
+  busy: boolean,
+  reservationBadge: { label: string; subLabel?: string } | null | undefined,
+  reservationPressure:
+    | { type: "upcoming" | "late"; time: string }
+    | null
+    | undefined,
+): "LIBRE" | "RESERVADA" | "OCUPADA" | "RETRASADA" {
+  if (reservationPressure?.type === "late") return "RETRASADA";
+  if (!busy && reservationBadge) return "RESERVADA";
+  if (busy) return "OCUPADA";
+  return "LIBRE";
+}
+
+/** Número visible: primer bloque de dígitos en el nombre; si no, en tableId. */
+function tableNumberForDisplay(table: Table, tableId: string): string {
+  const name = String(table.name ?? "").trim();
+  const fromName = name.match(/(\d+)/);
+  if (fromName) return fromName[1] ?? name;
+  const fromId = tableId.match(/(\d+)/);
+  if (fromId) return fromId[1] ?? tableId;
+  return name || tableId.slice(0, 4);
+}
 
 export const ElementCard = memo(
   function ElementCard({
     table,
     tableId,
     busy,
-    tileVisual,
-    durationLabel,
-    showProductCount,
-    activeLineCount,
-    badgeTier,
+    tileVisual: _tileVisual,
+    durationLabel: _durationLabel,
+    showProductCount: _showProductCount,
+    activeLineCount: _activeLineCount,
+    badgeTier: _badgeTier,
     isCriticalTable,
     ariaLabel,
-    mapLibreLabel,
+    mapLibreLabel: _mapLibreLabel,
     onTableClick,
     occupancyStart: _occupancyStart,
     priority: _priority,
@@ -76,22 +143,135 @@ export const ElementCard = memo(
     mapTileWidth,
     mapTileHeight,
     tableShape,
-    seats,
-    tableMapStatus,
-    hasOpenOrder,
-    orderTotal,
-    openedAt,
-    mapNow,
+    seats: _seats,
+    tableMapStatus: _tableMapStatus,
+    hasOpenOrder: _hasOpenOrder,
+    orderTotal: _orderTotal,
+    openedAt: _openedAt,
+    mapNow: _mapNow,
     priorityLevel = 0,
-    inactiveMinutes = 0,
-    waiterShortLabel = null,
-    billRequested = false,
-    reservationBadge = null,
-    reservationPressure = null,
+    inactiveMinutes: _inactiveMinutes,
+    waiterShortLabel: _waiterShortLabel,
+    billRequested: _billRequested,
+    reservationBadge,
+    reservationPressure,
+    readyToClose,
+    groupedBadgeText,
+    mapJoinDragEnabled = false,
+    onMapTableJoinDrop,
   }: ElementMapCardProps) {
-    const finalStatus = hasOpenOrder
-      ? TABLE_MAP_STATUS_OCCUPIED
-      : tableMapStatus;
+    const joinDragStateRef = useRef<{
+      startX: number;
+      startY: number;
+      armed: boolean;
+      active: boolean;
+    } | null>(null);
+    const joinSuppressClickRef = useRef(false);
+    const pressResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [isHovered, setIsHovered] = useState(false);
+    const [isPressedPulse, setIsPressedPulse] = useState(false);
+
+    const animationsOff = prefersReducedMotion || isUltraFastMode;
+
+    const armPressBurst = useCallback(() => {
+      if (animationsOff) return;
+      if (pressResetRef.current !== null) {
+        clearTimeout(pressResetRef.current);
+      }
+      setIsPressedPulse(true);
+      pressResetRef.current = setTimeout(() => {
+        setIsPressedPulse(false);
+        pressResetRef.current = null;
+      }, 100);
+    }, [animationsOff]);
+
+    useEffect(() => {
+      return () => {
+        if (pressResetRef.current !== null) {
+          clearTimeout(pressResetRef.current);
+        }
+      };
+    }, []);
+
+    const handleJoinPointerDown = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!mapJoinDragEnabled || !onMapTableJoinDrop) return;
+        if (e.button !== 0) return;
+        joinDragStateRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          armed: true,
+          active: false,
+        };
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+      },
+      [mapJoinDragEnabled, onMapTableJoinDrop],
+    );
+
+    const handleJoinPointerMove = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        const st = joinDragStateRef.current;
+        if (!st?.armed) return;
+        const dx = e.clientX - st.startX;
+        const dy = e.clientY - st.startY;
+        if (dx * dx + dy * dy > 64) st.active = true;
+      },
+      [],
+    );
+
+    const handleJoinPointerUp = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        const st = joinDragStateRef.current;
+        joinDragStateRef.current = null;
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        if (!st?.armed) return;
+        if (st.active) {
+          joinSuppressClickRef.current = true;
+          const els = document.elementsFromPoint(e.clientX, e.clientY);
+          for (const node of els) {
+            if (!(node instanceof HTMLElement)) continue;
+            const host = node.closest("[data-hostly-map-table]");
+            if (!host) continue;
+            const tid = host.getAttribute("data-hostly-map-table")?.trim();
+            if (tid && tid !== tableId) {
+              onMapTableJoinDrop?.(tableId, tid);
+              break;
+            }
+          }
+        }
+      },
+      [onMapTableJoinDrop, tableId],
+    );
+
+    const handleRootClick = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        if (joinSuppressClickRef.current) {
+          joinSuppressClickRef.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        onTableClick(tableId);
+      },
+      [onTableClick, tableId],
+    );
+
+    const handleTilePointerDown = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.button === 0) armPressBurst();
+        handleJoinPointerDown(e);
+      },
+      [armPressBurst, handleJoinPointerDown],
+    );
+
     const planType = table.type;
     const tileBorderRadius =
       planType === "sunbed"
@@ -101,63 +281,102 @@ export const ElementCard = memo(
           : tableShape === "round"
             ? "999px"
             : "12px";
-    let orderTotalLevel: "low" | "medium" | "high" = "low";
-    if (
-      typeof orderTotal === "number" &&
-      Number.isFinite(orderTotal) &&
-      orderTotal > 0
-    ) {
-      if (orderTotal > 50) orderTotalLevel = "high";
-      else if (orderTotal > 20) orderTotalLevel = "medium";
+
+    const baseSurface = useMemo(
+      () => resolveBaseSurface(busy, reservationBadge),
+      [busy, reservationBadge],
+    );
+
+    const alertDot = useMemo(
+      () =>
+        resolveAlertDot(
+          isCriticalTable,
+          priorityLevel,
+          readyToClose ?? false,
+          reservationPressure,
+        ),
+      [
+        isCriticalTable,
+        priorityLevel,
+        readyToClose,
+        reservationPressure,
+      ],
+    );
+
+    const skin = SURFACE_TOKENS[baseSurface];
+
+    const tableNumber = useMemo(
+      () => tableNumberForDisplay(table, tableId),
+      [table, tableId],
+    );
+
+    const groupCorner = useMemo(() => {
+      const t = groupedBadgeText?.trim();
+      if (!t || !t.startsWith("+")) return null;
+      return t;
+    }, [groupedBadgeText]);
+
+    const statusLabel = useMemo(
+      () =>
+        resolveMapTableStatusLabel(busy, reservationBadge, reservationPressure),
+      [busy, reservationBadge, reservationPressure],
+    );
+
+    const baseTileShadow = "0 2px 8px rgba(15, 23, 42, 0.06)";
+    const occupiedHoverShadow = "0 4px 12px rgba(15, 23, 42, 0.11)";
+
+    let transform: string | undefined;
+    let boxShadow: string;
+
+    if (animationsOff) {
+      transform = undefined;
+      boxShadow = baseTileShadow;
+    } else if (busy) {
+      boxShadow =
+        isHovered && !isPressedPulse ? occupiedHoverShadow : baseTileShadow;
+      if (isPressedPulse) {
+        transform = "scale(0.985)";
+      } else if (isHovered) {
+        transform = "translateY(-1px)";
+      } else {
+        transform = undefined;
+      }
+    } else {
+      const tactileScale = isPressedPulse ? 0.95 : isHovered ? 1.03 : 1;
+      transform =
+        tactileScale !== 1 ? `scale(${tactileScale})` : undefined;
+      boxShadow = baseTileShadow;
     }
-    const minutes =
-      typeof openedAt === "number" &&
-      Number.isFinite(openedAt) &&
-      typeof mapNow === "number" &&
-      Number.isFinite(mapNow)
-        ? Math.max(0, Math.floor((mapNow - openedAt) / 60000))
-        : null;
-    const orderOpenLabel =
-      minutes != null ? formatOrderOpenDurationLabel(minutes) : null;
-    const timeOpenAlertBg =
-      minutes == null
-        ? null
-        : minutes >= 60
-          ? "rgba(255, 0, 0, 0.9)"
-          : minutes >= 30
-            ? "rgba(255, 165, 0, 0.85)"
-            : "rgba(15, 23, 42, 0.72)";
-    const baseShadow =
-      priorityLevel === 1 ? "0 4px 16px rgba(15, 23, 42, 0.28)" : "";
-    const reservedShadow =
-      reservationBadge && !prefersReducedMotion && !isUltraFastMode
-        ? "inset 0 0 0 2px rgba(245, 158, 11, 0.95)"
-        : "";
-    const pressureShadow =
-      reservationPressure?.type === "late" && !prefersReducedMotion && !isUltraFastMode
-        ? "inset 0 0 0 2px rgba(248, 113, 113, 0.95)"
-        : reservationPressure?.type === "upcoming" && !prefersReducedMotion && !isUltraFastMode
-          ? "inset 0 0 0 2px rgba(245, 158, 11, 0.95)"
-          : "";
-    const finalShadow = [baseShadow, pressureShadow || reservedShadow]
-      .filter(Boolean)
-      .join(", ");
+
+    const transition = animationsOff
+      ? "none"
+      : "transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease";
 
     return (
       <div
         role="button"
         tabIndex={0}
         ref={setNodeRef}
-        className={`carta-table-map-tile carta-table-map-tile--${tileVisual}${
-          isCriticalTable ? " carta-table-map-tile--critical" : ""
-        }`}
+        data-hostly-map-table={tableId}
+        className={`hostly-map-table ${baseSurface}`}
         aria-label={ariaLabel}
         onKeyDown={(e) => {
           if (e.key !== "Enter" && e.key !== " ") return;
+          armPressBurst();
           e.preventDefault();
           onTableClick(tableId);
         }}
-        onClick={() => onTableClick(tableId)}
+        onPointerDown={handleTilePointerDown}
+        onMouseEnter={() => {
+          if (!animationsOff) setIsHovered(true);
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false);
+        }}
+        onPointerMove={handleJoinPointerMove}
+        onPointerUp={handleJoinPointerUp}
+        onPointerCancel={handleJoinPointerUp}
+        onClick={handleRootClick}
         style={{
           position: "absolute",
           left: mapLayoutX,
@@ -165,261 +384,105 @@ export const ElementCard = memo(
           width: mapTileWidth,
           height: mapTileHeight,
           boxSizing: "border-box",
-          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "6px",
+          cursor: mapJoinDragEnabled ? "grab" : "pointer",
           zIndex: 10 + priorityLevel,
-          outline:
-            priorityLevel === 2
-              ? "3px solid rgba(255, 140, 0, 0.95)"
-              : "none",
-          boxShadow: finalShadow || undefined,
-          transition:
-            prefersReducedMotion || isUltraFastMode || priorityLevel === 3
-              ? "none"
-              : "transform 200ms ease, opacity 200ms ease",
-          willChange: "transform",
-          backfaceVisibility: "hidden",
+          transform,
+          transition,
           borderRadius: tileBorderRadius,
-          backgroundColor:
-            finalStatus === "free"
-              ? "#22c55e"
-              : finalStatus === "occupied"
-                ? "#ef4444"
-                : "#eab308",
+          background: skin.background,
+          color: skin.color,
+          border: "1px solid rgba(15, 23, 42, 0.1)",
+          boxShadow,
         }}
       >
-        <span className="carta-table-map-tile-name">{table.name}</span>
-        <span
+        {alertDot ? (
+          <span
+            aria-hidden
+            className={`hostly-map-table-alert-dot hostly-map-table-alert-dot--${alertDot}`}
+            style={{
+              position: "absolute",
+              top: 5,
+              right: 5,
+              width: 8,
+              height: 8,
+              borderRadius: 9999,
+              background: ALERT_DOT_COLORS[alertDot],
+              boxShadow:
+                alertDot === "critical"
+                  ? "0 0 0 1px rgba(255,255,255,0.95), 0 0 4px rgba(239, 68, 68, 0.6)"
+                  : "0 0 0 1px rgba(255,255,255,0.95)",
+              zIndex: 2,
+              pointerEvents: "none",
+            }}
+          />
+        ) : null}
+        {groupCorner ? (
+          <span
+            aria-hidden
+            className="table-group-corner"
+            style={{
+              position: "absolute",
+              top: 4,
+              ...(alertDot ? { left: 5 } : { right: 5 }),
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              opacity: 0.55,
+              pointerEvents: "none",
+              lineHeight: 1,
+            }}
+          >
+            {groupCorner}
+          </span>
+        ) : null}
+        <div
           style={{
-            fontSize: 17,
-            fontWeight: 900,
-            lineHeight: 1.1,
-            color: "#475569",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            minWidth: 0,
+            maxWidth: "100%",
+            pointerEvents: "none",
           }}
         >
-          {seats}
-        </span>
-        {busy && durationLabel ? (
-          <span className="carta-table-map-tile-duration">{durationLabel}</span>
-        ) : null}
-        {showProductCount ? (
-          <span
-            className={`carta-table-map-tile-badge carta-table-map-tile-badge--${badgeTier}`}
-          >
-            {activeLineCount}
-          </span>
-        ) : null}
-        {busy ? (
-          <span className="carta-table-map-tile-state carta-table-map-tile-state--occupied">
-            <span className="carta-table-map-tile-live-dot" aria-hidden />
-          </span>
-        ) : (
-          <span className="carta-table-map-tile-state">{mapLibreLabel}</span>
-        )}
-        {waiterShortLabel ? (
-          <span
-            aria-hidden
+          <div
+            className="table-number"
             style={{
-              position: "absolute",
-              top: 4,
-              left: 4,
-              zIndex: 2,
-              minWidth: 18,
-              height: 18,
-              padding: "0 5px",
-              boxSizing: "border-box",
-              borderRadius: 999,
-              background: "#0f172a",
-              color: "#ffffff",
-              fontSize: waiterShortLabel.length > 1 ? 9 : 11,
-              fontWeight: 800,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
+              color: "#000000",
+              fontSize: "clamp(19px, 4.75vw, 28px)",
+              fontWeight: 700,
               lineHeight: 1,
-              pointerEvents: "none",
+              letterSpacing: "-0.03em",
+              userSelect: "none",
             }}
           >
-            {waiterShortLabel}
-          </span>
-        ) : null}
-        {hasOpenOrder && inactiveMinutes >= 10 ? (
+            {tableNumber}
+          </div>
           <span
-            aria-hidden
-            className={
-              inactiveMinutes >= 20 &&
-              !prefersReducedMotion &&
-              !isUltraFastMode
-                ? "carta-table-map-tile--inactive-blink"
-                : undefined
-            }
+            className="hostly-map-table-status-label"
             style={{
-              position: "absolute",
-              top: 4,
-              left: waiterShortLabel ? 26 : 4,
-              zIndex: 1,
-              fontSize: inactiveMinutes >= 20 ? 13 : 10,
-              lineHeight: 1,
-              pointerEvents: "none",
-            }}
-          >
-            {inactiveMinutes >= 20 ? (
-              "⚠️"
-            ) : (
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 8,
-                  height: 8,
-                  borderRadius: 999,
-                  background: "#fbbf24",
-                  verticalAlign: "middle",
-                }}
-              />
-            )}
-          </span>
-        ) : null}
-        {orderOpenLabel && timeOpenAlertBg ? (
-          <span
-            style={{
-              position: "absolute",
-              top: 6,
-              right: 6,
-              zIndex: 1,
-              padding: "2px 6px",
-              borderRadius: 6,
-              fontSize: 11,
-              fontWeight: 800,
-              lineHeight: 1.2,
-              color: "#ffffff",
-              background: timeOpenAlertBg,
-              pointerEvents: "none",
-            }}
-          >
-            {orderOpenLabel}
-          </span>
-        ) : null}
-        {typeof orderTotal === "number" &&
-        Number.isFinite(orderTotal) &&
-        orderTotal > 0 ? (
-          <span
-            style={{
-              position: "absolute",
-              right: 6,
-              bottom: 6,
-              zIndex: 1,
-              padding: "2px 6px",
-              borderRadius: 6,
-              fontSize: 11,
-              fontWeight: 800,
-              lineHeight: 1.2,
-              color: "#ffffff",
-              background:
-                orderTotalLevel === "high"
-                  ? "rgba(255, 0, 0, 0.85)"
-                  : orderTotalLevel === "medium"
-                    ? "rgba(255, 165, 0, 0.85)"
-                    : "rgba(15, 23, 42, 0.72)",
-              pointerEvents: "none",
-            }}
-          >
-            €{orderTotal.toFixed(2)}
-          </span>
-        ) : null}
-        {billRequested ? (
-          <span
-            aria-hidden
-            style={{
-              position: "absolute",
-              left: 6,
-              bottom: 6,
-              zIndex: 2,
-              padding: "2px 6px",
-              borderRadius: 6,
-              fontSize: 9,
-              fontWeight: 900,
-              letterSpacing: "0.04em",
+              color: "#374151",
+              fontSize: "10px",
+              fontWeight: 400,
               textTransform: "uppercase",
-              color: "#78350f",
-              background: "rgba(251, 191, 36, 0.95)",
-              border: "1px solid rgba(180, 83, 9, 0.45)",
-              pointerEvents: "none",
-              lineHeight: 1.2,
-            }}
-          >
-            Cuenta
-          </span>
-        ) : null}
-        {reservationPressure ? (
-          <span
-            aria-hidden
-            style={{
-              position: "absolute",
-              left: 6,
-              bottom: billRequested ? 26 : 6,
-              zIndex: 3,
-              padding: "2px 6px",
-              borderRadius: 6,
-              fontSize: 9,
-              fontWeight: 900,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              color: reservationPressure.type === "late" ? "#7f1d1d" : "#78350f",
-              background:
-                reservationPressure.type === "late"
-                  ? "rgba(248, 113, 113, 0.92)"
-                  : "rgba(251, 191, 36, 0.95)",
-              border:
-                reservationPressure.type === "late"
-                  ? "1px solid rgba(127, 29, 29, 0.55)"
-                  : "1px solid rgba(180, 83, 9, 0.45)",
-              pointerEvents: "none",
-              lineHeight: 1.2,
-              maxWidth: "calc(100% - 12px)",
+              letterSpacing: "0.045em",
+              lineHeight: 1.08,
+              textAlign: "center",
+              whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              maxWidth: "100%",
             }}
-            title={`${reservationPressure.type === "late" ? "Retrasada" : "Próxima"} · ${reservationPressure.time}`}
           >
-            {reservationPressure.type === "late"
-              ? `Retrasada · ${reservationPressure.time}`
-              : `Próxima · ${reservationPressure.time}`}
+            {statusLabel}
           </span>
-        ) : reservationBadge ? (
-          <span
-            aria-hidden
-            style={{
-              position: "absolute",
-              left: 6,
-              bottom: billRequested ? 26 : 6,
-              zIndex: 2,
-              padding: "2px 6px",
-              borderRadius: 6,
-              fontSize: 9,
-              fontWeight: 900,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              color: "#78350f",
-              background: "rgba(251, 191, 36, 0.95)",
-              border: "1px solid rgba(180, 83, 9, 0.45)",
-              pointerEvents: "none",
-              lineHeight: 1.2,
-              maxWidth: "calc(100% - 12px)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-            title={
-              reservationBadge.subLabel
-                ? `${reservationBadge.label} · ${reservationBadge.subLabel}`
-                : reservationBadge.label
-            }
-          >
-            {reservationBadge.subLabel
-              ? `${reservationBadge.label} · ${reservationBadge.subLabel}`
-              : reservationBadge.label}
-          </span>
-        ) : null}
+        </div>
       </div>
     );
   },
@@ -430,19 +493,10 @@ export const ElementCard = memo(
     if (a.type !== b.type) return false;
     if (a.name !== b.name) return false;
     if (prev.busy !== next.busy) return false;
-    if (prev.activeLineCount !== next.activeLineCount) return false;
     if (prev.tileVisual !== next.tileVisual) return false;
-    if (prev.durationLabel !== next.durationLabel) return false;
-    if (prev.showProductCount !== next.showProductCount) return false;
-    if (prev.badgeTier !== next.badgeTier) return false;
     if (prev.isCriticalTable !== next.isCriticalTable) return false;
     if (prev.ariaLabel !== next.ariaLabel) return false;
-    if (prev.mapLibreLabel !== next.mapLibreLabel) return false;
     if (prev.onTableClick !== next.onTableClick) return false;
-    const timeA = prev.occupancyStart || 0;
-    const timeB = next.occupancyStart || 0;
-    if (timeA !== timeB) return false;
-    if (prev.priority !== next.priority) return false;
     if (prev.setNodeRef !== next.setNodeRef) return false;
     if (prev.prefersReducedMotion !== next.prefersReducedMotion) return false;
     if (prev.isUltraFastMode !== next.isUltraFastMode) return false;
@@ -451,30 +505,9 @@ export const ElementCard = memo(
     if (prev.mapTileWidth !== next.mapTileWidth) return false;
     if (prev.mapTileHeight !== next.mapTileHeight) return false;
     if (prev.tableShape !== next.tableShape) return false;
-    if (prev.seats !== next.seats) return false;
     if (prev.tableMapStatus !== next.tableMapStatus) return false;
     if (prev.hasOpenOrder !== next.hasOpenOrder) return false;
-    if (prev.orderTotal !== next.orderTotal) return false;
-    if (prev.openedAt !== next.openedAt) return false;
-    if (prev.mapNow !== next.mapNow) return false;
-    const prevMin =
-      typeof prev.openedAt === "number" &&
-      Number.isFinite(prev.openedAt) &&
-      typeof prev.mapNow === "number" &&
-      Number.isFinite(prev.mapNow)
-        ? Math.max(0, Math.floor((prev.mapNow - prev.openedAt) / 60000))
-        : null;
-    const nextMin =
-      typeof next.openedAt === "number" &&
-      Number.isFinite(next.openedAt) &&
-      typeof next.mapNow === "number" &&
-      Number.isFinite(next.mapNow)
-        ? Math.max(0, Math.floor((next.mapNow - next.openedAt) / 60000))
-        : null;
-    if (prevMin !== nextMin) return false;
     if (prev.priorityLevel !== next.priorityLevel) return false;
-    if (prev.inactiveMinutes !== next.inactiveMinutes) return false;
-    if (prev.waiterShortLabel !== next.waiterShortLabel) return false;
     if (prev.billRequested !== next.billRequested) return false;
     const prevBadge = prev.reservationBadge;
     const nextBadge = next.reservationBadge;
@@ -483,7 +516,11 @@ export const ElementCard = memo(
     const pa = prev.reservationPressure;
     const pb = next.reservationPressure;
     if ((pa?.type ?? "") !== (pb?.type ?? "")) return false;
-    if ((pa?.time ?? "") !== (pb?.time ?? "")) return false;
+    if (prev.readyToClose !== next.readyToClose) return false;
+    if ((prev.groupedBadgeText ?? "") !== (next.groupedBadgeText ?? ""))
+      return false;
+    if (prev.mapJoinDragEnabled !== next.mapJoinDragEnabled) return false;
+    if (prev.onMapTableJoinDrop !== next.onMapTableJoinDrop) return false;
     return true;
   },
 );

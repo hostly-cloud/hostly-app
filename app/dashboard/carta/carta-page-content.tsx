@@ -14,6 +14,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
+import { FirebaseError } from "firebase/app";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CSSProperties, WheelEvent as ReactWheelEvent } from "react";
 import {
@@ -35,8 +36,9 @@ import { paymentSaleAmount } from "@/lib/payments/paymentSaleAmount";
 import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
 import { loadPlatos, PLATOS_CHANGED_EVENT, type PlatoCarta } from "@/lib/platos-local";
 import {
+  computeBillableTotalFromOrderDocLike,
   isOrderStatusActiveForTableOccupancy,
-  mapOccupancyFromOrderRows,
+  orderDocHasActiveLinesForMapOccupancy,
   readOrderCreatedAtMs,
 } from "@/lib/firestore/order-table-occupancy";
 import {
@@ -62,6 +64,8 @@ import {
 } from "@/lib/firestore/reservations";
 import { isBarItem } from "@/lib/kds/bar-classification";
 import type { Product } from "@/types/product";
+
+const AUTO_PRINT_TICKET_STORAGE_KEY = "hostly:autoPrintTicket";
 
 async function upsertVoucherBalanceAfterPayment(
   db: Firestore,
@@ -161,6 +165,24 @@ function displayRestaurantUserName(row: RestaurantUserRow): string {
   return em || "—";
 }
 
+/** Errores de red / backend / modo offline del cliente Firestore (listener TPV). */
+function isFirestoreTpvConnectivityFailure(err: unknown): boolean {
+  if (err instanceof FirebaseError) {
+    const c = err.code;
+    if (c === "unavailable" || c === "deadline-exceeded") return true;
+    if (c.endsWith("/unavailable")) return true;
+  }
+  const msg =
+    err && typeof err === "object" && "message" in err
+      ? String((err as { message: unknown }).message).toLowerCase()
+      : "";
+  return (
+    msg.includes("client is offline") ||
+    msg.includes("could not reach cloud firestore") ||
+    msg.includes("could not reach firestore")
+  );
+}
+
 /** Prioridad visual en mapa (0–3); solo render, no Firestore. */
 function computeMapVisualPriorityLevel(
   openedAtMs: number | undefined,
@@ -179,6 +201,25 @@ function computeMapVisualPriorityLevel(
   if (minutes >= 30) return 2;
   if (total > 50) return 1;
   return 0;
+}
+
+/** Misma regla que `resolveAlertDot` en `components/map/element-map-card.tsx`. */
+function mapAlertDotFromTileInputs(
+  isCriticalTable: boolean,
+  priorityLevel: number,
+  readyToClose: boolean,
+  reservationPressure: { type: "upcoming" | "late"; time?: string } | null | undefined,
+): "critical" | "attention" | null {
+  if (isCriticalTable || priorityLevel >= 3) return "critical";
+  if (
+    priorityLevel === 1 ||
+    priorityLevel === 2 ||
+    readyToClose ||
+    reservationPressure?.type === "late"
+  ) {
+    return "attention";
+  }
+  return null;
 }
 
 function formatOrderOpenDurationLabel(totalMinutes: number): string {
@@ -263,18 +304,55 @@ function normalizeComandaCourseForStorage(raw: unknown): number | undefined {
   return Math.min(4, Math.max(1, Math.floor(n)));
 }
 
-/**
- * Mapea el pase de UI (string) al campo numérico `course` que ya usan
- * `CartOrderLine`, cocina y comanda. NO se introduce ningún campo nuevo
- * en la estructura ni en Firestore: solo se traduce.
- */
-type ActiveCourseUi = "starter" | "first" | "main" | "dessert";
-const ACTIVE_COURSE_TO_NUM: Record<ActiveCourseUi, number> = {
-  starter: 1,
-  first: 2,
-  main: 3,
-  dessert: 4,
-};
+function getProductDefaultCourse(product: Product): number {
+  const explicitCourse = normalizeComandaCourseForStorage(
+    (product as unknown as { course?: unknown }).course,
+  );
+  if (explicitCourse) return explicitCourse;
+
+  const raw =
+    `${product.nombre ?? ""} ${product.categoria ?? ""} ${(product as unknown as { categoryName?: unknown }).categoryName ?? ""} ${(product as unknown as { category?: unknown }).category ?? ""} ${(product as unknown as { familia?: unknown }).familia ?? ""} ${(product as unknown as { family?: unknown }).family ?? ""}`
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  if (
+    raw.includes("postre") ||
+    raw.includes("dessert") ||
+    raw.includes("tarta") ||
+    raw.includes("dulce")
+  ) {
+    return 4;
+  }
+
+  if (
+    raw.includes("pescado") ||
+    raw.includes("carne") ||
+    raw.includes("hamburgues") ||
+    raw.includes("principal") ||
+    raw.includes("segundo")
+  ) {
+    return 3;
+  }
+
+  if (
+    raw.includes("arroz") ||
+    raw.includes("paella") ||
+    raw.includes("primero")
+  ) {
+    return 2;
+  }
+
+  if (
+    raw.includes("entrante") ||
+    raw.includes("ensalada") ||
+    raw.includes("extra")
+  ) {
+    return 1;
+  }
+
+  return 1;
+}
 
 function lineCourseToPaseDraft(line: CartOrderLine): 0 | 1 | 2 | 3 | 4 {
   const u = normalizeComandaCourseForStorage(line.course);
@@ -495,6 +573,130 @@ function parseFirestoreLineExtras(raw: unknown): CartOrderLineExtra[] {
       };
     })
     .filter((e) => e.name !== "");
+}
+
+/** Listas de texto desde campos opcionales sin migración. */
+function normListFromUnknown(v: unknown): string[] {
+  if (v == null) return [];
+  if (Array.isArray(v)) {
+    return v
+      .map((x) => String(x).trim())
+      .filter((s) => s !== "");
+  }
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return [];
+    return t
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter((s) => s !== "");
+  }
+  return [];
+}
+
+function normStringUnknown(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    return t || null;
+  }
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  if (typeof v === "boolean") return v ? "Sí" : null;
+  return null;
+}
+
+/** Heurística: vino / bebida tipo vino (categoría + nombre + flags en doc). */
+function isWineLikeProduct(product: Product): boolean {
+  const raw = product as unknown as Record<string, unknown>;
+  if (normStringUnknown(raw.wineType ?? raw.tipoVino ?? raw.tipo_vino))
+    return true;
+  const blob = `${product.categoria} ${product.nombre}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return /\b(vino|vinos|tinto|tintos|blanco|blancos|rosado|rosados|cava|cavas|champagne|champan|champagn|espumoso|espumosos|priorat|rioja|ribera|rueda|rias baixas|verdejo|tempranillo|garnacha|monastrell|albarino|bobal|vermouth|vermut)\b/.test(
+    blob,
+  );
+}
+
+type QuickProductDetails = {
+  ingredients: string[];
+  allergens: string[];
+  isWineLike: boolean;
+  wineType: string | null;
+  grape: string | null;
+  region: string | null;
+  tastingNotes: string | null;
+  pairing: string | null;
+  recommendedProductIds: string[];
+  recommendedLabelsFromDoc: string[];
+};
+
+/** Detalle para ficha rápida (solo lectura; sin cambiar modelo Firestore). */
+function extractQuickProductDetails(product: Product): QuickProductDetails {
+  const r = product as unknown as Record<string, unknown>;
+  const ingredients = normListFromUnknown(
+    r.ingredientes ?? r.ingredients ?? r.ingredientList,
+  );
+  const allergens = normListFromUnknown(
+    r.alergenos ?? r.alergenes ?? r.allergens ?? r.allergenes,
+  );
+
+  const wineType = normStringUnknown(r.wineType ?? r.tipoVino ?? r.tipo_vino);
+  const grape = normStringUnknown(r.grape ?? r.uva);
+  const region = normStringUnknown(
+    r.region ?? r.denominacion ?? r.denominación ?? r.zona,
+  );
+  const tastingNotes = normStringUnknown(
+    r.tastingNotes ?? r.notas ?? r.notasCata ?? r.notas_cata,
+  );
+  const pairing = normStringUnknown(r.pairing ?? r.maridaje);
+
+  let recommendedProductIds: string[] = [];
+  const rawRecIds = r.recommendedProductIds;
+  if (Array.isArray(rawRecIds)) {
+    recommendedProductIds = rawRecIds
+      .map((x) => String(x).trim())
+      .filter(Boolean);
+  } else if (typeof rawRecIds === "string" && rawRecIds.trim()) {
+    recommendedProductIds = rawRecIds
+      .split(/[,;\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  let recommendedLabelsFromDoc: string[] = [];
+  const rawRec = r.recommendedProducts ?? r.platosRecomendados;
+  if (Array.isArray(rawRec)) {
+    recommendedLabelsFromDoc = rawRec
+      .map((x) => {
+        if (typeof x === "string") return x.trim();
+        if (x && typeof x === "object") {
+          const o = x as Record<string, unknown>;
+          const n = o.nombre ?? o.name ?? o.label;
+          if (typeof n === "string" && n.trim()) return n.trim();
+        }
+        return String(x).trim();
+      })
+      .filter((s) => s !== "");
+  } else if (typeof rawRec === "string" && rawRec.trim()) {
+    recommendedLabelsFromDoc = normListFromUnknown(rawRec);
+  }
+
+  const isWineLike = isWineLikeProduct(product);
+
+  return {
+    ingredients,
+    allergens,
+    isWineLike,
+    wineType,
+    grape,
+    region,
+    tastingNotes,
+    pairing,
+    recommendedProductIds,
+    recommendedLabelsFromDoc,
+  };
 }
 
 function formatComandaLineEuroEs(value: number): string {
@@ -741,12 +943,16 @@ function platoCartaToProduct(p: PlatoCarta): Product {
       ? p.precioVenta
       : 0;
   const cat = typeof p.categoria === "string" ? p.categoria.trim() : "";
+  const courseFromCatalog = normalizeComandaCourseForStorage(
+    (p as PlatoCarta & { course?: unknown }).course,
+  );
   return {
     id: p.id,
     nombre: p.nombre?.trim() ? p.nombre.trim() : "Sin nombre",
     categoria: cat || "Sin categoría",
     categoryId: p.categoriaCartaId,
     precio,
+    ...(courseFromCatalog != null ? { course: courseFromCatalog } : {}),
     imageUrl:
       typeof p.fotoUrl === "string" && p.fotoUrl.trim() !== ""
         ? p.fotoUrl.trim()
@@ -923,16 +1129,38 @@ const getItemTimeInfo = (createdAt?: number) => {
   return { minutes, label: "NUEVO", color: "#52c41a" };
 };
 
+const EMPTY_TABLES_READY_TO_CLOSE: ReadonlySet<string> = new Set();
+
 export type CartaPageContentProps = {
   /** Oculta la cabecera Hostly en `/dashboard/operacion` (tabs Operación arriba). Solo layout. */
   embeddedInOperacion?: boolean;
+  /** Mesas marcadas listas para cerrar (UI desde Sala vía evento `tablesReadyToClose:update`). */
+  tablesReadyToClose?: Set<string>;
+  /**
+   * Agrupación opcional solo en cliente (estado típico en `app/dashboard/carta/page.tsx`).
+   * Al abrir desde el mapa se usa `resolveMainTableId`; `getGroupedBadgeText` dibuja badges.
+   * `joinTables` / `separateTable`: unir/separar mesas en mapa (persistencia vía página Carta cuando apliquen).
+   */
+  groupedTablesMapHandlers?: {
+    resolveMainTableId: (tableId: string) => string;
+    isGroupedTable: (tableId: string) => boolean;
+    /** Mesa unida a otra: no se pinta en mapa como ficha propia. */
+    isJoinedSecondaryTable?: (tableId: string) => boolean;
+    getGroupedBadgeText: (tableId: string) => string | null;
+    joinTables?: (mainTableId: string, secondaryTableId: string) => void;
+    separateTable?: (tableId: string) => void;
+  };
 };
 
 export function CartaPageContent({
   embeddedInOperacion = false,
+  tablesReadyToClose,
+  groupedTablesMapHandlers,
 }: CartaPageContentProps) {
   const router = useRouter();
   const { t } = useI18n();
+  const salaReadyToCloseTableIds =
+    tablesReadyToClose ?? EMPTY_TABLES_READY_TO_CLOSE;
   const {
     user,
     restaurantId: profileRestaurantId,
@@ -958,6 +1186,9 @@ export function CartaPageContent({
   const lastChangeTsRef = useRef(0);
   const isInteractingRef = useRef(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
+  /** Evita mezclar líneas al cambiar de mesa y vacía solo cuando toca (mesa ocupada sin caché tras switch). */
+  const prevSelectedTableForOrderSyncRef = useRef<string | null>(null);
+  const openingTableRef = useRef<string | null>(null);
   const restaurantId = profileRestaurantId ?? user?.uid ?? null;
 
   const [cartaHeaderMobile, setCartaHeaderMobile] = useState(false);
@@ -1140,11 +1371,11 @@ export function CartaPageContent({
   const holdIntervalRef = useRef<number | null>(null);
   const holdActiveProductIdRef = useRef<string | null>(null);
   const holdDidRepeatRef = useRef(false);
-  /* Long-press en la grid de productos para QUITAR 1 unidad (reutiliza
-     `handleDecrementLine`, que solo opera sobre líneas locales `pending`). */
+  /* Timer legacy (grid); limpiado con `clearRepeatAndHoldGesture`. */
   const removeHoldTimeoutRef = useRef<number | null>(null);
-  const removeIsHoldingRef = useRef(false);
   const [holdingProductId, setHoldingProductId] = useState<string | null>(null);
+  const productInfoLongPressTimerRef = useRef<number | null>(null);
+  const [quickProductInfo, setQuickProductInfo] = useState<Product | null>(null);
   /** Evita disparar `onClick` → add si el dedo se movió (scroll / arrastre). */
   const productPointerStartRef = useRef<{
     productId: string;
@@ -1157,34 +1388,6 @@ export function CartaPageContent({
   /** Solo móvil: evita click sintético tras deslizar el dedo (scroll sobre la rejilla). */
   const touchMovedRef = useRef(false);
   const touchStartYRef = useRef(0);
-  /**
-   * Pase activo en la grid TPV. Es UI puro: se mapea al campo numérico
-   * `course` (1-4) que YA existe en `CartOrderLine` y que ya consume
-   * cocina/comanda. No se persiste ningún string nuevo en Firestore.
-   */
-  const [activeCourse, setActiveCourse] = useState<
-    "starter" | "first" | "main" | "dessert"
-  >("starter");
-  /* Flash visual breve al cambiar de pase para confirmar la selección.
-     Solo UI local: el valor refleja el pase recién elegido y se borra
-     a los 700 ms con un timer; no afecta a `order` ni a Firestore. */
-  const [courseFlash, setCourseFlash] = useState<
-    "starter" | "first" | "main" | "dessert" | null
-  >(null);
-  const courseFlashTimeoutRef = useRef<number | null>(null);
-  const handleSelectCourse = (
-    course: "starter" | "first" | "main" | "dessert",
-  ) => {
-    setActiveCourse(course);
-    setCourseFlash(course);
-    if (courseFlashTimeoutRef.current != null) {
-      window.clearTimeout(courseFlashTimeoutRef.current);
-    }
-    courseFlashTimeoutRef.current = window.setTimeout(() => {
-      setCourseFlash(null);
-      courseFlashTimeoutRef.current = null;
-    }, 700);
-  };
   const [hoveredComandaLineIndex, setHoveredComandaLineIndex] = useState<
     number | null
   >(null);
@@ -1197,6 +1400,10 @@ export function CartaPageContent({
   );
   /** Filtro de zona en el mapa (`__all__` = todas). */
   const [mapZoneFilter, setMapZoneFilter] = useState<string>("__all__");
+  /** Filtro por chip del resumen (misma semántica que colores / punto en el mapa). */
+  const [activeMapFilter, setActiveMapFilter] = useState<
+    "all" | "free" | "occupied" | "reserved" | "attention" | "critical" | "delayed"
+  >("all");
   /** Filtro de camarero en mapa: todas, las del usuario actual, o id de usuario. */
   const [waiterFilter, setWaiterFilter] = useState<"all" | "me" | string>("all");
 
@@ -1211,6 +1418,23 @@ export function CartaPageContent({
       /* ignore */
     }
   }, [waiterFilter]);
+
+  useEffect(() => {
+    return () => {
+      if (productInfoLongPressTimerRef.current != null) {
+        window.clearTimeout(productInfoLongPressTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!quickProductInfo) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setQuickProductInfo(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [quickProductInfo]);
   const [now, setNow] = useState(Date.now());
   /** Mesa seleccionada: siempre `tables[].id` (clave de `ordersByTable`). */
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -1234,8 +1458,14 @@ export function CartaPageContent({
   const [lastActivityAtByTable, setLastActivityAtByTable] = useState<
     Record<string, number>
   >({});
+  /** Firestore orders listener: sin red / backend o cliente offline (datos posiblemente solo locales). */
+  const [isOffline, setIsOffline] = useState(false);
   const [isComandaSending, setIsComandaSending] = useState(false);
   const [comandaSentFlash, setComandaSentFlash] = useState(false);
+  const [isMarcharModalOpen, setIsMarcharModalOpen] = useState(false);
+  const [isMarcharSegundosOpen, setIsMarcharSegundosOpen] = useState(false);
+  const [isMarchandoSegundos, setIsMarchandoSegundos] = useState(false);
+  const [sentFeedbackMessage, setSentFeedbackMessage] = useState<string | null>(null);
   const [isPayTableOrderSending, setIsPayTableOrderSending] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isFinalTicketOpen, setIsFinalTicketOpen] = useState(false);
@@ -1253,7 +1483,9 @@ export function CartaPageContent({
   const [closingFeedback, setClosingFeedback] = useState<null | { tableName?: string }>(
     null,
   );
+  const [tableClosedFeedback, setTableClosedFeedback] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [autoPrintTicket, setAutoPrintTicket] = useState(true);
   const [isInvoice, setIsInvoice] = useState(false);
   const [invoiceName, setInvoiceName] = useState("");
   const [invoiceTaxId, setInvoiceTaxId] = useState("");
@@ -1403,6 +1635,30 @@ export function CartaPageContent({
       window.clearTimeout(t);
     };
   }, [voucherNumber, restaurantId, paymentMethod, isFirebaseConfigured]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(AUTO_PRINT_TICKET_STORAGE_KEY);
+      if (raw === "false") setAutoPrintTicket(false);
+      else if (raw === "true") setAutoPrintTicket(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistAutoPrintTicket = useCallback((next: boolean) => {
+    setAutoPrintTicket(next);
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        AUTO_PRINT_TICKET_STORAGE_KEY,
+        next ? "true" : "false",
+      );
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     if (!lastPaymentInfo) return;
@@ -1816,6 +2072,9 @@ export function CartaPageContent({
   );
 
   const finishPaymentAndReturnToMap = useCallback((clearedTableId: string | null) => {
+    if (clearedTableId) {
+      groupedTablesMapHandlers?.separateTable?.(clearedTableId);
+    }
     const selectedTable =
       clearedTableId != null
         ? tablesList.find((t) => t.id === clearedTableId) ?? null
@@ -1826,6 +2085,15 @@ export function CartaPageContent({
       "Mesa";
 
     setIsPaymentOpen(false);
+    setSelectedTableId(null);
+    setOrder([]);
+    if (clearedTableId) {
+      window.dispatchEvent(
+        new CustomEvent("tablesReadyToClose:clear", {
+          detail: clearedTableId,
+        }),
+      );
+    }
     setPaymentMethod(null);
     setCashReceived("");
     setCardReceived("");
@@ -1833,7 +2101,6 @@ export function CartaPageContent({
     setVoucherNumber("");
     setDiscountAmount("");
     setDiscountPercent("");
-    setOrder([]);
     if (clearedTableId) {
       setOrdersByTable((prev) => ({
         ...prev,
@@ -1860,7 +2127,17 @@ export function CartaPageContent({
         return next;
       });
     }
-    setSelectedTableId(null);
+    window.setTimeout(() => {
+      if (restaurantId) {
+        void getTables(restaurantId).then((list) => {
+          setTablesList(list);
+        });
+      }
+    }, 0);
+    if (clearedTableId) {
+      setTableClosedFeedback(true);
+      window.setTimeout(() => setTableClosedFeedback(false), 1500);
+    }
     setClosingFeedback({ tableName });
     window.setTimeout(() => {
       setClosingFeedback(null);
@@ -1878,7 +2155,7 @@ export function CartaPageContent({
     setSplitCount(2);
     setCurrentSplitIndex(1);
     setPaidSplitItemIds([]);
-  }, [tablesList]);
+  }, [groupedTablesMapHandlers, restaurantId, tablesList]);
 
   const handleConfirmPayment = useCallback(async (opts?: {
     overrideTotal?: number;
@@ -1934,6 +2211,7 @@ export function CartaPageContent({
     const invoiceNumber = `F-${datePart}-${timePart}`;
 
     try {
+      const tableIdForFinish = selectedTableId;
       const invoiceData = isInvoice
         ? {
             invoiceNumber,
@@ -2026,20 +2304,22 @@ export function CartaPageContent({
       }
 
       if (soundEnabled) playClickSound();
-      setLastPaymentInfo({
-        ticketNumber,
-        invoiceNumber: isInvoice ? invoiceNumber : undefined,
-      });
-      setLastOrderSnapshot(order);
-      setLastTicketBreakdown({
-        originalTotal: breakdown.baseTotal,
-        invPart: breakdown.invPart,
-        pctPart: breakdown.pctPart,
-        percentValue: breakdown.discountPercentValue,
-        finalTotal: breakdown.finalTotal,
-        discountTotal: breakdown.discountTotal,
-      });
-      setIsFinalTicketOpen(true);
+      if (autoPrintTicket) {
+        setLastPaymentInfo({
+          ticketNumber,
+          invoiceNumber: isInvoice ? invoiceNumber : undefined,
+        });
+        setLastOrderSnapshot(order);
+        setLastTicketBreakdown({
+          originalTotal: breakdown.baseTotal,
+          invPart: breakdown.invPart,
+          pctPart: breakdown.pctPart,
+          percentValue: breakdown.discountPercentValue,
+          finalTotal: breakdown.finalTotal,
+          discountTotal: breakdown.discountTotal,
+        });
+        setIsFinalTicketOpen(true);
+      }
 
       if (selectedTableId && !opts?.skipCloseTable) {
         const closeMs = Date.now();
@@ -2064,7 +2344,7 @@ export function CartaPageContent({
       }
 
       if (!opts?.keepModalOpen) {
-        finishPaymentAndReturnToMap(selectedTableId ?? null);
+        finishPaymentAndReturnToMap(tableIdForFinish ?? null);
       }
     } catch (error) {
       console.error("ERROR REGISTRANDO COBRO", error);
@@ -2099,6 +2379,7 @@ export function CartaPageContent({
     invoiceName,
     invoiceTaxId,
     isInvoice,
+    autoPrintTicket,
     lastPaymentInfo,
     order,
     orderSessionId,
@@ -2179,6 +2460,7 @@ export function CartaPageContent({
       setFirestorePaidTableIds(new Set());
       setFirestoreBillRequestedTableIds(new Set());
       setFirestoreOrderNoteByTable({});
+      setIsOffline(false);
       return;
     }
 
@@ -2188,24 +2470,39 @@ export function CartaPageContent({
       where("restaurantId", "==", restaurantId),
     );
 
-    const unsub = onSnapshot(ordersQuery, (snapshot) => {
-      if (cancelled) return;
-      const rows = snapshot.docs.map((d) => {
+    const unsub = onSnapshot(
+      ordersQuery,
+      (snapshot) => {
+        if (cancelled) return;
+        if (!snapshot.metadata.fromCache) {
+          setIsOffline(false);
+        }
+
+        const occupiedTableIds = new Set<string>();
+      const oldestActiveCreatedAtMsByTableId: Record<string, number> = {};
+
+      for (const d of snapshot.docs) {
         const data = d.data() as {
           tableId?: string | null;
           status?: string;
           createdAt?: unknown;
           openedAt?: unknown;
+          items?: unknown;
+          total?: unknown;
         };
-        return {
-          tableId: data.tableId,
-          status: data.status,
-          createdAt: data.createdAt,
-          openedAt: data.openedAt,
-        };
-      });
-      const { occupiedTableIds, oldestActiveCreatedAtMsByTableId } =
-        mapOccupancyFromOrderRows(rows);
+        if (!orderDocHasActiveLinesForMapOccupancy(data)) continue;
+        const tid =
+          typeof data.tableId === "string" ? data.tableId.trim() : "";
+        if (!tid) continue;
+        occupiedTableIds.add(tid);
+        const openedMs = readOrderCreatedAtMs(data.openedAt);
+        const createdMs = readOrderCreatedAtMs(data.createdAt);
+        const ms = openedMs ?? createdMs;
+        if (ms == null) continue;
+        const prev = oldestActiveCreatedAtMsByTableId[tid];
+        if (prev == null || ms < prev) oldestActiveCreatedAtMsByTableId[tid] = ms;
+      }
+
       setFirestoreOccupiedTableIds(occupiedTableIds);
       setFirestoreOccupancyStartMsByTable(oldestActiveCreatedAtMsByTableId);
 
@@ -2221,13 +2518,15 @@ export function CartaPageContent({
             qty?: unknown;
             price?: unknown;
             precio?: unknown;
+            status?: unknown;
           }>;
         };
         if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
+        if (!orderDocHasActiveLinesForMapOccupancy(data)) continue;
         const tid =
           typeof data.tableId === "string" ? data.tableId.trim() : "";
         if (!tid) continue;
-        const amount = computeOrderDocTotal(data);
+        const amount = computeBillableTotalFromOrderDocLike(data);
         totals[tid] = (totals[tid] ?? 0) + amount;
       }
       setOrderTotalsByTable(totals);
@@ -2239,8 +2538,11 @@ export function CartaPageContent({
           status?: string;
           createdAt?: unknown;
           updatedAt?: unknown;
+          items?: unknown;
+          total?: unknown;
         };
         if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
+        if (!orderDocHasActiveLinesForMapOccupancy(data)) continue;
         const tid =
           typeof data.tableId === "string" ? data.tableId.trim() : "";
         if (!tid) continue;
@@ -2274,11 +2576,14 @@ export function CartaPageContent({
           tableId?: string | null;
           status?: string;
           paymentRequestedAt?: unknown;
+          items?: unknown;
+          total?: unknown;
         };
         const tid =
           typeof data.tableId === "string" ? data.tableId.trim() : "";
         if (!tid) continue;
         if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
+        if (!orderDocHasActiveLinesForMapOccupancy(data)) continue;
         if (isPaymentRequestedAtSet(data.paymentRequestedAt)) {
           billReqIds.add(tid);
         }
@@ -2291,8 +2596,11 @@ export function CartaPageContent({
           tableId?: string | null;
           status?: string;
           note?: unknown;
+          items?: unknown;
+          total?: unknown;
         };
         if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
+        if (!orderDocHasActiveLinesForMapOccupancy(data)) continue;
         const tid =
           typeof data.tableId === "string" ? data.tableId.trim() : "";
         if (!tid) continue;
@@ -2300,13 +2608,20 @@ export function CartaPageContent({
         if (!(tid in notesByTable)) notesByTable[tid] = noteStr;
       }
       setFirestoreOrderNoteByTable(notesByTable);
+    },
+    (error) => {
+      if (cancelled) return;
+      if (isFirestoreTpvConnectivityFailure(error)) {
+        setIsOffline(true);
+      }
+      console.error(error);
     });
 
     return () => {
       cancelled = true;
       unsub();
     };
-  }, [authReady, restaurantId]);
+  }, [authReady, restaurantId, isFirebaseConfigured]);
 
   useEffect(() => {
     if (appliedOrderFromUrlRef.current) return;
@@ -2440,26 +2755,18 @@ export function CartaPageContent({
     if (orderIdFromUrl) return;
     if (!tableIdFromUrl?.trim()) return;
     const id = tableIdFromUrl.trim();
+    setSelectedTableId(id);
+    setTpvEntryMode(tpvViewFromUrl === "summary" ? "summary" : "tpv");
     const busy = firestoreOccupiedTableIds.has(id);
     if (!busy) {
       setOrder([]);
       setOrdersByTable((prev) => ({ ...prev, [id]: [] }));
-    } else {
-      setOrdersByTable((prev) =>
-        Object.prototype.hasOwnProperty.call(prev, id)
-          ? prev
-          : { ...prev, [id]: [] },
-      );
     }
-    setSelectedTableId(id);
-    setTpvEntryMode(tpvViewFromUrl === "summary" ? "summary" : "tpv");
   }, [
     orderIdFromUrl,
     tableIdFromUrl,
     tpvViewFromUrl,
     firestoreOccupiedTableIds,
-    setOrder,
-    setOrdersByTable,
   ]);
 
   useEffect(() => {
@@ -2477,10 +2784,26 @@ export function CartaPageContent({
     if (orderIdFromUrl) return;
     if (!selectedTableId) {
       setOrder([]);
+      prevSelectedTableForOrderSyncRef.current = null;
       return;
     }
-    setOrder(ordersByTable[selectedTableId] || []);
-  }, [selectedTableId, ordersByTable, orderIdFromUrl]);
+    const prevSel = prevSelectedTableForOrderSyncRef.current;
+    const switched = prevSel !== null && prevSel !== selectedTableId;
+    prevSelectedTableForOrderSyncRef.current = selectedTableId;
+
+    const lines = ordersByTable[selectedTableId];
+    if (lines !== undefined) {
+      setOrder(lines);
+      return;
+    }
+    if (!firestoreOccupiedTableIds.has(selectedTableId)) {
+      setOrder([]);
+      return;
+    }
+    if (switched) {
+      setOrder([]);
+    }
+  }, [selectedTableId, ordersByTable, orderIdFromUrl, firestoreOccupiedTableIds]);
 
   useEffect(() => {
     if (orderIdFromUrl) return;
@@ -2536,10 +2859,7 @@ export function CartaPageContent({
     });
   }, [orderIdFromUrl, order]);
 
-  const handleQuickAdd = (
-    product: Product,
-    options?: { course?: ActiveCourseUi },
-  ) => {
+  const handleQuickAdd = (product: Product) => {
     // Feedback instantáneo (antes de cualquier otra lógica).
     setIsAddingByProductId((prev) => ({
       ...prev,
@@ -2556,11 +2876,16 @@ export function CartaPageContent({
       });
     }, 420);
 
-    /* Pase activo en UI traducido al campo numérico `course` (1-4) que ya
-       existe en `CartOrderLine`. Si quien llama no pasa nada, usamos
-       `activeCourse` actual (por defecto "starter" → 1). */
-    const courseUi: ActiveCourseUi = options?.course ?? activeCourse;
-    const courseNum = ACTIVE_COURSE_TO_NUM[courseUi];
+    const productCourse = getProductDefaultCourse(product);
+    console.log("PRODUCT COURSE DEBUG", {
+      nombre: product.nombre,
+      course: (product as unknown as { course?: unknown }).course,
+      category: (product as unknown as { category?: unknown }).category,
+      categoryName: (product as unknown as { categoryName?: unknown }).categoryName,
+      familia: (product as unknown as { familia?: unknown }).familia,
+      family: (product as unknown as { family?: unknown }).family,
+      resolvedCourse: productCourse,
+    });
 
     updateCurrentTableOrder((prev) => {
       const audio = new Audio("/sounds/click.mp3");
@@ -2575,11 +2900,9 @@ export function CartaPageContent({
           !i.extras &&
           !i.variantLabel &&
           !i.lineExtra &&
-          /* Solo merge si comparten pase: si el usuario ha cambiado el
-             pase activo entre tap y tap, queremos líneas separadas para
-             que cocina respete los cursos. Si la línea existente no tiene
-             course, se considera equivalente al pase 1 (starter). */
-          (normalizeComandaCourseForStorage(i.course) ?? 1) === courseNum,
+          /* Solo merge si comparten pase (definido en catálogo en línea nueva).
+             Sin course en línea existente → equivalente a pase 1. */
+          (normalizeComandaCourseForStorage(i.course) ?? 1) === productCourse,
       );
 
       if (existingIndex !== -1) {
@@ -2598,7 +2921,7 @@ export function CartaPageContent({
           status: "pending",
           addedAt: Date.now(),
           createdAt: Date.now(),
-          course: courseNum,
+          course: productCourse,
         },
       ];
     });
@@ -2686,16 +3009,27 @@ export function CartaPageContent({
     async (itemId: string) => {
       let next: CartOrderLine[] = [];
       updateCurrentTableOrder((prev) => {
-        next = prev.map((l) =>
-          l.id === itemId && (l.status === "sent" || l.status === "prepared")
-            ? { ...l, status: "served" as const, servedAt: Date.now() }
-            : l,
-        );
+        next = prev.map((l) => {
+          const st = normalizeOrderLineStatus(l.status);
+          if (
+            l.id === itemId &&
+            (st === "sent" || st === "prepared")
+          ) {
+            return { ...l, status: "served" as const, servedAt: Date.now() };
+          }
+          return l;
+        });
         return next;
       });
-      if (orderIdFromUrl && isFirebaseConfigured) {
+      const orderDocId =
+        orderIdFromUrl && orderIdFromUrl.trim() !== ""
+          ? orderIdFromUrl
+          : openOrderIdsForTable.length > 0
+            ? openOrderIdsForTable[0]!
+            : null;
+      if (orderDocId && isFirebaseConfigured) {
         try {
-          await updateDoc(doc(db, "orders", orderIdFromUrl), {
+          await updateDoc(doc(db, "orders", orderDocId), {
             items: orderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
           });
@@ -2704,7 +3038,12 @@ export function CartaPageContent({
         }
       }
     },
-    [orderIdFromUrl, isFirebaseConfigured, updateCurrentTableOrder],
+    [
+      orderIdFromUrl,
+      openOrderIdsForTable,
+      isFirebaseConfigured,
+      updateCurrentTableOrder,
+    ],
   );
 
   const handleCancelPersistedLine = useCallback(
@@ -3115,34 +3454,7 @@ export function CartaPageContent({
     );
   };
 
-  /**
-   * Long-press desde la grid: quita 1 unidad del producto.
-   * Reutiliza `handleDecrementLine` (estado local) y SOLO toca líneas con
-   * status `pending` para no chocar con líneas ya enviadas a Firestore.
-   * Devuelve `true` si encontró línea pendiente y decrementó.
-   */
-  const handleQuickRemoveOne = (product: Product): boolean => {
-    let target: CartOrderLine | null = null;
-    let targetAt = -1;
-    for (const line of order) {
-      if (line.product?.id !== product.id) continue;
-      if (line.status !== "pending") continue;
-      const at = Number(line.addedAt) || Number(line.createdAt) || 0;
-      if (at >= targetAt) {
-        target = line;
-        targetAt = at;
-      }
-    }
-    if (!target) return false;
-    handleDecrementLine(target.id);
-    return true;
-  };
-
-  /**
-   * Limpia timers del long-press de quitar sobre una tarjeta de producto
-   * y resetea el feedback visual `holding`. Se invoca al soltar, salir o
-   * cancelar el puntero.
-   */
+  /** Limpia timers de long-press sobre tarjeta de producto (ficha info / repetir envío). */
   const clearRepeatAndHoldGesture = () => {
     if (removeHoldTimeoutRef.current != null) {
       window.clearTimeout(removeHoldTimeoutRef.current);
@@ -3151,143 +3463,18 @@ export function CartaPageContent({
     setHoldingProductId(null);
   };
 
+  const clearProductInfoLongPressTimer = () => {
+    if (productInfoLongPressTimerRef.current != null) {
+      window.clearTimeout(productInfoLongPressTimerRef.current);
+      productInfoLongPressTimerRef.current = null;
+    }
+  };
+
   const handleRemoveLine = (lineId: string) => {
     updateCurrentTableOrder((prev) =>
       prev.filter((item) => !(item.id === lineId && item.status === "pending")),
     );
   };
-
-  const handleComanda = useCallback(async (): Promise<boolean> => {
-    if (!selectedTableId) return false;
-    if (!restaurantId || !isFirebaseConfigured) return false;
-    if (order.length === 0) return false;
-    if (isComandaSending) return false;
-    if (!order.some((l) => l.status === "pending")) return false;
-
-    const tableLabel =
-      tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
-      selectedTableId;
-
-    setIsComandaSending(true);
-    try {
-      const now = Date.now();
-      const pendingLines = order.filter((l) => l.status === "pending");
-      const hadPending = pendingLines.length > 0;
-
-      const nextOrder = order.map((l) =>
-        l.status === "pending"
-          ? { ...l, status: "sent" as const, sentAt: l.sentAt ?? now }
-          : l,
-      );
-
-      updateCurrentTableOrder(() => nextOrder);
-
-      if (hadPending) {
-        const items = orderLinesToFirestoreItems(nextOrder);
-        const grandTotal = items.reduce(
-          (acc, it) => acc + (Number(it.total) || 0),
-          0,
-        );
-
-        const existingOrderId =
-          orderIdFromUrl && orderIdFromUrl.trim() !== ""
-            ? orderIdFromUrl
-            : openOrderIdsForTable.length > 0
-              ? openOrderIdsForTable[0]!
-              : null;
-
-        const persistedOrderRef = existingOrderId
-          ? doc(db, "orders", existingOrderId)
-          : await addDoc(collection(db, "orders"), {
-              restaurantId,
-              tableId: selectedTableId,
-              table: tableLabel,
-              status: "sent",
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              items,
-              total: Number.isFinite(grandTotal) ? grandTotal : 0,
-            });
-
-        if (existingOrderId) {
-          await updateDoc(persistedOrderRef, {
-            status: "sent",
-            updatedAt: serverTimestamp(),
-            items,
-            total: Number.isFinite(grandTotal) ? grandTotal : 0,
-          });
-        }
-
-        const batch = writeBatch(db);
-        pendingLines.forEach((l) => {
-          const ref = doc(collection(db, "orderItems"));
-          const lCourse = normalizeComandaCourseForStorage(l.course);
-          const extrasPayload = Array.isArray(l.extras)
-            ? l.extras
-                .filter((ex) => ex && typeof ex.name === "string")
-                .map((ex) => ({
-                  name: String(ex.name).trim(),
-                  price: Number.isFinite(Number(ex.price))
-                    ? Number(ex.price)
-                    : 0,
-                }))
-                .filter((ex) => ex.name !== "")
-            : [];
-          batch.set(ref, {
-            restaurantId,
-            orderId: persistedOrderRef.id,
-            tableId: selectedTableId,
-            tableName: tableLabel,
-            name: l.product.nombre,
-            quantity: l.quantity,
-            status: "pending",
-            sentAt: now,
-            createdAt: now,
-            updatedAt: now,
-            categoryName: l.product.categoria ?? undefined,
-            course: lCourse ?? 1,
-            extras: extrasPayload,
-            note: l.lineNote?.trim() ?? "",
-          });
-        });
-        await batch.commit();
-      }
-
-      /* Tras enviar comanda con éxito: avanzar pase activo Entrante → Primero → Segundo
-         (sin salto automático a Postre; no toca order ni Firestore). */
-      if (activeCourse === "starter") {
-        setActiveCourse("first");
-      } else if (activeCourse === "first") {
-        setActiveCourse("main");
-      }
-
-      setComandaSentFlash(true);
-      if (comandaFlashTimeoutRef.current != null) {
-        window.clearTimeout(comandaFlashTimeoutRef.current);
-      }
-      comandaFlashTimeoutRef.current = window.setTimeout(() => {
-        setComandaSentFlash(false);
-        comandaFlashTimeoutRef.current = null;
-      }, 1000);
-      return true;
-    } catch (e) {
-      console.error(e);
-      return false;
-    } finally {
-      setIsComandaSending(false);
-    }
-  }, [
-    selectedTableId,
-    tablesList,
-    restaurantId,
-    isFirebaseConfigured,
-    order,
-    isComandaSending,
-    updateCurrentTableOrder,
-    orderIdFromUrl,
-    openOrderIdsForTable,
-    activeCourse,
-  ]);
 
   const handleGuardarComandaLocal = () => {
     if (!selectedTableId) return;
@@ -3403,12 +3590,25 @@ export function CartaPageContent({
   }, [tablesForTpvMap, mapZoneFilter]);
 
   const tablesFilteredByWaiter = useMemo(() => {
-    return tablesVisibleOnMap.filter((table) => {
-      if (waiterFilter === "all") return true;
-      if (waiterFilter === "me") return table.waiterId === user?.uid;
-      return table.waiterId === waiterFilter;
+    const waiterScoped = embeddedInOperacion
+      ? tablesVisibleOnMap
+      : tablesVisibleOnMap.filter((table) => {
+          if (waiterFilter === "all") return true;
+          if (waiterFilter === "me") return table.waiterId === user?.uid;
+          return table.waiterId === waiterFilter;
+        });
+    return waiterScoped.filter((table) => {
+      const id = String(table.id ?? "").trim();
+      if (!id) return true;
+      return !groupedTablesMapHandlers?.isJoinedSecondaryTable?.(id);
     });
-  }, [tablesVisibleOnMap, waiterFilter, user?.uid]);
+  }, [
+    embeddedInOperacion,
+    tablesVisibleOnMap,
+    waiterFilter,
+    user?.uid,
+    groupedTablesMapHandlers,
+  ]);
 
   const enrichedTables = useMemo(() => {
     const list = tablesFilteredByWaiter.filter((tbl) => String(tbl.id ?? "").trim() !== "");
@@ -3433,7 +3633,7 @@ export function CartaPageContent({
     return map;
   }, [tablesList]);
 
-  /** Mesas con al menos una order activa en Firestore (misma regla que `mapOccupancyFromOrderRows`). */
+  /** Mesas con al menos una order activa en Firestore (regla `orderDocHasActiveLinesForMapOccupancy`). */
   const openOrdersByTable = useMemo(() => {
     const m: Record<string, true> = {};
     for (const id of firestoreOccupiedTableIds) {
@@ -3445,9 +3645,13 @@ export function CartaPageContent({
   /** Por mesa: instante de la comanda activa más antigua (ms), alineado con ocupación. */
   const orderOpenedAtByTable = firestoreOccupancyStartMsByTable;
 
-  /** Resumen numérico de mesas visibles (respeta `tablesFilteredByWaiter`). */
+  /** Resumen numérico de mesas visibles (respeta `tablesFilteredByWaiter`). Libres / ocupadas / reservadas
+   *  alinean con colores del mapa: ocupada = comanda Firestore o líneas en memoria; reservada = libre de comanda y
+   *  con reserva del día asignada a la mesa. */
   const mapQuickSummary = useMemo(() => {
     let total = 0;
+    let free = 0;
+    let reserved = 0;
     let busy = 0;
     let warning = 0;
     let critical = 0;
@@ -3462,14 +3666,26 @@ export function CartaPageContent({
           : undefined;
       const orderTotal = orderTotalsByTable[id];
       const pl = computeMapVisualPriorityLevel(openedAt, now, orderTotal);
-      if (openOrdersByTable[id]) busy += 1;
+
+      const mapOccupied =
+        firestoreOccupiedTableIds.has(id) || (ordersByTable[id]?.length ?? 0) > 0;
+      if (mapOccupied) {
+        busy += 1;
+      } else if (reservedByTableId[id]) {
+        reserved += 1;
+      } else {
+        free += 1;
+      }
+
       if (pl === 2) warning += 1;
       if (pl === 3) critical += 1;
     }
-    return { total, busy, warning, critical };
+    return { total, free, reserved, busy, warning, critical };
   }, [
     tablesFilteredByWaiter,
-    openOrdersByTable,
+    firestoreOccupiedTableIds,
+    ordersByTable,
+    reservedByTableId,
     orderOpenedAtByTable,
     orderTotalsByTable,
     now,
@@ -3812,6 +4028,87 @@ export function CartaPageContent({
     [firestoreOccupiedTableIds, ordersByTable],
   );
 
+  /** Mesas mostradas en el plano según chip activo (encima de camarero/zona). */
+  const mapTablesForChipFilter = useMemo(() => {
+    if (activeMapFilter === "all") return mapTablesOrderedByVisualPriority;
+    return mapTablesOrderedByVisualPriority.filter((t) => {
+      const tableId = String(t.id ?? "").trim();
+      if (!tableId) return false;
+
+      const mapOccupied = isTableOccupiedOnMap(tableId);
+      const hasReservation = Boolean(reservedByTableId[tableId]);
+
+      if (activeMapFilter === "free") {
+        return !mapOccupied && !hasReservation;
+      }
+      if (activeMapFilter === "occupied") {
+        return mapOccupied;
+      }
+      if (activeMapFilter === "reserved") {
+        return !mapOccupied && hasReservation;
+      }
+
+      const activeLineCount = ordersByTable[tableId]?.length ?? 0;
+      const busy = mapOccupied;
+      const occupancyStartMs = firestoreOccupancyStartMsByTable[tableId];
+      const minutesOccupied =
+        occupancyStartMs != null
+          ? Math.max(0, (now - occupancyStartMs) / 60000)
+          : 0;
+      const isCriticalTable =
+        busy &&
+        occupancyStartMs != null &&
+        minutesOccupied >= 45 &&
+        activeLineCount >= 8;
+      const openedAtMsRaw = orderOpenedAtByTable[tableId];
+      const openedAtMs =
+        typeof openedAtMsRaw === "number" && Number.isFinite(openedAtMsRaw)
+          ? openedAtMsRaw
+          : undefined;
+      const ot = orderTotalsByTable[tableId];
+      const orderTotal =
+        typeof ot === "number" && Number.isFinite(ot) ? ot : undefined;
+      const priorityLevel = computeMapVisualPriorityLevel(
+        openedAtMs,
+        now,
+        orderTotal,
+      );
+      const readyToClose = salaReadyToCloseTableIds.has(tableId);
+      const rp = reservationPressureByTableId[tableId];
+
+      if (activeMapFilter === "delayed") {
+        return rp?.type === "late";
+      }
+
+      const dot = mapAlertDotFromTileInputs(
+        isCriticalTable,
+        priorityLevel,
+        readyToClose,
+        rp ?? null,
+      );
+
+      if (activeMapFilter === "critical") {
+        return dot === "critical";
+      }
+      if (activeMapFilter === "attention") {
+        return dot === "attention";
+      }
+      return true;
+    });
+  }, [
+    activeMapFilter,
+    mapTablesOrderedByVisualPriority,
+    isTableOccupiedOnMap,
+    reservedByTableId,
+    ordersByTable,
+    firestoreOccupancyStartMsByTable,
+    now,
+    orderOpenedAtByTable,
+    orderTotalsByTable,
+    salaReadyToCloseTableIds,
+    reservationPressureByTableId,
+  ]);
+
   const formatMapOccupiedDuration = useCallback(
     (tableId: string) => {
       const id = tableId.trim();
@@ -3848,12 +4145,31 @@ export function CartaPageContent({
     (tableId: string, options?: { entry?: "tpv" | "summary" }) => {
       const id = String(tableId).trim();
       if (!id) return;
-      setOrdersByTable((prev) =>
-        Object.prototype.hasOwnProperty.call(prev, id)
-          ? prev
-          : { ...prev, [id]: [] },
-      );
+
+      if (openingTableRef.current === id) return;
+      openingTableRef.current = id;
+
       setSelectedTableId(id);
+
+      if (!orderIdFromUrl) {
+        const busy = firestoreOccupiedTableIds.has(id);
+        if (!busy) {
+          setOrder([]);
+          setOrdersByTable((prev) => ({ ...prev, [id]: [] }));
+        } else {
+          const cached = ordersByTable[id];
+          if (cached && cached.length > 0) {
+            setOrder(cached);
+          }
+        }
+      } else {
+        setOrdersByTable((prev) =>
+          Object.prototype.hasOwnProperty.call(prev, id)
+            ? prev
+            : { ...prev, [id]: [] },
+        );
+      }
+
       const entry = options?.entry ?? "tpv";
       setTpvEntryMode(entry === "summary" ? "summary" : "tpv");
       const qs = new URLSearchParams();
@@ -3866,8 +4182,19 @@ export function CartaPageContent({
         ? "/dashboard/operacion/tpv"
         : "/dashboard/carta";
       router.push(`${basePath}?${qs.toString()}`);
+      window.setTimeout(() => {
+        if (openingTableRef.current === id) {
+          openingTableRef.current = null;
+        }
+      }, 300);
     },
-    [router, embeddedInOperacion],
+    [
+      embeddedInOperacion,
+      firestoreOccupiedTableIds,
+      orderIdFromUrl,
+      ordersByTable,
+      router,
+    ],
   );
 
   const persistGuestCount = useCallback(
@@ -3915,6 +4242,7 @@ export function CartaPageContent({
       setOrder([]);
       setOrdersByTable((prev) => ({ ...prev, [selectedTableId]: [] }));
       setGuestCount(0);
+      groupedTablesMapHandlers?.separateTable?.(selectedTableId);
     } catch (e) {
       console.error("handlePayOrder", e);
     } finally {
@@ -3926,6 +4254,7 @@ export function CartaPageContent({
     isFirebaseConfigured,
     isPayTableOrderSending,
     order.length,
+    groupedTablesMapHandlers,
   ]);
 
   const updateActiveOrderPaymentRequest = useCallback(
@@ -4164,8 +4493,36 @@ export function CartaPageContent({
     (tableId: string) => {
       const tid = String(tableId).trim();
       if (!tid) return;
+      const mainTableId =
+        groupedTablesMapHandlers?.resolveMainTableId(tid) ?? tid;
 
-      const busy = firestoreOccupiedTableIds.has(tid);
+      const isSecondaryInClientGroup =
+        Boolean(groupedTablesMapHandlers) &&
+        mainTableId !== tid &&
+        (groupedTablesMapHandlers?.isGroupedTable(tid) ?? false);
+
+      if (salaReadyToCloseTableIds.has(tid)) {
+        const fromLines = sumCartOrderLinesTotal(ordersByTable[tid] ?? []);
+        const fromAggregate =
+          typeof orderTotalsByTable[tid] === "number" &&
+          Number.isFinite(orderTotalsByTable[tid])
+            ? orderTotalsByTable[tid]
+            : 0;
+        const tablePendingTotal = Math.max(fromLines, fromAggregate);
+        handleOpenTableOrder(mainTableId, { entry: "summary" });
+        if (tablePendingTotal <= 0) {
+          return;
+        }
+        window.setTimeout(() => {
+          setIsPaymentOpen(true);
+        }, 0);
+        return;
+      }
+
+      const busy =
+        firestoreOccupiedTableIds.has(tid) ||
+        (isSecondaryInClientGroup &&
+          firestoreOccupiedTableIds.has(mainTableId));
       if (!busy) {
         // Mesa libre en el mapa: siempre comanda nueva (no reutilizar estado local antiguo).
         setOrder([]);
@@ -4195,10 +4552,14 @@ export function CartaPageContent({
         });
       }
 
-      handleOpenTableOrder(tid);
+      handleOpenTableOrder(mainTableId);
     },
     [
       handleOpenTableOrder,
+      salaReadyToCloseTableIds,
+      setIsPaymentOpen,
+      orderTotalsByTable,
+      ordersByTable,
       firestoreOccupiedTableIds,
       setFirestoreOccupiedTableIds,
       setLastActivityAtByTable,
@@ -4206,7 +4567,20 @@ export function CartaPageContent({
       setOrderTotalsByTable,
       setFirestoreOccupancyStartMsByTable,
       setOrdersByTable,
+      groupedTablesMapHandlers,
     ],
+  );
+
+  const handleMapTableJoinDrop = useCallback(
+    (draggedTableId: string, targetTableId: string) => {
+      const join = groupedTablesMapHandlers?.joinTables;
+      if (!join) return;
+      const d = String(draggedTableId).trim();
+      const t = String(targetTableId).trim();
+      if (!d || !t || d === t) return;
+      join(t, d);
+    },
+    [groupedTablesMapHandlers],
   );
 
   const handleBackToMap = useCallback(() => {
@@ -4217,17 +4591,6 @@ export function CartaPageContent({
   const handlePrintPreTicket = useCallback(() => {
     window.print();
   }, []);
-
-  const handleComandaAndExit = useCallback(async () => {
-    if (!order.some((l) => l.status === "pending")) return;
-    const ok = await handleComanda();
-    if (!ok) {
-      window.alert("No se pudo enviar la comanda. Inténtalo otra vez.");
-      return;
-    }
-    await new Promise((r) => window.setTimeout(r, 900));
-    handleBackToMap();
-  }, [handleComanda, handleBackToMap, order]);
 
   const getItemColor = (createdAt?: number) => {
     const now = Date.now();
@@ -4260,6 +4623,30 @@ export function CartaPageContent({
         }),
     [visibleOrderLines],
   );
+
+  const pendingDessertLines = useMemo(
+    () =>
+      linesPending.filter(
+        (line) => (normalizeComandaCourseForStorage(line.course) ?? 1) === 4,
+      ),
+    [linesPending],
+  );
+
+  /** Primeros + segundos pendientes (course 2 ó 3). */
+  const pendingPrimerosSegundos = useMemo(
+    () =>
+      linesPending.filter((line) => {
+        const c = normalizeComandaCourseForStorage(line.course) ?? 1;
+        return c === 2 || c === 3;
+      }),
+    [linesPending],
+  );
+
+  const hasPendingSegundos =
+    pendingPrimerosSegundos.length > 0;
+
+  const hasPendingPostres = pendingDessertLines.length > 0;
+
   const linesSent = useMemo(
     () =>
       visibleOrderLines
@@ -4317,6 +4704,233 @@ export function CartaPageContent({
     }
     return buckets;
   }, [linesPending, linesSent, linesPrepared, linesServed, viewMode]);
+
+  const sendLinesToComanda = useCallback(
+    async (linesToSend: CartOrderLine[]): Promise<boolean> => {
+      if (!selectedTableId) return false;
+      if (!restaurantId || !isFirebaseConfigured) return false;
+      if (linesToSend.length === 0) return false;
+      if (isComandaSending) return false;
+
+      const tableLabel =
+        tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
+        selectedTableId;
+
+      setIsComandaSending(true);
+      try {
+        const now = Date.now();
+        const sendIds = new Set(linesToSend.map((l) => l.id));
+
+        const nextOrder = order.map((l) =>
+          l.status === "pending" && sendIds.has(l.id)
+            ? { ...l, status: "sent" as const, sentAt: l.sentAt ?? now }
+            : l,
+        );
+
+        updateCurrentTableOrder(() => nextOrder);
+
+        const items = orderLinesToFirestoreItems(nextOrder);
+        const grandTotal = items.reduce(
+          (acc, it) => acc + (Number(it.total) || 0),
+          0,
+        );
+
+        const existingOrderId =
+          orderIdFromUrl && orderIdFromUrl.trim() !== ""
+            ? orderIdFromUrl
+            : openOrderIdsForTable.length > 0
+              ? openOrderIdsForTable[0]!
+              : null;
+
+        const persistedOrderRef = existingOrderId
+          ? doc(db, "orders", existingOrderId)
+          : await addDoc(collection(db, "orders"), {
+              restaurantId,
+              tableId: selectedTableId,
+              table: tableLabel,
+              status: "sent",
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              items,
+              total: Number.isFinite(grandTotal) ? grandTotal : 0,
+            });
+
+        if (existingOrderId) {
+          await updateDoc(persistedOrderRef, {
+            status: "sent",
+            updatedAt: serverTimestamp(),
+            items,
+            total: Number.isFinite(grandTotal) ? grandTotal : 0,
+          });
+        }
+
+        const batch = writeBatch(db);
+        linesToSend.forEach((l) => {
+          const ref = doc(collection(db, "orderItems"));
+          const lCourse = normalizeComandaCourseForStorage(l.course);
+          const extrasPayload = Array.isArray(l.extras)
+            ? l.extras
+                .filter((ex) => ex && typeof ex.name === "string")
+                .map((ex) => ({
+                  name: String(ex.name).trim(),
+                  price: Number.isFinite(Number(ex.price))
+                    ? Number(ex.price)
+                    : 0,
+                }))
+                .filter((ex) => ex.name !== "")
+            : [];
+          batch.set(ref, {
+            restaurantId,
+            orderId: persistedOrderRef.id,
+            tableId: selectedTableId,
+            tableName: tableLabel,
+            name: l.product.nombre,
+            quantity: l.quantity,
+            status: "pending",
+            sentAt: now,
+            createdAt: now,
+            updatedAt: now,
+            categoryName: l.product.categoria ?? undefined,
+            course: lCourse ?? 1,
+            extras: extrasPayload,
+            note: l.lineNote?.trim() ?? "",
+          });
+        });
+        await batch.commit();
+
+        setComandaSentFlash(true);
+        if (comandaFlashTimeoutRef.current != null) {
+          window.clearTimeout(comandaFlashTimeoutRef.current);
+        }
+        comandaFlashTimeoutRef.current = window.setTimeout(() => {
+          setComandaSentFlash(false);
+          comandaFlashTimeoutRef.current = null;
+        }, 1000);
+        return true;
+      } catch (e) {
+        console.error(e);
+        return false;
+      } finally {
+        setIsComandaSending(false);
+      }
+    },
+    [
+      selectedTableId,
+      tablesList,
+      restaurantId,
+      isFirebaseConfigured,
+      order,
+      isComandaSending,
+      updateCurrentTableOrder,
+      orderIdFromUrl,
+      openOrderIdsForTable,
+    ],
+  );
+
+  const handleComanda = useCallback(async (): Promise<boolean> => {
+    if (isComandaSending || isMarchandoSegundos) {
+      return false;
+    }
+    if (!selectedTableId) return false;
+    if (!restaurantId || !isFirebaseConfigured) return false;
+    if (order.length === 0) return false;
+    if (!order.some((l) => l.status === "pending")) return false;
+
+    const pendingLines = order.filter((l) => l.status === "pending");
+    const linesToSend = pendingLines.filter((line) => {
+      const course = normalizeComandaCourseForStorage(line.course) ?? 1;
+      const isDrinkOrBar = isBarProduct(line.product);
+      return isDrinkOrBar || course === 1;
+    });
+
+    if (linesToSend.length === 0) {
+      if (pendingPrimerosSegundos.length > 0) {
+        setIsMarcharSegundosOpen(true);
+        return false;
+      }
+      if (pendingDessertLines.length > 0) {
+        setIsMarcharModalOpen(true);
+        return false;
+      }
+      return false;
+    }
+
+    const ok = await sendLinesToComanda(linesToSend);
+    if (ok) {
+      showSentFeedback("Comanda enviada");
+    }
+    return ok;
+  }, [
+    selectedTableId,
+    restaurantId,
+    isFirebaseConfigured,
+    order,
+    isComandaSending,
+    isMarchandoSegundos,
+    pendingPrimerosSegundos.length,
+    pendingDessertLines.length,
+    sendLinesToComanda,
+  ]);
+
+  const showSentFeedback = (message: string) => {
+    setSentFeedbackMessage(message);
+
+    setTimeout(() => {
+      setSentFeedbackMessage(null);
+    }, 1500);
+  };
+
+  const handleMarcharCourse = useCallback(
+    async (course: 2 | 3 | 4) => {
+      const lines = linesPending.filter(
+        (l) => (normalizeComandaCourseForStorage(l.course) ?? 1) === course,
+      );
+      const ok = await sendLinesToComanda(lines);
+      if (ok) {
+        setIsMarcharModalOpen(false);
+        if (course === 4) {
+          showSentFeedback("Postres enviados");
+        }
+      }
+    },
+    [linesPending, sendLinesToComanda],
+  );
+
+  const handleMarcharSegundos = useCallback(async () => {
+    const lines = linesPending.filter((l) => {
+      const c = normalizeComandaCourseForStorage(l.course) ?? 1;
+      return c === 2 || c === 3;
+    });
+    if (lines.length === 0) return;
+    setIsMarchandoSegundos(true);
+    try {
+      const ok = await sendLinesToComanda(lines);
+      if (ok) {
+        setIsMarcharSegundosOpen(false);
+        showSentFeedback("Pase enviado");
+      }
+    } finally {
+      setIsMarchandoSegundos(false);
+    }
+  }, [linesPending, sendLinesToComanda]);
+
+  const handleComandaAndExit = useCallback(async () => {
+    if (!order.some((l) => l.status === "pending")) return;
+    const ok = await handleComanda();
+    if (!ok) {
+      const marchablePending = order.some((l) => {
+        if (l.status !== "pending") return false;
+        const course = normalizeComandaCourseForStorage(l.course) ?? 1;
+        return isBarProduct(l.product) || course === 1;
+      });
+      if (marchablePending) {
+        window.alert("No se pudo enviar la comanda. Inténtalo otra vez.");
+      }
+      return;
+    }
+    await new Promise((r) => window.setTimeout(r, 900));
+    handleBackToMap();
+  }, [handleComanda, handleBackToMap, order]);
 
   const orderDocIsPaid = useMemo(() => {
     if (
@@ -4416,24 +5030,84 @@ export function CartaPageContent({
     comandaHeaderNow,
   ]);
 
-  /**
-   * Total de unidades en estado `pending` (aún sin enviar a cocina/barra).
-   * Se calcula derivando del estado local `order`. Sin Firestore, sin
-   * lectura adicional ni handlers nuevos. Se memoriza para no recalcular
-   * en cada render que no afecte a `order`.
-   */
-  const totalPendingItems = useMemo(() => {
-    return order.reduce((sum, line) => {
-      if (line.status === "pending") {
-        return sum + (Number(line.quantity) || 0);
-      }
-      return sum;
-    }, 0);
-  }, [order]);
+  const tpvComandaEstadosChipsEl = useMemo(
+    () => (
+      <>
+        <span
+          style={{
+            color: "#0f172a",
+            background: "rgba(15,23,42,0.06)",
+            border: "1px solid rgba(15,23,42,0.12)",
+          }}
+        >
+          {cartaHeaderMobile
+            ? `Pen ${linesPending.length}`
+            : `Pendiente ${linesPending.length}`}
+        </span>
+        {hasPendingSegundos ? (
+          <span
+            className="ml-2 shrink-0 px-2 py-0.5 rounded bg-orange-100 text-orange-600 text-xs font-medium whitespace-nowrap border border-orange-200/80"
+            title="Hay primeros o segundos pendientes de marchar"
+          >
+            Segundos pendientes
+          </span>
+        ) : null}
+        {hasPendingPostres && (
+          <span
+            className="ml-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-600"
+            title="Hay postres pendientes de marchar"
+          >
+            Postres pendientes
+          </span>
+        )}
+        <span
+          style={{
+            color: "#1e3a8a",
+            background: "rgba(59,130,246,0.14)",
+            border: "1px solid rgba(37, 99, 235, 0.25)",
+          }}
+        >
+          {cartaHeaderMobile
+            ? `Env ${linesSent.length}`
+            : `Enviado ${linesSent.length}`}
+        </span>
+        <span
+          style={{
+            color: "#9a3412",
+            background: "rgba(245,158,11,0.14)",
+            border: "1px solid rgba(245, 158, 11, 0.25)",
+          }}
+        >
+          {cartaHeaderMobile
+            ? `Prep ${linesPrepared.length}`
+            : `Preparado ${linesPrepared.length}`}
+        </span>
+        <span
+          style={{
+            color: "#166534",
+            background: "rgba(34,197,94,0.14)",
+            border: "1px solid rgba(34, 197, 94, 0.25)",
+          }}
+        >
+          {cartaHeaderMobile
+            ? `Ser ${linesServed.length}`
+            : `Servido ${linesServed.length}`}
+        </span>
+      </>
+    ),
+    [
+      cartaHeaderMobile,
+      linesPending.length,
+      hasPendingSegundos,
+      hasPendingPostres,
+      linesSent.length,
+      linesPrepared.length,
+      linesServed.length,
+    ],
+  );
 
-  /** Pase activo en forma numérica (1–4 según toolbar), para resaltar líneas en comanda. */
-  const activeCourseNum = ACTIVE_COURSE_TO_NUM[activeCourse];
-  const activeCourseLabel = getCourseLabel(activeCourseNum);
+  /** Sin selector manual de pase: no hay “pase activo” para resaltar filas. */
+  const activeCourseNum = -1;
 
   const cocinaItems = useMemo(() => {
     return order
@@ -4532,6 +5206,8 @@ export function CartaPageContent({
             : courseForBadge === 4
               ? "Postre"
               : null;
+    const lineSt = normalizeOrderLineStatus(item.status);
+    const statusChipClickable = lineSt === "sent" || lineSt === "prepared";
     /* ¿Esta línea pertenece al pase activo? Sirve para resaltar
        sutilmente la fila y oscurecer su badge inline, ayudando al
        camarero a localizar visualmente las líneas del pase actual.
@@ -4607,6 +5283,37 @@ export function CartaPageContent({
               </div>
               <div className="carta-comanda-line-badges">
                 <span
+                  className={
+                    statusChipClickable
+                      ? "carta-comanda-status-chip--clickable"
+                      : undefined
+                  }
+                  role={statusChipClickable ? "button" : undefined}
+                  tabIndex={statusChipClickable ? 0 : undefined}
+                  aria-label={
+                    statusChipClickable
+                      ? `Marcar como servido (${statusLabel}). Pulse para confirmar.`
+                      : undefined
+                  }
+                  onClick={
+                    statusChipClickable
+                      ? (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void handleServeItem(item.id);
+                        }
+                      : undefined
+                  }
+                  onKeyDown={
+                    statusChipClickable
+                      ? (e) => {
+                          if (e.key !== "Enter" && e.key !== " ") return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void handleServeItem(item.id);
+                        }
+                      : undefined
+                  }
                   style={{
                     flexShrink: 0,
                     fontSize: 8,
@@ -4782,6 +5489,193 @@ export function CartaPageContent({
           : {}),
       }}
     >
+      {quickProductInfo ? (
+        <div
+          className="fixed inset-0 z-[79] flex items-center justify-center bg-black/45 p-3"
+          role="presentation"
+          onClick={() => setQuickProductInfo(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="carta-quick-product-info-title"
+            className="relative max-h-[min(520px,85vh)] w-full max-w-[340px] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-4 text-gray-900 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              aria-label="Cerrar"
+              onClick={() => setQuickProductInfo(null)}
+            >
+              ×
+            </button>
+            <h2
+              id="carta-quick-product-info-title"
+              className="pr-8 text-base font-bold leading-snug"
+            >
+              {quickProductInfo.nombre}
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-slate-700">
+              {Number.isFinite(quickProductInfo.precio)
+                ? formatComandaLineEuroEs(quickProductInfo.precio)
+                : "—"}
+            </p>
+            {(() => {
+              const d = extractQuickProductDetails(quickProductInfo);
+              const recNames: string[] = [...d.recommendedLabelsFromDoc];
+              const seen = new Set(
+                recNames.map((s) => s.toLowerCase()),
+              );
+              for (const id of d.recommendedProductIds) {
+                const p = products.find(
+                  (x) => String(x.id) === String(id),
+                );
+                const label = p?.nombre?.trim();
+                if (label) {
+                  const k = label.toLowerCase();
+                  if (!seen.has(k)) {
+                    seen.add(k);
+                    recNames.push(label);
+                  }
+                } else if (id) {
+                  const stub = `Referencia: ${id}`;
+                  if (!seen.has(stub.toLowerCase())) {
+                    seen.add(stub.toLowerCase());
+                    recNames.push(stub);
+                  }
+                }
+              }
+              const hasMaridajeInfo =
+                Boolean(d.pairing?.trim()) ||
+                Boolean(d.tastingNotes?.trim()) ||
+                recNames.length > 0;
+
+              const wineDetailRows: Array<{ label: string; value: string }> =
+                [];
+              if (d.isWineLike) {
+                if (d.wineType) {
+                  wineDetailRows.push({
+                    label: "Tipo de vino",
+                    value: d.wineType,
+                  });
+                }
+                if (d.grape) wineDetailRows.push({ label: "Uva", value: d.grape });
+                if (d.region) {
+                  wineDetailRows.push({
+                    label: "Denominación / zona",
+                    value: d.region,
+                  });
+                }
+              }
+
+              return (
+                <>
+                  <div className="mt-3">
+                    <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Ingredientes
+                    </div>
+                    {d.ingredients.length > 0 ? (
+                      <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-sm text-slate-800">
+                        {d.ingredients.map((t, i) => (
+                          <li key={`ing-${i}-${t}`}>{t}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm italic text-slate-500">
+                        Sin ingredientes registrados
+                      </p>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Alérgenos
+                    </div>
+                    {d.allergens.length > 0 ? (
+                      <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-sm text-slate-800">
+                        {d.allergens.map((t, i) => (
+                          <li key={`alg-${i}-${t}`}>{t}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm italic text-slate-500">
+                        Sin alérgenos registrados
+                      </p>
+                    )}
+                  </div>
+
+                  {d.isWineLike && wineDetailRows.length > 0 ? (
+                    <div className="mt-4 border-t border-slate-200 pt-3">
+                      <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Vino
+                      </div>
+                      <dl className="mt-2 space-y-1.5 text-sm text-slate-800">
+                        {wineDetailRows.map((row) => (
+                          <div key={row.label}>
+                            <dt className="text-[11px] font-semibold text-slate-500">
+                              {row.label}
+                            </dt>
+                            <dd className="mt-0.5">{row.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  ) : null}
+
+                  {d.isWineLike ? (
+                    <div className="mt-4 border-t border-slate-200 pt-3">
+                      <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Maridaje y recomendaciones
+                      </div>
+                      {hasMaridajeInfo ? (
+                        <div className="mt-2 space-y-2 text-sm text-slate-800">
+                          {d.tastingNotes ? (
+                            <div>
+                              <div className="text-[11px] font-semibold text-slate-500">
+                                Notas
+                              </div>
+                              <p className="mt-0.5 whitespace-pre-wrap">
+                                {d.tastingNotes}
+                              </p>
+                            </div>
+                          ) : null}
+                          {d.pairing ? (
+                            <div>
+                              <div className="text-[11px] font-semibold text-slate-500">
+                                Maridaje
+                              </div>
+                              <p className="mt-0.5 whitespace-pre-wrap">
+                                {d.pairing}
+                              </p>
+                            </div>
+                          ) : null}
+                          {recNames.length > 0 ? (
+                            <div>
+                              <div className="text-[11px] font-semibold text-slate-500">
+                                Platos recomendados
+                              </div>
+                              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                                {recNames.map((t, i) => (
+                                  <li key={`rec-${i}-${t}`}>{t}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm italic text-slate-500">
+                          Sin información de maridaje registrada
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      ) : null}
       {comandaLineActionsOpen && comandaLineActionsTarget ? (
         <div
           className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-3"
@@ -5037,6 +5931,178 @@ export function CartaPageContent({
   border-color: rgba(245, 158, 11, 0.40);
 }
 
+/* Modal marchar primeros / segundos / postres */
+.carta-marchar-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.carta-marchar-modal {
+  width: min(360px, 100%);
+  background: white;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.carta-marchar-modal h3 {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.carta-marchar-modal button {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  font-weight: 800;
+  margin-top: 8px;
+  background: #111827;
+  color: white;
+}
+
+.carta-marchar-modal button:last-child {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+/* Modal mapa: juntar / separar mesas (producción) */
+.carta-tablegroups-map-trigger {
+  min-height: 28px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 58, 237, 0.38);
+  background: rgba(124, 58, 237, 0.1);
+  font-size: 11px;
+  font-weight: 800;
+  color: #5b21b6;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.carta-tablegroups-map-trigger:hover {
+  background: rgba(124, 58, 237, 0.16);
+}
+
+.carta-tablegroups-modal {
+  width: min(400px, 100%);
+  max-height: min(90dvh, 620px);
+  overflow-y: auto;
+  background: white;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.carta-tablegroups-modal h3 {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0 0 6px;
+}
+
+.carta-tablegroups-modal__hint {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #64748b;
+  margin: 0 0 14px;
+}
+
+.carta-tablegroups-modal__section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.carta-tablegroups-modal__section:last-of-type {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.carta-tablegroups-modal label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.carta-tablegroups-modal label + select {
+  margin-bottom: 0;
+}
+
+.carta-tablegroups-modal select {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #fff;
+}
+
+.carta-tablegroups-modal__field-gap {
+  margin-top: 10px;
+}
+
+.carta-tablegroups-modal__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.carta-tablegroups-modal__actions .carta-tablegroups-modal__btn {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+}
+
+.carta-tablegroups-modal__btn-primary {
+  background: #111827;
+  color: white;
+}
+
+.carta-tablegroups-modal__btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.carta-tablegroups-modal__btn-secondary {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.carta-tablegroups-modal__sep-btn {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+  margin-top: 12px;
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.carta-tablegroups-modal__sep-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Layout responsive (/dashboard/carta) */
 .carta-root {
   display: flex;
@@ -5233,22 +6299,28 @@ export function CartaPageContent({
 
 .carta-map-summary-block {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px 8px;
-  flex-shrink: 0;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
 .carta-map-summary-status {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  height: auto;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
   letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.88);
   flex-shrink: 0;
+  margin: 0;
   margin-left: auto;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .carta-map-waiter-row {
@@ -5256,15 +6328,25 @@ export function CartaPageContent({
   width: 100%;
   box-sizing: border-box;
   padding: 0 8px 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .carta-map-top-strip-main {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
+  align-content: center;
+  gap: 2px 4px;
+  flex: 1 1 auto;
   min-width: 0;
-  flex: 1 1 220px;
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .carta-map-waiter-compact {
@@ -5341,15 +6423,53 @@ export function CartaPageContent({
   width: 100%;
   box-sizing: border-box;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(2, 6, 23, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .carta-map-summary-shell.carta-map-summary-block,
 .carta-map-summary-shell--critical.carta-map-summary-block {
-  padding: 4px 8px;
-  border-radius: 10px;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+/* Alto fijo del strip de métricas (prioridad máxima; evita fugas desde padding/global). */
+.carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
+.carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
+  height: 1.1cm !important;
+  min-height: 1.1cm !important;
+  max-height: 1.1cm !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  overflow: hidden !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.carta-map-metrics-strip-host .carta-map-top-strip-main .carta-map-summary-pill,
+.carta-map-metrics-strip-host .carta-map-top-strip-main .carta-map-summary-pill--interactive,
+.carta-map-metrics-strip-host .carta-map-top-strip-main .carta-table-map-zone-btn {
+  min-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.carta-map-metrics-strip-host .carta-map-summary-status {
+  line-height: 1 !important;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .carta-map-summary-row {
@@ -5363,22 +6483,124 @@ export function CartaPageContent({
 .carta-map-summary-pill {
   display: inline-flex;
   align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
+  justify-content: center;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
-  color: #ffffff;
+  color: #000000;
+  box-sizing: border-box;
+  box-shadow: none;
+  border: none;
+  vertical-align: middle;
+  margin: 0;
 }
 
-.carta-map-summary-pill--neutral { background: rgba(148, 163, 184, 0.22); }
-.carta-map-summary-pill--busy { background: rgba(59, 130, 246, 0.35); }
-.carta-map-summary-pill--warn { background: rgba(245, 158, 11, 0.40); }
-.carta-map-summary-pill--crit { background: rgba(239, 68, 68, 0.42); }
+.carta-map-summary-pill--neutral {
+  background: #f3f4f6;
+}
+.carta-map-summary-pill--free {
+  background: #bbf7d0;
+}
+.carta-map-summary-pill--busy {
+  background: #bae6fd;
+}
+.carta-map-summary-pill--reserved {
+  background: #e9d5ff;
+}
+.carta-map-summary-pill--warn {
+  background: #fde68a;
+}
+.carta-map-summary-pill--crit {
+  background: #fecaca;
+}
+.carta-map-summary-pill--delayed {
+  background: #fcd34d;
+}
+.carta-map-summary-pill--interactive {
+  margin: 0;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  color: #000000;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
+  cursor: default;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-radius: 10px;
+}
+.carta-map-summary-pill--interactive:focus {
+  outline: none;
+}
+.carta-map-summary-pill--interactive:focus-visible {
+  outline: 1px dotted rgba(148, 163, 184, 0.9);
+  outline-offset: 0;
+}
 
-.carta-map-top-strip .carta-map-summary-pill {
-  padding: 4px 8px;
-  font-size: 11px;
+.carta-map-top-strip-main .carta-map-summary-pill,
+.carta-map-top-strip-main .carta-map-summary-pill--interactive {
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 5px;
+  padding-right: 5px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  color: #000000;
+}
+
+.carta-map-top-strip-main .carta-map-summary-pill span,
+.carta-map-top-strip-main .carta-map-summary-pill--interactive span {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  color: #000000;
+  margin: 0;
+  padding: 0;
+}
+
+.carta-map-top-strip-main .carta-map-zones-inline {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-content: center;
+  gap: 2px 4px;
+  min-width: 0;
+  max-width: max-content;
+  flex-shrink: 0;
+}
+
+.carta-map-top-strip-main .carta-table-map-zone-btn {
+  min-height: 22px !important;
+  height: 22px !important;
+  max-height: 22px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 5px !important;
+  padding-right: 5px !important;
+  line-height: 1 !important;
+  font-size: 9px !important;
+  border-radius: 10px !important;
+  box-sizing: border-box;
 }
 
 .carta-map-top-strip .carta-table-map-zone-btn {
@@ -5535,6 +6757,26 @@ export function CartaPageContent({
   min-width: 0;
 }
 
+.carta-header-compact.carta-comanda-header-compact {
+  justify-content: flex-start;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.carta-header-compact.carta-comanda-header-compact::-webkit-scrollbar {
+  display: none;
+}
+
+.carta-header-compact.carta-comanda-header-compact .carta-estados {
+  flex: 1 1 auto;
+  justify-content: space-between;
+  align-self: stretch;
+  min-width: 0;
+  width: 100%;
+  gap: 10px;
+}
+
 .carta-comensales-compact.carta-comensales--pill {
   max-width: 180px;
   height: 36px;
@@ -5557,32 +6799,34 @@ export function CartaPageContent({
 
 .carta-comensales-count {
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   min-width: 18px;
   text-align: center;
 }
 
-.carta-comensales-compact button {
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  min-height: 26px;
-  border-radius: 8px;
+.carta-comensales-compact.carta-comensales--pill > button {
+  box-sizing: border-box !important;
+  width: 22px !important;
+  height: 18px !important;
+  min-width: 22px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  border-radius: 7px;
   background: #ffffff;
   color: #111827;
   border: 1px solid rgba(15, 23, 42, 0.18);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 900;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
-  padding: 0;
+  padding: 1px 0 !important;
   cursor: pointer;
 }
 
-.carta-comensales-compact button:disabled {
+.carta-comensales-compact.carta-comensales--pill > button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -5607,6 +6851,7 @@ export function CartaPageContent({
   line-height: 1.2;
   white-space: nowrap;
 }
+
 
 .carta-active-mesa {
   flex: 1 1 auto;
@@ -5730,9 +6975,9 @@ export function CartaPageContent({
   margin-left: 6px;
   padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(37, 99, 235, 0.38);
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: #ffffff;
+  color: #334155;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -5740,68 +6985,21 @@ export function CartaPageContent({
   white-space: nowrap;
   box-sizing: border-box;
   font: inherit;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .carta-tpv-to-map-btn:hover {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(29, 78, 216, 0.45);
+  background: #f1f5f9;
+  border-color: rgba(15, 23, 42, 0.22);
+  color: #1e293b;
 }
 
 .carta-tpv-to-map-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28);
-}
-
-.carta-active-course-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  align-self: flex-start;
-  font-size: 14px;
-  font-weight: 900;
-  margin-bottom: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #111827;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
-}
-
-.carta-course-selector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: 100%;
-  margin-bottom: 10px;
-}
-
-.carta-course-selector button {
-  flex: 1;
-  min-width: 76px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(2, 6, 23, 0.15);
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  box-sizing: border-box;
-  line-height: 1.1;
-  transition: transform 120ms ease, box-shadow 120ms ease;
-}
-
-.carta-course-selector button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.28);
-}
-
-.carta-course-selector button.active {
-  background: #111827 !important;
-  color: #ffffff !important;
-  font-weight: 900 !important;
-  transform: scale(1.04);
-  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.25);
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12);
 }
 
 .carta-cats-wrap {
@@ -5829,7 +7027,8 @@ export function CartaPageContent({
 
 .carta-table-map-shell {
   width: 100%;
-  max-width: none;
+  max-width: 100%;
+  min-width: 0;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -6080,13 +7279,13 @@ export function CartaPageContent({
   0%,
   100% {
     box-shadow:
-      0 0 0 1px rgba(239, 68, 68, 0.38),
-      0 0 16px rgba(239, 68, 68, 0.26);
+      0 0 0 1px rgba(239, 68, 68, 0.28),
+      0 0 8px rgba(239, 68, 68, 0.16);
   }
   50% {
     box-shadow:
-      0 0 0 1px rgba(239, 68, 68, 0.55),
-      0 0 26px rgba(239, 68, 68, 0.4);
+      0 0 0 1px rgba(239, 68, 68, 0.42),
+      0 0 12px rgba(239, 68, 68, 0.24);
   }
 }
 
@@ -6268,6 +7467,21 @@ export function CartaPageContent({
   flex-shrink: 0;
   align-items: center;
   gap: 4px;
+}
+
+.carta-comanda-status-chip--clickable {
+  cursor: pointer;
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+
+.carta-comanda-status-chip--clickable:hover {
+  opacity: 0.92;
+  filter: brightness(1.06);
+}
+
+.carta-comanda-status-chip--clickable:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline-offset: 1px;
 }
 
 .carta-comanda-qty-inline {
@@ -6854,6 +8068,11 @@ export function CartaPageContent({
   animation: pulsePending 1.2s infinite;
 }
 
+/* Fila intermedia tiempo + pendientes: el gap del flex ya separa del tiempo. */
+.carta-pending-indicator.carta-pending-indicator--meta-row {
+  margin-left: 0;
+}
+
 @keyframes pulsePending {
   0%   { transform: scale(1); }
   50%  { transform: scale(1.08); }
@@ -6997,9 +8216,23 @@ export function CartaPageContent({
   }
 
   .carta-comanda-header-compact {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    justify-content: flex-start !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+  }
+
+  .carta-comanda-header-compact .carta-estados {
+    flex: 1 1 auto !important;
+    justify-content: space-between !important;
+    align-self: stretch !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    gap: 10px !important;
   }
 
   .carta-comensales-compact.carta-comensales--pill {
@@ -7007,11 +8240,12 @@ export function CartaPageContent({
     grid-template-columns: auto 1fr auto auto !important;
     align-items: center !important;
     gap: 4px !important;
-
     height: 34px !important;
+    min-height: 34px !important;
     padding: 2px 6px !important;
     border-radius: 10px !important;
     max-width: 180px !important;
+    overflow: visible !important;
   }
 
   .carta-comensales-label {
@@ -7022,26 +8256,29 @@ export function CartaPageContent({
 
   .carta-comensales-count {
     font-size: 13px !important;
-    font-weight: 900 !important;
+    font-weight: 700 !important;
     text-align: center !important;
+    min-width: 16px !important;
   }
 
-  .carta-comensales-compact button {
-    width: 26px !important;
-    height: 26px !important;
-    min-width: 26px !important;
-    min-height: 26px !important;
-
-    border-radius: 6px !important;
-    font-size: 14px !important;
+  .carta-comensales-compact.carta-comensales--pill > button {
+    box-sizing: border-box !important;
+    width: 22px !important;
+    height: 18px !important;
+    min-width: 22px !important;
+    min-height: 18px !important;
+    max-height: 18px !important;
+    border-radius: 5px !important;
+    font-size: 12px !important;
     font-weight: 900 !important;
-
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-
     background: #ffffff !important;
+    color: #111827 !important;
     border: 1px solid rgba(0, 0, 0, 0.15) !important;
+    line-height: 1 !important;
+    padding: 1px 0 !important;
   }
 
   .carta-comanda-status-row {
@@ -7049,9 +8286,9 @@ export function CartaPageContent({
     align-items: center;
     gap: 3px;
     flex-wrap: nowrap;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
-    justify-content: flex-end;
+    justify-content: flex-start;
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
@@ -7346,54 +8583,101 @@ export function CartaPageContent({
                 aria-live="polite"
                 className={
                   mapSummaryAlertLevel === "critical"
-                    ? "carta-map-summary-shell--critical carta-map-summary-block"
-                    : "carta-map-summary-shell carta-map-summary-block"
+                    ? "carta-map-metrics-strip-host carta-map-summary-shell--critical carta-map-summary-block"
+                    : "carta-map-metrics-strip-host carta-map-summary-shell carta-map-summary-block"
                 }
                 style={{
+                  boxSizing: "border-box",
+                  paddingLeft: 6,
+                  paddingRight: 6,
+                  flexShrink: 0,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
                   border:
                     mapSummaryAlertLevel === "critical"
-                      ? "2px solid rgba(239, 68, 68, 0.88)"
+                      ? "1px solid rgba(239, 68, 68, 0.78)"
                       : mapSummaryAlertLevel === "warning"
-                        ? "2px solid rgba(245, 158, 11, 0.85)"
-                        : "1px solid rgba(148, 163, 184, 0.18)",
+                        ? "1px solid rgba(245, 158, 11, 0.78)"
+                        : "1px solid rgba(148, 163, 184, 0.14)",
                   boxShadow:
                     mapSummaryAlertLevel === "critical"
-                      ? "0 0 0 1px rgba(239, 68, 68, 0.35), 0 0 16px rgba(239, 68, 68, 0.22)"
+                      ? "0 0 0 1px rgba(239, 68, 68, 0.22), 0 0 8px rgba(239, 68, 68, 0.14)"
                       : mapSummaryAlertLevel === "warning"
-                        ? "0 0 0 1px rgba(245, 158, 11, 0.28), 0 0 14px rgba(245, 158, 11, 0.2)"
+                        ? "0 0 0 1px rgba(245, 158, 11, 0.2), 0 0 8px rgba(245, 158, 11, 0.12)"
                         : undefined,
                   marginBottom: 0,
                 }}
               >
                 <div className="carta-map-top-strip-main">
-                  <span className="carta-map-summary-pill carta-map-summary-pill--neutral">
-                    {mapQuickSummary.total} mesas
-                  </span>
-                  <span className="carta-map-summary-pill carta-map-summary-pill--busy">
-                    {mapQuickSummary.busy} ocupadas
-                  </span>
-                  <span className="carta-map-summary-pill carta-map-summary-pill--warn">
+                  <button
+                    type="button"
+                    className="carta-map-summary-pill carta-map-summary-pill--neutral carta-map-summary-pill--interactive"
+                    aria-pressed={activeMapFilter === "all"}
+                    onClick={() => setActiveMapFilter("all")}
+                  >
+                    {mapQuickSummary.total}{" "}
+                    {mapQuickSummary.total === 1 ? "mesa" : "mesas"}
+                  </button>
+                  <button
+                    type="button"
+                    className="carta-map-summary-pill carta-map-summary-pill--free carta-map-summary-pill--interactive"
+                    title="Sin comanda y sin reserva asignada hoy"
+                    aria-pressed={activeMapFilter === "free"}
+                    onClick={() => setActiveMapFilter("free")}
+                  >
+                    {mapQuickSummary.free}{" "}
+                    {mapQuickSummary.free === 1 ? "libre" : "libres"}
+                  </button>
+                  <button
+                    type="button"
+                    className="carta-map-summary-pill carta-map-summary-pill--busy carta-map-summary-pill--interactive"
+                    title="Con comanda activa o líneas en curso"
+                    aria-pressed={activeMapFilter === "occupied"}
+                    onClick={() => setActiveMapFilter("occupied")}
+                  >
+                    {mapQuickSummary.busy}{" "}
+                    {mapQuickSummary.busy === 1 ? "ocupada" : "ocupadas"}
+                  </button>
+                  <button
+                    type="button"
+                    className="carta-map-summary-pill carta-map-summary-pill--reserved carta-map-summary-pill--interactive"
+                    title="Reserva del día, mesa libre de comanda"
+                    aria-pressed={activeMapFilter === "reserved"}
+                    onClick={() => setActiveMapFilter("reserved")}
+                  >
+                    {mapQuickSummary.reserved}{" "}
+                    {mapQuickSummary.reserved === 1 ? "reservada" : "reservadas"}
+                  </button>
+                  <button
+                    type="button"
+                    className="carta-map-summary-pill carta-map-summary-pill--warn carta-map-summary-pill--interactive"
+                    aria-pressed={activeMapFilter === "attention"}
+                    onClick={() => setActiveMapFilter("attention")}
+                  >
                     {mapQuickSummary.warning} atención
-                  </span>
-                  <span className="carta-map-summary-pill carta-map-summary-pill--crit">
-                    {mapQuickSummary.critical} críticas
-                  </span>
-                  {reservationPressureCounts.upcoming > 0 ? (
-                    <span
-                      className="carta-map-summary-pill carta-map-summary-pill--warn"
-                      title="Reservas próximas (90 min)"
-                    >
-                      {reservationPressureCounts.upcoming} próximas
-                    </span>
-                  ) : null}
-                  {reservationPressureCounts.late > 0 ? (
-                    <span
-                      className="carta-map-summary-pill carta-map-summary-pill--crit"
-                      title="Reservas retrasadas (≥15 min)"
-                    >
-                      {reservationPressureCounts.late} retrasadas
-                    </span>
-                  ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    className="carta-map-summary-pill carta-map-summary-pill--crit carta-map-summary-pill--interactive"
+                    aria-pressed={activeMapFilter === "critical"}
+                    onClick={() => setActiveMapFilter("critical")}
+                  >
+                    {mapQuickSummary.critical}{" "}
+                    {mapQuickSummary.critical === 1 ? "crítica" : "críticas"}
+                  </button>
+                  <button
+                    type="button"
+                    className="carta-map-summary-pill carta-map-summary-pill--delayed carta-map-summary-pill--interactive"
+                    title="Reservas retrasadas (≥15 min)"
+                    aria-pressed={activeMapFilter === "delayed"}
+                    onClick={() => setActiveMapFilter("delayed")}
+                  >
+                    {reservationPressureCounts.late}{" "}
+                    {reservationPressureCounts.late === 1
+                      ? "retrasada"
+                      : "retrasadas"}
+                  </button>
                   {mapZoneOptions.length > 1 ? (
                     <div className="carta-map-zones-inline" role="tablist">
                       <button
@@ -7432,6 +8716,7 @@ export function CartaPageContent({
                       : "Servicio estable"}
                 </span>
               </div>
+              {!embeddedInOperacion ? (
               <div className="carta-map-waiter-row">
                 <label className="carta-map-waiter-compact">
                   <span style={{ opacity: 0.75 }}>Camarero</span>
@@ -7451,6 +8736,7 @@ export function CartaPageContent({
                   </select>
                 </label>
               </div>
+              ) : null}
               <div
                 ref={mapRef}
                 className="carta-table-map-grid"
@@ -7508,6 +8794,17 @@ export function CartaPageContent({
                   >
                     No hay mesas para este filtro de camarero.
                   </p>
+                ) : mapTablesForChipFilter.length === 0 ? (
+                  <p
+                    style={{
+                      color: "#64748b",
+                      fontWeight: 600,
+                      margin: 0,
+                      width: "100%",
+                    }}
+                  >
+                    Ninguna mesa coincide con el filtro del resumen.
+                  </p>
                 ) : (
                   <PinchZoomMap
                     enabled={cartaHeaderMobile && embeddedInOperacion}
@@ -7517,7 +8814,7 @@ export function CartaPageContent({
                   >
                   <EditableFloorMap
                     editable={false}
-                    elements={mapTablesOrderedByVisualPriority}
+                    elements={mapTablesForChipFilter}
                     renderElement={(ctx) => {
                       const tableId = ctx.elementId;
                       const stableTable = tablesById[tableId] ?? ctx.element;
@@ -7526,7 +8823,7 @@ export function CartaPageContent({
                       const mapTileWidth = ctx.mapTileWidth;
                       const mapTileHeight = ctx.mapTileHeight;
                       const priorityTable =
-                        mapTablesOrderedByVisualPriority.find(
+                        mapTablesForChipFilter.find(
                           (t) => String(t.id).trim() === tableId,
                         ) ?? ctx.element;
                       const busy = isTableOccupiedOnMap(tableId);
@@ -7591,6 +8888,9 @@ export function CartaPageContent({
                           ? Math.max(0, Math.floor(dinersRaw))
                           : 0;
                       const paxLabel = dinersCount > 0 ? `${dinersCount} pax` : "";
+                      const groupedBadgeText =
+                        groupedTablesMapHandlers?.getGroupedBadgeText(tableId) ??
+                        null;
 
                       return (
                         <ElementCard
@@ -7657,6 +8957,12 @@ export function CartaPageContent({
                                 }
                               : null
                           }
+                          readyToClose={salaReadyToCloseTableIds.has(tableId)}
+                          groupedBadgeText={groupedBadgeText}
+                          mapJoinDragEnabled={Boolean(
+                            groupedTablesMapHandlers?.joinTables,
+                          )}
+                          onMapTableJoinDrop={handleMapTableJoinDrop}
                         />
                       );
                     }}
@@ -7712,73 +9018,117 @@ export function CartaPageContent({
                       : undefined
                 }
               >
-                <div className="grid grid-cols-3 items-center w-full mb-1">
-                  <div className="text-left font-semibold text-lg" style={{ minWidth: 0 }}>
-                    <p
-                      className="carta-comanda-headline truncate min-w-0"
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 950,
-                        letterSpacing: "-0.01em",
-                        textAlign: "left",
-                        justifyContent: "flex-start",
-                        margin: 0,
-                        padding: 0,
-                        minWidth: 0,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
+                <div className="carta-comanda-head-top-stack w-full min-w-0">
+                  <div
+                    className="carta-comanda-head-top-grid mb-0 w-full min-h-[36px]"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr auto 1fr",
+                      alignItems: "center",
+                      columnGap: 8,
+                      rowGap: 0,
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <div
+                      className="min-w-0 self-center"
+                      style={{ justifySelf: "start" }}
                     >
-                      {selectedTableId ? (
-                        formatActiveMesaIndicator(
-                          tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
-                            selectedTableId,
-                        )
-                      ) : orderIdFromUrl ? (
-                        orderUrlTableId
-                          ? formatActiveMesaIndicator(
-                              tablesList.find((t) => t.id === orderUrlTableId)?.name?.trim() ||
-                                orderUrlTableId,
-                            )
-                          : "Comanda"
-                      ) : (
-                        <span style={{ color: "rgba(15, 23, 42, 0.38)" }}>
-                          Sin mesa
+                      {viewMode === "normal" && selectedTableId ? (
+                        <div className="carta-comensales-compact carta-comensales--pill">
+                          <span className="carta-comensales-label">
+                            Comensales:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void persistGuestCount(guestCount - 1)}
+                            disabled={guestCount <= 0}
+                          >
+                            -
+                          </button>
+                          <span className="carta-comensales-count">
+                            {guestCount}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void persistGuestCount(guestCount + 1)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div
+                      className="flex min-w-0 max-w-full items-center justify-center gap-1.5 self-center px-1"
+                      style={{ justifySelf: "center" }}
+                    >
+                      <p
+                        className="carta-comanda-headline min-w-0 truncate"
+                        style={{
+                          fontSize: 18,
+                          fontWeight: 950,
+                          letterSpacing: "-0.01em",
+                          textAlign: "center",
+                          margin: 0,
+                          padding: 0,
+                          minWidth: 0,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          flex: "0 1 auto",
+                        }}
+                      >
+                        {selectedTableId ? (
+                          formatActiveMesaIndicator(
+                            tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
+                              selectedTableId,
+                          )
+                        ) : orderIdFromUrl ? (
+                          orderUrlTableId
+                            ? formatActiveMesaIndicator(
+                                tablesList.find((t) => t.id === orderUrlTableId)?.name?.trim() ||
+                                  orderUrlTableId,
+                              )
+                            : "Comanda"
+                        ) : (
+                          <span style={{ color: "rgba(15, 23, 42, 0.38)" }}>
+                            Sin mesa
+                          </span>
+                        )}
+                      </p>
+                      {tpvComandaHeaderTime ? (
+                        <span
+                          className="carta-comanda-headline-time shrink-0 text-[11px] font-semibold tabular-nums leading-none tracking-tight"
+                          style={{ color: tpvComandaHeaderTime.color }}
+                        >
+                          {tpvComandaHeaderTime.label}
                         </span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="text-center text-xs text-gray-500">
-                    {tpvComandaHeaderTime ? (
-                      <span
-                        className="carta-comanda-headline-time"
-                        style={{ color: tpvComandaHeaderTime.color }}
+                      ) : null}
+                    </div>
+                    <div
+                      className="min-w-0 self-center"
+                      style={{ justifySelf: "end" }}
+                    >
+                      <div
+                        className={
+                          viewMode === "normal"
+                            ? "flex w-full justify-end md:hidden"
+                            : "flex w-full justify-end"
+                        }
                       >
-                        {tpvComandaHeaderTime.label}
-                      </span>
-                    ) : null}
-                    {totalPendingItems > 0 ? (
-                      <span
-                        className="carta-pending-indicator"
-                        aria-label={`${totalPendingItems} unidades pendientes de enviar`}
-                      >
-                        {totalPendingItems} pendientes
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex justify-end">
-                    {!orderIdFromUrl &&
-                    (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
-                      <button
-                        type="button"
-                        className="carta-tpv-to-map-btn"
-                        onClick={handleBackToMap}
-                        style={{ flexShrink: 0 }}
-                      >
-                        {t("cartaTpv.mapNavVisible")}
-                      </button>
-                    ) : null}
+                        {!orderIdFromUrl &&
+                        (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
+                          <button
+                            type="button"
+                            className="carta-tpv-to-map-btn"
+                            onClick={handleBackToMap}
+                            style={{ flexShrink: 0 }}
+                          >
+                            {t("cartaTpv.mapNavVisible")}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {((!orderDocIsPaid &&
@@ -7821,76 +9171,8 @@ export function CartaPageContent({
           </div>
           {viewMode === "normal" && (
             <div className="carta-header-compact carta-comanda-header-compact">
-              <div className="carta-comensales-compact carta-comensales--pill">
-                {selectedTableId ? (
-                  <>
-                    <span className="carta-comensales-label">
-                      Comensales:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void persistGuestCount(guestCount - 1)}
-                      disabled={guestCount <= 0}
-                    >
-                      -
-                    </button>
-                    <span className="carta-comensales-count">
-                      {guestCount}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void persistGuestCount(guestCount + 1)}
-                    >
-                      +
-                    </button>
-                  </>
-                ) : null}
-              </div>
               <div className="carta-estados carta-comanda-status-row">
-                <span
-                  style={{
-                    color: "#0f172a",
-                    background: "rgba(15,23,42,0.06)",
-                    border: "1px solid rgba(15,23,42,0.12)",
-                  }}
-                >
-                  {cartaHeaderMobile
-                    ? `Pen ${linesPending.length}`
-                    : `Pendiente ${linesPending.length}`}
-                </span>
-                <span
-                  style={{
-                    color: "#1e3a8a",
-                    background: "rgba(59,130,246,0.14)",
-                    border: "1px solid rgba(37, 99, 235, 0.25)",
-                  }}
-                >
-                  {cartaHeaderMobile
-                    ? `Env ${linesSent.length}`
-                    : `Enviado ${linesSent.length}`}
-                </span>
-                <span
-                  style={{
-                    color: "#9a3412",
-                    background: "rgba(245,158,11,0.14)",
-                    border: "1px solid rgba(245, 158, 11, 0.25)",
-                  }}
-                >
-                  {cartaHeaderMobile
-                    ? `Prep ${linesPrepared.length}`
-                    : `Preparado ${linesPrepared.length}`}
-                </span>
-                <span
-                  style={{
-                    color: "#166534",
-                    background: "rgba(34,197,94,0.14)",
-                    border: "1px solid rgba(34, 197, 94, 0.25)",
-                  }}
-                >
-                  {cartaHeaderMobile
-                    ? `Ser ${linesServed.length}`
-                    : `Servido ${linesServed.length}`}
-                </span>
+                {tpvComandaEstadosChipsEl}
               </div>
             </div>
           )}
@@ -8086,13 +9368,20 @@ export function CartaPageContent({
               >
                 <button
                   type="button"
-                  className="carta-comanda-button"
+                  className={`carta-comanda-button${
+                    isComandaSending || isMarchandoSegundos
+                      ? " opacity-60 cursor-not-allowed"
+                      : ""
+                  }`}
                   onClick={() => {
                     if (!hasPendingItems) return;
                     void handleComandaAndExit();
                   }}
                   disabled={
                     isComandaSending ||
+                    isMarchandoSegundos ||
+                    isMarcharSegundosOpen ||
+                    isMarcharModalOpen ||
                     order.length === 0 ||
                     !selectedTableId ||
                     !hasPendingItems
@@ -8104,6 +9393,9 @@ export function CartaPageContent({
                     fontSize: 15,
                     cursor:
                       isComandaSending ||
+                      isMarchandoSegundos ||
+                      isMarcharSegundosOpen ||
+                      isMarcharModalOpen ||
                       order.length === 0 ||
                       !selectedTableId ||
                       !hasPendingItems
@@ -8115,12 +9407,15 @@ export function CartaPageContent({
                     color: "#111827",
                     minHeight: 44,
                     opacity:
-                      isComandaSending ||
-                      order.length === 0 ||
-                      !selectedTableId ||
-                      !hasPendingItems
-                        ? 0.5
-                        : 1,
+                      isComandaSending || isMarchandoSegundos
+                        ? 0.6
+                        : isMarcharSegundosOpen ||
+                            isMarcharModalOpen ||
+                            order.length === 0 ||
+                            !selectedTableId ||
+                            !hasPendingItems
+                          ? 0.5
+                          : 1,
                     filter: comandaSentFlash ? "brightness(1.06)" : "none",
                     transition:
                       "filter 120ms ease, opacity 120ms ease, background-color 120ms ease",
@@ -8412,15 +9707,30 @@ export function CartaPageContent({
                 {isSimplePaymentMode ? (
                   <div className="flex flex-col justify-between min-h-0 flex-1">
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2 text-sm font-semibold text-gray-900 leading-tight">
-                        <span>Cobrar mesa</span>
-                        <button
-                          type="button"
-                          onClick={() => setSoundEnabled((v) => !v)}
-                          className="text-[10px] text-gray-500 shrink-0"
-                        >
-                          🔊 {soundEnabled ? "On" : "Off"}
-                        </button>
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold text-gray-900 leading-tight">
+                        <span className="min-w-0">Cobrar mesa</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="inline-flex items-center gap-1.5 cursor-pointer text-[10px] font-medium text-gray-500 normal-case select-none">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                              checked={autoPrintTicket}
+                              onChange={(e) =>
+                                persistAutoPrintTicket(e.target.checked)
+                              }
+                            />
+                            <span className="whitespace-nowrap">
+                              Auto imprimir ticket
+                            </span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setSoundEnabled((v) => !v)}
+                            className="text-[10px] text-gray-500 shrink-0"
+                          >
+                            🔊 {soundEnabled ? "On" : "Off"}
+                          </button>
+                        </div>
                       </div>
 
                       {(() => {
@@ -8721,15 +10031,32 @@ export function CartaPageContent({
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between gap-2 text-sm font-semibold mb-0.5 text-gray-900 leading-tight">
-                      <span>{isSplitMode ? "Dividir cuenta" : "Cobrar mesa"}</span>
-                      <button
-                        type="button"
-                        onClick={() => setSoundEnabled((v) => !v)}
-                        className="text-[10px] text-gray-500 shrink-0"
-                      >
-                        🔊 {soundEnabled ? "On" : "Off"}
-                      </button>
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold mb-0.5 text-gray-900 leading-tight">
+                      <span className="min-w-0">
+                        {isSplitMode ? "Dividir cuenta" : "Cobrar mesa"}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer text-[10px] font-medium text-gray-500 normal-case select-none">
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                            checked={autoPrintTicket}
+                            onChange={(e) =>
+                              persistAutoPrintTicket(e.target.checked)
+                            }
+                          />
+                          <span className="whitespace-nowrap">
+                            Auto imprimir ticket
+                          </span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setSoundEnabled((v) => !v)}
+                          className="text-[10px] text-gray-500 shrink-0"
+                        >
+                          🔊 {soundEnabled ? "On" : "Off"}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="text-xl font-bold mb-1 tracking-tight text-gray-900 leading-none">
@@ -9209,7 +10536,9 @@ export function CartaPageContent({
                                     }
                                   }
 
-                                  finishPaymentAndReturnToMap(tableIdToFinish ?? null);
+                                  finishPaymentAndReturnToMap(
+                                    tableIdToFinish ?? selectedTableId ?? null,
+                                  );
                                   window.alert("Cobro registrado");
                                   return;
                                 }
@@ -10171,50 +11500,23 @@ export function CartaPageContent({
                 !error &&
                 products.length > 0 && (
                   <>
-                    <div className="carta-active-course-indicator">
-                      {activeCourseLabel}
-                    </div>
-                    <div
-                      className="carta-course-selector"
-                      role="tablist"
-                      aria-label="Pase de comanda"
-                    >
-                      {(
-                        [
-                          { key: "starter" as const, label: "Entrante" },
-                          { key: "first" as const, label: "Primero" },
-                          { key: "main" as const, label: "Segundo" },
-                          { key: "dessert" as const, label: "Postre" },
-                        ] as const
-                      ).map(({ key, label }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          role="tab"
-                          aria-selected={activeCourse === key}
-                          className={activeCourse === key ? "active" : undefined}
-                          onClick={() => handleSelectCourse(key)}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div
-                      role="tablist"
-                      aria-label={t("cartaTpv.menuGroupAria")}
-                      style={{
-                        display: "flex",
-                        width: "100%",
-                        maxWidth: 320,
-                        marginBottom: 10,
-                        padding: 3,
-                        boxSizing: "border-box",
-                        borderRadius: 11,
-                        background: "rgba(2, 6, 23, 0.42)",
-                        border: "1px solid rgba(148, 163, 184, 0.16)",
-                        gap: 4,
-                      }}
-                    >
+                    <div className="mb-2.5 flex w-full flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-3">
+                      <div
+                        role="tablist"
+                        aria-label={t("cartaTpv.menuGroupAria")}
+                        className="w-full shrink-0 md:max-w-[320px]"
+                        style={{
+                          display: "flex",
+                          width: "100%",
+                          maxWidth: 320,
+                          padding: 3,
+                          boxSizing: "border-box",
+                          borderRadius: 11,
+                          background: "rgba(2, 6, 23, 0.42)",
+                          border: "1px solid rgba(148, 163, 184, 0.16)",
+                          gap: 4,
+                        }}
+                      >
                       {(["bebida", "comida"] as const).map((g) => {
                         const active = menuGroup === g;
                         return (
@@ -10250,6 +11552,20 @@ export function CartaPageContent({
                           </button>
                         );
                       })}
+                    </div>
+                      <div className="hidden shrink-0 md:flex md:items-center md:justify-end">
+                        {!orderIdFromUrl &&
+                        (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
+                          <button
+                            type="button"
+                            className="carta-tpv-to-map-btn"
+                            onClick={handleBackToMap}
+                            style={{ flexShrink: 0 }}
+                          >
+                            {t("cartaTpv.mapNavVisible")}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   <div
                     className="carta-cats-wrap"
@@ -10450,7 +11766,7 @@ export function CartaPageContent({
                                       if (activeProductTimeoutRef.current != null) {
                                         window.clearTimeout(activeProductTimeoutRef.current);
                                       }
-                                      handleQuickAdd(product, { course: activeCourse });
+                                      handleQuickAdd(product);
                                       activeProductTimeoutRef.current = window.setTimeout(() => {
                                         setActiveProductId(null);
                                       }, 120);
@@ -10465,6 +11781,7 @@ export function CartaPageContent({
                                       const diff = Math.abs(y - touchStartYRef.current);
                                       if (diff > 10) {
                                         touchMovedRef.current = true;
+                                        clearProductInfoLongPressTimer();
                                       }
                                     }}
                                     onPointerDown={(e) => {
@@ -10476,17 +11793,16 @@ export function CartaPageContent({
                                         y: e.clientY,
                                         moved: false,
                                       };
-                                      removeIsHoldingRef.current = false;
                                       clearRepeatAndHoldGesture();
-                                      removeHoldTimeoutRef.current = window.setTimeout(() => {
-                                        const removed = handleQuickRemoveOne(product);
-                                        if (removed) {
-                                          removeIsHoldingRef.current = true;
-                                          setHoldingProductId(product.id);
-                                          suppressClickUntilByProductIdRef.current[product.id] =
-                                            Date.now() + 600;
-                                        }
-                                      }, 400);
+                                      clearProductInfoLongPressTimer();
+                                      productInfoLongPressTimerRef.current = window.setTimeout(() => {
+                                        productInfoLongPressTimerRef.current = null;
+                                        setQuickProductInfo(product);
+                                        suppressClickUntilByProductIdRef.current[product.id] =
+                                          Date.now() + 900;
+                                        stopHoldAdd();
+                                        clearRepeatAndHoldGesture();
+                                      }, 1000);
                                     }}
                                     onPointerMove={(e) => {
                                       const start = productPointerStartRef.current;
@@ -10495,50 +11811,37 @@ export function CartaPageContent({
                                       const dy = Math.abs(e.clientY - start.y);
                                       if (dx > 8 || dy > 8) {
                                         start.moved = true;
+                                        clearProductInfoLongPressTimer();
                                       }
                                     }}
                                     onPointerUp={() => {
+                                      clearProductInfoLongPressTimer();
                                       const start = productPointerStartRef.current;
                                       if (start?.productId === product.id) {
                                         productPointerMovedClickBlockRef.current =
                                           start.moved ? product.id : null;
                                       }
                                       productPointerStartRef.current = null;
-
-                                      if (removeIsHoldingRef.current) {
-                                        suppressClickUntilByProductIdRef.current[product.id] =
-                                          Date.now() + 500;
-                                      }
                                       clearRepeatAndHoldGesture();
-                                      removeIsHoldingRef.current = false;
                                     }}
                                     onPointerLeave={() => {
+                                      clearProductInfoLongPressTimer();
                                       const start = productPointerStartRef.current;
                                       if (start?.productId === product.id) {
                                         productPointerMovedClickBlockRef.current =
                                           start.moved ? product.id : null;
                                       }
                                       productPointerStartRef.current = null;
-
-                                      if (removeIsHoldingRef.current) {
-                                        suppressClickUntilByProductIdRef.current[product.id] =
-                                          Date.now() + 500;
-                                      }
                                       clearRepeatAndHoldGesture();
-                                      removeIsHoldingRef.current = false;
                                     }}
                                     onPointerCancel={() => {
+                                      clearProductInfoLongPressTimer();
                                       const start = productPointerStartRef.current;
                                       if (start?.productId === product.id && start.moved) {
                                         productPointerMovedClickBlockRef.current = product.id;
                                       }
                                       productPointerStartRef.current = null;
-                                      if (removeIsHoldingRef.current) {
-                                        suppressClickUntilByProductIdRef.current[product.id] =
-                                          Date.now() + 500;
-                                      }
                                       clearRepeatAndHoldGesture();
-                                      removeIsHoldingRef.current = false;
                                     }}
                                     onMouseDown={(e) => {
                                       if (e.button !== 0) return;
@@ -10548,12 +11851,12 @@ export function CartaPageContent({
                                       holdTimeoutRef.current = window.setTimeout(() => {
                                         if (holdActiveProductIdRef.current !== product.id) return;
                                         holdDidRepeatRef.current = true;
-                                        handleQuickAdd(product, { course: activeCourse });
+                                        handleQuickAdd(product);
                                         holdIntervalRef.current = window.setInterval(() => {
                                           if (holdActiveProductIdRef.current !== product.id) return;
-                                          handleQuickAdd(product, { course: activeCourse });
+                                          handleQuickAdd(product);
                                         }, 120);
-                                      }, 300);
+                                      }, 1050);
                                     }}
                                     onMouseUp={stopHoldAdd}
                                     onMouseLeave={stopHoldAdd}
@@ -10568,7 +11871,7 @@ export function CartaPageContent({
                                           lastClickAtByProductIdRef.current[product.id] ?? 0;
                                         if (now - last < 120) return;
                                         lastClickAtByProductIdRef.current[product.id] = now;
-                                        handleQuickAdd(product, { course: activeCourse });
+                                        handleQuickAdd(product);
                                       }
                                     }}
                                     style={{
@@ -11059,6 +12362,94 @@ export function CartaPageContent({
         </div>
       ) : null}
 
+      {isMarcharSegundosOpen ? (
+        <div
+          className="fixed inset-0 z-[82] flex items-center justify-center bg-black/45 p-4"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !isMarchandoSegundos && !isComandaSending) {
+              setIsMarcharSegundosOpen(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white text-gray-900 p-5 shadow-2xl border border-gray-200"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="carta-marchar-segundos-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h3 id="carta-marchar-segundos-title" className="text-lg font-bold">
+              ¿Marchar segundos?
+            </h3>
+            <p className="text-sm text-gray-600 mt-2 leading-snug">
+              Ya no hay entrantes pendientes. Puedes marchar primeros y segundos a cocina.
+            </p>
+            <button
+              type="button"
+              className="mt-4 w-full min-h-[44px] rounded-xl bg-gray-200 text-gray-900 font-bold hover:bg-gray-300 disabled:opacity-60"
+              disabled={isMarchandoSegundos || isComandaSending}
+              onClick={() => setIsMarcharSegundosOpen(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="mt-2 w-full min-h-[44px] rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 disabled:opacity-60"
+              disabled={isMarchandoSegundos || isComandaSending}
+              onClick={() => void handleMarcharSegundos()}
+            >
+              {isMarchandoSegundos || isComandaSending ? "Marchando…" : "Marchar segundos"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {isMarcharModalOpen ? (
+        <div
+          className="carta-marchar-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsMarcharModalOpen(false);
+          }}
+        >
+          <div
+            className="carta-marchar-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="carta-marchar-modal-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h3 id="carta-marchar-modal-title">Marchar pase</h3>
+
+            {pendingDessertLines.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => void handleMarcharCourse(4)}
+              >
+                Marchar postres
+              </button>
+            ) : null}
+
+            <button type="button" onClick={() => setIsMarcharModalOpen(false)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {isOffline ? (
+        <div
+          className="pointer-events-none fixed bottom-3 left-3 z-[38] max-w-[min(18rem,calc(100vw-1.5rem))]"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="rounded-md border border-amber-500/40 bg-slate-950/88 px-2.5 py-1.5 text-[11px] font-medium leading-snug text-amber-100 shadow-md backdrop-blur-[2px]">
+            Sin conexión. Mostrando datos locales.
+          </div>
+        </div>
+      ) : null}
+
       {closingFeedback && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
           <div className="bg-black/80 text-white px-6 py-4 rounded-2xl text-center shadow-xl animate-fade-in">
@@ -11066,6 +12457,20 @@ export function CartaPageContent({
               {closingFeedback.tableName} cerrada
             </div>
             <div className="text-sm text-gray-300 mt-1">Cobro registrado</div>
+          </div>
+        </div>
+      )}
+
+      {tableClosedFeedback && !closingFeedback && (
+        <div className="pointer-events-none fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-green-600 px-4 py-2 text-sm text-white shadow-lg">
+          Mesa cerrada
+        </div>
+      )}
+
+      {sentFeedbackMessage && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+          <div className="bg-green-600 text-white text-sm px-4 py-2 rounded-full shadow">
+            {sentFeedbackMessage}
           </div>
         </div>
       )}

@@ -22,6 +22,7 @@ export default function KitchenView() {
       <ServiceMetricsBar scope="kitchen" />
       <OrderItemsBoard
         itemFilter={filter}
+        groupSentPasses
         emptyMessage="No hay pedidos en cocina"
         sentAction={{
           label: "Marcar como preparado",

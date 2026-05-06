@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Timestamp,
   collection,
@@ -53,7 +53,13 @@ type SalaTableGroup = {
   oldestPreparedAtMs?: number;
   priority: PriorityLevel;
   oldestMinutes: number;
+  isTableFullyServed: boolean;
 };
+
+function salaLineItemStatus(line: SalaLine, orders: SalaOrder[]): string | undefined {
+  const order = orders.find((o) => o.id === line.orderId);
+  return order?.items.find((i) => i.id === line.itemId)?.status;
+}
 
 function readItemNoteFromRecord(rec: Record<string, unknown>): string | undefined {
   const keys = ["note", "lineNote", "notes", "comment", "observations"] as const;
@@ -190,6 +196,130 @@ function formatMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = Math.floor(minutes % 60);
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+/** Misma ventana que cocina/barra (order-items-board) para agrupar ítems listos por “pase”. */
+const PASS_BUCKET_MS = 2000;
+
+function formatSalaPrepClockHm(preparedAtMs: number): string {
+  const d = new Date(preparedAtMs);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Tiempo de espera en sala desde el primer listo del pase (preparedAtMs). */
+function formatSalaPassElapsedWaitLabel(elapsedMs: number): string {
+  const min = Math.floor(elapsedMs / 60000);
+  return `${min} min`;
+}
+
+function salaPassPreparedWaitColorClass(elapsedMs: number): string {
+  const min = elapsedMs / 60000;
+  if (min >= 10) return "text-red-600";
+  if (min >= 5) return "text-orange-600";
+  return "text-gray-500";
+}
+
+function getSalaPassBgClass(ms: number | null): string {
+  if (ms == null) return "bg-gray-50 border-gray-200";
+  const min = ms / 60000;
+  if (min >= 10) return "bg-red-50 border-red-200";
+  if (min >= 5) return "bg-orange-50 border-orange-200";
+  return "bg-gray-50 border-gray-200";
+}
+
+function getSalaPassHeaderTextClass(ms: number | null): string {
+  if (ms == null) return "text-gray-500";
+  const min = ms / 60000;
+  if (min >= 10) return "text-red-700";
+  if (min >= 5) return "text-orange-700";
+  return "text-gray-500";
+}
+
+function getSalaPassUrgencyLabel(ms: number | null): string | null {
+  if (ms == null) return null;
+  const min = ms / 60000;
+  if (min >= 10) return "Urgente";
+  if (min >= 5) return "Atención";
+  return null;
+}
+
+function getSalaGroupUrgencyScore(lines: SalaLine[], nowMs: number): number {
+  let maxScore = 0;
+  for (const line of lines) {
+    const t = line.preparedAtMs;
+    if (typeof t === "number" && Number.isFinite(t)) {
+      const min = (nowMs - t) / 60000;
+      if (min >= 10) maxScore = Math.max(maxScore, 2);
+      else if (min >= 5) maxScore = Math.max(maxScore, 1);
+    }
+  }
+  return maxScore;
+}
+
+function getUrgencyLabel(score: number): string | null {
+  if (score >= 2) return "Urgente";
+  if (score >= 1) return "Atención";
+  return null;
+}
+
+const getSalaGroupCardUrgencyClassName = (score: number) => {
+  if (score >= 2) return "border-red-200 bg-red-50";
+  if (score >= 1) return "border-orange-200 bg-orange-50";
+  return "";
+};
+
+const formatMin = (ms: number) => {
+  return `${Math.floor(ms / 60000)} min`;
+};
+
+const getSalaMetricsClass = (maxWait: number | null) => {
+  if (maxWait == null) return "text-gray-500";
+  const min = maxWait / 60000;
+  if (min >= 10) return "text-red-600 font-semibold animate-pulse";
+  if (min >= 5) return "text-orange-600";
+  return "text-gray-500";
+};
+
+const getSalaStationStatus = (maxWait: number | null) => {
+  if (maxWait == null) return null;
+  const min = maxWait / 60000;
+  if (min >= 10) return "Sala lenta";
+  if (min >= 5) return "Sala atención";
+  return "Sala en ritmo";
+};
+
+const getSalaStationStatusClass = (status: string | null) => {
+  if (status === "Sala lenta") return "bg-red-100 text-red-700";
+  if (status === "Sala atención") return "bg-orange-100 text-orange-700";
+  if (status === "Sala en ritmo") return "bg-green-100 text-green-700";
+  return "";
+};
+
+function groupSalaLinesByPase(lines: SalaLine[]): SalaLine[][] {
+  if (lines.length === 0) return [];
+  const withPreparedAt = lines.some(
+    (l) => l.preparedAtMs != null && Number.isFinite(l.preparedAtMs),
+  );
+  if (!withPreparedAt) {
+    return [lines.slice()];
+  }
+  const byBucket = new Map<number, SalaLine[]>();
+  for (const line of lines) {
+    const ms = line.preparedAtMs;
+    const bucket =
+      ms != null && Number.isFinite(ms)
+        ? Math.floor(ms / PASS_BUCKET_MS)
+        : Number.MAX_SAFE_INTEGER;
+    const arr = byBucket.get(bucket) ?? [];
+    arr.push(line);
+    byBucket.set(bucket, arr);
+  }
+  const keys = Array.from(byBucket.keys()).sort((a, b) => a - b);
+  return keys.map((k) => {
+    const chunk = byBucket.get(k)!;
+    chunk.sort((a, b) => (a.preparedAtMs ?? 0) - (b.preparedAtMs ?? 0));
+    return chunk;
+  });
 }
 
 const gridStyle: CSSProperties = {
@@ -431,6 +561,7 @@ export default function SalaView() {
             oldestPreparedAtMs: preparedAtMs,
             priority: "normal",
             oldestMinutes: 0,
+            isTableFullyServed: false,
           };
           byTable.set(tableKey, g);
         }
@@ -453,6 +584,9 @@ export default function SalaView() {
           : 0;
       g.oldestMinutes = minutes;
       g.priority = priorityLevelFor(minutes);
+      g.isTableFullyServed =
+        g.lines.length > 0 &&
+        g.lines.every((line) => salaLineItemStatus(line, orders) === "served");
     }
     list.sort((a, b) => {
       const pr = priorityRank(a.priority) - priorityRank(b.priority);
@@ -505,6 +639,53 @@ export default function SalaView() {
 
   const totalLines = groups.reduce((acc, g) => acc + g.lines.length, 0);
 
+  const now = nowMs;
+  let readyCount = 0;
+  let urgentCount = 0;
+  let attentionCount = 0;
+  let totalWait = 0;
+  let waitCount = 0;
+  let maxWait = 0;
+  for (const g of groups) {
+    for (const line of g.lines) {
+      const preparedAt = line.preparedAtMs;
+      if (typeof preparedAt === "number" && Number.isFinite(preparedAt)) {
+        const elapsed = now - preparedAt;
+        totalWait += elapsed;
+        waitCount++;
+        if (elapsed > maxWait) {
+          maxWait = elapsed;
+        }
+        const min = elapsed / 60000;
+        readyCount++;
+        if (min >= 10) {
+          urgentCount++;
+        } else if (min >= 5) {
+          attentionCount++;
+        }
+      }
+    }
+  }
+
+  const avgWait = waitCount > 0 ? totalWait / waitCount : null;
+  const stationMaxWaitMs = waitCount > 0 ? maxWait : null;
+  const salaStationStatus = getSalaStationStatus(stationMaxWaitMs);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("kds:station-status", {
+        detail: { station: "sala", status: salaStationStatus },
+      }),
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("kds:station-status", {
+          detail: { station: "sala", status: null },
+        }),
+      );
+    };
+  }, [salaStationStatus]);
+
   return (
     <div
       style={{
@@ -516,25 +697,52 @@ export default function SalaView() {
       }}
     >
       <ServiceMetricsBar scope="all" />
-      {totalLines === 0 ? (
-        <div style={emptyStyle}>
-          No hay productos pendientes de servir
+      {readyCount > 0 && (
+        <div className="mb-3">
+          {salaStationStatus ? (
+            <div
+              className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${getSalaStationStatusClass(salaStationStatus)}`}
+            >
+              {salaStationStatus}
+            </div>
+          ) : null}
+          <div className="flex gap-2">
+            <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium">
+              {readyCount} listos
+            </div>
+            {attentionCount > 0 && (
+              <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
+                {attentionCount} atención
+              </div>
+            )}
+            {urgentCount > 0 && (
+              <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+                {urgentCount} urgentes
+              </div>
+            )}
+          </div>
+          {waitCount > 0 && avgWait != null ? (
+            <div className={`text-xs ${getSalaMetricsClass(maxWait)}`}>
+              Media: {formatMin(avgWait)} · Máx: {formatMin(maxWait)}
+            </div>
+          ) : null}
         </div>
-      ) : (
-        <SalaBoard
-          groups={groups}
-          totalLines={totalLines}
-          priorityCounts={priorityCounts}
-          nowMs={nowMs}
-          busyItemIds={busyItemIds}
-          onMarkServed={handleMarkServed}
-        />
       )}
+      <SalaBoard
+        orders={orders}
+        groups={groups}
+        totalLines={totalLines}
+        priorityCounts={priorityCounts}
+        nowMs={nowMs}
+        busyItemIds={busyItemIds}
+        onMarkServed={handleMarkServed}
+      />
     </div>
   );
 }
 
 function SalaBoard({
+  orders,
   groups,
   totalLines,
   priorityCounts,
@@ -542,6 +750,7 @@ function SalaBoard({
   busyItemIds,
   onMarkServed,
 }: {
+  orders: SalaOrder[];
   groups: SalaTableGroup[];
   totalLines: number;
   priorityCounts: { normal: number; attention: number; critical: number };
@@ -549,8 +758,81 @@ function SalaBoard({
   busyItemIds: Record<string, boolean>;
   onMarkServed: (orderId: string, itemId: string) => void;
 }) {
+  const [completedTablesQueue, setCompletedTablesQueue] = useState<
+    Array<{ key: string; label: string }>
+  >([]);
+  const [tablesReadyToClose, setTablesReadyToClose] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const prevTableKeysRef = useRef<Set<string> | null>(null);
+  const announcedCompletedTablesRef = useRef<Set<string>>(new Set());
+  const previousGroupsByKeyRef = useRef<Map<string, SalaTableGroup>>(new Map());
+
+  useEffect(() => {
+    const detail = Array.from(tablesReadyToClose);
+    window.dispatchEvent(
+      new CustomEvent("tablesReadyToClose:update", { detail }),
+    );
+  }, [tablesReadyToClose]);
+
+  useEffect(() => {
+    const currentKeys = new Set(groups.map((g) => g.tableKey));
+    for (const tableKey of currentKeys) {
+      announcedCompletedTablesRef.current.delete(tableKey);
+    }
+    const currentGroupsByKey = new Map(groups.map((g) => [g.tableKey, g]));
+    const prevKeys = prevTableKeysRef.current;
+    if (prevKeys !== null) {
+      for (const tableKey of prevKeys) {
+        if (!currentKeys.has(tableKey)) {
+          if (!announcedCompletedTablesRef.current.has(tableKey)) {
+            announcedCompletedTablesRef.current.add(tableKey);
+            const previousGroup = previousGroupsByKeyRef.current.get(tableKey);
+            const label = previousGroup?.tableLabel ?? tableKey;
+            setCompletedTablesQueue((prev) => [...prev, { key: tableKey, label }]);
+            setTablesReadyToClose((prev) => {
+              const next = new Set(prev);
+              next.add(tableKey);
+              return next;
+            });
+          }
+        }
+      }
+    }
+    prevTableKeysRef.current = currentKeys;
+    previousGroupsByKeyRef.current = currentGroupsByKey;
+  }, [groups]);
+
+  useEffect(() => {
+    if (completedTablesQueue.length === 0) return;
+
+    const timeout = setTimeout(() => {
+      setCompletedTablesQueue((prev) => prev.slice(1));
+    }, 2500);
+
+    return () => clearTimeout(timeout);
+  }, [completedTablesQueue]);
+
+  const completedTableLabel = completedTablesQueue[0]?.label ?? "";
+  const completedTableText = `${
+    completedTableLabel.toLowerCase().includes("mesa")
+      ? `${completedTableLabel} servida`
+      : `Mesa ${completedTableLabel} servida`
+  } · Lista para cerrar`;
+
+  const sortedGroups = [...groups].sort((a, b) => {
+    const aScore = getSalaGroupUrgencyScore(a.lines, nowMs);
+    const bScore = getSalaGroupUrgencyScore(b.lines, nowMs);
+    return bScore - aScore;
+  });
+
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+    <>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        {totalLines === 0 ? (
+          <div style={emptyStyle}>No hay productos pendientes de servir</div>
+        ) : (
+          <>
       <div style={headerRowStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <h3 style={headerTitleStyle}>Pendiente de servir</h3>
@@ -569,16 +851,31 @@ function SalaBoard({
         </div>
       </div>
       <div style={gridStyle}>
-        {groups.map((g) => {
+        {sortedGroups.map((g) => {
+          const isTableFullyServed = g.isTableFullyServed;
           const tone = priorityTone(g.priority);
+          const mesaUrgencyScore = getSalaGroupUrgencyScore(g.lines, nowMs);
+          const mesaUrgencyLabel = getUrgencyLabel(mesaUrgencyScore);
+          const salaCardUrgencyClass =
+            getSalaGroupCardUrgencyClassName(mesaUrgencyScore);
+          const shouldShowMesaUrgencyLabel =
+            !!mesaUrgencyLabel &&
+            !(mesaUrgencyLabel === "Urgente" && g.priority === "critical");
+          const mesaCardStyle: CSSProperties = {
+            ...cardBaseStyle,
+            boxShadow: tone.boxShadow ?? cardBaseStyle.boxShadow,
+            ...(!salaCardUrgencyClass ? { border: tone.border } : {}),
+          };
+          if (salaCardUrgencyClass) {
+            delete mesaCardStyle.background;
+          }
           return (
             <div
               key={g.tableKey}
-              style={{
-                ...cardBaseStyle,
-                border: tone.border,
-                boxShadow: tone.boxShadow ?? cardBaseStyle.boxShadow,
-              }}
+              className={`transition-all duration-300${
+                salaCardUrgencyClass ? ` border ${salaCardUrgencyClass}` : ""
+              }`.trim()}
+              style={mesaCardStyle}
             >
               <div
                 style={{
@@ -597,6 +894,17 @@ function SalaBoard({
                   }}
                 >
                   <h4 style={tableTitleStyle}>{g.tableLabel}</h4>
+                  {shouldShowMesaUrgencyLabel ? (
+                    <span
+                      className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        mesaUrgencyLabel === "Urgente"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      {mesaUrgencyLabel}
+                    </span>
+                  ) : null}
                   {g.priority === "critical" ? (
                     <span
                       style={{
@@ -627,93 +935,178 @@ function SalaBoard({
                 ) : null}
               </div>
               <div
-                style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
               >
-                {g.lines.map((line) => {
-                  const minutes =
-                    line.preparedAtMs != null
-                      ? Math.floor((nowMs - line.preparedAtMs) / 60000)
-                      : 0;
-                  let itemBorder = "1px solid #e5e7eb"; // gray-200
-                  let itemBg = "rgba(15, 23, 42, 0.72)";
-                  if (minutes >= 10) {
-                    itemBorder = "1px solid #ef4444";
-                    itemBg = "rgba(254, 242, 242, 0.12)";
-                  } else if (minutes >= 5) {
-                    itemBorder = "1px solid #fb923c";
-                    itemBg = "rgba(255, 247, 237, 0.12)";
+                {groupSalaLinesByPase(g.lines).map((chunk, passIdx) => {
+                  let oldestPrep: number | undefined;
+                  for (const l of chunk) {
+                    const ms = l.preparedAtMs;
+                    if (ms == null || !Number.isFinite(ms)) continue;
+                    if (oldestPrep === undefined || ms < oldestPrep) oldestPrep = ms;
                   }
-                  const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
+                  const servedCount = chunk.filter(
+                    (line) => salaLineItemStatus(line, orders) === "served",
+                  ).length;
+                  const totalCount = chunk.length;
+                  const isPassFullyServed =
+                    servedCount > 0 && servedCount === totalCount;
+                  const passElapsedMs =
+                    oldestPrep != null && Number.isFinite(oldestPrep)
+                      ? nowMs - oldestPrep
+                      : null;
+                  const urgencyLabel = getSalaPassUrgencyLabel(
+                    !isPassFullyServed ? passElapsedMs : null,
+                  );
                   return (
                     <div
-                      key={`${line.orderId}:${line.itemId}`}
-                      style={{
-                        ...lineRowStyle,
-                        border: itemBorder,
-                        background: itemBg,
-                      }}
+                      key={`${g.tableKey}-pase-${passIdx}`}
+                      className={`rounded-xl border p-2 ${getSalaPassBgClass(
+                        !isPassFullyServed ? passElapsedMs : null,
+                      )}`}
                     >
-                      <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                        <div style={lineNameStyle}>
-                          {line.qty}x {line.name}
-                        </div>
-                        {line.extras && line.extras.length > 0 ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 2,
-                              marginTop: 4,
-                            }}
-                          >
-                            {line.extras.map((ex, xi) => (
-                              <div
-                                key={`${line.orderId}:${line.itemId}:ex:${xi}`}
-                                style={lineExtrasStyle}
-                              >
-                                + {ex.name}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        {line.note ? (
-                          <div style={{ ...lineNoteStyle, marginTop: 4 }}>
-                            Nota: {line.note}
-                          </div>
-                        ) : null}
-                        <div style={lineMetaStyle}>
-                          <div
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 600,
-                              marginRight: 6,
-                            }}
-                          >
-                            {minutes} min
-                          </div>
-                          <span>
-                            {line.preparedAtMs != null
-                              ? `Listo hace ${formatMinutes(minutes)}`
-                              : "Listo"}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        style={{
-                          ...markButtonStyle,
-                          alignSelf: "center",
-                          flexShrink: 0,
-                          opacity: busy ? 0.6 : 1,
-                          cursor: busy ? "progress" : "pointer",
-                        }}
-                        onClick={() =>
-                          onMarkServed(line.orderId, line.itemId)
-                        }
+                      <div
+                        className={`mb-2 text-xs font-semibold ${getSalaPassHeaderTextClass(
+                          !isPassFullyServed ? passElapsedMs : null,
+                        )}`}
                       >
-                        {busy ? "Guardando…" : "Marcar como servido"}
-                      </button>
+                        <span>
+                          Pase {passIdx + 1} · Listo
+                          {oldestPrep != null ? ` · ${formatSalaPrepClockHm(oldestPrep)}` : ""}
+                          {` · ${chunk.length === 1 ? "1 línea" : `${chunk.length} líneas`}`}
+                          {" · "}
+                        </span>
+                        {isPassFullyServed ? (
+                          <>
+                            Servido{" "}
+                            <span className="ml-1 text-green-600">✓</span>
+                          </>
+                        ) : (
+                          <span className="ml-1 text-orange-600">Pendiente</span>
+                        )}
+                        {!isPassFullyServed &&
+                        passElapsedMs != null &&
+                        Number.isFinite(passElapsedMs) &&
+                        passElapsedMs >= 0 ? (
+                          <span
+                            className={`ml-2 text-xs ${salaPassPreparedWaitColorClass(passElapsedMs)}`}
+                          >
+                            · {formatSalaPassElapsedWaitLabel(passElapsedMs)}
+                          </span>
+                        ) : null}
+                        {urgencyLabel ? (
+                          <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-xs font-semibold">
+                            {urgencyLabel}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div
+                        style={{
+                          height: 1,
+                          width: "100%",
+                          background: "rgba(148, 163, 184, 0.15)",
+                          marginBottom: 8,
+                        }}
+                      />
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 6,
+                        }}
+                      >
+                        {chunk.map((line) => {
+                          const minutes =
+                            line.preparedAtMs != null
+                              ? Math.floor((nowMs - line.preparedAtMs) / 60000)
+                              : 0;
+                          let itemBorder = "1px solid #e5e7eb"; // gray-200
+                          let itemBg = "rgba(15, 23, 42, 0.72)";
+                          if (minutes >= 10) {
+                            itemBorder = "1px solid #ef4444";
+                            itemBg = "rgba(254, 242, 242, 0.12)";
+                          } else if (minutes >= 5) {
+                            itemBorder = "1px solid #fb923c";
+                            itemBg = "rgba(255, 247, 237, 0.12)";
+                          }
+                          const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
+                          return (
+                            <div
+                              key={`${line.orderId}:${line.itemId}`}
+                              style={{
+                                ...lineRowStyle,
+                                border: itemBorder,
+                                background: itemBg,
+                              }}
+                            >
+                              <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                                <div style={lineNameStyle}>
+                                  {line.qty}x {line.name}
+                                </div>
+                                {line.extras && line.extras.length > 0 ? (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      gap: 2,
+                                      marginTop: 4,
+                                    }}
+                                  >
+                                    {line.extras.map((ex, xi) => (
+                                      <div
+                                        key={`${line.orderId}:${line.itemId}:ex:${xi}`}
+                                        style={lineExtrasStyle}
+                                      >
+                                        + {ex.name}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                {line.note ? (
+                                  <div style={{ ...lineNoteStyle, marginTop: 4 }}>
+                                    Nota: {line.note}
+                                  </div>
+                                ) : null}
+                                <div style={lineMetaStyle}>
+                                  <div
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      marginRight: 6,
+                                    }}
+                                  >
+                                    {minutes} min
+                                  </div>
+                                  <span>
+                                    {line.preparedAtMs != null
+                                      ? `Listo hace ${formatMinutes(minutes)}`
+                                      : "Listo"}
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                style={{
+                                  ...markButtonStyle,
+                                  alignSelf: "center",
+                                  flexShrink: 0,
+                                  opacity: busy ? 0.6 : 1,
+                                  cursor: busy ? "progress" : "pointer",
+                                }}
+                                onClick={() =>
+                                  onMarkServed(line.orderId, line.itemId)
+                                }
+                              >
+                                {busy ? "Guardando…" : "Marcar como servido"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -722,6 +1115,21 @@ function SalaBoard({
           );
         })}
       </div>
+          </>
+        )}
     </div>
+      {completedTablesQueue.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+          <div
+            className="bg-green-600 text-white text-sm px-4 py-2 rounded-full shadow cursor-pointer"
+            onClick={() => {
+              setCompletedTablesQueue((prev) => prev.slice(1));
+            }}
+          >
+            {completedTableText}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

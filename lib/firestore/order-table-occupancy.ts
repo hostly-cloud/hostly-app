@@ -86,3 +86,79 @@ export function occupiedTableIdsFromOrderRows(
 ): Set<string> {
   return mapOccupancyFromOrderRows(rows).occupiedTableIds;
 }
+
+/** Línea de pedido con cantidad > 0 y no cancelada → cuenta para “mesa ocupada” en mapa. */
+export function isFirestoreOrderLineActiveForOccupancy(
+  it: Record<string, unknown>,
+): boolean {
+  const st = String(it.status ?? "")
+    .trim()
+    .toLowerCase();
+  if (
+    st === "cancelled" ||
+    st === "canceled" ||
+    st === "cancelado"
+  ) {
+    return false;
+  }
+  const q = Number(it.quantity ?? it.qty) || 0;
+  return q > 0;
+}
+
+/**
+ * Total mostrado en mapa: solo líneas no canceladas con cantidad > 0.
+ * Si el documento no trae `items`, se usa `total` (órdenes legacy sin ítems).
+ * No usa `total` del documento cuando existe `items` (evita importe obsoleto).
+ */
+export function computeBillableTotalFromOrderDocLike(data: {
+  total?: unknown;
+  items?: unknown;
+}): number {
+  if (!Array.isArray(data.items)) {
+    const t = data.total;
+    if (typeof t === "number" && Number.isFinite(t)) return Math.max(0, t);
+    return 0;
+  }
+  let sum = 0;
+  for (const raw of data.items) {
+    if (!raw || typeof raw !== "object") continue;
+    const it = raw as Record<string, unknown>;
+    if (!isFirestoreOrderLineActiveForOccupancy(it)) continue;
+    if (typeof it.total === "number" && Number.isFinite(it.total)) {
+      sum += it.total;
+      continue;
+    }
+    const q = Number(it.quantity ?? it.qty) || 0;
+    const p = Number(it.price ?? it.precio) || 0;
+    sum += q * p;
+  }
+  return sum;
+}
+
+/**
+ * Documento de pedido “ocupa mesa” si el estado es activo y hay líneas reales o total legacy.
+ */
+export function orderDocHasActiveLinesForMapOccupancy(data: {
+  status?: unknown;
+  items?: unknown;
+  total?: unknown;
+}): boolean {
+  if (
+    !isOrderStatusActiveForTableOccupancy(
+      typeof data.status === "string" ? data.status : undefined,
+    )
+  ) {
+    return false;
+  }
+  if (Array.isArray(data.items)) {
+    for (const raw of data.items) {
+      if (!raw || typeof raw !== "object") continue;
+      if (isFirestoreOrderLineActiveForOccupancy(raw as Record<string, unknown>)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  const t = data.total;
+  return typeof t === "number" && Number.isFinite(t) && t > 0;
+}

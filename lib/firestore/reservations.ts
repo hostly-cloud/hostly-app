@@ -95,6 +95,7 @@ export function listenReservationsForDate(
   restaurantId: string,
   date: string,
   onData: (items: Reservation[]) => void,
+  onListenError?: (error: unknown) => void,
 ): Unsubscribe {
   const rid = restaurantId.trim();
   const d = date.trim();
@@ -103,11 +104,19 @@ export function listenReservationsForDate(
     where("restaurantId", "==", rid),
     where("date", "==", d),
   );
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map(mapDocToReservation);
-    list.sort((a, b) => a.time.localeCompare(b.time, "es"));
-    onData(list);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map(mapDocToReservation);
+      list.sort((a, b) => a.time.localeCompare(b.time, "es"));
+      onData(list);
+    },
+    (err) => {
+      console.error("listenReservationsForDate Firestore error", err);
+      onListenError?.(err);
+      onData([]);
+    },
+  );
 }
 
 export function listenReservationsForRange(
@@ -164,9 +173,11 @@ export async function createReservation(
     updatedAt: serverTimestamp(),
   };
 
-  if (payload.tableId && payload.tableLabel) {
-    docPayload.tableId = payload.tableId;
-    docPayload.tableLabel = payload.tableLabel;
+  const tid = String(payload.tableId ?? "").trim();
+  if (tid) {
+    docPayload.tableId = tid;
+    const tlab = String(payload.tableLabel ?? "").trim();
+    if (tlab) docPayload.tableLabel = tlab;
   }
   if (payload.zoneId && payload.zoneName) {
     docPayload.zoneId = payload.zoneId;
@@ -176,10 +187,14 @@ export async function createReservation(
     docPayload.notes = String(payload.notes).trim();
   }
 
+  console.log("saving reservation", docPayload);
+
   try {
     const ref = await addDoc(collection(db, COLLECTION), docPayload);
+    console.log("reservation saved", ref.id);
     return ref.id;
   } catch (e) {
+    console.error("createReservation failed", e);
     rethrowWithMessage(e);
   }
 }

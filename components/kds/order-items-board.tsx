@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Timestamp,
   collection,
@@ -88,6 +88,12 @@ export type OrderItemsBoardProps = {
   emptyMessage: string;
   sentAction: BoardColumnAction;
   preparedAction: BoardColumnAction;
+  /** Cocina: agrupa columna Pendiente por ventanas de envío (~2s) usando sentAt. Barra puede usar solo UI. */
+  groupSentPasses?: boolean;
+  /** Si es false con `groupSentPasses`, solo agrupación visual sin “Preparar pase”. Cocina: omitir (por defecto preparación masiva activa). */
+  enablePreparePassBulk?: boolean;
+  /** Cabecera de tipo de pase agrupado (ej. Barra → “Bebidas”). Cocina: omitir para Entrantes/Segundos/Postres/Mixto. */
+  passTypeLabelOverride?: string;
 };
 
 function readItemNoteFromRecord(rec: Record<string, unknown>): string | undefined {
@@ -526,19 +532,192 @@ function groupLinesByTable(lines: DecoratedLine[]): BoardTableGroup[] {
   return list;
 }
 
+/** Ventana temporal (~2s) para agrupar líneas enviadas en el mismo “pase”. */
+const PASS_BUCKET_MS = 2000;
+
+/**
+ * Agrupa ítems enviados (columna Pendiente) por `Math.floor(sentAtMs / PASS_BUCKET_MS)`.
+ * Sin sentAt en ningún ítem → null (lista por secciones de curso como hasta ahora).
+ */
+function groupKitchenSentLinesByPase(lines: BoardLine[]): BoardLine[][] | null {
+  if (lines.length === 0) return [];
+  const withSentAt = lines.some((l) => l.sentAtMs != null);
+  if (!withSentAt) return null;
+
+  const byBucket = new Map<number, BoardLine[]>();
+  for (const line of lines) {
+    const ms = line.sentAtMs;
+    const bucket =
+      ms != null ? Math.floor(ms / PASS_BUCKET_MS) : Number.MAX_SAFE_INTEGER;
+    const arr = byBucket.get(bucket) ?? [];
+    arr.push(line);
+    byBucket.set(bucket, arr);
+  }
+  const keys = Array.from(byBucket.keys()).sort((a, b) => a - b);
+  return keys.map((k) => {
+    const chunk = byBucket.get(k)!;
+    chunk.sort((a, b) => {
+      const ka = sortCourseKey(a.course);
+      const kb = sortCourseKey(b.course);
+      if (ka !== kb) return ka - kb;
+      return (a.sentAtMs ?? 0) - (b.sentAtMs ?? 0);
+    });
+    return chunk;
+  });
+}
+
+function oldestSentAtMsInChunk(chunk: BoardLine[]): number | undefined {
+  let min: number | undefined;
+  for (const line of chunk) {
+    const ms = line.sentAtMs;
+    if (ms == null || !Number.isFinite(ms)) continue;
+    if (min === undefined || ms < min) min = ms;
+  }
+  return min;
+}
+
+/** Orden visual de mesas: 2 = ≥10 min, 1 = ≥5 min, 0 = resto (según sent/prep). */
+function getGroupUrgencyScore(lines: BoardLine[], nowMs: number): number {
+  let maxScore = 0;
+  for (const line of lines) {
+    const t = line.sentAtMs ?? line.preparedAtMs;
+    if (typeof t === "number" && Number.isFinite(t)) {
+      const min = (nowMs - t) / 60000;
+      if (min >= 10) {
+        maxScore = Math.max(maxScore, 2);
+      } else if (min >= 5) {
+        maxScore = Math.max(maxScore, 1);
+      }
+    }
+  }
+  return maxScore;
+}
+
+function getUrgencyLabel(score: number): string | null {
+  if (score >= 2) return "Urgente";
+  if (score >= 1) return "Atención";
+  return null;
+}
+
+function getGroupCardUrgencyClassName(score: number): string {
+  if (score >= 2) return "border-red-200 bg-red-50";
+  if (score >= 1) return "border-orange-200 bg-orange-50";
+  return "";
+}
+
+const formatMin = (ms: number) => {
+  return `${Math.floor(ms / 60000)} min`;
+};
+
+const formatClock = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getHours().toString().padStart(2, "0")}:${d
+    .getMinutes()
+    .toString()
+    .padStart(2, "0")}`;
+};
+
+const getKdsMetricsClass = (maxTime: number | null) => {
+  if (maxTime == null) return "text-gray-500";
+  const min = maxTime / 60000;
+  if (min >= 10) return "text-red-600 font-semibold animate-pulse";
+  if (min >= 5) return "text-orange-600";
+  return "text-gray-500";
+};
+
+const getStationStatus = (maxTime: number | null) => {
+  if (maxTime == null) return null;
+  const min = maxTime / 60000;
+  if (min >= 10) return "Lento";
+  if (min >= 5) return "Atención";
+  return "En ritmo";
+};
+
+const getStationStatusClass = (status: string | null) => {
+  if (status === "Lento") return "bg-red-100 text-red-700";
+  if (status === "Atención") return "bg-orange-100 text-orange-700";
+  if (status === "En ritmo") return "bg-green-100 text-green-700";
+  return "";
+};
+
+/** Hora local HH:mm para cabecera de pase (solo UI). */
+function formatPassSentClockHm(sentAtMs: number): string {
+  const d = new Date(sentAtMs);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatPassElapsedMinutesFromMs(ms: number): string {
+  const min = Math.floor(ms / 60000);
+  return `${min} min`;
+}
+
+function passElapsedUrgencyTextClassFromMs(elapsedMs: number): string {
+  const min = elapsedMs / 60000;
+  if (min >= 10) return "text-red-600";
+  if (min >= 5) return "text-orange-600";
+  return "text-gray-500";
+}
+
+/** Etiqueta de tipo de pase según cursos homogéneos del chunk (solo cocina / UI). */
+function kitchenPassChunkTypeLabel(chunk: BoardLine[]): string {
+  if (chunk.length === 0) return "Mixto";
+  if (chunk.every((l) => l.course === 1)) return "Entrantes";
+  if (chunk.every((l) => l.course === 2 || l.course === 3)) return "Segundos";
+  if (chunk.every((l) => l.course === 4)) return "Postres";
+  return "Mixto";
+}
+
+function getPassChunkClassName(label: string): string {
+  if (label === "Bebidas") return "rounded-xl border border-blue-200 bg-blue-50 p-2";
+  if (label === "Entrantes")
+    return "rounded-xl border border-emerald-200 bg-emerald-50 p-2";
+  if (label === "Segundos") return "rounded-xl border border-orange-200 bg-orange-50 p-2";
+  if (label === "Postres") return "rounded-xl border border-purple-200 bg-purple-50 p-2";
+  return "rounded-xl border border-gray-200 bg-gray-50 p-2";
+}
+
+function getPassHeaderTextClassName(label: string): string {
+  if (label === "Bebidas") return "text-xs font-semibold text-blue-700 mb-1";
+  if (label === "Entrantes") return "text-xs font-semibold text-emerald-700 mb-1";
+  if (label === "Segundos") return "text-xs font-semibold text-orange-700 mb-1";
+  if (label === "Postres") return "text-xs font-semibold text-purple-700 mb-1";
+  return "text-xs font-semibold text-gray-500 mb-1";
+}
+
 export default function OrderItemsBoard({
   itemFilter,
   emptyMessage,
   sentAction,
   preparedAction,
+  groupSentPasses = false,
+  enablePreparePassBulk,
+  passTypeLabelOverride,
 }: OrderItemsBoardProps) {
   const { restaurantId, ready: authReady } = useAuth();
   const { matchesOrder } = useOperationFilter();
   const [orders, setOrders] = useState<BoardOrder[]>([]);
+  const ordersRef = useRef<BoardOrder[]>([]);
+  ordersRef.current = orders;
+  const completedPrepTimesRef = useRef<number[]>([]);
+  const lastPreparedRef = useRef<{ name: string; time: number }[]>([]);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [busyItemIds, setBusyItemIds] = useState<Record<string, boolean>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [boardFeedbackMessage, setBoardFeedbackMessage] = useState<string | null>(null);
+  const [busyPassKey, setBusyPassKey] = useState<string | null>(null);
+  const [resetFeedback, setResetFeedback] = useState(false);
+  const [recentClearedFeedback, setRecentClearedFeedback] = useState(false);
+
+  const showBoardFeedback = (message: string) => {
+    setBoardFeedbackMessage(message);
+    setTimeout(() => {
+      setBoardFeedbackMessage(null);
+    }, 1500);
+  };
+
+  const showPreparePassBulk =
+    groupSentPasses && enablePreparePassBulk !== false;
 
   useEffect(() => {
     if (!authReady || !isFirebaseConfigured || !restaurantId) return;
@@ -638,7 +817,7 @@ export default function OrderItemsBoard({
     next: "prepared" | "served",
   ) {
     if (!isFirebaseConfigured) return;
-    const order = orders.find((o) => o.id === orderId);
+    const order = ordersRef.current.find((o) => o.id === orderId);
     if (!order) return;
     const key = `${orderId}:${itemId}`;
     if (busyItemIds[key]) return;
@@ -685,6 +864,23 @@ export default function OrderItemsBoard({
           updatedAt: serverTimestamp(),
         }),
       );
+      if (next === "prepared") {
+        const item = order.items.find((i) => i.id === itemId);
+        if (item) {
+          const sentAtMs = readMs(item.sentAt);
+          if (typeof sentAtMs === "number" && Number.isFinite(sentAtMs)) {
+            completedPrepTimesRef.current.push(now - sentAtMs);
+          }
+          const itemName = item?.name || "Item";
+          lastPreparedRef.current.unshift({
+            name: itemName.trim() || "Item",
+            time: now,
+          });
+          if (lastPreparedRef.current.length > 5) {
+            lastPreparedRef.current.pop();
+          }
+        }
+      }
       setActionSuccess("Pedido actualizado");
       setTimeout(() => setActionSuccess(null), 1500);
     } catch (e) {
@@ -699,6 +895,31 @@ export default function OrderItemsBoard({
       });
     }
   }
+
+  async function handlePreparePassChunk(
+    lines: BoardLine[],
+    passKey: string,
+    message: string,
+  ) {
+    if (busyPassKey) return;
+    const targets = lines.filter((l) => l.status === "sent");
+    if (targets.length === 0) return;
+    setBusyPassKey(passKey);
+    try {
+      for (const line of targets) {
+        await handleMarkNext(line.orderId, line.itemId, "prepared");
+      }
+      showBoardFeedback(message);
+    } finally {
+      setBusyPassKey(null);
+    }
+  }
+
+  const completedAvg =
+    completedPrepTimesRef.current.length > 0
+      ? completedPrepTimesRef.current.reduce((a, b) => a + b, 0) /
+        completedPrepTimesRef.current.length
+      : null;
 
   const totalLines =
     columns.sent.reduce((acc, g) => acc + g.lines.length, 0) +
@@ -728,9 +949,32 @@ export default function OrderItemsBoard({
           groups={columns.sent}
           nowMs={nowMs}
           showUrgency
+          showPendingColumnMetrics
           action={sentAction}
           busyItemIds={busyItemIds}
           onMark={handleMarkNext}
+          sentPassesGrouping={groupSentPasses}
+          onPreparePassChunk={
+            showPreparePassBulk ? handlePreparePassChunk : undefined
+          }
+          busyPassKey={showPreparePassBulk ? busyPassKey : null}
+          passTypeLabelOverride={passTypeLabelOverride}
+          completedSessionPrepAvgMs={completedAvg}
+          onResetSessionPrepAvg={() => {
+            completedPrepTimesRef.current = [];
+          }}
+          onAfterSessionPrepReset={() => {
+            setResetFeedback(true);
+            setTimeout(() => setResetFeedback(false), 1500);
+          }}
+          sessionPrepResetFeedback={resetFeedback}
+          recentPreparedEntries={lastPreparedRef.current.slice()}
+          onClearRecentPrepared={() => {
+            lastPreparedRef.current = [];
+            setRecentClearedFeedback(true);
+            setTimeout(() => setRecentClearedFeedback(false), 1500);
+          }}
+          recentPreparedClearedFeedback={recentClearedFeedback}
         />
         <BoardColumn
           title="Listo"
@@ -741,6 +985,7 @@ export default function OrderItemsBoard({
           action={preparedAction}
           busyItemIds={busyItemIds}
           onMark={handleMarkNext}
+          sentPassesGrouping={false}
         />
         <BoardColumn
           title="Servido"
@@ -751,9 +996,134 @@ export default function OrderItemsBoard({
           action={null}
           busyItemIds={busyItemIds}
           onMark={handleMarkNext}
+          sentPassesGrouping={false}
         />
       </div>
+      {boardFeedbackMessage && (
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
+          <div className="rounded-full bg-green-600 px-4 py-2 text-sm text-white shadow">
+            {boardFeedbackMessage}
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+function BoardLineRow({
+  line,
+  nowMs,
+  showUrgency,
+  action,
+  busyItemIds,
+  onMark,
+}: {
+  line: BoardLine;
+  nowMs: number;
+  showUrgency: boolean;
+  action: BoardColumnAction | null;
+  busyItemIds: Record<string, boolean>;
+  onMark: (
+    orderId: string,
+    itemId: string,
+    next: "prepared" | "served",
+  ) => void;
+}) {
+  const minutes =
+    line.sentAtMs != null ? Math.floor((nowMs - line.sentAtMs) / 60000) : 0;
+  let itemBorder = "1px solid #e5e7eb"; // gray-200
+  let itemBg = "#ffffff";
+  if (minutes >= 10) {
+    itemBorder = "1px solid #ef4444";
+    itemBg = "#fef2f2";
+  } else if (minutes >= 5) {
+    itemBorder = "1px solid #fb923c";
+    itemBg = "#fff7ed";
+  }
+  const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
+  return (
+    <div
+      style={{
+        ...lineRowStyle,
+        border: itemBorder,
+        background: itemBg,
+      }}
+    >
+      <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "stretch",
+            gap: 2,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 6,
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={lineNameStyle}>
+              x{line.qty} {line.name}
+            </span>
+          </div>
+        </div>
+        {line.extras && line.extras.length > 0 ? (
+          <div style={lineExtrasJoinedStyle}>
+            {line.extras.map((e) => `+ ${e.name}`).join(" · ")}
+          </div>
+        ) : null}
+        {line.removedIngredients && line.removedIngredients.length > 0 ? (
+          <div style={lineRemovedStyle}>
+            Sin: {line.removedIngredients.join(" · ")}
+          </div>
+        ) : null}
+        {line.note ? <div style={lineNoteStyle}>Nota: {line.note}</div> : null}
+        <div style={lineMetaStyle}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              marginRight: 6,
+            }}
+          >
+            {minutes} min
+          </div>
+          <span>
+            {showUrgency && line.sentAtMs != null
+              ? `Avisado hace ${formatMinutes(minutes)}`
+              : line.status === "served" && line.servedAtMs != null
+                ? `Servido hace ${formatMinutes(
+                    (nowMs - line.servedAtMs) / 60000,
+                  )}`
+                : line.status === "served"
+                  ? "Servido"
+                  : "Avisado"}
+          </span>
+        </div>
+      </div>
+      {action ? (
+        <button
+          type="button"
+          disabled={busy}
+          style={{
+            ...markButtonStyle,
+            alignSelf: "center",
+            flexShrink: 0,
+            opacity: busy ? 0.6 : 1,
+            cursor: busy ? "progress" : "pointer",
+          }}
+          onClick={() =>
+            onMark(line.orderId, line.itemId, action.nextStatus)
+          }
+        >
+          {busy ? (action.busyLabel ?? "Guardando…") : action.label}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -766,12 +1136,40 @@ function BoardColumn({
   action,
   busyItemIds,
   onMark,
+  sentPassesGrouping,
+  onPreparePassChunk,
+  busyPassKey = null,
+  passTypeLabelOverride,
+  showPendingColumnMetrics = false,
+  completedSessionPrepAvgMs = null,
+  onResetSessionPrepAvg,
+  onAfterSessionPrepReset,
+  sessionPrepResetFeedback = false,
+  recentPreparedEntries = [],
+  onClearRecentPrepared,
+  recentPreparedClearedFeedback = false,
 }: {
   title: string;
   count: number;
   groups: BoardTableGroup[];
   nowMs: number;
   showUrgency: boolean;
+  /** Cocina/Barra: chips de métricas sobre la columna enviados pendientes. */
+  showPendingColumnMetrics?: boolean;
+  /** Media de tiempo sent→prepared en esta sesión (solo memoria cliente). */
+  completedSessionPrepAvgMs?: number | null;
+  /** Limpia el histórico en memoria de la media de sesión (sin estado). */
+  onResetSessionPrepAvg?: () => void;
+  /** Tras reset confirmado; activa mensaje breve en el padre. */
+  onAfterSessionPrepReset?: () => void;
+  /** Muestra “Media reiniciada” tras reset. */
+  sessionPrepResetFeedback?: boolean;
+  /** Últimos ítems marcados preparados en sesión (solo UI). */
+  recentPreparedEntries?: { name: string; time: number }[];
+  /** Vacía la lista de últimos preparados en memoria (no toca la media de sesión). */
+  onClearRecentPrepared?: () => void;
+  /** Tras limpiar el historial de preparados recientes (solo UI). */
+  recentPreparedClearedFeedback?: boolean;
   action: BoardColumnAction | null;
   busyItemIds: Record<string, boolean>;
   onMark: (
@@ -779,7 +1177,115 @@ function BoardColumn({
     itemId: string,
     next: "prepared" | "served",
   ) => void;
+  sentPassesGrouping?: boolean;
+  /** Cocina: marca todo el chunk como preparado vía la misma acción que una línea. */
+  onPreparePassChunk?: (
+    lines: BoardLine[],
+    passKey: string,
+    message: string,
+  ) => void | Promise<void>;
+  busyPassKey?: string | null;
+  passTypeLabelOverride?: string;
 }) {
+  const prepareLabel =
+    passTypeLabelOverride === "Bebidas"
+      ? "Preparar bebidas"
+      : "Preparar pase";
+
+  const prepareFeedbackMessage =
+    passTypeLabelOverride === "Bebidas"
+      ? "Bebidas preparadas"
+      : "Pase preparado";
+
+  const pendingLabel =
+    passTypeLabelOverride === "Bebidas"
+      ? "bebidas pendientes"
+      : "pendientes";
+
+  const completedAvgLabel =
+    passTypeLabelOverride === "Bebidas"
+      ? "Bebidas media sesión"
+      : "Prep media sesión";
+
+  const recentPreparedTitle =
+    passTypeLabelOverride === "Bebidas"
+      ? "Últimas bebidas preparadas"
+      : "Últimos preparados";
+
+  const now = nowMs;
+  let pendingCount = 0;
+  let attentionCount = 0;
+  let urgentCount = 0;
+  let totalTime = 0;
+  let prepTimeCount = 0;
+  let maxTime = 0;
+  if (showPendingColumnMetrics) {
+    for (const g of groups) {
+      for (const line of g.lines) {
+        if (line.status === "sent") {
+          pendingCount++;
+          const sentAt = line.sentAtMs;
+          if (typeof sentAt === "number" && Number.isFinite(sentAt)) {
+            const elapsed = now - sentAt;
+            totalTime += elapsed;
+            prepTimeCount++;
+            if (elapsed > maxTime) {
+              maxTime = elapsed;
+            }
+            const min = elapsed / 60000;
+            if (min >= 10) {
+              urgentCount++;
+            } else if (min >= 5) {
+              attentionCount++;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const avgTime = prepTimeCount > 0 ? totalTime / prepTimeCount : null;
+
+  const stationMaxTimeMs = prepTimeCount > 0 ? maxTime : null;
+  const stationStatus = getStationStatus(stationMaxTimeMs);
+
+  const stationStatusLabel =
+    stationStatus == null
+      ? null
+      : passTypeLabelOverride === "Bebidas"
+        ? stationStatus === "En ritmo"
+          ? "Barra en ritmo"
+          : stationStatus === "Atención"
+            ? "Barra atención"
+            : "Barra lenta"
+        : stationStatus;
+
+  useEffect(() => {
+    if (!showPendingColumnMetrics) return;
+    const station = passTypeLabelOverride === "Bebidas" ? "barra" : "cocina";
+    window.dispatchEvent(
+      new CustomEvent("kds:station-status", {
+        detail: {
+          station,
+          status: stationStatus,
+        },
+      }),
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("kds:station-status", {
+          detail: { station, status: null },
+        }),
+      );
+    };
+  }, [stationStatus, showPendingColumnMetrics, passTypeLabelOverride]);
+
+  const sortedGroups = [...groups].sort((a, b) => {
+    const aScore = getGroupUrgencyScore(a.lines, nowMs);
+    const bScore = getGroupUrgencyScore(b.lines, nowMs);
+    return bScore - aScore;
+  });
+
   return (
     <div style={columnStyle}>
       <div style={columnHeaderStyle}>
@@ -787,10 +1293,103 @@ function BoardColumn({
         <span style={columnCountStyle}>{count}</span>
       </div>
       <div style={columnBodyStyle}>
+        {showPendingColumnMetrics &&
+        (pendingCount > 0 ||
+          completedSessionPrepAvgMs != null ||
+          sessionPrepResetFeedback ||
+          recentPreparedEntries.length > 0 ||
+          recentPreparedClearedFeedback) ? (
+          <div className="mb-3">
+            {stationStatus ? (
+              <div
+                className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStationStatusClass(stationStatus)}`}
+              >
+                {stationStatusLabel}
+              </div>
+            ) : null}
+            {pendingCount > 0 ? (
+              <>
+                <div className="flex gap-2">
+                  <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium">
+                    {pendingCount} {pendingLabel}
+                  </div>
+                  {attentionCount > 0 ? (
+                    <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
+                      {attentionCount} atención
+                    </div>
+                  ) : null}
+                  {urgentCount > 0 ? (
+                    <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+                      {urgentCount} urgentes
+                    </div>
+                  ) : null}
+                </div>
+                {prepTimeCount > 0 && avgTime != null ? (
+                  <div className={`text-xs ${getKdsMetricsClass(maxTime)}`}>
+                    Media: {formatMin(avgTime)} · Máx: {formatMin(maxTime)}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+            {completedSessionPrepAvgMs != null ? (
+              <div className="text-xs text-blue-600">
+                {completedAvgLabel}: {formatMin(completedSessionPrepAvgMs)}
+                <button
+                  type="button"
+                  className="ml-2 text-xs text-gray-400 hover:text-gray-600"
+                  onClick={(event) => {
+                    event.stopPropagation();
+
+                    const ok = window.confirm("¿Resetear media de sesión?");
+                    if (!ok) return;
+
+                    onResetSessionPrepAvg?.();
+                    onAfterSessionPrepReset?.();
+                  }}
+                >
+                  reset
+                </button>
+              </div>
+            ) : null}
+            {recentPreparedEntries.length > 0 ? (
+              <div className="mt-2 text-xs text-gray-500">
+                <div className="mb-1 flex flex-wrap items-center">
+                  <span className="font-medium">{recentPreparedTitle}</span>
+                  <button
+                    type="button"
+                    className="ml-2 text-xs text-gray-400 hover:text-gray-600"
+                    onClick={(event) => {
+                      event.stopPropagation();
+
+                      const ok = window.confirm("¿Limpiar últimos preparados?");
+                      if (!ok) return;
+
+                      onClearRecentPrepared?.();
+                    }}
+                  >
+                    limpiar
+                  </button>
+                </div>
+                {recentPreparedEntries.map((p, i) => (
+                  <div key={i} className="flex justify-between">
+                    <span>{p.name}</span>
+                    <span>{formatClock(p.time)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {recentPreparedClearedFeedback ? (
+              <div className="text-xs text-green-600 mt-1">Historial limpiado</div>
+            ) : null}
+            {sessionPrepResetFeedback ? (
+              <div className="text-xs text-green-600">Media reiniciada</div>
+            ) : null}
+          </div>
+        ) : null}
         {groups.length === 0 ? (
           <div style={emptyColumnStyle}>—</div>
         ) : (
-          groups.map((g) => {
+          sortedGroups.map((g) => {
             const oldestMinutes =
               g.oldestSentAtMs != null
                 ? (nowMs - g.oldestSentAtMs) / 60000
@@ -817,10 +1416,39 @@ function BoardColumn({
                 label: getCourseSectionLabel(course).toUpperCase(),
                 lines,
               }));
+            const passChunks =
+              sentPassesGrouping ? groupKitchenSentLinesByPase(g.lines) : null;
+            const indexedPassChunks =
+              passChunks?.map((chunk, originalIndex) => ({
+                chunk,
+                originalIndex,
+              })) ?? null;
+            const sortedPassChunks = indexedPassChunks
+              ? [...indexedPassChunks].sort((a, b) => {
+                  const aPrepared = a.chunk.every((l) => l.status === "prepared");
+                  const bPrepared = b.chunk.every((l) => l.status === "prepared");
+                  if (aPrepared === bPrepared) return 0;
+                  if (aPrepared) return 1;
+                  return -1;
+                })
+              : null;
+            const score = getGroupUrgencyScore(g.lines, nowMs);
+            const urgencyLabel = getUrgencyLabel(score);
+            const cardUrgencyClass = getGroupCardUrgencyClassName(score);
+            const tableCardStyle: CSSProperties = {
+              ...cardBaseStyle,
+              ...(cardUrgencyClass ? {} : { border: tone.border }),
+            };
+            if (cardUrgencyClass) {
+              delete tableCardStyle.background;
+            }
             return (
               <div
                 key={g.tableKey}
-                style={{ ...cardBaseStyle, border: tone.border }}
+                className={`transition-all duration-300${
+                  cardUrgencyClass ? ` border ${cardUrgencyClass}` : ""
+                }`.trim()}
+                style={tableCardStyle}
               >
                 <div
                   style={{
@@ -830,7 +1458,28 @@ function BoardColumn({
                     gap: 8,
                   }}
                 >
-                  <h4 style={tableTitleStyle}>{g.tableLabel}</h4>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      minWidth: 0,
+                      flex: "1 1 auto",
+                    }}
+                  >
+                    <h4 style={tableTitleStyle}>{g.tableLabel}</h4>
+                    {urgencyLabel ? (
+                      <span
+                        className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          urgencyLabel === "Urgente"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-orange-100 text-orange-700"
+                        }`}
+                      >
+                        {urgencyLabel}
+                      </span>
+                    ) : null}
+                  </div>
                   {showUrgency && g.oldestSentAtMs != null ? (
                     <span
                       style={{
@@ -844,129 +1493,158 @@ function BoardColumn({
                   ) : null}
                 </div>
                 <div
-                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                  className={
+                    sortedPassChunks != null ? "flex flex-col space-y-2" : undefined
+                  }
+                  style={
+                    sortedPassChunks != null
+                      ? { display: "flex", flexDirection: "column" }
+                      : { display: "flex", flexDirection: "column", gap: 6 }
+                  }
                 >
-                  {courseSections.map((section) => (
-                    <div key={section.label} style={{ display: "grid", gap: 6 }}>
+                  {sortedPassChunks != null ? (
+                    sortedPassChunks.map(({ chunk, originalIndex }) => {
+                      const oldestSent = oldestSentAtMsInChunk(chunk);
+                      const passElapsedMs =
+                        oldestSent != null && Number.isFinite(oldestSent)
+                          ? nowMs - oldestSent
+                          : null;
+                      const preparedCount = chunk.filter(
+                        (l) => l.status === "prepared",
+                      ).length;
+                      const totalCount = chunk.length;
+                      const progressLabel =
+                        preparedCount === 0
+                          ? totalCount === 1
+                            ? "1 línea"
+                            : `${totalCount} líneas`
+                          : preparedCount === totalCount
+                            ? totalCount === 1
+                              ? "1 lista"
+                              : `${totalCount} listas`
+                            : `${preparedCount}/${totalCount} listas`;
+                      const passTypeLabel =
+                        passTypeLabelOverride ??
+                        kitchenPassChunkTypeLabel(chunk);
+                      const isPassFullyPrepared =
+                        preparedCount > 0 && preparedCount === totalCount;
+                      const passTargets = chunk.filter((l) => l.status === "sent");
+                      const passBulkBusy = passTargets.some(
+                        (l) => busyItemIds[`${l.orderId}:${l.itemId}`],
+                      );
+                      const passKey = `${g.tableKey}-pase-${originalIndex}`;
+                      const passPrepareBusy = busyPassKey === passKey;
+                      return (
                       <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 900,
-                          letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                          color: "#94a3b8",
-                          marginTop: 2,
-                        }}
+                        key={`${g.tableKey}-pase-${originalIndex}`}
+                        className={`${getPassChunkClassName(passTypeLabel)}${
+                          isPassFullyPrepared ? " opacity-50" : ""
+                        }`}
                       >
-                        {section.label}
-                      </div>
-                      {section.lines.map((line) => {
-                        const minutes =
-                          line.sentAtMs != null
-                            ? Math.floor((nowMs - line.sentAtMs) / 60000)
-                            : 0;
-                        let itemBorder = "1px solid #e5e7eb"; // gray-200
-                        let itemBg = "#ffffff";
-                        if (minutes >= 10) {
-                          itemBorder = "1px solid #ef4444";
-                          itemBg = "#fef2f2";
-                        } else if (minutes >= 5) {
-                          itemBorder = "1px solid #fb923c";
-                          itemBg = "#fff7ed";
-                        }
-                        const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
-                        return (
+                        <div className="mb-1 flex items-start justify-between gap-2">
                           <div
-                            key={`${line.orderId}:${line.itemId}`}
-                            style={{
-                              ...lineRowStyle,
-                              border: itemBorder,
-                              background: itemBg,
-                            }}
+                            className={`min-w-0 flex-1 ${getPassHeaderTextClassName(passTypeLabel)}${
+                              isPassFullyPrepared ? " opacity-60" : ""
+                            }`}
                           >
-                            <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "stretch",
-                                  gap: 2,
-                                }}
+                            Pase {originalIndex + 1}
+                            {` · ${passTypeLabel}`}
+                            {oldestSent != null
+                              ? ` · ${formatPassSentClockHm(oldestSent)}`
+                              : null}
+                            {` · ${progressLabel}`}
+                            {!isPassFullyPrepared &&
+                            passElapsedMs != null &&
+                            Number.isFinite(passElapsedMs) &&
+                            passElapsedMs >= 0 ? (
+                              <span
+                                className={`ml-2 text-xs ${passElapsedUrgencyTextClassFromMs(passElapsedMs)}`}
                               >
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "baseline",
-                                    gap: 6,
-                                    flexWrap: "wrap",
-                                  }}
-                                >
-                                  <span style={lineNameStyle}>
-                                    x{line.qty} {line.name}
-                                  </span>
-                                </div>
-                              </div>
-                              {line.extras && line.extras.length > 0 ? (
-                                <div style={lineExtrasJoinedStyle}>
-                                  {line.extras.map((e) => `+ ${e.name}`).join(" · ")}
-                                </div>
-                              ) : null}
-                              {line.removedIngredients &&
-                              line.removedIngredients.length > 0 ? (
-                                <div style={lineRemovedStyle}>
-                                  Sin: {line.removedIngredients.join(" · ")}
-                                </div>
-                              ) : null}
-                              {line.note ? (
-                                <div style={lineNoteStyle}>Nota: {line.note}</div>
-                              ) : null}
-                              <div style={lineMetaStyle}>
-                                <div
-                                  style={{
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    marginRight: 6,
-                                  }}
-                                >
-                                  {minutes} min
-                                </div>
-                                <span>
-                                  {showUrgency && line.sentAtMs != null
-                                    ? `Avisado hace ${formatMinutes(minutes)}`
-                                    : line.status === "served" &&
-                                        line.servedAtMs != null
-                                      ? `Servido hace ${formatMinutes(
-                                          (nowMs - line.servedAtMs) / 60000,
-                                        )}`
-                                      : line.status === "served"
-                                        ? "Servido"
-                                        : "Avisado"}
-                                </span>
-                              </div>
-                            </div>
-                            {action ? (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                style={{
-                                  ...markButtonStyle,
-                                  alignSelf: "center",
-                                  flexShrink: 0,
-                                  opacity: busy ? 0.6 : 1,
-                                  cursor: busy ? "progress" : "pointer",
-                                }}
-                                onClick={() =>
-                                  onMark(line.orderId, line.itemId, action.nextStatus)
-                                }
-                              >
-                                {busy ? (action.busyLabel ?? "Guardando…") : action.label}
-                              </button>
+                                · {formatPassElapsedMinutesFromMs(passElapsedMs)}
+                              </span>
                             ) : null}
+                            {isPassFullyPrepared ? (
+                              <>
+                                {` · Completado`}
+                                <span className="ml-1 text-green-600">✓</span>
+                              </>
+                            ) : (
+                              <>
+                                {` · `}
+                                <span className="ml-1 text-orange-600">Pendiente</span>
+                              </>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                          {onPreparePassChunk &&
+                          action &&
+                          action.nextStatus === "prepared" &&
+                          passTargets.length > 0 ? (
+                            <button
+                              type="button"
+                              className={`rounded-full bg-green-600 px-2 py-1 text-xs font-medium text-white shrink-0 ${
+                                !!busyPassKey || passBulkBusy
+                                  ? "opacity-60 cursor-not-allowed"
+                                  : ""
+                              }`}
+                              disabled={!!busyPassKey || passBulkBusy}
+                              onClick={() =>
+                                void onPreparePassChunk(
+                                  chunk,
+                                  passKey,
+                                  prepareFeedbackMessage,
+                                )
+                              }
+                            >
+                              {passPrepareBusy ? "Preparando..." : prepareLabel}
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="my-1 h-px w-full bg-black/5" />
+                        <div style={{ display: "grid", gap: 6 }}>
+                          {chunk.map((line) => (
+                            <BoardLineRow
+                              key={`${line.orderId}:${line.itemId}`}
+                              line={line}
+                              nowMs={nowMs}
+                              showUrgency={showUrgency}
+                              action={action}
+                              busyItemIds={busyItemIds}
+                              onMark={onMark}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      );
+                    })
+                  ) : (
+                    courseSections.map((section) => (
+                      <div key={section.label} style={{ display: "grid", gap: 6 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 900,
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            color: "#94a3b8",
+                            marginTop: 2,
+                          }}
+                        >
+                          {section.label}
+                        </div>
+                        {section.lines.map((line) => (
+                          <BoardLineRow
+                            key={`${line.orderId}:${line.itemId}`}
+                            line={line}
+                            nowMs={nowMs}
+                            showUrgency={showUrgency}
+                            action={action}
+                            busyItemIds={busyItemIds}
+                            onMark={onMark}
+                          />
+                        ))}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             );

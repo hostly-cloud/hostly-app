@@ -22,6 +22,8 @@ export default function BarView() {
       <ServiceMetricsBar scope="bar" />
       <OrderItemsBoard
         itemFilter={filter}
+        groupSentPasses
+        passTypeLabelOverride="Bebidas"
         emptyMessage="No hay pedidos en barra"
         sentAction={{
           label: "Preparado",
