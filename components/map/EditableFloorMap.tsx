@@ -2522,7 +2522,7 @@ export function EditableFloorMap({
                     position: "absolute",
                     inset: 0,
                     zIndex: 0,
-                    borderRadius: chrome.borderRadius,
+                    borderRadius: baseVisual.borderRadius,
                     overflow: "hidden",
                     pointerEvents: "none",
                   }}
@@ -2774,7 +2774,7 @@ export function EditableFloorMap({
                   padding: 0,
                   border: "none",
                   borderRadius:
-                    chrome.borderRadius >= 999
+                    Number(baseVisual.borderRadius) >= 999
                       ? "0 0 999px 0"
                       : "0 0 10px 0",
                   background:
