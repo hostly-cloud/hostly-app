@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 import { DashboardGate } from "@/components/auth/dashboard-gate";
 import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -20,13 +21,15 @@ export default function DashboardLayout({
       className="hostly-touch-root min-h-full flex flex-col"
       data-hostly-touch
     >
-      <DashboardGate>
-        {isFirebaseConfigured && profileReady && !restaurantId ? (
-          <div>No tienes restaurante asignado</div>
-        ) : (
-          children
-        )}
-      </DashboardGate>
+      <Suspense fallback={null}>
+        <DashboardGate>
+          {isFirebaseConfigured && profileReady && !restaurantId ? (
+            <div>No tienes restaurante asignado</div>
+          ) : (
+            children
+          )}
+        </DashboardGate>
+      </Suspense>
     </div>
   );
 }
