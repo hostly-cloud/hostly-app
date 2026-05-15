@@ -215,7 +215,7 @@ const controlPanelStyle: CSSProperties = {
   minHeight: 0,
   display: "flex",
   flexDirection: "column",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.045), 0 12px 32px rgba(49, 95, 125, 0.045)",
+  boxShadow: "0 1px 2px rgba(49, 95, 125, 0.045), 0 12px 32px rgba(49, 95, 125, 0.04)",
 };
 
 export default function DashboardPage() {
@@ -457,7 +457,7 @@ export default function DashboardPage() {
           border: "1px solid var(--hostly-line)",
           background:
             "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,252,255,0.9) 100%)",
-          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.045), 0 12px 32px rgba(49, 95, 125, 0.045)",
+          boxShadow: "0 1px 2px rgba(49, 95, 125, 0.045), 0 12px 32px rgba(49, 95, 125, 0.04)",
         }}
       >
         <div style={{ ...sectionTitleStyle, marginBottom: 10 }}>Nombre del restaurante</div>
@@ -551,7 +551,7 @@ export default function DashboardPage() {
                   width: 40,
                   height: 40,
                   borderRadius: 10,
-                  background: hovered ? "rgba(63, 100, 120, 0.12)" : "rgba(71, 85, 105, 0.08)",
+                  background: hovered ? "rgba(63, 100, 120, 0.12)" : "rgba(226, 240, 251, 0.68)",
                 }}
               >
                 <Icon size={22} />

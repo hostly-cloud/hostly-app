@@ -7052,7 +7052,10 @@ export function CartaPageContent({
   height: 100% !important;
   max-height: 100% !important;
   min-height: 0 !important;
+  width: 100% !important;
+  max-width: 100vw !important;
   overflow: hidden !important;
+  overflow-x: hidden !important;
   overflow-y: hidden !important;
   padding-bottom: 0 !important;
 }
@@ -7183,7 +7186,63 @@ export function CartaPageContent({
   min-height: 0 !important;
   height: auto !important;
   width: 100% !important;
-  overflow: auto !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  padding: 6px !important;
+  border-radius: 14px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-table-map-grid > div {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-page-fill {
+  width: 100% !important;
+  max-width: 100vw !important;
+  min-width: 0 !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  box-sizing: border-box !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 4px 6px !important;
+  align-items: flex-start !important;
+  overflow: hidden !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main {
+  flex-wrap: wrap !important;
+  overflow: hidden !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  width: 100% !important;
+  gap: 4px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-map-summary-pill,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-map-summary-pill--interactive,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-table-map-zone-btn {
+  flex: 0 1 auto !important;
+  max-width: 100% !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-summary-status {
+  width: 100% !important;
+  margin-left: 0 !important;
+  white-space: normal !important;
+  line-height: 1.15 !important;
 }
 
 .carta-page-main {
