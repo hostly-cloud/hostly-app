@@ -6,12 +6,14 @@ import {
   doc,
   onSnapshot,
   query,
-  updateDoc,
   where,
-  writeBatch,
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
 import { db } from "@/lib/firebase/client";
+import {
+  dbgUpdateDoc,
+  DbgWriteBatch,
+} from "@/lib/firestore/instrumentedWrites";
 import type { OrderItem } from "@/types/order";
 
 function getElapsedMinutes(timestamp: number) {
@@ -783,10 +785,21 @@ export default function CocinaPage() {
 
   const handleMarkPreparing = async (itemId: string) => {
     try {
-      await updateDoc(doc(db, "orderItems", itemId), {
+      const row = items.find((i) => i.id === itemId);
+      await dbgUpdateDoc(
+        doc(db, "orderItems", itemId),
+        {
         status: "preparing",
         updatedAt: Date.now(),
-      });
+      },
+        {
+          label: "cocina:handleMarkPreparing",
+          collection: "orderItems",
+          restaurantId,
+          orderId: row?.orderId ?? null,
+          tableId: row?.tableId ?? null,
+        },
+      );
     } catch (err) {
       console.error("Error marking preparing", err);
     }
@@ -794,23 +807,45 @@ export default function CocinaPage() {
 
   const handleMarkReady = async (itemId: string) => {
     try {
+      const row = items.find((i) => i.id === itemId);
       const ref = doc(db, "orderItems", itemId);
-      await updateDoc(ref, {
+      await dbgUpdateDoc(
+        ref,
+        {
         status: "ready",
         readyAt: Date.now(),
         updatedAt: Date.now(),
-      });
+      },
+        {
+          label: "cocina:handleMarkReady",
+          collection: "orderItems",
+          restaurantId,
+          orderId: row?.orderId ?? null,
+          tableId: row?.tableId ?? null,
+        },
+      );
     } catch (e) {
       console.error("handleMarkReady", e);
     }
   };
 
   const handleMarkServed = async (itemId: string) => {
-    await updateDoc(doc(db, "orderItems", itemId), {
+    const row = items.find((i) => i.id === itemId);
+    await dbgUpdateDoc(
+      doc(db, "orderItems", itemId),
+      {
       status: "served",
       servedAt: Date.now(),
       updatedAt: Date.now(),
-    });
+    },
+      {
+        label: "cocina:handleMarkServed",
+        collection: "orderItems",
+        restaurantId,
+        orderId: row?.orderId ?? null,
+        tableId: row?.tableId ?? null,
+      },
+    );
   };
 
   const clearPausedStats = () => {
@@ -839,10 +874,21 @@ export default function CocinaPage() {
   const handleUndoLast = async () => {
     if (!lastAction) return;
     const { id } = lastAction;
-    await updateDoc(doc(db, "orderItems", id), {
+    const row = items.find((i) => i.id === id);
+    await dbgUpdateDoc(
+      doc(db, "orderItems", id),
+      {
       status: "pending",
       updatedAt: Date.now(),
-    });
+    },
+      {
+        label: "cocina:handleUndoLast",
+        collection: "orderItems",
+        restaurantId,
+        orderId: row?.orderId ?? null,
+        tableId: row?.tableId ?? null,
+      },
+    );
     setFocusedItemId(id);
     setLastAction(null);
     setToast({ message: "Deshecho" });
@@ -851,19 +897,36 @@ export default function CocinaPage() {
 
   const handleBackToPending = async (itemId: string) => {
     try {
-      await updateDoc(doc(db, "orderItems", itemId), {
+      const row = items.find((i) => i.id === itemId);
+      await dbgUpdateDoc(
+        doc(db, "orderItems", itemId),
+        {
         status: "pending",
         updatedAt: Date.now(),
-      });
+      },
+        {
+          label: "cocina:handleBackToPending",
+          collection: "orderItems",
+          restaurantId,
+          orderId: row?.orderId ?? null,
+          tableId: row?.tableId ?? null,
+        },
+      );
     } catch (error) {
       console.error("Error reverting to pending:", error);
     }
   };
 
-  const handleMarkOrderReady = async (items: OrderItem[]) => {
+  const handleMarkOrderReady = async (itemsToMark: OrderItem[]) => {
     try {
-      const batch = writeBatch(db);
-      items.forEach((item) => {
+      const batch = new DbgWriteBatch(db, {
+        label: "cocina:handleMarkOrderReady",
+        collection: "orderItems",
+        restaurantId,
+        orderId: itemsToMark[0]?.orderId ?? null,
+        tableId: itemsToMark[0]?.tableId ?? null,
+      });
+      itemsToMark.forEach((item) => {
         const ref = doc(db, "orderItems", item.id);
         batch.update(ref, {
           status: "ready",
@@ -876,10 +939,16 @@ export default function CocinaPage() {
     }
   };
 
-  const handleMarkOrderPreparing = async (items: OrderItem[]) => {
+  const handleMarkOrderPreparing = async (itemsToMark: OrderItem[]) => {
     try {
-      const batch = writeBatch(db);
-      items.forEach((item) => {
+      const batch = new DbgWriteBatch(db, {
+        label: "cocina:handleMarkOrderPreparing",
+        collection: "orderItems",
+        restaurantId,
+        orderId: itemsToMark[0]?.orderId ?? null,
+        tableId: itemsToMark[0]?.tableId ?? null,
+      });
+      itemsToMark.forEach((item) => {
         const ref = doc(db, "orderItems", item.id);
         batch.update(ref, {
           status: "preparing",

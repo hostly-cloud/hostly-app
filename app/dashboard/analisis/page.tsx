@@ -34,31 +34,6 @@ const TABS: { id: AnalisisTab; label: string; placeholder: string }[] = [
   { id: "comensales", label: "Comensales", placeholder: "Próximamente: análisis de comensales" },
 ];
 
-const tabBarStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "stretch",
-  gap: 2,
-  padding: 4,
-  borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.55)",
-};
-
-function tabButtonStyle(active: boolean): CSSProperties {
-  return {
-    minWidth: 96,
-    padding: "8px 16px",
-    borderRadius: 8,
-    border: "none",
-    background: active ? "rgba(56, 189, 248, 0.18)" : "transparent",
-    color: active ? "#e0f2fe" : "#94a3b8",
-    fontWeight: 600,
-    fontSize: 14,
-    letterSpacing: "-0.02em",
-    cursor: "pointer",
-  };
-}
-
 function todayYmd(): string {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -191,7 +166,7 @@ export default function AnalisisPage() {
   const [tab, setTab] = useState<AnalisisTab>("ventas");
 
   const { restaurantId: profileRestaurantId, user, ready: authReady } = useAuth();
-  const restaurantId = profileRestaurantId ?? user?.uid ?? null;
+  const restaurantId = profileRestaurantId ?? null;
   const today = useMemo(() => todayYmd(), []);
   const [dateTo, setDateTo] = useState<string>(today);
   const [dateFrom, setDateFrom] = useState<string>(() => addDaysYmd(today, -6));
@@ -1145,7 +1120,7 @@ function AnalisisTabsBar({
   onChange: (t: AnalisisTab) => void;
 }) {
   return (
-    <div role="tablist" aria-label="Secciones de análisis" style={tabBarStyle}>
+    <div role="tablist" aria-label="Secciones de análisis" className="hostly-segmented">
       {TABS.map((t) => (
         <button
           key={t.id}
@@ -1153,7 +1128,8 @@ function AnalisisTabsBar({
           role="tab"
           aria-selected={active === t.id}
           onClick={() => onChange(t.id)}
-          style={tabButtonStyle(active === t.id)}
+          className="hostly-tab"
+          style={{ minWidth: 96, padding: "8px 16px", cursor: "pointer" }}
         >
           {t.label}
         </button>

@@ -15,6 +15,7 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 
 /** @deprecated Lectura legacy; escribir `free` | `occupied` | `reserved`. */
 export const TABLE_STATUS_LIBRE = "libre" as const;
@@ -49,7 +50,9 @@ export type PlanElementType =
   | "wall"
   | "bar"
   | "column"
-  | "pool";
+  | "pool"
+  | "door"
+  | "planter";
 
 export const PLAN_ELEMENT_DEFAULT_SIZE: Record<
   PlanElementType,
@@ -59,17 +62,26 @@ export const PLAN_ELEMENT_DEFAULT_SIZE: Record<
   sunbed: { width: 200, height: 52 },
   bed: { width: 160, height: 110 },
   custom: { width: 116, height: 76 },
-  wall: { width: 280, height: 14 },
-  bar: { width: 160, height: 52 },
+  wall: { width: 280, height: 12 },
+  bar: { width: 200, height: 48 },
   column: { width: 44, height: 44 },
   pool: { width: 260, height: 140 },
+  door: { width: 36, height: 112 },
+  planter: { width: 168, height: 44 },
 };
 
 /** Referencia visual en el editor; no operativo en TPV Carta. */
 export function isDecorativePlanElementType(
   type: PlanElementType,
 ): boolean {
-  return type === "wall" || type === "bar" || type === "column" || type === "pool";
+  return (
+    type === "wall" ||
+    type === "bar" ||
+    type === "column" ||
+    type === "pool" ||
+    type === "door" ||
+    type === "planter"
+  );
 }
 
 export function getDefaultSizeForPlanElementType(
@@ -87,7 +99,9 @@ function parsePlanElementType(v: unknown): PlanElementType {
     v === "wall" ||
     v === "bar" ||
     v === "column" ||
-    v === "pool"
+    v === "pool" ||
+    v === "door" ||
+    v === "planter"
   ) {
     return v;
   }
@@ -154,9 +168,13 @@ export function nextAutoLabelForPlanElementType(
               ? "Columna"
               : planType === "pool"
                 ? "Piscina"
-                : planType === "custom"
-                  ? "Elemento"
-                  : "Mesa";
+                : planType === "door"
+                  ? "Puerta"
+                  : planType === "planter"
+                    ? "Jardinera"
+                    : planType === "custom"
+                      ? "Elemento"
+                      : "Mesa";
 
   const re = new RegExp(`^${prefix}\\s+(\\d+)$`, "i");
   let max = 0;
@@ -192,6 +210,10 @@ export function nextAutoLabelForPlanElementType(
       return `Columna ${Date.now()}`;
     case "pool":
       return `Piscina ${Date.now()}`;
+    case "door":
+      return `Puerta ${Date.now()}`;
+    case "planter":
+      return `Jardinera ${Date.now()}`;
     case "custom":
       return `Elemento ${Date.now()}`;
     default:
@@ -350,7 +372,7 @@ function mapDocToTable(d: QueryDocumentSnapshot): Table {
   };
 }
 
-/** Mapa TPV Carta: activos; sin elementos solo decorativos del editor (wall/bar/column/pool). */
+/** Mapa TPV Carta: activos; sin elementos solo decorativos del editor (layout / no operativos). */
 export function filterTablesForTpvMap(tables: Table[]): Table[] {
   return tables.filter(
     (t) => t.isActive !== false && !isDecorativePlanElementType(t.type),
@@ -368,6 +390,7 @@ export function sortTablesForTpvMap(a: Table, b: Table): number {
 export async function getTables(restaurantId: string): Promise<Table[]> {
   const rid = restaurantId.trim();
   if (!rid) return [];
+  if (!isAuthReady()) return [];
   try {
     const col = collection(db, "tables");
     const snap = await getDocs(query(col, where("restaurantId", "==", rid)));

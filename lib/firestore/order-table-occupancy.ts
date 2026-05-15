@@ -45,6 +45,22 @@ export function readOrderCreatedAtMs(createdAt: unknown): number | undefined {
   return undefined;
 }
 
+/** `orders.updatedAt` en número (ms) o Firestore Timestamp / fecha. */
+export function readOrderUpdatedAtMs(updatedAt: unknown): number | undefined {
+  if (typeof updatedAt === "number" && Number.isFinite(updatedAt))
+    return updatedAt;
+  if (updatedAt instanceof Timestamp) return updatedAt.toMillis();
+  if (
+    updatedAt &&
+    typeof updatedAt === "object" &&
+    "toDate" in updatedAt &&
+    typeof (updatedAt as { toDate?: () => Date }).toDate === "function"
+  ) {
+    return (updatedAt as { toDate: () => Date }).toDate().getTime();
+  }
+  return undefined;
+}
+
 export type MapOccupancyFromOrders = {
   occupiedTableIds: Set<string>;
   /** Por `table.id`: instante de la order activa más antigua (`createdAt` mínimo). */

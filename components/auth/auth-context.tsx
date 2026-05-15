@@ -6,19 +6,20 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db, isFirebaseConfigured } from "@/lib/firebase/client";
+import { auth, isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   acceptInvite,
   getMyPendingInvite,
 } from "@/lib/firestore/restaurant-invites";
 import { subscribeToAuthState } from "@/lib/auth/auth";
 import {
-  parseRoleField,
+  loadRestaurantNameById,
+  loadUserRestaurantContext,
   type UserRestaurantRole,
 } from "@/lib/firestore/user-restaurant-profile";
 
@@ -29,6 +30,8 @@ type AuthContextValue = {
   /** Rol en el restaurante (owner | staff). */
   role: UserRestaurantRole;
   ready: boolean;
+  /** Perfil multi-restaurante resuelto (o fallido); evita mensaje de “sin restaurante” durante la carga. */
+  profileReady: boolean;
   refreshProfile: () => void;
 };
 
@@ -40,68 +43,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [restaurantName, setRestaurantName] = useState<string | null>(null);
   const [role, setRole] = useState<UserRestaurantRole>("owner");
   const [ready, setReady] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
+
+  /** Monótono: solo la ejecución con requestId === valor actual puede escribir estado de perfil. */
+  const profileLoadSeqRef = useRef(0);
 
   const applyRestaurantFromUid = useCallback((uid: string | null) => {
+    const requestId = ++profileLoadSeqRef.current;
+
     if (!uid) {
       setRestaurantId(null);
       setRestaurantName(null);
       setRole("owner");
+      setProfileReady(true);
       return;
     }
-    setRestaurantId(null);
-    setRestaurantName(null);
-    setRole("owner");
+
+    setProfileReady(false);
+
     void (async () => {
-      const userRef = doc(db, "users", uid);
-      let snap = await getDoc(userRef);
-      if (!snap.exists()) {
-        throw new Error("NO_RESTAURANT_ASSIGNED");
-      }
-      let d = snap.data() as Record<string, unknown>;
-      let restaurantIdRaw = d.restaurantId;
-      let rid =
-        typeof restaurantIdRaw === "string" ? restaurantIdRaw.trim() : "";
+      const isStale = () => requestId !== profileLoadSeqRef.current;
 
-      const authUser = auth.currentUser;
-      if (!rid && authUser?.email) {
-        try {
-          const invite = await getMyPendingInvite(authUser.email);
-          if (invite) {
-            await acceptInvite(invite, uid);
-            snap = await getDoc(userRef);
-            if (!snap.exists()) {
-              throw new Error("NO_RESTAURANT_ASSIGNED");
-            }
-            d = snap.data() as Record<string, unknown>;
-            restaurantIdRaw = d.restaurantId;
-            rid =
-              typeof restaurantIdRaw === "string"
-                ? restaurantIdRaw.trim()
-                : "";
-          }
-        } catch (e) {
-          console.error("[AUTH] pending invite accept", e);
+      try {
+        let ctx = await loadUserRestaurantContext(uid);
+        if (isStale()) {
+          return;
         }
+
+        let rid = ctx.restaurantId?.trim() ?? "";
+
+        const authUser = auth.currentUser;
+        if (!rid && authUser?.email) {
+          try {
+            const invite = await getMyPendingInvite(authUser.email);
+            if (invite) {
+              await acceptInvite(invite, uid);
+              ctx = await loadUserRestaurantContext(uid);
+              rid = ctx.restaurantId?.trim() ?? "";
+            }
+          } catch (e) {
+            console.error("[AUTH] pending invite accept", e);
+          }
+        }
+
+        if (isStale()) {
+          return;
+        }
+
+        if (!rid) {
+          throw new Error("NO_RESTAURANT_ASSIGNED");
+        }
+
+        let rn = ctx.restaurantName;
+        if (rn == null || rn.trim() === "") {
+          try {
+            rn = await loadRestaurantNameById(rid);
+          } catch (nameErr) {
+            if (process.env.NODE_ENV === "development") {
+              console.warn("[AUTH] loadRestaurantNameById failed", nameErr);
+            }
+            rn = null;
+          }
+        }
+
+        if (isStale()) {
+          return;
+        }
+
+        setRestaurantId(rid);
+        setRestaurantName(rn);
+        setRole(ctx.role);
+      } catch (e) {
+        if (isStale()) {
+          return;
+        }
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[AUTH] restaurant profile unresolved", e);
+        }
+        setRestaurantId(null);
+        setRestaurantName(null);
+        setRole("owner");
+      } finally {
+        if (isStale()) {
+          return;
+        }
+        setProfileReady(true);
       }
-
-      if (!rid) {
-        throw new Error("NO_RESTAURANT_ASSIGNED");
-      }
-
-      const restaurantRef = doc(db, "restaurants", rid);
-      const restaurantSnap = await getDoc(restaurantRef);
-
-      const nameRaw = restaurantSnap.exists()
-        ? (restaurantSnap.data() as Record<string, unknown>).name
-        : null;
-      const rn =
-        typeof nameRaw === "string" && nameRaw.trim() !== ""
-          ? nameRaw.trim()
-          : null;
-
-      setRestaurantId(rid);
-      setRestaurantName(rn);
-      setRole(parseRoleField(d.role) ?? "owner");
     })();
   }, []);
 
@@ -112,23 +139,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [applyRestaurantFromUid]);
 
   useEffect(() => {
-    console.log("[AUTH] init");
     if (!isFirebaseConfigured) {
+      profileLoadSeqRef.current += 1;
       setUser(null);
       setRestaurantId(null);
       setRestaurantName(null);
       setRole("owner");
+      setProfileReady(true);
       setReady(true);
-      console.log("[AUTH] ready true");
       return;
     }
 
     const unsub = subscribeToAuthState((u) => {
-      console.log("[AUTH] state changed", u?.uid ?? null);
       setUser(u);
       applyRestaurantFromUid(u?.uid ?? null);
       setReady(true);
-      console.log("[AUTH] ready true");
     });
 
     return () => {
@@ -143,9 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       restaurantName,
       role,
       ready,
+      profileReady,
       refreshProfile,
     }),
-    [user, restaurantId, restaurantName, role, ready, refreshProfile],
+    [user, restaurantId, restaurantName, role, ready, profileReady, refreshProfile],
   );
 
   return (

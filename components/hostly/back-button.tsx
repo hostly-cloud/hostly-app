@@ -1,11 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 
 export type HostlyBackButtonProps = {
   label: ReactNode;
   ariaLabel?: string;
+  /** `light`: cabecera clara (Configuración). Por defecto `dark` (dashboard oscuro). */
+  tone?: "dark" | "light";
 } & (
   | { href: string; onClick?: never }
   | { onClick: () => void; href?: never }
@@ -17,7 +19,7 @@ function normalizeLabel(label: ReactNode): ReactNode {
   return label.replace(/^\s*←\s*/u, "");
 }
 
-const sharedStyle: React.CSSProperties = {
+const sharedDark: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
@@ -31,7 +33,14 @@ const sharedStyle: React.CSSProperties = {
   textDecoration: "none",
 };
 
-const arrowStyle: React.CSSProperties = {
+const sharedLight: CSSProperties = {
+  ...sharedDark,
+  border: "1px solid rgba(148, 163, 184, 0.35)",
+  background: "rgba(255, 255, 255, 0.72)",
+  color: "#0f172a",
+};
+
+const arrowDark: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -46,14 +55,30 @@ const arrowStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
-const labelStyle: React.CSSProperties = {
+const arrowLight: CSSProperties = {
+  ...arrowDark,
+  border: "1px solid rgba(148, 163, 184, 0.28)",
+  background: "rgba(248, 250, 252, 0.95)",
+  color: "#0f172a",
+};
+
+const labelDark: CSSProperties = {
   fontWeight: 700,
   fontSize: 13,
   color: "#cbd5e1",
   minWidth: 0,
 };
 
+const labelLight: CSSProperties = {
+  ...labelDark,
+  color: "#334155",
+};
+
 export function HostlyBackButton(props: HostlyBackButtonProps) {
+  const tone = props.tone ?? "dark";
+  const sharedStyle = tone === "light" ? sharedLight : sharedDark;
+  const arrowStyle = tone === "light" ? arrowLight : arrowDark;
+  const labelStyle = tone === "light" ? labelLight : labelDark;
   const label = normalizeLabel(props.label);
   const content = (
     <>

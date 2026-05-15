@@ -91,7 +91,7 @@ const dotStyle = (color?: string): CSSProperties => ({
 
 export default function ZonasManagement() {
   const { restaurantId: profileRestaurantId, user, ready: authReady } = useAuth();
-  const restaurantId = profileRestaurantId ?? user?.uid ?? null;
+  const restaurantId = profileRestaurantId ?? null;
 
   const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);

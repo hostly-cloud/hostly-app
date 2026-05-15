@@ -10,6 +10,16 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+
+/** Sincroniza highlight de destino entre fichas durante join-drag. */
+const HOSTLY_MAP_JOIN_DRAG_HOVER = "hostly-map-join-drag-hover";
+const HOSTLY_MAP_JOIN_DRAG_END = "hostly-map-join-drag-end";
+
+export type HostlyMapJoinDragHoverDetail = {
+  hoverTableId: string | null;
+  draggedTableId: string;
+  draggedClusterMain: string;
+};
 import type { Table, TableMapStatus } from "@/lib/firestore/tables";
 import {
   MAP_TABLE_CHAIR_BORDER,
@@ -58,10 +68,14 @@ export type ElementMapCardProps = {
   groupedBadgeText?: string | null;
   mapJoinDragEnabled?: boolean;
   onMapTableJoinDrop?: (draggedTableId: string, targetTableId: string) => void;
+  /** Id de mesa principal del grupo (resolveMainTableId); para no destacar mismo cluster al arrastrar. */
+  mapJoinClusterMainId?: string;
   /** false: no dibujar sillas decorativas (p. ej. móvil). Por defecto true. */
   showVisualChairs?: boolean;
   /** Mesa principal con al menos una secundaria (long-press → separar grupo). */
   isMapGroupedPrimary?: boolean;
+  /** Mesa agrupada (principal) con selección activa en el mapa: sombra y ligera elevación. */
+  isMapGroupedSelectionElevated?: boolean;
   onRequestSeparateGroupedTables?: (mainTableId: string) => void;
 };
 
@@ -76,17 +90,17 @@ const SURFACE_TOKENS: Record<
   MapBaseSurfaceClass,
   { background: string; color: string }
 > = {
-  "hostly-map-table--free": { background: "#bbf7d0", color: "#166534" },
-  "hostly-map-table--occupied": { background: "#7dd3fc", color: "#1e40af" },
-  "hostly-map-table--reserved": { background: "#f3e8ff", color: "#7e22ce" },
+  "hostly-map-table--free": { background: "#dff0e4", color: "#264f34" },
+  "hostly-map-table--occupied": { background: "#dcecf3", color: "#25495a" },
+  "hostly-map-table--reserved": { background: "#ebe4f4", color: "#51425f" },
 };
 
 const LONG_PRESS_GROUP_MS = 1000;
 const LONG_PRESS_MOVE_PX_SQ = 64;
 
 const ALERT_DOT_COLORS: Record<MapAlertDotClass, string> = {
-  critical: "#ef4444",
-  attention: "#f59e0b",
+  critical: "#b94c46",
+  attention: "#b87922",
 };
 
 /** Superficie base: solo libre / ocupada / reservada (sin urgencia en el fondo). */
@@ -183,8 +197,10 @@ export const ElementCard = memo(
     groupedBadgeText,
     mapJoinDragEnabled = false,
     onMapTableJoinDrop,
+    mapJoinClusterMainId,
     showVisualChairs = true,
     isMapGroupedPrimary = false,
+    isMapGroupedSelectionElevated = false,
     onRequestSeparateGroupedTables,
   }: ElementMapCardProps) {
     const joinDragStateRef = useRef<{
@@ -202,11 +218,19 @@ export const ElementCard = memo(
     const pressResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isHovered, setIsHovered] = useState(false);
     const [isPressedPulse, setIsPressedPulse] = useState(false);
+    const [joinDropHighlight, setJoinDropHighlight] = useState(false);
+    const [isJoinGestureActive, setIsJoinGestureActive] = useState(false);
+    const [joinDragPreviewPos, setJoinDragPreviewPos] = useState<{
+      x: number;
+      y: number;
+    } | null>(null);
     const [groupMenuOpen, setGroupMenuOpen] = useState(false);
     const [groupMenuPos, setGroupMenuPos] = useState<{
       top: number;
       left: number;
     } | null>(null);
+    const [separateFlashActive, setSeparateFlashActive] = useState(false);
+    const separateFlashTimerRef = useRef<number | null>(null);
 
     const separateGroupButtonRef = useRef<HTMLButtonElement | null>(null);
     const onRequestSeparateGroupedTablesRef = useRef(
@@ -225,6 +249,15 @@ export const ElementCard = memo(
         }
         ev.preventDefault();
         ev.stopPropagation();
+        if (separateFlashTimerRef.current != null) {
+          window.clearTimeout(separateFlashTimerRef.current);
+          separateFlashTimerRef.current = null;
+        }
+        setSeparateFlashActive(true);
+        separateFlashTimerRef.current = window.setTimeout(() => {
+          setSeparateFlashActive(false);
+          separateFlashTimerRef.current = null;
+        }, 420);
         onRequestSeparateGroupedTablesRef.current?.(tableId);
         setGroupMenuOpen(false);
         setGroupMenuPos(null);
@@ -232,6 +265,14 @@ export const ElementCard = memo(
       btn.addEventListener("click", handler, true);
       return () => btn.removeEventListener("click", handler, true);
     }, [groupMenuOpen, tableId]);
+
+    useEffect(() => {
+      return () => {
+        if (separateFlashTimerRef.current != null) {
+          window.clearTimeout(separateFlashTimerRef.current);
+        }
+      };
+    }, []);
 
     const animationsOff = prefersReducedMotion || isUltraFastMode;
 
@@ -280,6 +321,8 @@ export const ElementCard = memo(
       (e: React.PointerEvent<HTMLDivElement>) => {
         if (!mapJoinDragEnabled || !onMapTableJoinDrop) return;
         if (e.button !== 0) return;
+        setIsJoinGestureActive(false);
+        setJoinDragPreviewPos(null);
         joinDragStateRef.current = {
           startX: e.clientX,
           startY: e.clientY,
@@ -295,21 +338,81 @@ export const ElementCard = memo(
       [mapJoinDragEnabled, onMapTableJoinDrop],
     );
 
+    const draggedJoinClusterMain = String(
+      mapJoinClusterMainId ?? tableId,
+    ).trim();
+
     const handleJoinPointerMove = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
         const st = joinDragStateRef.current;
         if (!st?.armed) return;
         const dx = e.clientX - st.startX;
         const dy = e.clientY - st.startY;
-        if (dx * dx + dy * dy > 64) st.active = true;
+        if (dx * dx + dy * dy > 64) {
+          if (!st.active) {
+            st.active = true;
+            setIsJoinGestureActive(true);
+          }
+        }
+        if (!st.active || !mapJoinDragEnabled || !onMapTableJoinDrop) return;
+
+        const rootEl = e.currentTarget as HTMLElement;
+        const prevPe = rootEl.style.pointerEvents;
+        rootEl.style.pointerEvents = "none";
+        let hoverId: string | null = null;
+        try {
+          const els = document.elementsFromPoint(e.clientX, e.clientY);
+          for (const node of els) {
+            if (!(node instanceof HTMLElement)) continue;
+            const host = node.closest("[data-hostly-map-table]");
+            if (!host || host === rootEl) continue;
+            const tid = host.getAttribute("data-hostly-map-table")?.trim();
+            if (tid && tid !== tableId) {
+              hoverId = tid;
+              break;
+            }
+          }
+        } finally {
+          rootEl.style.pointerEvents = prevPe;
+        }
+
+        document.dispatchEvent(
+          new CustomEvent<HostlyMapJoinDragHoverDetail>(
+            HOSTLY_MAP_JOIN_DRAG_HOVER,
+            {
+              bubbles: true,
+              detail: {
+                hoverTableId: hoverId,
+                draggedTableId: tableId,
+                draggedClusterMain: draggedJoinClusterMain,
+              },
+            },
+          ),
+        );
+
+        setJoinDragPreviewPos({ x: e.clientX, y: e.clientY });
       },
-      [],
+      [
+        draggedJoinClusterMain,
+        mapJoinDragEnabled,
+        onMapTableJoinDrop,
+        tableId,
+      ],
     );
+
+    const emitJoinDragEnd = useCallback(() => {
+      document.dispatchEvent(
+        new CustomEvent(HOSTLY_MAP_JOIN_DRAG_END, { bubbles: true }),
+      );
+    }, []);
 
     const handleJoinPointerUp = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
         const st = joinDragStateRef.current;
         joinDragStateRef.current = null;
+        setIsJoinGestureActive(false);
+        setJoinDragPreviewPos(null);
+        emitJoinDragEnd();
         try {
           e.currentTarget.releasePointerCapture(e.pointerId);
         } catch {
@@ -339,8 +442,42 @@ export const ElementCard = memo(
           }
         }
       },
-      [onMapTableJoinDrop, tableId],
+      [emitJoinDragEnd, onMapTableJoinDrop, tableId],
     );
+
+    useEffect(() => {
+      if (!mapJoinDragEnabled || !onMapTableJoinDrop) return;
+      const clusterSelf = String(mapJoinClusterMainId ?? tableId).trim();
+      const onHover = (ev: Event) => {
+        const ce = ev as CustomEvent<HostlyMapJoinDragHoverDetail>;
+        const d = ce.detail;
+        if (!d) return;
+        if (d.draggedTableId === tableId) {
+          setJoinDropHighlight(false);
+          return;
+        }
+        const hover = d.hoverTableId?.trim() ?? "";
+        if (!hover || hover !== tableId) {
+          setJoinDropHighlight(false);
+          return;
+        }
+        const dm = String(d.draggedClusterMain ?? "").trim();
+        setJoinDropHighlight(dm !== clusterSelf);
+      };
+      const onEnd = () => setJoinDropHighlight(false);
+      document.addEventListener(
+        HOSTLY_MAP_JOIN_DRAG_HOVER,
+        onHover as EventListener,
+      );
+      document.addEventListener(HOSTLY_MAP_JOIN_DRAG_END, onEnd);
+      return () => {
+        document.removeEventListener(
+          HOSTLY_MAP_JOIN_DRAG_HOVER,
+          onHover as EventListener,
+        );
+        document.removeEventListener(HOSTLY_MAP_JOIN_DRAG_END, onEnd);
+      };
+    }, [mapJoinClusterMainId, mapJoinDragEnabled, onMapTableJoinDrop, tableId]);
 
     const handleRootClick = useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
@@ -490,7 +627,6 @@ export const ElementCard = memo(
     );
 
     const skin = SURFACE_TOKENS[baseSurface];
-
     const tableNumber = useMemo(
       () => tableNumberForDisplay(table, tableId),
       [table, tableId],
@@ -501,6 +637,16 @@ export const ElementCard = memo(
       if (!t || !t.startsWith("+")) return null;
       return t;
     }, [groupedBadgeText]);
+
+    /** Copy contextual para el menú largo (solo UI). */
+    const groupedTotalTablesLabel = useMemo(() => {
+      const t = groupCorner?.trim();
+      if (!t?.startsWith("+")) return null;
+      const sec = Number.parseInt(t.slice(1), 10);
+      if (!Number.isFinite(sec) || sec < 1) return null;
+      const total = sec + 1;
+      return total === 2 ? "2 mesas unidas" : `${total} mesas unidas`;
+    }, [groupCorner]);
 
     const statusLabel = useMemo(
       () =>
@@ -522,8 +668,36 @@ export const ElementCard = memo(
       return null;
     }, [statusLabel, reservationPressure, reservationBadge]);
 
-    const baseTileShadow = "0 2px 8px rgba(15, 23, 42, 0.06)";
-    const occupiedHoverShadow = "0 4px 12px rgba(15, 23, 42, 0.11)";
+    /** Etiqueta discreta esquina (R u hora corta); solo lectura de datos ya existentes. */
+    const reserveCornerLabel = useMemo((): string | null => {
+      if (!reservationBadge) return null;
+      const t = reservationTimeDisplay?.trim();
+      if (t) {
+        const timeHm = t.match(/\d{1,2}:\d{2}/);
+        if (timeHm) return timeHm[0];
+        const compact = t.replace(/\s+/g, "");
+        return compact.length <= 5 ? compact : compact.slice(0, 5);
+      }
+      return "R";
+    }, [reservationBadge, reservationTimeDisplay]);
+
+    const showReserveCornerPill = reserveCornerLabel != null;
+
+    const baseTileShadow =
+      "0 1px 2px rgba(15, 23, 42, 0.06), 0 7px 16px rgba(49, 95, 125, 0.075)";
+    const occupiedHoverShadow =
+      "0 2px 5px rgba(15, 23, 42, 0.08), 0 10px 22px rgba(49, 95, 125, 0.11)";
+    /** Mesa agrupada (principal): sombra un poco más densa, sin animaciones ni cambio de tamaño. */
+    const groupedIdleShadowBoost =
+      "0 4px 14px rgba(48, 39, 28, 0.08), 0 2px 6px rgba(48, 39, 28, 0.05)";
+    /** Agrupada + seleccionada: más elevación y anillo legible. */
+    const groupedSelectedShadow =
+      "0 10px 26px rgba(48, 39, 28, 0.14), 0 3px 10px rgba(48, 39, 28, 0.08)";
+    const groupedSelectedHoverShadow =
+      "0 12px 32px rgba(48, 39, 28, 0.16), 0 4px 12px rgba(48, 39, 28, 0.09)";
+    /** Anillo suave sin mover layout (solo box-shadow). */
+    const groupedSelectedRing =
+      "0 0 0 2px rgba(255, 255, 255, 0.96), 0 0 0 5px rgba(63, 100, 120, 0.22)";
 
     let transform: string | undefined;
     let boxShadow: string;
@@ -548,9 +722,46 @@ export const ElementCard = memo(
       boxShadow = baseTileShadow;
     }
 
+    const isGroupedPrimaryTile = Boolean(groupCorner);
+
+    if (isGroupedPrimaryTile && !isMapGroupedSelectionElevated) {
+      boxShadow = `${boxShadow}, ${groupedIdleShadowBoost}`;
+    }
+
+    if (isMapGroupedSelectionElevated) {
+      const elevatedShadow =
+        !animationsOff && isHovered && !isPressedPulse
+          ? groupedSelectedHoverShadow
+          : groupedSelectedShadow;
+      boxShadow = `${elevatedShadow}, ${groupedSelectedRing}`;
+    }
+
+    if (joinDropHighlight && mapJoinDragEnabled) {
+      boxShadow = `${boxShadow}, 0 10px 28px rgba(15, 23, 42, 0.08), 0 5px 16px rgba(63, 100, 120, 0.14), 0 0 0 2px rgba(63, 100, 120, 0.35)`;
+    }
+
+    if (isJoinGestureActive && mapJoinDragEnabled) {
+      boxShadow = `${boxShadow}, 0 0 0 2px rgba(63, 100, 120, 0.24)`;
+    }
+
+    if (isGroupedPrimaryTile) {
+      boxShadow = `${boxShadow}, inset 0 0 0 1px rgba(63, 100, 120, 0.22)`;
+    }
+
+    if (separateFlashActive) {
+      boxShadow = `${boxShadow}, 0 0 0 3px rgba(63, 100, 120, 0.26), 0 12px 28px rgba(63, 100, 120, 0.1)`;
+    }
+
+    const tileBorder =
+      isMapGroupedSelectionElevated && isGroupedPrimaryTile
+        ? "1px solid rgba(63, 100, 120, 0.34)"
+        : isGroupedPrimaryTile
+          ? "1px solid rgba(63, 100, 120, 0.3)"
+          : "1px solid var(--hostly-line)";
+
     const transition = animationsOff
       ? "none"
-      : "transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease";
+      : "transform 120ms ease, box-shadow 280ms ease, opacity 120ms ease";
 
     const visualChairLayouts = useMemo(() => {
       if (!showVisualChairs || planType !== "table") return [];
@@ -579,33 +790,160 @@ export const ElementCard = memo(
                 left: groupMenuPos.left,
                 transform: "translateX(-50%)",
                 zIndex: 10000,
-                minWidth: 160,
-                padding: 8,
-                borderRadius: 10,
-                background: "rgba(255,255,255,0.98)",
-                border: "1px solid rgba(148, 163, 184, 0.35)",
-                boxShadow: "0 8px 24px rgba(15,23,42,0.15)",
+                minWidth: 196,
+                padding: "10px 11px 11px",
+                borderRadius: 14,
+                background: "rgba(255, 255, 255, 0.98)",
+                border: "1px solid rgba(148, 163, 184, 0.38)",
+                boxShadow: "var(--hostly-shadow-float)",
               }}
             >
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                  marginBottom: 5,
+                }}
+              >
+                Grupo de mesas
+              </div>
+              {groupedTotalTablesLabel ? (
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 750,
+                    letterSpacing: "-0.02em",
+                    color: "#1f2933",
+                    lineHeight: 1.25,
+                    marginBottom: 10,
+                  }}
+                >
+                  {groupedTotalTablesLabel}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "#667085",
+                    lineHeight: 1.3,
+                    marginBottom: 10,
+                  }}
+                >
+                  Varias mesas comparten esta cuenta
+                </div>
+              )}
               <button
                 ref={separateGroupButtonRef}
                 type="button"
                 className="hostly-map-separate-group-btn"
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
+                  padding: "11px 12px 10px",
                   border: "none",
-                  borderRadius: 8,
-                  background: "rgba(241, 245, 249, 0.95)",
-                  color: "#0f172a",
-                  fontSize: 13,
-                  fontWeight: 600,
+                  borderRadius: 11,
+                  background: "#1f2933",
+                  color: "#ffffff",
                   cursor: "pointer",
                   textAlign: "center",
+                  boxShadow: "var(--hostly-shadow-card)",
                 }}
               >
-                Separar mesas
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 14,
+                    fontWeight: 780,
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  Separar mesas
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    opacity: 0.82,
+                    marginTop: 3,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  Cada mesa vuelve a mostrarse sola en el mapa
+                </span>
               </button>
+            </div>,
+            document.body,
+          )
+        : null;
+
+    const joinDragPreviewPortal =
+      joinDragPreviewPos != null &&
+      typeof document !== "undefined" &&
+      mapJoinDragEnabled &&
+      onMapTableJoinDrop
+        ? createPortal(
+            <div
+              aria-hidden
+              style={{
+                position: "fixed",
+                left: joinDragPreviewPos.x,
+                top: joinDragPreviewPos.y,
+                transform: "translate(-50%, -50%)",
+                width: mapTileWidth,
+                height: mapTileHeight,
+                boxSizing: "border-box",
+                borderRadius: tileBorderRadius,
+                background: skin.background,
+                border: tileBorder,
+                opacity: 0.88,
+                pointerEvents: "none",
+                zIndex: 10100,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 6,
+                boxShadow: "var(--hostly-shadow-float)",
+              }}
+            >
+              {groupCorner ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 5,
+                    left: 5,
+                    padding: "3px 9px",
+                    borderRadius: 9999,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.02em",
+                    lineHeight: 1.15,
+                    color: "#ffffff",
+                    background: "rgba(31, 41, 51, 0.88)",
+                    pointerEvents: "none",
+                    boxShadow:
+                      "0 1px 3px rgba(48, 39, 28, 0.18), 0 1px 1px rgba(0, 0, 0, 0.05)",
+                  }}
+                >
+                  {groupCorner}
+                </span>
+              ) : null}
+              <div
+                style={{
+                  color: "#1f2933",
+                  fontSize: "clamp(19px, 4.75vw, 28px)",
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  letterSpacing: "-0.03em",
+                  userSelect: "none",
+                  pointerEvents: "none",
+                }}
+              >
+                {tableNumber}
+              </div>
             </div>,
             document.body,
           )
@@ -647,18 +985,47 @@ export const ElementCard = memo(
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "6px",
-          cursor: mapJoinDragEnabled ? "grab" : "pointer",
-          zIndex: 10 + priorityLevel,
+          padding: "8px",
+          cursor:
+            isJoinGestureActive && mapJoinDragEnabled
+              ? "grabbing"
+              : mapJoinDragEnabled
+                ? "grab"
+                : "pointer",
+          zIndex:
+            10 +
+            priorityLevel +
+            (isMapGroupedSelectionElevated ? 5 : 0) +
+            (joinDropHighlight && mapJoinDragEnabled ? 6 : 0),
           transform,
           transition,
           borderRadius: tileBorderRadius,
           background: skin.background,
           color: skin.color,
-          border: "1px solid rgba(15, 23, 42, 0.1)",
+          border:
+            baseSurface === "hostly-map-table--free"
+              ? "1px solid rgba(47, 93, 60, 0.22)"
+              : baseSurface === "hostly-map-table--occupied"
+                ? "1px solid rgba(45, 82, 97, 0.24)"
+                : tileBorder,
           boxShadow,
+          opacity:
+            isJoinGestureActive && mapJoinDragEnabled ? 0.56 : 1,
         }}
       >
+        {planType === "table" ? (
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: -8,
+              borderRadius: tileBorderRadius,
+              background: "transparent",
+              pointerEvents: "auto",
+              zIndex: 0,
+            }}
+          />
+        ) : null}
         {planType === "table" && showVisualChairs ? (
           <span
             aria-hidden
@@ -693,46 +1060,81 @@ export const ElementCard = memo(
             ))}
           </span>
         ) : null}
+        {groupCorner ? (
+          <span
+            aria-hidden
+            className="hostly-map-table-group-badge"
+            style={{
+              position: "absolute",
+              top: 5,
+              left: 5,
+              padding: "3px 9px",
+              borderRadius: 9999,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.02em",
+              lineHeight: 1.15,
+              color: "#ffffff",
+              background: "rgba(31, 41, 51, 0.84)",
+              pointerEvents: "none",
+              /* Por debajo del punto de alerta (esquina contraria) para no competir por capa */
+              zIndex: 2,
+              boxShadow:
+                "0 1px 3px rgba(48, 39, 28, 0.18), 0 1px 1px rgba(0, 0, 0, 0.05)",
+            }}
+          >
+            {groupCorner}
+          </span>
+        ) : null}
+        {showReserveCornerPill ? (
+          <span
+            aria-hidden
+            className="hostly-map-table-reserve-corner"
+            style={{
+              position: "absolute",
+              top: 5,
+              right: 5,
+              padding: "3px 8px",
+              borderRadius: 9999,
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: "0.02em",
+              lineHeight: 1.15,
+              color: "#4c3b5f",
+              background: "rgba(247, 241, 255, 0.98)",
+              border: "1px solid rgba(111, 78, 139, 0.2)",
+              pointerEvents: "none",
+              zIndex: 3,
+              maxWidth: "calc(100% - 28px)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              boxShadow: "var(--hostly-shadow-card)",
+            }}
+          >
+            {reserveCornerLabel}
+          </span>
+        ) : null}
         {alertDot ? (
           <span
             aria-hidden
             className={`hostly-map-table-alert-dot hostly-map-table-alert-dot--${alertDot}`}
             style={{
               position: "absolute",
-              top: 5,
+              top: showReserveCornerPill ? 21 : 5,
               right: 5,
-              width: 8,
-              height: 8,
+              width: 10,
+              height: 10,
               borderRadius: 9999,
               background: ALERT_DOT_COLORS[alertDot],
               boxShadow:
                 alertDot === "critical"
-                  ? "0 0 0 1px rgba(255,255,255,0.95), 0 0 4px rgba(239, 68, 68, 0.6)"
-                  : "0 0 0 1px rgba(255,255,255,0.95)",
-              zIndex: 2,
+                  ? "0 0 0 2px rgba(255,255,255,0.96), 0 1px 4px rgba(185, 76, 70, 0.28)"
+                  : "0 0 0 2px rgba(255,255,255,0.96), 0 1px 4px rgba(184, 121, 34, 0.24)",
+              zIndex: 5,
               pointerEvents: "none",
             }}
           />
-        ) : null}
-        {groupCorner ? (
-          <span
-            aria-hidden
-            className="table-group-corner"
-            style={{
-              position: "absolute",
-              top: 4,
-              ...(alertDot ? { left: 5 } : { right: 5 }),
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              opacity: 0.55,
-              pointerEvents: "none",
-              lineHeight: 1,
-              zIndex: 1,
-            }}
-          >
-            {groupCorner}
-          </span>
         ) : null}
         <div
           style={{
@@ -740,7 +1142,7 @@ export const ElementCard = memo(
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            gap: 2,
+            gap: 3,
             minWidth: 0,
             maxWidth: "100%",
             pointerEvents: "none",
@@ -751,9 +1153,9 @@ export const ElementCard = memo(
           <div
             className="table-number"
             style={{
-              color: "#000000",
-              fontSize: "clamp(19px, 4.75vw, 28px)",
-              fontWeight: 700,
+              color: "#17212b",
+              fontSize: "clamp(22px, 5vw, 31px)",
+              fontWeight: 820,
               lineHeight: 1,
               letterSpacing: "-0.03em",
               userSelect: "none",
@@ -764,9 +1166,9 @@ export const ElementCard = memo(
           <span
             className="hostly-map-table-status-label"
             style={{
-              color: "#374151",
-              fontSize: "10px",
-              fontWeight: 400,
+              color: "#4f6475",
+              fontSize: "10.5px",
+              fontWeight: 720,
               textTransform: "uppercase",
               letterSpacing: "0.045em",
               lineHeight: 1.08,
@@ -783,9 +1185,9 @@ export const ElementCard = memo(
             <span
               className="hostly-map-table-res-time"
               style={{
-                color: "#78716c",
-                fontSize: "9px",
-                fontWeight: 600,
+                color: "#5f4e72",
+                fontSize: "10px",
+                fontWeight: 760,
                 lineHeight: 1.1,
                 textAlign: "center",
                 maxWidth: "100%",
@@ -800,6 +1202,7 @@ export const ElementCard = memo(
         </div>
       </div>
       {groupMenuPortal}
+      {joinDragPreviewPortal}
       </>
     );
   },
@@ -846,9 +1249,16 @@ export const ElementCard = memo(
       return false;
     if (prev.mapJoinDragEnabled !== next.mapJoinDragEnabled) return false;
     if (prev.onMapTableJoinDrop !== next.onMapTableJoinDrop) return false;
+    if ((prev.mapJoinClusterMainId ?? "") !== (next.mapJoinClusterMainId ?? ""))
+      return false;
     if ((prev.showVisualChairs ?? true) !== (next.showVisualChairs ?? true))
       return false;
     if ((prev.isMapGroupedPrimary ?? false) !== (next.isMapGroupedPrimary ?? false))
+      return false;
+    if (
+      (prev.isMapGroupedSelectionElevated ?? false) !==
+      (next.isMapGroupedSelectionElevated ?? false)
+    )
       return false;
     if (prev.onRequestSeparateGroupedTables !== next.onRequestSeparateGroupedTables)
       return false;

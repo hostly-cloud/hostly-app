@@ -1,4 +1,5 @@
-import { addDoc, collection } from "firebase/firestore";
+import { dbgAddDoc } from "@/lib/firestore/instrumentedWrites";
+import { collection } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 
 /** Cobro / cierre contable en documentos `orders` (además de estados de flujo como `sent`). */
@@ -25,12 +26,18 @@ export const createOrder = async ({
   tableId?: string | null;
   tableName?: string | null;
 }) => {
-  await addDoc(collection(db, "orders"), {
+  const payload = {
     restaurantId,
     items,
     total,
     createdAt: Date.now(),
     tableId: tableId ?? null,
     tableName: tableName ?? null,
+  };
+  await dbgAddDoc(collection(db, "orders"), payload, {
+    label: "createOrder",
+    collection: "orders",
+    restaurantId,
+    tableId: tableId ?? null,
   });
 };

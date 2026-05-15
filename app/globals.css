@@ -1,19 +1,46 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #eef7ff;
+  --foreground: #1f2933;
 
   /* ------------------------------------------------------------------------ */
-  /* Hostly — base visual tokens (layout / rhythm)                             */
+  /* Hostly — premium claro global (Apple / SevenRooms / Shopify POS)          */
   /* ------------------------------------------------------------------------ */
+  --hostly-surface-page: #eef7ff;
+  --hostly-surface-page-soft: #f7fcff;
+  --hostly-surface-card: rgba(255, 255, 255, 0.94);
+  --hostly-surface-card-solid: #ffffff;
+  --hostly-surface-muted: #e2f0fb;
+  --hostly-surface-raised: #ffffff;
+  --hostly-ink: #1f2933;
+  --hostly-ink-muted: #667085;
+  --hostly-ink-soft: #7b8794;
+  --hostly-line: rgba(54, 86, 116, 0.15);
+  --hostly-line-strong: rgba(54, 86, 116, 0.25);
+  --hostly-accent: #315f7d;
+  --hostly-accent-soft: rgba(49, 95, 125, 0.13);
+  --hostly-success-soft: #e8f4ef;
+  --hostly-warning-soft: #f5eddc;
+  --hostly-danger-soft: #f5e8e8;
+  --hostly-info-soft: #e6f0f6;
+  --hostly-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.045);
+  --hostly-shadow-float: 0 10px 28px rgba(15, 23, 42, 0.08);
+
+  /* Layout / rhythm */
   --hostly-content-max: 1180px; /* single global dashboard width */
   --hostly-content-max-wide: 1400px; /* TPV / workbench layouts */
   --hostly-page-pad-x: clamp(12px, 2.2vw, 22px);
   --hostly-page-pad-y: clamp(12px, 2.2vw, 22px);
   --hostly-radius-lg: 18px;
   --hostly-radius-md: 14px;
-  --hostly-border-subtle: rgba(148, 163, 184, 0.14);
+  --hostly-border-subtle: var(--hostly-line);
+
+  /* Configuración — sistema claro (Stripe / Linear; sin lógica de negocio) */
+  --hostly-config-radius: 10px;
+  --hostly-config-card-border: var(--hostly-line);
+  --hostly-config-card-shadow: var(--hostly-shadow-card);
+  --hostly-config-content-max: 80rem; /* 1280px — alinea workbench + tablas */
 }
 
 @theme inline {
@@ -21,13 +48,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
@@ -61,8 +81,9 @@ body {
   z-index: 5;
   padding: 14px 0;
   border-bottom: 1px solid var(--hostly-border-subtle);
-  background: rgba(2, 6, 23, 0.55);
-  backdrop-filter: blur(10px);
+  background: rgba(248, 251, 254, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Móvil dashboard: pestañas horizontales con scroll si no caben */
@@ -89,23 +110,205 @@ body {
 
 .hostly-page-title {
   font-size: 18px;
-  font-weight: 900;
+  font-weight: 720;
   letter-spacing: -0.02em;
-  color: #f8fafc;
+  color: var(--hostly-ink);
   line-height: 1.1;
 }
 
 .hostly-page-subtitle {
   margin-top: 2px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--hostly-ink-muted);
 }
 
 .hostly-card {
   border-radius: var(--hostly-radius-lg);
   border: 1px solid var(--hostly-border-subtle);
-  background: rgba(2, 6, 23, 0.55);
-  box-shadow: 0 18px 50px rgba(2,6,23,0.35);
+  background: var(--hostly-surface-card);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-surface {
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-surface-card);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-panel {
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 252, 255, 0.92) 100%);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-panel-soft {
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-md);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--hostly-line);
+  border-radius: 999px;
+  background: rgba(248, 251, 254, 0.82);
+  color: var(--hostly-ink-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.hostly-pill,
+.hostly-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hostly-ink-muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 120ms ease;
+}
+
+.hostly-pill:hover,
+.hostly-tab:hover {
+  border-color: var(--hostly-line);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--hostly-ink);
+}
+
+.hostly-pill[aria-pressed="true"],
+.hostly-tab[aria-selected="true"],
+.hostly-tab[data-active="true"] {
+  border-color: rgba(49, 95, 125, 0.22);
+  background: rgba(226, 240, 251, 0.92);
+  color: var(--hostly-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.hostly-pill:active,
+.hostly-tab:active {
+  transform: scale(0.985);
+}
+
+.hostly-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--hostly-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-btn-soft {
+  border: 1px solid var(--hostly-line);
+  border-radius: 10px;
+  background: rgba(248, 251, 254, 0.86);
+  color: var(--hostly-ink);
+  box-shadow: var(--hostly-shadow-card);
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.hostly-floor-editor-toolbox,
+.hostly-floor-editor-inspector {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+.hostly-floor-editor-toolbox::-webkit-scrollbar,
+.hostly-floor-editor-inspector::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.hostly-floor-editor-toolbox::-webkit-scrollbar-thumb,
+.hostly-floor-editor-inspector::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+}
+
+.hostly-floor-editor-toolbox::-webkit-scrollbar-track,
+.hostly-floor-editor-inspector::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hostly-floor-editor-map-wrap {
+  min-height: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Configuración — capa global clara (no TPV; solo shell de configuración)     */
+/* -------------------------------------------------------------------------- */
+.hostly-config-shell {
+  background:
+    radial-gradient(ellipse 90% 62% at 50% -18%, rgba(255, 255, 255, 0.74), transparent 48%),
+    linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 48%, #dbeefa 100%);
+  color: var(--hostly-ink);
+}
+
+/* Tablas listado en Config (Categorías, Familias, etc.) */
+.hostly-config-table-head {
+  border-bottom: 1px solid var(--hostly-line);
+  background-color: rgba(248, 251, 254, 0.86);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-muted);
+}
+
+/* Marco claro alrededor del editor de plano (lienzo sigue oscuro dentro) */
+.hostly-config-map-frame-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-radius: var(--hostly-config-radius);
+  border: 1px solid var(--hostly-line);
+  background-color: var(--hostly-surface-card-solid);
+  padding: 6px;
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-config-map-frame {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  border-radius: calc(var(--hostly-config-radius) - 4px);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background-color: rgb(2, 6, 23);
+  box-shadow: none;
+}
+
+.hostly-productos-config-skin .hostly-productos-data-row {
+  transition: background-color 0.22s ease;
+}
+
+.hostly-productos-config-skin .hostly-productos-data-row:hover {
+  background-color: rgba(248, 250, 252, 0.9) !important;
+}
+
+.hostly-productos-config-skin .hostly-productos-row-text-btn:hover:not(:disabled) {
+  background-color: rgb(248 250 252) !important;
+  border-color: rgb(226 232 240) !important;
+  color: rgb(30 41 59) !important;
 }
 
 /* -------------------------------------------------------------------------- */

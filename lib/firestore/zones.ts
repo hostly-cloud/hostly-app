@@ -20,6 +20,7 @@ export type Zone = {
   id: string;
   restaurantId: string;
   name: string;
+  floorPlanId?: string;
   color?: string;
   x?: number;
   y?: number;
@@ -55,6 +56,10 @@ function mapDocToZone(d: QueryDocumentSnapshot): Zone {
     typeof data.color === "string" && data.color.trim() !== ""
       ? data.color.trim()
       : undefined;
+  const floorPlanId =
+    typeof data.floorPlanId === "string" && data.floorPlanId.trim() !== ""
+      ? data.floorPlanId.trim()
+      : undefined;
   const x = typeof data.x === "number" && Number.isFinite(data.x) ? data.x : undefined;
   const y = typeof data.y === "number" && Number.isFinite(data.y) ? data.y : undefined;
   const width =
@@ -65,6 +70,7 @@ function mapDocToZone(d: QueryDocumentSnapshot): Zone {
     id: d.id,
     restaurantId,
     name,
+    ...(floorPlanId !== undefined ? { floorPlanId } : {}),
     ...(color !== undefined ? { color } : {}),
     ...(x !== undefined ? { x } : {}),
     ...(y !== undefined ? { y } : {}),
@@ -93,6 +99,13 @@ export async function createZone(
   restaurantId: string,
   name: string,
   color?: string,
+  initial?: {
+    floorPlanId?: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+  },
 ): Promise<string> {
   const rid = restaurantId.trim();
   if (!rid) throw new Error("createZone: restaurantId no disponible");
@@ -108,6 +121,21 @@ export async function createZone(
     };
     const c = typeof color === "string" ? color.trim() : "";
     if (c) payload.color = c;
+    const floorPlanId =
+      typeof initial?.floorPlanId === "string" ? initial.floorPlanId.trim() : "";
+    if (floorPlanId) payload.floorPlanId = floorPlanId;
+    if (typeof initial?.x === "number" && Number.isFinite(initial.x)) {
+      payload.x = Math.round(initial.x);
+    }
+    if (typeof initial?.y === "number" && Number.isFinite(initial.y)) {
+      payload.y = Math.round(initial.y);
+    }
+    if (typeof initial?.width === "number" && Number.isFinite(initial.width)) {
+      payload.width = Math.round(initial.width);
+    }
+    if (typeof initial?.height === "number" && Number.isFinite(initial.height)) {
+      payload.height = Math.round(initial.height);
+    }
     const ref = await addDoc(col, payload);
     return ref.id;
   } catch (e) {
@@ -120,6 +148,7 @@ export async function updateZone(
   updates: {
     name?: string;
     color?: string | null;
+    floorPlanId?: string | null;
     x?: number | null;
     y?: number | null;
     width?: number | null;
@@ -138,6 +167,11 @@ export async function updateZone(
     const c =
       typeof updates.color === "string" ? updates.color.trim() : "";
     payload.color = c ? c : deleteField();
+  }
+  if (updates.floorPlanId !== undefined) {
+    const floorPlanId =
+      typeof updates.floorPlanId === "string" ? updates.floorPlanId.trim() : "";
+    payload.floorPlanId = floorPlanId ? floorPlanId : deleteField();
   }
   if (updates.x !== undefined) {
     payload.x =

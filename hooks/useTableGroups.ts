@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { onSnapshot, setDoc } from "firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
+import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import {
   normalizeTableGroups,
   persistTableGroups,
@@ -118,6 +119,11 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
       return;
     }
 
+    if (!isAuthReady()) {
+      setGroupedTables({});
+      return;
+    }
+
     const ref = tableGroupsDocRef(restaurantIdTrimmed);
     const unsub = onSnapshot(
       ref,
@@ -133,7 +139,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
               { merge: false },
             );
           } catch (e) {
-            console.error("tableGroups:initDoc", e);
+            console.error(e);
           }
           setGroupedTables({});
           return;
@@ -142,7 +148,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
         setGroupedTables(normalizeTableGroups(data.groups));
       },
       (error) => {
-        console.error("tableGroups:onSnapshot", error);
+        console.error(error);
       },
     );
 
@@ -196,7 +202,8 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
 
   const queuePersist = useCallback(
     (next: Record<string, string[]>) => {
-      if (!restaurantIdTrimmed || !isFirebaseConfigured) return;
+      if (!restaurantIdTrimmed || !isFirebaseConfigured || !isAuthReady())
+        return;
       queueMicrotask(() => {
         void persistTableGroups(restaurantIdTrimmed, next);
       });
@@ -240,20 +247,8 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
       const id = String(tableId).trim();
       if (!id) return;
 
-      const dev = process.env.NODE_ENV === "development";
-      if (dev) {
-        console.log("[separate] hook input", id);
-      }
-
       setGroupedTables((prev) => {
-        if (dev) {
-          console.log("[separate] prev groups", { ...prev });
-        }
-
         if (!isTableGroupedInMap(prev, id)) {
-          if (dev) {
-            console.warn("[separate] no group found for", id);
-          }
           return prev;
         }
 
@@ -279,19 +274,9 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
             break;
           }
           if (updated == null) {
-            if (dev) {
-              console.warn("[separate] no group found for", id);
-            }
             return prev;
           }
           next = updated;
-        }
-
-        if (dev) {
-          console.log("[separate] next groups", { ...next });
-          if (JSON.stringify(next) === JSON.stringify(prev)) {
-            console.warn("[separate] next equals prev for", id);
-          }
         }
 
         queuePersist(next);

@@ -11,6 +11,7 @@ import {
 import { useAuth } from "@/components/auth/auth-context";
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
+import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 import {
   computeServiceMetrics,
   formatAvgMinutes,
@@ -37,16 +38,16 @@ function chipStyle(tone: ChipTone): CSSProperties {
   if (tone === "blue") {
     return {
       ...chipBase,
-      background: "rgba(59, 130, 246, 0.16)",
-      color: "#dbeafe",
-      border: "1px solid rgba(59, 130, 246, 0.32)",
+      background: "rgba(49, 95, 125, 0.11)",
+      color: "#315f7d",
+      border: "1px solid rgba(49, 95, 125, 0.22)",
     };
   }
   if (tone === "amber") {
     return {
       ...chipBase,
       background: "rgba(249, 115, 22, 0.16)",
-      color: "#fed7aa",
+      color: "#9a5d16",
       border: "1px solid rgba(249, 115, 22, 0.32)",
     };
   }
@@ -54,15 +55,15 @@ function chipStyle(tone: ChipTone): CSSProperties {
     return {
       ...chipBase,
       background: "rgba(34, 197, 94, 0.16)",
-      color: "#bbf7d0",
+      color: "#2f5d3c",
       border: "1px solid rgba(34, 197, 94, 0.32)",
     };
   }
   return {
     ...chipBase,
-    background: "rgba(148, 163, 184, 0.14)",
-    color: "#e2e8f0",
-    border: "1px solid rgba(148, 163, 184, 0.28)",
+    background: "rgba(255, 255, 255, 0.64)",
+    color: "#475569",
+    border: "1px solid var(--hostly-line)",
   };
 }
 
@@ -86,8 +87,8 @@ const barStyle: CSSProperties = {
   gap: 8,
   padding: "8px 10px",
   borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.45)",
+  border: "1px solid var(--hostly-line)",
+  background: "rgba(255, 255, 255, 0.72)",
 };
 
 function Chip({
@@ -113,12 +114,21 @@ type MetricsOrder = {
   items: ServiceMetricsItem[];
 };
 
+export type ServidosArchiveToggleProps = {
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+};
+
 export default function ServiceMetricsBar({
   scope,
+  servidosArchiveToggle,
 }: {
   scope: ServiceScope;
+  /** Cocina: botón secundario para archivo servidos (reemplaza chip estático Servidos). */
+  servidosArchiveToggle?: ServidosArchiveToggleProps;
 }) {
-  const { restaurantId, ready: authReady } = useAuth();
+  const { restaurantId, ready: authReady, user } = useAuth();
   const { matchesOrder } = useOperationFilter();
   const [orders, setOrders] = useState<MetricsOrder[]>([]);
 
@@ -150,9 +160,22 @@ export default function ServiceMetricsBar({
         });
       }
       setOrders(next);
+    }, (err) => {
+      console.error(err);
+      logFirestorePermissionError(
+        {
+          file: "components/kds/service-metrics-bar.tsx",
+          op: "onSnapshot",
+          path: `orders (where restaurantId==${restaurantId})`,
+          restaurantId,
+          uid: user?.uid ?? null,
+          email: user?.email ?? null,
+        },
+        err,
+      );
     });
     return () => unsub();
-  }, [authReady, restaurantId]);
+  }, [authReady, restaurantId, user]);
 
   const metrics = useMemo(() => {
     const items: ServiceMetricsItem[] = [];
@@ -164,10 +187,24 @@ export default function ServiceMetricsBar({
   }, [orders, scope, matchesOrder]);
 
   return (
-    <div style={barStyle} aria-label="Métricas de servicio">
+    <div
+      style={{
+        ...barStyle,
+        ...(servidosArchiveToggle
+          ? {
+              width: "100%",
+              flexWrap: "wrap",
+              justifyContent: "flex-start",
+            }
+          : {}),
+      }}
+      aria-label="Métricas de servicio"
+    >
       <Chip label="Enviados" value={metrics.sent} tone="blue" />
       <Chip label="Preparados" value={metrics.prepared} tone="amber" />
-      <Chip label="Servidos" value={metrics.served} tone="green" />
+      {servidosArchiveToggle ? null : (
+        <Chip label="Servidos" value={metrics.served} tone="green" />
+      )}
       <Chip
         label="Prep. media"
         value={formatAvgMinutes(metrics.avgPrepMinutes)}
@@ -178,6 +215,52 @@ export default function ServiceMetricsBar({
         value={formatAvgMinutes(metrics.avgServeMinutes)}
         tone="neutral"
       />
+      {servidosArchiveToggle ? (
+        <button
+          type="button"
+          aria-expanded={servidosArchiveToggle.open}
+          aria-controls="kds-served-archive-panel"
+          title={
+            servidosArchiveToggle.open
+              ? "Cerrar histórico de servidos"
+              : "Ver histórico de servidos"
+          }
+          onClick={() => servidosArchiveToggle.onToggle()}
+          style={{
+            ...chipStyle("green"),
+            alignItems: "center",
+            marginLeft: "auto",
+            cursor: "pointer",
+            ...(servidosArchiveToggle.open
+              ? {
+                  background: "rgba(34, 197, 94, 0.32)",
+                  border: "1px solid rgba(52, 211, 153, 0.52)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255, 255, 255, 0.07)",
+                  color: "#ecfdf5",
+                }
+              : {}),
+          }}
+        >
+          <span style={chipLabelStyle}>Servidos</span>
+          <span style={chipValueStyle}>
+            · {servidosArchiveToggle.count}
+          </span>
+          {servidosArchiveToggle.open ? (
+            <span
+              aria-hidden
+              style={{
+                fontSize: 13,
+                fontWeight: 800,
+                opacity: 0.86,
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </span>
+          ) : null}
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -4,17 +4,22 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Timestamp,
+  GeoPoint,
+  DocumentReference,
+  type DocumentData,
+  type UpdateData,
   collection,
   doc,
   onSnapshot,
   query,
   serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
+import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
+import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 
 export type BoardItem = {
   id: string;
@@ -53,6 +58,35 @@ function cleanFirestoreData<T extends Record<string, unknown>>(data: T) {
   ) as Partial<T>;
 }
 
+/**
+ * Elimina solo `undefined` en profundidad (objetos y arrays).
+ * Conserva `null`, `false`, `0`; no usa JSON (preserva Timestamp / Date).
+ */
+function stripUndefinedDeep(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "object") return value;
+  if (value instanceof Timestamp) return value;
+  if (value instanceof Date) return value;
+  if (value instanceof GeoPoint) return value;
+  if (value instanceof DocumentReference) return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((el) => stripUndefinedDeep(el))
+      .filter((el) => el !== undefined);
+  }
+  const obj = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) continue;
+    const next = stripUndefinedDeep(v);
+    if (next !== undefined) {
+      out[k] = next;
+    }
+  }
+  return out;
+}
+
 type BoardLine = {
   orderId: string;
   itemId: string;
@@ -68,6 +102,8 @@ type BoardLine = {
   course: number;
   /** Texto para fila "Mesa …" (ítem o pedido). */
   mesaRowText: string;
+  /** Clave de agrupación por mesa/pedido; solo UI (no se envía a Firestore). */
+  tableKey?: string;
 };
 
 type BoardTableGroup = {
@@ -94,6 +130,14 @@ export type OrderItemsBoardProps = {
   enablePreparePassBulk?: boolean;
   /** Cabecera de tipo de pase agrupado (ej. Barra → “Bebidas”). Cocina: omitir para Entrantes/Segundos/Postres/Mixto. */
   passTypeLabelOverride?: string;
+  /** Cocina: tickets en fila horizontal con scroll táctil por columna de estado. */
+  ticketRailLayout?: boolean;
+  /** Cocina: oculta la columna permanente “Servido”; usar panel/archivo controlado por `servedArchiveOpen`. */
+  kitchenHideServedColumn?: boolean;
+  /** Abierto el panel compacto de líneas servidas (solo presentación). */
+  servedArchiveOpen?: boolean;
+  /** Notifica total de líneas en estado servido (para chip en barra de métricas). */
+  onServedLineCountChange?: (count: number) => void;
 };
 
 function readItemNoteFromRecord(rec: Record<string, unknown>): string | undefined {
@@ -142,6 +186,61 @@ function sortCourseSectionKey(course: number): number {
   if (course === 2) return 2;
   if (course === 3 || course === 4) return 3;
   return 4;
+}
+
+/** Etiqueta corta para chip “Mesa …” en KDS (sin `undefined`). */
+function formatMesaChipLabel(
+  src: Pick<BoardLine, "mesaRowText" | "tableKey">,
+): string {
+  const raw = (src.mesaRowText ?? "").trim();
+  const fallbackKey = (src.tableKey ?? "").trim();
+
+  const normalizeDisplay = (t: string): string => {
+    const s = t.trim();
+    if (!s || s === "Sin mesa") return "";
+    const lower = s.toLowerCase();
+    if (lower.startsWith("mesa")) return s;
+    return `Mesa ${s}`;
+  };
+
+  const fromRaw = normalizeDisplay(raw);
+  if (fromRaw) return fromRaw;
+
+  const fromKey = normalizeDisplay(fallbackKey);
+  if (fromKey) return fromKey;
+
+  return "Sin mesa";
+}
+
+/** Texto producto + cantidad para histórico (usa `BoardLine.name` / `qty`). */
+function displayLineProductLabel(line: Pick<BoardLine, "name" | "qty">): string {
+  const raw = typeof line.name === "string" ? line.name.trim() : "";
+  const label = raw || "Producto";
+  const qtyOk =
+    typeof line.qty === "number" && Number.isFinite(line.qty) && line.qty > 0;
+  if (!qtyOk) return label;
+  const q = Math.floor(line.qty as number);
+  return `${q}x ${label}`;
+}
+
+/** Una mesa vs varias, para cabecera de pase agrupado por tiempo. */
+function passChunkMesaSummary(chunk: BoardLine[]): string {
+  if (chunk.length === 0) return "Sin mesa";
+  const keys = new Set<string>();
+  for (const l of chunk) {
+    const k = (l.tableKey ?? "").trim();
+    if (k) keys.add(k);
+  }
+  if (keys.size > 1) return "Varias mesas";
+  if (keys.size === 1) {
+    const onlyKey = [...keys][0]!;
+    const lineSample =
+      chunk.find((l) => (l.tableKey ?? "").trim() === onlyKey) ?? chunk[0]!;
+    return formatMesaChipLabel(lineSample);
+  }
+  const labels = new Set(chunk.map((l) => formatMesaChipLabel(l)));
+  if (labels.size > 1) return "Varias mesas";
+  return [...labels][0] ?? "Sin mesa";
 }
 
 function readItemExtrasFromRecord(
@@ -233,6 +332,134 @@ function readItemsArray(raw: unknown): BoardItem[] {
     });
   }
   return out;
+}
+
+/** Copia profunda segura de una línea `orders.items[]` (preserva Timestamp, etc.). */
+function cloneFirestoreOrderLineRecord(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  if (typeof structuredClone === "function") {
+    try {
+      return structuredClone(raw) as Record<string, unknown>;
+    } catch {
+      /* seguir */
+    }
+  }
+  return JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
+}
+
+function extractRawOrderItemsFromSnapshotField(
+  itemsField: unknown,
+): Record<string, unknown>[] {
+  if (!Array.isArray(itemsField)) return [];
+  const out: Record<string, unknown>[] = [];
+  for (const x of itemsField) {
+    if (!x || typeof x !== "object") continue;
+    out.push(cloneFirestoreOrderLineRecord(x as Record<string, unknown>));
+  }
+  return out;
+}
+
+function readFirestoreLineQty(row: Record<string, unknown>): number {
+  const q = Number(row.qty ?? row.quantity ?? 1);
+  return Number.isFinite(q) && q > 0 ? Math.floor(q) : 1;
+}
+
+function applyKitchenStatusToSingleFirestoreLine(
+  row: Record<string, unknown>,
+  status: "prepared" | "served",
+  now: number,
+): Record<string, unknown> {
+  const next = cloneFirestoreOrderLineRecord(row);
+  next.status = status;
+  next.updatedAt = now;
+  if (status === "prepared") next.preparedAt = now;
+  else next.servedAt = now;
+  next.qty = readFirestoreLineQty(next);
+  next.quantity = next.qty;
+  return next;
+}
+
+function splitFirestoreLineForKitchenAdvance(
+  row: Record<string, unknown>,
+  newId: string,
+  remainingQty: number,
+  advancedQty: number,
+  status: "prepared" | "served",
+  now: number,
+): { remainder: Record<string, unknown>; advanced: Record<string, unknown> } {
+  const remainder = cloneFirestoreOrderLineRecord(row);
+  remainder.qty = remainingQty;
+  remainder.quantity = remainingQty;
+  remainder.updatedAt = now;
+
+  const advanced = cloneFirestoreOrderLineRecord(row);
+  advanced.id = newId;
+  advanced.qty = advancedQty;
+  advanced.quantity = advancedQty;
+  advanced.status = status;
+  advanced.updatedAt = now;
+  advanced.createdAt = now;
+  if (status === "prepared") advanced.preparedAt = now;
+  else advanced.servedAt = now;
+
+  const origQty = readFirestoreLineQty(row);
+  const lineTotal = Number(row.total);
+  if (
+    Number.isFinite(lineTotal) &&
+    origQty > 0 &&
+    remainingQty > 0 &&
+    advancedQty > 0
+  ) {
+    remainder.total = (lineTotal * remainingQty) / origQty;
+    advanced.total = (lineTotal * advancedQty) / origQty;
+  }
+
+  return { remainder, advanced };
+}
+
+/**
+ * Replica la lógica de `handleMarkNext` pero sobre filas Firestore completas,
+ * sin pasar por `BoardItem` (que pierde productId, precios y metadata).
+ */
+function applyKitchenMarkNextToRawItems(
+  items: Record<string, unknown>[],
+  itemId: string,
+  next: "prepared" | "served",
+  now: number,
+): Record<string, unknown>[] | null {
+  const idx = items.findIndex((r) => String(r.id ?? "") === itemId);
+  if (idx === -1) return null;
+
+  const nextItems = items.map((r) => cloneFirestoreOrderLineRecord(r));
+  const row = nextItems[idx]!;
+  const qty = readFirestoreLineQty(row);
+
+  if (qty > 1) {
+    const newId = `${itemId}-${now}-${Math.random().toString(16).slice(2)}`;
+    const { remainder, advanced } = splitFirestoreLineForKitchenAdvance(
+      row,
+      newId,
+      qty - 1,
+      1,
+      next,
+      now,
+    );
+    nextItems[idx] = remainder;
+    nextItems.splice(idx + 1, 0, advanced);
+    return nextItems;
+  }
+
+  nextItems[idx] = applyKitchenStatusToSingleFirestoreLine(row, next, now);
+  return nextItems;
+}
+
+function applyKitchenAdvancePreparedToRawItems(
+  items: Record<string, unknown>[],
+  itemId: string,
+  now: number,
+): Record<string, unknown>[] | null {
+  return applyKitchenMarkNextToRawItems(items, itemId, "prepared", now);
 }
 
 const TERMINAL_STATUSES = new Set(["closed", "paid", "cancelled", "canceled"]);
@@ -347,12 +574,97 @@ const columnBodyStyle: CSSProperties = {
   gap: 10,
 };
 
+/** Contenedor vertical métricas + rail en modo comandero (cocina). */
+const ticketRailOuterBodyStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  paddingTop: 10,
+};
+
+/** Carril horizontal de tickets por estado (scroll táctil). */
+const ticketRailStripStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "row",
+  gap: 12,
+  alignItems: "stretch",
+  overflowX: "auto",
+  overflowY: "hidden",
+  paddingLeft: 10,
+  paddingRight: 10,
+  paddingBottom: 12,
+  overscrollBehaviorX: "contain",
+  scrollSnapType: "x proximity",
+  touchAction: "pan-x",
+  WebkitOverflowScrolling: "touch",
+};
+
+/** Una tarjeta-ticket dentro del rail: ancho estable + snap + scroll vertical interno. */
+const ticketRailCardWrapStyle: CSSProperties = {
+  flex: "0 0 auto",
+  width: "clamp(260px, 82vw, 328px)",
+  minWidth: "clamp(260px, 82vw, 328px)",
+  maxHeight: "100%",
+  overflowY: "auto",
+  scrollSnapAlign: "start",
+};
+
+const ticketRailCardChromeStyle: CSSProperties = {
+  border: "1px solid rgba(51, 65, 85, 0.65)",
+  boxShadow: "4px 4px 0 rgba(15, 23, 42, 0.75)",
+};
+
+/** Ticket dentro del archivo servidos (menos contraste). */
+const archiveTicketChromeStyle: CSSProperties = {
+  border: "1px solid rgba(71, 85, 105, 0.45)",
+  boxShadow: "2px 2px 0 rgba(15, 23, 42, 0.42)",
+  opacity: 0.93,
+};
+
 const emptyColumnStyle: CSSProperties = {
   padding: "24px 12px",
   textAlign: "center",
   color: "#64748b",
   fontSize: 12,
   fontWeight: 600,
+};
+
+/** Área vacía centrada bajo métricas en rail cocina. */
+const ticketRailEmptyAreaStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0 10px 16px",
+};
+
+/** Columna interna cuando no hay rail (lista vertical clásica). */
+const ticketRailInnerLegacyStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+};
+
+/** Panel desplegable cocina: archivo de líneas servidas (solo UI). */
+const kitchenServedArchivePanelStyle: CSSProperties = {
+  flexShrink: 0,
+  borderRadius: 12,
+  border: "1px solid rgba(71, 85, 105, 0.42)",
+  background:
+    "linear-gradient(180deg, rgba(22, 36, 28, 0.55) 0%, rgba(15, 23, 42, 0.72) 100%)",
+  maxHeight: "min(42vh, 380px)",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  boxShadow: "0 14px 36px -22px rgba(0, 0, 0, 0.55)",
 };
 
 const emptyBoardStyle: CSSProperties = {
@@ -388,6 +700,47 @@ const tableTitleStyle: CSSProperties = {
   fontWeight: 700,
   letterSpacing: "-0.01em",
   color: "#f8fafc",
+};
+
+/** Mesa destacada en KDS (legible a distancia). */
+const mesaChipStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  alignSelf: "flex-start",
+  padding: "6px 12px",
+  borderRadius: 999,
+  background: "#0f172a",
+  color: "#ffffff",
+  fontSize: 13,
+  fontWeight: 800,
+  letterSpacing: "0.04em",
+  lineHeight: 1,
+};
+
+const mesaChipArchiveStyle: CSSProperties = {
+  ...mesaChipStyle,
+  padding: "5px 10px",
+  fontSize: 12,
+};
+
+const archiveLineProductStyle: CSSProperties = {
+  fontSize: 15,
+  fontWeight: 800,
+  color: "#0f172a",
+  lineHeight: 1.3,
+  letterSpacing: "-0.02em",
+};
+
+const archiveLineSecondaryRowStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#64748b",
+  lineHeight: 1.35,
+};
+
+const archiveServedRowSurfaceStyle: CSSProperties = {
+  border: "1px solid rgba(148, 163, 184, 0.38)",
+  background: "rgba(248, 250, 252, 0.96)",
 };
 
 const badgeStyle: CSSProperties = {
@@ -499,8 +852,8 @@ type DecoratedLine = BoardLine & {
 function groupLinesByTable(lines: DecoratedLine[]): BoardTableGroup[] {
   const byKey = new Map<string, BoardTableGroup>();
   for (const line of lines) {
-    const { tableKey, tableLabel, ...rest } = line;
-    const bare: BoardLine = rest;
+    const { tableLabel, tableKey, ...rest } = line;
+    const bare: BoardLine = { ...rest, tableKey };
     let g = byKey.get(tableKey);
     if (!g) {
       g = {
@@ -677,11 +1030,11 @@ function getPassChunkClassName(label: string): string {
 }
 
 function getPassHeaderTextClassName(label: string): string {
-  if (label === "Bebidas") return "text-xs font-semibold text-blue-700 mb-1";
-  if (label === "Entrantes") return "text-xs font-semibold text-emerald-700 mb-1";
-  if (label === "Segundos") return "text-xs font-semibold text-orange-700 mb-1";
-  if (label === "Postres") return "text-xs font-semibold text-purple-700 mb-1";
-  return "text-xs font-semibold text-gray-500 mb-1";
+  if (label === "Bebidas") return "text-xs font-semibold text-blue-700";
+  if (label === "Entrantes") return "text-xs font-semibold text-emerald-700";
+  if (label === "Segundos") return "text-xs font-semibold text-orange-700";
+  if (label === "Postres") return "text-xs font-semibold text-purple-700";
+  return "text-xs font-semibold text-gray-500";
 }
 
 export default function OrderItemsBoard({
@@ -692,12 +1045,20 @@ export default function OrderItemsBoard({
   groupSentPasses = false,
   enablePreparePassBulk,
   passTypeLabelOverride,
+  ticketRailLayout = false,
+  kitchenHideServedColumn = false,
+  servedArchiveOpen = false,
+  onServedLineCountChange,
 }: OrderItemsBoardProps) {
-  const { restaurantId, ready: authReady } = useAuth();
+  const { restaurantId, ready: authReady, user } = useAuth();
   const { matchesOrder } = useOperationFilter();
   const [orders, setOrders] = useState<BoardOrder[]>([]);
   const ordersRef = useRef<BoardOrder[]>([]);
   ordersRef.current = orders;
+  /** Copia íntegra de `orders.items` por pedido (misma fuente que el snapshot; no pasa por `BoardItem`). */
+  const orderFirestoreItemsRef = useRef<
+    Record<string, Record<string, unknown>[]>
+  >({});
   const completedPrepTimesRef = useRef<number[]>([]);
   const lastPreparedRef = useRef<{ name: string; time: number }[]>([]);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
@@ -726,8 +1087,12 @@ export default function OrderItemsBoard({
       where("restaurantId", "==", restaurantId),
     );
     const unsub = onSnapshot(q, (snapshot) => {
+      const rawByOrderId: Record<string, Record<string, unknown>[]> = {};
       const next: BoardOrder[] = snapshot.docs.map((d) => {
         const data = d.data() as Record<string, unknown>;
+        rawByOrderId[d.id] = extractRawOrderItemsFromSnapshotField(
+          data.items,
+        );
         return {
           id: d.id,
           table:
@@ -743,10 +1108,24 @@ export default function OrderItemsBoard({
           items: readItemsArray(data.items),
         };
       });
+      orderFirestoreItemsRef.current = rawByOrderId;
       setOrders(next);
+    }, (err) => {
+      console.error(err);
+      logFirestorePermissionError(
+        {
+          file: "components/kds/order-items-board.tsx",
+          op: "onSnapshot",
+          path: `orders (where restaurantId==${restaurantId})`,
+          restaurantId,
+          uid: user?.uid ?? null,
+          email: user?.email ?? null,
+        },
+        err,
+      );
     });
     return () => unsub();
-  }, [authReady, restaurantId]);
+    }, [authReady, restaurantId, user]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 15000);
@@ -811,6 +1190,15 @@ export default function OrderItemsBoard({
     };
   }, [orders, itemFilter, matchesOrder]);
 
+  const servedLineCount = useMemo(
+    () => columns.served.reduce((acc, g) => acc + g.lines.length, 0),
+    [columns.served],
+  );
+
+  useEffect(() => {
+    onServedLineCountChange?.(servedLineCount);
+  }, [servedLineCount, onServedLineCountChange]);
+
   async function handleMarkNext(
     orderId: string,
     itemId: string,
@@ -818,51 +1206,43 @@ export default function OrderItemsBoard({
   ) {
     if (!isFirebaseConfigured) return;
     const order = ordersRef.current.find((o) => o.id === orderId);
-    if (!order) return;
+    if (!order) {
+      return;
+    }
     const key = `${orderId}:${itemId}`;
     if (busyItemIds[key]) return;
     setBusyItemIds((prev) => ({ ...prev, [key]: true }));
     const now = Date.now();
-    const nextItems: BoardItem[] = [];
-    for (const it of order.items) {
-      if (it.id !== itemId) {
-        nextItems.push(it);
-        continue;
-      }
-
-      const qty = typeof it.qty === "number" && Number.isFinite(it.qty) ? it.qty : 1;
-
-      // Si hay varias unidades, marcar solo 1 unidad avanzando estado.
-      if (qty > 1) {
-        nextItems.push({ ...it, qty: qty - 1 });
-        const newId = `${it.id}-${now}-${Math.random().toString(16).slice(2)}`;
-        const advanced: BoardItem = {
-          ...it,
-          id: newId,
-          qty: 1,
-          status: next,
-          ...(next === "prepared" ? { preparedAt: now } : { servedAt: now }),
-          createdAt: now,
-          updatedAt: now,
-        } as BoardItem & { createdAt?: number; updatedAt?: number };
-        nextItems.push(advanced);
-        continue;
-      }
-
-      // Mantener comportamiento actual para qty === 1.
-      if (next === "prepared") {
-        nextItems.push({ ...it, status: "prepared", preparedAt: now });
-      } else {
-        nextItems.push({ ...it, status: "served", servedAt: now });
-      }
-    }
+    const baseline = (
+      orderFirestoreItemsRef.current[orderId] ?? []
+    ).map(cloneFirestoreOrderLineRecord);
+    const rawNext = applyKitchenMarkNextToRawItems(
+      baseline,
+      itemId,
+      next,
+      now,
+    );
     try {
-      await updateDoc(
+      if (!rawNext) {
+        setActionError("No se pudo actualizar el pedido. Inténtalo otra vez.");
+        setTimeout(() => setActionError(null), 3000);
+        return;
+      }
+      const sanitizedItems = rawNext.map((row) => stripUndefinedDeep(row));
+
+      await dbgUpdateDoc(
         doc(db, "orders", orderId),
         cleanFirestoreData({
-          items: nextItems,
+          items: sanitizedItems,
           updatedAt: serverTimestamp(),
-        }),
+        }) as UpdateData<DocumentData>,
+        {
+          label: "order-items-board:handleMarkNext",
+          collection: "orders",
+          restaurantId,
+          orderId,
+          tableId: order.tableId ?? null,
+        },
       );
       if (next === "prepared") {
         const item = order.items.find((i) => i.id === itemId);
@@ -885,6 +1265,18 @@ export default function OrderItemsBoard({
       setTimeout(() => setActionSuccess(null), 1500);
     } catch (e) {
       console.error("OrderItemsBoard.handleMarkNext", e);
+      logFirestorePermissionError(
+        {
+          file: "components/kds/order-items-board.tsx",
+          op: "updateDoc",
+          path: `orders/${orderId}`,
+          restaurantId,
+          orderId,
+          uid: user?.uid ?? null,
+          email: user?.email ?? null,
+        },
+        e,
+      );
       setActionError("No se pudo actualizar el pedido. Inténtalo otra vez.");
       setTimeout(() => setActionError(null), 3000);
     } finally {
@@ -904,14 +1296,118 @@ export default function OrderItemsBoard({
     if (busyPassKey) return;
     const targets = lines.filter((l) => l.status === "sent");
     if (targets.length === 0) return;
+
+    const busyKeys = targets.map((t) => `${t.orderId}:${t.itemId}`);
+    setBusyItemIds((prev) => {
+      const next = { ...prev };
+      for (const k of busyKeys) next[k] = true;
+      return next;
+    });
     setBusyPassKey(passKey);
+
+    let updateFailed = false;
+
     try {
-      for (const line of targets) {
-        await handleMarkNext(line.orderId, line.itemId, "prepared");
+      const byOrder = new Map<string, BoardLine[]>();
+      for (const t of targets) {
+        const arr = byOrder.get(t.orderId) ?? [];
+        arr.push(t);
+        byOrder.set(t.orderId, arr);
       }
-      showBoardFeedback(message);
+
+      for (const [orderId, orderTargets] of byOrder) {
+        const order = ordersRef.current.find((o) => o.id === orderId);
+        if (!order) {
+          updateFailed = true;
+          continue;
+        }
+
+        const now = Date.now();
+        const baseline = (
+          orderFirestoreItemsRef.current[orderId] ?? []
+        ).map(cloneFirestoreOrderLineRecord);
+        let rawWorking = baseline;
+        let orderBuildOk = true;
+        for (const line of orderTargets) {
+          const advanced = applyKitchenAdvancePreparedToRawItems(
+            rawWorking,
+            line.itemId,
+            now,
+          );
+          if (advanced == null) {
+            orderBuildOk = false;
+            updateFailed = true;
+            break;
+          }
+          rawWorking = advanced;
+        }
+        if (!orderBuildOk) continue;
+
+        try {
+          const sanitizedItems = rawWorking.map((row) => stripUndefinedDeep(row));
+          await dbgUpdateDoc(
+            doc(db, "orders", orderId),
+            cleanFirestoreData({
+              items: sanitizedItems,
+              updatedAt: serverTimestamp(),
+            }) as UpdateData<DocumentData>,
+            {
+              label: "order-items-board:handlePreparePassChunk",
+              collection: "orders",
+              restaurantId,
+              orderId,
+              tableId: order.tableId ?? null,
+            },
+          );
+          for (const line of orderTargets) {
+            const item = order.items.find((i) => i.id === line.itemId);
+            if (!item) continue;
+            const sentAtMs = readMs(item.sentAt);
+            if (typeof sentAtMs === "number" && Number.isFinite(sentAtMs)) {
+              completedPrepTimesRef.current.push(now - sentAtMs);
+            }
+            const itemName = item.name || "Item";
+            lastPreparedRef.current.unshift({
+              name: itemName.trim() || "Item",
+              time: now,
+            });
+            if (lastPreparedRef.current.length > 5) {
+              lastPreparedRef.current.pop();
+            }
+          }
+        } catch (e) {
+          updateFailed = true;
+          console.error("OrderItemsBoard.handlePreparePassChunk", e);
+          logFirestorePermissionError(
+            {
+              file: "components/kds/order-items-board.tsx",
+              op: "updateDoc",
+              path: `orders/${orderId}`,
+              restaurantId,
+              orderId,
+              uid: user?.uid ?? null,
+              email: user?.email ?? null,
+            },
+            e,
+          );
+        }
+      }
+
+      if (!updateFailed) {
+        showBoardFeedback(message);
+        setActionSuccess("Pedido actualizado");
+        setTimeout(() => setActionSuccess(null), 1500);
+      } else {
+        setActionError("No se pudo actualizar el pedido. Inténtalo otra vez.");
+        setTimeout(() => setActionError(null), 3000);
+      }
     } finally {
       setBusyPassKey(null);
+      setBusyItemIds((prev) => {
+        const next = { ...prev };
+        for (const k of busyKeys) delete next[k];
+        return next;
+      });
     }
   }
 
@@ -942,13 +1438,68 @@ export default function OrderItemsBoard({
           {actionSuccess}
         </div>
       )}
-      <div style={boardStyle}>
+      {kitchenHideServedColumn && servedArchiveOpen ? (
+        <div
+          style={kitchenServedArchivePanelStyle}
+          className="ring-1 ring-emerald-500/15"
+          role="region"
+          aria-label="Histórico de líneas servidas"
+          id="kds-served-archive-panel"
+        >
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: "hidden",
+              padding: "10px 12px 12px",
+            }}
+          >
+            <BoardColumn
+              title="Servido"
+              count={servedLineCount}
+              groups={columns.served}
+              nowMs={nowMs}
+              showUrgency={false}
+              ticketRailLayout={ticketRailLayout}
+              railAccent="#475569"
+              compactArchiveColumn
+              archiveMuted
+              servedHistoryPresentation
+              action={null}
+              busyItemIds={busyItemIds}
+              onMark={handleMarkNext}
+              sentPassesGrouping={false}
+            />
+          </div>
+        </div>
+      ) : null}
+      <div
+        className={
+          ticketRailLayout && kitchenHideServedColumn
+            ? "flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+            : ticketRailLayout
+              ? "flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-3"
+              : undefined
+        }
+        style={
+          ticketRailLayout
+            ? { flex: 1, minHeight: 0, minWidth: 0 }
+            : kitchenHideServedColumn
+              ? { ...boardStyle, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }
+              : boardStyle
+        }
+      >
         <BoardColumn
           title="Pendiente"
           count={columns.sent.reduce((a, g) => a + g.lines.length, 0)}
           groups={columns.sent}
           nowMs={nowMs}
           showUrgency
+          ticketRailLayout={ticketRailLayout}
+          railVerticalBand={
+            ticketRailLayout && kitchenHideServedColumn ? "main" : undefined
+          }
+          railAccent="#38bdf8"
           showPendingColumnMetrics
           action={sentAction}
           busyItemIds={busyItemIds}
@@ -982,22 +1533,31 @@ export default function OrderItemsBoard({
           groups={columns.prepared}
           nowMs={nowMs}
           showUrgency
+          ticketRailLayout={ticketRailLayout}
+          railVerticalBand={
+            ticketRailLayout && kitchenHideServedColumn ? "compact" : undefined
+          }
+          railAccent="#fbbf24"
           action={preparedAction}
           busyItemIds={busyItemIds}
           onMark={handleMarkNext}
           sentPassesGrouping={false}
         />
-        <BoardColumn
-          title="Servido"
-          count={columns.served.reduce((a, g) => a + g.lines.length, 0)}
-          groups={columns.served}
-          nowMs={nowMs}
-          showUrgency={false}
-          action={null}
-          busyItemIds={busyItemIds}
-          onMark={handleMarkNext}
-          sentPassesGrouping={false}
-        />
+        {!kitchenHideServedColumn ? (
+          <BoardColumn
+            title="Servido"
+            count={columns.served.reduce((a, g) => a + g.lines.length, 0)}
+            groups={columns.served}
+            nowMs={nowMs}
+            showUrgency={false}
+            ticketRailLayout={ticketRailLayout}
+            railAccent="#64748b"
+            action={null}
+            busyItemIds={busyItemIds}
+            onMark={handleMarkNext}
+            sentPassesGrouping={false}
+          />
+        ) : null}
       </div>
       {boardFeedbackMessage && (
         <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
@@ -1017,6 +1577,7 @@ function BoardLineRow({
   action,
   busyItemIds,
   onMark,
+  servedArchiveLayout = false,
 }: {
   line: BoardLine;
   nowMs: number;
@@ -1028,9 +1589,107 @@ function BoardLineRow({
     itemId: string,
     next: "prepared" | "served",
   ) => void;
+  /** Histórico servidos en panel: mesa → producto → curso → tiempo servido. */
+  servedArchiveLayout?: boolean;
 }) {
   const minutes =
     line.sentAtMs != null ? Math.floor((nowMs - line.sentAtMs) / 60000) : 0;
+  const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
+  const isServeAction = action?.nextStatus === "served";
+  const servedMarkStyles: CSSProperties = isServeAction
+    ? {
+        color: "#14532d",
+        background: "rgba(34, 197, 94, 0.35)",
+        border: "1px solid rgba(22, 101, 52, 0.55)",
+        fontSize: 11,
+      }
+    : {};
+  const markLabel = isServeAction ? "Servir" : (action?.label ?? "");
+
+  const archiveProductRow =
+    servedArchiveLayout && line.status === "served";
+
+  if (archiveProductRow) {
+    const coursePart =
+      line.course >= 1 && line.course <= 4 ? getCourseLabel(line.course) : "";
+    const servedPhrase =
+      line.servedAtMs != null
+        ? `Servido hace ${formatMinutes(
+            (nowMs - line.servedAtMs) / 60000,
+          )}`
+        : "Servido";
+    const secondaryText = [coursePart, servedPhrase].filter(Boolean).join(" · ");
+    return (
+      <div
+        style={{
+          ...lineRowStyle,
+          ...archiveServedRowSurfaceStyle,
+          padding: "10px 12px",
+        }}
+      >
+        <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: 8,
+            }}
+          >
+            <span style={mesaChipArchiveStyle}>
+              {formatMesaChipLabel(line)}
+            </span>
+            <span style={archiveLineProductStyle}>
+              {displayLineProductLabel(line)}
+            </span>
+            <div style={archiveLineSecondaryRowStyle}>{secondaryText}</div>
+          </div>
+          {line.extras && line.extras.length > 0 ? (
+            <div
+              style={{
+                ...lineExtrasJoinedStyle,
+                marginTop: 6,
+                fontSize: 11,
+                opacity: 0.92,
+              }}
+            >
+              {line.extras.map((e) => `+ ${e.name}`).join(" · ")}
+            </div>
+          ) : null}
+          {line.removedIngredients && line.removedIngredients.length > 0 ? (
+            <div style={{ ...lineRemovedStyle, marginTop: 4, fontSize: 11 }}>
+              Sin: {line.removedIngredients.join(" · ")}
+            </div>
+          ) : null}
+          {line.note ? (
+            <div style={{ ...lineNoteStyle, marginTop: 4, fontSize: 11 }}>
+              Nota: {line.note}
+            </div>
+          ) : null}
+        </div>
+        {action ? (
+          <button
+            type="button"
+            disabled={busy}
+            style={{
+              ...markButtonStyle,
+              ...servedMarkStyles,
+              alignSelf: "center",
+              flexShrink: 0,
+              opacity: busy ? 0.6 : 1,
+              cursor: busy ? "progress" : "pointer",
+            }}
+            onClick={() =>
+              onMark(line.orderId, line.itemId, action.nextStatus)
+            }
+          >
+            {busy ? (action.busyLabel ?? "Guardando…") : markLabel}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   let itemBorder = "1px solid #e5e7eb"; // gray-200
   let itemBg = "#ffffff";
   if (minutes >= 10) {
@@ -1040,7 +1699,6 @@ function BoardLineRow({
     itemBorder = "1px solid #fb923c";
     itemBg = "#fff7ed";
   }
-  const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
   return (
     <div
       style={{
@@ -1055,9 +1713,23 @@ function BoardLineRow({
             display: "flex",
             flexDirection: "column",
             alignItems: "stretch",
-            gap: 2,
+            gap: 6,
           }}
         >
+          <span style={mesaChipStyle}>{formatMesaChipLabel(line)}</span>
+          {line.course >= 1 && line.course <= 4 ? (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#64748b",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}
+            >
+              {getCourseLabel(line.course)}
+            </span>
+          ) : null}
           <div
             style={{
               display: "flex",
@@ -1111,6 +1783,7 @@ function BoardLineRow({
           disabled={busy}
           style={{
             ...markButtonStyle,
+            ...servedMarkStyles,
             alignSelf: "center",
             flexShrink: 0,
             opacity: busy ? 0.6 : 1,
@@ -1120,7 +1793,7 @@ function BoardLineRow({
             onMark(line.orderId, line.itemId, action.nextStatus)
           }
         >
-          {busy ? (action.busyLabel ?? "Guardando…") : action.label}
+          {busy ? (action.busyLabel ?? "Guardando…") : markLabel}
         </button>
       ) : null}
     </div>
@@ -1148,12 +1821,30 @@ function BoardColumn({
   recentPreparedEntries = [],
   onClearRecentPrepared,
   recentPreparedClearedFeedback = false,
+  ticketRailLayout = false,
+  railAccent,
+  archiveMuted = false,
+  compactArchiveColumn = false,
+  servedHistoryPresentation = false,
+  railVerticalBand,
 }: {
   title: string;
   count: number;
   groups: BoardTableGroup[];
   nowMs: number;
   showUrgency: boolean;
+  /** Cocina: carril horizontal de tickets por columna. */
+  ticketRailLayout?: boolean;
+  /** Borde de acento izquierdo en modo rail (solo UI). */
+  railAccent?: string;
+  /** Vistas archivo/histórico (servidos en panel). */
+  archiveMuted?: boolean;
+  /** Ocupa alto disponible dentro del panel archivo (flex). */
+  compactArchiveColumn?: boolean;
+  /** Panel histórico servidos: sin cabecera de columna duplicada y líneas con énfasis en producto. */
+  servedHistoryPresentation?: boolean;
+  /** Cocina vertical: franja superior (Pendiente) vs inferior más compacta (Listo). */
+  railVerticalBand?: "main" | "compact";
   /** Cocina/Barra: chips de métricas sobre la columna enviados pendientes. */
   showPendingColumnMetrics?: boolean;
   /** Media de tiempo sent→prepared en esta sesión (solo memoria cliente). */
@@ -1286,20 +1977,108 @@ function BoardColumn({
     return bScore - aScore;
   });
 
+  const resolvedColumnStyle: CSSProperties = {
+    ...columnStyle,
+    ...(compactArchiveColumn
+      ? { flex: 1, minHeight: 0, maxHeight: "100%", minWidth: 0 }
+      : {}),
+    ...(ticketRailLayout && railAccent
+      ? { borderLeft: `4px solid ${railAccent}` }
+      : {}),
+    ...(archiveMuted
+      ? {
+          background: "rgba(15, 23, 42, 0.42)",
+          borderColor: "rgba(71, 85, 105, 0.38)",
+        }
+      : {}),
+  };
+  let resolvedTitleStyle: CSSProperties = ticketRailLayout
+    ? { ...columnTitleStyle, fontSize: 13, letterSpacing: "0.1em" }
+    : columnTitleStyle;
+  if (ticketRailLayout && railVerticalBand === "main") {
+    resolvedTitleStyle = {
+      ...resolvedTitleStyle,
+      fontSize: 14,
+      letterSpacing: "0.11em",
+    };
+  }
+  if (archiveMuted) {
+    resolvedTitleStyle = {
+      ...resolvedTitleStyle,
+      color: "#86efac",
+      opacity: 0.84,
+      fontSize: ticketRailLayout ? 12 : (resolvedTitleStyle.fontSize ?? 12),
+    };
+  }
+  let resolvedHeaderStyle: CSSProperties = ticketRailLayout
+    ? { ...columnHeaderStyle, paddingTop: 12, paddingBottom: 12 }
+    : columnHeaderStyle;
+  if (archiveMuted) {
+    resolvedHeaderStyle = {
+      ...resolvedHeaderStyle,
+      borderBottom: "1px solid rgba(71, 85, 105, 0.35)",
+      background: "rgba(21, 32, 28, 0.42)",
+    };
+  }
+  if (ticketRailLayout && railVerticalBand === "compact") {
+    resolvedHeaderStyle = {
+      ...resolvedHeaderStyle,
+      paddingTop: 10,
+      paddingBottom: 10,
+    };
+  }
+  const columnBodyMerged: CSSProperties = ticketRailLayout
+    ? {
+        ...columnBodyStyle,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        gap: railVerticalBand === "compact" ? 8 : 10,
+        paddingLeft: 0,
+        paddingRight: 0,
+        paddingBottom: 0,
+        paddingTop: servedHistoryPresentation ? 6 : railVerticalBand === "compact" ? 8 : 10,
+      }
+    : columnBodyStyle;
+  const ticketRailInnerStyle: CSSProperties = ticketRailLayout
+    ? groups.length === 0
+      ? ticketRailEmptyAreaStyle
+      : ticketRailStripStyle
+    : ticketRailInnerLegacyStyle;
+
   return (
-    <div style={columnStyle}>
-      <div style={columnHeaderStyle}>
-        <h3 style={columnTitleStyle}>{title}</h3>
+    <div
+      style={resolvedColumnStyle}
+      className={
+        ticketRailLayout
+          ? compactArchiveColumn
+            ? "flex w-full min-w-0 flex-1 lg:min-h-0 min-h-0 max-h-full flex-col"
+            : railVerticalBand === "main"
+              ? "flex w-full min-w-0 flex-[2_1_0] basis-0 flex-col min-h-[240px] sm:min-h-[260px]"
+              : railVerticalBand === "compact"
+                ? "flex w-full min-w-0 flex-[1_1_0] basis-0 flex-col min-h-[200px] border-t border-white/10 pt-0.5 sm:min-h-[220px]"
+                : "flex w-full min-w-0 flex-1 lg:min-h-0 min-h-[260px] flex-col"
+          : compactArchiveColumn
+            ? "flex min-h-0 flex-1 flex-col min-w-0"
+            : undefined
+      }
+    >
+      {!servedHistoryPresentation ? (
+      <div style={resolvedHeaderStyle}>
+        <h3 style={resolvedTitleStyle}>{title}</h3>
         <span style={columnCountStyle}>{count}</span>
       </div>
-      <div style={columnBodyStyle}>
+      ) : null}
+      <div style={columnBodyMerged}>
         {showPendingColumnMetrics &&
         (pendingCount > 0 ||
           completedSessionPrepAvgMs != null ||
           sessionPrepResetFeedback ||
           recentPreparedEntries.length > 0 ||
           recentPreparedClearedFeedback) ? (
-          <div className="mb-3">
+          <div
+            className={ticketRailLayout ? "mb-2 px-2.5" : "mb-3"}
+          >
             {stationStatus ? (
               <div
                 className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStationStatusClass(stationStatus)}`}
@@ -1386,6 +2165,7 @@ function BoardColumn({
             ) : null}
           </div>
         ) : null}
+        <div style={ticketRailInnerStyle}>
         {groups.length === 0 ? (
           <div style={emptyColumnStyle}>—</div>
         ) : (
@@ -1448,12 +2228,22 @@ function BoardColumn({
                 className={`transition-all duration-300${
                   cardUrgencyClass ? ` border ${cardUrgencyClass}` : ""
                 }`.trim()}
-                style={tableCardStyle}
+                style={{
+                  ...tableCardStyle,
+                  ...(ticketRailLayout
+                    ? {
+                        ...ticketRailCardWrapStyle,
+                        ...(archiveMuted
+                          ? archiveTicketChromeStyle
+                          : ticketRailCardChromeStyle),
+                      }
+                    : {}),
+                }}
               >
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     justifyContent: "space-between",
                     gap: 8,
                   }}
@@ -1461,24 +2251,42 @@ function BoardColumn({
                   <div
                     style={{
                       display: "flex",
-                      alignItems: "center",
+                      flexDirection: "column",
+                      alignItems: "stretch",
                       gap: 8,
                       minWidth: 0,
                       flex: "1 1 auto",
                     }}
                   >
-                    <h4 style={tableTitleStyle}>{g.tableLabel}</h4>
-                    {urgencyLabel ? (
-                      <span
-                        className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          urgencyLabel === "Urgente"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-orange-100 text-orange-700"
-                        }`}
-                      >
-                        {urgencyLabel}
-                      </span>
-                    ) : null}
+                    <span style={mesaChipStyle}>
+                      {formatMesaChipLabel({
+                        mesaRowText: g.tableLabel,
+                        tableKey: g.tableKey,
+                      })}
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <h4 style={{ ...tableTitleStyle, fontWeight: 600, opacity: 0.92 }}>
+                        {g.tableLabel}
+                      </h4>
+                      {urgencyLabel ? (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                            urgencyLabel === "Urgente"
+                              ? "border-red-300/80 bg-transparent text-red-600"
+                              : "border-orange-300/80 bg-transparent text-orange-700"
+                          }`}
+                        >
+                          {urgencyLabel}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   {showUrgency && g.oldestSentAtMs != null ? (
                     <span
@@ -1492,6 +2300,15 @@ function BoardColumn({
                     </span>
                   ) : null}
                 </div>
+                {ticketRailLayout ? (
+                  <div
+                    style={{
+                      margin: "6px 0 10px",
+                      borderTop: "1px dashed rgba(148, 163, 184, 0.45)",
+                    }}
+                    aria-hidden
+                  />
+                ) : null}
                 <div
                   className={
                     sortedPassChunks != null ? "flex flex-col space-y-2" : undefined
@@ -1534,6 +2351,7 @@ function BoardColumn({
                       );
                       const passKey = `${g.tableKey}-pase-${originalIndex}`;
                       const passPrepareBusy = busyPassKey === passKey;
+                      const passMesaHeadline = passChunkMesaSummary(chunk);
                       return (
                       <div
                         key={`${g.tableKey}-pase-${originalIndex}`}
@@ -1543,37 +2361,46 @@ function BoardColumn({
                       >
                         <div className="mb-1 flex items-start justify-between gap-2">
                           <div
-                            className={`min-w-0 flex-1 ${getPassHeaderTextClassName(passTypeLabel)}${
-                              isPassFullyPrepared ? " opacity-60" : ""
+                            className={`min-w-0 flex-1 flex flex-col gap-1.5 ${
+                              isPassFullyPrepared ? "opacity-60" : ""
                             }`}
                           >
-                            Pase {originalIndex + 1}
-                            {` · ${passTypeLabel}`}
-                            {oldestSent != null
-                              ? ` · ${formatPassSentClockHm(oldestSent)}`
-                              : null}
-                            {` · ${progressLabel}`}
-                            {!isPassFullyPrepared &&
-                            passElapsedMs != null &&
-                            Number.isFinite(passElapsedMs) &&
-                            passElapsedMs >= 0 ? (
-                              <span
-                                className={`ml-2 text-xs ${passElapsedUrgencyTextClassFromMs(passElapsedMs)}`}
-                              >
-                                · {formatPassElapsedMinutesFromMs(passElapsedMs)}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span style={mesaChipStyle}>{passMesaHeadline}</span>
+                              <span className="text-sm font-extrabold text-slate-800 tracking-tight">
+                                Pase {originalIndex + 1}
+                                {` · ${progressLabel}`}
                               </span>
-                            ) : null}
-                            {isPassFullyPrepared ? (
-                              <>
-                                {` · Completado`}
-                                <span className="ml-1 text-green-600">✓</span>
-                              </>
-                            ) : (
-                              <>
-                                {` · `}
-                                <span className="ml-1 text-orange-600">Pendiente</span>
-                              </>
-                            )}
+                            </div>
+                            <div className={getPassHeaderTextClassName(passTypeLabel)}>
+                              {passTypeLabel}
+                              {oldestSent != null
+                                ? ` · ${formatPassSentClockHm(oldestSent)}`
+                                : null}
+                              {!isPassFullyPrepared &&
+                              passElapsedMs != null &&
+                              Number.isFinite(passElapsedMs) &&
+                              passElapsedMs >= 0 ? (
+                                <span
+                                  className={`ml-1 text-xs ${passElapsedUrgencyTextClassFromMs(passElapsedMs)}`}
+                                >
+                                  · {formatPassElapsedMinutesFromMs(passElapsedMs)}
+                                </span>
+                              ) : null}
+                              {isPassFullyPrepared ? (
+                                <>
+                                  {` · Completado`}
+                                  <span className="ml-1 text-green-600">✓</span>
+                                </>
+                              ) : (
+                                <>
+                                  {` · `}
+                                  <span className="ml-1 text-orange-600">
+                                    Pendiente
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                           {onPreparePassChunk &&
                           action &&
@@ -1610,6 +2437,7 @@ function BoardColumn({
                               action={action}
                               busyItemIds={busyItemIds}
                               onMark={onMark}
+                              servedArchiveLayout={servedHistoryPresentation}
                             />
                           ))}
                         </div>
@@ -1619,6 +2447,7 @@ function BoardColumn({
                   ) : (
                     courseSections.map((section) => (
                       <div key={section.label} style={{ display: "grid", gap: 6 }}>
+                        {!servedHistoryPresentation ? (
                         <div
                           style={{
                             fontSize: 11,
@@ -1631,6 +2460,7 @@ function BoardColumn({
                         >
                           {section.label}
                         </div>
+                        ) : null}
                         {section.lines.map((line) => (
                           <BoardLineRow
                             key={`${line.orderId}:${line.itemId}`}
@@ -1640,6 +2470,7 @@ function BoardColumn({
                             action={action}
                             busyItemIds={busyItemIds}
                             onMark={onMark}
+                            servedArchiveLayout={servedHistoryPresentation}
                           />
                         ))}
                       </div>
@@ -1650,6 +2481,7 @@ function BoardColumn({
             );
           })
         )}
+        </div>
       </div>
     </div>
   );

@@ -2,16 +2,13 @@
 
 import {
   collection,
-  deleteDoc,
   deleteField,
   doc,
   serverTimestamp,
-  setDoc,
   writeBatch,
-  updateDoc,
   type DocumentData,
 } from "firebase/firestore";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   useCallback,
   useEffect,
@@ -20,9 +17,34 @@ import {
   useRef,
   useState,
 } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  BedDouble,
+  BedSingle,
+  Circle,
+  DoorOpen,
+  Flower2,
+  Layers3,
+  Maximize2,
+  Minus,
+  MousePointer2,
+  Plus,
+  RectangleHorizontal,
+  Scan,
+  Square,
+  Waves,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
-import { EditableFloorMap } from "@/components/map/EditableFloorMap";
+import {
+  EditableFloorMap,
+  type FloorPlanCanvasSize,
+  type FloorSurfacePresetId,
+  type EditableFloorMapViewportControls,
+} from "@/components/map/EditableFloorMap";
+import MapFloatingQuickActions, {
+  type ScreenRect,
+} from "@/components/map/MapFloatingQuickActions";
 import ModulePageShell from "@/components/module-page-shell";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import {
@@ -36,14 +58,22 @@ import {
 import {
   createDefaultFloorPlanIfNeeded,
   createFloorPlan,
+  DEFAULT_FLOOR_PLAN_HEIGHT,
+  DEFAULT_FLOOR_PLAN_WIDTH,
   getFloorPlans,
   type FloorPlan,
 } from "@/lib/firestore/floorPlans";
 import {
+  createZone,
   getZones,
   updateZone,
   type Zone,
 } from "@/lib/firestore/zones";
+import {
+  defaultZoneColorForTemplate,
+  getAreaTemplateFurniture,
+  type AreaTemplateKey,
+} from "@/lib/map/area-template-furniture";
 
 const fieldLabelStyle: CSSProperties = {
   display: "block",
@@ -56,6 +86,65 @@ const fieldLabelStyle: CSSProperties = {
 
 const fieldBlock: CSSProperties = {
   marginBottom: 10,
+};
+
+const inspectorPremiumDivider: CSSProperties = {
+  height: 1,
+  margin: "4px 0 6px",
+  border: "none",
+  background: "rgba(148, 163, 184, 0.07)",
+};
+
+const inspectorCfgDivider: CSSProperties = {
+  height: 1,
+  margin: "6px 0 8px",
+  border: "none",
+  background: "#e7e0d6",
+};
+
+const inspectorPremiumLabel: CSSProperties = {
+  display: "block",
+  fontSize: 8.5,
+  fontWeight: 700,
+  color: "#64748b",
+  marginBottom: 3,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const inspectorPremiumInput: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 7,
+  border: "1px solid rgba(148, 163, 184, 0.12)",
+  background: "rgba(15, 23, 42, 0.32)",
+  color: "#f1f5f9",
+  padding: "4px 6px",
+  fontSize: 11.5,
+  outline: "none",
+};
+
+const inspectorMapLayoutLabel: CSSProperties = {
+  display: "block",
+  fontSize: 9,
+  fontWeight: 600,
+  color: "#64748b",
+  marginBottom: 4,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+};
+
+const inspectorMapLayoutInput: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 6,
+  border: "1px solid #e7e0d6",
+  background: "#fffdf9",
+  color: "#0f172a",
+  padding: "4px 8px",
+  fontSize: 12,
+  fontWeight: 500,
+  outline: "none",
 };
 
 const inputStyle: CSSProperties = {
@@ -130,13 +219,13 @@ const zoneHighlightSelectStyle: CSSProperties = {
 };
 
 const smallBtn: CSSProperties = {
-  padding: "7px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "rgba(15, 23, 42, 0.45)",
-  color: "#e2e8f0",
+  padding: "5px 10px",
+  borderRadius: 8,
+  border: "1px solid rgba(148, 163, 184, 0.2)",
+  background: "rgba(15, 23, 42, 0.35)",
+  color: "#cbd5e1",
   fontWeight: 600,
-  fontSize: 13,
+  fontSize: 12,
   cursor: "pointer",
   whiteSpace: "nowrap",
 };
@@ -158,38 +247,368 @@ const smallBtnActive: CSSProperties = {
 
 const primaryBtn: CSSProperties = {
   ...smallBtn,
-  border: "1px solid rgba(56, 189, 248, 0.35)",
-  background: "rgba(56, 189, 248, 0.18)",
+  border: "1px solid rgba(56, 189, 248, 0.32)",
+  background: "rgba(56, 189, 248, 0.16)",
   color: "#e0f2fe",
-  fontWeight: 800,
+  fontWeight: 700,
 };
 
 const unsavedBadgeStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 6,
-  padding: "6px 10px",
+  gap: 5,
+  padding: "4px 8px",
   borderRadius: 999,
-  border: "1px solid rgba(249, 115, 22, 0.35)",
-  background: "rgba(249, 115, 22, 0.14)",
+  border: "1px solid rgba(249, 115, 22, 0.28)",
+  background: "rgba(249, 115, 22, 0.1)",
   color: "#fed7aa",
-  fontWeight: 700,
-  fontSize: 12,
+  fontWeight: 600,
+  fontSize: 11,
   whiteSpace: "nowrap",
 };
+
+const unsavedBadgeCompactStyle: CSSProperties = {
+  ...unsavedBadgeStyle,
+  padding: "2px 6px",
+  fontSize: 9,
+  gap: 3,
+};
+
+/** Pill “Sin guardar” en cabecera del editor de plano (config clara, mínima). */
+const mapEditorUnsavedPillStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "1px 7px",
+  borderRadius: 999,
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+  color: "#64748b",
+  fontWeight: 500,
+  fontSize: 10,
+  letterSpacing: "0.01em",
+  whiteSpace: "nowrap",
+};
+
+/** Guardar integrado en toolbar premium (protagonismo mapa). */
+const premiumToolbarSaveBtn: CSSProperties = {
+  padding: "3px 9px",
+  borderRadius: 6,
+  border: "1px solid rgba(71, 85, 105, 0.55)",
+  background: "rgba(51, 65, 85, 0.95)",
+  color: "#f1f5f9",
+  fontWeight: 700,
+  fontSize: 9,
+  letterSpacing: "-0.01em",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+};
+
+const premiumToolbarResetBtn: CSSProperties = {
+  ...premiumToolbarSaveBtn,
+  borderColor: "rgba(71, 85, 105, 0.42)",
+  background: "rgba(30, 41, 59, 0.75)",
+  color: "#94a3b8",
+  fontWeight: 600,
+};
+
+const premiumToolbarDiscardBtn: CSSProperties = {
+  padding: "2px 6px",
+  borderRadius: 5,
+  border: "1px solid transparent",
+  background: "transparent",
+  color: "#64748b",
+  fontWeight: 600,
+  fontSize: 9,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+/** Barra mínima encima del lienzo (solo preset premium). */
+const premiumUltraPlanBarStyle: CSSProperties = {
+  marginBottom: 2,
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: 6,
+  minHeight: 28,
+  minWidth: 0,
+  padding: "2px 8px",
+  borderRadius: 10,
+  border: "1px solid rgba(148, 163, 184, 0.08)",
+  background: "rgba(15, 23, 42, 0.42)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 22px rgba(2, 6, 23, 0.14)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+  boxSizing: "border-box",
+};
+
+const premiumPopoverSectionLabel: CSSProperties = {
+  marginTop: 8,
+  marginBottom: 4,
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: "0.1em",
+  color: "#64748b",
+  textTransform: "uppercase",
+};
+
+const premiumMenuActionRow: CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  padding: "6px 8px",
+  borderRadius: 8,
+  border: "1px solid rgba(148, 163, 184, 0.08)",
+  background: "rgba(30, 41, 59, 0.4)",
+  color: "#e2e8f0",
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: "pointer",
+  marginBottom: 4,
+  boxSizing: "border-box",
+};
+
+const premiumFabPlusStyle: CSSProperties = {
+  width: 40,
+  height: 40,
+  borderRadius: 12,
+  border: "1px solid rgba(148, 163, 184, 0.14)",
+  background: "rgba(15, 23, 42, 0.78)",
+  color: "#f1f5f9",
+  fontSize: 24,
+  fontWeight: 200,
+  lineHeight: 1,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flex: "none",
+  boxShadow:
+    "0 4px 22px rgba(2, 6, 23, 0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+};
+
+const premiumPopoverPanelStyle: CSSProperties = {
+  width: 268,
+  maxHeight: "min(420px, 72vh)",
+  overflow: "auto",
+  padding: "8px 8px 10px",
+  borderRadius: 12,
+  border: "1px solid rgba(148, 163, 184, 0.12)",
+  background: "rgba(15, 23, 42, 0.94)",
+  boxShadow: "0 16px 48px rgba(2, 6, 23, 0.5)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  boxSizing: "border-box",
+};
+
+const mapToolboxAsideStyle: CSSProperties = {
+  flex: "0 0 168px",
+  width: 168,
+  maxWidth: 168,
+  minHeight: 0,
+  overflowY: "auto",
+  overflowX: "hidden",
+  boxSizing: "border-box",
+  padding: "12px 10px 14px",
+  background: "#f3f7fb",
+  borderRight: "1px solid var(--hostly-line)",
+};
+
+const mapToolboxMicro: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 650,
+  letterSpacing: "0.09em",
+  textTransform: "uppercase",
+  color: "#64748b",
+  margin: "0 0 7px",
+};
+
+const mapToolboxTopCard: CSSProperties = {
+  borderRadius: 12,
+  padding: 8,
+  marginBottom: 16,
+  background: "rgba(255, 255, 255, 0.76)",
+  border: "1px solid var(--hostly-line)",
+  boxShadow: "none",
+};
+
+const mapToolboxSelect: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  outline: "none",
+  fontSize: 11,
+  padding: "6px 8px",
+  marginBottom: 8,
+  borderRadius: 8,
+  border: "1px solid var(--hostly-line)",
+  background: "rgba(255, 255, 255, 0.84)",
+  color: "#0f172a",
+  cursor: "pointer",
+};
+
+const mapToolboxRow2: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 4,
+};
+
+const mapToolboxSaveSm: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  padding: "5px 8px",
+  borderRadius: 6,
+  border: "1px solid #7dd3fc",
+  background: "#f5efe5",
+  color: "#5f4b32",
+  cursor: "pointer",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+};
+
+const mapToolboxGhostSm: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  padding: "5px 8px",
+  borderRadius: 6,
+  border: "1px solid var(--hostly-line)",
+  background: "#ffffff",
+  color: "#475569",
+  cursor: "pointer",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+};
+
+/** Rail configuración: añadir en 2 columnas, compacto y legible. */
+const mapToolboxAddGrid2: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 5,
+  marginBottom: 16,
+};
+
+const mapToolboxChipsRow: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+  marginBottom: 18,
+};
+
+const mapToolboxSectionBtn: CSSProperties = {
+  width: "100%",
+  minHeight: 30,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  padding: "6px 0",
+  margin: 0,
+  border: "none",
+  background: "transparent",
+  color: "#334155",
+  cursor: "pointer",
+  fontSize: 10,
+  fontWeight: 750,
+  letterSpacing: "0.09em",
+  textTransform: "uppercase",
+};
+
+const mapToolboxSectionPanel: CSSProperties = {
+  overflow: "hidden",
+  transition: "grid-template-rows 150ms ease, opacity 150ms ease",
+};
+
+const mapFloorSwatchGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 1fr)",
+  gap: 6,
+  marginBottom: 16,
+};
+
+const mapToolboxVistaGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 6,
+  marginBottom: 10,
+};
+
+const mapToolboxFullMuted: CSSProperties = {
+  width: "100%",
+  fontSize: 11,
+  fontWeight: 600,
+  padding: "6px 8px",
+  borderRadius: 6,
+  border: "1px solid var(--hostly-line)",
+  background: "#ffffff",
+  color: "#475569",
+  cursor: "pointer",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+};
+
+const mapRailActionCaption: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 500,
+  lineHeight: 1.15,
+  color: "#475569",
+  letterSpacing: "0.01em",
+};
+
+/** Inspector: acciones inferiores compactas (ruta configuración mapa). */
+const inspectorCfgFooterBtn: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "100%",
+  padding: "6px 8px",
+  borderRadius: 6,
+  border: "1px solid #e7e0d6",
+  background: "#fffdf9",
+  color: "#334155",
+  fontWeight: 600,
+  fontSize: 11,
+  cursor: "pointer",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+  transition: "background-color 140ms ease, border-color 140ms ease, color 140ms ease",
+};
+
+const inspectorCfgFooterDelete: CSSProperties = {
+  ...inspectorCfgFooterBtn,
+  border: "1px solid #f0c9c9",
+  background: "#fff7f5",
+  color: "#be123c",
+  fontWeight: 600,
+  transition:
+    "background-color 140ms ease, border-color 140ms ease, color 140ms ease",
+};
+
+function mapToolboxChipStyle(disabled: boolean): CSSProperties {
+  return {
+    fontSize: 10,
+    fontWeight: 600,
+    padding: "4px 9px",
+    borderRadius: 999,
+    border: "1px solid var(--hostly-line)",
+    background: "#ffffff",
+    color: "#475569",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+    whiteSpace: "nowrap",
+  };
+}
 
 /** Barra principal del editor: acciones colocar + guardar. */
 const editorTopBarStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
   alignItems: "center",
-  gap: 8,
-  rowGap: 8,
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.55)",
-  marginBottom: 8,
+  gap: 6,
+  rowGap: 6,
+  padding: "6px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(148, 163, 184, 0.14)",
+  background: "rgba(15, 23, 42, 0.42)",
+  marginBottom: 4,
   boxSizing: "border-box",
 };
 
@@ -198,24 +617,107 @@ const editorSecondaryStripStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
   alignItems: "center",
-  gap: 6,
-  rowGap: 6,
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.14)",
-  background: "rgba(15, 23, 42, 0.32)",
-  marginBottom: 12,
+  gap: 5,
+  rowGap: 5,
+  padding: "5px 8px",
+  borderRadius: 9,
+  border: "1px solid rgba(148, 163, 184, 0.1)",
+  background: "rgba(15, 23, 42, 0.26)",
+  marginBottom: 6,
   boxSizing: "border-box",
 };
 
+/** Barra única del preset espacial premium (ruta configuración → espacios → mesas). */
+const editorPremiumBarStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: 1,
+  rowGap: 1,
+  minHeight: 36,
+  padding: "1px 4px",
+  borderRadius: 6,
+  border: "1px solid rgba(148, 163, 184, 0.05)",
+  background: "rgba(2, 6, 23, 0.26)",
+  marginBottom: 0,
+  boxSizing: "border-box",
+};
+
+const editorPremiumSecondaryStyle: CSSProperties = {
+  ...editorSecondaryStripStyle,
+  border: "1px solid rgba(148, 163, 184, 0.06)",
+  background: "rgba(15, 23, 42, 0.12)",
+  marginBottom: 2,
+  minHeight: 32,
+  boxSizing: "border-box",
+  padding: "1px 4px",
+  gap: 2,
+  rowGap: 2,
+};
+
+function EditorToolbarGroup({
+  label,
+  children,
+  compact = false,
+}: {
+  label: string;
+  children: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: compact ? 0 : 2,
+        padding: compact ? "0 1px 0 2px" : "2px 4px 2px 5px",
+        borderRadius: 6,
+        border: "1px solid rgba(148, 163, 184, 0.05)",
+        background: "rgba(15, 23, 42, 0.14)",
+        boxSizing: "border-box",
+        minHeight: 24,
+      }}
+    >
+      <span
+        style={{
+          fontSize: compact ? 5.5 : 6.5,
+          fontWeight: 600,
+          letterSpacing: "0.12em",
+          color: "rgba(71, 85, 105, 0.72)",
+          textTransform: "uppercase",
+          paddingRight: compact ? 2 : 4,
+          marginRight: 0,
+          borderRight: "1px solid rgba(148, 163, 184, 0.1)",
+          lineHeight: 1.1,
+        }}
+      >
+        {label}
+      </span>
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: compact ? 0 : 2,
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 const topBarMesaBtn: CSSProperties = {
-  padding: "6px 12px",
+  padding: "5px 10px",
   borderRadius: 8,
-  border: "1px solid rgba(56, 189, 248, 0.38)",
-  background: "rgba(56, 189, 248, 0.16)",
-  color: "#e0f2fe",
-  fontWeight: 700,
-  fontSize: 12,
+  border: "1px solid rgba(56, 189, 248, 0.32)",
+  background: "rgba(56, 189, 248, 0.12)",
+  color: "#bae6fd",
+  fontWeight: 600,
+  fontSize: 11,
   letterSpacing: "-0.02em",
   cursor: "pointer",
   whiteSpace: "nowrap",
@@ -227,6 +729,27 @@ const topBarMesaBtnActive: CSSProperties = {
   boxShadow: "inset 0 0 0 1px rgba(56, 189, 248, 0.25)",
 };
 
+/** Mesa en toolbar premium: menos “neon”, más editorial. */
+const premiumTopBarMesaBtn: CSSProperties = {
+  padding: "3px 8px",
+  borderRadius: 7,
+  border: "1px solid rgba(71, 85, 105, 0.55)",
+  background: "rgba(30, 41, 59, 0.65)",
+  color: "#e2e8f0",
+  fontWeight: 600,
+  fontSize: 9.5,
+  letterSpacing: "-0.01em",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const premiumTopBarMesaBtnActive: CSSProperties = {
+  ...premiumTopBarMesaBtn,
+  border: "1px solid rgba(148, 163, 184, 0.45)",
+  background: "rgba(51, 65, 85, 0.9)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+};
+
 const decorativeSelectStyle: CSSProperties = {
   ...zoneHighlightSelectStyle,
   minWidth: 148,
@@ -235,13 +758,13 @@ const decorativeSelectStyle: CSSProperties = {
 };
 
 const miniToolBtn: CSSProperties = {
-  padding: "5px 9px",
-  borderRadius: 8,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "rgba(15, 23, 42, 0.4)",
-  color: "#e2e8f0",
+  padding: "4px 8px",
+  borderRadius: 7,
+  border: "1px solid rgba(148, 163, 184, 0.18)",
+  background: "rgba(15, 23, 42, 0.32)",
+  color: "#cbd5e1",
   fontWeight: 600,
-  fontSize: 12,
+  fontSize: 11,
   cursor: "pointer",
   whiteSpace: "nowrap",
 };
@@ -261,15 +784,41 @@ const miniToolBtnActive: CSSProperties = {
   fontWeight: 700,
 };
 
+const premiumMiniToolBtn: CSSProperties = {
+  ...miniToolBtn,
+  padding: "1px 4px",
+  fontSize: 8.5,
+  borderRadius: 6,
+};
+
+const premiumMiniToolBtnActive: CSSProperties = {
+  ...miniToolBtn,
+  padding: "1px 4px",
+  fontSize: 8.5,
+  borderRadius: 6,
+  border: "1px solid rgba(100, 116, 139, 0.45)",
+  background: "rgba(51, 65, 85, 0.55)",
+  color: "#e2e8f0",
+  fontWeight: 700,
+};
+
+/** Chips compactos “plantilla de área” (solo toolbar premium). */
+const areaTemplateChip: CSSProperties = {
+  ...premiumMiniToolBtn,
+  fontSize: 7.5,
+  padding: "1px 4px",
+  letterSpacing: "0.01em",
+};
+
 const sidePanelStyle: CSSProperties = {
-  flex: "0 0 270px",
-  width: 270,
+  flex: "0 0 228px",
+  width: 228,
   maxWidth: "100%",
-  minWidth: 240,
+  minWidth: 200,
   boxSizing: "border-box",
   display: "flex",
   flexDirection: "column",
-  padding: "11px 11px 10px",
+  padding: "9px 9px 8px",
   borderRadius: "var(--hostly-radius-md)",
   alignSelf: "stretch",
   overflow: "hidden",
@@ -277,7 +826,7 @@ const sidePanelStyle: CSSProperties = {
 
 const sidePanelTitleStyle: CSSProperties = {
   fontSize: 11,
-  fontWeight: 750,
+  fontWeight: 700,
   letterSpacing: "0.06em",
   textTransform: "uppercase",
   color: "#94a3b8",
@@ -312,6 +861,10 @@ function planTypeLabelEs(t: PlanElementType): string {
       return "Columna";
     case "pool":
       return "Piscina";
+    case "door":
+      return "Puerta";
+    case "planter":
+      return "Jardinera";
     case "custom":
       return "Personalizado";
     default:
@@ -320,13 +873,22 @@ function planTypeLabelEs(t: PlanElementType): string {
 }
 
 function minSizeForPlanType(t: PlanElementType): { w: number; h: number } {
-  if (t === "sunbed") return { w: 80, h: 40 };
-  if (t === "bed") return { w: 100, h: 60 };
-  if (t === "wall") return { w: 100, h: 6 };
-  if (t === "bar") return { w: 80, h: 40 };
-  if (t === "column") return { w: 24, h: 24 };
-  if (t === "pool") return { w: 100, h: 60 };
-  return { w: 60, h: 60 };
+  if (t === "sunbed") return { w: 64, h: 28 };
+  if (t === "bed") return { w: 72, h: 44 };
+  if (t === "wall") return { w: 10, h: 4 };
+  if (t === "bar") return { w: 44, h: 16 };
+  if (t === "column") return { w: 10, h: 10 };
+  if (t === "pool") return { w: 48, h: 28 };
+  if (t === "door") return { w: 10, h: 10 };
+  if (t === "planter") return { w: 12, h: 8 };
+  return { w: 36, h: 36 };
+}
+
+function createSizeForPlanType(t: PlanElementType): { width: number; height: number } | null {
+  if (t === "door") return { width: 36, height: 10 };
+  if (t === "wall") return { width: 80, height: 10 };
+  if (t === "planter") return { width: 64, height: 12 };
+  return null;
 }
 
 const DUPLICATE_OFFSET = 20;
@@ -361,8 +923,12 @@ function getNextElementName(
             : type === "column"
               ? "Columna"
               : type === "pool"
-                ? "Piscina"
-                : "Mesa";
+              ? "Piscina"
+              : type === "door"
+                ? "Puerta"
+                : type === "planter"
+                  ? "Jardinera"
+                  : "Mesa";
   const re = new RegExp(`^${baseName}\\s+(\\d+)$`, "i");
   let max = 0;
   for (const el of elements) {
@@ -382,33 +948,245 @@ function cloneElementList(els: FloorElement[]): FloorElement[] {
   return els.map((e) => ({ ...e }));
 }
 
+const AREA_QUICK_TEMPLATES = [
+  { key: "interior", label: "Interior", baseName: "Interior", width: 520, height: 360 },
+  { key: "terraza", label: "Terraza", baseName: "Terraza", width: 600, height: 320 },
+  { key: "barra", label: "Barra", baseName: "Barra", width: 520, height: 120 },
+  { key: "piscina", label: "Piscina", baseName: "Piscina", width: 480, height: 260 },
+  { key: "cocktail", label: "Cocktail", baseName: "Cocktail Bar", width: 440, height: 300 },
+  { key: "vip", label: "VIP", baseName: "VIP", width: 360, height: 240 },
+] as const;
+type AreaQuickTemplate = (typeof AREA_QUICK_TEMPLATES)[number];
+
+const FLOOR_SURFACE_OPTIONS = [
+  { id: "ice", label: "Azul hielo", swatch: "linear-gradient(135deg, #f8fbfe 0%, #dceaf5 100%)" },
+  { id: "stone", label: "Piedra clara", swatch: "linear-gradient(135deg, #f7f9fb 0%, #d8e0e7 100%)" },
+  { id: "warm", label: "Beige suave", swatch: "linear-gradient(135deg, #fffaf2 0%, #e7ddd0 100%)" },
+  { id: "coolGray", label: "Gris frío", swatch: "linear-gradient(135deg, #f6f9fb 0%, #d9e2ea 100%)" },
+  { id: "sand", label: "Arena", swatch: "linear-gradient(135deg, #fbf6eb 0%, #dfd2bd 100%)" },
+  { id: "cement", label: "Cemento", swatch: "linear-gradient(135deg, #f2f6f8 0%, #cfdbe4 100%)" },
+  { id: "lightWood", label: "Madera clara", swatch: "linear-gradient(135deg, #fbf5eb 0%, #dccab2 100%)" },
+  { id: "slate", label: "Slate claro", swatch: "linear-gradient(135deg, #eef4f9 0%, #cbdbe8 100%)" },
+] as const satisfies readonly {
+  id: FloorSurfacePresetId;
+  label: string;
+  swatch: string;
+}[];
+
+type RailSectionId = "floor" | "tables" | "elements" | "areas";
+
+const TABLE_CREATE_VARIANTS = [
+  {
+    key: "round",
+    label: "Redonda",
+    icon: Circle,
+    tableShape: "round",
+    width: 62,
+    height: 62,
+    seats: 4,
+  },
+  {
+    key: "square",
+    label: "Cuadrada",
+    icon: Square,
+    tableShape: "square",
+    width: 68,
+    height: 68,
+    seats: 4,
+  },
+  {
+    key: "rect",
+    label: "Rect.",
+    icon: RectangleHorizontal,
+    tableShape: "square",
+    width: 108,
+    height: 64,
+    seats: 4,
+  },
+  {
+    key: "long",
+    label: "Larga",
+    icon: RectangleHorizontal,
+    tableShape: "square",
+    width: 150,
+    height: 62,
+    seats: 6,
+  },
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  tableShape: FloorElement["tableShape"];
+  width: number;
+  height: number;
+  seats: number;
+}[];
+
+type TableCreateVariantKey = (typeof TABLE_CREATE_VARIANTS)[number]["key"];
+type ActiveCreateTool = PlanElementType | null;
+
+function sortZonesByName(list: Zone[]): Zone[] {
+  return [...list].sort((a, b) => a.name.localeCompare(b.name, "es"));
+}
+
+function sortFloorPlansForSelector(list: FloorPlan[]): FloorPlan[] {
+  return [...list].sort((a, b) => {
+    const sa = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    const sb = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    if (sa !== sb) return sa - sb;
+    return a.name.localeCompare(b.name, "es");
+  });
+}
+
+function floorPlanSizeForEditor(plan: FloorPlan | null | undefined): FloorPlanCanvasSize {
+  return {
+    width:
+      typeof plan?.width === "number" &&
+      Number.isFinite(plan.width) &&
+      plan.width > 0
+        ? plan.width
+        : DEFAULT_FLOOR_PLAN_WIDTH,
+    height:
+      typeof plan?.height === "number" &&
+      Number.isFinite(plan.height) &&
+      plan.height > 0
+        ? plan.height
+        : DEFAULT_FLOOR_PLAN_HEIGHT,
+  };
+}
+
+function nextUniqueZoneBaseName(baseName: string, zones: Zone[]): string {
+  const names = new Set(zones.map((z) => z.name.trim()));
+  const base = baseName.trim();
+  if (!names.has(base)) return base;
+  let n = 2;
+  while (names.has(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
+}
+
+function zoneHasVisualRect(z: Zone): boolean {
+  return (
+    typeof z.x === "number" &&
+    typeof z.y === "number" &&
+    typeof z.width === "number" &&
+    typeof z.height === "number" &&
+    Number.isFinite(z.x) &&
+    Number.isFinite(z.y) &&
+    Number.isFinite(z.width) &&
+    Number.isFinite(z.height)
+  );
+}
+
+/** Posición inicial cerca del centro del plano, con ligero escalonado si ya hay zonas con rect. */
+function suggestNewZonePosition(
+  zones: Zone[],
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  const stagger = 26;
+  const idx = zones.filter(zoneHasVisualRect).length;
+  const col = idx % 6;
+  const row = Math.floor(idx / 6);
+  const x = Math.round(420 - width / 2 + col * stagger);
+  const y = Math.round(300 - height / 2 + row * stagger);
+  return { x, y };
+}
+
+/** Si no hay zona con rect, el escenario base usa este rectángulo lógico. */
+const DEFAULT_VENUE_SEED_RECT = { x: 88, y: 76, w: 600, h: 412 };
+
+function pickSeedZoneLayout(zones: Zone[]): {
+  rect: { x: number; y: number; w: number; h: number };
+  attach: { id: string; name: string };
+} | null {
+  const rects = zones.filter(zoneHasVisualRect);
+  if (rects.length === 0) return null;
+  const interior = rects.find((z) =>
+    z.name.trim().toLowerCase().includes("interior"),
+  );
+  const chosen =
+    interior ??
+    [...rects].sort(
+      (a, b) =>
+        (b.width ?? 0) * (b.height ?? 0) - (a.width ?? 0) * (a.height ?? 0),
+    )[0]!;
+  return {
+    rect: {
+      x: chosen.x as number,
+      y: chosen.y as number,
+      w: chosen.width as number,
+      h: chosen.height as number,
+    },
+    attach: { id: chosen.id, name: chosen.name },
+  };
+}
+
+/** Desplazamiento estable por plano/índice (aspecto “natural”, no grid perfecto). */
+function seedJitter(planId: string, index: number, salt: number): number {
+  let h = 0;
+  for (let i = 0; i < planId.length; i++) {
+    h = (h * 31 + planId.charCodeAt(i)) | 0;
+  }
+  const t = Math.sin((h + salt * 127 + index * 19.091) * 12.9898) * 43758.5453123;
+  const f = t - Math.floor(t);
+  return Math.round(f * 28 - 14);
+}
+
+const mapRailIconProps = {
+  size: 14 as const,
+  strokeWidth: 1.7 as const,
+  className: "text-stone-500 shrink-0",
+};
+
+function MapRailIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon {...mapRailIconProps} aria-hidden />;
+}
+
+function mapRailPaletteBtnClass(active: boolean, disabled?: boolean): string {
+  const base =
+    "flex min-h-[38px] flex-col items-center justify-center gap-0.5 rounded-lg border text-center transition-[background-color,border-color,color] duration-[140ms] ease-out";
+  if (disabled) {
+    return `${base} cursor-not-allowed border-stone-100/70 bg-stone-50/50 text-stone-400 opacity-50`;
+  }
+  if (active) {
+    return `${base} cursor-pointer border-stone-300/90 bg-stone-100/80 text-stone-900`;
+  }
+  return `${base} cursor-pointer border-stone-200/75 bg-[#fffdf9]/70 text-stone-600 hover:bg-stone-50/90`;
+}
+
 export type ConfigMesasPageProps = {
   lockViewportFillParent?: boolean;
+  /** Solo ruta `/dashboard/configuracion/espacios/mesas`: look espacial premium sin tocar modelos ni Firestore. */
+  premiumSpatialEditor?: boolean;
+  /** Solo esa misma ruta: rail izquierdo de herramientas y sin sidebar de configuración (layout padre). */
+  configuracionMapEditorLayout?: boolean;
 };
 
 export default function ConfigMesasPage({
   lockViewportFillParent = false,
+  premiumSpatialEditor = false,
+  configuracionMapEditorLayout = false,
 }: ConfigMesasPageProps = {}) {
   const router = useRouter();
   const { user, restaurantId: profileRestaurantId, ready: authReady } =
     useAuth();
-  const restaurantId = profileRestaurantId ?? user?.uid ?? null;
+  const restaurantId = profileRestaurantId ?? null;
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  const [activeCreateType, setActiveCreateType] = useState<
-    | "table"
-    | "sunbed"
-    | "bed"
-    | "wall"
-    | "bar"
-    | "column"
-    | "pool"
-  >("table");
+  const [activeCreateType, setActiveCreateType] =
+    useState<ActiveCreateTool>(null);
+  const [activeTableVariant, setActiveTableVariant] =
+    useState<TableCreateVariantKey>("round");
 
   const [loadedElements, setLoadedElements] = useState<FloorElement[]>([]);
   const [loadedZones, setLoadedZones] = useState<Zone[]>([]);
   const [elements, setElementsBase] = useState<FloorElement[]>([]);
+  const elementsRef = useRef<FloorElement[]>([]);
+  const venueBaselineLockRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    elementsRef.current = elements;
+  }, [elements]);
   const [history, setHistory] = useState<FloorElement[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const historyRef = useRef<FloorElement[][]>([]);
@@ -425,11 +1203,91 @@ export default function ConfigMesasPage({
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedIdsRef = useRef<string[]>([]);
+  const lastMapInteractionRef = useRef<{ x: number; y: number } | null>(null);
+  const [preferredPlacementMapPoint, setPreferredPlacementMapPoint] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [selectionScreenRect, setSelectionScreenRect] =
+    useState<ScreenRect | null>(null);
+  const [zoneHudScreenRect, setZoneHudScreenRect] =
+    useState<ScreenRect | null>(null);
   const [clipboardElements, setClipboardElements] = useState<
     FloorElement[] | null
   >(null);
 
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds.map((id) => String(id).trim());
+  }, [selectedIds]);
+
   const [editorLayoutNarrow, setEditorLayoutNarrow] = useState(false);
+  const [areaTemplateBusy, setAreaTemplateBusy] = useState(false);
+  const [areaTemplateFeedback, setAreaTemplateFeedback] = useState<string | null>(null);
+  const [floorSurfacePreset, setFloorSurfacePreset] =
+    useState<FloorSurfacePresetId>("ice");
+  const [openRailSection, setOpenRailSection] =
+    useState<RailSectionId | null>("tables");
+  const [premiumToolsMenuOpen, setPremiumToolsMenuOpen] = useState(false);
+  const [premiumInspectorCollapsed, setPremiumInspectorCollapsed] = useState(
+    () => Boolean(configuracionMapEditorLayout),
+  );
+  const premiumToolsMenuRef = useRef<HTMLDivElement | null>(null);
+  const mapViewportControlsRef = useRef<EditableFloorMapViewportControls | null>(
+    null,
+  );
+  const placementSeqRef = useRef(0);
+  const [placementRequest, setPlacementRequest] = useState<{
+    id: number;
+    planType: PlanElementType;
+  } | null>(null);
+  const clearPlacementRequest = useCallback(() => {
+    setPlacementRequest(null);
+    setPreferredPlacementMapPoint(null);
+  }, []);
+
+  useEffect(() => {
+    if (!premiumToolsMenuOpen || configuracionMapEditorLayout) return;
+    const onDown = (e: MouseEvent) => {
+      const root = premiumToolsMenuRef.current;
+      if (!root?.contains(e.target as Node)) {
+        setPremiumToolsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [premiumToolsMenuOpen]);
+
+  useEffect(() => {
+    if (!premiumSpatialEditor) return;
+    if (editorLayoutNarrow) {
+      setPremiumInspectorCollapsed(false);
+      return;
+    }
+    if (!configuracionMapEditorLayout) return;
+    const hasFocus = editingZones || selectedIds.length > 0;
+    setPremiumInspectorCollapsed(!hasFocus);
+  }, [
+    premiumSpatialEditor,
+    editorLayoutNarrow,
+    configuracionMapEditorLayout,
+    editingZones,
+    selectedIds.length,
+  ]);
+
+  const requestStructureAtMapCenter = useCallback(
+    (planType: PlanElementType) => {
+      setEditingZones(false);
+      setActiveCreateType(planType);
+      placementSeqRef.current += 1;
+      setPreferredPlacementMapPoint(null);
+      setPlacementRequest({
+        id: placementSeqRef.current,
+        planType,
+      });
+    },
+    [],
+  );
 
   const [nameDraft, setNameDraft] = useState("");
   const [dimDraft, setDimDraft] = useState({
@@ -627,9 +1485,11 @@ export default function ConfigMesasPage({
         const list = await getFloorPlans(restaurantId);
         if (cancelled) return;
         setFloorPlans(list);
-        const def = list.find((p) => p.isDefault === true);
-        const nextId = def?.id ?? list[0]?.id ?? null;
-        setSelectedFloorPlanId(nextId);
+        setSelectedFloorPlanId((current) => {
+          if (current && list.some((p) => p.id === current)) return current;
+          const def = list.find((p) => p.isDefault === true);
+          return def?.id ?? list[0]?.id ?? null;
+        });
       } catch {
         if (!cancelled) {
           setFloorPlans([]);
@@ -649,6 +1509,16 @@ export default function ConfigMesasPage({
     );
   }, [floorPlans, selectedFloorPlanId]);
 
+  const selectedFloorPlan = useMemo(() => {
+    if (!selectedFloorPlanId) return null;
+    return floorPlans.find((p) => p.id === selectedFloorPlanId) ?? null;
+  }, [floorPlans, selectedFloorPlanId]);
+
+  const selectedFloorPlanSize = useMemo(
+    () => floorPlanSizeForEditor(selectedFloorPlan),
+    [selectedFloorPlan],
+  );
+
   const visibleElements = useMemo(() => {
     return elements.filter((el) => {
       if (el.floorPlanId) {
@@ -657,6 +1527,58 @@ export default function ConfigMesasPage({
       return true;
     });
   }, [elements, selectedFloorPlanId]);
+
+  const visibleZones = useMemo(() => {
+    return zones.filter((z) => {
+      if (z.floorPlanId) {
+        return z.floorPlanId === selectedFloorPlanId;
+      }
+      return true;
+    });
+  }, [zones, selectedFloorPlanId]);
+
+  const canReorderSelectionFront = useMemo(() => {
+    if (selectedIds.length < 1) return false;
+    const set = new Set(selectedIds.map((s) => String(s).trim()));
+    let maxIdx = -1;
+    visibleElements.forEach((el, i) => {
+      if (set.has(String(el.id).trim())) maxIdx = Math.max(maxIdx, i);
+    });
+    return maxIdx >= 0 && maxIdx < visibleElements.length - 1;
+  }, [selectedIds, visibleElements]);
+
+  const canReorderSelectionBack = useMemo(() => {
+    if (selectedIds.length < 1) return false;
+    const set = new Set(selectedIds.map((s) => String(s).trim()));
+    let minIdx = Number.POSITIVE_INFINITY;
+    visibleElements.forEach((el, i) => {
+      if (set.has(String(el.id).trim())) minIdx = Math.min(minIdx, i);
+    });
+    return Number.isFinite(minIdx) && minIdx > 0;
+  }, [selectedIds, visibleElements]);
+
+  const tablesCountInSelectedZone = useMemo(() => {
+    if (!selectedZoneId) return 0;
+    const zid = selectedZoneId.trim();
+    let n = 0;
+    for (const el of elements) {
+      if (el.type !== "table") continue;
+      const ez = typeof el.zoneId === "string" ? el.zoneId.trim() : "";
+      if (ez === zid) n++;
+    }
+    return n;
+  }, [elements, selectedZoneId]);
+
+  const [mapFitNonce, setMapFitNonce] = useState(0);
+  const prevVisibleCountRef = useRef(-1);
+  useEffect(() => {
+    if (!premiumSpatialEditor) return;
+    const n = visibleElements.length;
+    if (prevVisibleCountRef.current === 0 && n > 0) {
+      setMapFitNonce((c) => c + 1);
+    }
+    prevVisibleCountRef.current = n;
+  }, [premiumSpatialEditor, visibleElements.length]);
 
   useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -688,8 +1610,8 @@ export default function ConfigMesasPage({
 
   const selectedZone = useMemo(() => {
     if (!selectedZoneId) return null;
-    return zones.find((z) => z.id === selectedZoneId) ?? null;
-  }, [zones, selectedZoneId]);
+    return visibleZones.find((z) => z.id === selectedZoneId) ?? null;
+  }, [visibleZones, selectedZoneId]);
 
   useEffect(() => {
     if (!selectedZone) {
@@ -736,6 +1658,16 @@ export default function ConfigMesasPage({
   const handleSelectElement = useCallback(
     (id: string, modifiers?: { shiftKey?: boolean }) => {
       const tid = String(id).trim();
+      const el = elements.find((e) => String(e.id).trim() === tid);
+      if (el) {
+        const def = getDefaultSizeForPlanElementType(el.type);
+        const ew = el.width ?? def.width;
+        const eh = el.height ?? def.height;
+        lastMapInteractionRef.current = {
+          x: (el.x ?? 0) + ew / 2,
+          y: (el.y ?? 0) + eh / 2,
+        };
+      }
       if (modifiers?.shiftKey) {
         setSelectedIds((prev) => {
           const trimmed = prev.map((p) => String(p).trim());
@@ -749,7 +1681,7 @@ export default function ConfigMesasPage({
         setSelectedIds([tid]);
       }
     },
-    [],
+    [elements],
   );
 
   const handleRenameElement = useCallback((id: string, newName: string) => {
@@ -769,10 +1701,15 @@ export default function ConfigMesasPage({
     );
   }, [elements, selectedElement]);
 
-  const showSideInspector = useMemo(
-    () => editingZones || selectedIds.length > 0,
-    [editingZones, selectedIds],
-  );
+  const showSideInspector = useMemo(() => {
+    if (configuracionMapEditorLayout && premiumSpatialEditor) return true;
+    return editingZones || selectedIds.length > 0;
+  }, [
+    configuracionMapEditorLayout,
+    premiumSpatialEditor,
+    editingZones,
+    selectedIds,
+  ]);
 
   useEffect(() => {
     if (!selectedElement) {
@@ -794,7 +1731,7 @@ export default function ConfigMesasPage({
     (x: number, y: number) => {
       let best: Zone | null = null;
       let bestArea = Number.POSITIVE_INFINITY;
-      for (const z of zones) {
+      for (const z of visibleZones) {
         if (
           typeof z.x !== "number" ||
           typeof z.y !== "number" ||
@@ -821,7 +1758,7 @@ export default function ConfigMesasPage({
       }
       return best;
     },
-    [zones],
+    [visibleZones],
   );
 
   const persistElementZoneFromLayout = useCallback(
@@ -1047,6 +1984,69 @@ export default function ConfigMesasPage({
     [restaurantId, editingZones, elements, persistElementZoneFromLayout, commitElements],
   );
 
+  const handleMoveMany = useCallback(
+    async (updates: { id: string; x: number; y: number }[]) => {
+      if (!restaurantId || !isFirebaseConfigured) return;
+      if (editingZones) return;
+      if (updates.length === 0) return;
+      const floor = document.querySelector<HTMLElement>(
+        ".hostly-floor-editor-map",
+      );
+      const floorW = floor?.clientWidth ?? 0;
+      const floorH = floor?.clientHeight ?? 0;
+
+      const nextCoords = new Map(
+        updates.map((u) => [String(u.id).trim(), { x: u.x, y: u.y }] as const),
+      );
+
+      commitElements((prev) =>
+        prev.map((el) => {
+          const key = String(el.id).trim();
+          const p = nextCoords.get(key);
+          if (!p) return el;
+          let x = p.x;
+          let y = p.y;
+          if (floorW > 0 && floorH > 0) {
+            const def = getDefaultSizeForPlanElementType(el.type);
+            const w = el.width ?? def.width;
+            const h = el.height ?? def.height;
+            x = clamp(x, -w / 2, floorW - w / 2);
+            y = clamp(y, -h / 2, floorH - h / 2);
+          }
+          return { ...el, x, y };
+        }),
+      );
+
+      for (const u of updates) {
+        const moved = elements.find(
+          (el) => String(el.id).trim() === String(u.id).trim(),
+        );
+        if (!moved) continue;
+        const key = String(u.id).trim();
+        const p = nextCoords.get(key);
+        if (!p) continue;
+        const def = getDefaultSizeForPlanElementType(moved.type);
+        const w = moved.width ?? def.width;
+        const h = moved.height ?? def.height;
+        let x = p.x;
+        let y = p.y;
+        if (floorW > 0 && floorH > 0) {
+          x = clamp(x, -w / 2, floorW - w / 2);
+          y = clamp(y, -h / 2, floorH - h / 2);
+        }
+        void persistElementZoneFromLayout(moved.id, x, y, w, h);
+      }
+      setHasUnsavedChanges(true);
+    },
+    [
+      restaurantId,
+      editingZones,
+      elements,
+      persistElementZoneFromLayout,
+      commitElements,
+    ],
+  );
+
   const handleResize = useCallback(
     async (id: string, width: number, height: number) => {
       if (!restaurantId || !isFirebaseConfigured) return;
@@ -1078,6 +2078,8 @@ export default function ConfigMesasPage({
         zoneId?: string;
         zoneName?: string;
         zone?: string;
+        /** Asignar plano sin depender del `selectedFloorPlanId` del render (p. ej. escenario base). */
+        floorPlanId?: string;
       },
     ) => {
       if (!restaurantId || !isFirebaseConfigured) return;
@@ -1120,9 +2122,11 @@ export default function ConfigMesasPage({
             : zHit
               ? { zoneId: zHit.id, zoneName: zHit.name, zone: zHit.name }
               : {}),
-          ...(selectedFloorPlanId
-            ? { floorPlanId: selectedFloorPlanId }
-            : {}),
+          ...(typeof opts?.floorPlanId === "string" && opts.floorPlanId.trim()
+            ? { floorPlanId: opts.floorPlanId.trim() }
+            : selectedFloorPlanId
+              ? { floorPlanId: selectedFloorPlanId }
+              : {}),
           tableShape: opts?.tableShape ?? "square",
           seats:
             opts?.seats ??
@@ -1150,13 +2154,20 @@ export default function ConfigMesasPage({
 
   const handleCreateZoneVisual = useCallback(async () => {
     if (!restaurantId || !isFirebaseConfigured) return;
-    if (zones.length === 0) return;
+    if (!selectedFloorPlanId?.trim()) {
+      setAreaTemplateFeedback("Crea o selecciona un plano antes de crear zonas");
+      window.setTimeout(() => {
+        setAreaTemplateFeedback(null);
+      }, 2400);
+      return;
+    }
+    if (visibleZones.length === 0) return;
     const preferred =
       zoneHighlight !== "all" && zoneHighlight !== "unassigned"
         ? zoneHighlight
-        : zones[0]?.id;
+        : visibleZones[0]?.id;
     const zoneId = preferred ? String(preferred).trim() : "";
-    const zone = zones.find((z) => z.id === zoneId) ?? zones[0]!;
+    const zone = visibleZones.find((z) => z.id === zoneId) ?? visibleZones[0]!;
     if (
       typeof zone.x === "number" &&
       typeof zone.y === "number" &&
@@ -1179,7 +2190,123 @@ export default function ConfigMesasPage({
     setSelectedZoneId(zone.id);
     setEditingZones(true);
     setHasUnsavedChanges(true);
-  }, [restaurantId, zones, zoneHighlight]);
+  }, [restaurantId, selectedFloorPlanId, visibleZones, zoneHighlight]);
+
+  const handleApplyAreaTemplate = useCallback(
+    async (t: AreaQuickTemplate) => {
+      if (!premiumSpatialEditor) return;
+      if (!restaurantId || !isFirebaseConfigured) return;
+      if (editingZones || areaTemplateBusy) return;
+      const planId = selectedFloorPlanId?.trim();
+      if (!planId) {
+        setAreaTemplateFeedback("Crea o selecciona un plano antes de crear zonas");
+        window.setTimeout(() => {
+          setAreaTemplateFeedback(null);
+        }, 2400);
+        return;
+      }
+      const uniqueName = nextUniqueZoneBaseName(t.baseName, visibleZones);
+      const { x, y } = suggestNewZonePosition(visibleZones, t.width, t.height);
+      const zoneColor = defaultZoneColorForTemplate(t.key as AreaTemplateKey);
+      const previewId = `area-preview-${Date.now()}`;
+      const previewZone: Zone = {
+        id: previewId,
+        restaurantId,
+        floorPlanId: planId,
+        name: uniqueName,
+        x,
+        y,
+        width: t.width,
+        height: t.height,
+        color: zoneColor,
+      };
+      setAreaTemplateBusy(true);
+      setAreaTemplateFeedback(`Creando zona ${uniqueName}`);
+      setSelectedIds([]);
+      setSelectedZoneId(previewId);
+      setZoneHighlight(previewId);
+      setEditingZones(true);
+      setZones((prev) => sortZonesByName([...prev, previewZone]));
+      try {
+        const zoneId = await createZone(restaurantId, uniqueName, zoneColor, {
+          floorPlanId: planId,
+          x,
+          y,
+          width: t.width,
+          height: t.height,
+        });
+        const newZone: Zone = {
+          id: zoneId,
+          restaurantId,
+          floorPlanId: planId,
+          name: uniqueName,
+          x,
+          y,
+          width: t.width,
+          height: t.height,
+          color: zoneColor,
+        };
+        setZones((prev) => {
+          let replaced = false;
+          const next = prev.map((z) => {
+            if (z.id !== previewId) return z;
+            replaced = true;
+            return newZone;
+          });
+          return sortZonesByName(replaced ? next : [...next, newZone]);
+        });
+        setLoadedZones((prev) =>
+          sortZonesByName([...prev.filter((z) => z.id !== zoneId), newZone]),
+        );
+        const pieces = getAreaTemplateFurniture(t.key as AreaTemplateKey, {
+          x,
+          y,
+          width: t.width,
+          height: t.height,
+        });
+        for (const p of pieces) {
+          await createFloorElement(p.type, p.x, p.y, {
+            name: p.name,
+            width: p.width,
+            height: p.height,
+            seats: p.seats,
+            tableShape: p.tableShape,
+            zoneId,
+            zoneName: uniqueName,
+            zone: uniqueName,
+            floorPlanId: planId,
+          });
+        }
+        setSelectedZoneId(zoneId);
+        setZoneHighlight(zoneId);
+        setAreaTemplateFeedback(`Zona ${uniqueName} lista. Arrástrala o redimensiónala.`);
+      } catch (error) {
+        console.error("[MAP_EDITOR] area template failed", error);
+        const detail = error instanceof Error ? error.message : String(error);
+        setZones((prev) => prev.filter((z) => z.id !== previewId));
+        setSelectedZoneId(null);
+        setZoneHighlight("all");
+        setEditingZones(false);
+        setAreaTemplateFeedback(`No se pudo crear la zona: ${detail}`);
+      } finally {
+        setAreaTemplateBusy(false);
+        window.setTimeout(() => {
+          setAreaTemplateFeedback(null);
+        }, 2200);
+      }
+    },
+    [
+      premiumSpatialEditor,
+      restaurantId,
+      isFirebaseConfigured,
+      editingZones,
+      areaTemplateBusy,
+      zones,
+      visibleZones,
+      selectedFloorPlanId,
+      createFloorElement,
+    ],
+  );
 
   const handleMoveZone = useCallback(
     async (zoneId: string, x: number, y: number) => {
@@ -1369,6 +2496,65 @@ export default function ConfigMesasPage({
     setHasUnsavedChanges(true);
   }, [selectedElement, commitElements]);
 
+  const handleBoxSelect = useCallback((ids: string[]) => {
+    const uniq: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of ids) {
+      const t = String(raw).trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      uniq.push(t);
+    }
+    setSelectedIds(uniq);
+  }, []);
+
+  const handleBringSelectionToFront = useCallback(() => {
+    if (selectedIds.length < 1) return;
+    const set = new Set(selectedIds.map((s) => String(s).trim()));
+    commitElements((prev) => {
+      const picked: FloorElement[] = [];
+      const rest: FloorElement[] = [];
+      for (const el of prev) {
+        if (set.has(String(el.id).trim())) picked.push(el);
+        else rest.push(el);
+      }
+      if (picked.length === 0) return prev;
+      return [...rest, ...picked];
+    });
+    setHasUnsavedChanges(true);
+  }, [selectedIds, commitElements]);
+
+  const handleSendSelectionToBack = useCallback(() => {
+    if (selectedIds.length < 1) return;
+    const set = new Set(selectedIds.map((s) => String(s).trim()));
+    commitElements((prev) => {
+      const picked: FloorElement[] = [];
+      const rest: FloorElement[] = [];
+      for (const el of prev) {
+        if (set.has(String(el.id).trim())) picked.push(el);
+        else rest.push(el);
+      }
+      if (picked.length === 0) return prev;
+      return [...picked, ...rest];
+    });
+    setHasUnsavedChanges(true);
+  }, [selectedIds, commitElements]);
+
+  const handleToggleSelectionLock = useCallback(() => {
+    if (selectedIds.length < 1) return;
+    const set = new Set(selectedIds.map((s) => String(s).trim()));
+    const selEls = elements.filter((el) => set.has(String(el.id).trim()));
+    if (selEls.length === 0) return;
+    const everyLocked = selEls.every((el) => el.locked === true);
+    const nextLocked = !everyLocked;
+    commitElements((prev) =>
+      prev.map((el) =>
+        set.has(String(el.id).trim()) ? { ...el, locked: nextLocked } : el,
+      ),
+    );
+    setHasUnsavedChanges(true);
+  }, [selectedIds, elements, commitElements]);
+
   const handleToggleElementLock = useCallback(() => {
     if (!selectedElement) return;
     const id = String(selectedElement.id).trim();
@@ -1455,20 +2641,27 @@ export default function ConfigMesasPage({
       let acc = prev;
       const newSelectionIds: string[] = [];
 
-      for (const sid of selectedIds) {
-        const sidTrim = String(sid).trim();
-        const source = prev.find((e) => String(e.id).trim() === sidTrim);
-        if (!source) continue;
-        if (source.type === "custom") {
-          continue;
-        }
+      const sources = selectedIds
+        .map((sid) =>
+          prev.find((e) => String(e.id).trim() === String(sid).trim()),
+        )
+        .filter((e): e is FloorElement => !!e && e.type !== "custom");
 
+      if (sources.length === 0) return prev;
+
+      const refEl = sources[0];
+      const baseX = refEl.x ?? 0;
+      const baseY = refEl.y ?? 0;
+      const ddx = snapToGrid(baseX + DUPLICATE_OFFSET) - baseX;
+      const ddy = snapToGrid(baseY + DUPLICATE_OFFSET) - baseY;
+
+      for (const source of sources) {
         const ref = doc(collection(db, "tables"));
         const def = getDefaultSizeForPlanElementType(source.type);
         const w = source.width ?? def.width;
         const h = source.height ?? def.height;
-        let nx = snapToGrid((source.x ?? 0) + DUPLICATE_OFFSET);
-        let ny = snapToGrid((source.y ?? 0) + DUPLICATE_OFFSET);
+        let nx = snapToGrid((source.x ?? 0) + ddx);
+        let ny = snapToGrid((source.y ?? 0) + ddy);
         if (floorW > 0 && floorH > 0) {
           nx = clamp(nx, -w / 2, floorW - w / 2);
           ny = clamp(ny, -h / 2, floorH - h / 2);
@@ -1666,6 +2859,300 @@ export default function ConfigMesasPage({
     setHasUnsavedChanges(true);
   }, [selectedFloorPlanId, selectedIds, editingZones, commitElements]);
 
+  const runPremiumVenueBaseline = useCallback(
+    async (floorPlanId: string) => {
+      if (!premiumSpatialEditor || !restaurantId || !isFirebaseConfigured) return;
+      if (editingZones) return;
+      const onPlan = (e: FloorElement) =>
+        typeof e.floorPlanId === "string" &&
+        e.floorPlanId.trim() === floorPlanId;
+      if (elementsRef.current.some(onPlan)) return;
+      if (venueBaselineLockRef.current.has(floorPlanId)) return;
+      venueBaselineLockRef.current.add(floorPlanId);
+      try {
+        const allRemoteZones = await getZones(restaurantId);
+        let remoteZones = allRemoteZones.filter(
+          (z) => z.floorPlanId === floorPlanId,
+        );
+        if (elementsRef.current.some(onPlan)) return;
+
+        const hasVisibleZone = remoteZones.some(zoneHasVisualRect);
+        if (!hasVisibleZone) {
+          if (remoteZones.length === 0) {
+            const iw = 672;
+            const ih = 432;
+            const { x: ix, y: iy } = suggestNewZonePosition([], iw, ih);
+            const interiorId = await createZone(restaurantId, "Interior", undefined, {
+              floorPlanId,
+              x: ix,
+              y: iy,
+              width: iw,
+              height: ih,
+            });
+            const interiorZone: Zone = {
+              id: interiorId,
+              restaurantId,
+              floorPlanId,
+              name: "Interior",
+              x: ix,
+              y: iy,
+              width: iw,
+              height: ih,
+            };
+            const twW = 152;
+            const twH = Math.max(220, ih - 100);
+            const twX = ix + iw + 12;
+            const twY = iy + 56;
+            const terrazaName = nextUniqueZoneBaseName("Terraza", [interiorZone]);
+            const terrazaId = await createZone(restaurantId, terrazaName, undefined, {
+              floorPlanId,
+              x: twX,
+              y: twY,
+              width: twW,
+              height: twH,
+            });
+            const terrazaZone: Zone = {
+              id: terrazaId,
+              restaurantId,
+              floorPlanId,
+              name: terrazaName,
+              x: twX,
+              y: twY,
+              width: twW,
+              height: twH,
+            };
+            remoteZones = sortZonesByName([interiorZone, terrazaZone]);
+            setZones((prev) =>
+              sortZonesByName([
+                ...prev.filter((z) => z.floorPlanId !== floorPlanId),
+                ...remoteZones,
+              ]),
+            );
+            setLoadedZones((prev) =>
+              sortZonesByName([
+                ...prev.filter((z) => z.floorPlanId !== floorPlanId),
+                ...remoteZones,
+              ]),
+            );
+            setZoneHighlight(interiorId);
+            setSelectedZoneId(interiorId);
+          } else {
+            const nm = nextUniqueZoneBaseName("Interior", remoteZones);
+            const iw = 664;
+            const ih = 420;
+            const { x: ix, y: iy } = suggestNewZonePosition(remoteZones, iw, ih);
+            const zid = await createZone(restaurantId, nm, undefined, {
+              floorPlanId,
+              x: ix,
+              y: iy,
+              width: iw,
+              height: ih,
+            });
+            const nz: Zone = {
+              id: zid,
+              restaurantId,
+              floorPlanId,
+              name: nm,
+              x: ix,
+              y: iy,
+              width: iw,
+              height: ih,
+            };
+            const withInterior = [...remoteZones, nz];
+            const terrazaName = nextUniqueZoneBaseName("Terraza", withInterior);
+            const twW = 148;
+            const twH = Math.max(216, ih - 100);
+            const twX = ix + iw + 10;
+            const twY = iy + 50;
+            const terrazaId = await createZone(restaurantId, terrazaName, undefined, {
+              floorPlanId,
+              x: twX,
+              y: twY,
+              width: twW,
+              height: twH,
+            });
+            const terrazaZone: Zone = {
+              id: terrazaId,
+              restaurantId,
+              floorPlanId,
+              name: terrazaName,
+              x: twX,
+              y: twY,
+              width: twW,
+              height: twH,
+            };
+            remoteZones = sortZonesByName([...remoteZones, nz, terrazaZone]);
+            setZones((prev) =>
+              sortZonesByName([
+                ...prev.filter((z) => z.floorPlanId !== floorPlanId),
+                ...remoteZones,
+              ]),
+            );
+            setLoadedZones((prev) =>
+              sortZonesByName([
+                ...prev.filter((z) => z.floorPlanId !== floorPlanId),
+                ...remoteZones,
+              ]),
+            );
+            setZoneHighlight(zid);
+            setSelectedZoneId(zid);
+          }
+        }
+
+        if (elementsRef.current.some(onPlan)) return;
+
+        const interiorPick = pickSeedZoneLayout(remoteZones);
+        const rect = interiorPick?.rect ?? DEFAULT_VENUE_SEED_RECT;
+        const interiorAttach = interiorPick?.attach ?? null;
+        const baseInteriorOpts = {
+          floorPlanId: floorPlanId,
+          ...(interiorAttach
+            ? {
+                zoneId: interiorAttach.id,
+                zoneName: interiorAttach.name,
+                zone: interiorAttach.name,
+              }
+            : {}),
+        };
+
+        const terrazaZ = remoteZones.find(
+          (z) =>
+            zoneHasVisualRect(z) &&
+            z.name.trim().toLowerCase().includes("terraza"),
+        );
+        const terrazaAttach =
+          terrazaZ && zoneHasVisualRect(terrazaZ)
+            ? {
+                zoneId: terrazaZ.id,
+                zoneName: terrazaZ.name,
+                zone: terrazaZ.name,
+                floorPlanId: floorPlanId,
+              }
+            : null;
+        const terrRect =
+          terrazaZ &&
+          typeof terrazaZ.x === "number" &&
+          typeof terrazaZ.y === "number" &&
+          typeof terrazaZ.width === "number" &&
+          typeof terrazaZ.height === "number"
+            ? {
+                x: terrazaZ.x,
+                y: terrazaZ.y,
+                w: terrazaZ.width,
+                h: terrazaZ.height,
+              }
+            : null;
+
+        const barW = Math.round(
+          Math.min(Math.max(240, rect.w * 0.68), rect.w - 32, 596),
+        );
+        const barH = 74;
+        const barX = Math.round(
+          rect.x + (rect.w - barW) / 2 + seedJitter(floorPlanId, 0, 5),
+        );
+        const barY = Math.round(rect.y + 22 + seedJitter(floorPlanId, 0, 6));
+        const barCenterX = barX + barW / 2;
+        void createFloorElement("bar", barX, barY, {
+          ...baseInteriorOpts,
+          width: barW,
+          height: barH,
+        });
+
+        const td = getDefaultSizeForPlanElementType("table");
+        const tw = td.width;
+        const th = td.height;
+        const nearY = barY + barH + 18 + seedJitter(floorPlanId, 2, 1);
+        const nearBaseX = [-162, -84, 54, 132];
+        for (let i = 0; i < 4; i++) {
+          const rowShift = i < 2 ? -6 + i * 10 : 4 + (i - 2) * 12;
+          const bx = Math.round(
+            barCenterX +
+              nearBaseX[i]! -
+              tw / 2 +
+              seedJitter(floorPlanId, i * 2, 20) +
+              (i === 1 || i === 3 ? seedJitter(floorPlanId, i * 2 + 1, 22) : 0),
+          );
+          const by = Math.round(
+            nearY + rowShift + seedJitter(floorPlanId, i * 2 + 1, 21),
+          );
+          void createFloorElement("table", bx, by, {
+            ...baseInteriorOpts,
+            tableShape: i % 3 === 1 ? "round" : "square",
+            seats: i % 2 === 0 ? 4 : 2,
+          });
+        }
+
+        const salonY =
+          barY +
+          barH +
+          124 +
+          seedJitter(floorPlanId, 3, 2) +
+          (Math.abs(seedJitter(floorPlanId, 3, 3)) % 16);
+        const salonCx =
+          rect.x + rect.w / 2 + seedJitter(floorPlanId, 8, 5);
+        const salonLayout = [
+          { ox: -108, oy: 2 },
+          { ox: 8, oy: 20 },
+          { ox: 112, oy: -6 },
+        ];
+        for (let i = 0; i < 3; i++) {
+          const { ox, oy } = salonLayout[i]!;
+          const bx = Math.round(
+            salonCx + ox - tw / 2 + seedJitter(floorPlanId, i + 10, 11),
+          );
+          const by = Math.round(salonY + oy + seedJitter(floorPlanId, i + 10, 12));
+          void createFloorElement("table", bx, by, {
+            ...baseInteriorOpts,
+            tableShape: i === 1 ? "round" : "square",
+            seats: 6,
+          });
+        }
+
+        if (terrazaAttach && terrRect) {
+          const gapT = 40 + (Math.abs(seedJitter(floorPlanId, 30, 1)) % 16);
+          const pairMidX = terrRect.x + terrRect.w / 2;
+          for (let i = 0; i < 2; i++) {
+            const bx = Math.round(
+              pairMidX -
+                tw / 2 +
+                (i === 0 ? -gapT / 2 : gapT / 2) +
+                seedJitter(floorPlanId, i + 40, 4) +
+                (i === 0 ? -6 : 8),
+            );
+            const by = Math.round(
+              terrRect.y +
+                terrRect.h / 2 -
+                th / 2 +
+                (i === 0 ? -22 : 26) +
+                seedJitter(floorPlanId, i + 40, 5),
+            );
+            void createFloorElement("table", bx, by, {
+              ...terrazaAttach,
+              tableShape: "square",
+              seats: 4,
+            });
+          }
+        }
+
+        setSelectedIds([]);
+      } finally {
+        venueBaselineLockRef.current.delete(floorPlanId);
+      }
+    },
+    [
+      premiumSpatialEditor,
+      restaurantId,
+      isFirebaseConfigured,
+      editingZones,
+      createFloorElement,
+      setZones,
+      setLoadedZones,
+      setZoneHighlight,
+      setSelectedZoneId,
+      setSelectedIds,
+    ],
+  );
+
   const handleCreateNewFloorPlan = useCallback(async () => {
     if (!restaurantId || !isFirebaseConfigured) return;
     const raw = window.prompt("Nombre del plano");
@@ -1674,13 +3161,63 @@ export default function ConfigMesasPage({
     if (!name) return;
     try {
       const created = await createFloorPlan(restaurantId, name);
-      const updated = await getFloorPlans(restaurantId);
-      setFloorPlans(updated);
+      const optimisticPlan: FloorPlan = {
+        id: created.id,
+        restaurantId,
+        name: created.name,
+        width: DEFAULT_FLOOR_PLAN_WIDTH,
+        height: DEFAULT_FLOOR_PLAN_HEIGHT,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      setFloorPlans((prev) =>
+        sortFloorPlansForSelector([
+          ...prev.filter((p) => p.id !== created.id),
+          optimisticPlan,
+        ]),
+      );
       setSelectedFloorPlanId(created.id);
-    } catch {
-      /* ignore */
+      const updated = await getFloorPlans(restaurantId);
+      setFloorPlans((prev) => {
+        const withCreated = updated.some((p) => p.id === created.id)
+          ? updated
+          : [...updated, optimisticPlan];
+        const merged = withCreated.length > 0 ? withCreated : prev;
+        return sortFloorPlansForSelector(merged);
+      });
+      if (premiumSpatialEditor) {
+        await runPremiumVenueBaseline(created.id);
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      window.alert(`No se pudo crear el plano.\n\nDetalle: ${detail}`);
     }
-  }, [restaurantId]);
+  }, [restaurantId, premiumSpatialEditor, runPremiumVenueBaseline]);
+
+  useEffect(() => {
+    if (!premiumSpatialEditor || !restaurantId || !isFirebaseConfigured) return;
+    if (configuracionMapEditorLayout) return;
+    if (!selectedFloorPlanId || loading || editingZones) return;
+    if (visibleElements.length > 0) return;
+    let cancelled = false;
+    void (async () => {
+      await runPremiumVenueBaseline(selectedFloorPlanId);
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    premiumSpatialEditor,
+    configuracionMapEditorLayout,
+    restaurantId,
+    isFirebaseConfigured,
+    selectedFloorPlanId,
+    loading,
+    editingZones,
+    visibleElements.length,
+    runPremiumVenueBaseline,
+  ]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1735,6 +3272,11 @@ export default function ConfigMesasPage({
         pasteFromClipboard();
         return;
       }
+      if (e.key === "Escape" && activeCreateType !== null) {
+        e.preventDefault();
+        setActiveCreateType(null);
+        return;
+      }
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       if (selectedIds.length === 0) return;
       if (!restaurantId || !isFirebaseConfigured) return;
@@ -1752,11 +3294,30 @@ export default function ConfigMesasPage({
     copySelectionToClipboard,
     pasteFromClipboard,
     clipboardElements,
+    activeCreateType,
   ]);
 
   const handleSavePlanChanges = useCallback(async () => {
     if (!restaurantId || !isFirebaseConfigured) return;
+    if (areaTemplateBusy) {
+      window.alert("Espera a que termine de crearse la zona antes de guardar.");
+      return;
+    }
     const batch = writeBatch(db);
+
+    if (selectedFloorPlanId) {
+      batch.set(
+        doc(db, "floorPlans", selectedFloorPlanId),
+        {
+          id: selectedFloorPlanId,
+          restaurantId,
+          width: selectedFloorPlanSize.width,
+          height: selectedFloorPlanSize.height,
+          updatedAt: serverTimestamp(),
+        } as DocumentData,
+        { merge: true },
+      );
+    }
 
     const loadedById: Record<string, FloorElement> = {};
     for (const el of loadedElements) loadedById[el.id] = el;
@@ -1764,7 +3325,10 @@ export default function ConfigMesasPage({
     const currentIds = new Set(elements.map((e) => e.id));
     for (const oldId of Object.keys(loadedById)) {
       if (!currentIds.has(oldId)) {
-        batch.delete(doc(db, "tables", oldId));
+        batch.update(doc(db, "tables", oldId), {
+          isActive: false,
+          updatedAt: serverTimestamp(),
+        } as DocumentData);
       }
     }
 
@@ -1805,13 +3369,11 @@ export default function ConfigMesasPage({
         el.floorPlanId.trim() !== ""
       ) {
         payload.floorPlanId = el.floorPlanId.trim();
-      }
-      if (loadedById[el.id]) {
-        batch.update(ref, payload);
       } else {
-        payload.createdAt = serverTimestamp();
-        batch.set(ref, payload, { merge: true });
+        payload.floorPlanId = deleteField();
       }
+      if (!loadedById[el.id]) payload.createdAt = serverTimestamp();
+      batch.set(ref, payload, { merge: true });
     }
 
     const loadedZonesById: Record<string, Zone> = {};
@@ -1822,6 +3384,7 @@ export default function ConfigMesasPage({
       const changed =
         !before ||
         before.name !== z.name ||
+        (before.floorPlanId ?? "") !== (z.floorPlanId ?? "") ||
         (before.color ?? "") !== (z.color ?? "") ||
         (before.x ?? null) !== (z.x ?? null) ||
         (before.y ?? null) !== (z.y ?? null) ||
@@ -1833,6 +3396,11 @@ export default function ConfigMesasPage({
         name: z.name,
         updatedAt: serverTimestamp(),
       };
+      if (z.floorPlanId && z.floorPlanId.trim()) {
+        up.floorPlanId = z.floorPlanId.trim();
+      } else {
+        up.floorPlanId = deleteField();
+      }
       if (z.color && z.color.trim()) up.color = z.color.trim();
       else up.color = deleteField();
       if (
@@ -1855,18 +3423,43 @@ export default function ConfigMesasPage({
         up.width = deleteField();
         up.height = deleteField();
       }
-      batch.update(zref, up);
+      if (before) {
+        batch.update(zref, up);
+      } else {
+        batch.set(
+          zref,
+          {
+            ...up,
+            id: z.id,
+            restaurantId,
+            createdAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
     }
 
     try {
       await batch.commit();
-      setLoadedElements(elements);
-      setLoadedZones(zones);
+      setLoadedElements(elements.map((el) => ({ ...el })));
+      setLoadedZones(zones.map((z) => ({ ...z })));
       setHasUnsavedChanges(false);
-    } catch {
+    } catch (error) {
+      console.error("[MAP_EDITOR] save failed", error);
+      const detail = error instanceof Error ? error.message : String(error);
+      window.alert(`No se pudo guardar el plano.\n\nDetalle: ${detail}`);
       // keep unsaved state
     }
-  }, [restaurantId, elements, zones, loadedElements, loadedZones]);
+  }, [
+    restaurantId,
+    elements,
+    zones,
+    loadedElements,
+    loadedZones,
+    areaTemplateBusy,
+    selectedFloorPlanId,
+    selectedFloorPlanSize,
+  ]);
 
   const handleDiscardPlanChanges = useCallback(() => {
     if (!hasUnsavedChanges) return;
@@ -1898,9 +3491,14 @@ export default function ConfigMesasPage({
     Boolean(restaurantId && isFirebaseConfigured) &&
     visibleElements.length === 0;
 
+  const editorSecondaryActionBtnStyle = premiumSpatialEditor
+    ? premiumMiniToolBtn
+    : miniToolBtn;
+
   const editorToolbar = (
     <>
-      <div style={editorTopBarStyle}>
+      {premiumSpatialEditor ? null : (
+        <div style={editorTopBarStyle}>
         <div
           style={{
             display: "flex",
@@ -1943,7 +3541,7 @@ export default function ConfigMesasPage({
             <select
               id="hostly-decorative-place-type"
               aria-label="Tipo de elemento decorativo a colocar"
-              value={activeCreateType === "table" ? "" : activeCreateType}
+              value={activeCreateType == null || activeCreateType === "table" ? "" : activeCreateType}
               onChange={(e) => {
                 const v = e.target.value;
                 if (
@@ -1952,7 +3550,9 @@ export default function ConfigMesasPage({
                   v === "wall" ||
                   v === "bar" ||
                   v === "column" ||
-                  v === "pool"
+                  v === "pool" ||
+                  v === "door" ||
+                  v === "planter"
                 ) {
                   setActiveCreateType(v);
                 }
@@ -1967,6 +3567,8 @@ export default function ConfigMesasPage({
               <option value="bar">{planTypeLabelEs("bar")}</option>
               <option value="column">{planTypeLabelEs("column")}</option>
               <option value="pool">{planTypeLabelEs("pool")}</option>
+              <option value="door">{planTypeLabelEs("door")}</option>
+              <option value="planter">{planTypeLabelEs("planter")}</option>
             </select>
           </div>
         </div>
@@ -2014,64 +3616,68 @@ export default function ConfigMesasPage({
           </button>
         </div>
       </div>
+      )}
 
-      <div style={editorSecondaryStripStyle}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 750,
-            color: "#475569",
-            textTransform: "uppercase",
-            letterSpacing: "0.07em",
-            marginRight: 4,
-          }}
-        >
-          Zonas y selección
-        </span>
-        <button
-          type="button"
-          style={editingZones ? miniToolBtnActive : miniToolBtn}
-          onClick={() => {
-            setEditingZones((v) => {
-              const next = !v;
-              if (next) setSelectedIds([]);
-              else setSelectedZoneId(null);
-              return next;
-            });
-          }}
-        >
-          {editingZones ? "Salir zonas" : "Editar zonas"}
-        </button>
-        <button
-          type="button"
-          style={miniToolBtn}
-          onClick={() => void handleCreateZoneVisual()}
-          disabled={zones.length === 0}
-        >
-          Zona visual
-        </button>
-        {zones.length > 0 ? (
-          <select
-            value={zoneHighlight}
-            onChange={(e) => setZoneHighlight(e.target.value)}
-            style={{ ...zoneHighlightSelectStyle, fontSize: 12, minWidth: 140 }}
-            aria-label="Resaltar zona"
-          >
-            <option value="all">Todas las zonas</option>
-            <option value="unassigned">Sin zona</option>
-            <optgroup label="Zonas">
-              {zones.map((z) => (
-                <option key={z.id} value={z.id}>
-                  {z.name}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        ) : null}
+      {!premiumSpatialEditor ? (
+        <div style={editorSecondaryStripStyle}>
+          <>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: "#475569",
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                marginRight: 4,
+              }}
+            >
+              Zonas y selección
+            </span>
+            <button
+              type="button"
+              style={editingZones ? miniToolBtnActive : miniToolBtn}
+              onClick={() => {
+                setEditingZones((v) => {
+                  const next = !v;
+                  if (next) setSelectedIds([]);
+                  else setSelectedZoneId(null);
+                  return next;
+                });
+              }}
+            >
+              {editingZones ? "Salir zonas" : "Editar zonas"}
+            </button>
+            <button
+              type="button"
+              style={editorSecondaryActionBtnStyle}
+              onClick={() => void handleCreateZoneVisual()}
+              disabled={visibleZones.length === 0}
+            >
+              Zona visual
+            </button>
+            {visibleZones.length > 0 ? (
+              <select
+                value={zoneHighlight}
+                onChange={(e) => setZoneHighlight(e.target.value)}
+                style={{ ...zoneHighlightSelectStyle, fontSize: 12, minWidth: 140 }}
+                aria-label="Resaltar zona"
+              >
+                <option value="all">Todas las zonas</option>
+                <option value="unassigned">Sin zona</option>
+                <optgroup label="Zonas">
+                  {visibleZones.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            ) : null}
+          </>
         {hasAnyLockedElement ? (
           <button
             type="button"
-            style={miniToolBtn}
+            style={editorSecondaryActionBtnStyle}
             onClick={() => void handleUnlockAllElements()}
             disabled={editingZones}
           >
@@ -2082,7 +3688,7 @@ export default function ConfigMesasPage({
           <>
             <button
               type="button"
-              style={miniToolBtn}
+              style={editorSecondaryActionBtnStyle}
               onClick={() => void handleDuplicateSelection()}
               disabled={editingZones}
             >
@@ -2099,7 +3705,7 @@ export default function ConfigMesasPage({
             {selectedFloorPlanId ? (
               <button
                 type="button"
-                style={miniToolBtn}
+                style={editorSecondaryActionBtnStyle}
                 onClick={() => void handleMoveSelectionToActiveFloorPlan()}
                 disabled={editingZones}
               >
@@ -2133,7 +3739,7 @@ export default function ConfigMesasPage({
               </span>
               <button
                 type="button"
-                style={miniToolBtn}
+                style={editorSecondaryActionBtnStyle}
                 disabled={editingZones}
                 title="Alinear a la izquierda"
                 onClick={() => alignSelectedElements("left")}
@@ -2142,7 +3748,7 @@ export default function ConfigMesasPage({
               </button>
               <button
                 type="button"
-                style={miniToolBtn}
+                style={editorSecondaryActionBtnStyle}
                 disabled={editingZones}
                 title="Centrar horizontalmente"
                 onClick={() => alignSelectedElements("centerH")}
@@ -2151,7 +3757,7 @@ export default function ConfigMesasPage({
               </button>
               <button
                 type="button"
-                style={miniToolBtn}
+                style={editorSecondaryActionBtnStyle}
                 disabled={editingZones}
                 title="Alinear a la derecha"
                 onClick={() => alignSelectedElements("right")}
@@ -2160,7 +3766,7 @@ export default function ConfigMesasPage({
               </button>
               <button
                 type="button"
-                style={miniToolBtn}
+                style={editorSecondaryActionBtnStyle}
                 disabled={editingZones}
                 title="Alinear arriba"
                 onClick={() => alignSelectedElements("top")}
@@ -2169,7 +3775,7 @@ export default function ConfigMesasPage({
               </button>
               <button
                 type="button"
-                style={miniToolBtn}
+                style={editorSecondaryActionBtnStyle}
                 disabled={editingZones}
                 title="Centrar verticalmente"
                 onClick={() => alignSelectedElements("centerV")}
@@ -2178,7 +3784,7 @@ export default function ConfigMesasPage({
               </button>
               <button
                 type="button"
-                style={miniToolBtn}
+                style={editorSecondaryActionBtnStyle}
                 disabled={editingZones}
                 title="Alinear abajo"
                 onClick={() => alignSelectedElements("bottom")}
@@ -2210,7 +3816,7 @@ export default function ConfigMesasPage({
                 </span>
                 <button
                   type="button"
-                  style={miniToolBtn}
+                  style={editorSecondaryActionBtnStyle}
                   disabled={editingZones}
                   onClick={() => distributeSelectedElements("horizontal")}
                 >
@@ -2218,7 +3824,7 @@ export default function ConfigMesasPage({
                 </button>
                 <button
                   type="button"
-                  style={miniToolBtn}
+                  style={editorSecondaryActionBtnStyle}
                   disabled={editingZones}
                   onClick={() => distributeSelectedElements("vertical")}
                 >
@@ -2228,13 +3834,22 @@ export default function ConfigMesasPage({
             ) : null}
           </>
         ) : null}
-        {zones.length > 0 ? (
+        {visibleZones.length > 0 ? (
           <div
-            style={{ ...zoneLegendStyle, marginLeft: "auto", maxWidth: 360 }}
+            style={{
+              ...zoneLegendStyle,
+              marginLeft: "auto",
+              maxWidth: 360,
+            }}
             aria-label="Leyenda de zonas"
           >
-            {zones.map((z) => (
-              <span key={z.id} style={zoneLegendItemStyle}>
+            {visibleZones.map((z) => (
+              <span
+                key={z.id}
+                style={{
+                  ...zoneLegendItemStyle,
+                }}
+              >
                 <span
                   aria-hidden
                   style={{
@@ -2251,59 +3866,141 @@ export default function ConfigMesasPage({
             ))}
           </div>
         ) : null}
-      </div>
+        </div>
+      ) : null}
     </>
   );
+
+  const mapInspectorLabelStyle: CSSProperties =
+    configuracionMapEditorLayout && premiumSpatialEditor
+      ? inspectorMapLayoutLabel
+      : premiumSpatialEditor
+        ? inspectorPremiumLabel
+        : fieldLabelStyle;
+
+  const mapInspectorInputStyle: CSSProperties =
+    configuracionMapEditorLayout && premiumSpatialEditor
+      ? inspectorMapLayoutInput
+      : premiumSpatialEditor
+        ? inspectorPremiumInput
+        : inputStyle;
+
+  const insFieldMb =
+    configuracionMapEditorLayout && premiumSpatialEditor
+      ? 5
+      : premiumSpatialEditor
+        ? 6
+        : 10;
+
+  const insGridGap =
+    configuracionMapEditorLayout && premiumSpatialEditor
+      ? 4
+      : premiumSpatialEditor
+        ? 6
+        : 12;
+
+  const premiumCanvasHeaderRight =
+    configuracionMapEditorLayout &&
+    premiumSpatialEditor &&
+    restaurantId &&
+    isFirebaseConfigured ? (
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          flexWrap: "wrap",
+          justifyContent: "flex-end",
+        }}
+      >
+        {hasUnsavedChanges ? (
+          <span style={mapEditorUnsavedPillStyle}>Sin guardar</span>
+        ) : null}
+      </div>
+    ) : null;
+
+  const cfgMapUi = configuracionMapEditorLayout && premiumSpatialEditor;
+
+  const renderRailSection = (
+    sectionId: RailSectionId,
+    label: string,
+    children: ReactNode,
+  ) => {
+    const open = openRailSection === sectionId;
+    return (
+      <div style={{ marginBottom: open ? 12 : 6 }}>
+        <button
+          type="button"
+          style={mapToolboxSectionBtn}
+          aria-expanded={open}
+          onClick={() =>
+            setOpenRailSection((current) =>
+              current === sectionId ? null : sectionId,
+            )
+          }
+        >
+          <span>{label}</span>
+          <span
+            aria-hidden
+            style={{
+              fontSize: 12,
+              lineHeight: 1,
+              color: "#64748b",
+              transform: open ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 140ms ease",
+            }}
+          >
+            ›
+          </span>
+        </button>
+        <div
+          style={{
+            ...mapToolboxSectionPanel,
+            display: "grid",
+            gridTemplateRows: open ? "1fr" : "0fr",
+            opacity: open ? 1 : 0,
+          }}
+        >
+          <div style={{ minHeight: 0 }}>{children}</div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <ModulePageShell
       title="Editor de plano"
-      maxWidth={1400}
+      maxWidth={premiumSpatialEditor ? 1760 : 1400}
       compactLayout
       operationalFocus
       lockViewport
       lockViewportFillParent={lockViewportFillParent}
       backLabel="Volver"
+      shellSurface={configuracionMapEditorLayout ? "configLight" : "default"}
+      backHref={
+        configuracionMapEditorLayout
+          ? "/dashboard/configuracion/espacios/zonas"
+          : "/dashboard"
+      }
+      fitLaptopViewport={premiumSpatialEditor}
+      denseWorkbench={premiumSpatialEditor}
+      stretchContentWidth={premiumSpatialEditor}
+      mapEditorDenseChrome={configuracionMapEditorLayout}
+      headerRight={premiumCanvasHeaderRight}
+      hideLogoutButton={configuracionMapEditorLayout}
     >
       {restaurantId && isFirebaseConfigured ? (
-        <div
-          style={{
-            marginBottom: 12,
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "8px 12px",
-            minWidth: 0,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: "#e2e8f0",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {selectedFloorPlanName ?? "—"}
-          </span>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 8,
-              flex: "1 1 200px",
-              minWidth: 0,
-            }}
-          >
+        premiumSpatialEditor ? (
+          configuracionMapEditorLayout ? null : (
+          <div style={premiumUltraPlanBarStyle}>
             <label
               htmlFor="hostly-floor-plan-select"
               style={{
-                fontSize: 11,
+                fontSize: 8,
                 fontWeight: 700,
                 color: "#64748b",
                 textTransform: "uppercase",
-                letterSpacing: "0.05em",
+                letterSpacing: "0.08em",
                 whiteSpace: "nowrap",
               }}
             >
@@ -2320,11 +4017,11 @@ export default function ConfigMesasPage({
               style={{
                 ...inputStyle,
                 width: "auto",
-                minWidth: 160,
-                maxWidth: "100%",
+                minWidth: 120,
+                maxWidth: "min(42vw, 280px)",
                 cursor: "pointer",
-                fontSize: 12,
-                padding: "6px 10px",
+                fontSize: 11,
+                padding: "3px 7px",
               }}
             >
               {floorPlans.map((p) => (
@@ -2333,17 +4030,140 @@ export default function ConfigMesasPage({
                 </option>
               ))}
             </select>
+            {hasUnsavedChanges ? (
+              <span
+                title="Cambios sin guardar"
+                style={{
+                  ...unsavedBadgeCompactStyle,
+                  fontSize: 8,
+                  padding: "1px 5px",
+                }}
+              >
+                ●
+              </span>
+            ) : null}
             <button
               type="button"
-              style={{ ...smallBtn, fontSize: 12, padding: "5px 10px" }}
-              onClick={() => void handleCreateNewFloorPlan()}
+              style={{
+                ...premiumToolbarSaveBtn,
+                opacity: hasUnsavedChanges ? 1 : 0.42,
+                cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+              }}
+              onClick={() => void handleSavePlanChanges()}
+              disabled={!hasUnsavedChanges}
             >
-              Nuevo plano
+              Guardar
+            </button>
+            <button
+              type="button"
+              style={
+                activeCreateType === "table" && !editingZones
+                  ? premiumTopBarMesaBtnActive
+                  : premiumTopBarMesaBtn
+              }
+              onClick={() => {
+                setEditingZones(false);
+                setActiveCreateType("table");
+              }}
+              disabled={editingZones}
+            >
+              Mesa
+            </button>
+            <button
+              type="button"
+              style={premiumMiniToolBtn}
+              onClick={() => void handleCreateZoneVisual()}
+              disabled={visibleZones.length === 0 || editingZones}
+              title="Dibujar o editar rectángulo de zona en el plano"
+            >
+              Zona
             </button>
           </div>
-        </div>
+          )
+        ) : (
+          <div
+            style={{
+              marginBottom: 6,
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "6px 10px",
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#e2e8f0",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {selectedFloorPlanName ?? "—"}
+            </span>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 8,
+                flex: "1 1 200px",
+                minWidth: 0,
+              }}
+            >
+              <label
+                htmlFor="hostly-floor-plan-select"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#64748b",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Plano
+              </label>
+              <select
+                id="hostly-floor-plan-select"
+                aria-label="Seleccionar plano"
+                value={selectedFloorPlanId ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  setSelectedFloorPlanId(v ? v : null);
+                }}
+                style={{
+                  ...inputStyle,
+                  width: "auto",
+                  minWidth: 160,
+                  maxWidth: "100%",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  padding: "6px 10px",
+                }}
+              >
+                {floorPlans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                style={{
+                  ...smallBtn,
+                  fontSize: 12,
+                  padding: "5px 10px",
+                }}
+                onClick={() => void handleCreateNewFloorPlan()}
+              >
+                Nuevo plano
+              </button>
+            </div>
+          </div>
+        )
       ) : null}
-      {editorToolbar}
+      {!premiumSpatialEditor ? editorToolbar : null}
       <div
         style={{
           flex: 1,
@@ -2351,23 +4171,449 @@ export default function ConfigMesasPage({
           minWidth: 0,
           width: "100%",
           display: "flex",
-          flexDirection: editorLayoutNarrow ? "column" : "row",
+          flexDirection:
+            configuracionMapEditorLayout && premiumSpatialEditor
+              ? "row"
+              : editorLayoutNarrow
+                ? "column"
+                : "row",
           alignItems: "stretch",
-          gap: editorLayoutNarrow ? 14 : 16,
+          gap:
+            configuracionMapEditorLayout && premiumSpatialEditor
+              ? 0
+              : premiumSpatialEditor
+                ? 2
+                : 10,
         }}
       >
+        {configuracionMapEditorLayout &&
+        premiumSpatialEditor &&
+        restaurantId &&
+        isFirebaseConfigured ? (
+          <aside
+            className="hostly-floor-editor-toolbox"
+            style={
+              {
+                ...mapToolboxAsideStyle,
+                "--hostly-touch-min": "34px",
+              } as CSSProperties
+            }
+            aria-label="Herramientas del plano"
+          >
+            <div style={mapToolboxMicro}>Plano</div>
+            <div style={mapToolboxTopCard}>
+              <select
+                id="hostly-floor-plan-select"
+                aria-label="Seleccionar plano"
+                value={selectedFloorPlanId ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  setSelectedFloorPlanId(v ? v : null);
+                }}
+                style={mapToolboxSelect}
+              >
+                {floorPlans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <div style={mapToolboxRow2}>
+                <button
+                  type="button"
+                  style={{
+                    ...mapToolboxSaveSm,
+                    opacity: hasUnsavedChanges ? 1 : 0.4,
+                    cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+                  }}
+                  disabled={!hasUnsavedChanges}
+                  onClick={() => void handleSavePlanChanges()}
+                >
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  style={mapToolboxGhostSm}
+                  onClick={() => void handleCreateNewFloorPlan()}
+                >
+                  Nuevo
+                </button>
+              </div>
+              <button
+                type="button"
+                style={{
+                  ...mapToolboxGhostSm,
+                  width: "100%",
+                  marginTop: 6,
+                  opacity: hasUnsavedChanges ? 1 : 0.42,
+                  cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+                }}
+                disabled={!hasUnsavedChanges}
+                onClick={handleDiscardPlanChanges}
+              >
+                Restablecer
+              </button>
+            </div>
+
+            {renderRailSection("floor", "Suelo", (
+            <div style={mapFloorSwatchGrid} aria-label="Suelo del restaurante">
+              {FLOOR_SURFACE_OPTIONS.map((preset) => {
+                const selected = floorSurfacePreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    aria-label={preset.label}
+                    title={preset.label}
+                    aria-pressed={selected}
+                    onClick={() => setFloorSurfacePreset(preset.id)}
+                    style={{
+                      width: "100%",
+                      aspectRatio: "1 / 1",
+                      minHeight: 30,
+                      borderRadius: 999,
+                      border: selected
+                        ? "2px solid #3f6478"
+                        : "1px solid rgba(71, 85, 105, 0.18)",
+                      background: preset.swatch,
+                      cursor: "pointer",
+                      boxShadow: selected
+                        ? "0 0 0 3px rgba(63, 100, 120, 0.12)"
+                        : "0 1px 2px rgba(15, 23, 42, 0.04)",
+                    }}
+                  />
+                );
+              })}
+            </div>
+            ))}
+
+            {renderRailSection("tables", "Mesas", (
+            <div style={mapToolboxAddGrid2}>
+              {TABLE_CREATE_VARIANTS.map((variant) => (
+                <button
+                  key={variant.key}
+                  type="button"
+                  className={mapRailPaletteBtnClass(
+                    activeCreateType === "table" &&
+                      activeTableVariant === variant.key &&
+                      !editingZones,
+                    editingZones,
+                  )}
+                  onClick={() => {
+                    setEditingZones(false);
+                    setActiveCreateType("table");
+                    setActiveTableVariant(variant.key);
+                  }}
+                  disabled={editingZones}
+                >
+                  <MapRailIcon icon={variant.icon} />
+                  <span style={mapRailActionCaption}>{variant.label}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                className={mapRailPaletteBtnClass(
+                  activeCreateType === "sunbed" && !editingZones,
+                  editingZones,
+                )}
+                disabled={editingZones}
+                onClick={() => {
+                  setEditingZones(false);
+                  setActiveCreateType("sunbed");
+                }}
+              >
+                <MapRailIcon icon={BedSingle} />
+                <span style={mapRailActionCaption}>Hamaca</span>
+              </button>
+              <button
+                type="button"
+                className={mapRailPaletteBtnClass(
+                  activeCreateType === "bed" && !editingZones,
+                  editingZones,
+                )}
+                disabled={editingZones}
+                onClick={() => {
+                  setEditingZones(false);
+                  setActiveCreateType("bed");
+                }}
+              >
+                <MapRailIcon icon={BedDouble} />
+                <span style={mapRailActionCaption}>Cama</span>
+              </button>
+            </div>
+            ))}
+
+            {renderRailSection("elements", "Elementos", (
+            <div style={mapToolboxAddGrid2}>
+              <button
+                type="button"
+                className={mapRailPaletteBtnClass(activeCreateType === "bar" && !editingZones, editingZones)}
+                disabled={editingZones}
+                onClick={() => requestStructureAtMapCenter("bar")}
+              >
+                <MapRailIcon icon={RectangleHorizontal} />
+                <span style={mapRailActionCaption}>Barra</span>
+              </button>
+              <button
+                type="button"
+                className={mapRailPaletteBtnClass(activeCreateType === "wall" && !editingZones, editingZones)}
+                disabled={editingZones}
+                onClick={() => requestStructureAtMapCenter("wall")}
+              >
+                <MapRailIcon icon={Minus} />
+                <span style={mapRailActionCaption}>Pared</span>
+              </button>
+              <button
+                type="button"
+                className={mapRailPaletteBtnClass(activeCreateType === "door" && !editingZones, editingZones)}
+                disabled={editingZones}
+                onClick={() => requestStructureAtMapCenter("door")}
+              >
+                <MapRailIcon icon={DoorOpen} />
+                <span style={mapRailActionCaption}>Puerta</span>
+              </button>
+              <button
+                type="button"
+                className={mapRailPaletteBtnClass(activeCreateType === "pool" && !editingZones, editingZones)}
+                disabled={editingZones}
+                onClick={() => requestStructureAtMapCenter("pool")}
+              >
+                <MapRailIcon icon={Waves} />
+                <span style={mapRailActionCaption}>Piscina</span>
+              </button>
+              <button
+                type="button"
+                className={mapRailPaletteBtnClass(activeCreateType === "planter" && !editingZones, editingZones)}
+                disabled={editingZones}
+                onClick={() => requestStructureAtMapCenter("planter")}
+              >
+                <MapRailIcon icon={Flower2} />
+                <span style={mapRailActionCaption}>Jardinera</span>
+              </button>
+              <button
+                type="button"
+                className={`${mapRailPaletteBtnClass(activeCreateType === "column" && !editingZones, editingZones)} min-h-[38px]`}
+                disabled={editingZones}
+                onClick={() => requestStructureAtMapCenter("column")}
+              >
+                <MapRailIcon icon={Circle} />
+                <span style={mapRailActionCaption}>Columna</span>
+              </button>
+            </div>
+            ))}
+
+            {renderRailSection("areas", "Áreas", (
+            <>
+            {editingZones || areaTemplateFeedback ? (
+              <div
+                style={{
+                  margin: "0 0 8px",
+                  padding: "7px 8px",
+                  borderRadius: 10,
+                  border: "1px solid var(--hostly-line)",
+                  background: "rgba(248, 251, 254, 0.88)",
+                  color: "#3f6478",
+                  fontSize: 10.5,
+                  fontWeight: 650,
+                  lineHeight: 1.25,
+                }}
+              >
+                {areaTemplateFeedback ??
+                  "Modo zonas activo: mueve o redimensiona el ambiente seleccionado."}
+              </div>
+            ) : null}
+            <div style={mapToolboxChipsRow}>
+              <button
+                type="button"
+                style={mapToolboxChipStyle(visibleZones.length === 0 || editingZones)}
+                onClick={() => void handleCreateZoneVisual()}
+                disabled={visibleZones.length === 0 || editingZones}
+              >
+                Zona visual
+              </button>
+            </div>
+            <div style={mapToolboxChipsRow}>
+              {AREA_QUICK_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.key}
+                  type="button"
+                  style={mapToolboxChipStyle(
+                    Boolean(editingZones || areaTemplateBusy),
+                  )}
+                  disabled={editingZones || areaTemplateBusy}
+                  onClick={() => void handleApplyAreaTemplate(tpl)}
+                >
+                  {tpl.label}
+                </button>
+              ))}
+            </div>
+            </>
+            ))}
+
+            <div style={mapToolboxMicro}>Vista</div>
+            <div style={mapToolboxVistaGrid}>
+              <button
+                type="button"
+                className={`${mapRailPaletteBtnClass(false)} min-h-[40px]`}
+                aria-label="Alejar el plano"
+                title="Alejar"
+                onClick={() => mapViewportControlsRef.current?.zoomOut()}
+              >
+                <MapRailIcon icon={Minus} />
+              </button>
+              <button
+                type="button"
+                className={`${mapRailPaletteBtnClass(false)} min-h-[40px]`}
+                aria-label="Acercar el plano"
+                title="Acercar"
+                onClick={() => mapViewportControlsRef.current?.zoomIn()}
+              >
+                <MapRailIcon icon={Plus} />
+              </button>
+              <button
+                type="button"
+                className={`${mapRailPaletteBtnClass(false)} min-h-[40px]`}
+                aria-label="Zoom al 100 %"
+                title="100 %"
+                onClick={() => mapViewportControlsRef.current?.resetNaturalZoom()}
+              >
+                <MapRailIcon icon={Scan} />
+                <span style={{ ...mapRailActionCaption, fontSize: 10 }}>
+                  100 %
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`${mapRailPaletteBtnClass(false)} min-h-[40px]`}
+                aria-label="Ajustar plano a la vista"
+                title="Ajustar"
+                onClick={() => mapViewportControlsRef.current?.fitToViewport()}
+              >
+                <MapRailIcon icon={Maximize2} />
+                <span style={{ ...mapRailActionCaption, fontSize: 10 }}>
+                  Ajustar
+                </span>
+              </button>
+            </div>
+            <button
+              type="button"
+              style={{ ...mapToolboxFullMuted, marginBottom: 6 }}
+              onClick={() => {
+                setEditingZones((v) => {
+                  const next = !v;
+                  if (next) setSelectedIds([]);
+                  else setSelectedZoneId(null);
+                  return next;
+                });
+              }}
+            >
+              {editingZones ? "Salir zonas" : "Editar zonas"}
+            </button>
+
+            <div style={mapToolboxMicro}>Semilla</div>
+            <button
+              type="button"
+              style={{
+                ...mapToolboxSaveSm,
+                width: "100%",
+                opacity:
+                  !selectedFloorPlanId ||
+                  loading ||
+                  editingZones ||
+                  areaTemplateBusy ||
+                  visibleElements.length > 0
+                    ? 0.45
+                    : 1,
+                cursor:
+                  !selectedFloorPlanId ||
+                  loading ||
+                  editingZones ||
+                  areaTemplateBusy ||
+                  visibleElements.length > 0
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+              disabled={
+                !selectedFloorPlanId ||
+                loading ||
+                editingZones ||
+                areaTemplateBusy ||
+                visibleElements.length > 0
+              }
+              onClick={() => {
+                if (!selectedFloorPlanId) return;
+                void runPremiumVenueBaseline(selectedFloorPlanId);
+              }}
+            >
+              Salón sugerido
+            </button>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: 10,
+                lineHeight: 1.4,
+                color: "#64748b",
+                fontWeight: 500,
+              }}
+            >
+              Solo plano vacío. Revisa y guarda arriba.
+            </p>
+          </aside>
+        ) : null}
         <div
-          className="hostly-card"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: editorLayoutNarrow ? "column" : "row",
+            alignItems: "stretch",
+            gap:
+              configuracionMapEditorLayout && premiumSpatialEditor
+                ? 0
+                : premiumSpatialEditor
+                  ? 2
+                  : 10,
+          }}
+        >
+        <div
+          className={
+            configuracionMapEditorLayout && premiumSpatialEditor
+              ? "hostly-floor-editor-map-wrap"
+              : "hostly-card"
+          }
           style={{
             flex: "1 1 0%",
             minWidth: 0,
-            minHeight: editorLayoutNarrow ? 320 : 0,
+            minHeight: editorLayoutNarrow
+              ? premiumSpatialEditor
+                ? 300
+                : 320
+              : 0,
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             padding: 0,
-            borderRadius: "var(--hostly-radius-md)",
+            borderRadius:
+              configuracionMapEditorLayout && premiumSpatialEditor
+                ? 4
+                : premiumSpatialEditor
+                  ? 12
+                  : "var(--hostly-radius-md)",
             order: editorLayoutNarrow ? 1 : undefined,
+            ...(configuracionMapEditorLayout && premiumSpatialEditor
+              ? {
+                  border: "1px solid #d8cec0",
+                  boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)",
+                  background:
+                    "linear-gradient(180deg, #eef4f9 0%, #e4edf5 100%)",
+                }
+              : premiumSpatialEditor
+                ? {
+                    boxShadow: "0 0 0 1px rgba(148, 163, 184, 0.05)",
+                    border: "1px solid rgba(148, 163, 184, 0.06)",
+                  }
+                : {}),
           }}
         >
           {loading ? (
@@ -2393,7 +4639,7 @@ export default function ConfigMesasPage({
                 minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
-                padding: "14px 16px 16px",
+                padding: premiumSpatialEditor ? 0 : "8px 10px 10px",
                 boxSizing: "border-box",
               }}
             >
@@ -2437,9 +4683,496 @@ export default function ConfigMesasPage({
                   </div>
                 </div>
               ) : null}
+              {premiumSpatialEditor &&
+              !configuracionMapEditorLayout &&
+              restaurantId &&
+              isFirebaseConfigured &&
+              !loading ? (
+                <div
+                  ref={premiumToolsMenuRef}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 12,
+                    pointerEvents: "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 8,
+                      bottom: 8,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "stretch",
+                      gap: 8,
+                      pointerEvents: "auto",
+                      maxWidth: "calc(100% - 100px)",
+                    }}
+                  >
+                    {premiumToolsMenuOpen ? (
+                      <div
+                        id="hostly-premium-tools-popover"
+                        role="dialog"
+                        aria-label="Más herramientas del plano"
+                        style={premiumPopoverPanelStyle}
+                      >
+                        <div style={premiumPopoverSectionLabel}>Plano</div>
+                        <button
+                          type="button"
+                          style={premiumMenuActionRow}
+                          onClick={() => {
+                            setPremiumToolsMenuOpen(false);
+                            void handleCreateNewFloorPlan();
+                          }}
+                        >
+                          Nuevo plano
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...premiumMenuActionRow,
+                            opacity: hasUnsavedChanges ? 1 : 0.45,
+                            cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+                          }}
+                          disabled={!hasUnsavedChanges}
+                          onClick={() => {
+                            setPremiumToolsMenuOpen(false);
+                            handleDiscardPlanChanges();
+                          }}
+                        >
+                          Restablecer cambios
+                        </button>
+
+                        <div style={premiumPopoverSectionLabel}>Zonas</div>
+                        <button
+                          type="button"
+                          style={premiumMenuActionRow}
+                          onClick={() => {
+                            setPremiumToolsMenuOpen(false);
+                            setEditingZones((v) => {
+                              const next = !v;
+                              if (next) setSelectedIds([]);
+                              else setSelectedZoneId(null);
+                              return next;
+                            });
+                          }}
+                        >
+                          {editingZones ? "Salir del modo zonas" : "Editar zonas"}
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...premiumMenuActionRow,
+                            opacity: visibleZones.length === 0 ? 0.45 : 1,
+                            cursor: visibleZones.length === 0 ? "not-allowed" : "pointer",
+                          }}
+                          disabled={visibleZones.length === 0}
+                          onClick={() => {
+                            setPremiumToolsMenuOpen(false);
+                            void handleCreateZoneVisual();
+                          }}
+                        >
+                          Rectángulo de zona en plano
+                        </button>
+                        {visibleZones.length > 0 ? (
+                          <select
+                            aria-label="Resaltar zona"
+                            value={zoneHighlight}
+                            onChange={(e) => setZoneHighlight(e.target.value)}
+                            style={{
+                              ...zoneHighlightSelectStyle,
+                              fontSize: 11,
+                              width: "100%",
+                              marginBottom: 4,
+                              boxSizing: "border-box",
+                            }}
+                          >
+                            <option value="all">Todas las zonas</option>
+                            <option value="unassigned">Sin zona</option>
+                            <optgroup label="Zonas">
+                              {visibleZones.map((z) => (
+                                <option key={z.id} value={z.id}>
+                                  {z.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        ) : null}
+
+                        <div style={premiumPopoverSectionLabel}>
+                          Plantillas de área
+                        </div>
+                        {AREA_QUICK_TEMPLATES.map((tpl) => (
+                          <button
+                            key={tpl.key}
+                            type="button"
+                            style={{
+                              ...premiumMenuActionRow,
+                              opacity:
+                                editingZones || areaTemplateBusy ? 0.45 : 1,
+                              cursor:
+                                editingZones || areaTemplateBusy
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                            disabled={editingZones || areaTemplateBusy}
+                            onClick={() => {
+                              setPremiumToolsMenuOpen(false);
+                              void handleApplyAreaTemplate(tpl);
+                            }}
+                          >
+                            {tpl.label}
+                          </button>
+                        ))}
+
+                        <div style={premiumPopoverSectionLabel}>
+                          Colocar en el centro (estructura)
+                        </div>
+                        {(
+                          [
+                            ["wall", "Pared"],
+                            ["bar", "Barra"],
+                            ["column", "Columna"],
+                            ["pool", "Piscina"],
+                            ["door", "Puerta"],
+                            ["planter", "Jardinera"],
+                          ] as const
+                        ).map(([t, label]) => (
+                          <button
+                            key={t}
+                            type="button"
+                            style={{
+                              ...premiumMenuActionRow,
+                              opacity: editingZones ? 0.45 : 1,
+                              cursor: editingZones ? "not-allowed" : "pointer",
+                            }}
+                            disabled={editingZones}
+                            onClick={() => {
+                              setPremiumToolsMenuOpen(false);
+                              requestStructureAtMapCenter(t);
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+
+                        <div style={premiumPopoverSectionLabel}>
+                          Cursor
+                        </div>
+                        <button
+                          type="button"
+                          style={premiumMenuActionRow}
+                          onClick={() => {
+                            setPremiumToolsMenuOpen(false);
+                            setActiveCreateType(null);
+                          }}
+                        >
+                          Seleccionar sin crear
+                        </button>
+
+                        <div style={premiumPopoverSectionLabel}>
+                          Colocar al clic (mobiliario)
+                        </div>
+                        <button
+                          type="button"
+                          style={{
+                            ...premiumMenuActionRow,
+                            opacity: editingZones ? 0.45 : 1,
+                            cursor: editingZones ? "not-allowed" : "pointer",
+                          }}
+                          disabled={editingZones}
+                          onClick={() => {
+                            setPremiumToolsMenuOpen(false);
+                            setActiveCreateType("sunbed");
+                          }}
+                        >
+                          Hamaca
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...premiumMenuActionRow,
+                            opacity: editingZones ? 0.45 : 1,
+                            cursor: editingZones ? "not-allowed" : "pointer",
+                          }}
+                          disabled={editingZones}
+                          onClick={() => {
+                            setPremiumToolsMenuOpen(false);
+                            setActiveCreateType("bed");
+                          }}
+                        >
+                          Cama
+                        </button>
+
+                        {hasAnyLockedElement ? (
+                          <>
+                            <div style={premiumPopoverSectionLabel}>
+                              Bloqueo
+                            </div>
+                            <button
+                              type="button"
+                              style={premiumMenuActionRow}
+                              disabled={editingZones}
+                              onClick={() => {
+                                setPremiumToolsMenuOpen(false);
+                                void handleUnlockAllElements();
+                              }}
+                            >
+                              Desbloquear todo
+                            </button>
+                          </>
+                        ) : null}
+
+                        {selectedIds.length >= 1 ? (
+                          <>
+                            <div style={premiumPopoverSectionLabel}>
+                              Selección
+                            </div>
+                            <button
+                              type="button"
+                              style={premiumMenuActionRow}
+                              disabled={editingZones}
+                              onClick={() => {
+                                setPremiumToolsMenuOpen(false);
+                                void handleDuplicateSelection();
+                              }}
+                            >
+                              Duplicar
+                            </button>
+                            <button
+                              type="button"
+                              style={{
+                                ...premiumMenuActionRow,
+                                borderColor: "rgba(248, 113, 113, 0.35)",
+                                color: "#fecaca",
+                              }}
+                              disabled={editingZones}
+                              onClick={() => {
+                                setPremiumToolsMenuOpen(false);
+                                void handleDeleteSelection();
+                              }}
+                            >
+                              Eliminar
+                            </button>
+                            {selectedFloorPlanId ? (
+                              <button
+                                type="button"
+                                style={premiumMenuActionRow}
+                                disabled={editingZones}
+                                onClick={() => {
+                                  setPremiumToolsMenuOpen(false);
+                                  void handleMoveSelectionToActiveFloorPlan();
+                                }}
+                              >
+                                Mover a este plano
+                              </button>
+                            ) : null}
+                          </>
+                        ) : null}
+
+                        {selectedIds.length >= 2 ? (
+                          <>
+                            <div style={premiumPopoverSectionLabel}>Alinear</div>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 4,
+                                marginBottom: 6,
+                              }}
+                            >
+                              {(
+                                [
+                                  ["left", "←"],
+                                  ["centerH", "H"],
+                                  ["right", "→"],
+                                  ["top", "↑"],
+                                  ["centerV", "V"],
+                                  ["bottom", "↓"],
+                                ] as const
+                              ).map(([k, sym]) => (
+                                <button
+                                  key={k}
+                                  type="button"
+                                  style={{
+                                    ...premiumMiniToolBtn,
+                                    flex: "1 1 28%",
+                                    minWidth: 44,
+                                    justifyContent: "center",
+                                  }}
+                                  disabled={editingZones}
+                                  onClick={() => {
+                                    setPremiumToolsMenuOpen(false);
+                                    alignSelectedElements(k);
+                                  }}
+                                >
+                                  {sym}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        ) : null}
+
+                        {selectedIds.length >= 3 ? (
+                          <>
+                            <div style={premiumPopoverSectionLabel}>
+                              Repartir
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 4,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                style={{
+                                  ...premiumMiniToolBtn,
+                                  flex: 1,
+                                  justifyContent: "center",
+                                }}
+                                disabled={editingZones}
+                                onClick={() => {
+                                  setPremiumToolsMenuOpen(false);
+                                  distributeSelectedElements("horizontal");
+                                }}
+                              >
+                                Horizontal
+                              </button>
+                              <button
+                                type="button"
+                                style={{
+                                  ...premiumMiniToolBtn,
+                                  flex: 1,
+                                  justifyContent: "center",
+                                }}
+                                disabled={editingZones}
+                                onClick={() => {
+                                  setPremiumToolsMenuOpen(false);
+                                  distributeSelectedElements("vertical");
+                                }}
+                              >
+                                Vertical
+                              </button>
+                            </div>
+                          </>
+                        ) : null}
+
+                        {visibleZones.length > 0 ? (
+                          <>
+                            <div style={premiumPopoverSectionLabel}>
+                              Leyenda
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 4,
+                                paddingBottom: 2,
+                              }}
+                              aria-label="Leyenda de zonas"
+                            >
+                              {visibleZones.map((z) => (
+                                <span
+                                  key={z.id}
+                                  style={{
+                                    ...zoneLegendItemStyle,
+                                    fontSize: 10,
+                                    gap: 4,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <span
+                                    aria-hidden
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: 999,
+                                      background:
+                                        z.color ?? "rgba(148, 163, 184, 0.55)",
+                                      border:
+                                        "1px solid rgba(148, 163, 184, 0.45)",
+                                      flex: "none",
+                                    }}
+                                  />
+                                  <span>{z.name}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-expanded={premiumToolsMenuOpen}
+                      aria-controls="hostly-premium-tools-popover"
+                      aria-label={
+                        premiumToolsMenuOpen
+                          ? "Cerrar menú de herramientas"
+                          : "Más herramientas"
+                      }
+                      style={premiumFabPlusStyle}
+                      onClick={() =>
+                        setPremiumToolsMenuOpen((open) => !open)
+                      }
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {editingZones || areaTemplateFeedback ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 14,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    zIndex: 42,
+                    pointerEvents: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    maxWidth: "min(520px, calc(100% - 32px))",
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(180, 150, 112, 0.28)",
+                    background: "rgba(255, 252, 246, 0.86)",
+                    color: "#5f513f",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    letterSpacing: "-0.01em",
+                    boxShadow: "0 8px 28px rgba(58, 47, 34, 0.08)",
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: 999,
+                      background: areaTemplateBusy ? "#d6a85f" : "#7c6a52",
+                      boxShadow: "0 0 0 4px rgba(214, 168, 95, 0.12)",
+                      flex: "none",
+                    }}
+                  />
+                  <span>
+                    {areaTemplateFeedback ??
+                      "Modo zonas: arrastra y redimensiona los ambientes del plano"}
+                  </span>
+                </div>
+              ) : null}
               <EditableFloorMap
                 editable
                 editorPlanSurface
+                editorVisualPreset={
+                  premiumSpatialEditor ? "premium" : "default"
+                }
+                floorSurfacePreset={floorSurfacePreset}
+                planSize={selectedFloorPlanSize}
                 className="hostly-floor-editor-map"
                 createType={activeCreateType}
                 elements={visibleElements}
@@ -2450,10 +5183,23 @@ export default function ConfigMesasPage({
                 onResize={handleResize}
                 onRename={editingZones ? undefined : handleRenameElement}
                 onCreate={(type, x, y) => {
+                  lastMapInteractionRef.current = { x, y };
                   if (type === "custom") return;
-                  void createFloorElement(type, x, y);
+                  if (type === "table") {
+                    const variant =
+                      TABLE_CREATE_VARIANTS.find((v) => v.key === activeTableVariant) ??
+                      TABLE_CREATE_VARIANTS[0];
+                    void createFloorElement(type, x, y, {
+                      tableShape: variant.tableShape,
+                      width: variant.width,
+                      height: variant.height,
+                      seats: variant.seats,
+                    });
+                    return;
+                  }
+                  void createFloorElement(type, x, y, createSizeForPlanType(type) ?? undefined);
                 }}
-                zones={zones}
+                zones={visibleZones}
                 zoneHighlight={zoneHighlight}
                 editingZones={editingZones}
                 selectedZoneId={selectedZoneId}
@@ -2462,17 +5208,229 @@ export default function ConfigMesasPage({
                 }}
                 onMoveZone={handleMoveZone}
                 onResizeZone={handleResizeZone}
+                mapAutoFitKey={
+                  premiumSpatialEditor ? (selectedFloorPlanId ?? "") : undefined
+                }
+                mapAutoFitNonce={premiumSpatialEditor ? mapFitNonce : 0}
+                placementRequest={
+                  premiumSpatialEditor ? placementRequest : null
+                }
+                onPlacementRequestHandled={
+                  premiumSpatialEditor ? clearPlacementRequest : undefined
+                }
+                hideInlineZoomControls={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                }
+                viewportControlsRef={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? mapViewportControlsRef
+                    : undefined
+                }
+                viewportFitPaddingPx={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? 12
+                    : undefined
+                }
+                viewportFitMode="content"
+                viewportFitElements={visibleElements}
+                viewportFitZones={visibleZones}
+                viewportFitZoomMax={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? 1.28
+                    : undefined
+                }
+                mapLayoutEmphasis={
+                  Boolean(
+                    configuracionMapEditorLayout && premiumSpatialEditor,
+                  )
+                }
+                selectedIdsRef={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? selectedIdsRef
+                    : undefined
+                }
+                onSelectionScreenRect={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? setSelectionScreenRect
+                    : undefined
+                }
+                onZoneScreenRect={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? setZoneHudScreenRect
+                    : undefined
+                }
+                onBoxSelect={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? handleBoxSelect
+                    : undefined
+                }
+                preferredPlacementMapPoint={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? preferredPlacementMapPoint
+                    : null
+                }
+                onMoveMany={
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? handleMoveMany
+                    : undefined
+                }
               />
+              {configuracionMapEditorLayout && premiumSpatialEditor ? (
+                <>
+                  <MapFloatingQuickActions
+                    anchor={selectionScreenRect}
+                    visible={
+                      !editingZones &&
+                      selectedIds.length > 0 &&
+                      !!selectionScreenRect
+                    }
+                    multi={selectedIds.length > 1}
+                    canDistribute={selectedIds.length >= 3}
+                    canReorderFront={canReorderSelectionFront}
+                    canReorderBack={canReorderSelectionBack}
+                    onDuplicate={() => {
+                      void handleDuplicateSelection();
+                    }}
+                    onLock={() => handleToggleSelectionLock()}
+                    onFront={() => handleBringSelectionToFront()}
+                    onBack={() => handleSendSelectionToBack()}
+                    onDelete={() => void handleDeleteSelection()}
+                    onAlignH={() => alignSelectedElements("centerV")}
+                    onAlignV={() => alignSelectedElements("centerH")}
+                    onDistributeH={() =>
+                      distributeSelectedElements("horizontal")
+                    }
+                    onDistributeV={() =>
+                      distributeSelectedElements("vertical")
+                    }
+                  />
+                  {editingZones &&
+                  zoneHudScreenRect &&
+                  selectedZone ? (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      style={{
+                        position: "fixed",
+                        left:
+                          zoneHudScreenRect.left +
+                          zoneHudScreenRect.width / 2,
+                        top: zoneHudScreenRect.top + zoneHudScreenRect.height + 6,
+                        zIndex: 55,
+                        pointerEvents: "none",
+                        padding: "5px 10px",
+                        borderRadius: 8,
+                        border: "1px solid rgba(148, 163, 184, 0.35)",
+                        background: "rgba(255, 255, 255, 0.96)",
+                        boxShadow:
+                          "0 4px 14px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06)",
+                        fontSize: 11,
+                        color: "#334155",
+                        fontWeight: 600,
+                        maxWidth: 220,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        transform: "translateX(-50%)",
+                      }}
+                    >
+                      {selectedZone.name}
+                      <span style={{ opacity: 0.65, fontWeight: 500 }}>
+                        {" "}
+                        · {tablesCountInSelectedZone} mesas · ≈
+                        {typeof selectedZone.width === "number" &&
+                        typeof selectedZone.height === "number"
+                          ? ` ${Math.round(selectedZone.width)}×${Math.round(
+                              selectedZone.height,
+                            )}`
+                          : ""}
+                      </span>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
             </div>
           )}
         </div>
 
         {showSideInspector ? (
         <aside
-          className="hostly-card"
+          className={
+            configuracionMapEditorLayout && premiumSpatialEditor
+              ? "hostly-floor-editor-inspector"
+              : "hostly-card"
+          }
           style={{
             ...sidePanelStyle,
-            ...(editorLayoutNarrow
+            ...(premiumSpatialEditor
+              ? editorLayoutNarrow
+                ? configuracionMapEditorLayout
+                  ? {
+                      flex: "0 0 auto",
+                      width: "100%",
+                      maxWidth: "100%",
+                      minWidth: 0,
+                      maxHeight: "min(44vh, 420px)",
+                      order: 2,
+                      padding: "8px 10px 10px",
+                      border: "1px solid #e7e0d6",
+                      background: "#fffdf9",
+                      boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+                    }
+                  : {
+                      flex: "0 0 auto",
+                      width: "100%",
+                      maxWidth: "100%",
+                      minWidth: 0,
+                      maxHeight: "min(44vh, 420px)",
+                      order: 2,
+                      padding: "4px 6px 6px",
+                      border: "1px solid rgba(148, 163, 184, 0.06)",
+                      background: "rgba(15, 23, 42, 0.1)",
+                      boxShadow:
+                        "inset 0 1px 0 rgba(255,255,255,0.02), 0 6px 18px rgba(2, 6, 23, 0.12)",
+                    }
+                : premiumInspectorCollapsed
+                  ? {
+                      flex: configuracionMapEditorLayout ? "0 0 40px" : "0 0 36px",
+                      width: configuracionMapEditorLayout ? 40 : 36,
+                      minWidth: configuracionMapEditorLayout ? 40 : 36,
+                      maxWidth: configuracionMapEditorLayout ? 40 : 36,
+                      padding: configuracionMapEditorLayout ? "8px 3px" : "6px 2px",
+                      border: configuracionMapEditorLayout
+                        ? "1px solid #e7e0d6"
+                        : "1px solid rgba(148, 163, 184, 0.06)",
+                      background: configuracionMapEditorLayout
+                        ? "#f7f4ef"
+                        : "rgba(15, 23, 42, 0.1)",
+                      boxShadow: configuracionMapEditorLayout
+                        ? "0 1px 2px rgba(15, 23, 42, 0.04)"
+                        : "inset 0 1px 0 rgba(255,255,255,0.02), 0 6px 18px rgba(2, 6, 23, 0.12)",
+                      alignItems: "center",
+                    }
+                  : configuracionMapEditorLayout
+                    ? {
+                        flex: "0 0 212px",
+                        width: 212,
+                        minWidth: 188,
+                        maxWidth: 220,
+                        padding: "8px 10px 10px",
+                        border: "1px solid #e7e0d6",
+                        background: "#fffdf9",
+                        boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+                      }
+                    : {
+                      flex: "0 0 148px",
+                      width: 148,
+                      minWidth: 132,
+                      padding: "3px 5px 5px",
+                      border: "1px solid rgba(148, 163, 184, 0.06)",
+                      background: "rgba(15, 23, 42, 0.1)",
+                      boxShadow:
+                        "inset 0 1px 0 rgba(255,255,255,0.02), 0 6px 18px rgba(2, 6, 23, 0.12)",
+                    }
+              : {}),
+            ...(editorLayoutNarrow && !premiumSpatialEditor
               ? {
                   flex: "0 0 auto",
                   width: "100%",
@@ -2484,21 +5442,126 @@ export default function ConfigMesasPage({
               : {}),
           }}
         >
-          <div style={sidePanelTitleStyle}>
-            {editingZones ? "Zona" : "Detalle"}
-          </div>
+          {premiumSpatialEditor &&
+          !editorLayoutNarrow &&
+          premiumInspectorCollapsed ? (
+            <button
+              type="button"
+              aria-label="Abrir inspector"
+              title="Abrir inspector"
+              onClick={() => setPremiumInspectorCollapsed(false)}
+              style={{
+                border: configuracionMapEditorLayout
+                  ? "1px solid #e2e8f0"
+                  : "1px solid rgba(148, 163, 184, 0.14)",
+                background: configuracionMapEditorLayout
+                  ? "#ffffff"
+                  : "rgba(30, 41, 59, 0.55)",
+                color: configuracionMapEditorLayout ? "#64748b" : "#94a3b8",
+                borderRadius: 6,
+                width: "100%",
+                flex: 1,
+                minHeight: 72,
+                maxHeight: "min(60vh, 420px)",
+                cursor: "pointer",
+                fontSize: configuracionMapEditorLayout ? 9 : 14,
+                lineHeight: configuracionMapEditorLayout ? 1.2 : 1,
+                fontWeight: configuracionMapEditorLayout ? 600 : 400,
+                letterSpacing: configuracionMapEditorLayout ? "0.08em" : "normal",
+                textTransform: configuracionMapEditorLayout ? "uppercase" : "none",
+                writingMode: configuracionMapEditorLayout ? "vertical-rl" : "horizontal-tb",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: configuracionMapEditorLayout ? "10px 0" : 0,
+              }}
+            >
+              {configuracionMapEditorLayout ? "Inspector" : "⟨"}
+            </button>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 6,
+                  marginBottom:
+                    configuracionMapEditorLayout && premiumSpatialEditor
+                      ? 2
+                      : premiumSpatialEditor
+                        ? 4
+                        : 10,
+                }}
+              >
+                <div
+                  style={{
+                    ...sidePanelTitleStyle,
+                    marginBottom: 0,
+                    ...(premiumSpatialEditor && configuracionMapEditorLayout
+                      ? {
+                          color: "#64748b",
+                          fontSize: 10,
+                          fontWeight: 600,
+                          letterSpacing: "0.07em",
+                        }
+                      : premiumSpatialEditor
+                        ? {
+                            color: "#94a3b8",
+                            fontSize: 8.5,
+                            letterSpacing: "0.1em",
+                          }
+                        : {}),
+                  }}
+                >
+                  {editingZones
+                    ? "Zona"
+                    : premiumSpatialEditor
+                      ? "Inspector"
+                      : "Detalle"}
+                </div>
+                {premiumSpatialEditor && !editorLayoutNarrow ? (
+                  <button
+                    type="button"
+                    aria-label="Minimizar inspector"
+                    title="Minimizar"
+                    onClick={() => setPremiumInspectorCollapsed(true)}
+                    style={{
+                      border:
+                        configuracionMapEditorLayout && premiumSpatialEditor
+                          ? "1px solid #e2e8f0"
+                          : "1px solid rgba(148, 163, 184, 0.1)",
+                      background:
+                        configuracionMapEditorLayout && premiumSpatialEditor
+                          ? "#ffffff"
+                          : "rgba(30, 41, 59, 0.35)",
+                      color: "#64748b",
+                      borderRadius: 6,
+                      width: 24,
+                      height: 24,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      lineHeight: 1,
+                      flex: "none",
+                      padding: 0,
+                    }}
+                  >
+                    ⟩
+                  </button>
+                ) : null}
+              </div>
 
           {editingZones ? (
             selectedZone ? (
               <>
                 <div style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 2 }}>
-                <div style={fieldBlock}>
-                  <label htmlFor="zona-nombre" style={fieldLabelStyle}>
+                <div style={{ ...fieldBlock, marginBottom: insFieldMb }}>
+                  <label htmlFor="zona-nombre" style={mapInspectorLabelStyle}>
                     Nombre
                   </label>
                   <input
                     id="zona-nombre"
-                    style={inputStyle}
+                    style={mapInspectorInputStyle}
                     value={zoneDraft.name}
                     onChange={(e) =>
                       setZoneDraft((d) => ({ ...d, name: e.target.value }))
@@ -2507,13 +5570,13 @@ export default function ConfigMesasPage({
                   />
                 </div>
 
-                <div style={fieldBlock}>
-                  <label htmlFor="zona-color" style={fieldLabelStyle}>
+                <div style={{ ...fieldBlock, marginBottom: insFieldMb }}>
+                  <label htmlFor="zona-color" style={mapInspectorLabelStyle}>
                     Color
                   </label>
                   <input
                     id="zona-color"
-                    style={inputStyle}
+                    style={mapInspectorInputStyle}
                     value={zoneDraft.color}
                     placeholder="#38bdf8"
                     onChange={(e) =>
@@ -2528,17 +5591,23 @@ export default function ConfigMesasPage({
                     ...fieldBlock,
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
-                    gap: 12,
+                    gap: insGridGap,
+                    marginBottom:
+                      configuracionMapEditorLayout && premiumSpatialEditor
+                        ? 3
+                        : premiumSpatialEditor
+                          ? 6
+                          : undefined,
                   }}
                 >
                   <div>
-                    <label htmlFor="zona-x" style={fieldLabelStyle}>
+                    <label htmlFor="zona-x" style={mapInspectorLabelStyle}>
                       X
                     </label>
                     <input
                       id="zona-x"
                       type="number"
-                      style={inputStyle}
+                      style={mapInspectorInputStyle}
                       value={zoneDraft.x}
                       onChange={(e) =>
                         setZoneDraft((d) => ({ ...d, x: e.target.value }))
@@ -2547,13 +5616,13 @@ export default function ConfigMesasPage({
                     />
                   </div>
                   <div>
-                    <label htmlFor="zona-y" style={fieldLabelStyle}>
+                    <label htmlFor="zona-y" style={mapInspectorLabelStyle}>
                       Y
                     </label>
                     <input
                       id="zona-y"
                       type="number"
-                      style={inputStyle}
+                      style={mapInspectorInputStyle}
                       value={zoneDraft.y}
                       onChange={(e) =>
                         setZoneDraft((d) => ({ ...d, y: e.target.value }))
@@ -2566,21 +5635,26 @@ export default function ConfigMesasPage({
                 <div
                   style={{
                     ...fieldBlock,
-                    marginBottom: 16,
+                    marginBottom:
+                      configuracionMapEditorLayout && premiumSpatialEditor
+                        ? 6
+                        : premiumSpatialEditor
+                          ? 10
+                          : 16,
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
-                    gap: 12,
+                    gap: insGridGap,
                   }}
                 >
                   <div>
-                    <label htmlFor="zona-w" style={fieldLabelStyle}>
+                    <label htmlFor="zona-w" style={mapInspectorLabelStyle}>
                       Ancho
                     </label>
                     <input
                       id="zona-w"
                       type="number"
                       min={120}
-                      style={inputStyle}
+                      style={mapInspectorInputStyle}
                       value={zoneDraft.width}
                       onChange={(e) =>
                         setZoneDraft((d) => ({ ...d, width: e.target.value }))
@@ -2589,14 +5663,14 @@ export default function ConfigMesasPage({
                     />
                   </div>
                   <div>
-                    <label htmlFor="zona-h" style={fieldLabelStyle}>
+                    <label htmlFor="zona-h" style={mapInspectorLabelStyle}>
                       Alto
                     </label>
                     <input
                       id="zona-h"
                       type="number"
                       min={90}
-                      style={inputStyle}
+                      style={mapInspectorInputStyle}
                       value={zoneDraft.height}
                       onChange={(e) =>
                         setZoneDraft((d) => ({ ...d, height: e.target.value }))
@@ -2609,9 +5683,10 @@ export default function ConfigMesasPage({
                 <button
                   type="button"
                   style={btnDanger}
+                  title="Eliminar zona visual"
                   onClick={() => void handleDeleteZoneVisual()}
                 >
-                  Eliminar zona visual
+                  {premiumSpatialEditor ? "Eliminar" : "Eliminar zona visual"}
                 </button>
                 </div>
               </>
@@ -2632,52 +5707,63 @@ export default function ConfigMesasPage({
                 paddingTop: 12,
               }}
             >
-              <div style={{ fontWeight: 700, color: "#e2e8f0", fontSize: 15 }}>
-                {selectedIds.length} elementos seleccionados
+              <div style={{ fontWeight: 700, color: "#e2e8f0", fontSize: premiumSpatialEditor ? 14 : 15 }}>
+                {premiumSpatialEditor
+                  ? `${selectedIds.length} sel.`
+                  : `${selectedIds.length} elementos seleccionados`}
               </div>
               <div
                 style={{
                   color: "#64748b",
                   fontWeight: 500,
-                  fontSize: 13,
+                  fontSize: premiumSpatialEditor ? 12 : 13,
                   textAlign: "center",
                   lineHeight: 1.45,
                 }}
               >
-                Mayús+clic para añadir o quitar. El primero en la selección es la referencia al alinear.
+                {premiumSpatialEditor
+                  ? "Mayús+clic · el primero es referencia al alinear."
+                  : "Mayús+clic para añadir o quitar. El primero en la selección es la referencia al alinear."}
               </div>
             </div>
           ) : selectedElement ? (
             <>
             <div style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 2 }}>
 
-            <div style={fieldBlock}>
-              <label htmlFor="el-nombre" style={fieldLabelStyle}>
+            <div style={{ ...fieldBlock, marginBottom: insFieldMb }}>
+              <label htmlFor="el-nombre" style={mapInspectorLabelStyle}>
                 Nombre
               </label>
               <input
                 id="el-nombre"
-                style={inputStyle}
+                style={mapInspectorInputStyle}
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
                 onBlur={() => void persistName()}
               />
             </div>
 
-            <div style={fieldBlock}>
-              <label htmlFor="el-tipo" style={fieldLabelStyle}>
+            <div style={{ ...fieldBlock, marginBottom: insFieldMb }}>
+              <label htmlFor="el-tipo" style={mapInspectorLabelStyle}>
                 Tipo
               </label>
               <input
                 id="el-tipo"
                 readOnly
                 tabIndex={-1}
-                style={readOnlyStyle}
+                style={premiumSpatialEditor ? { ...mapInspectorInputStyle, opacity: 0.85 } : readOnlyStyle}
                 value={planTypeLabelEs(selectedElement.type)}
               />
             </div>
 
-            <div style={fieldBlock}>
+            {premiumSpatialEditor ? (
+              <div
+                style={cfgMapUi ? inspectorCfgDivider : inspectorPremiumDivider}
+                aria-hidden
+              />
+            ) : null}
+
+            <div style={{ ...fieldBlock, marginBottom: insFieldMb }}>
               <button
                 type="button"
                 style={{
@@ -2685,35 +5771,51 @@ export default function ConfigMesasPage({
                   alignItems: "center",
                   justifyContent: "center",
                   width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(148, 163, 184, 0.28)",
-                  background: "rgba(15, 23, 42, 0.28)",
-                  color: "#e2e8f0",
-                  fontWeight: 700,
-                  fontSize: 13,
+                  padding: cfgMapUi
+                    ? "5px 8px"
+                    : premiumSpatialEditor
+                      ? "7px 10px"
+                      : "10px 12px",
+                  borderRadius: cfgMapUi ? 6 : premiumSpatialEditor ? 8 : 10,
+                  border: cfgMapUi
+                    ? "1px solid #e2e8f0"
+                    : "1px solid rgba(148, 163, 184, 0.22)",
+                  background: cfgMapUi ? "#ffffff" : "rgba(15, 23, 42, 0.28)",
+                  color: cfgMapUi ? "#334155" : "#e2e8f0",
+                  fontWeight: 600,
+                  fontSize: cfgMapUi ? 11 : premiumSpatialEditor ? 11 : 13,
                   cursor: "pointer",
+                  boxShadow: cfgMapUi
+                    ? "0 1px 2px rgba(15, 23, 42, 0.04)"
+                    : undefined,
+                  transition: cfgMapUi
+                    ? "background-color 140ms ease, border-color 140ms ease"
+                    : undefined,
                 }}
                 onClick={() => void handleToggleElementLock()}
               >
                 {selectedElement.locked === true
-                  ? "Desbloquear elemento"
-                  : "Bloquear elemento"}
+                  ? premiumSpatialEditor
+                    ? "Desbloquear"
+                    : "Desbloquear elemento"
+                  : premiumSpatialEditor
+                    ? "Bloquear"
+                    : "Bloquear elemento"}
               </button>
             </div>
 
-            <div style={fieldBlock}>
-              <label htmlFor="el-zona" style={fieldLabelStyle}>
+            <div style={{ ...fieldBlock, marginBottom: insFieldMb }}>
+              <label htmlFor="el-zona" style={mapInspectorLabelStyle}>
                 Zona
               </label>
               <select
                 id="el-zona"
-                style={inputStyle}
+                style={mapInspectorInputStyle}
                 value={selectedElement.zoneId ?? ""}
                 onChange={(e) => void persistZone(e.target.value)}
               >
                 <option value="">Sin zona</option>
-                {zones.map((z) => (
+                {visibleZones.map((z) => (
                   <option key={z.id} value={z.id}>
                     {z.name}
                   </option>
@@ -2726,17 +5828,23 @@ export default function ConfigMesasPage({
                 ...fieldBlock,
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
-                gap: 12,
+                gap: insGridGap,
+                marginBottom:
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? 3
+                    : premiumSpatialEditor
+                      ? 6
+                      : undefined,
               }}
             >
               <div>
-                <label htmlFor="el-x" style={fieldLabelStyle}>
-                  Posición X
+                <label htmlFor="el-x" style={mapInspectorLabelStyle}>
+                  {premiumSpatialEditor ? "X" : "Posición X"}
                 </label>
                 <input
                   id="el-x"
                   type="number"
-                  style={inputStyle}
+                  style={mapInspectorInputStyle}
                   value={dimDraft.x}
                   onChange={(e) =>
                     setDimDraft((d) => ({ ...d, x: e.target.value }))
@@ -2745,13 +5853,13 @@ export default function ConfigMesasPage({
                 />
               </div>
               <div>
-                <label htmlFor="el-y" style={fieldLabelStyle}>
-                  Posición Y
+                <label htmlFor="el-y" style={mapInspectorLabelStyle}>
+                  {premiumSpatialEditor ? "Y" : "Posición Y"}
                 </label>
                 <input
                   id="el-y"
                   type="number"
-                  style={inputStyle}
+                  style={mapInspectorInputStyle}
                   value={dimDraft.y}
                   onChange={(e) =>
                     setDimDraft((d) => ({ ...d, y: e.target.value }))
@@ -2764,21 +5872,24 @@ export default function ConfigMesasPage({
             <div
               style={{
                 ...fieldBlock,
-                marginBottom: 10,
+                marginBottom:
+                  configuracionMapEditorLayout && premiumSpatialEditor
+                    ? 5
+                    : 10,
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
-                gap: 12,
+                gap: insGridGap,
               }}
             >
               <div>
-                <label htmlFor="el-w" style={fieldLabelStyle}>
+                <label htmlFor="el-w" style={mapInspectorLabelStyle}>
                   Ancho
                 </label>
                 <input
                   id="el-w"
                   type="number"
-                  min={48}
-                  style={inputStyle}
+                  min={minSizeForPlanType(selectedElement.type).w}
+                  style={mapInspectorInputStyle}
                   value={dimDraft.w}
                   onChange={(e) =>
                     setDimDraft((d) => ({ ...d, w: e.target.value }))
@@ -2787,14 +5898,14 @@ export default function ConfigMesasPage({
                 />
               </div>
               <div>
-                <label htmlFor="el-h" style={fieldLabelStyle}>
+                <label htmlFor="el-h" style={mapInspectorLabelStyle}>
                   Alto
                 </label>
                 <input
                   id="el-h"
                   type="number"
-                  min={48}
-                  style={inputStyle}
+                  min={minSizeForPlanType(selectedElement.type).h}
+                  style={mapInspectorInputStyle}
                   value={dimDraft.h}
                   onChange={(e) =>
                     setDimDraft((d) => ({ ...d, h: e.target.value }))
@@ -2803,42 +5914,48 @@ export default function ConfigMesasPage({
                 />
               </div>
             </div>
-            </div>
 
             <div
               style={{
                 position: "sticky",
                 bottom: 0,
-                marginTop: 10,
-                paddingTop: 10,
-                borderTop: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.35)",
-                backdropFilter: "blur(6px)",
-                WebkitBackdropFilter: "blur(6px)",
+                marginTop: cfgMapUi ? 6 : 10,
+                paddingTop: cfgMapUi ? 8 : 10,
+                paddingBottom: cfgMapUi ? 6 : 0,
+                borderTop: cfgMapUi
+                  ? "1px solid #e2e8f0"
+                  : "1px solid rgba(148, 163, 184, 0.18)",
+                background: cfgMapUi ? "#f8fafc" : "rgba(15, 23, 42, 0.35)",
+                backdropFilter: cfgMapUi ? undefined : "blur(6px)",
+                WebkitBackdropFilter: cfgMapUi ? undefined : "blur(6px)",
               }}
             >
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
-                  gap: 8,
-                  marginBottom: 8,
+                  gap: cfgMapUi ? 5 : 8,
+                  marginBottom: cfgMapUi ? 5 : 8,
                 }}
               >
                 <button
                   type="button"
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(148, 163, 184, 0.28)",
-                    background: "rgba(15, 23, 42, 0.28)",
-                    color: "#e2e8f0",
-                    fontWeight: 700,
-                    fontSize: 13,
+                    ...(cfgMapUi
+                      ? inspectorCfgFooterBtn
+                      : {
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "100%",
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(148, 163, 184, 0.28)",
+                          background: "rgba(15, 23, 42, 0.28)",
+                          color: "#e2e8f0",
+                          fontWeight: 700,
+                          fontSize: 13,
+                        }),
                     cursor:
                       selectedElementIndex < 0 ||
                       selectedElementIndex >= elements.length - 1
@@ -2855,60 +5972,100 @@ export default function ConfigMesasPage({
                     selectedElementIndex >= elements.length - 1
                   }
                   onClick={() => void handleBringToFront()}
+                  title="Traer delante"
                 >
-                  Traer delante
+                  {premiumSpatialEditor ? "Delante" : "Traer delante"}
                 </button>
                 <button
                   type="button"
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(148, 163, 184, 0.28)",
-                    background: "rgba(15, 23, 42, 0.28)",
-                    color: "#e2e8f0",
-                    fontWeight: 700,
-                    fontSize: 13,
+                    ...(cfgMapUi
+                      ? inspectorCfgFooterBtn
+                      : {
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "100%",
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(148, 163, 184, 0.28)",
+                          background: "rgba(15, 23, 42, 0.28)",
+                          color: "#e2e8f0",
+                          fontWeight: 700,
+                          fontSize: 13,
+                        }),
                     cursor:
                       selectedElementIndex <= 0 ? "not-allowed" : "pointer",
                     opacity: selectedElementIndex <= 0 ? 0.45 : 1,
                   }}
                   disabled={selectedElementIndex <= 0}
                   onClick={() => void handleSendToBack()}
+                  title="Enviar detrás"
                 >
-                  Enviar detrás
+                  {premiumSpatialEditor ? "Detrás" : "Enviar detrás"}
                 </button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: cfgMapUi ? 5 : 8,
+                }}
+              >
                 <button
                   type="button"
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(148, 163, 184, 0.28)",
-                    background: "rgba(15, 23, 42, 0.28)",
-                    color: "#e2e8f0",
-                    fontWeight: 700,
-                    fontSize: 13,
+                    ...(cfgMapUi
+                      ? inspectorCfgFooterBtn
+                      : {
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "100%",
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(148, 163, 184, 0.28)",
+                          background: "rgba(15, 23, 42, 0.28)",
+                          color: "#e2e8f0",
+                          fontWeight: 700,
+                          fontSize: 13,
+                        }),
                     cursor: "pointer",
                   }}
                   onClick={() => void handleDuplicate()}
                 >
                   Duplicar
                 </button>
-                <button type="button" style={btnDanger} onClick={() => void handleDelete()}>
+                <button
+                  type="button"
+                  style={
+                    cfgMapUi
+                      ? { ...inspectorCfgFooterDelete, cursor: "pointer" }
+                      : btnDanger
+                  }
+                  onClick={() => void handleDelete()}
+                >
                   Eliminar
                 </button>
               </div>
             </div>
+            </div>
             </>
+          ) : configuracionMapEditorLayout && premiumSpatialEditor ? (
+            <div
+              className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 px-3 text-center transition-opacity duration-150 ease-out"
+              aria-live="polite"
+            >
+              <MousePointer2
+                size={15}
+                strokeWidth={1.75}
+                className="shrink-0 text-slate-400"
+                aria-hidden
+              />
+              <span className="text-[11px] font-medium text-slate-500">
+                Selecciona un elemento
+              </span>
+            </div>
           ) : (
             <div style={sideEmptyStyle}>
               <div>Selecciona un elemento</div>
@@ -2917,8 +6074,11 @@ export default function ConfigMesasPage({
               </div>
             </div>
           )}
+            </>
+          )}
         </aside>
         ) : null}
+        </div>
       </div>
     </ModulePageShell>
   );

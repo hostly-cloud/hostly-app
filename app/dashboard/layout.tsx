@@ -13,7 +13,7 @@ export default function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
-  const { restaurantId } = useAuth();
+  const { restaurantId, profileReady } = useAuth();
 
   return (
     <div
@@ -21,7 +21,7 @@ export default function DashboardLayout({
       data-hostly-touch
     >
       <DashboardGate>
-        {isFirebaseConfigured && !restaurantId ? (
+        {isFirebaseConfigured && profileReady && !restaurantId ? (
           <div>No tienes restaurante asignado</div>
         ) : (
           children

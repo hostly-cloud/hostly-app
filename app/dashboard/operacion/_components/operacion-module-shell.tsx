@@ -18,8 +18,9 @@ import OperationFilterBar from "@/components/kds/operation-filter-bar";
  */
 const shellStyle: CSSProperties = {
   boxSizing: "border-box",
-  background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
-  color: "#f8fafc",
+  background:
+    "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 48%, #dbeefa 100%)",
+  color: "#1f2933",
   minHeight: "100dvh",
   height: "100dvh",
   maxHeight: "100dvh",
@@ -36,13 +37,13 @@ const topBarStyle: CSSProperties = {
   alignItems: "center",
   gap: 12,
   padding: "10px 16px",
-  borderBottom: "1px solid rgba(148, 163, 184, 0.14)",
-  background: "rgba(2, 6, 23, 0.28)",
+  borderBottom: "1px solid var(--hostly-line)",
+  background: "rgba(247, 252, 255, 0.92)",
 };
 
 const moduleLabelStyle: CSSProperties = {
   marginLeft: "auto",
-  color: "#94a3b8",
+  color: "#667085",
   fontSize: 12,
   fontWeight: 700,
   letterSpacing: "0.06em",
@@ -82,6 +83,7 @@ export function OperacionModuleShell({
           href="/dashboard/operacion"
           label="Volver a Operación"
           ariaLabel="Volver a Operación"
+          tone="light"
         />
         <span style={moduleLabelStyle}>{title}</span>
       </div>

@@ -243,7 +243,7 @@ function statusBadgeStyle(s: ReservationStatus): CSSProperties {
 export default function ReservasView() {
   const router = useRouter();
   const { restaurantId: profileRestaurantId, user, ready: authReady } = useAuth();
-  const restaurantId = profileRestaurantId ?? user?.uid ?? null;
+  const restaurantId = profileRestaurantId ?? null;
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [creating, setCreating] = useState(false);

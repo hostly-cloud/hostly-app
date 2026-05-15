@@ -46,45 +46,60 @@ import type { Locale } from "@/lib/i18n";
 type CartaFilter = "todos" | "activos" | "inactivos" | "conEscandallo" | "sinEscandallo";
 
 const PRODUCTOS_ROW_HOVER_CLASS = "hostly-productos-data-row";
-const PRODUCTOS_ROW_ACTION_CLASS = "hostly-productos-row-action-btn";
+const PRODUCTOS_ROW_TEXT_BTN_CLASS = "hostly-productos-row-text-btn";
 
-/** Hover de filas y botones (inline styles no soportan :hover). */
+/** Data-grid: hover suave en fila + botones de acción compactos (config TPV). */
 const productosTableInteractionStyles = `
 .hostly-productos-data-row {
-  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+  transition: background-color 0.16s ease;
 }
 .hostly-productos-data-row:hover {
-  background-color: rgba(51, 65, 85, 0.5) !important;
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
+  background-color: rgba(248, 250, 252, 0.045) !important;
 }
-.hostly-productos-row-action-btn {
-  transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease,
-    border-color 0.16s ease, color 0.16s ease, filter 0.16s ease;
+.hostly-productos-row-text-btn {
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease, opacity 0.14s ease;
+}
+.hostly-productos-row-text-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 @media (hover: hover) and (pointer: fine) {
-  .hostly-productos-row-action-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 3px 10px rgba(2, 6, 23, 0.45);
-    filter: brightness(1.12);
+  .hostly-productos-row-text-btn:hover:not(:disabled) {
+    background-color: rgba(255, 255, 255, 0.07) !important;
+    border-color: rgba(148, 163, 184, 0.24) !important;
+    color: #e2e8f0 !important;
   }
-  .hostly-productos-row-action-btn:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 1px 4px rgba(2, 6, 23, 0.35);
-    filter: brightness(1.05);
-    transition-duration: 0.08s;
+  .hostly-productos-row-text-btn:active:not(:disabled) {
+    background-color: rgba(255, 255, 255, 0.04) !important;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .hostly-productos-data-row,
-  .hostly-productos-row-action-btn {
+  .hostly-productos-row-text-btn {
     transition: none;
-  }
-  .hostly-productos-row-action-btn:hover:not(:disabled),
-  .hostly-productos-row-action-btn:active:not(:disabled) {
-    transform: none;
   }
 }
 `;
+
+/** Botones de texto en columna Acciones: compactos, misma altura, no “texto flotante”. */
+const productRowActionBtnShell: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  padding: "2px 6px",
+  borderRadius: 5,
+  fontSize: 9,
+  fontWeight: 600,
+  lineHeight: 1.2,
+  whiteSpace: "nowrap",
+  minHeight: 22,
+  boxSizing: "border-box",
+  cursor: "pointer",
+  border: "1px solid rgba(51, 65, 85, 0.85)",
+  background: "rgba(15, 23, 42, 0.35)",
+  color: "#94a3b8",
+};
 
 function normCatKey(s: string): string {
   return s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -121,12 +136,12 @@ const tabularFigures: CSSProperties = {
   fontFeatureSettings: '"tnum" 1',
 };
 
-/** Jerarquía visual en filas de lista: nombre > precio > estado > meta > acciones. */
+/** Nombre: columna dominante (Stripe-like). */
 const productRowNombreStyle: CSSProperties = {
-  fontWeight: 800,
-  color: "#ffffff",
+  fontWeight: 600,
+  color: "#f8fafc",
   fontSize: 14,
-  lineHeight: 1.28,
+  lineHeight: 1.32,
   letterSpacing: "-0.02em",
   minWidth: 0,
   flex: "1 1 0%",
@@ -139,19 +154,38 @@ const productRowPrecioStyle: CSSProperties = {
   ...tabularFigures,
   display: "block",
   width: "100%",
+  minWidth: 0,
   textAlign: "right",
-  fontWeight: 800,
-  color: "#7dd3fc",
-  fontSize: 13,
-  lineHeight: 1.25,
+  fontWeight: 600,
+  color: "#e2e8f0",
+  fontSize: 12,
+  lineHeight: 1.3,
   whiteSpace: "nowrap",
 };
 
-const productRowMetaStyle: CSSProperties = {
+/** Tipo: micro-etiqueta estrecha. */
+const productRowTipoStyle: CSSProperties = {
   fontSize: 10,
-  fontWeight: 500,
+  fontWeight: 600,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
   color: "#64748b",
   lineHeight: 1.25,
+  display: "block",
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+/** Categoría carta: secundaria legible. */
+const productRowCategoriaStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 500,
+  color: "#94a3b8",
+  lineHeight: 1.3,
+  display: "block",
+  minWidth: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -176,28 +210,75 @@ const labelStyle: CSSProperties = {
   marginBottom: 8,
 };
 
+/** Ancho útil del módulo: más protagonismo sin tocar sidebar de configuración. */
+const PRODUCTOS_SHELL_MAX_WIDTH = 1520;
+/** Mínimo horizontal del grid: scroll horizontal en pantallas estrechas, sin “tabla mini”. */
+const PRODUCTOS_TABLE_MIN_WIDTH_PX = 980;
+
 const colHeadStyle: CSSProperties = {
   fontSize: 10,
-  fontWeight: 700,
+  fontWeight: 600,
   color: "#64748b",
-  letterSpacing: "0.07em",
+  letterSpacing: "0.11em",
   textTransform: "uppercase",
-  lineHeight: 1.15,
+  lineHeight: 1.2,
+  display: "block",
+  minWidth: 0,
+  boxSizing: "border-box",
+  padding: "4px 6px",
 };
 
-/** Anchos fijos en precio / carta / esc para alinear verticalmente al hacer scroll. */
+/**
+ * Data-grid: misma plantilla en cabecera, filas y barra de grupo.
+ * Checkbox · nombre · tipo · categoría · PVP · carta · escandallo · acciones (texto).
+ */
+const PRODUCTOS_TABLE_GRID_TEMPLATE =
+  "32px minmax(200px, 4fr) 80px minmax(124px, 2fr) 76px minmax(86px, 1fr) 78px minmax(248px, 1.55fr)";
+
+const PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED =
+  "28px minmax(200px, 4fr) 80px minmax(124px, 2fr) 76px minmax(86px, 1fr) 78px minmax(248px, 1.55fr)";
+
 const rowGrid: CSSProperties = {
   display: "grid",
-  gridTemplateColumns:
-    "32px minmax(0, 1fr) 92px 124px 104px 138px 56px minmax(200px, max-content)",
-  gap: "4px 6px",
+  gridTemplateColumns: PRODUCTOS_TABLE_GRID_TEMPLATE,
+  columnGap: 6,
+  rowGap: 0,
   alignItems: "center",
   justifyItems: "stretch",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
-/** Padding vertical compacto para filas de producto (cabecera + cuerpo). */
-const productTableRowPadding = "5px 8px";
-const productRowMinHeight = 42;
+const rowGridEmbed: CSSProperties = {
+  ...rowGrid,
+  gridTemplateColumns: PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED,
+};
+
+/** Barra de grupo: misma rejilla; contenido en una sola celda ancha. */
+const rowGridGroupBar: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: PRODUCTOS_TABLE_GRID_TEMPLATE,
+  columnGap: 6,
+  alignItems: "center",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const rowGridGroupBarEmbed: CSSProperties = {
+  ...rowGridGroupBar,
+  gridTemplateColumns: PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED,
+};
+
+const productTableRowPadding = "5px 10px";
+const productRowMinHeight = 36;
+
+const productGridPriceCell: CSSProperties = {
+  justifySelf: "stretch",
+  minWidth: 0,
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+};
 
 const rowActionBtn: CSSProperties = {
   padding: "5px 8px",
@@ -206,17 +287,6 @@ const rowActionBtn: CSSProperties = {
   fontWeight: 700,
   cursor: "pointer",
   minHeight: 28,
-  lineHeight: 1.2,
-};
-
-/** Botones solo en fila de producto: menor peso visual que nombre/precio/estado. */
-const productListRowActionBtn: CSSProperties = {
-  padding: "4px 7px",
-  borderRadius: 5,
-  fontSize: 10,
-  fontWeight: 600,
-  cursor: "pointer",
-  minHeight: 26,
   lineHeight: 1.2,
 };
 
@@ -243,7 +313,15 @@ function getPublicationFlags(p: PlatoCarta): {
   return { isActive, enCarta, status: "offMenu" };
 }
 
-function ProductRowPublicationCell({ p, t }: { p: PlatoCarta; t: (key: string) => string }) {
+function ProductRowPublicationCell({
+  p,
+  t,
+  embedLight = false,
+}: {
+  p: PlatoCarta;
+  t: (key: string) => string;
+  embedLight?: boolean;
+}) {
   const { status } = getPublicationFlags(p);
   const label =
     status === "onMenu"
@@ -251,27 +329,42 @@ function ProductRowPublicationCell({ p, t }: { p: PlatoCarta; t: (key: string) =
       : status === "offMenu"
         ? t("productos.statusBadgeOffMenu")
         : t("productos.statusBadgeInactive");
-  const dot = status === "onMenu" ? "🟢" : status === "offMenu" ? "🟡" : "🔴";
-  const tone =
-    status === "onMenu"
+  const dotColor =
+    status === "onMenu" ? "#22c55e" : status === "offMenu" ? "#d97706" : "#ef4444";
+  const tone = embedLight
+    ? status === "onMenu"
       ? {
-          border: "1px solid rgba(74, 222, 128, 0.72)",
-          background: "rgba(34, 197, 94, 0.32)",
-          color: "#ecfdf5",
-          boxShadow: "0 0 0 1px rgba(34, 197, 94, 0.12)",
+          border: "1px solid rgba(16, 185, 129, 0.4)",
+          background: "rgba(236, 253, 245, 0.92)",
+          color: "#166534",
         }
       : status === "offMenu"
         ? {
-            border: "1px solid rgba(251, 191, 36, 0.7)",
-            background: "rgba(245, 158, 11, 0.26)",
-            color: "#fffbeb",
-            boxShadow: "0 0 0 1px rgba(245, 158, 11, 0.1)",
+            border: "1px solid rgba(245, 158, 11, 0.45)",
+            background: "rgba(255, 251, 235, 0.95)",
+            color: "#92400e",
           }
         : {
-            border: "1px solid rgba(248, 113, 113, 0.72)",
-            background: "rgba(239, 68, 68, 0.26)",
-            color: "#fef2f2",
-            boxShadow: "0 0 0 1px rgba(239, 68, 68, 0.1)",
+            border: "1px solid rgba(248, 113, 113, 0.4)",
+            background: "rgba(254, 242, 242, 0.95)",
+            color: "#b91c1c",
+          }
+    : status === "onMenu"
+      ? {
+          border: "1px solid rgba(74, 222, 128, 0.22)",
+          background: "rgba(34, 197, 94, 0.08)",
+          color: "#d1fae5",
+        }
+      : status === "offMenu"
+        ? {
+            border: "1px solid rgba(251, 191, 36, 0.2)",
+            background: "rgba(245, 158, 11, 0.06)",
+            color: "#fef3c7",
+          }
+        : {
+            border: "1px solid rgba(248, 113, 113, 0.2)",
+            background: "rgba(239, 68, 68, 0.06)",
+            color: "#fecaca",
           };
 
   return (
@@ -283,7 +376,7 @@ function ProductRowPublicationCell({ p, t }: { p: PlatoCarta; t: (key: string) =
         justifySelf: "stretch",
         width: "100%",
         minWidth: 0,
-        padding: "0 2px",
+        padding: "0 1px",
         boxSizing: "border-box",
       }}
     >
@@ -295,31 +388,72 @@ function ProductRowPublicationCell({ p, t }: { p: PlatoCarta; t: (key: string) =
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: 5,
+          gap: 4,
           maxWidth: "100%",
           boxSizing: "border-box",
-          padding: "3px 8px",
+          padding: "2px 7px",
           borderRadius: 999,
-          fontSize: 11,
-          fontWeight: 900,
-          letterSpacing: "0.02em",
-          lineHeight: 1.25,
+          fontSize: 9,
+          fontWeight: 600,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          lineHeight: 1.15,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
           ...tone,
         }}
       >
-        <span aria-hidden style={{ flexShrink: 0, fontSize: 11, lineHeight: 1 }}>
-          {dot}
-        </span>
+        <span
+          aria-hidden
+          style={{
+            flexShrink: 0,
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            background: dotColor,
+            boxShadow: embedLight ? "0 0 0 1px rgb(241 245 249)" : `0 0 0 1px rgba(15, 23, 42, 0.5)`,
+          }}
+        />
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
       </span>
     </div>
   );
 }
 
-function ProductRowEscandalloCell({ tiene, t }: { tiene: boolean; t: (key: string) => string }) {
+function ProductRowEscandalloCell({
+  tiene,
+  t,
+  embedLight = false,
+}: {
+  tiene: boolean;
+  t: (key: string) => string;
+  embedLight?: boolean;
+}) {
+  const label = tiene ? t("productos.escCon") : t("productos.escSin");
+  const escTone = embedLight
+    ? tiene
+      ? {
+          border: "1px solid rgba(148, 163, 184, 0.45)",
+          background: "rgba(248, 250, 252, 0.95)",
+          color: "#475569",
+        }
+      : {
+          border: "1px solid rgba(203, 213, 225, 0.85)",
+          background: "rgba(255, 255, 255, 0.6)",
+          color: "#64748b",
+        }
+    : tiene
+      ? {
+          border: "1px solid rgba(148, 163, 184, 0.14)",
+          background: "rgba(248, 250, 252, 0.04)",
+          color: "#94a3b8",
+        }
+      : {
+          border: "1px solid rgba(71, 85, 105, 0.35)",
+          background: "transparent",
+          color: "#64748b",
+        };
   return (
     <div
       style={{
@@ -333,41 +467,68 @@ function ProductRowEscandalloCell({ tiene, t }: { tiene: boolean; t: (key: strin
       }}
     >
       <span
+        title={label}
+        aria-label={label}
         style={{
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "2px 5px",
-          borderRadius: 999,
-          fontSize: 8.5,
-          fontWeight: 700,
+          gap: 4,
+          padding: "2px 6px",
+          borderRadius: 5,
+          fontSize: 9,
+          fontWeight: 600,
           letterSpacing: "0.05em",
           textTransform: "uppercase",
           maxWidth: "100%",
           boxSizing: "border-box",
-          ...(tiene
-            ? {
-                border: "1px solid rgba(74, 222, 128, 0.28)",
-                background: "rgba(34, 197, 94, 0.06)",
-                color: "#64748b",
-              }
-            : {
-                border: "1px solid rgba(71, 85, 105, 0.55)",
-                background: "rgba(15, 23, 42, 0.4)",
-                color: "#64748b",
-              }),
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          ...escTone,
         }}
       >
-        {tiene ? t("productos.escCon") : t("productos.escSin")}
+        <span
+          aria-hidden
+          style={{
+            width: 4,
+            height: 4,
+            borderRadius: 2,
+            flexShrink: 0,
+            background: tiene ? "rgba(148, 163, 184, 0.55)" : "rgba(71, 85, 105, 0.65)",
+          }}
+        />
+        {label}
       </span>
     </div>
   );
 }
 
+const productRowActionBtnShellLight: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  minHeight: 28,
+  height: 28,
+  padding: "0 9px",
+  borderRadius: 6,
+  fontSize: 10,
+  fontWeight: 500,
+  lineHeight: 1,
+  whiteSpace: "nowrap",
+  boxSizing: "border-box",
+  cursor: "pointer",
+  border: "1px solid rgb(226 232 240)",
+  background: "#ffffff",
+  color: "#475569",
+};
+
 function ProductRowActions({
   p,
   busyEsc,
   t,
+  embedLight = false,
   onEdit,
   onToggleCarta,
   onActivateProduct,
@@ -377,6 +538,7 @@ function ProductRowActions({
   p: PlatoCarta;
   busyEsc: boolean;
   t: (key: string) => string;
+  embedLight?: boolean;
   onEdit: () => void;
   onToggleCarta: () => void;
   onActivateProduct: () => void;
@@ -385,104 +547,141 @@ function ProductRowActions({
 }) {
   const { status, enCarta } = getPublicationFlags(p);
   const escEnabled = enCarta && !busyEsc;
+  const shell = embedLight ? productRowActionBtnShellLight : productRowActionBtnShell;
 
-  const primaryQuitar: CSSProperties = {
-    ...productListRowActionBtn,
-    padding: "4px 8px",
-    fontWeight: 700,
-    border: "1px solid rgba(251, 191, 36, 0.28)",
-    background: "rgba(245, 158, 11, 0.08)",
-    color: "#a8a29e",
-  };
-  const primaryVolver: CSSProperties = {
-    ...productListRowActionBtn,
-    padding: "4px 8px",
-    fontWeight: 700,
-    border: "1px solid rgba(74, 222, 128, 0.28)",
-    background: "rgba(34, 197, 94, 0.08)",
-    color: "#94a3b8",
-  };
-  const primaryActivar: CSSProperties = {
-    ...productListRowActionBtn,
-    padding: "4px 8px",
-    fontWeight: 700,
-    border: "1px solid rgba(74, 222, 128, 0.28)",
-    background: "rgba(34, 197, 94, 0.08)",
-    color: "#94a3b8",
-  };
+  const primaryCartaLabel =
+    status === "inactive"
+      ? t("productos.actionActivateProduct")
+      : status === "onMenu"
+        ? t("productos.actionQuitarCarta")
+        : t("productos.pubEnCarta");
+
+  const primaryCartaTitle =
+    status === "inactive"
+      ? t("productos.actionActivateProduct")
+      : status === "onMenu"
+        ? t("productos.actionQuitarCarta")
+        : t("productos.actionVolverCarta");
+
+  const primaryCartaStyle: CSSProperties = embedLight
+    ? status === "inactive"
+      ? {
+          ...shell,
+          border: "1px solid rgb(186 230 253)",
+          background: "rgb(240 249 255)",
+          color: "rgb(3 105 161)",
+          fontWeight: 500,
+        }
+      : status === "onMenu"
+        ? {
+            ...shell,
+            border: "1px solid rgb(253 230 138)",
+            background: "rgb(254 252 232)",
+            color: "rgb(133 77 14)",
+            fontWeight: 500,
+          }
+        : {
+            ...shell,
+            border: "1px solid rgb(187 247 208)",
+            background: "rgb(240 253 244)",
+            color: "rgb(22 101 52)",
+            fontWeight: 500,
+          }
+    : status === "inactive"
+      ? {
+          ...productRowActionBtnShell,
+          border: "1px solid rgba(56, 189, 248, 0.28)",
+          background: "rgba(8, 47, 73, 0.32)",
+          color: "#bae6fd",
+          fontWeight: 600,
+        }
+      : status === "onMenu"
+        ? {
+            ...productRowActionBtnShell,
+            border: "1px solid rgba(251, 191, 36, 0.28)",
+            background: "rgba(245, 158, 11, 0.08)",
+            color: "#fde68a",
+          }
+        : {
+            ...productRowActionBtnShell,
+            border: "1px solid rgba(74, 222, 128, 0.28)",
+            background: "rgba(34, 197, 94, 0.08)",
+            color: "#bbf7d0",
+          };
+
+  const onPrimaryCarta = status === "inactive" ? onActivateProduct : onToggleCarta;
+
+  const escLabel = busyEsc ? t("carta.escPending") : t("carta.actionEscandallo");
 
   return (
     <div
       style={{
         display: "flex",
-        flexWrap: "wrap",
-        gap: 4,
+        flexWrap: "nowrap",
+        gap: 3,
         justifyContent: "flex-end",
         alignItems: "center",
         justifySelf: "stretch",
         width: "100%",
         minWidth: 0,
         boxSizing: "border-box",
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
       }}
     >
-      {status === "inactive" ? (
-        <button type="button" className={PRODUCTOS_ROW_ACTION_CLASS} onClick={onActivateProduct} style={primaryActivar}>
-          {t("productos.actionActivateProduct")}
-        </button>
-      ) : status === "onMenu" ? (
-        <button type="button" className={PRODUCTOS_ROW_ACTION_CLASS} onClick={onToggleCarta} style={primaryQuitar}>
-          {t("productos.actionQuitarCarta")}
-        </button>
-      ) : (
-        <button type="button" className={PRODUCTOS_ROW_ACTION_CLASS} onClick={onToggleCarta} style={primaryVolver}>
-          {t("productos.actionVolverCarta")}
-        </button>
-      )}
+      <button
+        type="button"
+        className={PRODUCTOS_ROW_TEXT_BTN_CLASS}
+        onClick={onPrimaryCarta}
+        style={primaryCartaStyle}
+        title={primaryCartaTitle}
+        aria-label={primaryCartaTitle}
+      >
+        {primaryCartaLabel}
+      </button>
 
       <button
         type="button"
-        className={PRODUCTOS_ROW_ACTION_CLASS}
+        className={PRODUCTOS_ROW_TEXT_BTN_CLASS}
         onClick={onEdit}
-        style={{
-          ...productListRowActionBtn,
-          fontWeight: 600,
-          border: "1px solid rgba(51, 65, 85, 0.9)",
-          background: "rgba(15, 23, 42, 0.2)",
-          color: "#64748b",
-        }}
+        style={shell}
+        title={t("carta.actionEdit")}
       >
         {t("carta.actionEdit")}
       </button>
 
       <button
         type="button"
-        className={PRODUCTOS_ROW_ACTION_CLASS}
+        className={PRODUCTOS_ROW_TEXT_BTN_CLASS}
         disabled={!escEnabled}
-        title={!enCarta ? t("productos.escNeedCartaHint") : undefined}
+        title={
+          busyEsc
+            ? t("carta.escPending")
+            : !enCarta
+              ? t("productos.escNeedCartaHint")
+              : t("carta.actionEscandallo")
+        }
+        aria-label={escLabel}
         onClick={onEsc}
         style={{
-          ...productListRowActionBtn,
-          fontWeight: 600,
-          border: escEnabled ? "1px solid rgba(51, 65, 85, 0.85)" : "1px solid rgba(51, 65, 85, 0.65)",
-          background: escEnabled ? "rgba(15, 23, 42, 0.2)" : "rgba(15, 23, 42, 0.35)",
-          color: escEnabled ? "#64748b" : "#475569",
+          ...shell,
           cursor: escEnabled ? "pointer" : "not-allowed",
         }}
       >
-        {busyEsc ? t("carta.escPending") : t("carta.actionEscandallo")}
+        {escLabel}
       </button>
 
       <button
         type="button"
-        className={PRODUCTOS_ROW_ACTION_CLASS}
+        className={PRODUCTOS_ROW_TEXT_BTN_CLASS}
         onClick={onDelete}
         style={{
-          ...productListRowActionBtn,
-          border: "1px solid rgba(51, 65, 85, 0.85)",
-          background: "rgba(15, 23, 42, 0.2)",
-          color: "#64748b",
-          fontWeight: 600,
+          ...shell,
+          border: embedLight ? "1px solid rgb(226 232 240)" : "1px solid rgba(248, 113, 113, 0.28)",
+          background: embedLight ? "#ffffff" : "rgba(127, 29, 29, 0.12)",
+          color: embedLight ? "#64748b" : "#fca5a5",
         }}
+        title={t("common.delete")}
       >
         {t("common.delete")}
       </button>
@@ -493,13 +692,17 @@ function ProductRowActions({
 export type ProductosManagementPageProps = {
   /** Dentro del layout Config (franja superior); el shell usa altura flexible en lugar de 100dvh. */
   lockViewportFillParent?: boolean;
+  /** Vista alineada con Configuración: shell claro, tabla y chips legibles sobre fondo global. */
+  embedConfigVisual?: boolean;
 };
 
 export default function ProductosManagementPage({
   lockViewportFillParent = false,
+  embedConfigVisual = false,
 }: ProductosManagementPageProps = {}) {
   const { t, locale } = useI18n();
   const router = useRouter();
+  const emb = Boolean(embedConfigVisual);
   const [hydrated, setHydrated] = useState(false);
   const [items, setItems] = useState<PlatoCarta[]>([]);
   const [meta, setMeta] = useState<EscandalloMetaMap>(new Map());
@@ -539,19 +742,18 @@ export default function ProductosManagementPage({
     savePlatos(getBrowserRestauranteId(), next);
   }, []);
 
-  const pullLocal = useCallback(() => {
-    setItems(loadPlatos(getBrowserRestauranteId()));
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const restauranteId = getBrowserRestauranteId();
       await bootstrapPlatosFromEscandallosIfEmpty(restauranteId);
-      if (!cancelled) {
+      if (cancelled) return;
+      /** Evita setState en el mismo turno que aún no tiene alternate (React 19 DEV). */
+      queueMicrotask(() => {
+        if (cancelled) return;
         setItems(loadPlatos(restauranteId));
         setHydrated(true);
-      }
+      });
     })();
     return () => {
       cancelled = true;
@@ -560,10 +762,19 @@ export default function ProductosManagementPage({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onChange = () => pullLocal();
+    let alive = true;
+    const onChange = () => {
+      queueMicrotask(() => {
+        if (!alive) return;
+        setItems(loadPlatos(getBrowserRestauranteId()));
+      });
+    };
     window.addEventListener(PLATOS_CHANGED_EVENT, onChange);
-    return () => window.removeEventListener(PLATOS_CHANGED_EVENT, onChange);
-  }, [pullLocal]);
+    return () => {
+      alive = false;
+      window.removeEventListener(PLATOS_CHANGED_EVENT, onChange);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -573,11 +784,13 @@ export default function ProductosManagementPage({
       fetchCartaFamilias(rid),
       fetchModifierFamiliesForRestaurante(rid),
     ]).then(([list, fams, mods]) => {
-      if (!cancelled) {
+      if (cancelled) return;
+      queueMicrotask(() => {
+        if (cancelled) return;
         setCartaCategorias(list);
         setCartaFamilias(fams);
         setModifierFamilies(mods);
-      }
+      });
     });
     return () => {
       cancelled = true;
@@ -585,6 +798,7 @@ export default function ProductosManagementPage({
   }, []);
 
   useEffect(() => {
+    let alive = true;
     const onCat = () => {
       const rid = getBrowserRestauranteId();
       void Promise.all([
@@ -592,24 +806,38 @@ export default function ProductosManagementPage({
         fetchCartaFamilias(rid),
         fetchModifierFamiliesForRestaurante(rid),
       ]).then(([list, fams, mods]) => {
-        setCartaCategorias(list);
-        setCartaFamilias(fams);
-        setModifierFamilies(mods);
+        if (!alive) return;
+        queueMicrotask(() => {
+          if (!alive) return;
+          setCartaCategorias(list);
+          setCartaFamilias(fams);
+          setModifierFamilies(mods);
+        });
       });
     };
     window.addEventListener(CARTA_CATEGORIAS_CHANGED_EVENT, onCat);
-    return () => window.removeEventListener(CARTA_CATEGORIAS_CHANGED_EVENT, onCat);
+    return () => {
+      alive = false;
+      window.removeEventListener(CARTA_CATEGORIAS_CHANGED_EVENT, onCat);
+    };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     const ids = items.map((p) => p.escandalloSupabaseId).filter((x): x is number => x != null);
     if (ids.length === 0) {
-      setMeta(new Map());
-      return;
+      queueMicrotask(() => {
+        if (!cancelled) setMeta(new Map());
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     void fetchEscandalloMetaForIds(ids).then((m) => {
-      if (!cancelled) setMeta(m);
+      if (cancelled) return;
+      queueMicrotask(() => {
+        if (!cancelled) setMeta(m);
+      });
     });
     return () => {
       cancelled = true;
@@ -657,7 +885,16 @@ export default function ProductosManagementPage({
   }, [cartaCategorias, filteredSorted, t]);
 
   useEffect(() => {
-    if (!tabOptions.some((o) => o.id === categoryTab)) setCategoryTab("__all__");
+    let alive = true;
+    if (!tabOptions.some((o) => o.id === categoryTab)) {
+      queueMicrotask(() => {
+        if (!alive) return;
+        setCategoryTab("__all__");
+      });
+    }
+    return () => {
+      alive = false;
+    };
   }, [tabOptions, categoryTab]);
 
   const tabFilteredSorted = useMemo(() => {
@@ -690,11 +927,18 @@ export default function ProductosManagementPage({
   }, [tabFilteredSorted, listSearch, t]);
 
   useEffect(() => {
+    let alive = true;
     const valid = new Set(items.map((p) => p.id));
-    setSelectedIds((prev) => {
-      const next = new Set([...prev].filter((id) => valid.has(id)));
-      return next.size === prev.size && [...prev].every((id) => next.has(id)) ? prev : next;
+    queueMicrotask(() => {
+      if (!alive) return;
+      setSelectedIds((prev) => {
+        const next = new Set([...prev].filter((id) => valid.has(id)));
+        return next.size === prev.size && [...prev].every((id) => next.has(id)) ? prev : next;
+      });
     });
+    return () => {
+      alive = false;
+    };
   }, [items]);
 
   useLayoutEffect(() => {
@@ -796,6 +1040,37 @@ export default function ProductosManagementPage({
     [t, stats],
   );
 
+  const rowNombreStyleResolved = useMemo(
+    () => (emb ? { ...productRowNombreStyle, color: "#0f172a" } : productRowNombreStyle),
+    [emb],
+  );
+  const rowPrecioStyleResolved = useMemo(
+    () => (emb ? { ...productRowPrecioStyle, color: "#0f172a" } : productRowPrecioStyle),
+    [emb],
+  );
+  const rowTipoStyleResolved = useMemo(
+    () => (emb ? { ...productRowTipoStyle, color: "#64748b" } : productRowTipoStyle),
+    [emb],
+  );
+  const rowCategoriaStyleResolved = useMemo(
+    () => (emb ? { ...productRowCategoriaStyle, color: "#475569" } : productRowCategoriaStyle),
+    [emb],
+  );
+  const colHeadStyleResolved = useMemo(
+    () =>
+      emb
+        ? {
+            ...colHeadStyle,
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            color: "#64748b",
+            padding: "6px 8px",
+          }
+        : colHeadStyle,
+    [emb],
+  );
+
   const editingPlato = useMemo(() => (editingId ? (items.find((p) => p.id === editingId) ?? null) : null), [editingId, items]);
   const editingHasEscandallo = useMemo(() => (editingPlato ? tieneEscandalloForPlato(editingPlato, meta) : false), [editingPlato, meta]);
 
@@ -831,7 +1106,7 @@ export default function ProductosManagementPage({
     fontSize: 19,
     fontWeight: 700,
     letterSpacing: "-0.03em",
-    color: "#f8fafc",
+    color: emb ? "#0f172a" : "#f8fafc",
     lineHeight: 1.1,
   };
 
@@ -1100,13 +1375,15 @@ export default function ProductosManagementPage({
       <ModulePageShell
         title={t("productos.title")}
         subtitle={t("productos.loadingSubtitle")}
+        maxWidth={PRODUCTOS_SHELL_MAX_WIDTH}
         compactLayout
         operationalFocus
         denseWorkbench
         lockViewport
         lockViewportFillParent={lockViewportFillParent}
+        shellSurface={emb ? "configLight" : "default"}
       >
-        <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
+        <p style={{ color: emb ? "#64748b" : "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
   }
@@ -1117,17 +1394,22 @@ export default function ProductosManagementPage({
       <ModulePageShell
       title={t("productos.title")}
       subtitle={t("productos.subtitle")}
+      maxWidth={PRODUCTOS_SHELL_MAX_WIDTH}
       compactLayout
       operationalFocus
       denseWorkbench
       lockViewport
       lockViewportFillParent={lockViewportFillParent}
+      shellSurface={emb ? "configLight" : "default"}
       headerBelow={
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            gap: 12,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
             width: "100%",
             minWidth: 0,
             boxSizing: "border-box",
@@ -1140,20 +1422,20 @@ export default function ProductosManagementPage({
               flexWrap: "wrap",
               alignItems: "center",
               gap: 6,
-              width: "100%",
               minWidth: 0,
+              flex: "1 1 200px",
             }}
           >
             <Link
-              href="/dashboard/carta/categorias"
+              href={emb ? "/dashboard/configuracion/carta/categorias" : "/dashboard/carta/categorias"}
               style={{
-                border: "1px solid rgba(148, 163, 184, 0.28)",
-                background: "rgba(30, 41, 59, 0.35)",
-                color: "#cbd5e1",
-                padding: "6px 12px",
-                borderRadius: 999,
-                fontWeight: 640,
-                fontSize: 12,
+                border: emb ? "1px solid #e2e8f0" : "1px solid rgba(148, 163, 184, 0.14)",
+                background: emb ? "rgba(255,255,255,0.92)" : "rgba(15, 23, 42, 0.28)",
+                color: emb ? "#475569" : "#94a3b8",
+                padding: "5px 10px",
+                borderRadius: 8,
+                fontWeight: 600,
+                fontSize: 11,
                 lineHeight: 1.2,
                 minHeight: 30,
                 whiteSpace: "nowrap",
@@ -1169,16 +1451,18 @@ export default function ProductosManagementPage({
             </Link>
             <button
               type="button"
-              onClick={() => router.push("/dashboard/carta/modificadores")}
+              onClick={() =>
+                router.push(emb ? "/dashboard/configuracion/carta/modificadores" : "/dashboard/carta/modificadores")
+              }
               style={{
-                border: "1px solid rgba(56, 189, 248, 0.22)",
-                background: "rgba(8,47,73,0.12)",
-                color: "#93c5fd",
-                padding: "6px 12px",
-                borderRadius: 999,
-                fontWeight: 650,
+                border: emb ? "1px solid #e2e8f0" : "1px solid rgba(148, 163, 184, 0.14)",
+                background: emb ? "rgba(255,255,255,0.92)" : "rgba(15, 23, 42, 0.28)",
+                color: emb ? "#475569" : "#94a3b8",
+                padding: "5px 10px",
+                borderRadius: 8,
+                fontWeight: 600,
                 cursor: "pointer",
-                fontSize: 12,
+                fontSize: 11,
                 lineHeight: 1.2,
                 minHeight: 30,
                 whiteSpace: "nowrap",
@@ -1197,8 +1481,8 @@ export default function ProductosManagementPage({
               alignItems: "center",
               justifyContent: "flex-end",
               gap: 8,
-              width: "100%",
               minWidth: 0,
+              marginLeft: "auto",
             }}
           >
             <button
@@ -1206,19 +1490,19 @@ export default function ProductosManagementPage({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                router.push("/dashboard/carta/importar");
+                router.push(emb ? "/dashboard/configuracion/carta/importacion" : "/dashboard/carta/importar");
               }}
               style={{
-                border: "1px solid rgba(251, 191, 36, 0.34)",
-                background: "rgba(120, 53, 15, 0.18)",
-                color: "#fde68a",
-                padding: "7px 12px",
-                borderRadius: 999,
-                fontWeight: 750,
+                border: emb ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(251, 191, 36, 0.22)",
+                background: emb ? "rgba(255, 251, 235, 0.95)" : "rgba(120, 53, 15, 0.12)",
+                color: emb ? "#92400e" : "#fcd34d",
+                padding: "5px 11px",
+                borderRadius: 8,
+                fontWeight: 700,
                 cursor: "pointer",
-                fontSize: 12,
+                fontSize: 11,
                 lineHeight: 1.2,
-                minHeight: 32,
+                minHeight: 30,
                 whiteSpace: "nowrap",
                 letterSpacing: "-0.01em",
               }}
@@ -1229,16 +1513,16 @@ export default function ProductosManagementPage({
               type="button"
               onClick={openCreate}
               style={{
-                border: "1px solid rgba(34, 197, 94, 0.4)",
-                background: "rgba(6, 78, 59, 0.16)",
-                color: "#86efac",
-                padding: "7px 12px",
-                borderRadius: 999,
-                fontWeight: 780,
+                border: emb ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.42)",
+                background: emb ? "rgba(220, 252, 231, 0.9)" : "rgba(6, 78, 59, 0.22)",
+                color: emb ? "#166534" : "#bbf7d0",
+                padding: "6px 12px",
+                borderRadius: 8,
+                fontWeight: 700,
                 cursor: "pointer",
                 fontSize: 12,
                 lineHeight: 1.2,
-                minHeight: 32,
+                minHeight: 30,
                 whiteSpace: "nowrap",
                 letterSpacing: "-0.01em",
               }}
@@ -1250,6 +1534,7 @@ export default function ProductosManagementPage({
       }
     >
       <div
+        className={emb ? "hostly-productos-config-skin" : undefined}
         style={{
           flexGrow: 1,
           flexShrink: 1,
@@ -1257,7 +1542,7 @@ export default function ProductosManagementPage({
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          gap: 4,
+          gap: 0,
           overflow: "hidden",
         }}
       >
@@ -1267,9 +1552,9 @@ export default function ProductosManagementPage({
               flexShrink: 0,
               padding: "8px 11px",
               borderRadius: 8,
-              background: "rgba(34, 197, 94, 0.12)",
-              border: "1px solid rgba(34, 197, 94, 0.3)",
-              color: "#bbf7d0",
+              background: emb ? "rgba(220, 252, 231, 0.85)" : "rgba(34, 197, 94, 0.12)",
+              border: emb ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.3)",
+              color: emb ? "#166534" : "#bbf7d0",
               fontSize: 13,
               lineHeight: 1.32,
             }}
@@ -1284,9 +1569,9 @@ export default function ProductosManagementPage({
               flexShrink: 0,
               padding: "8px 11px",
               borderRadius: 8,
-              background: "rgba(248, 113, 113, 0.12)",
-              border: "1px solid rgba(248, 113, 113, 0.35)",
-              color: "#fecaca",
+              background: emb ? "rgba(254, 242, 242, 0.95)" : "rgba(248, 113, 113, 0.12)",
+              border: emb ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(248, 113, 113, 0.35)",
+              color: emb ? "#b91c1c" : "#fecaca",
               fontSize: 13,
             }}
           >
@@ -1294,24 +1579,34 @@ export default function ProductosManagementPage({
           </div>
         ) : null}
 
-        <div style={{ flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+        <div style={{ flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", marginBottom: 2 }}>
           {kpiPills.map((m) => (
             <span
               key={m.key}
               style={{
                 display: "inline-flex",
-                gap: 8,
+                gap: 6,
                 alignItems: "baseline",
-                padding: "5px 10px",
+                padding: "4px 9px",
                 borderRadius: 999,
-                border: "1px solid rgba(51, 65, 85, 0.8)",
-                background: "rgba(15, 23, 42, 0.35)",
-                minHeight: 28,
+                border: emb ? "1px solid #e2e8f0" : "1px solid rgba(51, 65, 85, 0.65)",
+                background: emb ? "rgba(255,255,255,0.9)" : "rgba(15, 23, 42, 0.28)",
+                minHeight: 26,
                 whiteSpace: "nowrap",
               }}
             >
-              <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>{m.label}</span>
-              <span style={{ ...metricNum, fontSize: 14, lineHeight: 1, color: "#e2e8f0" }}>{m.value}</span>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: emb ? "#64748b" : "#64748b",
+                }}
+              >
+                {m.label}
+              </span>
+              <span style={{ ...metricNum, fontSize: 14, lineHeight: 1, color: emb ? "#0f172a" : "#e2e8f0" }}>{m.value}</span>
             </span>
           ))}
         </div>
@@ -1326,26 +1621,26 @@ export default function ProductosManagementPage({
             flexDirection: "column",
             overflow: "hidden",
             borderRadius: 10,
-            background: "#1e293b",
-            border: "1px solid #334155",
-            boxShadow: "0 1px 0 rgba(0,0,0,0.25)",
+            background: emb ? "rgba(255,255,255,0.92)" : "#1e293b",
+            border: emb ? "1px solid rgb(226 232 240)" : "1px solid rgba(51, 65, 85, 0.5)",
+            boxShadow: emb ? "0 1px 2px rgba(15,23,42,0.04), 0 10px 28px -22px rgba(15,23,42,0.07)" : "none",
           }}
         >
           <div
             style={{
               flexShrink: 0,
-              padding: "5px 10px",
-              borderBottom: "1px solid #334155",
+              padding: "3px 6px",
+              borderBottom: emb ? "1px solid rgb(241 245 249)" : "1px solid #334155",
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 8,
+              gap: 6,
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 200px" }}>
-              <h2 style={{ ...OPER_PRIMARY_SECTION_TITLE, fontSize: "clamp(14px, 1.5vw, 18px)", lineHeight: 1.08 }}>{t("carta.listTitle")}</h2>
-              <p style={{ ...OPER_PRIMARY_COUNT_META, margin: "2px 0 0", fontSize: 10 }}>{t("carta.listCount", { shown: displayed.length, total: items.length })}</p>
+              <h2 style={{ ...OPER_PRIMARY_SECTION_TITLE, fontSize: "clamp(13px, 1.35vw, 16px)", lineHeight: 1.06, color: emb ? "#0f172a" : undefined }}>{t("carta.listTitle")}</h2>
+              <p style={{ ...OPER_PRIMARY_COUNT_META, margin: "1px 0 0", fontSize: 10, color: emb ? "#64748b" : undefined }}>{t("carta.listCount", { shown: displayed.length, total: items.length })}</p>
             </div>
             <input
               type="search"
@@ -1361,9 +1656,9 @@ export default function ProductosManagementPage({
                 maxWidth: 360,
                 padding: "6px 11px",
                 borderRadius: 999,
-                border: "1px solid #475569",
-                background: "#0f172a",
-                color: "#f8fafc",
+                border: emb ? "1px solid #cbd5e1" : "1px solid #475569",
+                background: emb ? "#f8fafc" : "#0f172a",
+                color: emb ? "#0f172a" : "#f8fafc",
                 fontSize: 13,
                 outline: "none",
                 boxSizing: "border-box",
@@ -1378,9 +1673,9 @@ export default function ProductosManagementPage({
               display: "flex",
               flexWrap: "wrap",
               gap: 6,
-              padding: "5px 8px",
+              padding: "3px 6px",
               alignItems: "center",
-              borderBottom: "1px solid #334155",
+              borderBottom: emb ? "1px solid rgb(241 245 249)" : "1px solid #334155",
             }}
           >
             <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginRight: 2 }}>{t("stock.filterHint")}</span>
@@ -1400,9 +1695,13 @@ export default function ProductosManagementPage({
                   type="button"
                   onClick={() => setListFilter(f.id)}
                   style={{
-                    border: active ? "1px solid rgba(34, 197, 94, 0.55)" : "1px solid #334155",
-                    background: active ? "rgba(34, 197, 94, 0.18)" : "#0f172a",
-                    color: active ? "#ecfdf5" : "#94a3b8",
+                    border: active
+                      ? "1px solid rgba(34, 197, 94, 0.55)"
+                      : emb
+                        ? "1px solid #e2e8f0"
+                        : "1px solid #334155",
+                    background: active ? (emb ? "rgba(220, 252, 231, 0.95)" : "rgba(34, 197, 94, 0.18)") : emb ? "#fff" : "#0f172a",
+                    color: active ? (emb ? "#166534" : "#ecfdf5") : "#94a3b8",
                     padding: "5px 11px",
                     borderRadius: 999,
                     fontWeight: 700,
@@ -1423,9 +1722,15 @@ export default function ProductosManagementPage({
                 type="button"
                 onClick={() => setViewMode("grouped")}
                 style={{
-                  border: viewMode === "grouped" ? "1px solid rgba(56, 189, 248, 0.55)" : "1px solid #334155",
-                  background: viewMode === "grouped" ? "rgba(14, 165, 233, 0.14)" : "#0f172a",
-                  color: viewMode === "grouped" ? "#bae6fd" : "#94a3b8",
+                  border:
+                    viewMode === "grouped"
+                      ? "1px solid rgba(56, 189, 248, 0.55)"
+                      : emb
+                        ? "1px solid #e2e8f0"
+                        : "1px solid #334155",
+                  background:
+                    viewMode === "grouped" ? (emb ? "rgba(224, 242, 254, 0.95)" : "rgba(14, 165, 233, 0.14)") : emb ? "#fff" : "#0f172a",
+                  color: viewMode === "grouped" ? (emb ? "#0369a1" : "#bae6fd") : "#94a3b8",
                   padding: "5px 11px",
                   borderRadius: 999,
                   fontWeight: 800,
@@ -1442,9 +1747,11 @@ export default function ProductosManagementPage({
                 type="button"
                 onClick={() => setViewMode("list")}
                 style={{
-                  border: viewMode === "list" ? "1px solid rgba(56, 189, 248, 0.55)" : "1px solid #334155",
-                  background: viewMode === "list" ? "rgba(14, 165, 233, 0.14)" : "#0f172a",
-                  color: viewMode === "list" ? "#bae6fd" : "#94a3b8",
+                  border:
+                    viewMode === "list" ? "1px solid rgba(56, 189, 248, 0.55)" : emb ? "1px solid #e2e8f0" : "1px solid #334155",
+                  background:
+                    viewMode === "list" ? (emb ? "rgba(224, 242, 254, 0.95)" : "rgba(14, 165, 233, 0.14)") : emb ? "#fff" : "#0f172a",
+                  color: viewMode === "list" ? (emb ? "#0369a1" : "#bae6fd") : "#94a3b8",
                   padding: "5px 11px",
                   borderRadius: 999,
                   fontWeight: 800,
@@ -1463,8 +1770,8 @@ export default function ProductosManagementPage({
           <div
             style={{
               flexShrink: 0,
-              padding: "4px 8px",
-              borderBottom: "1px solid rgba(51, 65, 85, 0.75)",
+              padding: "2px 6px 3px",
+              borderBottom: emb ? "1px solid rgb(241 245 249)" : "1px solid rgba(51, 65, 85, 0.75)",
               display: "flex",
               gap: 6,
               overflowX: "auto",
@@ -1472,7 +1779,9 @@ export default function ProductosManagementPage({
             }}
             aria-label="Pestañas de categoría"
           >
-            {tabOptions.map((tab) => {
+            {tabOptions
+              .filter((tab) => tab.id !== "__all__")
+              .map((tab) => {
               const active = categoryTab === tab.id;
               return (
                 <button
@@ -1481,9 +1790,13 @@ export default function ProductosManagementPage({
                   onClick={() => setCategoryTab(tab.id)}
                   style={{
                     flexShrink: 0,
-                    border: active ? "1px solid rgba(56, 189, 248, 0.55)" : "1px solid rgba(51, 65, 85, 0.8)",
-                    background: active ? "rgba(8,47,73,0.35)" : "rgba(2,6,23,0.12)",
-                    color: active ? "#bae6fd" : "#94a3b8",
+                    border: active
+                      ? "1px solid rgba(56, 189, 248, 0.55)"
+                      : emb
+                        ? "1px solid #e2e8f0"
+                        : "1px solid rgba(51, 65, 85, 0.8)",
+                    background: active ? (emb ? "rgba(224, 242, 254, 0.95)" : "rgba(8,47,73,0.35)") : emb ? "rgba(248,250,252,0.9)" : "rgba(2,6,23,0.12)",
+                    color: active ? (emb ? "#0369a1" : "#bae6fd") : "#94a3b8",
                     padding: "5px 10px",
                     borderRadius: 999,
                     fontWeight: 850,
@@ -1500,35 +1813,74 @@ export default function ProductosManagementPage({
             })}
           </div>
 
-          <div style={{ flexGrow: 1, minHeight: 0, padding: "0 4px 4px", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             {items.length === 0 ? (
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 16px", textAlign: "center", color: "#94a3b8" }}>
-                <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#e2e8f0" }}>{t("carta.emptyTitle")}</p>
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "28px 16px",
+                  textAlign: "center",
+                  color: emb ? "#64748b" : "#94a3b8",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: emb ? "#0f172a" : "#e2e8f0" }}>{t("carta.emptyTitle")}</p>
                 <p style={{ margin: "12px 0 0", maxWidth: 400, fontSize: 14, lineHeight: 1.5 }}>{t("carta.emptyBody")}</p>
-                <button type="button" onClick={openCreate} style={{ marginTop: 20, border: "none", background: "#22c55e", color: "#fff", padding: "12px 22px", borderRadius: 10, fontWeight: 700, cursor: "pointer", fontSize: 15, minHeight: 48 }}>
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  style={{
+                    marginTop: 20,
+                    border: "none",
+                    background: "#16a34a",
+                    color: "#fff",
+                    padding: "12px 22px",
+                    borderRadius: 10,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontSize: 15,
+                    minHeight: 48,
+                    boxShadow: emb ? "0 10px 28px -14px rgba(22, 163, 74, 0.55)" : undefined,
+                  }}
+                >
                   {t("carta.emptyCta")}
                 </button>
               </div>
             ) : filteredSorted.length === 0 ? (
-              <div style={{ padding: "24px 8px", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>{t("stock.filterEmpty")}</div>
+              <div style={{ padding: "24px 8px", textAlign: "center", color: emb ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("stock.filterEmpty")}</div>
             ) : displayed.length === 0 ? (
-              <div style={{ padding: "24px 8px", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>{t("carta.searchNoResults")}</div>
+              <div style={{ padding: "24px 8px", textAlign: "center", color: emb ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("carta.searchNoResults")}</div>
             ) : (
-              <div style={{ borderRadius: 8, border: "1px solid #334155", overflow: "hidden", background: "#0f172a", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  background: emb ? "#f1f5f9" : "rgba(2, 6, 23, 0.18)",
+                  border: "none",
+                  borderRadius: 0,
+                  boxShadow: "none",
+                }}
+              >
                 {selectedIds.size > 0 ? (
                   <div
                     style={{
                       flexShrink: 0,
                       padding: "4px 8px",
-                      borderBottom: "1px solid #334155",
+                      borderBottom: emb ? "1px solid rgba(186, 230, 253, 0.9)" : "1px solid #334155",
                       display: "flex",
                       flexWrap: "wrap",
                       alignItems: "center",
                       gap: 8,
-                      background: "rgba(56, 189, 248, 0.07)",
+                      background: emb ? "rgba(224, 242, 254, 0.92)" : "rgba(56, 189, 248, 0.07)",
                     }}
                   >
-                    <span style={{ fontSize: 12, fontWeight: 850, color: "#bae6fd" }}>
+                    <span style={{ fontSize: 12, fontWeight: 850, color: emb ? "#0369a1" : "#bae6fd" }}>
                       {t("productos.bulkSelectedCount", { count: String(selectedIds.size) })}
                     </span>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
@@ -1595,9 +1947,21 @@ export default function ProductosManagementPage({
                     </div>
                   </div>
                 ) : null}
-                <div style={{ overflowX: "auto", flex: 1, minHeight: 0, WebkitOverflowScrolling: "touch" }}>
-                  <div style={{ minWidth: 960 }}>
-                    <div style={{ ...rowGrid, padding: productTableRowPadding, background: "#1e293b", borderBottom: "1px solid #334155" }}>
+                <div style={{ overflowX: "auto", flex: 1, minHeight: 0, width: "100%", WebkitOverflowScrolling: "touch" }}>
+                  <div style={{ width: "100%", minWidth: PRODUCTOS_TABLE_MIN_WIDTH_PX, minHeight: 0, boxSizing: "border-box" }}>
+                    <div
+                      className={emb ? "hostly-config-table-head sticky top-0 z-[2]" : undefined}
+                      style={{
+                        ...(emb ? rowGridEmbed : rowGrid),
+                        padding: productTableRowPadding,
+                        ...(emb
+                          ? {}
+                          : {
+                              background: "rgba(2, 6, 23, 0.35)",
+                              borderBottom: "1px solid rgba(148, 163, 184, 0.08)",
+                            }),
+                      }}
+                    >
                       <label
                         style={{
                           display: "flex",
@@ -1605,7 +1969,7 @@ export default function ProductosManagementPage({
                           alignItems: "center",
                           margin: 0,
                           cursor: displayed.length === 0 ? "default" : "pointer",
-                          justifySelf: "center",
+                          minWidth: 0,
                         }}
                       >
                         <input
@@ -1615,34 +1979,78 @@ export default function ProductosManagementPage({
                           checked={displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id))}
                           onChange={toggleSelectAllDisplayed}
                           aria-label={t("productos.selectAllVisible")}
-                          style={{ width: 16, height: 16, cursor: displayed.length === 0 ? "not-allowed" : "pointer", accentColor: "#38bdf8" }}
+                          style={{ width: emb ? 14 : 16, height: emb ? 14 : 16, cursor: displayed.length === 0 ? "not-allowed" : "pointer", accentColor: "#38bdf8" }}
                         />
                       </label>
-                      <span style={{ ...colHeadStyle, justifySelf: "start" }}>{t("carta.colNombre")}</span>
-                      <span style={{ ...colHeadStyle, justifySelf: "start" }}>{t("carta.colTipo")}</span>
-                      <span style={{ ...colHeadStyle, justifySelf: "start" }}>{t("carta.colCategoria")}</span>
-                      <span style={{ ...colHeadStyle, textAlign: "right", justifySelf: "end", width: "100%" }}>{t("carta.colPrecio")}</span>
-                      <span style={{ ...colHeadStyle, textAlign: "center", justifySelf: "center" }}>{t("productos.colCarta")}</span>
-                      <span style={{ ...colHeadStyle, textAlign: "center", justifySelf: "center" }}>{t("productos.colEscandallo")}</span>
-                      <span style={{ ...colHeadStyle, textAlign: "right", justifySelf: "end", width: "100%" }}>{t("carta.colActions")}</span>
+                      <span style={{ ...colHeadStyleResolved, textAlign: "left" }}>{t("carta.colNombre")}</span>
+                      <span style={{ ...colHeadStyleResolved, textAlign: "left" }}>{t("carta.colTipo")}</span>
+                      <span style={{ ...colHeadStyleResolved, textAlign: "left" }}>{t("carta.colCategoria")}</span>
+                      <div style={productGridPriceCell}>
+                        <span style={{ ...colHeadStyleResolved, textAlign: "right", width: "100%" }}>{t("carta.colPrecio")}</span>
+                      </div>
+                      <span style={{ ...colHeadStyleResolved, textAlign: "center" }}>{t("productos.colCarta")}</span>
+                      <span style={{ ...colHeadStyleResolved, textAlign: "center" }}>{t("productos.colEscandallo")}</span>
+                      <span style={{ ...colHeadStyleResolved, textAlign: "right" }}>{t("carta.colActions")}</span>
                     </div>
                     <div>
                       {viewMode === "grouped"
                         ? groupedByCategoria.map((g, gi) => (
                             <div key={`cat-${g.sectionKey}-${gi}`}>
                               <div
+                                role="presentation"
                                 style={{
-                                  padding: "4px 8px",
-                                  borderBottom: "1px solid rgba(51, 65, 85, 0.85)",
-                                  background: "rgba(30, 41, 59, 0.78)",
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "baseline",
-                                  gap: 8,
+                                  ...(emb ? rowGridGroupBarEmbed : rowGridGroupBar),
+                                  marginTop: gi === 0 ? 0 : 8,
+                                  paddingTop: gi === 0 ? 5 : 9,
+                                  paddingBottom: 3,
+                                  paddingLeft: 10,
+                                  paddingRight: 10,
+                                  borderTop: gi === 0 ? "none" : emb ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.07)",
+                                  background: "transparent",
                                 }}
                               >
-                                <div style={{ fontSize: 12, fontWeight: 900, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.categoria}</div>
-                                <div style={{ fontSize: 11, fontWeight: 800, color: "#94a3b8", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{g.items.length}</div>
+                                <div
+                                  style={{
+                                    gridColumn: "1 / -1",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: 10,
+                                    minWidth: 0,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      letterSpacing: "0.12em",
+                                      textTransform: "uppercase",
+                                      color: emb ? "#475569" : "#94a3b8",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      minWidth: 0,
+                                    }}
+                                  >
+                                    {g.categoria}
+                                  </div>
+                                  <span
+                                    style={{
+                                      flexShrink: 0,
+                                      fontSize: 9,
+                                      fontWeight: 600,
+                                      letterSpacing: "0.06em",
+                                      color: "#64748b",
+                                      fontVariantNumeric: "tabular-nums",
+                                      padding: "2px 7px",
+                                      borderRadius: 999,
+                                      border: emb ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.1)",
+                                      background: emb ? "rgba(255,255,255,0.75)" : "rgba(248, 250, 252, 0.03)",
+                                    }}
+                                  >
+                                    {g.items.length}
+                                  </span>
+                                </div>
                               </div>
                               {g.items.map((p, idx) => {
                                 const tiene = tieneEscandalloForPlato(p, meta);
@@ -1653,10 +2061,15 @@ export default function ProductosManagementPage({
                                     key={p.id}
                                     className={PRODUCTOS_ROW_HOVER_CLASS}
                                     style={{
-                                      ...rowGrid,
+                                      ...(emb ? rowGridEmbed : rowGrid),
                                       padding: productTableRowPadding,
-                                      borderBottom: isLastInCat ? "1px solid rgba(51, 65, 85, 0.85)" : "1px solid rgba(51, 65, 85, 0.65)",
-                                      background: idx % 2 === 0 ? "rgba(15, 23, 42, 0.35)" : "transparent",
+                                      borderBottom:
+                                        isLastInCat && gi === groupedByCategoria.length - 1
+                                          ? "none"
+                                          : emb
+                                            ? "1px solid rgb(241 245 249)"
+                                            : "1px solid rgba(148, 163, 184, 0.06)",
+                                      background: "transparent",
                                       minHeight: productRowMinHeight,
                                     }}
                                   >
@@ -1675,7 +2088,12 @@ export default function ProductosManagementPage({
                                         checked={selectedIds.has(p.id)}
                                         onChange={() => toggleRowSelected(p.id)}
                                         aria-label={t("productos.selectRowAria", { name: p.nombre })}
-                                        style={{ width: 16, height: 16, accentColor: "#38bdf8", cursor: "pointer" }}
+                                        style={{
+                                          width: emb ? 14 : 16,
+                                          height: emb ? 14 : 16,
+                                          accentColor: "#38bdf8",
+                                          cursor: "pointer",
+                                        }}
                                       />
                                     </label>
                                     <div style={{ minWidth: 0, overflow: "hidden", width: "100%" }}>
@@ -1690,27 +2108,45 @@ export default function ProductosManagementPage({
                                         }}
                                         title={p.nombre}
                                       >
-                                        <span style={productRowNombreStyle}>{p.nombre}</span>
+                                        <span style={rowNombreStyleResolved}>{p.nombre}</span>
                                         {p.origenAlta === "importacion_ia" ? (
-                                          <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(56,189,248,0.28)", background: "rgba(8,47,73,0.18)", color: "#7dd3fc" }}>
+                                          <span
+                                            style={{
+                                              flexShrink: 0,
+                                              fontSize: emb ? 8 : 9,
+                                              fontWeight: emb ? 600 : 900,
+                                              letterSpacing: "0.08em",
+                                              textTransform: "uppercase",
+                                              padding: emb ? "1px 5px" : "2px 6px",
+                                              borderRadius: emb ? 5 : 999,
+                                              border: emb
+                                                ? "1px solid rgb(226 232 240)"
+                                                : "1px solid rgba(56,189,248,0.28)",
+                                              background: emb ? "rgb(248 250 252)" : "rgba(8,47,73,0.18)",
+                                              color: emb ? "rgb(71 85 105)" : "#7dd3fc",
+                                            }}
+                                          >
                                             IA
                                           </span>
                                         ) : null}
                                       </div>
                                     </div>
-                                    <span style={productRowMetaStyle} title={labelTipoVenta(t, p.tipoVenta)}>
+                                    <span style={rowTipoStyleResolved} title={labelTipoVenta(t, p.tipoVenta)}>
                                       {labelTipoVenta(t, p.tipoVenta)}
                                     </span>
-                                    <span style={productRowMetaStyle} title={p.categoria}>
+                                    <span style={rowCategoriaStyleResolved} title={p.categoria}>
                                       {p.categoria}
                                     </span>
-                                    <span style={productRowPrecioStyle}>{formatEuro(p.precioVenta, locale as Locale)}</span>
-                                    <ProductRowPublicationCell p={p} t={t} />
-                                    <ProductRowEscandalloCell tiene={tiene} t={t} />
+                                    <div style={productGridPriceCell}>
+                                      <span style={rowPrecioStyleResolved}>{formatEuro(p.precioVenta, locale as Locale)}</span>
+                                    </div>
+                                    <ProductRowPublicationCell p={p} t={t} embedLight={emb} />
+                                    <ProductRowEscandalloCell tiene={tiene} t={t} embedLight={emb} />
                                     <ProductRowActions
                                       p={p}
                                       busyEsc={busyEsc}
                                       t={t}
+                                      embedLight={emb}
                                       onEdit={() => openEdit(p)}
                                       onToggleCarta={() => toggleActivo(p)}
                                       onActivateProduct={() => activateProducto(p)}
@@ -1731,10 +2167,10 @@ export default function ProductosManagementPage({
                                 key={p.id}
                                 className={PRODUCTOS_ROW_HOVER_CLASS}
                                 style={{
-                                  ...rowGrid,
+                                  ...(emb ? rowGridEmbed : rowGrid),
                                   padding: productTableRowPadding,
-                                  borderBottom: isLast ? "none" : "1px solid rgba(51, 65, 85, 0.65)",
-                                  background: idx % 2 === 0 ? "rgba(15, 23, 42, 0.35)" : "transparent",
+                                  borderBottom: isLast ? "none" : emb ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.06)",
+                                  background: "transparent",
                                   minHeight: productRowMinHeight,
                                 }}
                               >
@@ -1753,7 +2189,12 @@ export default function ProductosManagementPage({
                                     checked={selectedIds.has(p.id)}
                                     onChange={() => toggleRowSelected(p.id)}
                                     aria-label={t("productos.selectRowAria", { name: p.nombre })}
-                                    style={{ width: 16, height: 16, accentColor: "#38bdf8", cursor: "pointer" }}
+                                    style={{
+                                      width: emb ? 14 : 16,
+                                      height: emb ? 14 : 16,
+                                      accentColor: "#38bdf8",
+                                      cursor: "pointer",
+                                    }}
                                   />
                                 </label>
                                 <div style={{ minWidth: 0, overflow: "hidden", width: "100%" }}>
@@ -1768,27 +2209,45 @@ export default function ProductosManagementPage({
                                     }}
                                     title={p.nombre}
                                   >
-                                    <span style={productRowNombreStyle}>{p.nombre}</span>
+                                    <span style={rowNombreStyleResolved}>{p.nombre}</span>
                                     {p.origenAlta === "importacion_ia" ? (
-                                      <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(56,189,248,0.28)", background: "rgba(8,47,73,0.18)", color: "#7dd3fc" }}>
+                                      <span
+                                        style={{
+                                          flexShrink: 0,
+                                          fontSize: emb ? 8 : 9,
+                                          fontWeight: emb ? 600 : 900,
+                                          letterSpacing: "0.08em",
+                                          textTransform: "uppercase",
+                                          padding: emb ? "1px 5px" : "2px 6px",
+                                          borderRadius: emb ? 5 : 999,
+                                          border: emb
+                                            ? "1px solid rgb(226 232 240)"
+                                            : "1px solid rgba(56,189,248,0.28)",
+                                          background: emb ? "rgb(248 250 252)" : "rgba(8,47,73,0.18)",
+                                          color: emb ? "rgb(71 85 105)" : "#7dd3fc",
+                                        }}
+                                      >
                                         IA
                                       </span>
                                     ) : null}
                                   </div>
                                 </div>
-                                <span style={productRowMetaStyle} title={labelTipoVenta(t, p.tipoVenta)}>
+                                <span style={rowTipoStyleResolved} title={labelTipoVenta(t, p.tipoVenta)}>
                                   {labelTipoVenta(t, p.tipoVenta)}
                                 </span>
-                                <span style={productRowMetaStyle} title={p.categoria}>
+                                <span style={rowCategoriaStyleResolved} title={p.categoria}>
                                   {p.categoria}
                                 </span>
-                                <span style={productRowPrecioStyle}>{formatEuro(p.precioVenta, locale as Locale)}</span>
-                                <ProductRowPublicationCell p={p} t={t} />
-                                <ProductRowEscandalloCell tiene={tiene} t={t} />
+                                <div style={productGridPriceCell}>
+                                  <span style={rowPrecioStyleResolved}>{formatEuro(p.precioVenta, locale as Locale)}</span>
+                                </div>
+                                <ProductRowPublicationCell p={p} t={t} embedLight={emb} />
+                                <ProductRowEscandalloCell tiene={tiene} t={t} embedLight={emb} />
                                 <ProductRowActions
                                   p={p}
                                   busyEsc={busyEsc}
                                   t={t}
+                                  embedLight={emb}
                                   onEdit={() => openEdit(p)}
                                   onToggleCarta={() => toggleActivo(p)}
                                   onActivateProduct={() => activateProducto(p)}

@@ -14,6 +14,8 @@ export type FloorPlan = {
   id: string;
   restaurantId: string;
   name: string;
+  width?: number;
+  height?: number;
   sortOrder?: number;
   isDefault?: boolean;
   createdAt?: number;
@@ -21,6 +23,8 @@ export type FloorPlan = {
 };
 
 const COLLECTION = "floorPlans";
+export const DEFAULT_FLOOR_PLAN_WIDTH = 1800;
+export const DEFAULT_FLOOR_PLAN_HEIGHT = 1200;
 
 function rethrowWithMessage(e: unknown): never {
   if (e instanceof FirebaseError) {
@@ -39,6 +43,14 @@ function mapDocToFloorPlan(d: QueryDocumentSnapshot): FloorPlan {
     typeof data.sortOrder === "number" && Number.isFinite(data.sortOrder)
       ? data.sortOrder
       : undefined;
+  const width =
+    typeof data.width === "number" && Number.isFinite(data.width) && data.width > 0
+      ? data.width
+      : undefined;
+  const height =
+    typeof data.height === "number" && Number.isFinite(data.height) && data.height > 0
+      ? data.height
+      : undefined;
   const isDefault =
     typeof data.isDefault === "boolean" ? data.isDefault : undefined;
   const createdAt =
@@ -53,6 +65,8 @@ function mapDocToFloorPlan(d: QueryDocumentSnapshot): FloorPlan {
     id: d.id,
     restaurantId,
     name,
+    ...(width !== undefined ? { width } : {}),
+    ...(height !== undefined ? { height } : {}),
     ...(sortOrder !== undefined ? { sortOrder } : {}),
     ...(isDefault !== undefined ? { isDefault } : {}),
     ...(createdAt !== undefined ? { createdAt } : {}),
@@ -72,11 +86,21 @@ export async function createFloorPlan(
     const docRef = await addDoc(collection(db, COLLECTION), {
       restaurantId: rid,
       name: n,
+      width: DEFAULT_FLOOR_PLAN_WIDTH,
+      height: DEFAULT_FLOOR_PLAN_HEIGHT,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     } as DocumentData);
     return { id: docRef.id, name: n };
   } catch (e) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[FLOOR_PLANS] create failed", {
+        path: COLLECTION,
+        restaurantId: rid,
+        name: n,
+        error: e,
+      });
+    }
     rethrowWithMessage(e);
   }
 }
@@ -111,6 +135,8 @@ export async function createDefaultFloorPlanIfNeeded(
     await addDoc(collection(db, COLLECTION), {
       restaurantId: rid,
       name: "Principal",
+      width: DEFAULT_FLOOR_PLAN_WIDTH,
+      height: DEFAULT_FLOOR_PLAN_HEIGHT,
       isDefault: true,
       sortOrder: 0,
       createdAt: Date.now(),

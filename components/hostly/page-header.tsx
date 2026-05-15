@@ -16,10 +16,14 @@ export type HostlyPageHeaderProps = {
   /** En móvil: volver arriba y título debajo (columna izquierda). */
   mobileStackLeftColumn?: boolean;
   containerStyle?: React.CSSProperties;
+  /** Menos aire entre bloques (p. ej. cabecera TPV /carta). */
+  compactSpacing?: boolean;
   titleClassName?: string;
   subtitleClassName?: string;
   titleStyle?: React.CSSProperties;
   subtitleStyle?: React.CSSProperties;
+  /** Estilo del elemento `<header>` (p. ej. padding vertical reducido en editores a pantalla completa). */
+  surfaceStyle?: React.CSSProperties;
 };
 
 export function HostlyPageHeader({
@@ -32,18 +36,42 @@ export function HostlyPageHeader({
   isMobileLayout,
   mobileStackLeftColumn,
   containerStyle,
+  compactSpacing,
   titleClassName,
   subtitleClassName,
   titleStyle,
   subtitleStyle,
+  surfaceStyle,
 }: HostlyPageHeaderProps) {
+  const rowGap =
+    compactSpacing
+      ? isMobileLayout && mobileStackLeftColumn
+        ? 6
+        : isMobileLayout
+          ? 5
+          : 6
+      : isMobileLayout && mobileStackLeftColumn
+        ? 10
+        : isMobileLayout
+          ? 8
+          : 12;
+  const leftColGap = compactSpacing ? 6 : 10;
+  const rightMarginLeft = compactSpacing ? 6 : 12;
+
   return (
     <header
       className="hostly-page-header"
       style={
         isMobileLayout
-          ? { position: "static", top: "auto", zIndex: "auto", backdropFilter: "none", borderBottom: undefined }
-          : undefined
+          ? {
+              position: "static",
+              top: "auto",
+              zIndex: "auto",
+              backdropFilter: "none",
+              borderBottom: undefined,
+              ...surfaceStyle,
+            }
+          : surfaceStyle
       }
     >
       <HostlyPageContainer wide={wide} style={containerStyle}>
@@ -62,8 +90,7 @@ export function HostlyPageHeader({
                 isMobileLayout && mobileStackLeftColumn ? "stretch" : isMobileLayout ? "flex-start" : "center",
               justifyContent: isMobileLayout ? "flex-start" : "space-between",
               flexDirection: isMobileLayout ? "column" : "row",
-              gap:
-                isMobileLayout && mobileStackLeftColumn ? 10 : isMobileLayout ? "0.5rem" : 12,
+              gap: rowGap,
               width: "100%",
               minWidth: 0,
             }}
@@ -73,7 +100,7 @@ export function HostlyPageHeader({
                 display: "flex",
                 alignItems: isMobileLayout && mobileStackLeftColumn ? "stretch" : "center",
                 flexDirection: isMobileLayout && mobileStackLeftColumn ? "column" : "row",
-                gap: 10,
+                gap: leftColGap,
                 minWidth: 0,
                 width: isMobileLayout ? "100%" : undefined,
                 flex: isMobileLayout ? undefined : "1 1 0%",
@@ -105,7 +132,7 @@ export function HostlyPageHeader({
                   flexShrink: 0,
                   alignSelf: isMobileLayout ? "stretch" : undefined,
                   width: isMobileLayout ? "100%" : undefined,
-                  marginLeft: isMobileLayout ? undefined : 12,
+                  marginLeft: isMobileLayout ? undefined : rightMarginLeft,
                 }}
               >
                 {right}
@@ -118,9 +145,11 @@ export function HostlyPageHeader({
                 width: "100%",
                 minWidth: 0,
                 boxSizing: "border-box",
-                marginTop: 18,
-                paddingTop: 16,
-                borderTop: "1px solid rgba(148, 163, 184, 0.16)",
+                marginTop: compactSpacing ? 6 : 18,
+                paddingTop: compactSpacing ? 8 : 16,
+                borderTop: compactSpacing
+                  ? "1px solid rgba(148, 163, 184, 0.1)"
+                  : "1px solid rgba(148, 163, 184, 0.16)",
               }}
             >
               {below}

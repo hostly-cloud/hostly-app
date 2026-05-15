@@ -55,7 +55,7 @@ export default function InvitacionesPage() {
     role,
     ready: authReady,
   } = useAuth();
-  const restaurantId = profileRestaurantId ?? user?.uid ?? null;
+  const restaurantId = profileRestaurantId ?? null;
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<RestaurantInviteRole>("staff");

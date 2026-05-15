@@ -7,7 +7,13 @@ service cloud.firestore {
     }
 
     function userRestaurantId() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId
+        : (
+          exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+            ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.restaurantId
+            : null
+        );
     }
 
     function sameRestaurant(resourceRestaurantId) {
@@ -16,6 +22,11 @@ service cloud.firestore {
 
     // USERS
     match /users/{userId} {
+      allow read, write: if isAuth() && request.auth.uid == userId;
+    }
+
+    // Legacy user profile mirror used by older Hostly accounts.
+    match /usuarios/{userId} {
       allow read, write: if isAuth() && request.auth.uid == userId;
     }
 
@@ -41,10 +52,71 @@ service cloud.firestore {
     // RESTAURANTS
     match /restaurants/{restaurantId} {
       allow read, write: if sameRestaurant(restaurantId);
+
+      // `restaurants/{rid}/config/tableGroups` — doc solo tiene `groups`/`updatedAt` (tenant viene del path).
+      match /config/{groupDocId} {
+        allow read, create, update: if groupDocId == "tableGroups"
+          && sameRestaurant(restaurantId);
+        allow delete: if false;
+      }
     }
 
     // TABLES
     match /tables/{tableId} {
+      allow read: if sameRestaurant(resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+      allow delete: if false;
+    }
+
+    // FLOOR PLAN ZONES
+    match /zones/{zoneId} {
+      allow read: if sameRestaurant(resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+      allow delete: if false;
+    }
+
+    // FLOOR PLANS
+    match /floorPlans/{floorPlanId} {
+      allow read: if sameRestaurant(resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+      allow delete: if false;
+    }
+
+    // ORDERS
+    match /orders/{orderId} {
+      allow read: if sameRestaurant(resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+      allow delete: if false;
+    }
+
+    // ORDER ITEMS (líneas enviadas a cocina / KDS)
+    match /orderItems/{orderItemId} {
+      allow read: if sameRestaurant(resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+      allow delete: if false;
+    }
+
+    // RESERVATIONS
+    match /reservations/{reservationId} {
+      allow read: if sameRestaurant(resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+      allow delete: if false;
+    }
+
+    // PAYMENTS (cobros, tickets, pagos parciales split_by_items)
+    match /payments/{paymentId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
       allow create: if sameRestaurant(request.resource.data.restaurantId);
       allow update: if sameRestaurant(resource.data.restaurantId)

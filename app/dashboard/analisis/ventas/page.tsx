@@ -27,6 +27,10 @@ type PaymentDoc = {
   received?: unknown;
 };
 
+function filterPillClass(active: boolean): string {
+  return `hostly-pill px-3 py-2 text-sm ${active ? "" : ""}`;
+}
+
 function readTsMs(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (v instanceof Timestamp) return v.toMillis();
@@ -365,131 +369,98 @@ export default function AnalisisVentasPage() {
   return (
     <ModulePageShell title="Ventas">
       <div style={{ display: "grid", gap: 16 }}>
-        <div className="flex gap-2 mb-4">
+        <div className="hostly-segmented flex gap-1 mb-4 w-fit">
           <button
             type="button"
             onClick={() => setDateFilter("today")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              dateFilter === "today"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={dateFilter === "today"}
+            className={filterPillClass(dateFilter === "today")}
           >
             Hoy
           </button>
           <button
             type="button"
             onClick={() => setDateFilter("yesterday")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              dateFilter === "yesterday"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={dateFilter === "yesterday"}
+            className={filterPillClass(dateFilter === "yesterday")}
           >
             Ayer
           </button>
           <button
             type="button"
             onClick={() => setDateFilter("range")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              dateFilter === "range"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={dateFilter === "range"}
+            className={filterPillClass(dateFilter === "range")}
           >
             Rango
           </button>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="hostly-segmented flex gap-1 mb-4 w-fit">
           <button
             type="button"
             onClick={() => setShiftFilter("all")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              shiftFilter === "all"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={shiftFilter === "all"}
+            className={filterPillClass(shiftFilter === "all")}
           >
             Todo
           </button>
           <button
             type="button"
             onClick={() => setShiftFilter("morning")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              shiftFilter === "morning"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={shiftFilter === "morning"}
+            className={filterPillClass(shiftFilter === "morning")}
           >
             Mañana
           </button>
           <button
             type="button"
             onClick={() => setShiftFilter("afternoon")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              shiftFilter === "afternoon"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={shiftFilter === "afternoon"}
+            className={filterPillClass(shiftFilter === "afternoon")}
           >
             Tarde
           </button>
           <button
             type="button"
             onClick={() => setShiftFilter("night")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              shiftFilter === "night"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={shiftFilter === "night"}
+            className={filterPillClass(shiftFilter === "night")}
           >
             Noche
           </button>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="hostly-segmented flex gap-1 mb-4 w-fit">
           <button
             type="button"
             onClick={() => setPaymentFilter("all")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              paymentFilter === "all"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={paymentFilter === "all"}
+            className={filterPillClass(paymentFilter === "all")}
           >
             Todos
           </button>
           <button
             type="button"
             onClick={() => setPaymentFilter("cash")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              paymentFilter === "cash"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={paymentFilter === "cash"}
+            className={filterPillClass(paymentFilter === "cash")}
           >
             Efectivo
           </button>
           <button
             type="button"
             onClick={() => setPaymentFilter("card")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              paymentFilter === "card"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={paymentFilter === "card"}
+            className={filterPillClass(paymentFilter === "card")}
           >
             Tarjeta
           </button>
           <button
             type="button"
             onClick={() => setPaymentFilter("voucher")}
-            className={`rounded-lg px-3 py-2 text-sm border ${
-              paymentFilter === "voucher"
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200"
-            }`}
+            aria-pressed={paymentFilter === "voucher"}
+            className={filterPillClass(paymentFilter === "voucher")}
           >
             Voucher
           </button>
@@ -501,43 +472,43 @@ export default function AnalisisVentasPage() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm"
+              className="border rounded-lg px-3 py-2 text-sm bg-white/80 border-[var(--hostly-line)]"
             />
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm"
+              className="border rounded-lg px-3 py-2 text-sm bg-white/80 border-[var(--hostly-line)]"
             />
           </div>
         )}
 
         <div className="grid gap-3 sm:grid-cols-5">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="hostly-panel p-4">
             <div className="text-sm text-slate-500">Ventas del día</div>
             <div className="mt-1 text-2xl font-extrabold text-slate-900">
               {formatEur(totals.totalVentas)}
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="hostly-panel p-4">
             <div className="text-sm text-slate-500">Propinas</div>
             <div className="mt-1 text-2xl font-extrabold text-slate-900">
               {formatEur(totals.totalPropinas)}
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="hostly-panel p-4">
             <div className="text-sm text-slate-500">Total cobrado</div>
             <div className="mt-1 text-2xl font-extrabold text-slate-900">
               {formatEur(totals.totalCobrado)}
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="hostly-panel p-4">
             <div className="text-sm text-slate-500">Ticket medio</div>
             <div className="mt-1 text-2xl font-extrabold text-slate-900">
               {avgTicket.toFixed(2)} €
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="hostly-panel p-4">
             <div className="text-sm text-slate-500">Tickets</div>
             <div className="mt-1 text-2xl font-extrabold text-slate-900">
               {paymentsCount}
@@ -546,29 +517,29 @@ export default function AnalisisVentasPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4">
-          <div className="bg-white p-3 rounded-xl shadow">
+          <div className="hostly-panel-soft p-3">
             <div className="text-sm text-gray-500">Efectivo</div>
             <div className="text-lg font-semibold">{byMethod.cash.toFixed(2)} €</div>
           </div>
 
-          <div className="bg-white p-3 rounded-xl shadow">
+          <div className="hostly-panel-soft p-3">
             <div className="text-sm text-gray-500">Tarjeta</div>
             <div className="text-lg font-semibold">{byMethod.card.toFixed(2)} €</div>
           </div>
 
-          <div className="bg-white p-3 rounded-xl shadow">
+          <div className="hostly-panel-soft p-3">
             <div className="text-sm text-gray-500">Voucher</div>
             <div className="text-lg font-semibold">{totalVoucher.toFixed(2)} €</div>
           </div>
 
-          <div className="bg-white p-3 rounded-xl shadow">
+          <div className="hostly-panel-soft p-3">
             <div className="text-sm text-gray-500">Propinas</div>
             <div className="text-lg font-semibold text-green-600">
               {byMethod.tips.toFixed(2)} €
             </div>
           </div>
 
-          <div className="bg-white p-3 rounded-xl shadow">
+          <div className="hostly-panel-soft p-3">
             <div className="text-sm text-gray-500">Descuentos</div>
             <div className="text-lg font-semibold text-red-600">
               -{formatNumberEU(totals.totalDiscounts)} €
@@ -584,9 +555,9 @@ export default function AnalisisVentasPage() {
               <div key={h.hour} className="flex items-center gap-2">
                 <div className="w-10 text-xs text-gray-500">{h.hour}:00</div>
 
-                <div className="flex-1 bg-gray-100 rounded h-3">
+                <div className="flex-1 bg-[var(--hostly-surface-muted)] rounded h-3">
                   <div
-                    className="bg-blue-500 h-3 rounded"
+                    className="bg-[var(--hostly-accent)] h-3 rounded"
                     style={{
                       width: `${(h.total / salesByHour.max) * 100}%`,
                     }}
@@ -606,7 +577,7 @@ export default function AnalisisVentasPage() {
             {waiterEntries.map(([id, w]) => (
               <div
                 key={id}
-                className="flex justify-between items-center bg-white p-3 rounded-xl shadow"
+                className="hostly-panel-soft flex justify-between items-center p-3"
               >
                 <div>
                   <div className="font-medium">
@@ -628,7 +599,7 @@ export default function AnalisisVentasPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="hostly-panel p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-semibold text-slate-900">Últimos pagos</div>
             <div className="flex items-center gap-2">

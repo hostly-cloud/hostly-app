@@ -16,14 +16,15 @@ export function canSendRestaurantInvites(role: UserRestaurantRole): boolean {
 }
 
 /**
- * Lee `users/{uid}` y, si hace falta, `usuarios/{uid}` para `restaurantId` y `restaurantName`.
+ * Lee `users/{uid}` y, si no hay `restaurantId`, `usuarios/{uid}` (mismo shape de campos).
+ * No inventa `restaurantId`: si no viene en ningún doc, devuelve `null`.
  */
 export async function loadUserRestaurantContext(uid: string): Promise<{
-  restaurantId: string;
+  restaurantId: string | null;
   restaurantName: string | null;
   role: UserRestaurantRole;
 }> {
-  let restaurantId = uid;
+  let restaurantId: string | null = null;
   let restaurantName: string | null = null;
   let role: UserRestaurantRole | null = null;
 
@@ -44,7 +45,7 @@ export async function loadUserRestaurantContext(uid: string): Promise<{
   if (uSnap.exists()) {
     apply(uSnap.data() as Record<string, unknown>);
   }
-  if (restaurantName == null) {
+  if (restaurantId == null) {
     const oSnap = await getDoc(doc(db, "usuarios", uid));
     if (oSnap.exists()) {
       apply(oSnap.data() as Record<string, unknown>);

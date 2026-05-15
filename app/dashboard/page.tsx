@@ -207,13 +207,15 @@ const sectionTitleStyle: CSSProperties = {
 };
 
 const controlPanelStyle: CSSProperties = {
-  background: "#1e293b",
-  border: "1px solid #334155",
-  borderRadius: 12,
-  padding: "12px 14px",
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,252,255,0.9) 100%)",
+  border: "1px solid var(--hostly-line)",
+  borderRadius: 16,
+  padding: "14px 16px",
   minHeight: 0,
   display: "flex",
   flexDirection: "column",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.045), 0 12px 32px rgba(49, 95, 125, 0.045)",
 };
 
 export default function DashboardPage() {
@@ -433,7 +435,7 @@ export default function DashboardPage() {
     fontSize: 19,
     fontWeight: 700,
     letterSpacing: "-0.03em",
-    color: "#f8fafc",
+    color: "#1f2933",
     lineHeight: 1.1,
   };
 
@@ -450,10 +452,12 @@ export default function DashboardPage() {
       <div
         style={{
           flexShrink: 0,
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: "1px solid #334155",
-          background: "#1e293b",
+          padding: "14px 16px",
+          borderRadius: 16,
+          border: "1px solid var(--hostly-line)",
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,252,255,0.9) 100%)",
+          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.045), 0 12px 32px rgba(49, 95, 125, 0.045)",
         }}
       >
         <div style={{ ...sectionTitleStyle, marginBottom: 10 }}>Nombre del restaurante</div>
@@ -467,9 +471,9 @@ export default function DashboardPage() {
             boxSizing: "border-box",
             padding: "10px 12px",
             borderRadius: 8,
-            border: "1px solid #475569",
-            background: "#0f172a",
-            color: "#f8fafc",
+            border: "1px solid var(--hostly-line-strong)",
+            background: "#ffffff",
+            color: "#1f2933",
             fontSize: 14,
             marginBottom: 10,
           }}
@@ -486,9 +490,9 @@ export default function DashboardPage() {
           style={{
             padding: "8px 16px",
             borderRadius: 8,
-            border: "none",
-            background: "#2563eb",
-            color: "#fff",
+            border: "1px solid var(--hostly-line-strong)",
+            background: "#1f2933",
+            color: "#ffffff",
             fontWeight: 600,
             fontSize: 14,
             cursor: "pointer",
@@ -530,15 +534,15 @@ export default function DashboardPage() {
                 borderRadius: 14,
                 padding: "18px 20px",
                 minHeight: 76,
-                border: hovered ? "1px solid rgba(96, 165, 250, 0.45)" : "1px solid #334155",
-                background: hovered ? "rgba(30, 41, 59, 0.95)" : "#0f172a",
-                color: "#f8fafc",
+                border: hovered ? "1px solid var(--hostly-line-strong)" : "1px solid var(--hostly-line)",
+                background: hovered ? "#ffffff" : "rgba(255, 255, 255, 0.88)",
+                color: "#1f2933",
                 transition: "border-color 0.15s ease, background 0.15s ease",
               }}
             >
               <span
                 style={{
-                  color: hovered ? "#93c5fd" : "#94a3b8",
+                  color: hovered ? "#3f6478" : "#7b8794",
                   flexShrink: 0,
                   display: "inline-flex",
                   alignItems: "center",
@@ -546,7 +550,7 @@ export default function DashboardPage() {
                   width: 40,
                   height: 40,
                   borderRadius: 10,
-                  background: hovered ? "rgba(56, 189, 248, 0.12)" : "rgba(148, 163, 184, 0.08)",
+                  background: hovered ? "rgba(63, 100, 120, 0.12)" : "rgba(71, 85, 105, 0.08)",
                 }}
               >
                 <Icon size={22} />
@@ -611,32 +615,33 @@ export default function DashboardPage() {
             justifyContent: "space-between",
             gap: 12,
             padding: "12px 14px",
-            borderRadius: 12,
-            border: "1px solid rgba(251, 191, 36, 0.28)",
-            background: "linear-gradient(95deg, rgba(69, 26, 3, 0.38) 0%, rgba(30, 41, 59, 0.72) 55%, rgba(15, 23, 42, 0.85) 100%)",
-            boxShadow: "inset 0 1px 0 rgba(253, 230, 138, 0.06), 0 4px 20px rgba(0,0,0,0.2)",
+            borderRadius: 16,
+            border: "1px solid var(--hostly-line)",
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(248,252,255,0.86) 100%)",
+            boxShadow: "var(--hostly-shadow-card)",
           }}
         >
           <div style={{ minWidth: 0, flex: "1 1 220px" }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: "#fde68a", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#3f6478", letterSpacing: "0.06em", textTransform: "uppercase" }}>
               {t("dashboard.onboardingPromoTitle")}
             </div>
-            <div style={{ marginTop: 4, fontSize: 13, color: "#cbd5e1", lineHeight: 1.4, fontWeight: 600 }}>{t("dashboard.onboardingPromoBody")}</div>
+            <div style={{ marginTop: 4, fontSize: 13, color: "#667085", lineHeight: 1.4, fontWeight: 600 }}>{t("dashboard.onboardingPromoBody")}</div>
           </div>
           <button
             type="button"
             onClick={() => router.push("/dashboard/onboarding")}
             style={{
               flexShrink: 0,
-              border: "none",
-              background: "linear-gradient(180deg, rgba(251, 191, 36, 0.95) 0%, rgba(217, 119, 6, 0.92) 100%)",
-              color: "#1c1917",
+              border: "1px solid var(--hostly-line-strong)",
+              background: "#ffffff",
+              color: "#3f6478",
               padding: "11px 20px",
               borderRadius: 10,
               fontWeight: 800,
               fontSize: 14,
               cursor: "pointer",
-              boxShadow: "0 3px 16px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255,255,255,0.25)",
+              boxShadow: "var(--hostly-shadow-card)",
               minHeight: 48,
             }}
           >
@@ -656,11 +661,12 @@ export default function DashboardPage() {
             <div
               key={k.label}
               style={{
-                background: "#1e293b",
-                borderRadius: 12,
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,252,255,0.9) 100%)",
+                borderRadius: 16,
                 padding: "12px 14px",
-                border: "1px solid #334155",
-                boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
+                border: "1px solid var(--hostly-line)",
+                boxShadow: "var(--hostly-shadow-card)",
                 borderTop: `2px solid ${k.accent}`,
                 minWidth: 0,
               }}
@@ -669,7 +675,7 @@ export default function DashboardPage() {
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: "#64748b",
+                  color: "#667085",
                   letterSpacing: "0.06em",
                   textTransform: "uppercase",
                   lineHeight: 1.2,
@@ -684,7 +690,7 @@ export default function DashboardPage() {
                 style={{
                   margin: "4px 0 0",
                   fontSize: 10,
-                  color: "#94a3b8",
+                  color: "#7b8794",
                   lineHeight: 1.3,
                   display: "-webkit-box",
                   WebkitLineClamp: 2,
@@ -713,12 +719,12 @@ export default function DashboardPage() {
           <div style={{ ...controlPanelStyle, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
             <h2 style={sectionTitleStyle}>{t("dashboard.sectionActivity")}</h2>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              <li style={{ paddingBottom: 10, borderBottom: "1px solid #334155" }}>
+              <li style={{ paddingBottom: 10, borderBottom: "1px solid var(--hostly-line)" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.06em", textTransform: "uppercase" }}>
                   {t("dashboard.activityLastMerma")}
                 </div>
                 {lastMerma && hydrated ? (
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0", lineHeight: 1.35, marginTop: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#1f2933", lineHeight: 1.35, marginTop: 4 }}>
                     {lastMerma.producto_stock_nombre}
                     <span style={activityLineMuted}>
                       {formatIsoDate(lastMerma.fecha, locale)} · {formatMotivoMerma(lastMerma.motivo)}
@@ -728,12 +734,12 @@ export default function DashboardPage() {
                   <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>{t("dashboard.activityEmpty")}</div>
                 )}
               </li>
-              <li style={{ paddingBottom: 10, borderBottom: "1px solid #334155" }}>
+              <li style={{ paddingBottom: 10, borderBottom: "1px solid var(--hostly-line)" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.06em", textTransform: "uppercase" }}>
                   {t("dashboard.activityLastOrder")}
                 </div>
                 {lastCompra && hydrated ? (
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0", lineHeight: 1.35, marginTop: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#1f2933", lineHeight: 1.35, marginTop: 4 }}>
                     {lastCompra.proveedor}
                     <span style={activityLineMuted}>
                       {formatIsoDate(lastCompra.fecha, locale)} · {compraEstadoLabel(lastCompra.estado, t)}
@@ -748,7 +754,7 @@ export default function DashboardPage() {
                   {t("dashboard.activityLastRelevant")}
                 </div>
                 {lastPriceRow && hydrated && !escandalloError ? (
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0", lineHeight: 1.35, marginTop: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#1f2933", lineHeight: 1.35, marginTop: 4 }}>
                     {lastPriceRow.nombre_plato ?? "—"} · {formatEuro(lastPriceRow.precio_venta ?? 0, locale)}
                     <span style={activityLineMuted}>{t("dashboard.activityRelevantHint")}</span>
                   </div>
@@ -792,8 +798,8 @@ export default function DashboardPage() {
                         backgroundColor: bg,
                       }}
                     >
-                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: "#f1f5f9" }}>{a.title}</div>
-                      <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.35 }}>{a.body}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: "#1f2933" }}>{a.title}</div>
+                      <div style={{ fontSize: 13, color: "#667085", lineHeight: 1.35 }}>{a.body}</div>
                       {a.key === "stock" && lowStockProducts.length > 0 ? (
                         <div style={{ marginTop: 4, fontSize: 10, color: "#64748b", lineHeight: 1.35 }}>
                           {lowStockProducts

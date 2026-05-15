@@ -9,9 +9,9 @@ const barStyle: CSSProperties = {
   gap: 8,
   padding: "6px 10px",
   borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.45)",
-  color: "#e2e8f0",
+  border: "1px solid var(--hostly-line)",
+  background: "rgba(255, 255, 255, 0.72)",
+  color: "#315f7d",
 };
 
 const labelStyle: CSSProperties = {
@@ -26,10 +26,10 @@ const selectStyle: CSSProperties = {
   appearance: "none",
   padding: "4px 28px 4px 10px",
   borderRadius: 8,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
+  border: "1px solid var(--hostly-line)",
   background:
-    "rgba(15, 23, 42, 0.65) url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23cbd5f5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\") no-repeat right 8px center",
-  color: "#e2e8f0",
+    "rgba(255, 255, 255, 0.82) url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23315f7d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\") no-repeat right 8px center",
+  color: "#1f2933",
   fontSize: 12,
   fontWeight: 700,
   letterSpacing: "-0.01em",

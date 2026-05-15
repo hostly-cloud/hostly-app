@@ -13,7 +13,8 @@ import {
   type Unsubscribe,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
+import { auth, db } from "@/lib/firebase/client";
+import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 
 export type ReservationStatus =
   | "booked"
@@ -99,6 +100,10 @@ export function listenReservationsForDate(
 ): Unsubscribe {
   const rid = restaurantId.trim();
   const d = date.trim();
+  if (!rid || !d || !auth.currentUser) {
+    onData([]);
+    return () => {};
+  }
   const q = query(
     collection(db, COLLECTION),
     where("restaurantId", "==", rid),
@@ -128,21 +133,32 @@ export function listenReservationsForRange(
   const rid = restaurantId.trim();
   const from = dateFrom.trim();
   const to = dateTo.trim();
+  if (!rid || !from || !to || !isAuthReady()) {
+    onData([]);
+    return () => {};
+  }
   const q = query(
     collection(db, COLLECTION),
     where("restaurantId", "==", rid),
     where("date", ">=", from),
     where("date", "<=", to),
   );
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map(mapDocToReservation);
-    list.sort((a, b) => {
-      const d = a.date.localeCompare(b.date, "es");
-      if (d !== 0) return d;
-      return a.time.localeCompare(b.time, "es");
-    });
-    onData(list);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map(mapDocToReservation);
+      list.sort((a, b) => {
+        const d = a.date.localeCompare(b.date, "es");
+        if (d !== 0) return d;
+        return a.time.localeCompare(b.time, "es");
+      });
+      onData(list);
+    },
+    (err) => {
+      console.error("listenReservationsForRange Firestore error", err);
+      onData([]);
+    },
+  );
 }
 
 export async function createReservation(

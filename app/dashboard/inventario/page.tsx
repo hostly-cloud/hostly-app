@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useState } from "react";
 import InventarioStockSection from "@/app/dashboard/inventario/inventario-stock-section";
 import ModulePageShell from "@/components/module-page-shell";
@@ -14,47 +13,19 @@ const TABS: { id: InventarioTab; label: string }[] = [
   { id: "mermas", label: "Mermas" },
 ];
 
-const tabBarStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "stretch",
-  gap: 2,
-  padding: 4,
-  borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.55)",
-};
-
-function tabButtonStyle(active: boolean): CSSProperties {
-  return {
-    minWidth: 96,
-    padding: "8px 16px",
-    borderRadius: 8,
-    border: "none",
-    background: active ? "rgba(56, 189, 248, 0.18)" : "transparent",
-    color: active ? "#e0f2fe" : "#94a3b8",
-    fontWeight: 600,
-    fontSize: 14,
-    letterSpacing: "-0.02em",
-    cursor: "pointer",
-  };
-}
-
-const placeholderStyle: CSSProperties = {
+const placeholderStyle = {
   flex: 1,
   minHeight: 0,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   padding: "40px 24px",
-  borderRadius: 14,
-  border: "1px solid rgba(148, 163, 184, 0.18)",
-  background: "rgba(15, 23, 42, 0.55)",
-  color: "#94a3b8",
+  color: "var(--hostly-ink-muted)",
   fontSize: 14,
-  fontWeight: 600,
+  fontWeight: 650,
   textAlign: "center",
   lineHeight: 1.5,
-};
+} as const;
 
 export default function InventarioPage() {
   const [tab, setTab] = useState<InventarioTab>("stock");
@@ -91,13 +62,13 @@ export default function InventarioPage() {
         </div>
 
         {tab === "compras" ? (
-          <div style={placeholderStyle}>Compras — próximamente</div>
+          <div className="hostly-panel-soft" style={placeholderStyle}>Compras — próximamente</div>
         ) : null}
         {tab === "recepciones" ? (
-          <div style={placeholderStyle}>Recepciones — próximamente</div>
+          <div className="hostly-panel-soft" style={placeholderStyle}>Recepciones — próximamente</div>
         ) : null}
         {tab === "mermas" ? (
-          <div style={placeholderStyle}>Mermas — próximamente</div>
+          <div className="hostly-panel-soft" style={placeholderStyle}>Mermas — próximamente</div>
         ) : null}
       </div>
     </ModulePageShell>
@@ -112,7 +83,7 @@ function InventarioTabsBar({
   onChange: (t: InventarioTab) => void;
 }) {
   return (
-    <div role="tablist" aria-label="Secciones de inventario" style={tabBarStyle}>
+    <div role="tablist" aria-label="Secciones de inventario" className="hostly-segmented">
       {TABS.map((t) => (
         <button
           key={t.id}
@@ -120,7 +91,8 @@ function InventarioTabsBar({
           role="tab"
           aria-selected={active === t.id}
           onClick={() => onChange(t.id)}
-          style={tabButtonStyle(active === t.id)}
+          className="hostly-tab"
+          style={{ minWidth: 96, padding: "8px 16px", cursor: "pointer" }}
         >
           {t.label}
         </button>

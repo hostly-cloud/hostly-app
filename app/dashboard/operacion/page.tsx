@@ -27,18 +27,18 @@ const KNOWN_SLUGS: OperacionModuleSlug[] = [
 const menuGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 16,
+  gap: 18,
   width: "100%",
-  marginTop: 20,
+  marginTop: 24,
 };
 
 const menuLinkStyle: CSSProperties = {
-  padding: "36px 20px",
-  borderRadius: 22,
-  border: "1px solid rgba(148, 163, 184, 0.24)",
+  padding: "38px 20px",
+  borderRadius: 24,
+  border: "1px solid rgba(54, 86, 116, 0.18)",
   background:
-    "linear-gradient(180deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.78) 100%)",
-  color: "#e0f2fe",
+    "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(247,252,255,0.9) 100%)",
+  color: "#1f2933",
   fontWeight: 700,
   fontSize: 22,
   letterSpacing: "-0.01em",
@@ -50,7 +50,7 @@ const menuLinkStyle: CSSProperties = {
   textAlign: "center",
   textDecoration: "none",
   boxShadow:
-    "0 1px 0 rgba(148, 163, 184, 0.08) inset, 0 12px 32px rgba(2, 6, 23, 0.35)",
+    "0 1px 2px rgba(15, 23, 42, 0.045), 0 12px 34px rgba(49, 95, 125, 0.055)",
   transition:
     "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease",
   WebkitTapHighlightColor: "transparent",
@@ -58,15 +58,17 @@ const menuLinkStyle: CSSProperties = {
 
 const menuResponsiveCss = `
 .op-menu-link:hover {
-  border-color: rgba(56, 189, 248, 0.45);
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.18) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border-color: rgba(49, 95, 125, 0.28);
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.055), 0 18px 38px rgba(49, 95, 125, 0.08);
+  transform: translateY(-1px);
 }
 .op-menu-link:active {
   transform: scale(0.98);
-  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.08) inset, 0 6px 18px rgba(2, 6, 23, 0.45);
+  box-shadow: none;
 }
 .op-menu-link:focus-visible {
-  outline: 2px solid rgba(56, 189, 248, 0.7);
+  outline: 2px solid rgba(63, 100, 120, 0.34);
   outline-offset: 2px;
 }
 

@@ -9,13 +9,14 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
 import ServiceMetricsBar from "@/components/kds/service-metrics-bar";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
+import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
+import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 
 type SalaItem = {
   id: string;
@@ -488,7 +489,7 @@ const markButtonStyle: CSSProperties = {
 };
 
 export default function SalaView() {
-  const { restaurantId, ready: authReady } = useAuth();
+  const { restaurantId, ready: authReady, user } = useAuth();
   const { matchesOrder } = useOperationFilter();
   const [orders, setOrders] = useState<SalaOrder[]>([]);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
@@ -519,9 +520,22 @@ export default function SalaView() {
         };
       });
       setOrders(next);
+    }, (err) => {
+      console.error(err);
+      logFirestorePermissionError(
+        {
+          file: "components/kds/sala-view.tsx",
+          op: "onSnapshot",
+          path: `orders (where restaurantId==${restaurantId})`,
+          restaurantId,
+          uid: user?.uid ?? null,
+          email: user?.email ?? null,
+        },
+        err,
+      );
     });
     return () => unsub();
-  }, [authReady, restaurantId]);
+  }, [authReady, restaurantId, user]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 15000);
@@ -622,12 +636,34 @@ export default function SalaView() {
         : it,
     );
     try {
-      await updateDoc(doc(db, "orders", orderId), {
+      await dbgUpdateDoc(
+        doc(db, "orders", orderId),
+        {
         items: nextItems,
         updatedAt: serverTimestamp(),
-      });
+      },
+        {
+          label: "sala-view:handleMarkServed",
+          collection: "orders",
+          restaurantId,
+          orderId,
+          tableId: order.tableId ?? null,
+        },
+      );
     } catch (e) {
       console.error("SalaView.handleMarkServed", e);
+      logFirestorePermissionError(
+        {
+          file: "components/kds/sala-view.tsx",
+          op: "updateDoc",
+          path: `orders/${orderId}`,
+          restaurantId,
+          orderId,
+          uid: user?.uid ?? null,
+          email: user?.email ?? null,
+        },
+        e,
+      );
     } finally {
       setBusyItemIds((prev) => {
         const cp = { ...prev };

@@ -1,6 +1,6 @@
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-
+import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 export const TABLE_GROUPS_DOC_SEGMENTS = ["config", "tableGroups"] as const;
 
 /** `restaurants/{restaurantId}/config/tableGroups` */
@@ -56,6 +56,7 @@ export async function persistTableGroups(
 ): Promise<void> {
   const rid = restaurantId.trim();
   if (!rid) return;
+  if (!isAuthReady()) return;
 
   try {
     const normalized = normalizeTableGroups(groups);

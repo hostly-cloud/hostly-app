@@ -11,7 +11,6 @@ import {
   serverTimestamp,
   updateDoc,
   where,
-  writeBatch,
 } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
@@ -32,7 +31,14 @@ import { HostlyPageContainer } from "@/components/hostly/page-container";
 import { HostlyPageHeader } from "@/components/hostly/page-header";
 import { useI18n } from "@/components/i18n-provider";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
+import {
+  dbgAddDoc,
+  dbgUpdateDoc,
+  DbgWriteBatch,
+} from "@/lib/firestore/instrumentedWrites";
+import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { paymentSaleAmount } from "@/lib/payments/paymentSaleAmount";
+import { MONEY_EPS, roundMoney } from "@/lib/payments/roundMoney";
 import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
 import { loadPlatos, PLATOS_CHANGED_EVENT, type PlatoCarta } from "@/lib/platos-local";
 import {
@@ -40,22 +46,36 @@ import {
   isOrderStatusActiveForTableOccupancy,
   orderDocHasActiveLinesForMapOccupancy,
   readOrderCreatedAtMs,
+  readOrderUpdatedAtMs,
 } from "@/lib/firestore/order-table-occupancy";
 import {
+  fetchOpenOrderForTable,
   fetchOpenOrdersForTable,
-  isFirestoreOrderStatusOpen,
   sortOpenOrderDocsByCreatedAt,
 } from "@/lib/firestore/open-orders-same-table";
+import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
 import { handlePayTableOrder } from "@/lib/firestore/pay-table-order";
 import {
   filterTablesForTpvMap,
   getTables,
+  isDecorativePlanElementType,
   sortTablesForTpvMap,
   TABLE_MAP_STATUS_OCCUPIED,
   type Table,
 } from "@/lib/firestore/tables";
+import {
+  DEFAULT_FLOOR_PLAN_HEIGHT,
+  DEFAULT_FLOOR_PLAN_WIDTH,
+  getFloorPlans,
+  type FloorPlan,
+} from "@/lib/firestore/floorPlans";
+import { getZones, type Zone } from "@/lib/firestore/zones";
 import { getUsersByRestaurant } from "@/lib/firestore/users";
-import { EditableFloorMap } from "@/components/map/EditableFloorMap";
+import {
+  EditableFloorMap,
+  getPlanElementBaseVisualStyle,
+  type FloorPlanCanvasSize,
+} from "@/components/map/EditableFloorMap";
 import { PinchZoomMap } from "./_components/pinch-zoom-map";
 import { ElementCard } from "@/components/map/element-map-card";
 import {
@@ -66,6 +86,58 @@ import { isBarItem } from "@/lib/kds/bar-classification";
 import type { Product } from "@/types/product";
 
 const AUTO_PRINT_TICKET_STORAGE_KEY = "hostly:autoPrintTicket";
+
+function tpvDecorativeElementStyle(
+  element: Table,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): CSSProperties {
+  const baseVisual = getPlanElementBaseVisualStyle(element, "premium");
+  const readonlyLayer =
+    element.type === "bar"
+      ? 8
+      : element.type === "wall"
+        ? 3
+        : element.type === "door"
+          ? 8
+          : isDecorativePlanElementType(element.type)
+            ? 5
+            : 6;
+  return {
+    position: "absolute",
+    left: x,
+    top: y,
+    width,
+    height,
+    boxSizing: "border-box",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    userSelect: "none",
+    pointerEvents: "none",
+    zIndex: readonlyLayer,
+    ...baseVisual,
+  };
+}
+
+function floorPlanSizeForTpv(plan: FloorPlan | null | undefined): FloorPlanCanvasSize {
+  return {
+    width:
+      typeof plan?.width === "number" &&
+      Number.isFinite(plan.width) &&
+      plan.width > 0
+        ? plan.width
+        : DEFAULT_FLOOR_PLAN_WIDTH,
+    height:
+      typeof plan?.height === "number" &&
+      Number.isFinite(plan.height) &&
+      plan.height > 0
+        ? plan.height
+        : DEFAULT_FLOOR_PLAN_HEIGHT,
+  };
+}
 
 async function upsertVoucherBalanceAfterPayment(
   db: Firestore,
@@ -801,6 +873,20 @@ type FirestoreOrderDocForCart = {
   }[];
 };
 
+/** Shape flexible para hidratar líneas desde `orders.items` (evita `never` con `items` opcional). */
+type FirestoreHydrationItem = {
+  id?: string;
+  productId?: string;
+  nombre?: string;
+  name?: string;
+  precio?: number;
+  quantity?: number;
+  qty?: number;
+  categoria?: string;
+  categoryName?: string;
+  [key: string]: unknown;
+};
+
 function isPaymentRequestedAtSet(raw: unknown): boolean {
   if (raw == null) return false;
   if (typeof raw === "number" && Number.isFinite(raw)) return true;
@@ -838,17 +924,53 @@ function normalizeMergedFirestoreItems(
   });
 }
 
+/**
+ * Identidad mínima para hidratar líneas desde `orders.items`.
+ * Tras actualizar desde KDS, los ítems pueden traer `name`/`qty`/`status` pero no `productId`
+ * (el tablero solo persiste el shape `BoardItem`). Sin esto, el TPV filtra todo y la comanda queda vacía.
+ */
+function firestoreOrderItemHydratable(
+  it: FirestoreHydrationItem | null | undefined,
+): it is FirestoreHydrationItem {
+  if (!it || typeof it !== "object") return false;
+  const qty = Math.max(0, Number(it.qty ?? it.quantity) || 0);
+  if (qty <= 0) return false;
+  const pid =
+    typeof it.productId === "string" ? it.productId.trim() : "";
+  const name = String(it.name ?? it.nombre ?? "").trim();
+  return pid !== "" || name !== "";
+}
+
+function resolveHydratedCartProductId(
+  it: FirestoreHydrationItem,
+  idx: number,
+): string {
+  const raw = it.productId;
+  if (typeof raw === "string" && raw.trim() !== "") return raw.trim();
+  const lineId =
+    typeof it.id === "string" && it.id.trim() !== ""
+      ? it.id.trim()
+      : `row-${idx}`;
+  return `__hydrated_line:${lineId}`;
+}
+
 function mapFirestoreOrderDocToCartLines(
   data: FirestoreOrderDocForCart,
   restaurantId: string,
 ): CartOrderLine[] | null {
   if (data.restaurantId !== restaurantId) return null;
-  const rawItems = Array.isArray(data.items) ? data.items : [];
+  const rawItems: FirestoreHydrationItem[] = Array.isArray(data.items)
+    ? (data.items as FirestoreHydrationItem[])
+    : [];
   const mapped = rawItems
-    .filter((it) => it && typeof it.productId === "string")
-    .map((it, idx) => {
+    .filter((it: FirestoreHydrationItem): it is FirestoreHydrationItem =>
+      firestoreOrderItemHydratable(it),
+    )
+    .map((it: FirestoreHydrationItem, idx) => {
       const qty = Math.max(0, Number(it.qty ?? it.quantity) || 0);
-      const name = String(it.name ?? it.nombre ?? "");
+      const productIdResolved = resolveHydratedCartProductId(it, idx);
+      const name =
+        String(it.name ?? it.nombre ?? "").trim() || "Producto";
       const st = normalizeOrderLineStatus(it.status);
       const createdMs =
         typeof it.createdAt === "number" ? it.createdAt : null;
@@ -900,10 +1022,10 @@ function mapFirestoreOrderDocToCartLines(
         id:
           typeof it.id === "string" && it.id.trim() !== ""
             ? it.id
-            : `legacy-${it.productId}-${idx}`,
+            : `legacy-${productIdResolved}-${idx}`,
         quantity: qty,
         product: {
-          id: it.productId as string,
+          id: productIdResolved,
           nombre: name,
           precio: basePrecio,
           categoria: String(it.categoria ?? ""),
@@ -1129,6 +1251,55 @@ const getItemTimeInfo = (createdAt?: number) => {
   return { minutes, label: "NUEVO", color: "#52c41a" };
 };
 
+type SessionPaymentHistoryRow = {
+  id: string;
+  amount: number;
+  method: string;
+  createdAt: number | null;
+};
+
+function formatTpveurEs(amount: number): string {
+  if (!Number.isFinite(amount)) return "0,00 €";
+  return (
+    new Intl.NumberFormat("es-ES", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount) + " €"
+  );
+}
+
+function paymentMethodLabelEs(method: string): string {
+  const m = String(method ?? "")
+    .trim()
+    .toLowerCase();
+  if (m === "cash") return "efectivo";
+  if (m === "card") return "tarjeta";
+  if (m === "voucher") return "voucher";
+  return m || "—";
+}
+
+/** Teclado TPV europeo: solo `,` como decimal; máximo 2 decimales. */
+function tpvAppendDigit(prev: string, digit: string): string {
+  let p = String(prev ?? "").replace(/\./g, ",");
+  if (digit === "00") {
+    if (p === "" || p === "0") return "0";
+    const lastComma = p.lastIndexOf(",");
+    const frac = lastComma >= 0 ? p.slice(lastComma + 1) : "";
+    if (lastComma >= 0 && frac.length >= 2) return p;
+    return p + "00";
+  }
+  if (digit === ",") {
+    if (p.includes(",")) return p;
+    return p === "" ? "0," : `${p},`;
+  }
+  if (!/^[0-9]$/.test(digit)) return p;
+  const lastComma = p.lastIndexOf(",");
+  const frac = lastComma >= 0 ? p.slice(lastComma + 1) : "";
+  if (lastComma >= 0 && frac.length >= 2) return p;
+  if (p === "0" && lastComma < 0) return digit;
+  return p + digit;
+}
+
 const EMPTY_TABLES_READY_TO_CLOSE: ReadonlySet<string> = new Set();
 
 export type CartaPageContentProps = {
@@ -1191,7 +1362,7 @@ export function CartaPageContent({
   /** Evita mezclar líneas al cambiar de mesa y vacía solo cuando toca (mesa ocupada sin caché tras switch). */
   const prevSelectedTableForOrderSyncRef = useRef<string | null>(null);
   const openingTableRef = useRef<string | null>(null);
-  const restaurantId = profileRestaurantId ?? user?.uid ?? null;
+  const restaurantId = profileRestaurantId ?? null;
 
   const [cartaHeaderMobile, setCartaHeaderMobile] = useState(false);
   useLayoutEffect(() => {
@@ -1214,7 +1385,8 @@ export function CartaPageContent({
   const [todayReservations, setTodayReservations] = useState<Reservation[]>([]);
 
   useEffect(() => {
-    if (!authReady || !restaurantId || !isFirebaseConfigured) {
+    const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+    if (!authReady || !user?.uid || !rid || !isFirebaseConfigured) {
       setTodayReservations([]);
       return;
     }
@@ -1223,13 +1395,13 @@ export function CartaPageContent({
     const mm = String(now.getMonth() + 1).padStart(2, "0");
     const dd = String(now.getDate()).padStart(2, "0");
     const ymd = `${yyyy}-${mm}-${dd}`;
-    const unsub = listenReservationsForDate(restaurantId, ymd, (list) => {
+    const unsub = listenReservationsForDate(rid, ymd, (list) => {
       setTodayReservations(
         list.filter((r) => r.status === "booked" || r.status === "seated"),
       );
     });
     return () => unsub();
-  }, [authReady, restaurantId, isFirebaseConfigured]);
+  }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
 
   const reservedByTableId = useMemo(() => {
     const by: Record<string, Reservation> = {};
@@ -1355,6 +1527,10 @@ export function CartaPageContent({
   const [error, setError] = useState(false);
 
   const [tablesList, setTablesList] = useState<Table[]>([]);
+  const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
+  const [zonesList, setZonesList] = useState<Zone[]>([]);
+  const [selectedTpvFloorPlanId, setSelectedTpvFloorPlanId] =
+    useState<string | null>(null);
   /** Nombre de categoría de carta resaltada; null si aún no hay categorías en el grupo (comida/bebida). */
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   /**
@@ -1513,6 +1689,16 @@ export function CartaPageContent({
   const [comandaLineActionsTargetId, setComandaLineActionsTargetId] = useState<string | null>(
     null,
   );
+  /** Ancla visual del menú de acciones de línea (popover contextual, no modal centrado). */
+  const [comandaLineActionsAnchorRect, setComandaLineActionsAnchorRect] = useState<{
+    top: number;
+    left: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const lineActionsPopoverRef = useRef<HTMLDivElement | null>(null);
   const [partialPayments, setPartialPayments] = useState<
     Array<{
       id: string;
@@ -1523,6 +1709,13 @@ export function CartaPageContent({
       type: string;
     }>
   >([]);
+  /** Suma de cobros `table_amount` (y legados sin tipo) ya registrados para esta mesa/sesión (excluye split por ítems y cuotas dividir igual). */
+  const [sessionTableAmountPaidSum, setSessionTableAmountPaidSum] = useState(0);
+  const [sessionPaymentHistory, setSessionPaymentHistory] = useState<
+    SessionPaymentHistoryRow[]
+  >([]);
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
+  const simplePaymentAmountInputRef = useRef<HTMLInputElement | null>(null);
   const [splitCount, setSplitCount] = useState(2);
   const [currentSplitIndex, setCurrentSplitIndex] = useState(1);
 
@@ -1571,6 +1764,15 @@ export function CartaPageContent({
   const [orderUrlTableId, setOrderUrlTableId] = useState<string | null>(null);
   const [openOrderIdsForTable, setOpenOrderIdsForTable] = useState<string[]>(
     [],
+  );
+  /** `orders/{id}` reutilizado por mesa para borrador sincronizado con Firestore. */
+  const openDraftOrderIdByTableRef = useRef<Record<string, string>>({});
+  /** En navegador los timers son `number`; evitar `NodeJS.Timeout` del merge de tipos. */
+  const draftPersistDebounceByTableRef = useRef<
+    Record<string, number | undefined>
+  >({});
+  const draftPersistChainByTableRef = useRef<Record<string, Promise<void>>>(
+    {},
   );
   const orderSessionId = useMemo(() => {
     const fromUrl = typeof orderIdFromUrl === "string" ? orderIdFromUrl.trim() : "";
@@ -1757,10 +1959,20 @@ export function CartaPageContent({
       if (target.status !== "paid") return;
       if (target.type !== "split_by_items") return;
       try {
-        await updateDoc(doc(db, "payments", paymentId), {
+        await dbgUpdateDoc(
+          doc(db, "payments", paymentId),
+          {
           status: "cancelled",
           updatedAt: Date.now(),
-        });
+        },
+          {
+            label: "carta:handleCancelPartialPayment",
+            collection: "payments",
+            restaurantId,
+            tableId: selectedTableId,
+            paymentId,
+          },
+        );
         setPartialPayments((prev) => {
           const next = prev.filter((p) => p.id !== paymentId);
           const uniqueItemIds = new Set<string>();
@@ -1802,6 +2014,66 @@ export function CartaPageContent({
     }
   }, [comandaLineEditorId]);
 
+  const flushPersistDraftOrderForTable = useCallback(
+    async (tableId: string, lines: CartOrderLine[]) => {
+      if (!restaurantId || !isFirebaseConfigured) return;
+      const tid = tableId.trim();
+      if (!tid) return;
+      try {
+        const tableLabel =
+          tablesList.find((t) => t.id === tid)?.name?.trim() || tid;
+        const items = orderLinesToFirestoreItems(lines) as Record<
+          string,
+          unknown
+        >[];
+        const grandTotal = items.reduce(
+          (acc, it) => acc + (Number(it.total) || 0),
+          0,
+        );
+        let knownId =
+          openDraftOrderIdByTableRef.current[tid]?.trim() || null;
+        if (!knownId) {
+          const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
+          if (snapDoc) knownId = snapDoc.id;
+        }
+        const orderId = await persistOpenOrderForTable(db, {
+          restaurantId,
+          tableId: tid,
+          tableLabel,
+          items,
+          total: Number.isFinite(grandTotal) ? grandTotal : 0,
+          existingOrderId: knownId,
+        });
+        openDraftOrderIdByTableRef.current[tid] = orderId;
+      } catch (e) {
+        console.error("[persistOpenOrderDraft]", {
+          tableId,
+          restaurantId,
+          error: e,
+        });
+      }
+    },
+    [restaurantId, isFirebaseConfigured, tablesList],
+  );
+
+  const schedulePersistDraftOrderForTable = useCallback(
+    (tableId: string, lines: CartOrderLine[]) => {
+      const tid = tableId.trim();
+      if (!tid) return;
+      const prevTimer = draftPersistDebounceByTableRef.current[tid];
+      if (prevTimer != null) window.clearTimeout(prevTimer);
+      draftPersistDebounceByTableRef.current[tid] = window.setTimeout(() => {
+        draftPersistDebounceByTableRef.current[tid] = undefined;
+        const tail =
+          draftPersistChainByTableRef.current[tid] ?? Promise.resolve();
+        draftPersistChainByTableRef.current[tid] = tail.then(() =>
+          flushPersistDraftOrderForTable(tid, lines),
+        );
+      }, 380) as number;
+    },
+    [flushPersistDraftOrderForTable],
+  );
+
   const updateCurrentTableOrder = useCallback(
     (updater: (prev: CartOrderLine[]) => CartOrderLine[]) => {
       if (orderIdFromUrl) {
@@ -1815,12 +2087,21 @@ export function CartaPageContent({
       setOrdersByTable((prev) => {
         const cur = prev[selectedTableId] || [];
         const nextOrder = updater(cur);
+        if (restaurantId && selectedTableId && isFirebaseConfigured) {
+          schedulePersistDraftOrderForTable(selectedTableId, nextOrder);
+        }
         return { ...prev, [selectedTableId]: nextOrder };
       });
       // Mantener `order` sincronizado para el render actual sin cambiar el resto del archivo.
       setOrder((prev) => updater(prev));
     },
-    [orderIdFromUrl, selectedTableId],
+    [
+      orderIdFromUrl,
+      selectedTableId,
+      restaurantId,
+      isFirebaseConfigured,
+      schedulePersistDraftOrderForTable,
+    ],
   );
 
   const openComandaLineEditor = useCallback((item: CartOrderLine) => {
@@ -2030,7 +2311,9 @@ export function CartaPageContent({
 
     if (cardReceivedTouched) return;
 
-    const next = calculateFinalTotal(total).finalTotal.toFixed(2);
+    const account = calculateFinalTotal(total).finalTotal;
+    const remaining = roundMoney(Math.max(account - sessionTableAmountPaidSum, 0));
+    const next = remaining.toFixed(2).replace(".", ",");
     if (cardReceived !== next) setCardReceived(next);
   }, [
     paymentMethod,
@@ -2044,24 +2327,32 @@ export function CartaPageContent({
     cardReceivedTouched,
     cardReceived,
     calculateFinalTotal,
+    sessionTableAmountPaidSum,
   ]);
 
   const isPaymentValid = useCallback(
-    (amountToPay: number) => {
+    (remainingDue: number) => {
       if (!paymentMethod) return false;
+      const r = roundMoney(remainingDue);
+      if (r <= 0) return false;
 
       if (paymentMethod === "cash") {
-        return parseMoney(cashReceived) >= amountToPay;
+        const c = roundMoney(parseMoney(cashReceived));
+        return c > 0 && c <= r + MONEY_EPS;
       }
 
       if (paymentMethod === "card") {
-        const cardValue = parseMoney(cardReceived);
-        return cardReceived.trim() === "" || cardValue >= amountToPay;
+        const raw = cardReceived.trim();
+        const c = raw === "" ? r : roundMoney(parseMoney(cardReceived));
+        return c > 0 && c <= r + MONEY_EPS;
       }
 
       if (paymentMethod === "voucher") {
+        const v = roundMoney(parseMoney(voucherAmount));
         return (
-          parseMoney(voucherAmount) >= amountToPay && voucherNumber.trim().length > 0
+          v > 0 &&
+          v <= r + MONEY_EPS &&
+          voucherNumber.trim().length > 0
         );
       }
 
@@ -2084,6 +2375,8 @@ export function CartaPageContent({
       "Mesa";
 
     setIsPaymentOpen(false);
+    setSessionTableAmountPaidSum(0);
+    setSessionPaymentHistory([]);
     setSelectedTableId(null);
     setOrder([]);
     if (clearedTableId) {
@@ -2101,6 +2394,7 @@ export function CartaPageContent({
     setDiscountAmount("");
     setDiscountPercent("");
     if (clearedTableId) {
+      delete openDraftOrderIdByTableRef.current[clearedTableId];
       setOrdersByTable((prev) => ({
         ...prev,
         [clearedTableId]: [],
@@ -2156,6 +2450,134 @@ export function CartaPageContent({
     setPaidSplitItemIds([]);
   }, [groupedTablesMapHandlers, restaurantId, tablesList]);
 
+  const reloadSessionTableAmountPaidSum = useCallback(async () => {
+    if (!restaurantId?.trim() || !selectedTableId?.trim()) {
+      setSessionTableAmountPaidSum(0);
+      setSessionPaymentHistory([]);
+      return;
+    }
+    const rid = restaurantId.trim();
+    const tid = selectedTableId.trim();
+    const sid = orderSessionId?.trim() ?? "";
+    const oid = openOrderIdsForTable[0]?.trim() ?? "";
+    try {
+      let snap;
+      if (sid) {
+        snap = await getDocs(
+          query(
+            collection(db, "payments"),
+            where("restaurantId", "==", rid),
+            where("tableId", "==", tid),
+            where("orderSessionId", "==", sid),
+          ),
+        );
+      } else if (oid) {
+        snap = await getDocs(
+          query(
+            collection(db, "payments"),
+            where("restaurantId", "==", rid),
+            where("tableId", "==", tid),
+            where("orderId", "==", oid),
+          ),
+        );
+      } else {
+        setSessionTableAmountPaidSum(0);
+        setSessionPaymentHistory([]);
+        return;
+      }
+      const rows: SessionPaymentHistoryRow[] = [];
+      let sum = 0;
+      const readCreatedMs = (v: unknown): number | null => {
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+        if (
+          v &&
+          typeof (v as { toMillis?: () => number }).toMillis === "function"
+        ) {
+          try {
+            const ms = (v as { toMillis: () => number }).toMillis();
+            return Number.isFinite(ms) ? ms : null;
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      };
+      for (const d of snap.docs) {
+        const data = d.data() as Record<string, unknown>;
+        const st = String(data.status ?? "").trim().toLowerCase();
+        if (st === "cancelled" || st === "canceled") continue;
+        if (data.type === "split_by_items") continue;
+        if (data.type === "split_equal") continue;
+        if (
+          typeof data.part === "number" &&
+          Number.isFinite(data.part) &&
+          typeof data.totalParts === "number" &&
+          Number.isFinite(data.totalParts)
+        ) {
+          continue;
+        }
+        const amt = paymentSaleAmount(data);
+        if (amt <= MONEY_EPS) continue;
+        sum += amt;
+        rows.push({
+          id: d.id,
+          amount: roundMoney(amt),
+          method: String(data.paymentMethod ?? "—"),
+          createdAt: readCreatedMs(data.createdAt),
+        });
+      }
+      rows.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+      setSessionPaymentHistory(rows);
+      setSessionTableAmountPaidSum(roundMoney(sum));
+    } catch (e) {
+      console.error("[reloadSessionTableAmountPaidSum]", e);
+    }
+  }, [restaurantId, selectedTableId, orderSessionId, openOrderIdsForTable]);
+
+  useEffect(() => {
+    if (!isPaymentOpen || !isFirebaseConfigured || !restaurantId?.trim()) return;
+    if (!selectedTableId?.trim()) return;
+    void reloadSessionTableAmountPaidSum();
+  }, [
+    isPaymentOpen,
+    isFirebaseConfigured,
+    restaurantId,
+    selectedTableId,
+    orderSessionId,
+    openOrderIdsForTable,
+    reloadSessionTableAmountPaidSum,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!isPaymentOpen || !isSimplePaymentMode) return;
+    if (paymentMethod != null) return;
+    const { finalTotal } = calculateFinalTotal(total);
+    const remainingDue = roundMoney(
+      Math.max(finalTotal - sessionTableAmountPaidSum, 0),
+    );
+    const prefill = remainingDue.toFixed(2).replace(".", ",");
+    setPaymentMethod("cash");
+    setCashReceived(prefill);
+    setCardReceivedTouched(false);
+  }, [
+    isPaymentOpen,
+    isSimplePaymentMode,
+    paymentMethod,
+    total,
+    sessionTableAmountPaidSum,
+    calculateFinalTotal,
+  ]);
+
+  useEffect(() => {
+    if (!isPaymentOpen || !isSimplePaymentMode) return;
+    if (!paymentMethod) return;
+    const id = window.setTimeout(() => {
+      simplePaymentAmountInputRef.current?.focus();
+      simplePaymentAmountInputRef.current?.select();
+    }, 60);
+    return () => window.clearTimeout(id);
+  }, [isPaymentOpen, isSimplePaymentMode, paymentMethod]);
+
   const handleConfirmPayment = useCallback(async (opts?: {
     overrideTotal?: number;
     part?: number;
@@ -2170,39 +2592,121 @@ export function CartaPageContent({
     }
     if (!paymentMethod) return;
 
-    const baseTotal =
-      typeof opts?.overrideTotal === "number" && Number.isFinite(opts.overrideTotal)
-        ? opts.overrideTotal
-        : total;
-    const breakdown = calculateFinalTotal(baseTotal);
-    const amountToCharge = breakdown.finalTotal;
-
-    if (!isPaymentValid(amountToCharge)) return;
+    const safeOpts = opts ?? {};
 
     const pm = paymentMethod;
     const cashParsed = parseMoney(cashReceived);
     const cardParsed = parseMoney(cardReceived);
     const voucherValue = parseMoney(voucherAmount);
+
+    const baseTotal =
+      typeof safeOpts.overrideTotal === "number" && Number.isFinite(safeOpts.overrideTotal)
+        ? safeOpts.overrideTotal
+        : total;
+
+    const isSplitEqualInstallment =
+      safeOpts.minimalPaymentDoc === true &&
+      typeof safeOpts.overrideTotal === "number" &&
+      Number.isFinite(safeOpts.overrideTotal);
+
+    let breakdown = calculateFinalTotal(baseTotal);
+    let chargeAmount = roundMoney(breakdown.finalTotal);
+    let remainingBeforePay = 0;
+    let remainingAfterPay = 0;
+    let isAccountFinalPayment = false;
+    let accountFinalForMeta: number | null = null;
+
+    if (isSplitEqualInstallment) {
+      if (!isPaymentValid(chargeAmount)) return;
+    } else {
+      const fullDisc = calculateFinalTotal(total);
+      accountFinalForMeta = roundMoney(fullDisc.finalTotal);
+      remainingBeforePay = roundMoney(
+        accountFinalForMeta - sessionTableAmountPaidSum,
+      );
+      if (remainingBeforePay <= MONEY_EPS) {
+        window.alert("No queda importe pendiente.");
+        return;
+      }
+      if (!isPaymentValid(remainingBeforePay)) return;
+
+      if (pm === "cash") {
+        chargeAmount = roundMoney(cashParsed);
+      } else if (pm === "card") {
+        chargeAmount =
+          cardReceived.trim() === ""
+            ? remainingBeforePay
+            : roundMoney(cardParsed);
+      } else {
+        chargeAmount = roundMoney(Math.min(voucherValue, remainingBeforePay));
+      }
+
+      if (chargeAmount <= MONEY_EPS) {
+        window.alert("El importe a cobrar debe ser mayor que 0.");
+        return;
+      }
+      if (chargeAmount > remainingBeforePay + MONEY_EPS) {
+        window.alert(
+          `El importe (${chargeAmount.toFixed(2)} €) no puede ser mayor que el pendiente (${remainingBeforePay.toFixed(2)} €).`,
+        );
+        return;
+      }
+
+      remainingAfterPay = roundMoney(remainingBeforePay - chargeAmount);
+      isAccountFinalPayment = remainingAfterPay <= MONEY_EPS;
+
+      if (sessionTableAmountPaidSum <= MONEY_EPS && isAccountFinalPayment) {
+        breakdown = fullDisc;
+        chargeAmount = roundMoney(fullDisc.finalTotal);
+      } else if (isAccountFinalPayment) {
+        breakdown = fullDisc;
+        chargeAmount = remainingBeforePay;
+      } else {
+        breakdown = {
+          baseTotal: chargeAmount,
+          discountAmountValue: 0,
+          discountPercentValue: 0,
+          percentAmount: 0,
+          discountTotal: 0,
+          finalTotal: chargeAmount,
+          invPart: 0,
+          pctPart: 0,
+        };
+        chargeAmount = roundMoney(chargeAmount);
+      }
+    }
+
     const voucherUsed =
-      pm === "voucher" ? Math.min(voucherValue, amountToCharge) : 0;
+      pm === "voucher" ? Math.min(voucherValue, chargeAmount) : 0;
     const voucherRemaining =
-      pm === "voucher" ? Math.max(voucherValue - amountToCharge, 0) : 0;
+      pm === "voucher" ? Math.max(voucherValue - chargeAmount, 0) : 0;
 
     const receivedVal =
       pm === "voucher"
         ? voucherValue
         : pm === "card"
-          ? cardParsed || amountToCharge
+          ? cardParsed || chargeAmount
           : cashParsed;
 
     const tipVal =
-      pm === "card" ? Math.max((cardParsed || amountToCharge) - amountToCharge, 0) : 0;
+      pm === "card"
+        ? Math.max((cardParsed || chargeAmount) - chargeAmount, 0)
+        : 0;
 
-    const changeVal = pm === "cash" ? Math.max(cashParsed - amountToCharge, 0) : 0;
+    const changeVal =
+      pm === "cash" ? Math.max(cashParsed - chargeAmount, 0) : 0;
+
+    const keepModalOpen = isSplitEqualInstallment
+      ? Boolean(safeOpts.keepModalOpen)
+      : safeOpts.keepModalOpen ?? !isAccountFinalPayment;
 
     const selectedTable = selectedTableId
       ? tablesList.find((t) => t.id === selectedTableId) ?? null
       : null;
+    const primaryOrderId =
+      (orderIdFromUrl?.trim() ? orderIdFromUrl.trim() : null) ??
+      (openOrderIdsForTable[0]?.trim() ? openOrderIdsForTable[0]!.trim() : null);
+
     const now = new Date();
     const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
     const timePart = now.getTime().toString().slice(-6);
@@ -2221,76 +2725,100 @@ export function CartaPageContent({
             },
           }
         : {};
-      console.log("PAYMENT DEBUG", {
-        baseTotal,
+
+      const minimalPayload = {
+        restaurantId,
+        tableId: selectedTableId || selectedTable?.id || null,
+        tableName:
+          selectedTable?.name ||
+          (selectedTable as { label?: string } | null)?.label ||
+          "",
+        total: breakdown.finalTotal,
+        originalTotal: baseTotal,
+        discountAmount: breakdown.discountAmountValue,
+        discountPercent: breakdown.discountPercentValue,
+        discountPercentAmount: breakdown.percentAmount,
+        discountTotal: breakdown.discountTotal,
         finalTotal: breakdown.finalTotal,
-      });
-      await addDoc(
+        paymentMethod,
+        orderSessionId: orderSessionId || null,
+        orderId: primaryOrderId,
+        waiterId,
+        waiterEmail,
+        tip: tipVal,
+        received: receivedVal,
+        voucherAmount: pm === "voucher" ? voucherValue : null,
+        voucherUsed: pm === "voucher" ? voucherUsed : null,
+        voucherRemaining: pm === "voucher" ? voucherRemaining : null,
+        voucherNumber: pm === "voucher" ? voucherNumber.trim() : null,
+        part: safeOpts.part ?? null,
+        totalParts: safeOpts.totalParts ?? null,
+        ticketNumber,
+        createdAt: Date.now(),
+        type: "split_equal",
+        ...invoiceData,
+      };
+
+      const fullTableAmountPayload = {
+        restaurantId,
+        tableId: selectedTableId || selectedTable?.id || null,
+        tableName:
+          selectedTable?.name ||
+          (selectedTable as { label?: string } | null)?.label ||
+          "",
+        total: chargeAmount,
+        amount: chargeAmount,
+        originalTotal: remainingBeforePay,
+        discountAmount: breakdown.discountAmountValue,
+        discountPercent: breakdown.discountPercentValue,
+        discountPercentAmount: breakdown.percentAmount,
+        discountTotal: breakdown.discountTotal,
+        finalTotal: chargeAmount,
+        paymentMethod,
+        orderSessionId: orderSessionId || null,
+        orderId: primaryOrderId,
+        waiterId,
+        waiterEmail,
+        tip: tipVal,
+        received: receivedVal,
+        voucherAmount: pm === "voucher" ? voucherValue : null,
+        voucherUsed: pm === "voucher" ? voucherUsed : null,
+        voucherRemaining: pm === "voucher" ? voucherRemaining : null,
+        voucherNumber: pm === "voucher" ? voucherNumber.trim() : null,
+        cashReceived: pm === "cash" ? cashParsed : null,
+        change: changeVal,
+        ticketNumber,
+        status: "paid",
+        type: "table_amount",
+        paymentKind: isAccountFinalPayment ? "final" : "partial",
+        isPartial: !isAccountFinalPayment,
+        remainingAfterPayment: roundMoney(
+          isAccountFinalPayment ? 0 : remainingAfterPay,
+        ),
+        accountFinalTotal:
+          accountFinalForMeta ?? roundMoney(breakdown.finalTotal),
+        createdBy:
+          (user as { uid?: string } | null | undefined)?.uid ?? null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        ...invoiceData,
+      };
+
+      await dbgAddDoc(
         collection(db, "payments"),
-        opts?.minimalPaymentDoc
-          ? {
-              restaurantId,
-              tableId: selectedTableId || selectedTable?.id || null,
-              tableName:
-                selectedTable?.name ||
-                (selectedTable as { label?: string } | null)?.label ||
-                "",
-              total: breakdown.finalTotal,
-              originalTotal: baseTotal,
-              discountAmount: breakdown.discountAmountValue,
-              discountPercent: breakdown.discountPercentValue,
-              discountPercentAmount: breakdown.percentAmount,
-              discountTotal: breakdown.discountTotal,
-              finalTotal: breakdown.finalTotal,
-              paymentMethod,
-              orderSessionId: orderSessionId || null,
-              waiterId,
-              waiterEmail,
-              tip: tipVal,
-              received: receivedVal,
-              voucherAmount: pm === "voucher" ? voucherValue : null,
-              voucherUsed: pm === "voucher" ? voucherUsed : null,
-              voucherRemaining: pm === "voucher" ? voucherRemaining : null,
-              voucherNumber: pm === "voucher" ? voucherNumber.trim() : null,
-              part: opts.part,
-              totalParts: opts.totalParts,
-              ticketNumber,
-              createdAt: Date.now(),
-              ...invoiceData,
-            }
-          : {
-              restaurantId,
-              tableId: selectedTableId || selectedTable?.id || null,
-              tableName:
-                selectedTable?.name ||
-                (selectedTable as { label?: string } | null)?.label ||
-                "",
-              total: breakdown.finalTotal,
-              originalTotal: baseTotal,
-              discountAmount: breakdown.discountAmountValue,
-              discountPercent: breakdown.discountPercentValue,
-              discountPercentAmount: breakdown.percentAmount,
-              discountTotal: breakdown.discountTotal,
-              finalTotal: breakdown.finalTotal,
-              paymentMethod,
-              orderSessionId: orderSessionId || null,
-              waiterId,
-              waiterEmail,
-              tip: tipVal,
-              received: receivedVal,
-              voucherAmount: pm === "voucher" ? voucherValue : null,
-              voucherUsed: pm === "voucher" ? voucherUsed : null,
-              voucherRemaining: pm === "voucher" ? voucherRemaining : null,
-              voucherNumber: pm === "voucher" ? voucherNumber.trim() : null,
-              cashReceived: pm === "cash" ? cashParsed : null,
-              change: changeVal,
-              ticketNumber,
-              status: "paid",
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-              ...invoiceData,
-            },
+        safeOpts.minimalPaymentDoc ? minimalPayload : fullTableAmountPayload,
+        {
+          label: "carta:handleConfirmPayment",
+          collection: "payments",
+          restaurantId,
+          tableId: selectedTableId || selectedTable?.id || null,
+          orderId: primaryOrderId,
+        },
       );
+
+      if (!isSplitEqualInstallment) {
+        void reloadSessionTableAmountPaidSum();
+      }
 
       if (pm === "voucher") {
         await upsertVoucherBalanceAfterPayment(
@@ -2303,7 +2831,7 @@ export function CartaPageContent({
       }
 
       if (soundEnabled) playClickSound();
-      if (autoPrintTicket) {
+      if (autoPrintTicket && !keepModalOpen) {
         setLastPaymentInfo({
           ticketNumber,
           invoiceNumber: isInvoice ? invoiceNumber : undefined,
@@ -2320,10 +2848,16 @@ export function CartaPageContent({
         setIsFinalTicketOpen(true);
       }
 
-      if (selectedTableId && !opts?.skipCloseTable) {
+      const shouldCloseTable =
+        Boolean(selectedTableId) &&
+        !safeOpts.skipCloseTable &&
+        (isSplitEqualInstallment || isAccountFinalPayment);
+
+      if (shouldCloseTable) {
+        const tid = selectedTableId!;
         const closeMs = Date.now();
-        await handlePayTableOrder(selectedTableId, { db, restaurantId });
-        await updateDoc(doc(db, "tables", selectedTableId), {
+        await handlePayTableOrder(tid, { db, restaurantId });
+        await updateDoc(doc(db, "tables", tid), {
           busy: false,
           status: "available",
           currentOrderId: null,
@@ -2342,7 +2876,7 @@ export function CartaPageContent({
         setGuestCount(0);
       }
 
-      if (!opts?.keepModalOpen) {
+      if (!keepModalOpen) {
         finishPaymentAndReturnToMap(tableIdForFinish ?? null);
       }
     } catch (error) {
@@ -2351,27 +2885,39 @@ export function CartaPageContent({
       return;
     }
 
-    if (opts?.keepModalOpen) {
+    if (keepModalOpen) {
       setCashReceived("");
+      setCardReceived("");
+      setCardReceivedTouched(false);
       setVoucherAmount("");
       setVoucherNumber("");
-    }
-    if (opts?.keepModalOpen) {
       setInvoiceName("");
       setInvoiceTaxId("");
       setInvoiceEmail("");
     }
-    window.alert(
-      `Cobro registrado\nTicket: ${ticketNumber}${
-        isInvoice ? `\nFactura: ${invoiceNumber}` : ""
-      }`,
-    );
+
+    const alertMsg = isSplitEqualInstallment
+      ? `Cobro registrado\nTicket: ${ticketNumber}${
+          isInvoice ? `\nFactura: ${invoiceNumber}` : ""
+        }`
+      : keepModalOpen
+        ? `Pago parcial registrado (${chargeAmount.toFixed(2)} €).\nPendiente: ${remainingAfterPay.toFixed(2)} €\nTicket: ${ticketNumber}${
+            isInvoice ? `\nFactura: ${invoiceNumber}` : ""
+          }`
+        : `Cobro registrado\nTicket: ${ticketNumber}${
+            isInvoice ? `\nFactura: ${invoiceNumber}` : ""
+          }`;
+    window.alert(alertMsg);
   }, [
     cardReceived,
     cashReceived,
     calculateFinalTotal,
     finishPaymentAndReturnToMap,
     isPaymentValid,
+    openOrderIdsForTable,
+    order,
+    orderIdFromUrl,
+    orderSessionId,
     parseMoney,
     playClickSound,
     invoiceEmail,
@@ -2380,14 +2926,15 @@ export function CartaPageContent({
     isInvoice,
     autoPrintTicket,
     lastPaymentInfo,
-    order,
-    orderSessionId,
     paymentMethod,
+    reloadSessionTableAmountPaidSum,
     restaurantId,
     selectedTableId,
+    sessionTableAmountPaidSum,
     soundEnabled,
     tablesList,
     total,
+    user,
     voucherAmount,
     voucherNumber,
     waiterEmail,
@@ -2411,19 +2958,60 @@ export function CartaPageContent({
   }, [refreshCatalogFromPlatos]);
 
   useEffect(() => {
-    if (!restaurantId || !isFirebaseConfigured) {
+    const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+    if (
+      !authReady ||
+      !user?.uid ||
+      !rid ||
+      !isFirebaseConfigured
+    ) {
       setTablesList([]);
       return;
     }
     let cancelled = false;
-    void getTables(restaurantId).then((list) => {
+    void getTables(rid).then((list) => {
       if (cancelled) return;
       setTablesList(list);
     });
     return () => {
       cancelled = true;
     };
-  }, [restaurantId, isFirebaseConfigured]);
+  }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
+
+  useEffect(() => {
+    const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+    if (!authReady || !user?.uid || !rid || !isFirebaseConfigured) {
+      setFloorPlans([]);
+      setZonesList([]);
+      setSelectedTpvFloorPlanId(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [plans, zones] = await Promise.all([
+          getFloorPlans(rid),
+          getZones(rid),
+        ]);
+        if (cancelled) return;
+        setFloorPlans(plans);
+        setZonesList(zones);
+        setSelectedTpvFloorPlanId((current) => {
+          if (current && plans.some((p) => p.id === current)) return current;
+          const def = plans.find((p) => p.isDefault === true);
+          return def?.id ?? plans[0]?.id ?? null;
+        });
+      } catch {
+        if (cancelled) return;
+        setFloorPlans([]);
+        setZonesList([]);
+        setSelectedTpvFloorPlanId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
 
   useEffect(() => {
     if (!authReady || !isFirebaseConfigured || !restaurantId) {
@@ -2451,7 +3039,14 @@ export function CartaPageContent({
   }, [authReady, restaurantId, isFirebaseConfigured]);
 
   useEffect(() => {
-    if (!authReady || !isFirebaseConfigured || !restaurantId) {
+    const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+    if (
+      !authReady ||
+      !user?.uid ||
+      !isFirebaseConfigured ||
+      !rid ||
+      !isAuthReady()
+    ) {
       setFirestoreOccupiedTableIds(new Set());
       setFirestoreOccupancyStartMsByTable({});
       setOrderTotalsByTable({});
@@ -2466,7 +3061,7 @@ export function CartaPageContent({
     let cancelled = false;
     const ordersQuery = query(
       collection(db, "orders"),
-      where("restaurantId", "==", restaurantId),
+      where("restaurantId", "==", rid),
     );
 
     const unsub = onSnapshot(
@@ -2620,11 +3215,12 @@ export function CartaPageContent({
       cancelled = true;
       unsub();
     };
-  }, [authReady, restaurantId, isFirebaseConfigured]);
+  }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
 
   useEffect(() => {
     if (appliedOrderFromUrlRef.current) return;
     if (!orderIdFromUrl || !isFirebaseConfigured || !restaurantId) return;
+    if (!isAuthReady()) return;
     appliedOrderFromUrlRef.current = true;
 
     let cancelled = false;
@@ -2677,6 +3273,14 @@ export function CartaPageContent({
       setOrderUrlTableId(null);
       return;
     }
+    if (!isAuthReady()) {
+      setOrderUrlDocStatus(null);
+      setOrderUrlPaymentRequestedAt(false);
+      setOrderUrlOpenedAtMs(null);
+      setOrderUrlNote("");
+      setOrderUrlTableId(null);
+      return;
+    }
     const ref = doc(db, "orders", orderIdFromUrl);
     const unsub = onSnapshot(ref, (snap) => {
       if (!snap.exists()) {
@@ -2717,6 +3321,8 @@ export function CartaPageContent({
           ? data.tableId.trim()
           : null;
       setOrderUrlTableId(tid);
+    }, (err) => {
+      console.error(err);
     });
     return () => unsub();
   }, [orderIdFromUrl, isFirebaseConfigured, restaurantId]);
@@ -2726,29 +3332,64 @@ export function CartaPageContent({
     return selectedTableId?.trim() || null;
   }, [orderIdFromUrl, orderUrlTableId, selectedTableId]);
 
+  const openOrdersSnapAuthReady = authReady;
+  const openOrdersSnapUid = user?.uid ?? null;
+  const openOrdersSnapRestaurantId = restaurantId ?? null;
+  const openOrdersSnapFirebaseOk = isFirebaseConfigured;
+  const openOrdersSnapTableId = mergeTableIdForOpenOrders ?? null;
+
   useEffect(() => {
-    if (!restaurantId || !isFirebaseConfigured || !mergeTableIdForOpenOrders) {
+    if (
+      !openOrdersSnapAuthReady ||
+      !openOrdersSnapUid ||
+      !openOrdersSnapRestaurantId?.trim() ||
+      !openOrdersSnapFirebaseOk ||
+      !openOrdersSnapTableId ||
+      !isAuthReady()
+    ) {
       setOpenOrderIdsForTable([]);
       return;
     }
-    const tid = mergeTableIdForOpenOrders;
+    const tid = openOrdersSnapTableId;
+    const rid = openOrdersSnapRestaurantId.trim();
     const q = query(
       collection(db, "orders"),
-      where("restaurantId", "==", restaurantId),
+      where("restaurantId", "==", rid),
       where("tableId", "==", tid),
     );
     const unsub = onSnapshot(q, (snap) => {
-      const open = snap.docs
+      const activeIds = snap.docs
         .filter((d) =>
-          isFirestoreOrderStatusOpen(
+          isOrderStatusActiveForTableOccupancy(
             (d.data() as { status?: string }).status,
           ),
         )
+        .sort((a, b) => {
+          const da = a.data() as { updatedAt?: unknown; createdAt?: unknown };
+          const db_ = b.data() as { updatedAt?: unknown; createdAt?: unknown };
+          const ua =
+            readOrderUpdatedAtMs(da.updatedAt) ??
+            readOrderCreatedAtMs(da.createdAt) ??
+            0;
+          const ub =
+            readOrderUpdatedAtMs(db_.updatedAt) ??
+            readOrderCreatedAtMs(db_.createdAt) ??
+            0;
+          return ub - ua;
+        })
         .map((d) => d.id);
-      setOpenOrderIdsForTable(open);
+      setOpenOrderIdsForTable(activeIds);
+    }, (err) => {
+      console.error(err);
     });
     return () => unsub();
-  }, [restaurantId, isFirebaseConfigured, mergeTableIdForOpenOrders]);
+  }, [
+    authReady,
+    user?.uid ?? null,
+    restaurantId ?? "",
+    isFirebaseConfigured,
+    mergeTableIdForOpenOrders ?? null,
+  ]);
 
   useEffect(() => {
     if (orderIdFromUrl) return;
@@ -2756,16 +3397,12 @@ export function CartaPageContent({
     const id = tableIdFromUrl.trim();
     setSelectedTableId(id);
     setTpvEntryMode(tpvViewFromUrl === "summary" ? "summary" : "tpv");
-    const busy = firestoreOccupiedTableIds.has(id);
-    if (!busy) {
-      setOrder([]);
-      setOrdersByTable((prev) => ({ ...prev, [id]: [] }));
-    }
   }, [
     orderIdFromUrl,
     tableIdFromUrl,
     tpvViewFromUrl,
     firestoreOccupiedTableIds,
+    restaurantId,
   ]);
 
   useEffect(() => {
@@ -2795,14 +3432,71 @@ export function CartaPageContent({
       setOrder(lines);
       return;
     }
-    if (!firestoreOccupiedTableIds.has(selectedTableId)) {
-      setOrder([]);
-      return;
-    }
     if (switched) {
       setOrder([]);
     }
-  }, [selectedTableId, ordersByTable, orderIdFromUrl, firestoreOccupiedTableIds]);
+  }, [selectedTableId, ordersByTable, orderIdFromUrl]);
+
+  useEffect(() => {
+    if (orderIdFromUrl) return;
+    if (!isFirebaseConfigured || !restaurantId || !selectedTableId) return;
+    if (!isAuthReady()) return;
+    const tid = selectedTableId.trim();
+    if (!tid) return;
+    if (Object.prototype.hasOwnProperty.call(ordersByTable, tid)) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
+        if (cancelled) return;
+        if (!snapDoc) {
+          if (!firestoreOccupiedTableIds.has(tid)) {
+            setOrder([]);
+            setOrdersByTable((prev) => {
+              const next = { ...prev };
+              delete next[tid];
+              return next;
+            });
+          }
+          return;
+        }
+        const data = snapDoc.data() as FirestoreOrderDocForCart;
+        const mapped = mapFirestoreOrderDocToCartLines(data, restaurantId);
+        if (!mapped || mapped.length === 0) {
+          if (!firestoreOccupiedTableIds.has(tid)) {
+            setOrder([]);
+            setOrdersByTable((prev) => {
+              const next = { ...prev };
+              delete next[tid];
+              return next;
+            });
+          }
+          return;
+        }
+        openDraftOrderIdByTableRef.current[tid] = snapDoc.id;
+        setOrdersByTable((prev) => {
+          const curLocal = prev[tid];
+          if (curLocal !== undefined && curLocal.length > 0) {
+            return prev;
+          }
+          return { ...prev, [tid]: mapped };
+        });
+      } catch (e) {
+        console.error("[hydrateOrder]", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    orderIdFromUrl,
+    selectedTableId,
+    restaurantId,
+    isFirebaseConfigured,
+    ordersByTable,
+    firestoreOccupiedTableIds,
+  ]);
 
   useEffect(() => {
     if (orderIdFromUrl) return;
@@ -2876,15 +3570,6 @@ export function CartaPageContent({
     }, 420);
 
     const productCourse = getProductDefaultCourse(product);
-    console.log("PRODUCT COURSE DEBUG", {
-      nombre: product.nombre,
-      course: (product as unknown as { course?: unknown }).course,
-      category: (product as unknown as { category?: unknown }).category,
-      categoryName: (product as unknown as { categoryName?: unknown }).categoryName,
-      familia: (product as unknown as { familia?: unknown }).familia,
-      family: (product as unknown as { family?: unknown }).family,
-      resolvedCourse: productCourse,
-    });
 
     updateCurrentTableOrder((prev) => {
       const audio = new Audio("/sounds/click.mp3");
@@ -2907,22 +3592,27 @@ export function CartaPageContent({
       if (existingIndex !== -1) {
         const updated = [...prev];
         const cur = updated[existingIndex]!;
-        updated[existingIndex] = { ...cur, quantity: cur.quantity + 1 };
+        const bumped: CartOrderLine = {
+          ...cur,
+          quantity: cur.quantity + 1,
+        };
+        updated[existingIndex] = bumped;
         return updated;
       }
 
-      return [
-        ...prev,
-        {
-          id: generateOrderLineId(),
-          product,
-          quantity: 1,
-          status: "pending",
-          addedAt: Date.now(),
-          createdAt: Date.now(),
-          course: productCourse,
-        },
-      ];
+      const pendingStatus: OrderLineStatus = "pending";
+      const newLine: CartOrderLine = {
+        id: generateOrderLineId(),
+        product,
+        quantity: 1,
+        status: pendingStatus,
+        addedAt: Date.now(),
+        createdAt: Date.now(),
+        course: productCourse,
+      };
+
+      const merged = [...prev, newLine];
+      return merged;
     });
   };
 
@@ -2964,16 +3654,33 @@ export function CartaPageContent({
       });
       if (orderIdFromUrl && isFirebaseConfigured) {
         try {
-          await updateDoc(doc(db, "orders", orderIdFromUrl), {
-            items: orderLinesToFirestoreItems(next),
+          const payloadItems = orderLinesToFirestoreItems(next);
+          await dbgUpdateDoc(
+            doc(db, "orders", orderIdFromUrl),
+            {
+            items: payloadItems,
             updatedAt: serverTimestamp(),
-          });
+          },
+            {
+              label: "carta:handleSendItem",
+              collection: "orders",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId: orderIdFromUrl,
+            },
+          );
         } catch (e) {
           console.error("handleSendItem", e);
         }
       }
     },
-    [orderIdFromUrl, isFirebaseConfigured, updateCurrentTableOrder],
+    [
+      orderIdFromUrl,
+      isFirebaseConfigured,
+      updateCurrentTableOrder,
+      restaurantId,
+      selectedTableId,
+    ],
   );
 
   const handleSendAllItems = useCallback(async () => {
@@ -2995,14 +3702,31 @@ export function CartaPageContent({
     });
     if (!didSend || !orderIdFromUrl || !isFirebaseConfigured) return;
     try {
-      await updateDoc(doc(db, "orders", orderIdFromUrl), {
-        items: orderLinesToFirestoreItems(next),
+      const payloadItems = orderLinesToFirestoreItems(next);
+      await dbgUpdateDoc(
+        doc(db, "orders", orderIdFromUrl),
+        {
+        items: payloadItems,
         updatedAt: serverTimestamp(),
-      });
+      },
+        {
+          label: "carta:handleSendAllItems",
+          collection: "orders",
+          restaurantId,
+          tableId: selectedTableId,
+          orderId: orderIdFromUrl,
+        },
+      );
     } catch (e) {
       console.error("handleSendAllItems", e);
     }
-  }, [orderIdFromUrl, isFirebaseConfigured, updateCurrentTableOrder]);
+  }, [
+    orderIdFromUrl,
+    isFirebaseConfigured,
+    updateCurrentTableOrder,
+    restaurantId,
+    selectedTableId,
+  ]);
 
   const handleServeItem = useCallback(
     async (itemId: string) => {
@@ -3028,10 +3752,20 @@ export function CartaPageContent({
             : null;
       if (orderDocId && isFirebaseConfigured) {
         try {
-          await updateDoc(doc(db, "orders", orderDocId), {
+          await dbgUpdateDoc(
+            doc(db, "orders", orderDocId),
+            {
             items: orderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
-          });
+          },
+            {
+              label: "carta:handleServeItem",
+              collection: "orders",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId: orderDocId,
+            },
+          );
         } catch (e) {
           console.error("handleServeItem", e);
         }
@@ -3062,10 +3796,20 @@ export function CartaPageContent({
       });
 
       try {
-        await updateDoc(doc(db, "orders", orderIdFromUrl), {
+        await dbgUpdateDoc(
+          doc(db, "orders", orderIdFromUrl),
+          {
           items: orderLinesToFirestoreItems(next),
           updatedAt: serverTimestamp(),
-        });
+        },
+          {
+            label: "carta:handleCancelPersistedLine",
+            collection: "orders",
+            restaurantId,
+            tableId: selectedTableId,
+            orderId: orderIdFromUrl,
+          },
+        );
       } catch (e) {
         console.error("handleCancelPersistedLine", e);
         window.alert("No se pudo cancelar el producto. Inténtalo otra vez.");
@@ -3093,10 +3837,20 @@ export function CartaPageContent({
       });
 
       try {
-        await updateDoc(doc(db, "orders", orderIdFromUrl), {
+        await dbgUpdateDoc(
+          doc(db, "orders", orderIdFromUrl),
+          {
           items: orderLinesToFirestoreItems(next),
           updatedAt: serverTimestamp(),
-        });
+        },
+          {
+            label: "carta:handleRemoveOnePersistedUnit",
+            collection: "orders",
+            restaurantId,
+            tableId: selectedTableId,
+            orderId: orderIdFromUrl,
+          },
+        );
       } catch (e) {
         console.error("handleRemoveOnePersistedUnit", e);
         window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
@@ -3112,7 +3866,6 @@ export function CartaPageContent({
       if (!ok) return;
 
       const selectedLine = line;
-      console.log("REMOVE ONE REAL LINE", selectedLine);
 
       const lineAny = line as unknown as {
         itemId?: unknown;
@@ -3144,24 +3897,6 @@ export function CartaPageContent({
       const qty = qtyRaw;
       const nextQty = Math.max(qty - 1, 0);
       const shouldCancel = qty <= 1;
-      const quantityField =
-        Object.prototype.hasOwnProperty.call(lineAny, "qty") ? "qty" : "quantity";
-
-      const src =
-        typeof lineAny.source === "string" && lineAny.source.trim()
-          ? lineAny.source.trim()
-          : orderItemDocId
-            ? "orderItems"
-            : "orders.items";
-
-      console.log("REMOVE ONE SOURCE", {
-        source: src,
-        orderId: orderDocId,
-        orderItemDocId,
-        quantityField,
-        previousQuantity: qty,
-        nextQuantity: shouldCancel ? 0 : nextQty,
-      });
 
       // Siempre actualiza UI local (comanda) para feedback inmediato.
       updateCurrentTableOrder((prev) =>
@@ -3182,21 +3917,40 @@ export function CartaPageContent({
             updatedAt: Date.now(),
           };
           if (shouldCancel) {
-            await updateDoc(doc(db, "orderItems", orderItemDocId), {
+            await dbgUpdateDoc(
+              doc(db, "orderItems", orderItemDocId),
+              {
               ...payloadBase,
               status: "cancelled",
               cancelledAt: Date.now(),
-            });
+            },
+              {
+                label: "carta:handleRemoveOneUnitFromLine:orderItems",
+                collection: "orderItems",
+                restaurantId,
+                tableId: selectedTableId,
+                orderId: orderDocId ?? undefined,
+              },
+            );
           } else {
             const existingHasQtyField = Object.prototype.hasOwnProperty.call(lineAny, "qty");
-            await updateDoc(doc(db, "orderItems", orderItemDocId), {
+            await dbgUpdateDoc(
+              doc(db, "orderItems", orderItemDocId),
+              {
               ...payloadBase,
               quantity: nextQty,
               ...(existingHasQtyField ? { qty: nextQty } : {}),
-            } as Record<string, unknown>);
+            } as Record<string, unknown>,
+              {
+                label: "carta:handleRemoveOneUnitFromLine:orderItems",
+                collection: "orderItems",
+                restaurantId,
+                tableId: selectedTableId,
+                orderId: orderDocId ?? undefined,
+              },
+            );
           }
 
-          console.log("REMOVE ONE FIRESTORE WRITE OK");
         } catch (e) {
           console.error("REMOVE ONE FIRESTORE WRITE ERROR", e);
         }
@@ -3218,11 +3972,20 @@ export function CartaPageContent({
         });
 
         try {
-          await updateDoc(doc(db, "orders", orderDocId), {
+          await dbgUpdateDoc(
+            doc(db, "orders", orderDocId),
+            {
             items: orderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
-          });
-          console.log("REMOVE ONE FIRESTORE WRITE OK");
+          },
+            {
+              label: "carta:handleRemoveOneUnitFromLine:orders",
+              collection: "orders",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId: orderDocId,
+            },
+          );
         } catch (e) {
           console.error("REMOVE ONE FIRESTORE WRITE ERROR", e);
         }
@@ -3257,11 +4020,6 @@ export function CartaPageContent({
 
       if (!orderDocId) return;
 
-      console.log("CANCEL PRODUCT", {
-        lineId: selectedLine.id,
-        orderId: orderDocId,
-      });
-
       let next: CartOrderLine[] = [];
       updateCurrentTableOrder((prev) => {
         next = prev.map((l) => {
@@ -3273,11 +4031,20 @@ export function CartaPageContent({
       });
 
       try {
-        await updateDoc(doc(db, "orders", orderDocId), {
+        await dbgUpdateDoc(
+          doc(db, "orders", orderDocId),
+          {
           items: orderLinesToFirestoreItems(next),
           updatedAt: Date.now(),
-        });
-        console.log("CANCEL PRODUCT OK");
+        },
+          {
+            label: "carta:handleCancelProductFromLine",
+            collection: "orders",
+            restaurantId,
+            tableId: selectedTableId,
+            orderId: orderDocId,
+          },
+        );
       } catch (error) {
         console.error("CANCEL PRODUCT ERROR", error);
       }
@@ -3315,19 +4082,10 @@ export function CartaPageContent({
 
       const nowMs = Date.now();
 
-      console.log("COMP PRODUCT START", {
-        orderId,
-        orderItemDocId,
-        targetId: lineEditorTarget?.id,
-      });
-
       let next: CartOrderLine[] = [];
-      let didMatch = false;
       updateCurrentTableOrder((prev) => {
         next = prev.map((l) => {
           if (l.id !== lineEditorTarget.id) return l;
-          console.log("COMP PRODUCT MATCH FOUND", l);
-          didMatch = true;
           return {
             ...l,
             isComped: true,
@@ -3338,52 +4096,58 @@ export function CartaPageContent({
         return next;
       });
 
-      if (!didMatch) {
-        console.error("COMP PRODUCT LINE NOT FOUND", {
-          targetId: lineEditorTarget?.id,
-          availableIds: order.map((l) => l.id),
-          lineEditorTarget,
-        });
-      }
-
-      console.log(
-        "COMP PRODUCT NEXT LINE",
-        next.find((l) => l.id === lineEditorTarget.id),
-      );
-
       try {
         // 1) orderItems/{id} (si existe)
         if (orderItemDocId) {
-          await updateDoc(doc(db, "orderItems", orderItemDocId), {
+          await dbgUpdateDoc(
+            doc(db, "orderItems", orderItemDocId),
+            {
             isComped: true,
             compedAt: nowMs,
             compedReason: "Invitación",
             updatedAt: nowMs,
-          });
+          },
+            {
+              label: "carta:handleCompProductFromLine:orderItems",
+              collection: "orderItems",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId,
+            },
+          );
         }
 
         // 2) orders/{id}.items[] (si existe)
         if (orderId) {
-          await updateDoc(doc(db, "orders", orderId), {
+          await dbgUpdateDoc(
+            doc(db, "orders", orderId),
+            {
             items: orderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
-          });
+          },
+            {
+              label: "carta:handleCompProductFromLine:orders",
+              collection: "orders",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId,
+            },
+          );
         }
 
-        console.log("COMP PRODUCT FIRESTORE OK", { orderId, orderItemDocId });
       } catch (error) {
         console.error("COMP PRODUCT FIRESTORE ERROR", error);
       }
 
       setComandaLineActionsOpen(false);
       setComandaLineActionsTargetId(null);
+      setComandaLineActionsAnchorRect(null);
     },
     [
       orderIdFromUrl,
       openOrderIdsForTable,
       isFirebaseConfigured,
       updateCurrentTableOrder,
-      order,
     ],
   );
 
@@ -3406,10 +4170,20 @@ export function CartaPageContent({
       });
       if (orderIdFromUrl && isFirebaseConfigured) {
         try {
-          await updateDoc(doc(db, "orders", orderIdFromUrl), {
+          await dbgUpdateDoc(
+            doc(db, "orders", orderIdFromUrl),
+            {
             items: orderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
-          });
+          },
+            {
+              label: "carta:handleRepeatItem",
+              collection: "orders",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId: orderIdFromUrl,
+            },
+          );
         } catch (e) {
           console.error("handleRepeatItem", e);
         }
@@ -3481,16 +4255,25 @@ export function CartaPageContent({
       ...prev,
       [selectedTableId]: order,
     }));
-    console.log("COMANDA GUARDADA", selectedTableId, order);
   };
 
   const handleMarkOrderClosed = async () => {
     if (!orderIdFromUrl || !isFirebaseConfigured) return;
     const ref = doc(db, "orders", orderIdFromUrl);
-    await updateDoc(ref, {
+    await dbgUpdateDoc(
+      ref,
+      {
       status: "closed",
       closedAt: serverTimestamp(),
-    });
+    },
+      {
+        label: "carta:handleMarkOrderClosed",
+        collection: "orders",
+        restaurantId,
+        tableId: selectedTableId,
+        orderId: orderIdFromUrl,
+      },
+    );
     setOrder([]);
   };
 
@@ -3568,10 +4351,46 @@ export function CartaPageContent({
     });
   }, [tablesList, ordersByTable]);
 
+  const activeFloorPlanHasElements = useMemo(() => {
+    if (!selectedTpvFloorPlanId) return false;
+    return tablesList.some(
+      (element) =>
+        element.isActive !== false &&
+        element.floorPlanId === selectedTpvFloorPlanId,
+    );
+  }, [tablesList, selectedTpvFloorPlanId]);
+
+  const planElementsForTpvMap = useMemo(() => {
+    const activeElements = tablesList.filter((element) => element.isActive !== false);
+    if (!selectedTpvFloorPlanId) return activeElements;
+    if (!activeFloorPlanHasElements) return activeElements;
+    return activeElements.filter(
+      (element) => element.floorPlanId === selectedTpvFloorPlanId,
+    );
+  }, [tablesList, selectedTpvFloorPlanId, activeFloorPlanHasElements]);
+
+  const zonesForTpvMap = useMemo(() => {
+    if (!selectedTpvFloorPlanId) return zonesList;
+    const scoped = zonesList.filter(
+      (zone) => zone.floorPlanId === selectedTpvFloorPlanId,
+    );
+    return scoped.length > 0 ? scoped : zonesList.filter((zone) => !zone.floorPlanId);
+  }, [zonesList, selectedTpvFloorPlanId]);
+
+  const selectedTpvFloorPlan = useMemo(() => {
+    if (!selectedTpvFloorPlanId) return null;
+    return floorPlans.find((plan) => plan.id === selectedTpvFloorPlanId) ?? null;
+  }, [floorPlans, selectedTpvFloorPlanId]);
+
+  const selectedTpvFloorPlanSize = useMemo(
+    () => floorPlanSizeForTpv(selectedTpvFloorPlan),
+    [selectedTpvFloorPlan],
+  );
+
   const tablesForTpvMap = useMemo(() => {
-    const list = filterTablesForTpvMap(tablesList);
+    const list = filterTablesForTpvMap(planElementsForTpvMap);
     return [...list].sort(sortTablesForTpvMap);
-  }, [tablesList]);
+  }, [planElementsForTpvMap]);
 
   const mapZoneOptions = useMemo(() => {
     const set = new Set<string>();
@@ -4108,6 +4927,69 @@ export function CartaPageContent({
     reservationPressureByTableId,
   ]);
 
+  const decorativePlanElementsForTpv = useMemo(() => {
+    return planElementsForTpvMap.filter((element) =>
+      isDecorativePlanElementType(element.type),
+    );
+  }, [planElementsForTpvMap]);
+
+  const mapElementsForTpvRender = useMemo(() => {
+    const tableIds = new Set(
+      mapTablesForChipFilter.map((table) => String(table.id ?? "").trim()),
+    );
+    const decorative = decorativePlanElementsForTpv.filter(
+      (element) => !tableIds.has(String(element.id ?? "").trim()),
+    );
+    return [...decorative, ...mapTablesForChipFilter];
+  }, [decorativePlanElementsForTpv, mapTablesForChipFilter]);
+
+  const tpvMapAutoFitKey = useMemo(() => {
+    const planKey = selectedTpvFloorPlanId ?? "legacy";
+    return [
+      planKey,
+      selectedTpvFloorPlanSize.width,
+      selectedTpvFloorPlanSize.height,
+      mapElementsForTpvRender.length,
+      planElementsForTpvMap.length,
+      zonesForTpvMap.length,
+      mapElementsForTpvRender
+        .map((element) =>
+          [
+            element.id,
+            element.type,
+            element.x,
+            element.y,
+            element.width,
+            element.height,
+          ].join(":"),
+        )
+        .join("|"),
+      planElementsForTpvMap
+        .map((element) =>
+          [
+            element.id,
+            element.type,
+            element.x,
+            element.y,
+            element.width,
+            element.height,
+          ].join(":"),
+        )
+        .join("|"),
+      zonesForTpvMap
+        .map((zone) =>
+          [zone.id, zone.x, zone.y, zone.width, zone.height].join(":"),
+        )
+        .join("|"),
+    ].join("::");
+  }, [
+    selectedTpvFloorPlanId,
+    selectedTpvFloorPlanSize,
+    mapElementsForTpvRender,
+    planElementsForTpvMap,
+    zonesForTpvMap,
+  ]);
+
   const formatMapOccupiedDuration = useCallback(
     (tableId: string) => {
       const id = tableId.trim();
@@ -4151,15 +5033,9 @@ export function CartaPageContent({
       setSelectedTableId(id);
 
       if (!orderIdFromUrl) {
-        const busy = firestoreOccupiedTableIds.has(id);
-        if (!busy) {
-          setOrder([]);
-          setOrdersByTable((prev) => ({ ...prev, [id]: [] }));
-        } else {
-          const cached = ordersByTable[id];
-          if (cached && cached.length > 0) {
-            setOrder(cached);
-          }
+        const cached = ordersByTable[id];
+        if (cached !== undefined) {
+          setOrder(cached);
         }
       } else {
         setOrdersByTable((prev) =>
@@ -4189,9 +5065,9 @@ export function CartaPageContent({
     },
     [
       embeddedInOperacion,
-      firestoreOccupiedTableIds,
       orderIdFromUrl,
       ordersByTable,
+      restaurantId,
       router,
     ],
   );
@@ -4238,6 +5114,7 @@ export function CartaPageContent({
         guestCount: 0,
         updatedAt: Date.now(),
       });
+      delete openDraftOrderIdByTableRef.current[selectedTableId];
       setOrder([]);
       setOrdersByTable((prev) => ({ ...prev, [selectedTableId]: [] }));
       setGuestCount(0);
@@ -4260,10 +5137,20 @@ export function CartaPageContent({
     async (setRequested: boolean) => {
       if (!restaurantId || !isFirebaseConfigured) return;
       if (orderIdFromUrl) {
-        await updateDoc(doc(db, "orders", orderIdFromUrl), {
+        await dbgUpdateDoc(
+          doc(db, "orders", orderIdFromUrl),
+          {
           paymentRequestedAt: setRequested ? serverTimestamp() : null,
           updatedAt: serverTimestamp(),
-        });
+        },
+          {
+            label: "carta:updateActiveOrderPaymentRequest:byOrderId",
+            collection: "orders",
+            restaurantId,
+            tableId: selectedTableId,
+            orderId: orderIdFromUrl,
+          },
+        );
         return;
       }
       if (!selectedTableId) return;
@@ -4276,10 +5163,20 @@ export function CartaPageContent({
       for (const d of snap.docs) {
         const data = d.data() as { status?: string };
         if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
-        await updateDoc(d.ref, {
+        await dbgUpdateDoc(
+          d.ref,
+          {
           paymentRequestedAt: setRequested ? serverTimestamp() : null,
           updatedAt: serverTimestamp(),
-        });
+        },
+          {
+            label: "carta:updateActiveOrderPaymentRequest:queryFirstActive",
+            collection: "orders",
+            restaurantId,
+            tableId: selectedTableId,
+            orderId: d.id,
+          },
+        );
         break;
       }
     },
@@ -4318,10 +5215,20 @@ export function CartaPageContent({
       setIsSavingOrderNote(true);
       try {
         if (orderIdFromUrl) {
-          await updateDoc(doc(db, "orders", orderIdFromUrl), {
+          await dbgUpdateDoc(
+            doc(db, "orders", orderIdFromUrl),
+            {
             note: value,
             updatedAt: serverTimestamp(),
-          });
+          },
+            {
+              label: "carta:handleSaveOrderNote:byOrderId",
+              collection: "orders",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId: orderIdFromUrl,
+            },
+          );
         } else if (selectedTableId) {
           const q = query(
             collection(db, "orders"),
@@ -4332,10 +5239,20 @@ export function CartaPageContent({
           for (const d of snap.docs) {
             const data = d.data() as { status?: string };
             if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
-            await updateDoc(d.ref, {
+            await dbgUpdateDoc(
+              d.ref,
+              {
               note: value,
               updatedAt: serverTimestamp(),
-            });
+            },
+              {
+                label: "carta:handleSaveOrderNote:queryFirstActive",
+                collection: "orders",
+                restaurantId,
+                tableId: selectedTableId,
+                orderId: d.id,
+              },
+            );
             break;
           }
         }
@@ -4432,7 +5349,13 @@ export function CartaPageContent({
         }
       }
 
-      const batch = writeBatch(db);
+      const batch = new DbgWriteBatch(db, {
+        label: "carta:handleMergeOrders",
+        collection: "orders",
+        restaurantId,
+        tableId,
+        orderId: destDoc.id,
+      });
       batch.update(destDoc.ref, {
         items: mergedItems,
         total: Number.isFinite(mergedTotal) ? mergedTotal : 0,
@@ -4524,6 +5447,7 @@ export function CartaPageContent({
           firestoreOccupiedTableIds.has(mainTableId));
       if (!busy) {
         // Mesa libre en el mapa: siempre comanda nueva (no reutilizar estado local antiguo).
+        delete openDraftOrderIdByTableRef.current[tid];
         setOrder([]);
         setOrdersByTable((prev) => ({
           ...prev,
@@ -4734,16 +5658,22 @@ export function CartaPageContent({
           0,
         );
 
+        const draftOrderId =
+          openDraftOrderIdByTableRef.current[selectedTableId]?.trim() || "";
         const existingOrderId =
           orderIdFromUrl && orderIdFromUrl.trim() !== ""
             ? orderIdFromUrl
-            : openOrderIdsForTable.length > 0
-              ? openOrderIdsForTable[0]!
-              : null;
+            : draftOrderId
+              ? draftOrderId
+              : openOrderIdsForTable.length > 0
+                ? openOrderIdsForTable[0]!
+                : null;
 
         const persistedOrderRef = existingOrderId
           ? doc(db, "orders", existingOrderId)
-          : await addDoc(collection(db, "orders"), {
+          : await dbgAddDoc(
+              collection(db, "orders"),
+              {
               restaurantId,
               tableId: selectedTableId,
               table: tableLabel,
@@ -4752,18 +5682,44 @@ export function CartaPageContent({
               updatedAt: serverTimestamp(),
               items,
               total: Number.isFinite(grandTotal) ? grandTotal : 0,
-            });
+            },
+              {
+                label: "carta:sendLinesToComanda:createOrder",
+                collection: "orders",
+                restaurantId,
+                tableId: selectedTableId,
+              },
+            );
+
+        openDraftOrderIdByTableRef.current[selectedTableId] =
+          persistedOrderRef.id;
 
         if (existingOrderId) {
-          await updateDoc(persistedOrderRef, {
+          await dbgUpdateDoc(
+            persistedOrderRef,
+            {
             status: "sent",
             updatedAt: serverTimestamp(),
             items,
             total: Number.isFinite(grandTotal) ? grandTotal : 0,
-          });
+          },
+            {
+              label: "carta:sendLinesToComanda:updateOrder",
+              collection: "orders",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId: persistedOrderRef.id,
+            },
+          );
         }
 
-        const batch = writeBatch(db);
+        const batch = new DbgWriteBatch(db, {
+          label: "carta:sendLinesToComanda:orderItemsBatch",
+          collection: "orderItems",
+          restaurantId,
+          tableId: selectedTableId,
+          orderId: persistedOrderRef.id,
+        });
         linesToSend.forEach((l) => {
           const ref = doc(collection(db, "orderItems"));
           const lCourse = normalizeComandaCourseForStorage(l.course);
@@ -5104,22 +6060,56 @@ export function CartaPageContent({
       ? null
       : (order.find((l) => l.id === comandaLineActionsTargetId) ?? null);
 
+  useLayoutEffect(() => {
+    if (
+      !comandaLineActionsOpen ||
+      !comandaLineActionsAnchorRect ||
+      !lineActionsPopoverRef.current
+    ) {
+      return;
+    }
+    const panel = lineActionsPopoverRef.current;
+    const rect = comandaLineActionsAnchorRect;
+    const margin = 8;
+    const gap = 6;
+    const pw = panel.offsetWidth;
+    const ph = panel.offsetHeight;
+    let top = rect.bottom + gap;
+    let left = rect.right - pw;
+    if (top + ph > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - ph - gap);
+    }
+    if (top < margin) top = margin;
+    if (left < margin) left = margin;
+    if (left + pw > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - pw - margin);
+    }
+    panel.style.top = `${Math.round(top)}px`;
+    panel.style.left = `${Math.round(left)}px`;
+  }, [
+    comandaLineActionsOpen,
+    comandaLineActionsAnchorRect,
+    comandaLineActionsTarget,
+  ]);
+
+  useEffect(() => {
+    if (!comandaLineActionsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setComandaLineActionsOpen(false);
+        setComandaLineActionsTargetId(null);
+        setComandaLineActionsAnchorRect(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [comandaLineActionsOpen]);
+
   const renderComandaLine = (
     item: CartOrderLine,
     statusLabel: "Pendiente" | "Enviado" | "Preparado" | "Servido",
     opts: { strike?: boolean; attachFirstPendingRef?: boolean },
   ) => {
-    console.log("COMANDA LINE DEBUG", {
-      id: item.id,
-      itemId: (item as unknown as { itemId?: unknown }).itemId,
-      orderId: (item as unknown as { orderId?: unknown }).orderId,
-      source: (item as unknown as { source?: unknown }).source,
-      name: (item as unknown as { name?: unknown }).name ?? item.product?.nombre,
-      quantity: (item as unknown as { quantity?: unknown; qty?: unknown }).quantity ?? (item as unknown as { qty?: unknown }).qty ?? item.quantity,
-      status: item.status,
-      destination: (item.product as Product & { preparationArea?: string }).preparationArea || "cocina",
-      rawLine: item,
-    });
     const i = order.indexOf(item);
     const base = Number(item.product.precio);
     const extrasSum = sumLineExtrasPrices(item);
@@ -5393,6 +6383,16 @@ export function CartaPageContent({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  const el = e.currentTarget;
+                  const r = el.getBoundingClientRect();
+                  setComandaLineActionsAnchorRect({
+                    top: r.top,
+                    left: r.left,
+                    right: r.right,
+                    bottom: r.bottom,
+                    width: r.width,
+                    height: r.height,
+                  });
                   setComandaLineActionsTargetId(item.id);
                   setComandaLineActionsOpen(true);
                 }}
@@ -5416,8 +6416,9 @@ export function CartaPageContent({
       data-carta-mobile={cartaHeaderMobile ? "true" : undefined}
       data-carta-embedded={embeddedInOperacion ? "true" : undefined}
       style={{
-        background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
-        color: "#e5e7eb",
+        background:
+          "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 48%, #e8eff6 100%)",
+        color: "var(--hostly-ink)",
         ...(embeddedInOperacion
           ? {
               height: "100%",
@@ -5616,95 +6617,107 @@ export function CartaPageContent({
         </div>
       ) : null}
       {comandaLineActionsOpen && comandaLineActionsTarget ? (
-        <div
-          className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-3"
-          onClick={() => {
-            setComandaLineActionsOpen(false);
-            setComandaLineActionsTargetId(null);
-          }}
-        >
+        <>
           <div
-            className="w-full max-w-sm rounded-2xl bg-white text-gray-900 shadow-2xl border border-gray-200 overflow-hidden"
+            className="fixed inset-0 z-[80] bg-black/35"
+            aria-hidden
+            onClick={() => {
+              setComandaLineActionsOpen(false);
+              setComandaLineActionsTargetId(null);
+              setComandaLineActionsAnchorRect(null);
+            }}
+          />
+          <div
+            ref={lineActionsPopoverRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Acciones de línea"
+            className="fixed z-[81] w-[min(15.75rem,calc(100vw-1rem))] overflow-hidden rounded-xl border border-slate-600/60 bg-slate-900/97 text-slate-100 shadow-[0_16px_40px_rgba(2,6,23,0.55)] backdrop-blur-sm"
+            style={{ top: 0, left: 0 }}
             onClick={(e) => e.stopPropagation()}
-            style={{ zIndex: 81 }}
           >
             {(() => {
               const status = comandaLineActionsTarget.status;
               const allowInvite = status === "sent" || status === "prepared";
               const allowRemoveOne = status === "sent";
+              const close = () => {
+                setComandaLineActionsOpen(false);
+                setComandaLineActionsTargetId(null);
+                setComandaLineActionsAnchorRect(null);
+              };
               return (
                 <>
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <div className="text-sm font-semibold">Acciones</div>
-              <button
-                type="button"
-                className="text-xs font-semibold text-gray-500 hover:text-gray-900"
-                onClick={() => {
-                  setComandaLineActionsOpen(false);
-                  setComandaLineActionsTargetId(null);
-                }}
-              >
-                Cerrar
-              </button>
-            </div>
+                  <div className="relative border-b border-slate-700/80 px-2.5 py-1.5 pr-9">
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                      aria-label="Cerrar"
+                      onClick={close}
+                    >
+                      ×
+                    </button>
+                    <div className="text-[11px] font-semibold leading-snug text-slate-400">
+                      Línea
+                    </div>
+                    <div className="truncate text-xs font-semibold text-slate-100">
+                      {comandaLineDisplayName(comandaLineActionsTarget)} ×
+                      {comandaLineActionsTarget.quantity}
+                    </div>
+                  </div>
 
-            <div className="p-3 space-y-2">
-              <div className="text-xs text-gray-600">
-                {comandaLineDisplayName(comandaLineActionsTarget)} x{comandaLineActionsTarget.quantity}
-              </div>
+                  <div className="flex flex-col gap-1 p-1.5">
+                    <button
+                      type="button"
+                      disabled={!allowRemoveOne}
+                      className={`w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold leading-tight ${
+                        allowRemoveOne
+                          ? "bg-slate-800 text-slate-100 hover:bg-slate-700 active:bg-slate-800"
+                          : "cursor-not-allowed opacity-45 text-slate-500"
+                      }`}
+                      style={
+                        allowRemoveOne
+                          ? { boxShadow: "inset 0 0 0 1px rgba(148,163,184,0.12)" }
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!allowRemoveOne) {
+                          return;
+                        }
+                        void handleRemoveOneUnitFromLine(comandaLineActionsTarget);
+                        close();
+                      }}
+                    >
+                      Quitar 1 unidad
+                    </button>
 
-              <button
-                type="button"
-                disabled={!allowRemoveOne}
-                className={`w-full py-2 rounded-lg bg-gray-100 text-sm font-semibold text-gray-900 ${
-                  allowRemoveOne ? "hover:bg-gray-200" : "opacity-50 cursor-not-allowed"
-                }`}
-                onClick={() => {
-                  if (!allowRemoveOne) {
-                    console.log("ACTION BLOCKED", { status, action: "remove_one" });
-                    return;
-                  }
-                  void handleRemoveOneUnitFromLine(comandaLineActionsTarget);
-                  setComandaLineActionsOpen(false);
-                  setComandaLineActionsTargetId(null);
-                }}
-              >
-                Quitar 1 unidad
-              </button>
-
-              <button
-                type="button"
-                disabled={!allowInvite}
-                className={`w-full py-2 rounded-lg bg-gray-100 text-sm font-semibold text-gray-900 ${
-                  allowInvite ? "hover:bg-gray-200" : "opacity-50 cursor-not-allowed"
-                }`}
-                onClick={() => {
-                  if (!allowInvite) {
-                    console.log("ACTION BLOCKED", { status, action: "invite" });
-                    return;
-                  }
-                  void handleCompProductFromLine(comandaLineActionsTarget);
-                }}
-              >
-                Invitar producto
-              </button>
-
-              <button
-                type="button"
-                className="w-full py-2 rounded-lg bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 border border-gray-200"
-                onClick={() => {
-                  setComandaLineActionsOpen(false);
-                  setComandaLineActionsTargetId(null);
-                }}
-              >
-                Cerrar
-              </button>
-            </div>
+                    <button
+                      type="button"
+                      disabled={!allowInvite}
+                      className={`w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold leading-tight ${
+                        allowInvite
+                          ? "bg-slate-800 text-slate-100 hover:bg-slate-700 active:bg-slate-800"
+                          : "cursor-not-allowed opacity-45 text-slate-500"
+                      }`}
+                      style={
+                        allowInvite
+                          ? { boxShadow: "inset 0 0 0 1px rgba(148,163,184,0.12)" }
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!allowInvite) {
+                          return;
+                        }
+                        void handleCompProductFromLine(comandaLineActionsTarget);
+                      }}
+                    >
+                      Invitar producto
+                    </button>
+                  </div>
                 </>
               );
             })()}
           </div>
-        </div>
+        </>
       ) : null}
       <style
         dangerouslySetInnerHTML={{
@@ -6009,6 +7022,20 @@ export function CartaPageContent({
   max-height: 100dvh;
   min-height: 0;
   overflow: hidden;
+  /* Más ancho útil en escritorio sin tocar variables globales fuera de Carta */
+  --hostly-content-max-wide: 1520px;
+}
+
+@media (min-width: 1280px) {
+  .carta-root {
+    --hostly-content-max-wide: 1620px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .carta-root {
+    --hostly-content-max-wide: 1740px;
+  }
 }
 
 .carta-root[data-carta-embedded="true"] {
@@ -6056,6 +7083,16 @@ export function CartaPageContent({
   padding: 0;
 }
 
+.carta-root .hostly-page-title {
+  font-size: 17px;
+  line-height: 1.08;
+}
+
+.carta-root .hostly-page-subtitle {
+  margin-top: 0;
+  font-size: 11px;
+}
+
 /* Móvil Carta: scroll natural, cabecera apilada (detalle en HostlyPageHeader + data-carta-mobile) */
 .carta-root[data-carta-mobile="true"] {
   height: auto !important;
@@ -6073,7 +7110,7 @@ export function CartaPageContent({
 }
 
 .carta-root[data-carta-mobile="true"] .carta-page-main--below-header {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .carta-root[data-carta-mobile="true"] .carta-header-mode-tabs {
@@ -6192,7 +7229,7 @@ export function CartaPageContent({
   flex-shrink: 0;
   width: 100%;
   box-sizing: border-box;
-  padding: 4px 0 6px;
+  padding: 3px 0 4px;
 }
 
 .carta-map-summary-block {
@@ -6213,7 +7250,7 @@ export function CartaPageContent({
   display: inline-flex;
   align-items: center;
   letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--hostly-ink-muted);
   flex-shrink: 0;
   margin: 0;
   margin-left: auto;
@@ -6225,7 +7262,7 @@ export function CartaPageContent({
   flex-shrink: 0;
   width: 100%;
   box-sizing: border-box;
-  padding: 0 8px 4px;
+  padding: 0 6px 3px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -6253,7 +7290,7 @@ export function CartaPageContent({
   gap: 4px;
   font-size: 11px;
   font-weight: 800;
-  color: #cbd5e1;
+  color: var(--hostly-ink-muted);
   white-space: nowrap;
 }
 
@@ -6267,9 +7304,9 @@ export function CartaPageContent({
   padding: 3px 8px !important;
   min-height: 28px !important;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(15, 23, 42, 0.65);
-  color: #e2e8f0;
+  border: 1px solid var(--hostly-line);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--hostly-ink);
   cursor: pointer;
   box-sizing: border-box;
 }
@@ -6284,7 +7321,7 @@ export function CartaPageContent({
 .carta-top-shell {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   box-sizing: border-box;
   flex-shrink: 0;
@@ -6293,7 +7330,7 @@ export function CartaPageContent({
 .carta-top-header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
   min-width: 0;
 }
@@ -6301,7 +7338,7 @@ export function CartaPageContent({
 .carta-top-view-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   width: 100%;
   min-width: 0;
@@ -6310,7 +7347,7 @@ export function CartaPageContent({
 .carta-top-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
   width: 100%;
   min-width: 0;
   flex-shrink: 0;
@@ -6320,10 +7357,11 @@ export function CartaPageContent({
 .carta-map-summary-shell--critical {
   width: 100%;
   box-sizing: border-box;
-  padding: 8px;
+  padding: 6px;
   border-radius: 10px;
-  background: rgba(2, 6, 23, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--hostly-line);
+  box-shadow: var(--hostly-shadow-card);
 }
 
 .carta-map-summary-shell.carta-map-summary-block,
@@ -6375,7 +7413,7 @@ export function CartaPageContent({
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
+  gap: 6px;
 }
 
 .carta-map-summary-pill {
@@ -6394,34 +7432,40 @@ export function CartaPageContent({
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  color: #000000;
+  color: var(--hostly-ink);
   box-sizing: border-box;
   box-shadow: none;
-  border: none;
+  border: 1px solid var(--hostly-line);
   vertical-align: middle;
   margin: 0;
 }
 
 .carta-map-summary-pill--neutral {
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.9);
 }
 .carta-map-summary-pill--free {
-  background: #bbf7d0;
+  background: #dff0e4;
+  border-color: rgba(47, 93, 60, 0.18);
 }
 .carta-map-summary-pill--busy {
-  background: #bae6fd;
+  background: #dcecf3;
+  border-color: rgba(45, 82, 97, 0.2);
 }
 .carta-map-summary-pill--reserved {
-  background: #e9d5ff;
+  background: #ebe4f4;
+  border-color: rgba(91, 80, 104, 0.2);
 }
 .carta-map-summary-pill--warn {
-  background: #fde68a;
+  background: #f4ead5;
+  border-color: rgba(184, 121, 34, 0.22);
 }
 .carta-map-summary-pill--crit {
-  background: #fecaca;
+  background: #f3e0df;
+  border-color: rgba(185, 76, 70, 0.22);
 }
 .carta-map-summary-pill--delayed {
-  background: #fcd34d;
+  background: #f2dca8;
+  border-color: rgba(184, 121, 34, 0.24);
 }
 .carta-map-summary-pill--interactive {
   margin: 0;
@@ -6432,7 +7476,7 @@ export function CartaPageContent({
   height: 22px;
   min-height: 22px;
   max-height: 22px;
-  color: #000000;
+  color: var(--hostly-ink);
   appearance: none;
   -webkit-appearance: none;
   box-shadow: none;
@@ -6463,7 +7507,7 @@ export function CartaPageContent({
   font-size: 9px;
   font-weight: 600;
   line-height: 1;
-  color: #000000;
+  color: var(--hostly-ink);
 }
 
 .carta-map-top-strip-main .carta-map-summary-pill span,
@@ -6502,15 +7546,15 @@ export function CartaPageContent({
 }
 
 .carta-map-top-strip .carta-table-map-zone-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(148, 163, 184, 0.28);
-  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.84);
+  border-color: var(--hostly-line);
+  color: var(--hostly-ink-muted);
 }
 
 .carta-map-top-strip .carta-table-map-zone-btn--on {
-  border-color: rgba(56, 189, 248, 0.55);
-  background: rgba(56, 189, 248, 0.18);
-  color: #bae6fd;
+  border-color: var(--hostly-line-strong);
+  background: var(--hostly-accent-soft);
+  color: var(--hostly-accent);
 }
 
 .carta-map-toolbar {
@@ -6520,14 +7564,14 @@ export function CartaPageContent({
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .carta-map-toolbar-left {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -6552,8 +7596,8 @@ export function CartaPageContent({
   box-sizing: border-box;
   padding: 3px 5px 3px 4px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--hostly-line);
+  background: rgba(248, 251, 254, 0.72);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
 }
 
@@ -6565,24 +7609,24 @@ export function CartaPageContent({
 }
 
 .carta-operativa-mode-strip .carta-mode-seg--compact {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(148, 163, 184, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  background: rgba(248, 251, 254, 0.72);
+  border-color: var(--hostly-line);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
 }
 
 .carta-operativa-mode-strip .carta-mode-btn--compact {
-  color: rgba(226, 232, 240, 0.9) !important;
+  color: var(--hostly-ink-muted) !important;
 }
 
 .carta-operativa-mode-strip .carta-mode-btn--compact[aria-pressed="true"] {
-  background: rgba(255, 255, 255, 0.16) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  color: #f8fafc !important;
-  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.2) !important;
+  background: #ffffff !important;
+  border-color: var(--hostly-line-strong) !important;
+  color: var(--hostly-ink) !important;
+  box-shadow: var(--hostly-shadow-card) !important;
 }
 
 .carta-operativa-mode-strip .carta-mode-btn--compact[aria-pressed="false"]:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
 }
 
 .carta-mode-btn {
@@ -6591,9 +7635,9 @@ export function CartaPageContent({
   min-width: 88px !important;
   padding: 10px 18px !important;
   border-radius: 999px !important;
-  border: 1px solid #374151 !important;
-  background: #111827 !important;
-  color: #f8fafc !important;
+  border: 1px solid var(--hostly-line) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  color: var(--hostly-ink-muted) !important;
   font-weight: 800 !important;
   font-size: 13px !important;
   line-height: 1.1 !important;
@@ -6615,7 +7659,7 @@ export function CartaPageContent({
   border-color: #e5e7eb !important;
   color: #0b1220 !important;
   font-weight: 900 !important;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.06), 0 6px 14px rgba(2, 6, 23, 0.14) !important;
+  box-shadow: var(--hostly-shadow-card) !important;
 }
 
 .carta-mode-btn:active {
@@ -6624,19 +7668,19 @@ export function CartaPageContent({
 
 .carta-mode-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22) !important;
+  box-shadow: 0 0 0 3px rgba(63, 100, 120, 0.18) !important;
 }
 
 .carta-mode-btn[aria-pressed="false"]:hover {
-  background: #374151 !important;
-  border-color: #4b5563 !important;
+  background: #ffffff !important;
+  border-color: var(--hostly-line-strong) !important;
 }
 
 .carta-aside-meta-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   min-width: 0;
 }
@@ -6650,7 +7694,7 @@ export function CartaPageContent({
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 5px;
   flex-wrap: nowrap;
   min-width: 0;
 }
@@ -6771,6 +7815,44 @@ export function CartaPageContent({
   margin: 0;
 }
 
+/* Cabecera comanda: laterales 1fr (aire real) | centro auto (mesa) | laterales 1fr.
+   Equivale a 1fr auto 1fr con minmax(0,1fr) para truncado sin romper grid. */
+.carta-comanda-head-top-grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 0;
+  box-sizing: border-box;
+}
+
+.carta-comanda-head-cell--left {
+  justify-self: start;
+  align-self: center;
+  text-align: left;
+  margin-left: -8px;
+}
+
+.carta-comanda-head-cell--center {
+  min-width: 0;
+  justify-self: center;
+  align-self: center;
+  max-width: 100%;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.carta-comanda-head-cell--right {
+  justify-self: end;
+  align-self: center;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .carta-comanda-headline-time {
   font-weight: 800;
 }
@@ -6779,8 +7861,8 @@ export function CartaPageContent({
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 5px;
+  margin-top: 4px;
 }
 
 .carta-comanda-meta-badge {
@@ -6800,7 +7882,7 @@ export function CartaPageContent({
   width: 100%;
   box-sizing: border-box;
   margin: 0;
-  padding: 10px 0 0;
+  padding: 6px 0 0;
   background: transparent;
   border-top: none;
   box-shadow: none;
@@ -6809,11 +7891,11 @@ export function CartaPageContent({
 .carta-tpv-payment-dock-stack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
 }
 
 .carta-tpv-payment-dock-total {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .carta-tpv-payment-dock-total-label {
@@ -6843,7 +7925,7 @@ export function CartaPageContent({
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
-  gap: 8px;
+  gap: 6px;
 }
 
 .carta-tpv-final-actions--dock {
@@ -6858,8 +7940,8 @@ export function CartaPageContent({
 }
 
 .carta-tpv-notes-panel {
-  padding: 12px 0 0;
-  margin-top: 12px;
+  padding: 8px 0 0;
+  margin-top: 8px;
   border-top: 1px solid rgba(148, 163, 184, 0.2);
 }
 
@@ -6873,36 +7955,48 @@ export function CartaPageContent({
   margin-left: 6px;
   padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.14);
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--hostly-line);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--hostly-ink);
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   cursor: pointer;
   white-space: nowrap;
   box-sizing: border-box;
-  font: inherit;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: var(--hostly-shadow-card);
   transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.09s ease;
 }
 
 .carta-tpv-to-map-btn:hover {
-  background: #f1f5f9;
-  border-color: rgba(15, 23, 42, 0.22);
-  color: #1e293b;
+  background: #ffffff;
+  border-color: var(--hostly-line-strong);
+  color: var(--hostly-ink);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.carta-tpv-to-map-btn:active {
+  transform: translateY(0.5px);
+  background: var(--hostly-surface-muted);
+  border-color: var(--hostly-line-strong);
+  box-shadow: none;
 }
 
 .carta-tpv-to-map-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 0 0 3px rgba(63, 100, 120, 0.18);
 }
 
 .carta-cats-wrap {
-  padding-bottom: 12px;
-  margin-bottom: 14px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
@@ -6914,7 +8008,7 @@ export function CartaPageContent({
 }
 
 .carta-current-cat-title {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 15px;
   font-weight: 950;
   letter-spacing: 0.02em;
@@ -6962,18 +8056,18 @@ export function CartaPageContent({
   min-height: 28px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--hostly-line);
+  background: rgba(255, 255, 255, 0.84);
   font-size: 11px;
   font-weight: 800;
-  color: #334155;
+  color: var(--hostly-ink-muted);
   cursor: pointer;
 }
 
 .carta-table-map-zone-btn--on {
-  border-color: rgba(56, 189, 248, 0.45);
-  background: rgba(56, 189, 248, 0.14);
-  color: #0369a1;
+  border-color: var(--hostly-line-strong);
+  background: var(--hostly-accent-soft);
+  color: var(--hostly-accent);
 }
 
 .carta-table-map-grid {
@@ -6984,9 +8078,10 @@ export function CartaPageContent({
   box-sizing: border-box;
   padding: 12px;
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(2, 6, 23, 0.28), rgba(2, 6, 23, 0.08));
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  background:
+    linear-gradient(180deg, rgba(244, 248, 252, 0.72) 0%, rgba(232, 239, 246, 0.7) 100%);
+  border: 1px solid var(--hostly-line);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.52);
 }
 
 .carta-table-map-tile {
@@ -6997,17 +8092,15 @@ export function CartaPageContent({
   gap: 4px;
   padding: 12px 10px;
   border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.14);
+  border: 1px solid var(--hostly-line);
   background: rgba(255, 255, 255, 0.92) !important;
   cursor: pointer;
   box-sizing: border-box;
   font: inherit;
   text-align: center;
   min-height: 92px;
-  color: #0f172a;
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.16);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  color: var(--hostly-ink);
+  box-shadow: var(--hostly-shadow-card);
 }
 
 .carta-table-map-tile:hover {
@@ -7025,48 +8118,26 @@ export function CartaPageContent({
 }
 
 .carta-table-map-tile--free {
-  border-color: rgba(34, 197, 94, 0.35);
-  background: linear-gradient(
-    180deg,
-    rgba(240, 253, 244, 0.98),
-    rgba(255, 255, 255, 0.94)
-  ) !important;
+  border-color: rgba(93, 132, 93, 0.28);
+  background: var(--hostly-success-soft) !important;
 }
 
 .carta-table-map-tile--busy-short {
-  border-color: rgba(34, 197, 94, 0.4);
-  background: linear-gradient(
-    180deg,
-    rgba(220, 252, 231, 0.98),
-    rgba(255, 255, 255, 0.92)
-  ) !important;
-  box-shadow:
-    0 0 0 1px rgba(34, 197, 94, 0.1),
-    0 6px 16px rgba(34, 197, 94, 0.1);
+  border-color: rgba(93, 132, 93, 0.32);
+  background: var(--hostly-success-soft) !important;
+  box-shadow: var(--hostly-shadow-card);
 }
 
 .carta-table-map-tile--busy-medium {
-  border-color: rgba(245, 158, 11, 0.45);
-  background: linear-gradient(
-    180deg,
-    rgba(254, 243, 199, 0.98),
-    rgba(255, 255, 255, 0.9)
-  ) !important;
-  box-shadow:
-    0 0 0 1px rgba(245, 158, 11, 0.12),
-    0 6px 16px rgba(245, 158, 11, 0.12);
+  border-color: rgba(196, 144, 61, 0.34);
+  background: var(--hostly-warning-soft) !important;
+  box-shadow: var(--hostly-shadow-card);
 }
 
 .carta-table-map-tile--busy-long {
-  border-color: rgba(239, 68, 68, 0.48);
-  background: linear-gradient(
-    180deg,
-    rgba(254, 226, 226, 0.98),
-    rgba(255, 255, 255, 0.9)
-  );
-  box-shadow:
-    0 0 0 1px rgba(239, 68, 68, 0.12),
-    0 6px 18px rgba(239, 68, 68, 0.14);
+  border-color: rgba(201, 99, 91, 0.34);
+  background: var(--hostly-danger-soft);
+  box-shadow: var(--hostly-shadow-card);
 }
 
 @keyframes carta-table-map-tile-critical-ring {
@@ -7082,10 +8153,10 @@ export function CartaPageContent({
 .carta-table-map-tile--critical {
   position: relative;
   z-index: 1;
-  outline: 2px solid rgba(30, 41, 59, 0.36);
+  outline: 2px solid rgba(201, 99, 91, 0.28);
   outline-offset: 2px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
-  animation: carta-table-map-tile-critical-ring 7s ease-in-out infinite;
+  box-shadow: var(--hostly-shadow-card);
+  animation: none;
 }
 
 .carta-table-map-tile-name {
@@ -7093,7 +8164,7 @@ export function CartaPageContent({
   font-weight: 900;
   line-height: 1.12;
   letter-spacing: -0.02em;
-  color: rgba(15, 23, 42, 0.92);
+  color: var(--hostly-ink);
 }
 
 .carta-table-map-tile-badge {
@@ -7110,13 +8181,13 @@ export function CartaPageContent({
 .carta-table-map-tile-badge--low {
   font-weight: 600;
   background: rgba(255, 255, 255, 0.9);
-  color: rgba(15, 23, 42, 0.6);
+  color: var(--hostly-ink-muted);
 }
 
 .carta-table-map-tile-badge--medium {
   font-weight: 600;
   background: rgba(148, 163, 184, 0.35);
-  color: #0f172a;
+  color: var(--hostly-ink);
 }
 
 .carta-table-map-tile-badge--high {
@@ -7130,7 +8201,7 @@ export function CartaPageContent({
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: #1e293b;
+  color: var(--hostly-ink);
   line-height: 1.2;
 }
 
@@ -7142,7 +8213,7 @@ export function CartaPageContent({
   font-weight: 900;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.58);
+  color: var(--hostly-ink-muted);
   line-height: 1.15;
 }
 
@@ -7155,7 +8226,7 @@ export function CartaPageContent({
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.48);
+  background: var(--hostly-ink-muted);
   flex-shrink: 0;
 }
 
@@ -7177,25 +8248,23 @@ export function CartaPageContent({
   0%,
   100% {
     box-shadow:
-      0 0 0 1px rgba(239, 68, 68, 0.28),
-      0 0 8px rgba(239, 68, 68, 0.16);
+      var(--hostly-shadow-card);
   }
   50% {
     box-shadow:
-      0 0 0 1px rgba(239, 68, 68, 0.42),
-      0 0 12px rgba(239, 68, 68, 0.24);
+      0 0 0 1px rgba(201, 99, 91, 0.24);
   }
 }
 
 .carta-map-summary-shell--critical {
-  animation: carta-map-summary-critical-glow 2.8s ease-in-out infinite;
+  animation: none;
 }
 
 .carta-layout {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -7268,14 +8337,14 @@ export function CartaPageContent({
 }
 
 .carta-comanda-group {
-  margin-bottom: 10px;
+  margin-bottom: 7px;
 }
 
 .carta-comanda-group-title {
   font-size: 11px;
   font-weight: 800;
   color: #6b7280;
-  margin: 6px 0 4px;
+  margin: 4px 0 3px;
 }
 
 .carta-comanda-line-grid {
@@ -7843,13 +8912,13 @@ export function CartaPageContent({
   width: 100%;
   grid-template-columns: repeat(4, 1fr);
   align-items: stretch;
-  gap: 12px;
+  gap: 9px;
 }
 
 .carta-product-card {
   height: 120px;
   min-height: 72px;
-  padding: 12px !important;
+  padding: 10px !important;
   gap: 4px;
   display: flex;
   flex-direction: column;
@@ -8012,15 +9081,37 @@ export function CartaPageContent({
   height: 50px;
 }
 
+/* Tablet/desktop: panel comanda más ancho (~+2.5 cm aquí; +4 cm desde 1024px).
+   Móvil sigue gobernado por @media (max-width: 767.98px). */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .carta-aside,
+  .carta-comanda {
+    width: calc(35% + 2.5cm);
+    min-width: calc(320px + 2.5cm);
+  }
+}
+
 @media (min-width: 768px) {
-  .carta-product-grid { grid-template-columns: repeat(5, 1fr); }
-  .carta-product-card { height: 120px; min-height: 72px; padding: 12px !important; gap: 4px; }
+  .carta-product-card { height: 120px; min-height: 72px; padding: 10px !important; gap: 4px; }
   .carta-product-media { max-width: 82px; height: 56px; }
 }
 
+@media (min-width: 768px) and (max-width: 899.98px) {
+  .carta-product-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (min-width: 900px) and (max-width: 1023.98px) {
+  .carta-product-grid { grid-template-columns: repeat(5, 1fr); }
+}
+
 @media (min-width: 1024px) {
+  .carta-aside,
+  .carta-comanda {
+    width: calc(35% + 4cm);
+    min-width: calc(320px + 4cm);
+  }
   .carta-product-grid { grid-template-columns: repeat(6, 1fr); }
-  .carta-product-card { height: 120px; min-height: 72px; padding: 12px !important; gap: 4px; }
+  .carta-product-card { height: 120px; min-height: 72px; padding: 10px !important; gap: 4px; }
   .carta-product-media { max-width: 86px; height: 60px; }
 }
 
@@ -8035,7 +9126,7 @@ export function CartaPageContent({
 @media (max-width: 767.98px) {
   .carta-layout {
     flex-direction: column;
-    gap: 8px !important;
+    gap: 6px !important;
   }
   .carta-aside,
   .carta-comanda {
@@ -8307,6 +9398,7 @@ export function CartaPageContent({
       {!embeddedInOperacion ? (
         <HostlyPageHeader
           wide
+          compactSpacing
           isMobileLayout={cartaHeaderMobile}
           mobileStackLeftColumn={cartaHeaderMobile}
           left={
@@ -8351,8 +9443,8 @@ export function CartaPageContent({
             </div>
           }
           containerStyle={{
-            paddingTop: 6,
-            paddingBottom: cartaHeaderMobile ? 16 : 6,
+            paddingTop: 4,
+            paddingBottom: cartaHeaderMobile ? 8 : 4,
           }}
         />
       ) : null}
@@ -8370,8 +9462,8 @@ export function CartaPageContent({
             flex: 1,
             minHeight: 0,
             overflowY: "auto",
-            paddingTop: 10,
-            paddingBottom: 18,
+            paddingTop: 8,
+            paddingBottom: 14,
           }}
         >
           <div
@@ -8446,8 +9538,8 @@ export function CartaPageContent({
                   display: "flex",
                   flexDirection: "column",
                   overflow: "hidden",
-                  paddingTop: 18,
-                  paddingBottom: 18,
+                  paddingTop: 12,
+                  paddingBottom: 12,
                 }
           }
         >
@@ -8494,16 +9586,11 @@ export function CartaPageContent({
                   gap: 8,
                   border:
                     mapSummaryAlertLevel === "critical"
-                      ? "1px solid rgba(239, 68, 68, 0.78)"
+                      ? "1px solid rgba(201, 99, 91, 0.38)"
                       : mapSummaryAlertLevel === "warning"
-                        ? "1px solid rgba(245, 158, 11, 0.78)"
-                        : "1px solid rgba(148, 163, 184, 0.14)",
-                  boxShadow:
-                    mapSummaryAlertLevel === "critical"
-                      ? "0 0 0 1px rgba(239, 68, 68, 0.22), 0 0 8px rgba(239, 68, 68, 0.14)"
-                      : mapSummaryAlertLevel === "warning"
-                        ? "0 0 0 1px rgba(245, 158, 11, 0.2), 0 0 8px rgba(245, 158, 11, 0.12)"
-                        : undefined,
+                        ? "1px solid rgba(196, 144, 61, 0.36)"
+                        : "1px solid var(--hostly-line)",
+                  boxShadow: "var(--hostly-shadow-card)",
                   marginBottom: 0,
                 }}
               >
@@ -8604,6 +9691,26 @@ export function CartaPageContent({
                         </button>
                       ))}
                     </div>
+                  ) : null}
+                  {floorPlans.length > 1 ? (
+                    <label className="carta-map-waiter-compact" style={{ maxWidth: 190 }}>
+                      <span style={{ opacity: 0.75 }}>Plano</span>
+                      <select
+                        value={selectedTpvFloorPlanId ?? ""}
+                        onChange={(e) => {
+                          const next = e.target.value.trim();
+                          setSelectedTpvFloorPlanId(next || null);
+                          setMapZoneFilter("__all__");
+                          setActiveMapFilter("all");
+                        }}
+                      >
+                        {floorPlans.map((plan) => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   ) : null}
                 </div>
                 <span className="carta-map-summary-status">
@@ -8712,9 +9819,41 @@ export function CartaPageContent({
                   >
                   <EditableFloorMap
                     editable={false}
-                    elements={mapTablesForChipFilter}
+                    editorPlanSurface
+                    editorVisualPreset="premium"
+                    mapLayoutEmphasis
+                    viewportFitPaddingPx={16}
+                    viewportFitMode="content"
+                    viewportFitElements={planElementsForTpvMap}
+                    viewportFitZones={zonesForTpvMap}
+                    viewportFitZoomMax={1.78}
+                    mapAutoFitKey={tpvMapAutoFitKey}
+                    planSize={selectedTpvFloorPlanSize}
+                    elements={mapElementsForTpvRender}
+                    zones={zonesForTpvMap}
                     renderElement={(ctx) => {
                       const tableId = ctx.elementId;
+                      if (isDecorativePlanElementType(ctx.element.type)) {
+                        return (
+                          <div
+                            aria-hidden
+                            style={tpvDecorativeElementStyle(
+                              ctx.element,
+                              ctx.mapLayoutX,
+                              ctx.mapLayoutY,
+                              ctx.mapTileWidth,
+                              ctx.mapTileHeight,
+                            )}
+                          />
+                        );
+                      }
+                      if (
+                        groupedTablesMapHandlers?.isJoinedSecondaryTable?.(
+                          tableId,
+                        )
+                      ) {
+                        return null;
+                      }
                       const stableTable = tablesById[tableId] ?? ctx.element;
                       const mapLayoutX = ctx.mapLayoutX;
                       const mapLayoutY = ctx.mapLayoutY;
@@ -8863,6 +10002,11 @@ export function CartaPageContent({
                             groupedTablesMapHandlers?.joinTables,
                           )}
                           onMapTableJoinDrop={handleMapTableJoinDrop}
+                          mapJoinClusterMainId={String(
+                            groupedTablesMapHandlers?.resolveMainTableId?.(
+                              tableId,
+                            ) ?? tableId,
+                          ).trim()}
                           showVisualChairs={true}
                           isMapGroupedPrimary={
                             stableTable.type === "table" &&
@@ -8872,25 +10016,18 @@ export function CartaPageContent({
                               ),
                             )
                           }
+                          isMapGroupedSelectionElevated={Boolean(
+                            groupedTablesMapHandlers?.isGroupedPrimaryTable?.(
+                              tableId,
+                            ) && selectedTableId === tableId,
+                          )}
                           onRequestSeparateGroupedTables={
                             groupedTablesMapHandlers?.separateTable
                               ? (tid: string) => {
-                                  if (process.env.NODE_ENV === "development") {
-                                    console.log(
-                                      "[separate] request from card",
-                                      tid,
-                                    );
-                                  }
                                   const mainId =
                                     groupedTablesMapHandlers?.resolveMainTableId?.(
                                       tid,
                                     ) ?? tid;
-                                  if (process.env.NODE_ENV === "development") {
-                                    console.log(
-                                      "[separate] resolved main",
-                                      mainId,
-                                    );
-                                  }
                                   groupedTablesMapHandlers.separateTable?.(
                                     mainId,
                                   );
@@ -8914,7 +10051,7 @@ export function CartaPageContent({
           style={{
             boxSizing: "border-box",
             color: "#0f172a",
-            padding: 16,
+            padding: 12,
             display: "flex",
             flexDirection: "column",
             alignSelf: "stretch",
@@ -8932,8 +10069,8 @@ export function CartaPageContent({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 8,
-              minHeight: 48,
+              gap: 6,
+              minHeight: 42,
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -8953,21 +10090,8 @@ export function CartaPageContent({
                 }
               >
                 <div className="carta-comanda-head-top-stack w-full min-w-0">
-                  <div
-                    className="carta-comanda-head-top-grid mb-0 w-full min-h-[36px]"
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto 1fr",
-                      alignItems: "center",
-                      columnGap: 8,
-                      rowGap: 0,
-                      boxSizing: "border-box",
-                    }}
-                  >
-                    <div
-                      className="min-w-0 self-center"
-                      style={{ justifySelf: "start" }}
-                    >
+                  <div className="carta-comanda-head-top-grid mb-0 w-full min-h-[32px]">
+                    <div className="carta-comanda-head-cell--left">
                       {viewMode === "normal" && selectedTableId ? (
                         <div className="carta-comensales-compact carta-comensales--pill">
                           <span className="carta-comensales-label">
@@ -8992,24 +10116,21 @@ export function CartaPageContent({
                         </div>
                       ) : null}
                     </div>
-                    <div
-                      className="flex min-w-0 max-w-full items-center justify-center gap-1.5 self-center px-1"
-                      style={{ justifySelf: "center" }}
-                    >
+                    <div className="carta-comanda-head-cell--center">
                       <p
                         className="carta-comanda-headline min-w-0 truncate"
                         style={{
-                          fontSize: 18,
+                          fontSize: 17,
                           fontWeight: 950,
                           letterSpacing: "-0.01em",
                           textAlign: "center",
                           margin: 0,
                           padding: 0,
                           minWidth: 0,
+                          maxWidth: "100%",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
-                          flex: "0 1 auto",
                         }}
                       >
                         {selectedTableId ? (
@@ -9030,24 +10151,21 @@ export function CartaPageContent({
                           </span>
                         )}
                       </p>
+                    </div>
+                    <div className="carta-comanda-head-cell--right">
                       {tpvComandaHeaderTime ? (
                         <span
-                          className="carta-comanda-headline-time shrink-0 text-[11px] font-semibold tabular-nums leading-none tracking-tight"
+                          className="carta-comanda-headline-time shrink-0 whitespace-nowrap text-[11px] font-semibold tabular-nums leading-none tracking-tight"
                           style={{ color: tpvComandaHeaderTime.color }}
                         >
                           {tpvComandaHeaderTime.label}
                         </span>
                       ) : null}
-                    </div>
-                    <div
-                      className="min-w-0 self-center"
-                      style={{ justifySelf: "end" }}
-                    >
                       <div
                         className={
                           viewMode === "normal"
-                            ? "flex w-full justify-end md:hidden"
-                            : "flex w-full justify-end"
+                            ? "flex shrink-0 justify-end md:hidden"
+                            : "flex shrink-0 justify-end"
                         }
                       >
                         {!orderIdFromUrl &&
@@ -9622,11 +10740,11 @@ export function CartaPageContent({
         </div>
         {isPaymentOpen && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-3">
-            <div className="bg-white text-gray-900 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[calc(100vh-32px)] overflow-hidden">
+            <div className="bg-white text-gray-900 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[calc(100vh-32px)] overflow-hidden">
               <div
                 className={
                   isSimplePaymentMode
-                    ? "flex-1 px-2.5 sm:px-3 pt-2 pb-2 flex flex-col justify-between"
+                    ? "flex-1 px-3 sm:px-4 pt-3 pb-3 flex flex-col justify-between"
                     : "flex-1 min-h-0 overflow-y-auto overscroll-contain px-2.5 sm:px-3 pt-2 pb-0"
                 }
               >
@@ -9662,38 +10780,250 @@ export function CartaPageContent({
                       {(() => {
                         const payDisc = calculateFinalTotal(total);
                         const payTotal = payDisc.finalTotal;
-                        const received = Number(cashReceived.replace(",", "."));
-                        const change = Math.max(received - payTotal, 0);
-                        const receivedCardRaw = Number(cardReceived.replace(",", ".") || 0);
+                        const remainingDue = roundMoney(
+                          Math.max(payTotal - sessionTableAmountPaidSum, 0),
+                        );
+                        const cardRawTrim = cardReceived.trim();
+                        const cardParsedNum = roundMoney(parseMoney(cardReceived));
+                        const cashParsedNum = roundMoney(parseMoney(cashReceived));
+                        const voucherParsedNum = roundMoney(parseMoney(voucherAmount));
+                        const voucherValueUi = voucherParsedNum;
+                        const voucherUsedUi = Math.min(voucherValueUi, remainingDue);
+                        const voucherRemainingUi = Math.max(
+                          voucherValueUi - remainingDue,
+                          0,
+                        );
+                        const receivedCardRaw =
+                          cardRawTrim === "" ? 0 : cardParsedNum;
                         const tipRaw =
-                          receivedCardRaw > payTotal ? receivedCardRaw - payTotal : 0;
-                        const voucherValueUi = parseMoney(voucherAmount);
-                        const voucherUsedUi = Math.min(voucherValueUi, payTotal);
-                        const voucherRemainingUi = Math.max(voucherValueUi - payTotal, 0);
+                          paymentMethod === "card" &&
+                          receivedCardRaw > remainingDue
+                            ? receivedCardRaw - remainingDue
+                            : 0;
+
+                        let receivedDisplay = 0;
+                        let changeDisplay = 0;
+                        if (paymentMethod === "cash") {
+                          receivedDisplay = cashParsedNum;
+                          changeDisplay = Math.max(
+                            receivedDisplay - remainingDue,
+                            0,
+                          );
+                        } else if (paymentMethod === "card") {
+                          receivedDisplay =
+                            cardRawTrim === "" ? remainingDue : cardParsedNum;
+                          changeDisplay = Math.max(
+                            receivedDisplay - remainingDue,
+                            0,
+                          );
+                        } else if (paymentMethod === "voucher") {
+                          receivedDisplay = voucherUsedUi;
+                          changeDisplay = 0;
+                        }
+
+                        let chargePreview = 0;
+                        if (paymentMethod === "cash") {
+                          chargePreview = cashParsedNum;
+                        } else if (paymentMethod === "card") {
+                          chargePreview =
+                            cardRawTrim === ""
+                              ? remainingDue
+                              : roundMoney(
+                                  Math.min(cardParsedNum, remainingDue),
+                                );
+                        } else if (paymentMethod === "voucher") {
+                          chargePreview = Math.min(
+                            voucherParsedNum,
+                            remainingDue,
+                          );
+                        }
+
+                        const willPayRemaining =
+                          remainingDue > MONEY_EPS &&
+                          chargePreview >= remainingDue - MONEY_EPS;
+
+                        const amtShort = `${chargePreview
+                          .toFixed(2)
+                          .replace(".", ",")} €`;
+                        let confirmLabel = `Cobrar ${amtShort}`;
+                        if (
+                          willPayRemaining &&
+                          sessionTableAmountPaidSum > MONEY_EPS
+                        ) {
+                          confirmLabel = "Pagar restante";
+                        } else if (
+                          willPayRemaining &&
+                          sessionTableAmountPaidSum <= MONEY_EPS
+                        ) {
+                          confirmLabel = "Finalizar cuenta";
+                        }
+
+                        const appendDigit = (d: string) => {
+                          if (paymentMethod === "cash") {
+                            setCashReceived((p) => tpvAppendDigit(p, d));
+                          } else if (paymentMethod === "card") {
+                            setCardReceivedTouched(true);
+                            setCardReceived((p) => tpvAppendDigit(p, d));
+                          } else if (paymentMethod === "voucher") {
+                            setVoucherAmount((p) => tpvAppendDigit(p, d));
+                          }
+                        };
+                        const backspaceDigit = () => {
+                          if (paymentMethod === "cash") {
+                            setCashReceived((p) => String(p).slice(0, -1));
+                          } else if (paymentMethod === "card") {
+                            setCardReceivedTouched(true);
+                            setCardReceived((p) => String(p).slice(0, -1));
+                          } else if (paymentMethod === "voucher") {
+                            setVoucherAmount((p) => String(p).slice(0, -1));
+                          }
+                        };
+                        const exactAmountStr = remainingDue
+                          .toFixed(2)
+                          .replace(".", ",");
+                        const setExact = () => {
+                          if (paymentMethod === "cash") {
+                            setCashReceived(exactAmountStr);
+                          } else if (paymentMethod === "card") {
+                            setCardReceivedTouched(true);
+                            setCardReceived(exactAmountStr);
+                          } else if (paymentMethod === "voucher") {
+                            setVoucherAmount(exactAmountStr);
+                          }
+                        };
+                        const bumpBy = (delta: number) => {
+                          const raw =
+                            paymentMethod === "cash"
+                              ? cashReceived
+                              : paymentMethod === "card"
+                                ? cardReceived
+                                : voucherAmount;
+                          const cur = roundMoney(parseMoney(raw));
+                          const next = roundMoney(
+                            Math.min(remainingDue, cur + delta),
+                          );
+                          const s = next.toFixed(2).replace(".", ",");
+                          if (paymentMethod === "cash") {
+                            setCashReceived(s);
+                          } else if (paymentMethod === "card") {
+                            setCardReceivedTouched(true);
+                            setCardReceived(s);
+                          } else if (paymentMethod === "voucher") {
+                            setVoucherAmount(s);
+                          }
+                        };
+
+                        const keypadTouchClass =
+                          "min-h-[52px] rounded-2xl border-2 border-slate-200 bg-white text-xl font-bold text-slate-900 shadow-sm active:scale-[0.98] active:bg-slate-50 touch-manipulation select-none";
+                        const keypadWideClass = `${keypadTouchClass} col-span-3 min-h-[54px] text-lg`;
+
+                        const inputMoneyClass =
+                          "w-full min-h-[52px] border-2 rounded-2xl px-4 text-center text-2xl font-bold tracking-tight text-slate-900 border-slate-200 bg-white touch-manipulation outline-none focus:border-blue-500 focus:ring-0";
 
                         return (
                           <>
-                            <div className="flex items-end justify-between gap-2">
-                              <div className="text-xs font-semibold text-gray-700 leading-none">
-                                Total a pagar
+                            {sessionPaymentHistory.length > 0 ? (
+                              <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 space-y-2">
+                                <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                  Pagos realizados
+                                </div>
+                                <ul className="space-y-2 max-h-32 overflow-y-auto overscroll-contain pr-0.5">
+                                  {sessionPaymentHistory.map((row) => (
+                                    <li
+                                      key={row.id}
+                                      className="flex items-baseline justify-between gap-3 text-base font-semibold text-slate-800"
+                                    >
+                                      <span className="min-w-0 leading-snug">
+                                        <span className="tabular-nums">
+                                          {formatTpveurEs(row.amount)}
+                                        </span>{" "}
+                                        <span className="text-sm font-medium text-slate-500 normal-case">
+                                          {paymentMethodLabelEs(row.method)}
+                                        </span>
+                                      </span>
+                                      {row.createdAt != null ? (
+                                        <span className="shrink-0 text-sm font-medium text-slate-400 tabular-nums">
+                                          {new Date(
+                                            row.createdAt,
+                                          ).toLocaleTimeString("es-ES", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </span>
+                                      ) : null}
+                                    </li>
+                                  ))}
+                                </ul>
                               </div>
-                              <div className="text-2xl font-extrabold tracking-tight text-gray-900 leading-none">
-                                {payTotal.toFixed(2)} €
+                            ) : null}
+
+                            <div className="rounded-2xl border-2 border-slate-900/10 bg-slate-900/[0.03] p-4 space-y-4">
+                              {sessionTableAmountPaidSum > MONEY_EPS ? (
+                                <div className="flex justify-between gap-2 text-sm font-semibold text-slate-500">
+                                  <span>Total cuenta</span>
+                                  <span className="tabular-nums text-slate-700">
+                                    {formatTpveurEs(payTotal)}
+                                  </span>
+                                </div>
+                              ) : null}
+                              <div className="space-y-1">
+                                <div className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                                  Pendiente
+                                </div>
+                                <div className="text-4xl sm:text-5xl font-black tabular-nums leading-none text-slate-900">
+                                  {formatTpveurEs(remainingDue)}
+                                </div>
                               </div>
+                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="space-y-1">
+                                  <div className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                                    Recibido
+                                  </div>
+                                  <div className="text-3xl sm:text-4xl font-extrabold tabular-nums leading-none text-slate-800">
+                                    {formatTpveurEs(receivedDisplay)}
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                                    Cambio
+                                  </div>
+                                  <div
+                                    className={`text-3xl sm:text-4xl font-extrabold tabular-nums leading-none ${
+                                      changeDisplay > MONEY_EPS
+                                        ? "text-emerald-600"
+                                        : "text-slate-400"
+                                    }`}
+                                  >
+                                    {formatTpveurEs(changeDisplay)}
+                                  </div>
+                                </div>
+                              </div>
+                              {paymentMethod === "card" && tipRaw > 0 ? (
+                                <div className="text-sm font-semibold text-emerald-700">
+                                  Propina / exceso tarjeta:{" "}
+                                  {formatTpveurEs(tipRaw)}
+                                </div>
+                              ) : null}
                             </div>
 
-                            <div className="flex gap-1.5">
+                            <div className="flex gap-2 pt-1">
                               <button
                                 type="button"
-                                className={`flex-1 py-2 rounded-md text-xs font-semibold ${
+                                className={`flex-1 min-h-[52px] rounded-2xl text-base font-bold shadow-sm touch-manipulation select-none ${
                                   paymentMethod === "cash"
-                                    ? "bg-blue-600 text-white shadow"
-                                    : "bg-gray-100 hover:bg-gray-200 text-gray-900"
+                                    ? "bg-blue-600 text-white ring-2 ring-blue-600/40"
+                                    : "bg-slate-100 text-slate-900 active:bg-slate-200"
                                 }`}
                                 onClick={() => {
                                   setPaymentMethod("cash");
+                                  setCardReceivedTouched(false);
                                   setCashReceived(
-                                    (Number.isFinite(payTotal) ? payTotal : 0).toFixed(2),
+                                    (Number.isFinite(remainingDue)
+                                      ? remainingDue
+                                      : 0
+                                    )
+                                      .toFixed(2)
+                                      .replace(".", ","),
                                   );
                                 }}
                               >
@@ -9701,16 +11031,21 @@ export function CartaPageContent({
                               </button>
                               <button
                                 type="button"
-                                className={`flex-1 py-2 rounded-md text-xs font-semibold ${
+                                className={`flex-1 min-h-[52px] rounded-2xl text-base font-bold shadow-sm touch-manipulation select-none ${
                                   paymentMethod === "card"
-                                    ? "bg-blue-600 text-white shadow"
-                                    : "bg-gray-100 hover:bg-gray-200 text-gray-900"
+                                    ? "bg-blue-600 text-white ring-2 ring-blue-600/40"
+                                    : "bg-slate-100 text-slate-900 active:bg-slate-200"
                                 }`}
                                 onClick={() => {
                                   setPaymentMethod("card");
                                   setCardReceivedTouched(false);
                                   setCardReceived(
-                                    (Number.isFinite(payTotal) ? payTotal : 0).toFixed(2),
+                                    (Number.isFinite(remainingDue)
+                                      ? remainingDue
+                                      : 0
+                                    )
+                                      .toFixed(2)
+                                      .replace(".", ","),
                                   );
                                 }}
                               >
@@ -9718,10 +11053,10 @@ export function CartaPageContent({
                               </button>
                               <button
                                 type="button"
-                                className={`flex-1 py-2 rounded-md text-xs font-semibold ${
+                                className={`flex-1 min-h-[52px] rounded-2xl text-base font-bold shadow-sm touch-manipulation select-none ${
                                   paymentMethod === "voucher"
-                                    ? "bg-blue-600 text-white shadow"
-                                    : "bg-gray-100 hover:bg-gray-200 text-gray-900"
+                                    ? "bg-blue-600 text-white ring-2 ring-blue-600/40"
+                                    : "bg-slate-100 text-slate-900 active:bg-slate-200"
                                 }`}
                                 onClick={() => setPaymentMethod("voucher")}
                               >
@@ -9729,122 +11064,228 @@ export function CartaPageContent({
                               </button>
                             </div>
 
-                            {paymentMethod === "card" && (
-                              <>
-                                <input
-                                  type="text"
-                                  placeholder="Importe cobrado"
-                                  value={cardReceived}
-                                  onChange={(e) => {
-                                    setCardReceivedTouched(true);
-                                    setCardReceived(e.target.value);
-                                  }}
-                                  className="w-full border rounded-md px-2 py-1.5 text-xs"
-                                />
-                                {tipRaw > 0 ? (
-                                  <div className="flex justify-between text-xs text-green-600">
-                                    <span>Propina</span>
-                                    <span>{tipRaw.toFixed(2)} €</span>
-                                  </div>
-                                ) : receivedCardRaw > 0 ? (
-                                  <div className="flex justify-between text-xs text-gray-400">
-                                    <span>Propina</span>
-                                    <span>0.00 €</span>
-                                  </div>
-                                ) : null}
-                              </>
-                            )}
+                            {paymentMethod === "card" ? (
+                              <input
+                                ref={simplePaymentAmountInputRef}
+                                type="text"
+                                inputMode="decimal"
+                                autoFocus
+                                autoComplete="off"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                placeholder="Importe cobrado"
+                                value={cardReceived}
+                                onFocus={(e) => e.currentTarget.select()}
+                                onChange={(e) => {
+                                  setCardReceivedTouched(true);
+                                  setCardReceived(e.target.value);
+                                }}
+                                className={inputMoneyClass}
+                              />
+                            ) : null}
 
-                            {paymentMethod === "voucher" && (
-                              <div className="space-y-1">
+                            {paymentMethod === "voucher" ? (
+                              <div className="space-y-3">
                                 <input
+                                  ref={simplePaymentAmountInputRef}
                                   type="text"
+                                  inputMode="decimal"
+                                  autoFocus
+                                  autoComplete="off"
+                                  spellCheck={false}
                                   placeholder="Importe voucher"
                                   value={voucherAmount}
-                                  onChange={(e) => setVoucherAmount(e.target.value)}
-                                  className="w-full border rounded-md px-2 py-1.5 text-xs"
+                                  onFocus={(e) => e.currentTarget.select()}
+                                  onChange={(e) =>
+                                    setVoucherAmount(e.target.value)
+                                  }
+                                  className={inputMoneyClass}
                                 />
                                 <input
                                   type="text"
                                   placeholder="Número de voucher"
                                   value={voucherNumber}
-                                  onChange={(e) => setVoucherNumber(e.target.value)}
-                                  className="w-full border rounded-md px-2 py-1.5 text-xs"
+                                  onChange={(e) =>
+                                    setVoucherNumber(e.target.value)
+                                  }
+                                  className="w-full min-h-[48px] border-2 rounded-2xl px-4 text-lg font-semibold border-slate-200 bg-white touch-manipulation outline-none focus:border-blue-500"
                                 />
-                                {voucherLookupBalance != null && (
-                                  <div className="text-xs text-gray-600 leading-tight">
-                                    Saldo disponible: {voucherLookupBalance.toFixed(2)} €
+                                {voucherLookupBalance != null ? (
+                                  <div className="text-base font-medium text-slate-600">
+                                    Saldo disponible:{" "}
+                                    {voucherLookupBalance
+                                      .toFixed(2)
+                                      .replace(".", ",")}{" "}
+                                    €
                                   </div>
-                                )}
-                                {voucherValueUi > 0 && (
-                                  <div className="text-xs text-gray-600 leading-tight">
-                                    Usado: {voucherUsedUi.toFixed(2)} €{" "}
+                                ) : null}
+                                {voucherValueUi > 0 ? (
+                                  <div className="text-base text-slate-600">
+                                    Usado:{" "}
+                                    {voucherUsedUi
+                                      .toFixed(2)
+                                      .replace(".", ",")}{" "}
+                                    €
                                     {voucherRemainingUi > 0 ? (
-                                      <span className="text-amber-600">
-                                        · Restante: {voucherRemainingUi.toFixed(2)} €
+                                      <span className="text-amber-700 font-semibold">
+                                        {" "}
+                                        · Restante en voucher:{" "}
+                                        {voucherRemainingUi
+                                          .toFixed(2)
+                                          .replace(".", ",")}{" "}
+                                        €
                                       </span>
                                     ) : null}
                                   </div>
-                                )}
+                                ) : null}
                               </div>
-                            )}
+                            ) : null}
 
-                            {paymentMethod === "cash" && (
-                              <div className="space-y-1">
-                                <div className="text-xs font-semibold text-gray-700">
-                                  Importe recibido
-                                </div>
+                            {paymentMethod === "cash" ? (
+                              <div className="space-y-2">
                                 <input
+                                  ref={simplePaymentAmountInputRef}
                                   type="text"
                                   inputMode="decimal"
+                                  autoFocus
+                                  autoComplete="off"
+                                  spellCheck={false}
                                   value={cashReceived}
-                                  onChange={(e) => setCashReceived(e.target.value)}
-                                  placeholder="0"
-                                  className="w-full text-base px-2 py-2 border rounded-md text-center leading-tight"
-                                  style={{
-                                    borderColor: "rgba(15,23,42,0.14)",
-                                    outline: "none",
-                                  }}
+                                  onFocus={(e) => e.currentTarget.select()}
+                                  onChange={(e) =>
+                                    setCashReceived(e.target.value)
+                                  }
+                                  placeholder="0,00"
+                                  aria-label="Importe recibido en efectivo"
+                                  className={inputMoneyClass}
                                 />
                               </div>
-                            )}
+                            ) : null}
 
-                            {paymentMethod === "cash" && (
-                              <div className="flex items-center justify-between rounded-md bg-slate-50 border border-slate-200 px-2.5 py-2 text-sm font-semibold text-gray-900">
-                                <span>Cambio</span>
-                                <span>
-                                  {Number.isFinite(received) && received >= payTotal
-                                    ? `${change.toFixed(2)} €`
-                                    : "0.00 €"}
-                                </span>
+                            {paymentMethod === "cash" ||
+                            paymentMethod === "card" ||
+                            paymentMethod === "voucher" ? (
+                              <div className="space-y-2.5 pt-1">
+                                <div className="grid grid-cols-3 gap-2.5">
+                                  {(
+                                    [
+                                      "1",
+                                      "2",
+                                      "3",
+                                      "4",
+                                      "5",
+                                      "6",
+                                      "7",
+                                      "8",
+                                      "9",
+                                    ] as const
+                                  ).map((k) => (
+                                    <button
+                                      key={k}
+                                      type="button"
+                                      className={keypadTouchClass}
+                                      onClick={() => appendDigit(k)}
+                                    >
+                                      {k}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="grid grid-cols-3 gap-2.5">
+                                  <button
+                                    type="button"
+                                    className={keypadTouchClass}
+                                    onClick={() => appendDigit("0")}
+                                  >
+                                    0
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={keypadTouchClass}
+                                    onClick={() => appendDigit(",")}
+                                  >
+                                    ,
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={keypadTouchClass}
+                                    onClick={() => appendDigit("00")}
+                                  >
+                                    00
+                                  </button>
+                                </div>
+                                <button
+                                  type="button"
+                                  className={keypadWideClass}
+                                  onClick={backspaceDigit}
+                                >
+                                  ⌫ Borrar
+                                </button>
+                                <div className="grid grid-cols-3 gap-2.5">
+                                  <button
+                                    type="button"
+                                    className={keypadTouchClass}
+                                    onClick={() => bumpBy(5)}
+                                  >
+                                    +5 €
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={keypadTouchClass}
+                                    onClick={() => bumpBy(10)}
+                                  >
+                                    +10 €
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`${keypadTouchClass} bg-blue-50 border-blue-200 text-blue-900`}
+                                    onClick={setExact}
+                                  >
+                                    Exacto
+                                  </button>
+                                </div>
                               </div>
-                            )}
+                            ) : null}
 
                             <button
                               type="button"
-                              disabled={paymentMethod === null || !isPaymentValid(payTotal)}
-                              className="w-full py-2.5 rounded-md text-sm font-semibold shadow"
+                              disabled={
+                                paymentMethod === null ||
+                                !isPaymentValid(remainingDue) ||
+                                isConfirmingPayment
+                              }
+                              className="w-full min-h-[56px] rounded-2xl text-lg font-bold shadow-md touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
                               style={{
                                 background:
-                                  paymentMethod === null || !isPaymentValid(payTotal)
+                                  paymentMethod === null ||
+                                  !isPaymentValid(remainingDue) ||
+                                  isConfirmingPayment
                                     ? "rgba(148,163,184,0.55)"
                                     : "#2563eb",
                                 color: "#fff",
-                                cursor:
-                                  paymentMethod === null || !isPaymentValid(payTotal)
-                                    ? "not-allowed"
-                                    : "pointer",
                               }}
                               onClick={() => {
-                                if (paymentMethod === null) return;
-                                void handleConfirmPayment();
+                                if (
+                                  paymentMethod === null ||
+                                  isConfirmingPayment
+                                )
+                                  return;
+                                void (async () => {
+                                  setIsConfirmingPayment(true);
+                                  try {
+                                    await handleConfirmPayment();
+                                  } finally {
+                                    setIsConfirmingPayment(false);
+                                  }
+                                })();
                               }}
                             >
-                              Confirmar cobro
+                              {isConfirmingPayment
+                                ? "Registrando…"
+                                : confirmLabel}
                             </button>
 
-                            <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2 space-y-1.5">
-                              <div className="text-[11px] font-semibold text-gray-700 leading-tight">
+                            <div className="mt-2 rounded-2xl border-2 border-gray-200 bg-gray-50 p-3 space-y-2.5">
+                              <div className="text-xs font-bold text-gray-600 uppercase tracking-wide">
                                 Ajustes
                               </div>
 
@@ -9853,62 +11294,76 @@ export function CartaPageContent({
                                   type="text"
                                   placeholder="Invitación (€)"
                                   value={discountAmount}
-                                  onChange={(e) => setDiscountAmount(e.target.value)}
-                                  className="flex-1 border rounded-md px-2 py-1 text-[11px] leading-tight bg-white"
+                                  onChange={(e) =>
+                                    setDiscountAmount(e.target.value)
+                                  }
+                                  className="flex-1 min-h-[44px] border rounded-xl px-2 text-sm bg-white"
                                 />
                                 <input
                                   type="text"
                                   placeholder="Descuento (%)"
                                   value={discountPercent}
-                                  onChange={(e) => setDiscountPercent(e.target.value)}
-                                  className="flex-1 border rounded-md px-2 py-1 text-[11px] leading-tight bg-white"
+                                  onChange={(e) =>
+                                    setDiscountPercent(e.target.value)
+                                  }
+                                  className="flex-1 min-h-[44px] border rounded-xl px-2 text-sm bg-white"
                                 />
                               </div>
 
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] text-gray-700">Factura</span>
+                                <span className="text-sm text-gray-700">
+                                  Factura
+                                </span>
                                 <input
                                   type="checkbox"
-                                  className="h-3.5 w-3.5 accent-blue-600 shrink-0"
+                                  className="h-5 w-5 accent-blue-600 shrink-0 touch-manipulation"
                                   checked={isInvoice}
-                                  onChange={(e) => setIsInvoice(e.target.checked)}
+                                  onChange={(e) =>
+                                    setIsInvoice(e.target.checked)
+                                  }
                                 />
                               </div>
 
-                              {isInvoice && (
-                                <div className="grid gap-1">
+                              {isInvoice ? (
+                                <div className="grid gap-2">
                                   <input
                                     placeholder="Nombre / Empresa"
-                                    className="input-base !py-1 !text-[11px]"
+                                    className="input-base !py-2 !text-sm min-h-[44px]"
                                     value={invoiceName}
-                                    onChange={(e) => setInvoiceName(e.target.value)}
+                                    onChange={(e) =>
+                                      setInvoiceName(e.target.value)
+                                    }
                                   />
                                   <input
                                     placeholder="NIF / CIF"
-                                    className="input-base !py-1 !text-[11px]"
+                                    className="input-base !py-2 !text-sm min-h-[44px]"
                                     value={invoiceTaxId}
-                                    onChange={(e) => setInvoiceTaxId(e.target.value)}
+                                    onChange={(e) =>
+                                      setInvoiceTaxId(e.target.value)
+                                    }
                                   />
                                   <input
                                     placeholder="Email"
-                                    className="input-base !py-1 !text-[11px]"
+                                    className="input-base !py-2 !text-sm min-h-[44px]"
                                     value={invoiceEmail}
-                                    onChange={(e) => setInvoiceEmail(e.target.value)}
+                                    onChange={(e) =>
+                                      setInvoiceEmail(e.target.value)
+                                    }
                                   />
                                 </div>
-                              )}
+                              ) : null}
 
-                              <div className="flex gap-2 pt-0.5">
+                              <div className="flex gap-2 pt-1">
                                 <button
                                   type="button"
-                                  className="flex-1 py-1.5 rounded-md text-[11px] font-semibold bg-white hover:bg-gray-100 text-gray-900 border border-gray-200"
+                                  className="flex-1 min-h-[48px] rounded-xl text-sm font-bold bg-white text-gray-900 border border-gray-200 active:bg-gray-100 touch-manipulation"
                                   onClick={handlePrintPreTicket}
                                 >
                                   Pre-ticket
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex-1 py-1.5 rounded-md text-[11px] font-semibold bg-white hover:bg-gray-100 text-gray-900 border border-gray-200"
+                                  className="flex-1 min-h-[48px] rounded-xl text-sm font-bold bg-white text-gray-900 border border-gray-200 active:bg-gray-100 touch-manipulation"
                                   onClick={() => {
                                     setIsSplitMode(true);
                                     setIsSplitEqualMode(false);
@@ -9922,7 +11377,7 @@ export function CartaPageContent({
 
                               <button
                                 type="button"
-                                className="w-full py-2 rounded-lg font-semibold bg-white hover:bg-gray-100 text-gray-700 text-sm border border-gray-200"
+                                className="w-full min-h-[52px] rounded-2xl font-bold bg-white text-gray-800 text-base border-2 border-gray-200 active:bg-gray-100 touch-manipulation"
                                 onClick={() => {
                                   setIsPaymentOpen(false);
                                   setPaymentMethod(null);
@@ -9943,6 +11398,8 @@ export function CartaPageContent({
                                   setSelectedItemIds([]);
                                   setPaidSplitItemIds([]);
                                   setPartialPayments([]);
+                                  setSessionTableAmountPaidSum(0);
+                                  setSessionPaymentHistory([]);
                                   setSplitCount(2);
                                   setCurrentSplitIndex(1);
                                 }}
@@ -10214,6 +11671,7 @@ export function CartaPageContent({
                                     type="text"
                                     inputMode="decimal"
                                     value={cashReceived}
+                                    onFocus={(e) => e.currentTarget.select()}
                                     onChange={(e) => setCashReceived(e.target.value)}
                                     placeholder="0"
                                     className="w-full text-sm px-2 py-1 border rounded-md text-center leading-tight"
@@ -10241,6 +11699,7 @@ export function CartaPageContent({
                                   type="text"
                                   placeholder="Importe cobrado"
                                   value={cardReceived}
+                                  onFocus={(e) => e.currentTarget.select()}
                                   onChange={(e) => setCardReceived(e.target.value)}
                                   className="w-full border rounded-md px-2 py-1 text-xs"
                                 />
@@ -10352,21 +11811,11 @@ export function CartaPageContent({
                                 const changeVal =
                                   pm === "cash" ? Math.max(cashParsed - amountToPay, 0) : 0;
 
-                                if (paymentMethod === "card") {
-                                  console.log("CARD PAYMENT", {
-                                    total: amountToPay,
-                                    receivedCard: receivedVal,
-                                    tip: tipVal,
-                                  });
-                                }
-
                                 try {
                                   const breakdown = calculateFinalTotal(selectedTotal);
-                                  console.log("PAYMENT DEBUG", {
-                                    baseTotal: selectedTotal,
-                                    finalTotal: breakdown.finalTotal,
-                                  });
-                                  await addDoc(collection(db, "payments"), {
+                                  await dbgAddDoc(
+                                    collection(db, "payments"),
+                                    {
                                     restaurantId,
                                     tableId: selectedTableId || selectedTable?.id || null,
                                     tableName:
@@ -10397,7 +11846,15 @@ export function CartaPageContent({
                                     itemIds: selectedItemIds,
                                     createdAt: Date.now(),
                                     updatedAt: Date.now(),
-                                  });
+                                  },
+                                    {
+                                      label: "carta:splitByItemsPayment",
+                                      collection: "payments",
+                                      restaurantId,
+                                      tableId: selectedTableId || selectedTable?.id || null,
+                                      orderId: orderIdFromUrl ?? null,
+                                    },
+                                  );
                                   if (pm === "voucher") {
                                     await upsertVoucherBalanceAfterPayment(
                                       db,
@@ -10774,6 +12231,7 @@ export function CartaPageContent({
                                   type="text"
                                   inputMode="decimal"
                                   value={cashReceived}
+                                  onFocus={(e) => e.currentTarget.select()}
                                   onChange={(e) => setCashReceived(e.target.value)}
                                   placeholder="0"
                                   style={{
@@ -10806,6 +12264,7 @@ export function CartaPageContent({
                                 type="text"
                                 placeholder="Importe cobrado"
                                 value={cardReceived}
+                                onFocus={(e) => e.currentTarget.select()}
                                 onChange={(e) => setCardReceived(e.target.value)}
                                 className="w-full border rounded-md px-2 py-1 text-xs"
                               />
@@ -10871,21 +12330,6 @@ export function CartaPageContent({
                               cursor: !isPaymentValid(payTotal) ? "not-allowed" : "pointer",
                             }}
                             onClick={async () => {
-                              if (paymentMethod === "card") {
-                                const receivedCardFinal =
-                                  cardReceived.trim() === ""
-                                    ? payTotal
-                                    : Number(cardReceived.replace(",", ".") || 0);
-                                const tipFinal =
-                                  receivedCardFinal > payTotal
-                                    ? receivedCardFinal - payTotal
-                                    : 0;
-                                console.log("CARD PAYMENT", {
-                                  total: payTotal,
-                                  receivedCard: receivedCardFinal,
-                                  tip: tipFinal,
-                                });
-                              }
                               const nextIndex = currentSplitIndex + 1;
                               const isLast = currentSplitIndex >= safeCount;
                               await handleConfirmPayment({
@@ -10983,21 +12427,38 @@ export function CartaPageContent({
                   {(() => {
                     const payDisc = calculateFinalTotal(total);
                     const payTotal = payDisc.finalTotal;
+                    const remainingDue = roundMoney(
+                      Math.max(payTotal - sessionTableAmountPaidSum, 0),
+                    );
                     const received = Number(cashReceived.replace(",", "."));
-                    const change = Math.max(received - payTotal, 0);
+                    const change = Math.max(received - remainingDue, 0);
                     const hasPartialPayments = paidSplitItemIds.length > 0;
                     const receivedCardRaw = Number(cardReceived.replace(",", ".") || 0);
-                    const tipRaw = receivedCardRaw > payTotal ? receivedCardRaw - payTotal : 0;
+                    const tipRaw =
+                      receivedCardRaw > remainingDue
+                        ? receivedCardRaw - remainingDue
+                        : 0;
                     const voucherValueUi = parseMoney(voucherAmount);
-                    const voucherUsedUi = Math.min(voucherValueUi, payTotal);
-                    const voucherRemainingUi = Math.max(voucherValueUi - payTotal, 0);
+                    const voucherUsedUi = Math.min(voucherValueUi, remainingDue);
+                    const voucherRemainingUi = Math.max(voucherValueUi - remainingDue, 0);
                     const receivedCard =
                       cardReceived.trim() === ""
-                        ? payTotal
+                        ? remainingDue
                         : Number(cardReceived.replace(",", ".") || 0);
 
                     return (
                       <div style={{ display: "grid", gap: 5 }}>
+                        {sessionTableAmountPaidSum > MONEY_EPS ? (
+                          <div className="text-[11px] text-gray-700 leading-tight space-y-0.5">
+                            <div>Total cuenta: {payTotal.toFixed(2)} €</div>
+                            <div className="text-emerald-700 font-semibold">
+                              Cobrado: {sessionTableAmountPaidSum.toFixed(2)} €
+                            </div>
+                            <div className="text-red-700 font-bold">
+                              Pendiente: {remainingDue.toFixed(2)} €
+                            </div>
+                          </div>
+                        ) : null}
                         <div className="flex gap-1.5">
                           <button
                             type="button"
@@ -11008,7 +12469,9 @@ export function CartaPageContent({
                             }`}
                             onClick={() => {
                               setPaymentMethod("cash");
-                              setCashReceived((Number.isFinite(payTotal) ? payTotal : 0).toFixed(2));
+                              setCashReceived(
+                                (Number.isFinite(remainingDue) ? remainingDue : 0).toFixed(2),
+                              );
                             }}
                           >
                             Efectivo
@@ -11024,7 +12487,7 @@ export function CartaPageContent({
                               setPaymentMethod("card");
                               setCardReceivedTouched(false);
                               setCardReceived(
-                                (Number.isFinite(payTotal) ? payTotal : 0).toFixed(2),
+                                (Number.isFinite(remainingDue) ? remainingDue : 0).toFixed(2),
                               );
                             }}
                           >
@@ -11055,6 +12518,7 @@ export function CartaPageContent({
                                 type="text"
                                 inputMode="decimal"
                                 value={cashReceived}
+                                onFocus={(e) => e.currentTarget.select()}
                                 onChange={(e) => setCashReceived(e.target.value)}
                                 placeholder="0"
                                 className="w-full text-sm px-2 py-1 border rounded-md text-center leading-tight"
@@ -11062,7 +12526,7 @@ export function CartaPageContent({
                               />
                             </label>
 
-                            {Number.isFinite(received) && received >= payTotal && (
+                            {Number.isFinite(received) && received >= remainingDue && (
                               <div
                                 className="leading-tight"
                                 style={{ fontSize: 12, fontWeight: 800, color: "#0f172a" }}
@@ -11078,6 +12542,7 @@ export function CartaPageContent({
                               type="text"
                               placeholder="Importe cobrado"
                               value={cardReceived}
+                              onFocus={(e) => e.currentTarget.select()}
                               onChange={(e) => {
                                 setCardReceivedTouched(true);
                                 setCardReceived(e.target.value);
@@ -11185,35 +12650,22 @@ export function CartaPageContent({
                           <div className="sticky bottom-0 z-[2] mt-1 border-t border-slate-200/90 bg-white pt-1.5 pb-0.5">
                           <button
                             type="button"
-                            disabled={!isPaymentValid(payTotal) || hasPartialPayments}
+                            disabled={!isPaymentValid(remainingDue) || hasPartialPayments}
                             className={`w-full py-2 rounded-md text-xs font-semibold shadow ${
                               hasPartialPayments ? "opacity-50 cursor-not-allowed" : ""
                             }`}
                             style={{
-                              background: !isPaymentValid(payTotal) || hasPartialPayments
+                              background: !isPaymentValid(remainingDue) || hasPartialPayments
                                 ? "rgba(148,163,184,0.55)"
                                 : "#2563eb",
                               color: "#fff",
                               cursor:
-                                !isPaymentValid(payTotal) || hasPartialPayments
+                                !isPaymentValid(remainingDue) || hasPartialPayments
                                   ? "not-allowed"
                                   : "pointer",
                             }}
                             onClick={() => {
                               if (hasPartialPayments) return;
-                              if (paymentMethod === "card") {
-                                const receivedCardFinal =
-                                  cardReceived.trim() === ""
-                                    ? payTotal
-                                    : Number(cardReceived.replace(",", ".") || 0);
-                                const tipFinal =
-                                  receivedCardFinal > payTotal ? receivedCardFinal - payTotal : 0;
-                                console.log("CARD PAYMENT", {
-                                  total: payTotal,
-                                  receivedCard: receivedCardFinal,
-                                  tip: tipFinal,
-                                });
-                              }
                               void handleConfirmPayment();
                             }}
                           >
@@ -11267,6 +12719,8 @@ export function CartaPageContent({
                       setSelectedItemIds([]);
                       setPaidSplitItemIds([]);
                       setPartialPayments([]);
+                      setSessionTableAmountPaidSum(0);
+                      setSessionPaymentHistory([]);
                       setSplitCount(2);
                       setCurrentSplitIndex(1);
                     }}
@@ -11390,7 +12844,7 @@ export function CartaPageContent({
             <div className="mt-3 flex gap-2">
               <button
                 className="flex-1 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg text-sm"
-                onClick={() => console.log("IMPRIMIR TICKET", lastPaymentInfo)}
+                onClick={() => {}}
               >
                 Imprimir ticket
               </button>
@@ -11398,7 +12852,7 @@ export function CartaPageContent({
               {lastPaymentInfo?.invoiceNumber && (
                 <button
                   className="flex-1 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg text-sm"
-                  onClick={() => console.log("ENVIAR FACTURA", lastPaymentInfo)}
+                  onClick={() => {}}
                 >
                   Enviar factura
                 </button>
@@ -11410,7 +12864,7 @@ export function CartaPageContent({
           <main
             className="carta-main carta-productos"
             style={{
-              padding: 18,
+              padding: 12,
               boxSizing: "border-box",
               borderRadius: 18,
               background: "rgba(2, 6, 23, 0.55)",
@@ -11426,7 +12880,7 @@ export function CartaPageContent({
                 !error &&
                 products.length > 0 && (
                   <>
-                    <div className="mb-2.5 flex w-full flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-3">
+                    <div className="mb-1.5 flex w-full flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-2">
                       <div
                         role="tablist"
                         aria-label={t("cartaTpv.menuGroupAria")}
@@ -11659,11 +13113,6 @@ export function CartaPageContent({
                                       if (touchMovedRef.current) return;
 
                                       const start = productPointerStartRef.current;
-
-                                      console.log("CLICK PRODUCT", {
-                                        moved: start?.moved,
-                                        id: product.id,
-                                      });
 
                                       if (
                                         productPointerMovedClickBlockRef.current ===

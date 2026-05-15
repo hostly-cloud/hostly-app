@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useLayoutEffect, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { HostlyBackButton } from "@/components/hostly/back-button";
 import { HostlyPageContainer } from "@/components/hostly/page-container";
 import { HostlyPageHeader } from "@/components/hostly/page-header";
@@ -36,6 +37,14 @@ export type ModulePageShellProps = {
   operationalFocus?: boolean;
   /** Con lockViewport: menos padding y márgenes verticales para caber en portátil horizontal (p. ej. importar carta). */
   fitLaptopViewport?: boolean;
+  /** Contenedor principal casi a ancho completo (editor canvas); prioridad sobre maxWidth numérico. */
+  stretchContentWidth?: boolean;
+  /** Editor de mapa en configuración: menos padding/márgenes para maximizar lienzo. */
+  mapEditorDenseChrome?: boolean;
+  /** Shell claro alineado con Configuración (gradiente global visible; cabecera tipo glass). */
+  shellSurface?: "default" | "configLight";
+  /** Oculta logout en herramientas inmersivas donde ya existe navegación global. */
+  hideLogoutButton?: boolean;
 };
 
 const DEFAULT_MAX = 1180;
@@ -57,6 +66,10 @@ export default function ModulePageShell({
   hideBackLink,
   operationalFocus,
   fitLaptopViewport,
+  stretchContentWidth,
+  mapEditorDenseChrome,
+  shellSurface = "default",
+  hideLogoutButton,
 }: ModulePageShellProps) {
   const { t } = useI18n();
   const [isMobile, setIsMobile] = useState(false);
@@ -72,26 +85,100 @@ export default function ModulePageShell({
   const effectiveLockViewport = Boolean(lockViewport && !isMobile);
   const laptopFit = Boolean(effectiveLockViewport && fitLaptopViewport && compactLayout && operationalFocus);
   const lockFill = Boolean(effectiveLockViewport && lockViewportFillParent);
-  const pad = laptopFit
-    ? "clamp(4px, 0.8vw, 10px)"
-    : compactLayout && operationalFocus
-      ? "clamp(8px, 1.2vw, 16px)"
-      : compactLayout
-        ? "clamp(14px, 2.2vw, 26px)"
-        : "clamp(24px, 4vw, 40px)";
+  const pad =
+    mapEditorDenseChrome && laptopFit && stretchContentWidth
+      ? "clamp(0px, 0.12vw, 3px)"
+      : laptopFit && stretchContentWidth
+      ? "clamp(2px, 0.45vw, 8px)"
+      : laptopFit
+        ? "clamp(4px, 0.8vw, 10px)"
+        : compactLayout && operationalFocus
+          ? denseWorkbench
+            ? "clamp(6px, 1vw, 12px)"
+            : "clamp(8px, 1.2vw, 16px)"
+          : compactLayout
+            ? "clamp(14px, 2.2vw, 26px)"
+            : "clamp(24px, 4vw, 40px)";
   const padTop =
     mainPaddingTopExtraPx != null && mainPaddingTopExtraPx > 0
       ? `calc(${pad} + ${mainPaddingTopExtraPx}px)`
       : pad;
 
-  const isWide = maxWidth > DEFAULT_MAX;
+  const isWide = maxWidth > DEFAULT_MAX || Boolean(stretchContentWidth);
+  const configLight = shellSurface === "configLight";
+  const premiumLight = configLight || shellSurface === "default";
+
+  const headerSurface =
+    mapEditorDenseChrome && laptopFit
+      ? {
+          paddingTop: 2,
+          paddingBottom: 2,
+          borderBottom: "1px solid rgba(148, 163, 184, 0.07)",
+        }
+      : premiumLight
+        ? {
+            paddingTop: denseWorkbench ? 8 : 10,
+            paddingBottom: denseWorkbench ? 8 : 10,
+            borderBottom: "1px solid var(--hostly-line)",
+            background: "rgba(247, 252, 255, 0.92)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+          }
+        : laptopFit
+          ? {
+              paddingTop: mapEditorDenseChrome ? 3 : 6,
+              paddingBottom: mapEditorDenseChrome ? 3 : 6,
+              borderBottom: "1px solid rgba(148, 163, 184, 0.07)",
+            }
+          : undefined;
+
+  const titleStyleResolved = {
+    fontSize: laptopFit
+      ? configLight && mapEditorDenseChrome
+        ? "clamp(11px, 1.12vw, 13px)"
+        : "clamp(11px, 1.25vw, 14px)"
+      : compactLayout && operationalFocus
+        ? "clamp(13px, 1.65vw, 17px)"
+        : compactLayout && denseWorkbench
+          ? "clamp(18px, 2.3vw, 24px)"
+          : compactLayout
+            ? "clamp(20px, 2.8vw, 28px)"
+            : "clamp(28px, 4vw, 42px)",
+    fontWeight: laptopFit
+      ? configLight && mapEditorDenseChrome
+        ? 500
+        : 600
+      : compactLayout && operationalFocus
+        ? 600
+        : 700,
+    lineHeight: compactLayout ? (operationalFocus ? 1.08 : 1.12) : 1.15,
+    color:
+      premiumLight
+        ? "#1f2933"
+        : compactLayout && operationalFocus
+          ? "#8b9aad"
+          : undefined,
+  };
+
+  const subtitleStyleResolved = {
+    color: premiumLight
+      ? "#667085"
+      : compactLayout && operationalFocus
+        ? "#5c6570"
+        : "#94a3b8",
+    fontSize: compactLayout ? (operationalFocus ? 11 : denseWorkbench ? 12 : 13) : 17,
+    lineHeight: compactLayout ? (operationalFocus ? 1.32 : denseWorkbench ? 1.3 : 1.35) : 1.45,
+    maxWidth: compactLayout ? (operationalFocus ? 480 : denseWorkbench ? 520 : 560) : 640,
+  };
 
   return (
     <main
       style={{
         boxSizing: "border-box",
-        background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
-        color: "#f8fafc",
+        background: premiumLight
+          ? "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 46%, #dbeefa 100%)"
+          : "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
+        color: premiumLight ? "#1f2933" : "#f8fafc",
         paddingTop: padTop,
         paddingLeft: 0,
         paddingRight: 0,
@@ -133,47 +220,89 @@ export default function ModulePageShell({
       <HostlyPageHeader
         wide={isWide}
         isMobileLayout={isMobile}
-        containerStyle={maxWidth !== DEFAULT_MAX ? { maxWidth } : undefined}
+        compactSpacing={Boolean(compactLayout && operationalFocus)}
+        containerStyle={
+          stretchContentWidth
+            ? {
+                maxWidth: "100%",
+                width: "100%",
+                paddingLeft: 4,
+                paddingRight: 4,
+                boxSizing: "border-box",
+              }
+            : maxWidth !== DEFAULT_MAX
+              ? { maxWidth }
+              : undefined
+        }
+        surfaceStyle={headerSurface}
         left={
           hideBackLink ? null : (
-            <HostlyBackButton href={backHref} label={resolvedBack} ariaLabel={String(resolvedBack)} />
+            <HostlyBackButton
+              href={backHref}
+              label={resolvedBack}
+              ariaLabel={String(resolvedBack)}
+              tone={premiumLight ? "light" : "dark"}
+            />
           )
         }
         title={title}
         subtitle={subtitle}
         below={headerBelow}
         right={
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: laptopFit ? 6 : 12,
+              flexWrap: "wrap",
+            }}
+          >
             {headerRight}
-            <LanguageSwitcher compact={Boolean(compactLayout && operationalFocus)} />
+            {!hideLogoutButton && hideBackLink && backHref === "/dashboard" ? (
+              <LogoutButton
+                compact={Boolean(compactLayout && operationalFocus)}
+                surface={premiumLight ? "light" : "dark"}
+              />
+            ) : null}
+            <LanguageSwitcher
+              compact={Boolean(compactLayout && operationalFocus)}
+              surface={premiumLight ? "light" : "dark"}
+            />
           </div>
         }
-        titleStyle={{
-          fontSize:
-            compactLayout && operationalFocus
-              ? "clamp(13px, 1.65vw, 17px)"
-              : compactLayout && denseWorkbench
-                ? "clamp(18px, 2.3vw, 24px)"
-                : compactLayout
-                  ? "clamp(20px, 2.8vw, 28px)"
-                  : "clamp(28px, 4vw, 42px)",
-          fontWeight: compactLayout && operationalFocus ? 600 : 700,
-          lineHeight: compactLayout ? (operationalFocus ? 1.08 : 1.12) : 1.15,
-          color: compactLayout && operationalFocus ? "#8b9aad" : undefined,
-        }}
-        subtitleStyle={{
-          color: compactLayout && operationalFocus ? "#5c6570" : "#94a3b8",
-          fontSize: compactLayout ? (operationalFocus ? 11 : denseWorkbench ? 12 : 13) : 17,
-          lineHeight: compactLayout ? (operationalFocus ? 1.32 : denseWorkbench ? 1.3 : 1.35) : 1.45,
-          maxWidth: compactLayout ? (operationalFocus ? 440 : denseWorkbench ? 520 : 560) : 640,
-        }}
+        titleStyle={titleStyleResolved}
+        subtitleStyle={subtitleStyleResolved}
       />
 
       <HostlyPageContainer
         wide={isWide}
         style={{
-          ...(maxWidth !== DEFAULT_MAX ? { maxWidth } : null),
-          marginTop: laptopFit ? 10 : compactLayout ? (operationalFocus ? 10 : denseWorkbench ? 14 : 16) : 24,
+          ...(stretchContentWidth
+            ? {
+                maxWidth: "100%",
+                width: "100%",
+                paddingLeft: 4,
+                paddingRight: 4,
+                boxSizing: "border-box",
+              }
+            : maxWidth !== DEFAULT_MAX
+              ? { maxWidth }
+              : null),
+          marginTop: stretchContentWidth
+            ? mapEditorDenseChrome
+              ? 0
+              : 4
+            : laptopFit
+              ? 8
+              : compactLayout
+              ? operationalFocus
+                ? denseWorkbench
+                  ? 6
+                  : 8
+                : denseWorkbench
+                  ? 12
+                  : 14
+              : 24,
           ...(isMobile
             ? {}
             : {

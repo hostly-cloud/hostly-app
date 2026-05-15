@@ -1,18 +1,20 @@
 "use client";
 
 import {
-  addDoc,
   collection,
   doc,
   onSnapshot,
   query,
-  runTransaction,
-  updateDoc,
   where,
-  writeBatch,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase/client";
+import {
+  dbgAddDoc,
+  dbgRunTransaction,
+  dbgTransactionUpdate,
+  DbgWriteBatch,
+} from "@/lib/firestore/instrumentedWrites";
 import { updateMesa } from "@/lib/firestore/mesas";
 import type { CatalogProduct, ComandaItem, PastOrder } from "@/types/comanda";
 import type { Mesa } from "@/types/mesa";
@@ -276,7 +278,9 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
       if (currentOrderId) {
         const now = Date.now();
 
-        await runTransaction(db, async (transaction) => {
+        await dbgRunTransaction(
+          db,
+          async (transaction) => {
           const ref = doc(db, "orders", currentOrderId);
           const snap = await transaction.get(ref);
 
@@ -287,20 +291,41 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
 
           assertNoOrderConflict(remoteUpdatedAt);
 
-          transaction.update(ref, {
-            items,
-            total,
-            updatedAt: now,
-            ...getOrderAuditFields(),
-          });
-        });
+          dbgTransactionUpdate(
+            transaction,
+            ref,
+            {
+              items,
+              total,
+              updatedAt: now,
+              ...getOrderAuditFields(),
+            },
+            {
+              label: "useMesaComanda:handleSaveOrder:txUpdate",
+              collection: "orders",
+              restaurantId,
+              tableId: mesaId,
+              orderId: currentOrderId,
+            },
+          );
+        },
+          {
+            label: "useMesaComanda:handleSaveOrder:transaction",
+            collection: "orders",
+            restaurantId,
+            tableId: mesaId,
+            orderId: currentOrderId,
+          },
+        );
 
         setCurrentOrderUpdatedAt(now);
         setOrderStatus(ORDER_STATUS_OPEN);
       } else {
         const now = Date.now();
 
-        const docRef = await addDoc(collection(db, "orders"), {
+        const docRef = await dbgAddDoc(
+          collection(db, "orders"),
+          {
           restaurantId: restaurantId ?? null,
           mesaId,
           tableId: mesaId,
@@ -314,7 +339,14 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
           createdAt: now,
           updatedAt: now,
           ...getOrderAuditFields(),
-        });
+        },
+          {
+            label: "useMesaComanda:handleSaveOrder:addDoc",
+            collection: "orders",
+            restaurantId,
+            tableId: mesaId,
+          },
+        );
 
         setCurrentOrderId(docRef.id);
         setOrderStatus(ORDER_STATUS_OPEN);
@@ -352,7 +384,9 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     try {
       const now = Date.now();
 
-      await runTransaction(db, async (transaction) => {
+      await dbgRunTransaction(
+        db,
+        async (transaction) => {
         const ref = doc(db, "orders", orderId);
         const snap = await transaction.get(ref);
 
@@ -363,13 +397,32 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
 
         assertNoOrderConflict(remoteUpdatedAt);
 
-        transaction.update(ref, {
-          status: ORDER_STATUS_CLOSED,
-          closedAt: now,
-          updatedAt: now,
-          ...getOrderAuditFields(),
-        });
-      });
+        dbgTransactionUpdate(
+          transaction,
+          ref,
+          {
+            status: ORDER_STATUS_CLOSED,
+            closedAt: now,
+            updatedAt: now,
+            ...getOrderAuditFields(),
+          },
+          {
+            label: "useMesaComanda:handleCloseOrder:txUpdate",
+            collection: "orders",
+            restaurantId,
+            tableId: mesaId,
+            orderId,
+          },
+        );
+      },
+        {
+          label: "useMesaComanda:handleCloseOrder",
+          collection: "orders",
+          restaurantId,
+          tableId: mesaId,
+          orderId,
+        },
+      );
 
       await updateMesa(mesaId, {
         status: "free",
@@ -404,7 +457,9 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     try {
       const now = Date.now();
 
-      await runTransaction(db, async (transaction) => {
+      await dbgRunTransaction(
+        db,
+        async (transaction) => {
         const ref = doc(db, "orders", orderId);
         const snap = await transaction.get(ref);
 
@@ -415,13 +470,32 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
 
         assertNoOrderConflict(remoteUpdatedAt);
 
-        transaction.update(ref, {
-          status: ORDER_STATUS_SENT,
-          sentAt: now,
-          updatedAt: now,
-          ...getOrderAuditFields(),
-        });
-      });
+        dbgTransactionUpdate(
+          transaction,
+          ref,
+          {
+            status: ORDER_STATUS_SENT,
+            sentAt: now,
+            updatedAt: now,
+            ...getOrderAuditFields(),
+          },
+          {
+            label: "useMesaComanda:handleSendToKitchen:txUpdate",
+            collection: "orders",
+            restaurantId,
+            tableId: mesaId,
+            orderId,
+          },
+        );
+      },
+        {
+          label: "useMesaComanda:handleSendToKitchen",
+          collection: "orders",
+          restaurantId,
+          tableId: mesaId,
+          orderId,
+        },
+      );
 
       const kitchenItems = buildOrderItemsForKitchen({
         items,
@@ -431,7 +505,13 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
         tableId: mesaId,
       });
 
-      const batch = writeBatch(db);
+      const batch = new DbgWriteBatch(db, {
+        label: "useMesaComanda:handleSendToKitchen:orderItemsBatch",
+        collection: "orderItems",
+        restaurantId,
+        tableId: mesaId,
+        orderId,
+      });
 
       kitchenItems.forEach((item) => {
         const ref = doc(db, "orderItems", item.id);
@@ -467,7 +547,9 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     try {
       const now = Date.now();
 
-      await runTransaction(db, async (transaction) => {
+      await dbgRunTransaction(
+        db,
+        async (transaction) => {
         const ref = doc(db, "orders", orderId);
         const snap = await transaction.get(ref);
 
@@ -478,13 +560,32 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
 
         assertNoOrderConflict(remoteUpdatedAt);
 
-        transaction.update(ref, {
-          status: ORDER_STATUS_OPEN,
-          reopenedAt: now,
-          updatedAt: now,
-          ...getOrderAuditFields(),
-        });
-      });
+        dbgTransactionUpdate(
+          transaction,
+          ref,
+          {
+            status: ORDER_STATUS_OPEN,
+            reopenedAt: now,
+            updatedAt: now,
+            ...getOrderAuditFields(),
+          },
+          {
+            label: "useMesaComanda:handleReopenOrder:txUpdate",
+            collection: "orders",
+            restaurantId,
+            tableId: mesaId,
+            orderId,
+          },
+        );
+      },
+        {
+          label: "useMesaComanda:handleReopenOrder",
+          collection: "orders",
+          restaurantId,
+          tableId: mesaId,
+          orderId,
+        },
+      );
 
       setCurrentOrderUpdatedAt(now);
       setOrderStatus(ORDER_STATUS_OPEN);

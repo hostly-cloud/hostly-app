@@ -4,9 +4,9 @@ import {
   query,
   serverTimestamp,
   where,
-  writeBatch,
   type Firestore,
 } from "firebase/firestore";
+import { DbgWriteBatch } from "@/lib/firestore/instrumentedWrites";
 import { isOrderStatusActiveForTableOccupancy } from "@/lib/firestore/order-table-occupancy";
 
 /**
@@ -32,7 +32,12 @@ export async function handlePayTableOrder(
     where("tableId", "==", tid),
   );
   const snap = await getDocs(q);
-  const batch = writeBatch(db);
+  const batch = new DbgWriteBatch(db, {
+    label: "handlePayTableOrder:batch",
+    collection: "orders",
+    restaurantId,
+    tableId: tid,
+  });
   let n = 0;
   for (const d of snap.docs) {
     const data = d.data() as { restaurantId?: string; status?: string };

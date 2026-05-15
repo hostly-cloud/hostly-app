@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -18,6 +19,7 @@ import {
 import { useAuth } from "@/components/auth/auth-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { getUsersByRestaurant } from "@/lib/firestore/users";
+import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 
 export type OperationWaiterFilter = "all" | "me" | string;
 
@@ -100,6 +102,13 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
   >({});
   const [zones, setZones] = useState<OperationZone[]>([]);
 
+  /** Último usuario para logs de snapshot sin meter `user` en deps (objeto inestable / tamaño de array). */
+  const tablesSnapAuthUidRef = useRef<string | null>(null);
+  const tablesSnapAuthEmailRef = useRef<string | null>(null);
+  tablesSnapAuthUidRef.current = user?.uid ?? null;
+  tablesSnapAuthEmailRef.current =
+    typeof user?.email === "string" ? user.email : null;
+
   useEffect(() => {
     if (!ready || !isFirebaseConfigured || !restaurantId) {
       setWaiters([]);
@@ -118,7 +127,8 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
           .filter((u) => u.id);
         mapped.sort((a, b) => a.name.localeCompare(b.name, "es"));
         setWaiters(mapped);
-      } catch {
+      } catch (error) {
+        console.error(error);
         if (!cancelled) setWaiters([]);
       }
     })();
@@ -170,6 +180,19 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
       setTableWaiterById(waiterMap);
       setTableZoneById(zoneMap);
       setZones(list);
+    }, (err) => {
+      console.error(err);
+      logFirestorePermissionError(
+        {
+          file: "components/kds/operation-filter-context.tsx",
+          op: "onSnapshot",
+          path: `tables (where restaurantId==${restaurantId})`,
+          restaurantId,
+          uid: tablesSnapAuthUidRef.current,
+          email: tablesSnapAuthEmailRef.current,
+        },
+        err,
+      );
     });
     return () => unsub();
   }, [ready, restaurantId]);
