@@ -491,11 +491,12 @@ export default function DashboardPage() {
             padding: "8px 16px",
             borderRadius: 8,
             border: "1px solid var(--hostly-line-strong)",
-            background: "#1f2933",
-            color: "#ffffff",
+            background: "#ffffff",
+            color: "#315f7d",
             fontWeight: 600,
             fontSize: 14,
             cursor: "pointer",
+            boxShadow: "var(--hostly-shadow-card)",
           }}
         >
           Guardar
@@ -580,6 +581,7 @@ export default function DashboardPage() {
       compactLayout
       lockViewport={!mobileScroll}
       hideBackLink
+      shellSurface="configLight"
     >
       <div
         style={
