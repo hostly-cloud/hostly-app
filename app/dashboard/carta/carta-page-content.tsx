@@ -7184,6 +7184,7 @@ export function CartaPageContent({
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  position: relative !important;
   margin: 0 !important;
   padding: 0 !important;
 }
@@ -7224,6 +7225,11 @@ export function CartaPageContent({
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
+  position: absolute !important;
+  top: 2px !important;
+  left: 2px !important;
+  right: 2px !important;
+  z-index: 12 !important;
   height: 24px !important;
   min-height: 24px !important;
   max-height: 24px !important;
@@ -7231,6 +7237,7 @@ export function CartaPageContent({
   align-items: center !important;
   overflow: hidden !important;
   gap: 2px !important;
+  flex: 0 0 auto !important;
   border-radius: 0 !important;
   border-width: 0 0 1px !important;
   box-shadow: none !important;
@@ -9690,32 +9697,38 @@ export function CartaPageContent({
                     }
               }
             >
-              <div
-                role="status"
-                aria-live="polite"
-                className={
-                  mapSummaryAlertLevel === "critical"
-                    ? "carta-map-metrics-strip-host carta-map-summary-shell--critical carta-map-summary-block"
-                    : "carta-map-metrics-strip-host carta-map-summary-shell carta-map-summary-block"
-                }
-                style={{
-                  boxSizing: "border-box",
-                  paddingLeft: 6,
-                  paddingRight: 6,
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                  border:
+              {cartaHeaderMobile &&
+              embeddedInOperacion &&
+              mapSummaryAlertLevel === "normal" &&
+              activeMapFilter === "all" &&
+              mapZoneOptions.length <= 1 &&
+              floorPlans.length <= 1 ? null : (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className={
                     mapSummaryAlertLevel === "critical"
-                      ? "1px solid rgba(201, 99, 91, 0.38)"
-                      : mapSummaryAlertLevel === "warning"
-                        ? "1px solid rgba(196, 144, 61, 0.36)"
-                        : "1px solid var(--hostly-line)",
-                  boxShadow: "var(--hostly-shadow-card)",
-                  marginBottom: 0,
-                }}
-              >
+                      ? "carta-map-metrics-strip-host carta-map-summary-shell--critical carta-map-summary-block"
+                      : "carta-map-metrics-strip-host carta-map-summary-shell carta-map-summary-block"
+                  }
+                  style={{
+                    boxSizing: "border-box",
+                    paddingLeft: 6,
+                    paddingRight: 6,
+                    flexShrink: 0,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    border:
+                      mapSummaryAlertLevel === "critical"
+                        ? "1px solid rgba(201, 99, 91, 0.38)"
+                        : mapSummaryAlertLevel === "warning"
+                          ? "1px solid rgba(196, 144, 61, 0.36)"
+                          : "1px solid var(--hostly-line)",
+                    boxShadow: "var(--hostly-shadow-card)",
+                    marginBottom: 0,
+                  }}
+                >
                 <div className="carta-map-top-strip-main">
                   <button
                     type="button"
@@ -9835,14 +9848,19 @@ export function CartaPageContent({
                     </label>
                   ) : null}
                 </div>
-                <span className="carta-map-summary-status">
-                  {mapSummaryAlertLevel === "critical"
-                    ? "Atención urgente"
-                    : mapSummaryAlertLevel === "warning"
-                      ? "Revisar mesas"
-                      : "Servicio estable"}
-                </span>
-              </div>
+                {cartaHeaderMobile &&
+                embeddedInOperacion &&
+                mapSummaryAlertLevel === "normal" ? null : (
+                  <span className="carta-map-summary-status">
+                    {mapSummaryAlertLevel === "critical"
+                      ? "Atención urgente"
+                      : mapSummaryAlertLevel === "warning"
+                        ? "Revisar mesas"
+                        : "Servicio estable"}
+                  </span>
+                )}
+                </div>
+              )}
               {!embeddedInOperacion ? (
               <div className="carta-map-waiter-row">
                 <label className="carta-map-waiter-compact">
