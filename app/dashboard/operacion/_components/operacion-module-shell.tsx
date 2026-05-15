@@ -76,9 +76,15 @@ export function OperacionModuleShell({
   showFilterBar,
   children,
 }: OperacionModuleShellProps) {
+  const moduleKey = title.trim().toLowerCase();
+
   return (
-    <main style={shellStyle}>
-      <div style={topBarStyle}>
+    <main
+      className="hostly-operation-shell"
+      data-operation-module={moduleKey}
+      style={shellStyle}
+    >
+      <div className="hostly-operation-topbar" style={topBarStyle}>
         <HostlyBackButton
           href="/dashboard/operacion"
           label="Volver a Operación"
@@ -95,6 +101,57 @@ export function OperacionModuleShell({
       ) : null}
 
       <div style={contentStyle}>{children}</div>
+      <style>{`
+        @media (max-width: 767.98px) {
+          .hostly-operation-shell[data-operation-module="tpv"]
+            .hostly-operation-topbar {
+            min-height: 26px !important;
+            padding: 2px 5px !important;
+            gap: 4px !important;
+            border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+            background: rgba(247, 252, 255, 0.72) !important;
+          }
+
+          .hostly-operation-shell[data-operation-module="tpv"]
+            .hostly-operation-topbar
+            .hostly-nav-aux {
+            min-height: 22px !important;
+            gap: 4px !important;
+            padding: 2px 6px !important;
+            border-radius: 8px !important;
+            border-color: rgba(148, 163, 184, 0.22) !important;
+            background: rgba(255, 255, 255, 0.66) !important;
+          }
+
+          .hostly-operation-shell[data-operation-module="tpv"]
+            .hostly-operation-topbar
+            .hostly-nav-aux
+            span:first-child {
+            width: 15px !important;
+            height: 15px !important;
+            border-radius: 5px !important;
+          }
+
+          .hostly-operation-shell[data-operation-module="tpv"]
+            .hostly-operation-topbar
+            .hostly-nav-aux
+            span:last-child {
+            max-width: 44px !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            font-size: 10px !important;
+            line-height: 1 !important;
+          }
+
+          .hostly-operation-shell[data-operation-module="tpv"]
+            .hostly-operation-topbar
+            > span {
+            font-size: 10px !important;
+            letter-spacing: 0.04em !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }

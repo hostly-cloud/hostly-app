@@ -7058,6 +7058,7 @@ export function CartaPageContent({
   overflow-x: hidden !important;
   overflow-y: hidden !important;
   padding-bottom: 0 !important;
+  background: var(--hostly-surface-page) !important;
 }
 
 .carta-root[data-carta-embedded="true"] .carta-page-main,
@@ -7161,6 +7162,8 @@ export function CartaPageContent({
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-page-fill {
@@ -7170,6 +7173,8 @@ export function CartaPageContent({
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-table-map-shell {
@@ -7179,6 +7184,8 @@ export function CartaPageContent({
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-table-map-grid {
@@ -7188,8 +7195,12 @@ export function CartaPageContent({
   width: 100% !important;
   max-width: 100% !important;
   overflow: hidden !important;
-  padding: 6px !important;
-  border-radius: 14px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-table-map-grid > div {
@@ -7206,43 +7217,95 @@ export function CartaPageContent({
   width: 100% !important;
   max-width: 100vw !important;
   min-width: 0 !important;
-  padding-left: 6px !important;
-  padding-right: 6px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
   box-sizing: border-box !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  padding: 4px 6px !important;
-  align-items: flex-start !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  max-height: 24px !important;
+  padding: 1px 2px !important;
+  align-items: center !important;
   overflow: hidden !important;
+  gap: 2px !important;
+  border-radius: 0 !important;
+  border-width: 0 0 1px !important;
+  box-shadow: none !important;
+  background: rgba(247, 252, 255, 0.82) !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main {
-  flex-wrap: wrap !important;
-  overflow: hidden !important;
-  height: auto !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  height: 100% !important;
   min-height: 0 !important;
-  max-height: none !important;
-  width: 100% !important;
-  gap: 4px !important;
+  max-height: 100% !important;
+  width: auto !important;
+  gap: 3px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main::-webkit-scrollbar {
+  display: none;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-zones-inline {
+  flex: 0 0 auto !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  gap: 3px !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-map-summary-pill,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-map-summary-pill--interactive,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-table-map-zone-btn {
-  flex: 0 1 auto !important;
-  max-width: 100% !important;
+  flex: 0 0 auto !important;
+  max-width: none !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  padding-left: 5px !important;
+  padding-right: 5px !important;
+  font-size: 8.5px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-map-waiter-compact {
+  flex: 0 0 auto !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  padding: 1px 5px !important;
+  gap: 3px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-map-waiter-compact select {
+  height: 16px !important;
+  min-height: 16px !important;
+  max-height: 16px !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-summary-status {
-  width: 100% !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  max-width: 54px !important;
   margin-left: 0 !important;
-  white-space: normal !important;
-  line-height: 1.15 !important;
+  white-space: nowrap !important;
+  line-height: 1 !important;
+  font-size: 8px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .carta-page-main {
@@ -9881,11 +9944,15 @@ export function CartaPageContent({
                     editorPlanSurface
                     editorVisualPreset="premium"
                     mapLayoutEmphasis
-                    viewportFitPaddingPx={16}
+                    viewportFitPaddingPx={
+                      cartaHeaderMobile && embeddedInOperacion ? 0 : 16
+                    }
                     viewportFitMode="content"
                     viewportFitElements={planElementsForTpvMap}
                     viewportFitZones={zonesForTpvMap}
-                    viewportFitZoomMax={1.78}
+                    viewportFitZoomMax={
+                      cartaHeaderMobile && embeddedInOperacion ? 2.35 : 1.78
+                    }
                     mapAutoFitKey={tpvMapAutoFitKey}
                     planSize={selectedTpvFloorPlanSize}
                     elements={mapElementsForTpvRender}
