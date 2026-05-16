@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/components/auth/auth-context";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import {
+  disableProductInventory,
+  listenProductsForInventory,
+  upsertProductInventory,
+  type ProductDocument,
+} from "@/lib/firestore/products";
 import { mockInventarioProductos } from "@/lib/inventario-productos";
 
 type Unidad = "kg" | "g" | "l" | "ml" | "ud";
@@ -48,8 +55,34 @@ function parseNumber(value: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function draftFromRows(rows: ProductoRow[]): DraftById {
+  const next: DraftById = {};
+  for (const r of rows) {
+    next[String(r.id)] = {
+      nombre: r.nombre ?? "",
+      unidad: r.unidad ?? "kg",
+      stock_actual: r.stock_actual == null ? "" : String(roundTo(r.stock_actual, 3)),
+      coste_unitario: r.coste_unitario == null ? "" : String(roundTo(r.coste_unitario, 2)),
+      stock_minimo: r.stock_minimo == null ? "" : String(roundTo(r.stock_minimo, 3)),
+    };
+  }
+  return next;
+}
+
+function mapProductDocumentToRow(item: ProductDocument): ProductoRow {
+  return {
+    id: item.id,
+    nombre: item.name,
+    unidad: item.inventory.unit,
+    stock_actual: item.inventory.currentStock,
+    coste_unitario: item.inventory.averageCost,
+    stock_minimo: item.inventory.minimumStock,
+  };
+}
+
 export default function InventarioStockSection() {
   const { t } = useI18n();
+  const { restaurantId, ready, profileReady } = useAuth();
   const [items, setItems] = useState<ProductoRow[]>([]);
   const [drafts, setDrafts] = useState<DraftById>({});
   const [loading, setLoading] = useState(true);
@@ -57,33 +90,48 @@ export default function InventarioStockSection() {
   const [error, setError] = useState<string | null>(null);
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
   const [deletingById, setDeletingById] = useState<Record<string, boolean>>({});
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
-    cargar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!ready || !profileReady) {
+      setLoading(true);
+      return;
+    }
+    const rid = restaurantId?.trim() ?? "";
+    if (!rid) {
+      setItems([]);
+      setDrafts({});
+      setUsingMock(false);
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
-  async function cargar() {
     setLoading(true);
     setError(null);
-    setUsingMock(true);
+    setUsingMock(false);
 
-    const rows = mockInventarioProductos() as ProductoRow[];
-    setItems(rows);
-    setDrafts(() => {
-      const next: DraftById = {};
-      for (const r of rows) {
-        next[String(r.id)] = {
-          nombre: r.nombre ?? "",
-          unidad: r.unidad ?? "kg",
-          stock_actual: r.stock_actual == null ? "" : String(roundTo(r.stock_actual, 3)),
-          coste_unitario: r.coste_unitario == null ? "" : String(roundTo(r.coste_unitario, 2)),
-          stock_minimo: r.stock_minimo == null ? "" : String(roundTo(r.stock_minimo, 3)),
-        };
-      }
-      return next;
-    });
-    setLoading(false);
+    return listenProductsForInventory(
+      rid,
+      (rows) => {
+        const mapped = rows.map(mapProductDocumentToRow);
+        setItems(mapped);
+        setDrafts(draftFromRows(mapped));
+        setLoading(false);
+      },
+      (e) => {
+        const rows = mockInventarioProductos() as ProductoRow[];
+        setItems(rows);
+        setDrafts(draftFromRows(rows));
+        setUsingMock(true);
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      },
+    );
+  }, [profileReady, ready, reloadNonce, restaurantId]);
+
+  function cargar() {
+    setReloadNonce((n) => n + 1);
   }
 
   function updateDraft(id: string | number, patch: Partial<DraftById[string]>) {
@@ -120,10 +168,17 @@ export default function InventarioStockSection() {
 
   async function guardarFila(id: string | number) {
     const key = String(id);
+    const rid = restaurantId?.trim() ?? "";
     setError(null);
     setSavingById((prev) => ({ ...prev, [key]: true }));
 
     try {
+      if (usingMock) {
+        throw new Error("Firestore no disponible: edición desactivada en modo demo");
+      }
+      if (!rid) {
+        throw new Error("No hay restaurante activo para guardar inventario");
+      }
       const draft = drafts[key] ?? { nombre: "", unidad: "kg", stock_actual: "", coste_unitario: "", stock_minimo: "" };
       const payload = {
         nombre: draft.nombre.trim() || null,
@@ -133,22 +188,30 @@ export default function InventarioStockSection() {
         stock_minimo: parseNumber(draft.stock_minimo, 0),
       };
 
-      // Solo memoria (sin backend SQL)
-      setItems((prev) =>
-        prev.map((r) =>
-          String(r.id) === key
-            ? {
-                ...r,
-                ...payload,
-                stock_actual: roundTo(payload.stock_actual, 3),
-                coste_unitario: roundTo(payload.coste_unitario, 2),
-                stock_minimo: roundTo(payload.stock_minimo, 3),
-              }
-            : r,
-        ),
-      );
+      if (key.startsWith("tmp_")) {
+        await upsertProductInventory(rid, null, {
+          name: payload.nombre,
+          unit: payload.unidad,
+          currentStock: payload.stock_actual,
+          minimumStock: payload.stock_minimo,
+          averageCost: payload.coste_unitario,
+        });
+        setItems((prev) => prev.filter((r) => String(r.id) !== key));
+        setDrafts((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      } else {
+        await upsertProductInventory(rid, key, {
+          name: payload.nombre,
+          unit: payload.unidad,
+          currentStock: payload.stock_actual,
+          minimumStock: payload.stock_minimo,
+          averageCost: payload.coste_unitario,
+        });
+      }
     } catch (e) {
-      // fallback seguro: no rompemos la pantalla
       setError(e instanceof Error ? e.message : t("inventory.errorSave"));
     } finally {
       setSavingById((prev) => ({ ...prev, [key]: false }));
@@ -157,10 +220,27 @@ export default function InventarioStockSection() {
 
   async function eliminarFila(id: string | number) {
     const key = String(id);
+    const rid = restaurantId?.trim() ?? "";
     setError(null);
     setDeletingById((prev) => ({ ...prev, [key]: true }));
 
     try {
+      if (usingMock) {
+        throw new Error("Firestore no disponible: borrado desactivado en modo demo");
+      }
+      if (key.startsWith("tmp_")) {
+        setItems((prev) => prev.filter((r) => String(r.id) !== key));
+        setDrafts((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        return;
+      }
+      if (!rid) {
+        throw new Error("No hay restaurante activo para borrar inventario");
+      }
+      await disableProductInventory(rid, key);
       setItems((prev) => prev.filter((r) => String(r.id) !== key));
       setDrafts((prev) => {
         const next = { ...prev };
@@ -223,9 +303,7 @@ export default function InventarioStockSection() {
             borderRadius: 12,
           }}
         >
-          {t("inventory.mockBannerBefore")}
-          <code>inventario_productos</code>
-          {t("inventory.mockBannerAfter")}
+          No se pudo leer Firestore. Mostrando datos de ejemplo temporalmente.
         </div>
       ) : null}
 

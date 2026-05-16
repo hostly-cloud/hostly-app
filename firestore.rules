@@ -59,6 +59,17 @@ service cloud.firestore {
           && sameRestaurant(restaurantId);
         allow delete: if false;
       }
+
+      match /inventoryProducts/{inventoryProductId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create, update, delete: if false;
+      }
+
+      match /products/{productId} {
+        allow read, delete: if sameRestaurant(restaurantId);
+        allow create, update: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+      }
     }
 
     // TABLES

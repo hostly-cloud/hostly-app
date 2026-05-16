@@ -6,16 +6,19 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   updateDoc,
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
+  type Unsubscribe,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
+import { auth, db } from "@/lib/firebase/client";
 import {
   deleteProductImageAtPath,
   uploadProductImage,
@@ -32,6 +35,49 @@ export type ProductWrite = {
   preparationArea: string;
 };
 
+export type ProductInventoryDocument = {
+  enabled: boolean;
+  unit: string;
+  currentStock: number | null;
+  minimumStock: number | null;
+  averageCost: number | null;
+};
+
+export type ProductRecipeIngredientDocument = {
+  productId?: string;
+  name?: string;
+  unit?: string;
+  quantity?: number;
+  cost?: number;
+};
+
+export type ProductRecipeDocument = {
+  enabled: boolean;
+  ingredients: ProductRecipeIngredientDocument[];
+};
+
+export type ProductDocument = {
+  id: string;
+  name: string;
+  categoryId: string | null;
+  price: number | null;
+  active: boolean;
+  station: string | null;
+  type: string | null;
+  inventory: ProductInventoryDocument;
+  recipe: ProductRecipeDocument;
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+export type ProductInventoryWrite = {
+  name: string | null;
+  unit: string;
+  currentStock: number;
+  minimumStock: number;
+  averageCost: number;
+};
+
 function rethrowWithMessage(e: unknown): never {
   if (e instanceof FirebaseError) {
     throw new Error(`${e.code}: ${e.message}`);
@@ -45,6 +91,18 @@ function readCreatedAtMs(data: Record<string, unknown>): number | undefined {
   if (typeof c === "number" && Number.isFinite(c)) return c;
   if (c instanceof Timestamp) return c.toMillis();
   return undefined;
+}
+
+function readUpdatedAtMs(data: Record<string, unknown>): number | undefined {
+  const c = data.updatedAt;
+  if (typeof c === "number" && Number.isFinite(c)) return c;
+  if (c instanceof Timestamp) return c.toMillis();
+  return undefined;
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return null;
 }
 
 export const UNAUTHORIZED_PRODUCT_ACCESS = "UNAUTHORIZED_PRODUCT_ACCESS";
@@ -348,4 +406,309 @@ export async function deleteProduct(
     await deleteProductImageAtPath(imagePath);
   }
   await deleteDoc(ref);
+}
+
+function centralProductsCollection(restaurantId: string) {
+  return collection(db, "restaurants", restaurantId, "products");
+}
+
+function legacyInventoryProductsCollection(restaurantId: string) {
+  return collection(db, "restaurants", restaurantId, "inventoryProducts");
+}
+
+function defaultInventory(): ProductInventoryDocument {
+  return {
+    enabled: false,
+    unit: "kg",
+    currentStock: null,
+    minimumStock: null,
+    averageCost: null,
+  };
+}
+
+function defaultRecipe(): ProductRecipeDocument {
+  return {
+    enabled: false,
+    ingredients: [],
+  };
+}
+
+function mapCentralDocToProductDocument(
+  snap: QueryDocumentSnapshot<DocumentData>,
+): ProductDocument {
+  const data = snap.data() as Record<string, unknown>;
+  const inventoryRaw =
+    data.inventory && typeof data.inventory === "object"
+      ? (data.inventory as Record<string, unknown>)
+      : {};
+  const recipeRaw =
+    data.recipe && typeof data.recipe === "object"
+      ? (data.recipe as Record<string, unknown>)
+      : {};
+
+  const name =
+    typeof data.name === "string" && data.name.trim() !== ""
+      ? data.name.trim()
+      : typeof data.nombre === "string" && data.nombre.trim() !== ""
+        ? data.nombre.trim()
+        : "Sin nombre";
+  const station =
+    typeof data.station === "string" && data.station.trim() !== ""
+      ? data.station.trim()
+      : typeof data.preparationArea === "string" && data.preparationArea.trim() !== ""
+        ? data.preparationArea.trim()
+        : null;
+  const categoryId =
+    typeof data.categoryId === "string" && data.categoryId.trim() !== ""
+      ? data.categoryId.trim()
+      : null;
+  const type =
+    typeof data.type === "string" && data.type.trim() !== ""
+      ? data.type.trim()
+      : null;
+  const active = typeof data.active === "boolean" ? data.active : true;
+  const price =
+    readFiniteNumber(data.price) ??
+    readFiniteNumber(data.precio) ??
+    null;
+
+  const unit =
+    typeof inventoryRaw.unit === "string" && inventoryRaw.unit.trim() !== ""
+      ? inventoryRaw.unit.trim()
+      : "kg";
+  const ingredients = Array.isArray(recipeRaw.ingredients)
+    ? (recipeRaw.ingredients as ProductRecipeIngredientDocument[])
+    : [];
+
+  return {
+    id: snap.id,
+    name,
+    categoryId,
+    price,
+    active,
+    station,
+    type,
+    inventory: {
+      enabled: inventoryRaw.enabled === true,
+      unit,
+      currentStock: readFiniteNumber(inventoryRaw.currentStock),
+      minimumStock: readFiniteNumber(inventoryRaw.minimumStock),
+      averageCost: readFiniteNumber(inventoryRaw.averageCost),
+    },
+    recipe: {
+      enabled: recipeRaw.enabled === true,
+      ingredients,
+    },
+    createdAt: readCreatedAtMs(data),
+    updatedAt: readUpdatedAtMs(data),
+  };
+}
+
+export function listenCentralProducts(
+  restaurantId: string,
+  onData: (items: ProductDocument[]) => void,
+  onListenError?: (error: unknown) => void,
+): Unsubscribe {
+  const rid = restaurantId.trim();
+  if (!rid || !auth.currentUser) {
+    onData([]);
+    return () => {};
+  }
+
+  return onSnapshot(
+    query(centralProductsCollection(rid)),
+    (snap) => {
+      const list = snap.docs.map(mapCentralDocToProductDocument);
+      list.sort((a, b) =>
+        a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
+      );
+      onData(list);
+    },
+    (error) => {
+      onListenError?.(error);
+      onData([]);
+    },
+  );
+}
+
+function mapLegacyInventoryDocToProductDocument(
+  snap: QueryDocumentSnapshot<DocumentData>,
+): ProductDocument {
+  const data = snap.data() as Record<string, unknown>;
+  const name =
+    typeof data.nombre === "string" && data.nombre.trim() !== ""
+      ? data.nombre.trim()
+      : "Sin nombre";
+  const unit =
+    typeof data.unidad === "string" && data.unidad.trim() !== ""
+      ? data.unidad.trim()
+      : "kg";
+
+  return {
+    id: snap.id,
+    name,
+    categoryId: null,
+    price: null,
+    active: true,
+    station: null,
+    type: null,
+    inventory: {
+      enabled: true,
+      unit,
+      currentStock: readFiniteNumber(data.stock_actual),
+      minimumStock: readFiniteNumber(data.stock_minimo),
+      averageCost: readFiniteNumber(data.coste_unitario),
+    },
+    recipe: defaultRecipe(),
+  };
+}
+
+export function listenProductsForInventory(
+  restaurantId: string,
+  onData: (items: ProductDocument[]) => void,
+  onListenError?: (error: unknown) => void,
+): Unsubscribe {
+  const rid = restaurantId.trim();
+  if (!rid || !auth.currentUser) {
+    onData([]);
+    return () => {};
+  }
+
+  let centralItems: ProductDocument[] = [];
+  let legacyItems: ProductDocument[] = [];
+  let centralReady = false;
+  let legacyReady = false;
+
+  const emit = () => {
+    if (!centralReady || !legacyReady) return;
+    const merged = new Map<string, ProductDocument>();
+    const centralIds = new Set(centralItems.map((item) => item.id));
+    for (const item of legacyItems) {
+      if (!centralIds.has(item.id)) merged.set(item.id, item);
+    }
+    for (const item of centralItems) {
+      if (item.inventory.enabled) merged.set(item.id, item);
+    }
+    const list = [...merged.values()];
+    list.sort((a, b) =>
+      a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
+    );
+    onData(list);
+  };
+
+  const unsubs: Unsubscribe[] = [];
+  unsubs.push(
+    onSnapshot(
+      query(centralProductsCollection(rid)),
+      (snap) => {
+        centralItems = snap.docs.map(mapCentralDocToProductDocument);
+        centralReady = true;
+        emit();
+      },
+      (error) => {
+        onListenError?.(error);
+        centralItems = [];
+        centralReady = true;
+        emit();
+      },
+    ),
+  );
+  unsubs.push(
+    onSnapshot(
+      query(legacyInventoryProductsCollection(rid)),
+      (snap) => {
+        legacyItems = snap.docs.map(mapLegacyInventoryDocToProductDocument);
+        legacyReady = true;
+        emit();
+      },
+      (error) => {
+        onListenError?.(error);
+        legacyItems = [];
+        legacyReady = true;
+        emit();
+      },
+    ),
+  );
+
+  return () => {
+    for (const unsub of unsubs) unsub();
+  };
+}
+
+function centralInventoryPayload(
+  restaurantId: string,
+  payload: ProductInventoryWrite,
+): DocumentData {
+  const name = payload.name?.trim() || "Sin nombre";
+  return {
+    restaurantId,
+    name,
+    active: true,
+    inventory: {
+      enabled: true,
+      unit: payload.unit.trim() || "kg",
+      currentStock: payload.currentStock,
+      minimumStock: payload.minimumStock,
+      averageCost: payload.averageCost,
+    },
+    recipe: defaultRecipe(),
+    updatedAt: serverTimestamp(),
+  } as DocumentData;
+}
+
+export async function upsertProductInventory(
+  restaurantId: string,
+  productId: string | null,
+  payload: ProductInventoryWrite,
+): Promise<string> {
+  const rid = restaurantId.trim();
+  if (!rid) throw new Error("upsertProductInventory: restaurantId no disponible");
+
+  try {
+    if (productId?.trim()) {
+      const id = productId.trim();
+      await setDoc(
+        doc(db, "restaurants", rid, "products", id),
+        centralInventoryPayload(rid, payload),
+        { merge: true },
+      );
+      return id;
+    }
+
+    const ref = doc(centralProductsCollection(rid));
+    await setDoc(ref, {
+      ...centralInventoryPayload(rid, payload),
+      createdAt: serverTimestamp(),
+    });
+    return ref.id;
+  } catch (e) {
+    rethrowWithMessage(e);
+  }
+}
+
+export async function disableProductInventory(
+  restaurantId: string,
+  productId: string,
+): Promise<void> {
+  const rid = restaurantId.trim();
+  const id = productId.trim();
+  if (!rid) throw new Error("disableProductInventory: restaurantId no disponible");
+  if (!id) throw new Error("disableProductInventory: productId no disponible");
+
+  try {
+    await setDoc(
+      doc(db, "restaurants", rid, "products", id),
+      {
+        restaurantId: rid,
+        inventory: {
+          ...defaultInventory(),
+          enabled: false,
+        },
+        updatedAt: serverTimestamp(),
+      } as DocumentData,
+      { merge: true },
+    );
+  } catch (e) {
+    rethrowWithMessage(e);
+  }
 }
