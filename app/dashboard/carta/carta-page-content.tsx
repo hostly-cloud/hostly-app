@@ -9516,30 +9516,30 @@ export function CartaPageContent({
   flex: 0 1 auto !important;
   min-height: 0 !important;
   max-height: 40dvh !important;
-  padding: 4px !important;
-  border-radius: 9px !important;
+  padding: 3px !important;
+  border-radius: 8px !important;
   overflow: hidden !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-top-shell {
-  gap: 2px !important;
+  gap: 1px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-top-toolbar {
-  gap: 3px !important;
+  gap: 2px !important;
   min-height: 0 !important;
   align-items: center !important;
   padding: 0 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-aside-meta-row {
   min-height: 0 !important;
-  gap: 3px !important;
+  gap: 2px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-active-mesa {
   padding: 0 !important;
   line-height: 1.05 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-top-grid {
-  min-height: 24px !important;
-  column-gap: 4px !important;
+  min-height: 21px !important;
+  column-gap: 3px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-cell--left {
   margin-left: 0 !important;
@@ -9552,35 +9552,40 @@ export function CartaPageContent({
   gap: 4px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline {
-  font-size: 15px !important;
+  font-size: 14px !important;
   line-height: 1 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline-time {
   font-size: 10px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-to-map-btn {
-  min-height: 22px !important;
-  padding: 3px 7px !important;
-  border-radius: 8px !important;
-  font-size: 10px !important;
+  min-height: 18px !important;
+  max-width: 54px !important;
+  padding: 2px 4px !important;
+  border-radius: 7px !important;
+  font-size: 9px !important;
   line-height: 1 !important;
   box-shadow: none !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  opacity: 0.78 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-header-compact {
-  gap: 3px !important;
-  margin-top: 1px !important;
+  gap: 1px !important;
+  margin-top: 0 !important;
   min-height: 0 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-header-compact .carta-estados,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row {
-  gap: 2px !important;
+  gap: 1px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row span,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row div,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row button {
   font-size: 8px !important;
-  padding: 1px 3px !important;
-  min-height: 16px !important;
+  padding: 1px 2px !important;
+  min-height: 14px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales-compact.carta-comensales--pill {
   height: 24px !important;
@@ -9609,7 +9614,7 @@ export function CartaPageContent({
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-aside-scroll {
   flex: 0 1 auto !important;
   min-height: 0 !important;
-  max-height: 20dvh !important;
+  max-height: 19dvh !important;
   overflow-y: auto !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-aside-scroll > div[style*="padding: 28px"] {
@@ -9714,7 +9719,7 @@ export function CartaPageContent({
   flex: 0 0 auto !important;
   min-height: 0 !important;
   height: auto !important;
-  padding: 3px !important;
+  padding: 0 !important;
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
@@ -9738,14 +9743,14 @@ export function CartaPageContent({
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  min-height: 28px !important;
-  max-height: 36px !important;
-  padding: 5px 8px !important;
-  border-radius: 8px !important;
-  background: rgba(255, 255, 255, 0.52) !important;
-  border: 1px solid rgba(148, 163, 184, 0.12) !important;
+  min-height: 24px !important;
+  max-height: 30px !important;
+  padding: 3px 6px !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  border: 0 !important;
   color: var(--hostly-ink-muted) !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-current-cat-title {
   margin: 0 0 3px !important;
@@ -13418,7 +13423,8 @@ export function CartaPageContent({
               {!showAuthSpinner &&
                 !showProductsSpinner &&
                 !error &&
-                products.length === 0 && (
+                products.length === 0 &&
+                visibleOrderLines.length > 0 && (
                   <div
                     className="carta-products-empty-state"
                     style={{
@@ -13437,7 +13443,8 @@ export function CartaPageContent({
                 !showProductsSpinner &&
                 !error &&
                 products.length > 0 &&
-                !hasVisibleProductsForCurrentMenu && (
+                !hasVisibleProductsForCurrentMenu &&
+                visibleOrderLines.length > 0 && (
                   <div
                     className="carta-products-empty-state"
                     style={{
