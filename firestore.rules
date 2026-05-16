@@ -66,9 +66,7 @@ service cloud.firestore {
       }
 
       match /products/{productId} {
-        allow read, delete: if sameRestaurant(restaurantId);
-        allow create, update: if sameRestaurant(restaurantId)
-          && request.resource.data.restaurantId == restaurantId;
+        allow read, write: if sameRestaurant(restaurantId);
       }
     }
 

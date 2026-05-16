@@ -37,10 +37,16 @@ export type ProductWrite = {
 
 export type ProductInventoryDocument = {
   enabled: boolean;
-  unit: string;
-  currentStock: number | null;
-  minimumStock: number | null;
-  averageCost: number | null;
+  unit: "kg" | "g" | "l" | "ml" | "ud";
+  currentStock: number;
+  minStock: number;
+  costPerUnit: number;
+  supplierName?: string;
+  /**
+   * Future-ready inventory image URL/path. Upload/AI photo ingestion is not
+   * implemented in this phase; this field only reserves the product contract.
+   */
+  image?: string;
 };
 
 export type ProductRecipeIngredientDocument = {
@@ -72,10 +78,15 @@ export type ProductDocument = {
 
 export type ProductInventoryWrite = {
   name: string | null;
-  unit: string;
+  categoryId?: string | null;
+  station?: string | null;
+  active?: boolean;
+  unit: "kg" | "g" | "l" | "ml" | "ud" | string;
   currentStock: number;
-  minimumStock: number;
-  averageCost: number;
+  minStock: number;
+  costPerUnit: number;
+  supplierName?: string;
+  image?: string;
 };
 
 function rethrowWithMessage(e: unknown): never {
@@ -103,6 +114,24 @@ function readUpdatedAtMs(data: Record<string, unknown>): number | undefined {
 function readFiniteNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   return null;
+}
+
+function readFiniteNumberWithDefault(value: unknown, fallback = 0): number {
+  const n = readFiniteNumber(value);
+  return n == null ? fallback : n;
+}
+
+function normalizeInventoryUnit(value: unknown): ProductInventoryDocument["unit"] {
+  if (
+    value === "kg" ||
+    value === "g" ||
+    value === "l" ||
+    value === "ml" ||
+    value === "ud"
+  ) {
+    return value;
+  }
+  return "ud";
 }
 
 export const UNAUTHORIZED_PRODUCT_ACCESS = "UNAUTHORIZED_PRODUCT_ACCESS";
@@ -419,10 +448,10 @@ function legacyInventoryProductsCollection(restaurantId: string) {
 function defaultInventory(): ProductInventoryDocument {
   return {
     enabled: false,
-    unit: "kg",
-    currentStock: null,
-    minimumStock: null,
-    averageCost: null,
+    unit: "ud",
+    currentStock: 0,
+    minStock: 0,
+    costPerUnit: 0,
   };
 }
 
@@ -430,6 +459,29 @@ function defaultRecipe(): ProductRecipeDocument {
   return {
     enabled: false,
     ingredients: [],
+  };
+}
+
+function normalizeProductInventory(
+  raw: Record<string, unknown>,
+): ProductInventoryDocument {
+  const supplierName =
+    typeof raw.supplierName === "string" && raw.supplierName.trim() !== ""
+      ? raw.supplierName.trim()
+      : undefined;
+  const image =
+    typeof raw.image === "string" && raw.image.trim() !== ""
+      ? raw.image.trim()
+      : undefined;
+
+  return {
+    enabled: raw.enabled === true,
+    unit: normalizeInventoryUnit(raw.unit),
+    currentStock: readFiniteNumberWithDefault(raw.currentStock),
+    minStock: readFiniteNumberWithDefault(raw.minStock ?? raw.minimumStock),
+    costPerUnit: readFiniteNumberWithDefault(raw.costPerUnit ?? raw.averageCost),
+    ...(supplierName ? { supplierName } : {}),
+    ...(image ? { image } : {}),
   };
 }
 
@@ -472,10 +524,6 @@ function mapCentralDocToProductDocument(
     readFiniteNumber(data.precio) ??
     null;
 
-  const unit =
-    typeof inventoryRaw.unit === "string" && inventoryRaw.unit.trim() !== ""
-      ? inventoryRaw.unit.trim()
-      : "kg";
   const ingredients = Array.isArray(recipeRaw.ingredients)
     ? (recipeRaw.ingredients as ProductRecipeIngredientDocument[])
     : [];
@@ -488,13 +536,7 @@ function mapCentralDocToProductDocument(
     active,
     station,
     type,
-    inventory: {
-      enabled: inventoryRaw.enabled === true,
-      unit,
-      currentStock: readFiniteNumber(inventoryRaw.currentStock),
-      minimumStock: readFiniteNumber(inventoryRaw.minimumStock),
-      averageCost: readFiniteNumber(inventoryRaw.averageCost),
-    },
+    inventory: normalizeProductInventory(inventoryRaw),
     recipe: {
       enabled: recipeRaw.enabled === true,
       ingredients,
@@ -542,7 +584,7 @@ function mapLegacyInventoryDocToProductDocument(
   const unit =
     typeof data.unidad === "string" && data.unidad.trim() !== ""
       ? data.unidad.trim()
-      : "kg";
+      : "ud";
 
   return {
     id: snap.id,
@@ -554,10 +596,10 @@ function mapLegacyInventoryDocToProductDocument(
     type: null,
     inventory: {
       enabled: true,
-      unit,
-      currentStock: readFiniteNumber(data.stock_actual),
-      minimumStock: readFiniteNumber(data.stock_minimo),
-      averageCost: readFiniteNumber(data.coste_unitario),
+      unit: normalizeInventoryUnit(unit),
+      currentStock: readFiniteNumberWithDefault(data.stock_actual),
+      minStock: readFiniteNumberWithDefault(data.stock_minimo),
+      costPerUnit: readFiniteNumberWithDefault(data.coste_unitario),
     },
     recipe: defaultRecipe(),
   };
@@ -640,16 +682,24 @@ function centralInventoryPayload(
   payload: ProductInventoryWrite,
 ): DocumentData {
   const name = payload.name?.trim() || "Sin nombre";
+  const categoryId = payload.categoryId?.trim() || null;
+  const station = payload.station?.trim() || null;
   return {
     restaurantId,
     name,
-    active: true,
+    categoryId,
+    station,
+    active: payload.active ?? true,
     inventory: {
       enabled: true,
-      unit: payload.unit.trim() || "kg",
+      unit: normalizeInventoryUnit(payload.unit),
       currentStock: payload.currentStock,
-      minimumStock: payload.minimumStock,
-      averageCost: payload.averageCost,
+      minStock: payload.minStock,
+      costPerUnit: payload.costPerUnit,
+      ...(payload.supplierName?.trim()
+        ? { supplierName: payload.supplierName.trim() }
+        : {}),
+      ...(payload.image?.trim() ? { image: payload.image.trim() } : {}),
     },
     recipe: defaultRecipe(),
     updatedAt: serverTimestamp(),
