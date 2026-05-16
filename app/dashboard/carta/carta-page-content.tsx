@@ -4329,6 +4329,10 @@ export function CartaPageContent({
       }, {}),
     [filteredProducts],
   );
+  const hasVisibleProductsForCurrentMenu = useMemo(
+    () => Object.values(groupedProducts).some((items) => items.length > 0),
+    [groupedProducts],
+  );
 
   const showAuthSpinner = !authReady;
   const showProductsSpinner = authReady && productsLoading && !error;
@@ -9298,9 +9302,10 @@ export function CartaPageContent({
     flex-shrink: 0;
   }
   .carta-main.carta-productos {
-    height: 42vh !important;
-    min-height: 300px !important;
-    max-height: 42vh !important;
+    flex: 1 1 0% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
@@ -9323,10 +9328,13 @@ export function CartaPageContent({
   }
 
   .carta-products-scroll {
-    overflow: visible !important;
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
     height: auto !important;
     max-height: none !important;
     min-height: 0 !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
   .carta-product-card {
@@ -9495,9 +9503,196 @@ export function CartaPageContent({
 /* === Mobile + embedded en Operación: viewport locked, productos con
    scroll propio para evitar el clip por overflow:hidden de los padres === */
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-layout {
-  flex: 1 1 auto !important;
+  flex: 1 1 0% !important;
   min-height: 0 !important;
   overflow: hidden !important;
+  gap: 3px !important;
+  height: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-aside,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda {
+  flex: 0 1 auto !important;
+  min-height: 0 !important;
+  max-height: 40dvh !important;
+  padding: 4px !important;
+  border-radius: 9px !important;
+  overflow: hidden !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-top-shell {
+  gap: 2px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-top-toolbar {
+  gap: 3px !important;
+  min-height: 0 !important;
+  align-items: center !important;
+  padding: 0 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-aside-meta-row {
+  min-height: 0 !important;
+  gap: 3px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-active-mesa {
+  padding: 0 !important;
+  line-height: 1.05 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-top-grid {
+  min-height: 24px !important;
+  column-gap: 4px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-cell--left {
+  margin-left: 0 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-cell--center {
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-cell--right {
+  gap: 4px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline {
+  font-size: 15px !important;
+  line-height: 1 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline-time {
+  font-size: 10px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-to-map-btn {
+  min-height: 22px !important;
+  padding: 3px 7px !important;
+  border-radius: 8px !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-header-compact {
+  gap: 3px !important;
+  margin-top: 1px !important;
+  min-height: 0 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-header-compact .carta-estados,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row {
+  gap: 2px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row span,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row div,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row button {
+  font-size: 8px !important;
+  padding: 1px 3px !important;
+  min-height: 16px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales-compact.carta-comensales--pill {
+  height: 24px !important;
+  min-height: 24px !important;
+  max-width: 132px !important;
+  gap: 2px !important;
+  padding: 1px 4px !important;
+  border-radius: 8px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales-label {
+  font-size: 9px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales-count {
+  font-size: 11px !important;
+  min-width: 12px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales-compact.carta-comensales--pill > button {
+  width: 17px !important;
+  height: 15px !important;
+  min-width: 17px !important;
+  min-height: 15px !important;
+  max-height: 15px !important;
+  border-radius: 5px !important;
+  font-size: 10px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-aside-scroll {
+  flex: 0 1 auto !important;
+  min-height: 0 !important;
+  max-height: 20dvh !important;
+  overflow-y: auto !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-aside-scroll > div[style*="padding: 28px"] {
+  padding: 10px 8px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-group {
+  margin-bottom: 4px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-group-title {
+  margin: 2px 0 2px !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line {
+  min-height: 36px !important;
+  padding: 3px 6px !important;
+  border-radius: 6px !important;
+  gap: 4px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line.is-pending {
+  padding: 3px 6px 3px 11px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line-grid {
+  column-gap: 4px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-name {
+  font-size: 12px !important;
+  line-height: 1.05 !important;
+  max-width: 132px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line-pricing,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-pu,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-pu-suffix {
+  font-size: 9px !important;
+  line-height: 1 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-line-course-badge {
+  font-size: 8px !important;
+  padding: 1px 4px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-qty-controls {
+  gap: 2px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-qty-btn {
+  width: 23px !important;
+  height: 23px !important;
+  min-width: 23px !important;
+  min-height: 23px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-payment-dock {
+  padding-top: 3px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-payment-dock-stack {
+  grid-template-columns: minmax(0, 1fr) 96px !important;
+  gap: 4px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-button {
+  min-height: 42px !important;
+  padding: 7px 10px !important;
+  border-radius: 10px !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%) !important;
+  color: #ffffff !important;
+  border-color: rgba(37, 99, 235, 0.36) !important;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.22) !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-payment-dock-total {
+  min-height: 42px !important;
+  padding: 5px 7px !important;
+  border-radius: 10px !important;
+  background: rgba(15, 23, 42, 0.08) !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-payment-dock-total-label {
+  font-size: 8px !important;
+  color: rgba(15, 23, 42, 0.48) !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-payment-dock-total-value,
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-payment-dock-total .total-amount {
+  font-size: 16px !important;
+  color: #0f172a !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main {
   flex: 1 1 auto !important;
@@ -9507,10 +9702,69 @@ export function CartaPageContent({
   display: flex !important;
   flex-direction: column !important;
 }
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos {
+  flex: 1 1 0% !important;
+  min-height: 88px !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 4px !important;
+  border-radius: 9px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos[data-products-empty="true"] {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 3px !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-mobile-products-scroll-shell {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-scroll {
   flex: 1 1 auto !important;
   min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos[data-products-empty="true"] .carta-products-scroll {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
   overflow: visible !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-empty-state {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 28px !important;
+  max-height: 36px !important;
+  padding: 5px 8px !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.52) !important;
+  border: 1px solid rgba(148, 163, 184, 0.12) !important;
+  color: var(--hostly-ink-muted) !important;
+  font-size: 11px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-current-cat-title {
+  margin: 0 0 3px !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-cats-wrap {
+  gap: 4px !important;
+  padding-bottom: 4px !important;
+  margin-bottom: 5px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-cats-wrap button {
+  min-height: 26px !important;
+  min-width: 68px !important;
+  padding: 5px 8px !important;
+  font-size: 10px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-main.carta-productos[data-products-empty="true"] .carta-current-cat-title {
+  display: none !important;
 }
 
 @keyframes fade-in {
@@ -13007,6 +13261,14 @@ export function CartaPageContent({
         {viewMode === "normal" && (
           <main
             className="carta-main carta-productos"
+            data-products-empty={
+              !showAuthSpinner &&
+              !showProductsSpinner &&
+              !error &&
+              !hasVisibleProductsForCurrentMenu
+                ? "true"
+                : undefined
+            }
             style={{
               padding: 12,
               boxSizing: "border-box",
@@ -13158,6 +13420,7 @@ export function CartaPageContent({
                 !error &&
                 products.length === 0 && (
                   <div
+                    className="carta-products-empty-state"
                     style={{
                       fontSize: 14,
                       opacity: 0.7,
@@ -13173,7 +13436,26 @@ export function CartaPageContent({
               {!showAuthSpinner &&
                 !showProductsSpinner &&
                 !error &&
-                products.length > 0 && (
+                products.length > 0 &&
+                !hasVisibleProductsForCurrentMenu && (
+                  <div
+                    className="carta-products-empty-state"
+                    style={{
+                      fontSize: 13,
+                      opacity: 0.78,
+                      padding: 10,
+                      textAlign: "center",
+                      margin: 0,
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    No hay productos visibles en esta categoría
+                  </div>
+                )}
+              {!showAuthSpinner &&
+                !showProductsSpinner &&
+                !error &&
+                hasVisibleProductsForCurrentMenu && (
                   <div>
                     {Object.keys(groupedProducts)
                       .sort((a, b) => a.localeCompare(b, "es"))
