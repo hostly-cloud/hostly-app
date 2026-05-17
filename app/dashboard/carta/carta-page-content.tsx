@@ -1408,6 +1408,14 @@ export function CartaPageContent({
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
 
+    function resolveReservationMapTileId(rawTableId: string): string {
+      const tid = String(rawTableId ?? "").trim();
+      if (!tid) return "";
+      const main = groupedTablesMapHandlers?.resolveMainTableId?.(tid);
+      const out = String(main ?? tid).trim();
+      return out || tid;
+    }
+
     function toMinutes(time: string): number {
       const m = /^(\d{1,2}):(\d{2})$/.exec(String(time ?? "").trim());
       if (!m) return 0;
@@ -1421,7 +1429,9 @@ export function CartaPageContent({
     for (const r of todayReservations) {
       const tid = typeof r.tableId === "string" ? r.tableId.trim() : "";
       if (!tid) continue;
-      (groups[tid] ||= []).push(r);
+      const mapKey = resolveReservationMapTileId(tid);
+      if (!mapKey) continue;
+      (groups[mapKey] ||= []).push(r);
     }
     for (const tableId of Object.keys(groups)) {
       const list = groups[tableId] ?? [];
@@ -1437,7 +1447,7 @@ export function CartaPageContent({
       if (chosen) by[tableId] = chosen;
     }
     return by;
-  }, [todayReservations]);
+  }, [todayReservations, groupedTablesMapHandlers]);
 
   const reservationPressureByTableId = useMemo(() => {
     const by: Record<
@@ -1446,6 +1456,14 @@ export function CartaPageContent({
     > = {};
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    function resolveReservationMapTileId(rawTableId: string): string {
+      const tid = String(rawTableId ?? "").trim();
+      if (!tid) return "";
+      const main = groupedTablesMapHandlers?.resolveMainTableId?.(tid);
+      const out = String(main ?? tid).trim();
+      return out || tid;
+    }
 
     function toMinutes(time: string): number {
       const m = /^(\d{1,2}):(\d{2})$/.exec(String(time ?? "").trim());
@@ -1472,7 +1490,9 @@ export function CartaPageContent({
     for (const r of rows) {
       const tid = typeof r.tableId === "string" ? r.tableId.trim() : "";
       if (!tid) continue;
-      (groups[tid] ||= []).push(r);
+      const mapKey = resolveReservationMapTileId(tid);
+      if (!mapKey) continue;
+      (groups[mapKey] ||= []).push(r);
     }
 
     for (const tableId of Object.keys(groups)) {
@@ -1500,7 +1520,7 @@ export function CartaPageContent({
       }
     }
     return by;
-  }, [todayReservations]);
+  }, [todayReservations, groupedTablesMapHandlers]);
 
   const reservationPressureCounts = useMemo(() => {
     let upcoming = 0;

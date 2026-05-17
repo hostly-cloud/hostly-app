@@ -77,6 +77,15 @@ export type ElementMapCardProps = {
   /** Mesa agrupada (principal) con selección activa en el mapa: sombra y ligera elevación. */
   isMapGroupedSelectionElevated?: boolean;
   onRequestSeparateGroupedTables?: (mainTableId: string) => void;
+  /**
+   * Solo plano vivo Reservas Hostly: re-tinte de superficie por estado de reserva
+   * cuando la mesa no está ocupada por comanda (`busy === false`).
+   */
+  reservasLiveTone?: "booked" | "seated" | "completed" | "no_show" | null;
+  /**
+   * Con comanda activa: mini chip (p. ej. hora de reserva booked pendiente).
+   */
+  reservasLiveFollowUpHint?: string | null;
 };
 
 type MapBaseSurfaceClass =
@@ -97,6 +106,32 @@ const SURFACE_TOKENS: Record<
 
 const LONG_PRESS_GROUP_MS = 1000;
 const LONG_PRESS_MOVE_PX_SQ = 64;
+
+const RESERVAS_LIVE_SKINS: Record<
+  "booked" | "seated" | "completed" | "no_show",
+  { background: string; color: string; border: string }
+> = {
+  booked: {
+    background: "linear-gradient(180deg, #eef2ff 0%, #e8e0f5 100%)",
+    color: "#312e81",
+    border: "1px solid rgba(99, 102, 241, 0.32)",
+  },
+  seated: {
+    background: "linear-gradient(180deg, #e0f2fe 0%, #dbeafe 100%)",
+    color: "#0c4a6e",
+    border: "1px solid rgba(14, 116, 144, 0.42)",
+  },
+  completed: {
+    background: "linear-gradient(180deg, #f1f5f9 0%, #e8edf3 100%)",
+    color: "#475569",
+    border: "1px solid rgba(100, 116, 139, 0.28)",
+  },
+  no_show: {
+    background: "linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)",
+    color: "#9f1239",
+    border: "1px solid rgba(225, 29, 72, 0.28)",
+  },
+};
 
 const ALERT_DOT_COLORS: Record<MapAlertDotClass, string> = {
   critical: "#b94c46",
@@ -140,8 +175,27 @@ function resolveMapTableStatusLabel(
     | { type: "upcoming" | "late"; time: string }
     | null
     | undefined,
-): "LIBRE" | "RESERVADA" | "OCUPADA" | "RETRASADA" {
+  reservasLiveTone?:
+    | "booked"
+    | "seated"
+    | "completed"
+    | "no_show"
+    | null
+    | undefined,
+):
+  | "LIBRE"
+  | "RESERVADA"
+  | "OCUPADA"
+  | "RETRASADA"
+  | "RESERVA"
+  | "EN SALA"
+  | "CERRADA"
+  | "NO SHOW" {
   if (reservationPressure?.type === "late") return "RETRASADA";
+  if (!busy && reservasLiveTone === "seated") return "EN SALA";
+  if (!busy && reservasLiveTone === "completed") return "CERRADA";
+  if (!busy && reservasLiveTone === "no_show") return "NO SHOW";
+  if (!busy && reservasLiveTone === "booked") return "RESERVA";
   if (!busy && reservationBadge) return "RESERVADA";
   if (busy) return "OCUPADA";
   return "LIBRE";
@@ -202,6 +256,8 @@ export const ElementCard = memo(
     isMapGroupedPrimary = false,
     isMapGroupedSelectionElevated = false,
     onRequestSeparateGroupedTables,
+    reservasLiveTone = null,
+    reservasLiveFollowUpHint = null,
   }: ElementMapCardProps) {
     const joinDragStateRef = useRef<{
       startX: number;
@@ -627,6 +683,12 @@ export const ElementCard = memo(
     );
 
     const skin = SURFACE_TOKENS[baseSurface];
+
+    const reservasLiveSkin =
+      !busy && reservasLiveTone
+        ? RESERVAS_LIVE_SKINS[reservasLiveTone]
+        : null;
+    const effectiveSkin = reservasLiveSkin ?? skin;
     const tableNumber = useMemo(
       () => tableNumberForDisplay(table, tableId),
       [table, tableId],
@@ -650,8 +712,13 @@ export const ElementCard = memo(
 
     const statusLabel = useMemo(
       () =>
-        resolveMapTableStatusLabel(busy, reservationBadge, reservationPressure),
-      [busy, reservationBadge, reservationPressure],
+        resolveMapTableStatusLabel(
+          busy,
+          reservationBadge,
+          reservationPressure,
+          reservasLiveTone,
+        ),
+      [busy, reservationBadge, reservationPressure, reservasLiveTone],
     );
 
     const reservationTimeDisplay = useMemo(() => {
@@ -1000,10 +1067,11 @@ export const ElementCard = memo(
           transform,
           transition,
           borderRadius: tileBorderRadius,
-          background: skin.background,
-          color: skin.color,
-          border:
-            baseSurface === "hostly-map-table--free"
+          background: effectiveSkin.background,
+          color: effectiveSkin.color,
+          border: reservasLiveSkin
+            ? reservasLiveSkin.border
+            : baseSurface === "hostly-map-table--free"
               ? "1px solid rgba(47, 93, 60, 0.22)"
               : baseSurface === "hostly-map-table--occupied"
                 ? "1px solid rgba(45, 82, 97, 0.24)"
@@ -1136,6 +1204,36 @@ export const ElementCard = memo(
             }}
           />
         ) : null}
+        {busy && reservasLiveFollowUpHint ? (
+          <span
+            aria-hidden
+            data-hostly-reservas-followup-hint
+            style={{
+              position: "absolute",
+              bottom: 4,
+              left: "50%",
+              transform: "translateX(-50%)",
+              maxWidth: "calc(100% - 8px)",
+              padding: "2px 6px",
+              borderRadius: 6,
+              fontSize: 9,
+              fontWeight: 750,
+              letterSpacing: "0.02em",
+              lineHeight: 1.2,
+              color: "#312e81",
+              background: "rgba(255,255,255,0.94)",
+              border: "1px solid rgba(99, 102, 241, 0.35)",
+              boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)",
+              pointerEvents: "none",
+              zIndex: 4,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {reservasLiveFollowUpHint}
+          </span>
+        ) : null}
         <div
           style={{
             display: "flex",
@@ -1255,12 +1353,17 @@ export const ElementCard = memo(
       return false;
     if ((prev.isMapGroupedPrimary ?? false) !== (next.isMapGroupedPrimary ?? false))
       return false;
-    if (
-      (prev.isMapGroupedSelectionElevated ?? false) !==
-      (next.isMapGroupedSelectionElevated ?? false)
-    )
+    if ((prev.isMapGroupedSelectionElevated ?? false) !==
+      (next.isMapGroupedSelectionElevated ?? false))
       return false;
     if (prev.onRequestSeparateGroupedTables !== next.onRequestSeparateGroupedTables)
+      return false;
+    if ((prev.reservasLiveTone ?? null) !== (next.reservasLiveTone ?? null))
+      return false;
+    if (
+      (prev.reservasLiveFollowUpHint ?? "") !==
+      (next.reservasLiveFollowUpHint ?? "")
+    )
       return false;
     return true;
   },

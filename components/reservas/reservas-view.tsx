@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
@@ -15,6 +15,7 @@ import {
   type ReservationStatus,
 } from "@/lib/firestore/reservations";
 import { computeReservationDayMetrics } from "@/lib/reservas/reservation-metrics";
+import { ReservationFloorMapPicker } from "@/components/reservas/reservation-floor-map-picker";
 
 const upcomingRowStyle: CSSProperties = {
   display: "flex",
@@ -159,6 +160,12 @@ export default function ReservasView() {
   const [savingReservation, setSavingReservation] = useState(false);
 
   const [tables, setTables] = useState<Table[]>([]);
+
+  const [floorMapPicker, setFloorMapPicker] = useState<
+    | null
+    | { mode: "create" }
+    | { mode: "edit"; reservationId: string }
+  >(null);
 
   const [draft, setDraft] = useState({
     customerName: "",
@@ -376,31 +383,95 @@ export default function ReservasView() {
     );
   }
 
-  async function handleAssignReservationTable(reservationId: string, tableId: string) {
-    if (!restaurantId || !isFirebaseConfigured) return;
-    const tid = String(tableId ?? "").trim();
-    const table = tid ? tablesOptions.find((t) => t.id === tid) : undefined;
-    setBusy(true);
-    try {
-      if (!table) {
+  const handleAssignReservationTable = useCallback(
+    async (reservationId: string, tableId: string) => {
+      if (!restaurantId || !isFirebaseConfigured) return;
+      const tid = String(tableId ?? "").trim();
+      const table = tid ? tablesOptions.find((t) => t.id === tid) : undefined;
+      setBusy(true);
+      try {
+        if (!table) {
+          await updateReservation(reservationId, {
+            tableId: "",
+            tableLabel: "",
+            zoneId: "",
+            zoneName: "",
+          });
+          return;
+        }
         await updateReservation(reservationId, {
-          tableId: "",
-          tableLabel: "",
-          zoneId: "",
-          zoneName: "",
+          tableId: table.id,
+          tableLabel: table.name,
+          zoneId: table.zoneId ?? "",
+          zoneName: table.zoneName ?? table.zone ?? "",
         });
-        return;
+      } finally {
+        setBusy(false);
       }
-      await updateReservation(reservationId, {
-        tableId: table.id,
-        tableLabel: table.name,
-        zoneId: table.zoneId ?? "",
-        zoneName: table.zoneName ?? table.zone ?? "",
-      });
-    } finally {
-      setBusy(false);
+    },
+    [restaurantId, tablesOptions],
+  );
+
+  const floorMapPickerContext = useMemo(() => {
+    if (!floorMapPicker || !restaurantId) return null;
+    if (floorMapPicker.mode === "create") {
+      return {
+        reservationDateYmd: String(draft.date ?? "").trim(),
+        initialTableId: draft.tableId.trim() || null,
+        excludeReservationId: null as string | null,
+        onConfirm: (payload: {
+          tableId: string;
+          tableLabel: string;
+          zoneId: string;
+          zoneName: string;
+        }) => {
+          setDraft((d) => ({ ...d, tableId: payload.tableId }));
+          setFloorMapPicker(null);
+        },
+      };
     }
-  }
+    const r = reservations.find((x) => x.id === floorMapPicker.reservationId);
+    if (!r) return null;
+    return {
+      reservationDateYmd: String(r.date ?? "").trim(),
+      initialTableId:
+        typeof r.tableId === "string" && r.tableId.trim()
+          ? r.tableId.trim()
+          : null,
+      excludeReservationId: r.id,
+        onConfirm: (payload: {
+          tableId: string;
+          tableLabel: string;
+          zoneId: string;
+          zoneName: string;
+        }) => {
+          void (async () => {
+            try {
+              await handleAssignReservationTable(
+                floorMapPicker.reservationId,
+                payload.tableId,
+              );
+              setFloorMapPicker(null);
+            } catch (e) {
+              console.error(e);
+            }
+          })();
+        },
+    };
+  }, [
+    floorMapPicker,
+    restaurantId,
+    draft.date,
+    draft.tableId,
+    reservations,
+    handleAssignReservationTable,
+  ]);
+
+  useEffect(() => {
+    if (floorMapPicker?.mode !== "edit") return;
+    const exists = reservations.some((r) => r.id === floorMapPicker.reservationId);
+    if (!exists) setFloorMapPicker(null);
+  }, [floorMapPicker, reservations]);
 
   return (
     <div
@@ -725,19 +796,31 @@ export default function ReservasView() {
                       </div>
                       <div className="md:col-span-2">
                         <label style={labelStyle}>Mesa (opcional)</label>
-                        <select
-                          className="hostly-select"
-                          value={draft.tableId}
-                          onChange={(e) => setDraft((d) => ({ ...d, tableId: e.target.value }))}
-                          disabled={savingReservation}
-                        >
-                          <option value="">—</option>
-                          {tablesOptions.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                          <select
+                            className="hostly-select min-w-0 flex-1"
+                            value={draft.tableId}
+                            onChange={(e) =>
+                              setDraft((d) => ({ ...d, tableId: e.target.value }))
+                            }
+                            disabled={savingReservation}
+                          >
+                            <option value="">—</option>
+                            {tablesOptions.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="hostly-button-secondary shrink-0 !min-h-10 whitespace-nowrap sm:self-stretch"
+                            disabled={savingReservation || !restaurantId || !draft.date}
+                            onClick={() => setFloorMapPicker({ mode: "create" })}
+                          >
+                            Elegir en mapa
+                          </button>
+                        </div>
                       </div>
                       <div className="md:col-span-2">
                         <label style={labelStyle}>Notas</label>
@@ -825,19 +908,33 @@ export default function ReservasView() {
 
                       <div>
                         <label style={labelStyle}>Mesa</label>
-                        <select
-                          className="hostly-select"
-                          value={r.tableId ?? ""}
-                          onChange={(e) => void handleAssignReservationTable(r.id, e.target.value)}
-                          disabled={busy}
-                        >
-                          <option value="">Sin mesa</option>
-                          {tablesOptions.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                          <select
+                            className="hostly-select min-w-0 flex-1"
+                            value={r.tableId ?? ""}
+                            onChange={(e) =>
+                              void handleAssignReservationTable(r.id, e.target.value)
+                            }
+                            disabled={busy}
+                          >
+                            <option value="">Sin mesa</option>
+                            {tablesOptions.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="hostly-button-secondary shrink-0 !min-h-10 whitespace-nowrap sm:self-stretch"
+                            disabled={busy || !restaurantId}
+                            onClick={() =>
+                              setFloorMapPicker({ mode: "edit", reservationId: r.id })
+                            }
+                          >
+                            Elegir en mapa
+                          </button>
+                        </div>
                       </div>
 
                       {r.status === "booked" ? (
@@ -906,6 +1003,19 @@ export default function ReservasView() {
           )}
         </div>
       </div>
+
+      {floorMapPicker != null && floorMapPickerContext ? (
+        <ReservationFloorMapPicker
+          open
+          restaurantId={restaurantId}
+          reservationDateYmd={floorMapPickerContext.reservationDateYmd}
+          tables={tables}
+          initialTableId={floorMapPickerContext.initialTableId}
+          excludeReservationId={floorMapPickerContext.excludeReservationId}
+          onClose={() => setFloorMapPicker(null)}
+          onConfirm={floorMapPickerContext.onConfirm}
+        />
+      ) : null}
     </div>
   );
 }
