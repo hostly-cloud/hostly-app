@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -20,91 +19,28 @@ import {
   type ServiceScope,
 } from "@/lib/operacion/service-metrics";
 
-type ChipTone = "blue" | "amber" | "green" | "neutral";
-
-const chipBase: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "baseline",
-  gap: 6,
-  padding: "6px 10px",
-  borderRadius: 10,
-  fontSize: 12,
-  fontWeight: 700,
-  letterSpacing: "-0.01em",
-  whiteSpace: "nowrap",
-};
-
-function chipStyle(tone: ChipTone): CSSProperties {
-  if (tone === "blue") {
-    return {
-      ...chipBase,
-      background: "rgba(49, 95, 125, 0.11)",
-      color: "#315f7d",
-      border: "1px solid rgba(49, 95, 125, 0.22)",
-    };
-  }
-  if (tone === "amber") {
-    return {
-      ...chipBase,
-      background: "rgba(249, 115, 22, 0.16)",
-      color: "#9a5d16",
-      border: "1px solid rgba(249, 115, 22, 0.32)",
-    };
-  }
-  if (tone === "green") {
-    return {
-      ...chipBase,
-      background: "rgba(34, 197, 94, 0.16)",
-      color: "#2f5d3c",
-      border: "1px solid rgba(34, 197, 94, 0.32)",
-    };
-  }
-  return {
-    ...chipBase,
-    background: "rgba(255, 255, 255, 0.64)",
-    color: "#475569",
-    border: "1px solid var(--hostly-line)",
-  };
-}
-
-const chipLabelStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  opacity: 0.85,
-  letterSpacing: "0.02em",
-};
-
-const chipValueStyle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 800,
-  letterSpacing: "-0.01em",
-};
-
-const barStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  flexWrap: "wrap",
-  gap: 8,
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid var(--hostly-line)",
-  background: "rgba(255, 255, 255, 0.72)",
-};
-
-function Chip({
+function MetricKpi({
   label,
   value,
-  tone,
+  variant,
 }: {
   label: string;
   value: string | number;
-  tone: ChipTone;
+  variant: "info" | "warning" | "success" | "neutral";
 }) {
+  const mod =
+    variant === "info"
+      ? "hostly-mobile-kpi--info"
+      : variant === "warning"
+        ? "hostly-mobile-kpi--warning"
+        : variant === "success"
+          ? "hostly-mobile-kpi--success"
+          : "hostly-mobile-kpi--neutral";
   return (
-    <span style={chipStyle(tone)}>
-      <span style={chipLabelStyle}>{label}</span>
-      <span style={chipValueStyle}>{value}</span>
-    </span>
+    <div className={`hostly-mobile-kpi !p-2 ${mod}`}>
+      <div className="hostly-mobile-kpi__label !text-[9px]">{label}</div>
+      <div className="hostly-mobile-kpi__value !mt-0.5 !text-[15px]">{value}</div>
+    </div>
   );
 }
 
@@ -125,7 +61,6 @@ export default function ServiceMetricsBar({
   servidosArchiveToggle,
 }: {
   scope: ServiceScope;
-  /** Cocina: botón secundario para archivo servidos (reemplaza chip estático Servidos). */
   servidosArchiveToggle?: ServidosArchiveToggleProps;
 }) {
   const { restaurantId, ready: authReady, user } = useAuth();
@@ -187,80 +122,55 @@ export default function ServiceMetricsBar({
   }, [orders, scope, matchesOrder]);
 
   return (
-    <div
-      style={{
-        ...barStyle,
-        ...(servidosArchiveToggle
-          ? {
-              width: "100%",
-              flexWrap: "wrap",
-              justifyContent: "flex-start",
-            }
-          : {}),
-      }}
+    <section
+      className="hostly-mobile-section !px-[var(--hostly-mobile-pad-x)] !py-2 md:!py-2"
       aria-label="Métricas de servicio"
     >
-      <Chip label="Enviados" value={metrics.sent} tone="blue" />
-      <Chip label="Preparados" value={metrics.prepared} tone="amber" />
-      {servidosArchiveToggle ? null : (
-        <Chip label="Servidos" value={metrics.served} tone="green" />
-      )}
-      <Chip
-        label="Prep. media"
-        value={formatAvgMinutes(metrics.avgPrepMinutes)}
-        tone="neutral"
-      />
-      <Chip
-        label="Serv. media"
-        value={formatAvgMinutes(metrics.avgServeMinutes)}
-        tone="neutral"
-      />
-      {servidosArchiveToggle ? (
-        <button
-          type="button"
-          aria-expanded={servidosArchiveToggle.open}
-          aria-controls="kds-served-archive-panel"
-          title={
-            servidosArchiveToggle.open
-              ? "Cerrar histórico de servidos"
-              : "Ver histórico de servidos"
-          }
-          onClick={() => servidosArchiveToggle.onToggle()}
-          style={{
-            ...chipStyle("green"),
-            alignItems: "center",
-            marginLeft: "auto",
-            cursor: "pointer",
-            ...(servidosArchiveToggle.open
-              ? {
-                  background: "rgba(34, 197, 94, 0.32)",
-                  border: "1px solid rgba(52, 211, 153, 0.52)",
-                  boxShadow:
-                    "inset 0 1px 0 rgba(255, 255, 255, 0.07)",
-                  color: "#ecfdf5",
-                }
-              : {}),
-          }}
-        >
-          <span style={chipLabelStyle}>Servidos</span>
-          <span style={chipValueStyle}>
-            · {servidosArchiveToggle.count}
-          </span>
-          {servidosArchiveToggle.open ? (
-            <span
-              aria-hidden
-              style={{
-                fontSize: 13,
-                fontWeight: 800,
-                opacity: 0.86,
-                lineHeight: 1,
-              }}
-            >
-              ✕
-            </span>
-          ) : null}
-        </button>
-      ) : null}
-    </div>
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-2">
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+          <MetricKpi label="Enviados" value={metrics.sent} variant="info" />
+          <MetricKpi label="Prep." value={metrics.prepared} variant="warning" />
+          {servidosArchiveToggle ? null : (
+            <MetricKpi label="Servidos" value={metrics.served} variant="success" />
+          )}
+          <MetricKpi
+            label="T prep"
+            value={formatAvgMinutes(metrics.avgPrepMinutes)}
+            variant="neutral"
+          />
+          <MetricKpi
+            label="T serv"
+            value={formatAvgMinutes(metrics.avgServeMinutes)}
+            variant="neutral"
+          />
+        </div>
+        {servidosArchiveToggle ? (
+          <button
+            type="button"
+            aria-expanded={servidosArchiveToggle.open}
+            aria-controls="kds-served-archive-panel"
+            title={
+              servidosArchiveToggle.open
+                ? "Cerrar histórico de servidos"
+                : "Ver histórico de servidos"
+            }
+            onClick={() => servidosArchiveToggle.onToggle()}
+            className={`hostly-button-secondary !h-auto min-h-9 shrink-0 self-center !px-3 !py-2 !text-[13px] sm:self-stretch ${
+              servidosArchiveToggle.open
+                ? "!border-emerald-300 !bg-[var(--hostly-success-soft)] !text-emerald-950"
+                : ""
+            }`}
+          >
+            <span className="font-semibold">Servidos</span>
+            <span className="tabular-nums">· {servidosArchiveToggle.count}</span>
+            {servidosArchiveToggle.open ? (
+              <span className="text-[15px] font-extrabold leading-none opacity-80" aria-hidden>
+                ✕
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+      </div>
+    </section>
   );
 }

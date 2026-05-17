@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Timestamp,
   collection,
@@ -167,26 +168,25 @@ type PriorityTone = {
 function priorityTone(level: PriorityLevel): PriorityTone {
   if (level === "critical") {
     return {
-      border: "1px solid rgba(239, 68, 68, 0.7)",
-      boxShadow:
-        "0 0 0 1px rgba(239, 68, 68, 0.25), 0 8px 24px -12px rgba(239, 68, 68, 0.45)",
-      badgeBg: "rgba(239, 68, 68, 0.28)",
-      badgeColor: "#fee2e2",
-      badgeBorder: "1px solid rgba(239, 68, 68, 0.55)",
+      border: "1px solid rgba(180, 70, 70, 0.35)",
+      boxShadow: "var(--hostly-shadow-hairline)",
+      badgeBg: "var(--hostly-danger-soft)",
+      badgeColor: "#7f1d1d",
+      badgeBorder: "1px solid rgba(180, 70, 70, 0.22)",
     };
   }
   if (level === "attention") {
     return {
-      border: "1px solid rgba(251, 146, 60, 0.6)",
-      badgeBg: "rgba(251, 146, 60, 0.28)",
-      badgeColor: "#fed7aa",
-      badgeBorder: "1px solid rgba(251, 146, 60, 0.5)",
+      border: "1px solid rgba(200, 120, 60, 0.3)",
+      badgeBg: "var(--hostly-warning-soft)",
+      badgeColor: "var(--hostly-navy-deep)",
+      badgeBorder: "1px solid rgba(200, 120, 60, 0.22)",
     };
   }
   return {
-    border: "1px solid rgba(148, 163, 184, 0.22)",
-    badgeBg: "rgba(148, 163, 184, 0.18)",
-    badgeColor: "#cbd5f5",
+    border: "1px solid var(--hostly-line)",
+    badgeBg: "var(--hostly-ice-100)",
+    badgeColor: "var(--hostly-navy-mid)",
   };
 }
 
@@ -221,11 +221,11 @@ function salaPassPreparedWaitColorClass(elapsedMs: number): string {
 }
 
 function getSalaPassBgClass(ms: number | null): string {
-  if (ms == null) return "bg-gray-50 border-gray-200";
+  if (ms == null) return "border-[var(--hostly-line)] bg-[var(--hostly-ice-50)]";
   const min = ms / 60000;
-  if (min >= 10) return "bg-red-50 border-red-200";
-  if (min >= 5) return "bg-orange-50 border-orange-200";
-  return "bg-gray-50 border-gray-200";
+  if (min >= 10) return "border-red-200 bg-red-50/95";
+  if (min >= 5) return "border-amber-200 bg-amber-50/95";
+  return "border-[var(--hostly-line)] bg-white";
 }
 
 function getSalaPassHeaderTextClass(ms: number | null): string {
@@ -325,112 +325,98 @@ function groupSalaLinesByPase(lines: SalaLine[]): SalaLine[][] {
 
 const gridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-  gap: 14,
+  gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+  gap: 8,
   alignContent: "start",
-  paddingBottom: 16,
-};
-
-const emptyStyle: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "40px 24px",
-  borderRadius: 14,
-  border: "1px dashed rgba(148, 163, 184, 0.28)",
-  background: "rgba(15, 23, 42, 0.45)",
-  color: "#94a3b8",
-  fontSize: 14,
-  fontWeight: 600,
-  textAlign: "center",
+  paddingBottom: 12,
 };
 
 const cardBaseStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 10,
-  padding: 14,
-  borderRadius: 14,
-  background: "rgba(15, 23, 42, 0.72)",
-  color: "#e2e8f0",
-  boxShadow: "0 8px 24px -18px rgba(2, 6, 23, 0.9)",
+  gap: 8,
+  padding: 8,
+  borderRadius: 8,
+  background: "#ffffff",
+  border: "1px solid var(--hostly-line)",
+  color: "var(--hostly-ink)",
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
 const headerRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: 10,
+  gap: 8,
   flexWrap: "wrap",
-  marginBottom: 10,
-  color: "#e2e8f0",
+  marginBottom: 8,
+  color: "var(--hostly-navy-deep)",
 };
 
 const headerTitleStyle: CSSProperties = {
   margin: 0,
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 800,
-  letterSpacing: "0.08em",
+  letterSpacing: "0.07em",
   textTransform: "uppercase",
-  color: "#cbd5f5",
+  color: "var(--hostly-navy-mid)",
 };
 
 const headerCountStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 700,
-  padding: "2px 8px",
+  padding: "1px 7px",
   borderRadius: 999,
-  background: "rgba(148, 163, 184, 0.18)",
-  color: "#e2e8f0",
+  background: "var(--hostly-ice-100)",
+  color: "var(--hostly-navy-deep)",
+  border: "1px solid var(--hostly-line)",
 };
 
 const tableTitleStyle: CSSProperties = {
   margin: 0,
-  fontSize: 15,
-  fontWeight: 700,
+  fontSize: 14,
+  fontWeight: 800,
   letterSpacing: "-0.01em",
-  color: "#f8fafc",
+  color: "var(--hostly-navy-deep)",
 };
 
 const badgeStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 700,
-  padding: "2px 8px",
+  padding: "2px 7px",
   borderRadius: 999,
-  letterSpacing: "0.02em",
+  letterSpacing: "0.03em",
 };
 
 function summaryChipStyle(level: PriorityLevel): CSSProperties {
   const base: CSSProperties = {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 700,
-    padding: "3px 9px",
+    padding: "2px 8px",
     borderRadius: 999,
     letterSpacing: "0.02em",
   };
   if (level === "critical") {
     return {
       ...base,
-      background: "rgba(239, 68, 68, 0.18)",
-      color: "#fecaca",
-      border: "1px solid rgba(239, 68, 68, 0.4)",
+      background: "var(--hostly-danger-soft)",
+      color: "#7f1d1d",
+      border: "1px solid rgba(180, 70, 70, 0.22)",
     };
   }
   if (level === "attention") {
     return {
       ...base,
-      background: "rgba(251, 146, 60, 0.2)",
-      color: "#fed7aa",
-      border: "1px solid rgba(251, 146, 60, 0.4)",
+      background: "var(--hostly-warning-soft)",
+      color: "var(--hostly-navy-deep)",
+      border: "1px solid rgba(200, 120, 60, 0.22)",
     };
   }
   return {
     ...base,
-    background: "rgba(148, 163, 184, 0.16)",
-    color: "#cbd5f5",
-    border: "1px solid rgba(148, 163, 184, 0.3)",
+    background: "var(--hostly-ice-100)",
+    color: "var(--hostly-navy-mid)",
+    border: "1px solid var(--hostly-line)",
   };
 }
 
@@ -438,54 +424,41 @@ const lineRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: 8,
-  padding: "8px 10px",
-  borderRadius: 10,
-  background: "rgba(148, 163, 184, 0.08)",
-  border: "1px solid rgba(148, 163, 184, 0.12)",
+  gap: 6,
+  padding: "6px 8px",
+  borderRadius: 8,
+  background: "var(--hostly-ice-50)",
+  border: "1px solid var(--hostly-line)",
 };
 
 const lineNameStyle: CSSProperties = {
-  fontSize: 14,
-  fontWeight: 600,
-  color: "#f1f5f9",
+  fontSize: 13,
+  fontWeight: 700,
+  color: "var(--hostly-navy-deep)",
   lineHeight: 1.2,
 };
 
 const lineMetaStyle: CSSProperties = {
-  fontSize: 12,
-  color: "#94a3b8",
+  fontSize: 11,
+  color: "var(--hostly-ink-muted)",
   marginTop: 2,
 };
 
 const lineExtrasStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 650,
-  color: "#93c5fd",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--hostly-accent)",
   lineHeight: 1.25,
   wordBreak: "break-word",
 };
 
 const lineNoteStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 650,
+  fontSize: 11,
+  fontWeight: 600,
   fontStyle: "italic",
-  color: "#fde68a",
+  color: "#9a5d16",
   lineHeight: 1.3,
   wordBreak: "break-word",
-};
-
-const markButtonStyle: CSSProperties = {
-  appearance: "none",
-  border: "1px solid rgba(34, 197, 94, 0.45)",
-  background: "rgba(34, 197, 94, 0.18)",
-  color: "#bbf7d0",
-  borderRadius: 8,
-  padding: "6px 10px",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
 };
 
 export default function SalaView() {
@@ -724,45 +697,59 @@ export default function SalaView() {
 
   return (
     <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
+      className="hostly-mobile-content min-h-0"
+      style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8 }}
     >
+      <header className="hostly-mobile-header md:hidden">
+        <div className="hostly-mobile-header-row">
+          <Link href="/dashboard/operacion" className="hostly-mobile-back" aria-label="Volver a Operación">
+            <span className="text-lg font-bold leading-none" aria-hidden>
+              ‹
+            </span>
+          </Link>
+          <div className="hostly-mobile-title-block">
+            <h1 className="hostly-mobile-title">Sala</h1>
+            <p className="hostly-mobile-subtitle">Retirada de platos listos y tiempos de espera</p>
+          </div>
+        </div>
+      </header>
+      <p className="hostly-mobile-text-caption hostly-mobile-section hidden !py-0 md:!mb-0 md:!mt-0 md:!block">
+        Sala · servicio de mesa
+      </p>
+
       <ServiceMetricsBar scope="all" />
       {readyCount > 0 && (
-        <div className="mb-3">
-          {salaStationStatus ? (
-            <div
-              className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${getSalaStationStatusClass(salaStationStatus)}`}
-            >
-              {salaStationStatus}
+        <section className="hostly-mobile-section !py-0">
+          <div className="hostly-mobile-card--compact hostly-mobile-card flex flex-wrap items-center gap-2 !p-2">
+            {salaStationStatus ? (
+              <span
+                className={`hostly-mobile-pill pointer-events-none !px-2 !py-0.5 !text-[10px] font-bold ${getSalaStationStatusClass(salaStationStatus)}`}
+              >
+                {salaStationStatus}
+              </span>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5">
+              <span className="hostly-mobile-pill pointer-events-none !px-2 !py-0.5 !text-[10px] font-bold text-[var(--hostly-navy-deep)]">
+                {readyCount} listos
+              </span>
+              {attentionCount > 0 ? (
+                <span className="hostly-mobile-pill pointer-events-none !border-amber-200/80 !bg-amber-50 !px-2 !py-0.5 !text-[10px] font-bold text-amber-900">
+                  {attentionCount} atención
+                </span>
+              ) : null}
+              {urgentCount > 0 ? (
+                <span className="hostly-mobile-pill pointer-events-none !border-red-200 !bg-red-50 !px-2 !py-0.5 !text-[10px] font-bold text-red-800">
+                  {urgentCount} urgentes
+                </span>
+              ) : null}
             </div>
-          ) : null}
-          <div className="flex gap-2">
-            <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium">
-              {readyCount} listos
-            </div>
-            {attentionCount > 0 && (
-              <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
-                {attentionCount} atención
-              </div>
-            )}
-            {urgentCount > 0 && (
-              <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
-                {urgentCount} urgentes
-              </div>
-            )}
+            {waitCount > 0 && avgWait != null ? (
+              <span className={`text-[11px] font-semibold ${getSalaMetricsClass(maxWait)}`}>
+                Media: {formatMin(avgWait)} · Máx: {formatMin(maxWait)}
+              </span>
+            ) : null}
           </div>
-          {waitCount > 0 && avgWait != null ? (
-            <div className={`text-xs ${getSalaMetricsClass(maxWait)}`}>
-              Media: {formatMin(avgWait)} · Máx: {formatMin(maxWait)}
-            </div>
-          ) : null}
-        </div>
+        </section>
       )}
       <SalaBoard
         orders={orders}
@@ -866,7 +853,20 @@ function SalaBoard({
     <>
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {totalLines === 0 ? (
-          <div style={emptyStyle}>No hay productos pendientes de servir</div>
+          <div className="hostly-mobile-empty-state hostly-mobile-card-soft flex min-h-[200px] flex-1 flex-col justify-center">
+            <div className="hostly-mobile-empty-state__icon" aria-hidden>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M5 9h14M5 9l1.5 9h11L19 9M9 9V7a3 3 0 016 0v2"
+                  stroke="currentColor"
+                  strokeWidth="1.65"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+            <h3 className="hostly-mobile-empty-state__title">No hay comandas pendientes</h3>
+            <p className="hostly-mobile-empty-state__desc">La cocina está al día.</p>
+          </div>
         ) : (
           <>
       <div style={headerRowStyle}>
@@ -911,7 +911,10 @@ function SalaBoard({
               className={`transition-all duration-300${
                 salaCardUrgencyClass ? ` border ${salaCardUrgencyClass}` : ""
               }`.trim()}
-              style={mesaCardStyle}
+              style={{
+                ...mesaCardStyle,
+                borderLeft: !salaCardUrgencyClass ? "3px solid var(--hostly-accent)" : undefined,
+              }}
             >
               <div
                 style={{
@@ -946,11 +949,11 @@ function SalaBoard({
                       style={{
                         ...badgeStyle,
                         textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                        fontSize: 10,
-                        background: "rgba(239, 68, 68, 0.22)",
-                        color: "#fecaca",
-                        border: "1px solid rgba(239, 68, 68, 0.45)",
+                        letterSpacing: "0.06em",
+                        fontSize: 9,
+                        background: "var(--hostly-danger-soft)",
+                        color: "#7f1d1d",
+                        border: "1px solid rgba(180, 70, 70, 0.25)",
                       }}
                     >
                       Urgente
@@ -1000,7 +1003,7 @@ function SalaBoard({
                   return (
                     <div
                       key={`${g.tableKey}-pase-${passIdx}`}
-                      className={`rounded-xl border p-2 ${getSalaPassBgClass(
+                      className={`rounded-lg border p-1.5 ${getSalaPassBgClass(
                         !isPassFullyServed ? passElapsedMs : null,
                       )}`}
                     >
@@ -1043,8 +1046,8 @@ function SalaBoard({
                         style={{
                           height: 1,
                           width: "100%",
-                          background: "rgba(148, 163, 184, 0.15)",
-                          marginBottom: 8,
+                          background: "var(--hostly-line)",
+                          marginBottom: 6,
                         }}
                       />
                       <div
@@ -1059,14 +1062,14 @@ function SalaBoard({
                             line.preparedAtMs != null
                               ? Math.floor((nowMs - line.preparedAtMs) / 60000)
                               : 0;
-                          let itemBorder = "1px solid #e5e7eb"; // gray-200
-                          let itemBg = "rgba(15, 23, 42, 0.72)";
+                          let itemBorder = "1px solid var(--hostly-line)";
+                          let itemBg = "var(--hostly-ice-50)";
                           if (minutes >= 10) {
-                            itemBorder = "1px solid #ef4444";
-                            itemBg = "rgba(254, 242, 242, 0.12)";
+                            itemBorder = "1px solid rgba(220, 80, 80, 0.35)";
+                            itemBg = "var(--hostly-danger-soft)";
                           } else if (minutes >= 5) {
-                            itemBorder = "1px solid #fb923c";
-                            itemBg = "rgba(255, 247, 237, 0.12)";
+                            itemBorder = "1px solid rgba(200, 120, 60, 0.35)";
+                            itemBg = "var(--hostly-warning-soft)";
                           }
                           const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
                           return (
@@ -1126,13 +1129,8 @@ function SalaBoard({
                               <button
                                 type="button"
                                 disabled={busy}
-                                style={{
-                                  ...markButtonStyle,
-                                  alignSelf: "center",
-                                  flexShrink: 0,
-                                  opacity: busy ? 0.6 : 1,
-                                  cursor: busy ? "progress" : "pointer",
-                                }}
+                                className="hostly-button-primary !min-h-8 shrink-0 self-center !px-3 !py-1.5 !text-[11px] disabled:opacity-60"
+                                style={{ cursor: busy ? "progress" : "pointer" }}
                                 onClick={() =>
                                   onMarkServed(line.orderId, line.itemId)
                                 }
@@ -1155,9 +1153,9 @@ function SalaBoard({
         )}
     </div>
       {completedTablesQueue.length > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
           <div
-            className="bg-green-600 text-white text-sm px-4 py-2 rounded-full shadow cursor-pointer"
+            className="hostly-mobile-card--compact hostly-button-primary cursor-pointer rounded-full !px-4 !py-2 !text-[13px] !shadow-md"
             onClick={() => {
               setCompletedTablesQueue((prev) => prev.slice(1));
             }}

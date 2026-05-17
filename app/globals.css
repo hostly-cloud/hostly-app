@@ -26,6 +26,27 @@
   --hostly-info-soft: #e6f0f6;
   --hostly-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.045);
   --hostly-shadow-float: 0 10px 28px rgba(15, 23, 42, 0.08);
+  --hostly-shadow-hairline: 0 1px 0 rgba(15, 23, 42, 0.04);
+
+  /* Navy + ice (operativo premium; mobile-first) */
+  --hostly-navy-deep: #0f2744;
+  --hostly-navy-mid: #173a55;
+  --hostly-ice-50: #f5fbff;
+  --hostly-ice-100: #e8f4fc;
+  --hostly-ice-200: #cfe8f4;
+  --hostly-ice-400: #6baecc;
+  --hostly-ice-ring: rgba(90, 160, 200, 0.28);
+  --hostly-focus-ring: 0 0 0 3px var(--hostly-ice-ring);
+
+  /* Mobile spacing system (tokens compartidos; tablet/desktop reutilizan mismos nombres) */
+  --hostly-mobile-pad-x: clamp(14px, 4.2vw, 22px);
+  --hostly-mobile-gap-section: clamp(14px, 3.5vw, 20px);
+  --hostly-mobile-gap-block: 12px;
+  --hostly-mobile-panel-pad: 16px;
+  --hostly-mobile-input-min-h: 48px;
+  --hostly-mobile-cta-min-h: 48px;
+  --hostly-radius-input: 17px;
+  --hostly-radius-button: 14px;
 
   /* Layout / rhythm */
   --hostly-content-max: 1180px; /* single global dashboard width */
@@ -36,7 +57,25 @@
   --hostly-radius-md: 14px;
   --hostly-border-subtle: var(--hostly-line);
 
-  /* Configuración — sistema claro (Stripe / Linear; sin lógica de negocio) */
+  /* ------------------------------------------------------------------------ */
+  /* Hostly — mobile / tablet táctil: tokens unificados (primitives)          */
+  /* ------------------------------------------------------------------------ */
+  --hostly-m-radius-sm: 12px;
+  --hostly-m-radius-md: 14px;
+  --hostly-m-radius-lg: 18px;
+  --hostly-m-radius-xl: 22px;
+  --hostly-m-stack-gap: 12px;
+  --hostly-m-section-gap: clamp(14px, 3.2vw, 20px);
+  --hostly-m-reading-max: 720px;
+  --hostly-m-transition: 160ms ease;
+  --hostly-m-transition-fast: 120ms ease;
+  --hostly-m-touch-target: 44px;
+  --hostly-m-header-min-h: 52px;
+  --hostly-m-kpi-pad-y: 11px;
+  --hostly-m-kpi-pad-x: 13px;
+  --hostly-m-drawer-radius: 20px 20px 0 0;
+  --hostly-m-card-pad-compact: 12px 14px;
+  --hostly-m-card-pad-comfortable: 18px 16px;
   --hostly-config-radius: 10px;
   --hostly-config-card-border: var(--hostly-line);
   --hostly-config-card-shadow: var(--hostly-shadow-card);
@@ -139,16 +178,25 @@ body {
 .hostly-panel {
   border: 1px solid var(--hostly-line);
   border-radius: var(--hostly-radius-lg);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 252, 255, 0.92) 100%);
+  background: var(--hostly-surface-card-solid);
   box-shadow: var(--hostly-shadow-card);
 }
 
 .hostly-panel-soft {
   border: 1px solid var(--hostly-line);
   border-radius: var(--hostly-radius-md);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
+/* Tarjeta móvil / bloque con padding coherente (sin lógica; solo cáscara) */
+.hostly-card-mobile {
+  border-radius: var(--hostly-radius-lg);
+  border: 1px solid var(--hostly-line);
+  background: var(--hostly-surface-card-solid);
   box-shadow: var(--hostly-shadow-card);
+  padding: var(--hostly-mobile-panel-pad);
+  box-sizing: border-box;
 }
 
 .hostly-chip {
@@ -168,7 +216,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  min-height: 32px;
+  padding: 6px 12px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -194,10 +243,10 @@ body {
 .hostly-pill[aria-pressed="true"],
 .hostly-tab[aria-selected="true"],
 .hostly-tab[data-active="true"] {
-  border-color: rgba(49, 95, 125, 0.22);
-  background: rgba(226, 240, 251, 0.92);
-  color: var(--hostly-accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  border-color: rgba(49, 95, 125, 0.18);
+  background: var(--hostly-ice-100);
+  color: var(--hostly-navy-deep);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .hostly-pill:active,
@@ -208,12 +257,669 @@ body {
 .hostly-segmented {
   display: inline-flex;
   align-items: stretch;
-  gap: 3px;
-  padding: 4px;
+  gap: 2px;
+  padding: 3px;
   border: 1px solid var(--hostly-line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.64);
+  border-radius: var(--hostly-m-radius-sm);
+  background: var(--hostly-ice-50);
+  box-shadow: none;
+  max-width: 100%;
+}
+
+.hostly-mobile-title {
+  margin: 0;
+  font-size: clamp(20px, 5.6vw, 24px);
+  font-weight: 720;
+  letter-spacing: -0.035em;
+  line-height: 1.14;
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-mobile-subtitle {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 520;
+  letter-spacing: -0.012em;
+  line-height: 1.4;
+  color: var(--hostly-ink-muted);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — MOBILE SHELL & LAYOUT PRIMITIVES (opt-in; no rompe desktop)        */
+/* Uso: envolver pantallas operativas móviles; desktop puede ignorar la shell */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  background: var(--hostly-surface-page-soft);
+  color: var(--hostly-ink);
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
+}
+
+.hostly-mobile-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hostly-mobile-content--reading {
+  max-width: var(--hostly-m-reading-max);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hostly-mobile-section {
+  padding-left: var(--hostly-mobile-pad-x);
+  padding-right: var(--hostly-mobile-pad-x);
+  padding-top: var(--hostly-m-section-gap);
+  padding-bottom: var(--hostly-m-section-gap);
+  box-sizing: border-box;
+}
+
+.hostly-mobile-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-m-stack-gap);
+  min-width: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — MOBILE HEADER (barra operativa estable)                           */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-header {
+  flex-shrink: 0;
+  padding: max(10px, env(safe-area-inset-top, 0px)) var(--hostly-mobile-pad-x)
+    var(--hostly-mobile-gap-block);
+  box-sizing: border-box;
+}
+
+.hostly-mobile-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: var(--hostly-m-header-min-h);
+}
+
+.hostly-mobile-title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.hostly-mobile-header-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.hostly-mobile-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hostly-m-touch-target);
+  height: var(--hostly-m-touch-target);
+  min-width: var(--hostly-m-touch-target);
+  padding: 0;
+  border-radius: var(--hostly-m-radius-sm);
+  border: 1px solid var(--hostly-line);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--hostly-navy-deep);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    background-color var(--hostly-m-transition),
+    border-color var(--hostly-m-transition),
+    transform var(--hostly-m-transition-fast);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-mobile-back:hover {
+  background: var(--hostly-ice-100);
+  border-color: rgba(54, 86, 116, 0.22);
+}
+
+.hostly-mobile-back:active {
+  transform: scale(0.97);
+}
+
+.hostly-mobile-back:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — MOBILE CARDS                                                       */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-card {
+  border-radius: var(--hostly-m-radius-lg);
+  border: 1px solid var(--hostly-line);
+  background: var(--hostly-surface-card-solid);
   box-shadow: var(--hostly-shadow-card);
+  padding: var(--hostly-mobile-panel-pad);
+  box-sizing: border-box;
+}
+
+.hostly-mobile-card--compact {
+  padding: var(--hostly-m-card-pad-compact);
+  border-radius: var(--hostly-m-radius-md);
+}
+
+.hostly-mobile-card--comfortable {
+  padding: var(--hostly-m-card-pad-comfortable);
+  border-radius: var(--hostly-m-radius-xl);
+}
+
+.hostly-mobile-card-soft {
+  border-radius: var(--hostly-m-radius-md);
+  border: 1px solid var(--hostly-line);
+  background: var(--hostly-ice-50);
+  box-shadow: var(--hostly-shadow-hairline);
+  padding: var(--hostly-mobile-panel-pad);
+  box-sizing: border-box;
+}
+
+.hostly-mobile-operational-card {
+  border-radius: var(--hostly-m-radius-lg);
+  border: 1px solid rgba(49, 95, 125, 0.12);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: var(--hostly-shadow-card);
+  padding: var(--hostly-mobile-panel-pad);
+  box-sizing: border-box;
+  border-left: 3px solid var(--hostly-accent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — MOBILE KPI                                                          */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 480px) {
+  .hostly-mobile-kpi-grid--cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.hostly-mobile-kpi {
+  border-radius: var(--hostly-m-radius-md);
+  border: 1px solid var(--hostly-line);
+  padding: var(--hostly-m-kpi-pad-y) var(--hostly-m-kpi-pad-x);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: var(--hostly-shadow-hairline);
+  min-width: 0;
+  box-sizing: border-box;
+  transition:
+    background-color var(--hostly-m-transition),
+    box-shadow var(--hostly-m-transition),
+    border-color var(--hostly-m-transition);
+}
+
+.hostly-mobile-kpi__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-muted);
+  line-height: 1.2;
+}
+
+.hostly-mobile-kpi__value {
+  margin-top: 4px;
+  font-size: clamp(16px, 4.4vw, 18px);
+  font-weight: 720;
+  letter-spacing: -0.028em;
+  line-height: 1.15;
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-mobile-kpi__hint {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--hostly-ink-soft);
+  line-height: 1.25;
+}
+
+.hostly-mobile-kpi--neutral {
+  border-color: var(--hostly-line);
+}
+
+.hostly-mobile-kpi--success {
+  background: var(--hostly-success-soft);
+  border-color: rgba(46, 125, 80, 0.16);
+}
+
+.hostly-mobile-kpi--warning {
+  background: var(--hostly-warning-soft);
+  border-color: rgba(180, 120, 40, 0.18);
+}
+
+.hostly-mobile-kpi--danger {
+  background: var(--hostly-danger-soft);
+  border-color: rgba(180, 70, 70, 0.18);
+}
+
+.hostly-mobile-kpi--info {
+  background: var(--hostly-info-soft);
+  border-color: rgba(49, 95, 125, 0.16);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — MOBILE SEGMENTED / PILL (unificación; convive con .hostly-segmented) */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-m-radius-sm);
+  background: var(--hostly-ice-50);
+  box-shadow: none;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.hostly-mobile-segment,
+.hostly-mobile-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hostly-ink-muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition:
+    background-color var(--hostly-m-transition),
+    border-color var(--hostly-m-transition),
+    color var(--hostly-m-transition),
+    transform var(--hostly-m-transition-fast);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-mobile-pill {
+  border-radius: 999px;
+}
+
+.hostly-mobile-segment:hover,
+.hostly-mobile-pill:hover {
+  border-color: var(--hostly-line);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--hostly-ink);
+}
+
+.hostly-mobile-segment[aria-selected="true"],
+.hostly-mobile-segment[data-active="true"],
+.hostly-mobile-pill[aria-pressed="true"] {
+  border-color: rgba(49, 95, 125, 0.18);
+  background: var(--hostly-ice-100);
+  color: var(--hostly-navy-deep);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.hostly-mobile-segment:active,
+.hostly-mobile-pill:active {
+  transform: scale(0.985);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — MOBILE FILTER BAR (scroll horizontal táctil)                      */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-filter-bar {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  padding: 8px var(--hostly-mobile-pad-x);
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.hostly-mobile-filter-bar::-webkit-scrollbar {
+  display: none;
+  height: 0;
+  width: 0;
+}
+
+.hostly-mobile-filter-bar > * {
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+
+.hostly-mobile-filter-bar--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: rgba(247, 252, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(54, 86, 116, 0.1);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — MOBILE EMPTY STATE                                                 */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: clamp(22px, 5.5vw, 36px) var(--hostly-mobile-pad-x);
+  box-sizing: border-box;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-mobile-empty-state__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--hostly-ice-100);
+  color: var(--hostly-accent);
+  opacity: 0.92;
+}
+
+.hostly-mobile-empty-state__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 720;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-mobile-empty-state__desc {
+  margin: 0;
+  max-width: 300px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-mobile-empty-state__cta {
+  margin-top: 4px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — MOBILE DRAWER (base; panel inferior / sheet)                       */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-drawer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(92dvh, 920px);
+  border-radius: var(--hostly-m-drawer-radius);
+  background: var(--hostly-surface-card-solid);
+  border: 1px solid var(--hostly-line);
+  box-shadow: 0 -12px 48px rgba(15, 23, 42, 0.07);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.hostly-mobile-drawer-header {
+  flex-shrink: 0;
+  padding: 14px var(--hostly-mobile-pad-x) 10px;
+  border-bottom: 1px solid rgba(54, 86, 116, 0.1);
+  box-sizing: border-box;
+}
+
+.hostly-mobile-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px var(--hostly-mobile-pad-x);
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+.hostly-mobile-drawer-footer {
+  flex-shrink: 0;
+  padding: 12px var(--hostly-mobile-pad-x) max(12px, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(54, 86, 116, 0.1);
+  background: rgba(255, 255, 255, 0.97);
+  box-sizing: border-box;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — tipografía móvil auxiliar                                         */
+/* -------------------------------------------------------------------------- */
+
+.hostly-mobile-text-caption {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-muted);
+  line-height: 1.25;
+}
+
+.hostly-mobile-text-body {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.45;
+  color: var(--hostly-ink);
+}
+
+.hostly-mobile-text-body strong {
+  font-weight: 720;
+  color: var(--hostly-navy-deep);
+}
+.hostly-input,
+.hostly-select,
+.hostly-textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  color: var(--hostly-ink);
+  background: #ffffff;
+  border: 1px solid var(--hostly-line-strong);
+  border-radius: var(--hostly-radius-input);
+  font-size: 15px;
+  line-height: 1.35;
+  min-height: var(--hostly-mobile-input-min-h);
+  padding: 0 16px;
+  box-shadow: var(--hostly-shadow-hairline);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-input::placeholder,
+.hostly-textarea::placeholder {
+  color: var(--hostly-ink-soft);
+  opacity: 0.88;
+}
+
+.hostly-input:hover:not(:disabled),
+.hostly-select:hover:not(:disabled),
+.hostly-textarea:hover:not(:disabled) {
+  border-color: rgba(54, 86, 116, 0.32);
+}
+
+.hostly-input:focus-visible,
+.hostly-select:focus-visible,
+.hostly-textarea:focus-visible {
+  outline: none;
+  border-color: var(--hostly-ice-400);
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-input:disabled,
+.hostly-select:disabled,
+.hostly-textarea:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  background: var(--hostly-ice-50);
+}
+
+.hostly-textarea {
+  min-height: 112px;
+  padding: 14px 16px;
+  resize: vertical;
+}
+
+.hostly-select {
+  appearance: none;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 42px;
+  cursor: pointer;
+}
+
+/* ——— Botones operativos (sin gradientes; navy + hielo) ——— */
+.hostly-button-primary,
+.hostly-button-secondary,
+.hostly-button-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: var(--hostly-mobile-cta-min-h);
+  padding: 0 18px;
+  border-radius: var(--hostly-radius-button);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-family: inherit;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 120ms ease,
+    box-shadow 160ms ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-button-primary {
+  background: var(--hostly-navy-deep);
+  color: #ffffff;
+  border-color: rgba(15, 39, 68, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.hostly-button-primary:hover:not(:disabled) {
+  background: var(--hostly-navy-mid);
+}
+
+.hostly-button-primary:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.hostly-button-primary:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-button-secondary {
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-navy-deep);
+  border-color: var(--hostly-line-strong);
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
+.hostly-button-secondary:hover:not(:disabled) {
+  background: var(--hostly-ice-50);
+  border-color: var(--hostly-ice-200);
+}
+
+.hostly-button-secondary:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.hostly-button-secondary:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-button-ghost {
+  background: transparent;
+  color: var(--hostly-accent);
+  border-color: transparent;
+}
+
+.hostly-button-ghost:hover:not(:disabled) {
+  background: var(--hostly-accent-soft);
+}
+
+.hostly-button-ghost:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.hostly-button-ghost:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-button-primary:disabled,
+.hostly-button-secondary:disabled,
+.hostly-button-ghost:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .hostly-btn-soft {
@@ -327,6 +1033,15 @@ body {
   -webkit-tap-highlight-color: rgba(255, 255, 255, 0.07);
 }
 
+/* Segmentados: más compactos que el CTA genérico; sigue siendo táctil (iOS ~44pt) */
+[data-hostly-touch] .hostly-segmented > button.hostly-tab,
+[data-hostly-touch] .hostly-segmented > button.hostly-pill,
+[data-hostly-touch] .hostly-mobile-segmented > button.hostly-mobile-segment,
+[data-hostly-touch] .hostly-mobile-segmented > button.hostly-mobile-pill {
+  min-height: 44px !important;
+  padding: 8px 14px !important;
+}
+
 /* Enlaces con hit-area tipo botón (p. ej. nombre en fila TPV) */
 [data-hostly-touch] .hostly-tpv-row-link {
   display: inline-flex !important;
@@ -374,6 +1089,10 @@ body {
 [data-hostly-touch] textarea {
   min-height: 96px !important;
   font-size: 16px !important;
+}
+
+[data-hostly-touch] textarea.hostly-textarea {
+  min-height: 112px !important;
 }
 
 [data-hostly-touch] [role="menu"] button,

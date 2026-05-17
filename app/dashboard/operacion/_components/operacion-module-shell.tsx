@@ -150,6 +150,17 @@ export function OperacionModuleShell({
             font-size: 10px !important;
             letter-spacing: 0.04em !important;
           }
+
+          .hostly-operation-shell[data-operation-module="reservas"]
+            .hostly-operation-topbar,
+          .hostly-operation-shell[data-operation-module="cocina"]
+            .hostly-operation-topbar,
+          .hostly-operation-shell[data-operation-module="barra"]
+            .hostly-operation-topbar,
+          .hostly-operation-shell[data-operation-module="sala"]
+            .hostly-operation-topbar {
+            display: none !important;
+          }
         }
       `}</style>
     </main>

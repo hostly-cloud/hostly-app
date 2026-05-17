@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -15,139 +16,37 @@ import {
 } from "@/lib/firestore/reservations";
 import { computeReservationDayMetrics } from "@/lib/reservas/reservation-metrics";
 
-const cardStyle: CSSProperties = {
-  borderRadius: 14,
-  border: "1px solid rgba(148, 163, 184, 0.18)",
-  background: "rgba(15, 23, 42, 0.55)",
-  padding: 14,
-};
-
-const headerRowStyle: CSSProperties = {
+const upcomingRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: 12,
-  flexWrap: "wrap",
-};
-
-const titleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 16,
-  fontWeight: 700,
-  color: "#e2e8f0",
-  letterSpacing: "-0.02em",
-};
-
-const primaryBtn: CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "1px solid rgba(56, 189, 248, 0.35)",
-  background: "rgba(56, 189, 248, 0.18)",
-  color: "#e0f2fe",
-  fontWeight: 800,
-  fontSize: 13,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};
-
-/** Botón principal del formulario “Guardar reserva”: más visible que el genérico. */
-const formSaveBtn: CSSProperties = {
-  padding: "12px 24px",
-  borderRadius: 10,
-  border: "1px solid rgba(56, 189, 248, 0.45)",
-  background: "linear-gradient(180deg, rgba(56, 189, 248, 0.35) 0%, rgba(56, 189, 248, 0.22) 100%)",
-  color: "#f0f9ff",
-  fontWeight: 800,
-  fontSize: 15,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-  boxShadow: "0 2px 10px rgba(56, 189, 248, 0.12)",
-  minWidth: 180,
-};
-
-const secondaryBtn: CSSProperties = {
-  padding: "12px 18px",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "transparent",
-  color: "#e2e8f0",
-  fontWeight: 700,
-  fontSize: 14,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.5)",
-  color: "#f8fafc",
+  gap: 10,
   padding: "10px 12px",
-  fontSize: 14,
-  outline: "none",
+  borderRadius: 12,
+  border: "1px solid rgba(251, 191, 36, 0.28)",
+  background: "var(--hostly-warning-soft)",
 };
 
 const labelStyle: CSSProperties = {
   display: "block",
   fontSize: 11,
   fontWeight: 700,
-  color: "#94a3b8",
+  color: "var(--hostly-navy-mid)",
   marginBottom: 6,
-  letterSpacing: "0.02em",
+  letterSpacing: "0.04em",
   textTransform: "uppercase",
 };
 
-const metricsBarStyle: CSSProperties = {
+const delayedRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  flexWrap: "wrap",
-  gap: 8,
-  padding: "8px 10px",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "10px 12px",
   borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.45)",
+  border: "1px solid rgba(220, 100, 100, 0.22)",
+  background: "var(--hostly-danger-soft)",
 };
-
-function metricChipStyle(tone: "amber" | "blue" | "green" | "red" | "gray" | "neutral"): CSSProperties {
-  const base: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "baseline",
-    gap: 6,
-    padding: "6px 10px",
-    borderRadius: 10,
-    fontSize: 12,
-    fontWeight: 800,
-    letterSpacing: "-0.01em",
-    whiteSpace: "nowrap",
-  };
-  if (tone === "amber") {
-    return { ...base, background: "rgba(251, 191, 36, 0.14)", border: "1px solid rgba(251, 191, 36, 0.28)", color: "#fed7aa" };
-  }
-  if (tone === "blue") {
-    return { ...base, background: "rgba(59, 130, 246, 0.16)", border: "1px solid rgba(59, 130, 246, 0.32)", color: "#dbeafe" };
-  }
-  if (tone === "green") {
-    return { ...base, background: "rgba(34, 197, 94, 0.16)", border: "1px solid rgba(34, 197, 94, 0.32)", color: "#bbf7d0" };
-  }
-  if (tone === "red") {
-    return { ...base, background: "rgba(248, 113, 113, 0.14)", border: "1px solid rgba(248, 113, 113, 0.32)", color: "#fecaca" };
-  }
-  if (tone === "gray") {
-    return { ...base, background: "rgba(148, 163, 184, 0.14)", border: "1px solid rgba(148, 163, 184, 0.28)", color: "#e2e8f0" };
-  }
-  return { ...base, background: "rgba(148, 163, 184, 0.12)", border: "1px solid rgba(148, 163, 184, 0.22)", color: "#e2e8f0" };
-}
-
-function MetricChip({ label, value, tone }: { label: string; value: string | number; tone: "amber" | "blue" | "green" | "red" | "gray" | "neutral" }) {
-  return (
-    <span style={metricChipStyle(tone)}>
-      <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.85, letterSpacing: "0.02em" }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: 900 }}>{value}</span>
-    </span>
-  );
-}
 
 function todayYmd(): string {
   const d = new Date();
@@ -155,6 +54,20 @@ function todayYmd(): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDayLabel(ymd: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? "").trim());
+  if (!m) return ymd;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(y, mo - 1, d);
+  return new Intl.DateTimeFormat("es-ES", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(dt);
 }
 
 function toMinutes(time: string): number {
@@ -182,67 +95,58 @@ function statusLabel(s: ReservationStatus): string {
 }
 
 function statusBadgeStyle(s: ReservationStatus): CSSProperties {
+  const base: CSSProperties = {
+    padding: "4px 10px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 720,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap",
+  };
   if (s === "seated") {
     return {
-      padding: "4px 8px",
-      borderRadius: 999,
-      background: "rgba(59, 130, 246, 0.18)",
-      border: "1px solid rgba(59, 130, 246, 0.36)",
-      color: "#dbeafe",
-      fontSize: 11,
-      fontWeight: 800,
-      letterSpacing: "0.03em",
-      textTransform: "uppercase",
+      ...base,
+      background: "var(--hostly-info-soft)",
+      border: "1px solid rgba(49, 95, 125, 0.2)",
+      color: "var(--hostly-navy-deep)",
     };
   }
   if (s === "completed") {
     return {
-      padding: "4px 8px",
-      borderRadius: 999,
-      background: "rgba(34, 197, 94, 0.16)",
-      border: "1px solid rgba(34, 197, 94, 0.32)",
-      color: "#bbf7d0",
-      fontSize: 11,
-      fontWeight: 800,
-      letterSpacing: "0.03em",
-      textTransform: "uppercase",
+      ...base,
+      background: "var(--hostly-success-soft)",
+      border: "1px solid rgba(46, 125, 80, 0.2)",
+      color: "var(--hostly-navy-deep)",
     };
   }
-  if (s === "no_show" || s === "cancelled") {
+  if (s === "no_show") {
     return {
-      padding: "4px 8px",
-      borderRadius: 999,
-      background:
-        s === "no_show"
-          ? "rgba(248, 113, 113, 0.14)"
-          : "rgba(148, 163, 184, 0.14)",
-      border:
-        s === "no_show"
-          ? "1px solid rgba(248, 113, 113, 0.32)"
-          : "1px solid rgba(148, 163, 184, 0.28)",
-      color: s === "no_show" ? "#fecaca" : "#e2e8f0",
-      fontSize: 11,
-      fontWeight: 800,
-      letterSpacing: "0.03em",
-      textTransform: "uppercase",
+      ...base,
+      background: "var(--hostly-danger-soft)",
+      border: "1px solid rgba(180, 70, 70, 0.22)",
+      color: "#7f1d1d",
+    };
+  }
+  if (s === "cancelled") {
+    return {
+      ...base,
+      background: "var(--hostly-ice-100)",
+      border: "1px solid var(--hostly-line-strong)",
+      color: "var(--hostly-ink-muted)",
     };
   }
   return {
-    padding: "4px 8px",
-    borderRadius: 999,
-    background: "rgba(251, 191, 36, 0.14)",
-    border: "1px solid rgba(251, 191, 36, 0.28)",
-    color: "#fed7aa",
-    fontSize: 11,
-    fontWeight: 800,
-    letterSpacing: "0.03em",
-    textTransform: "uppercase",
+    ...base,
+    background: "var(--hostly-warning-soft)",
+    border: "1px solid rgba(180, 120, 40, 0.2)",
+    color: "var(--hostly-navy-deep)",
   };
 }
 
 export default function ReservasView() {
   const router = useRouter();
-  const { restaurantId: profileRestaurantId, user, ready: authReady } = useAuth();
+  const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
   const restaurantId = profileRestaurantId ?? null;
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -508,525 +412,500 @@ export default function ReservasView() {
         overflow: "hidden",
       }}
     >
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          WebkitOverflowScrolling: "touch",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          padding: "0 16px 24px",
-          boxSizing: "border-box",
-        }}
-      >
-      <div style={{ ...cardStyle, ...headerRowStyle }}>
-        <div>
-          <h3 style={titleStyle}>Reservas</h3>
-          <div style={{ color: "#94a3b8", fontSize: 13, fontWeight: 600, marginTop: 4 }}>
-            Día seleccionado ·{" "}
-            <input
-              type="date"
-              value={viewDate}
-              onChange={(e) => setViewDate(e.target.value)}
-              style={{
-                marginLeft: 4,
-                borderRadius: 8,
-                border: "1px solid rgba(148, 163, 184, 0.25)",
-                background: "rgba(15, 23, 42, 0.6)",
-                color: "#e2e8f0",
-                padding: "4px 8px",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            />
-          </div>
-        </div>
-        <button
-          type="button"
-          style={primaryBtn}
-          onClick={() => {
-            setSaveError(null);
-            setDraft((d) => ({ ...d, date: viewDate }));
-            setCreating(true);
-          }}
-        >
-          Nueva reserva
-        </button>
-      </div>
-
-      {listError ? (
+      <div className="hostly-mobile-content" style={{ flex: 1, minHeight: 0, boxSizing: "border-box" }}>
         <div
-          style={{
-            ...cardStyle,
-            borderColor: "rgba(248, 113, 113, 0.4)",
-            color: "#fecaca",
-            fontWeight: 600,
-            fontSize: 14,
-          }}
-          role="alert"
+          className="hostly-mobile-stack"
+          style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom, 0px))" }}
         >
-          {listError}
-        </div>
-      ) : null}
-
-      <div style={metricsBarStyle} aria-label="Métricas de reservas del día">
-        <MetricChip label="Previstas" value={metrics.booked} tone="amber" />
-        <MetricChip label="Llegadas" value={metrics.seated} tone="blue" />
-        <MetricChip label="Completadas" value={metrics.completed} tone="green" />
-        <MetricChip label="No show" value={metrics.noShow} tone="red" />
-        <MetricChip label="Canceladas" value={metrics.cancelled} tone="gray" />
-        <MetricChip label="Pax previstas" value={metrics.paxPlanned} tone="neutral" />
-        <MetricChip label="Pax llegadas" value={metrics.paxSeated} tone="neutral" />
-      </div>
-
-      {upcoming.length > 0 || delayed.length > 0 ? (
-        <div style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                background: "rgba(148, 163, 184, 0.14)",
-                border: "1px solid rgba(148, 163, 184, 0.28)",
-                color: "#e2e8f0",
-                fontWeight: 800,
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {upcoming.length} próximas
-            </span>
-            <span
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                background: "rgba(248, 113, 113, 0.12)",
-                border: "1px solid rgba(248, 113, 113, 0.32)",
-                color: "#fecaca",
-                fontWeight: 800,
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {delayed.length} retrasadas
-            </span>
-          </div>
-
-          {upcoming.length > 0 ? (
-            <div>
-              <div style={{ color: "#cbd5f5", fontWeight: 800, fontSize: 12, marginBottom: 8 }}>
-                Próximas
+          <header className="hostly-mobile-header md:hidden">
+            <div className="hostly-mobile-header-row">
+              <Link href="/dashboard/operacion" className="hostly-mobile-back" aria-label="Volver a Operación">
+                <span className="text-lg font-bold leading-none" aria-hidden>
+                  ‹
+                </span>
+              </Link>
+              <div className="hostly-mobile-title-block">
+                <h1 className="hostly-mobile-title">Reservas</h1>
+                <p className="hostly-mobile-subtitle">Gestiona llegadas, no show y ocupación</p>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {upcoming.map((r) => (
-                  <div
-                    key={`up-${r.id}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      border: "1px solid rgba(251, 191, 36, 0.28)",
-                      background: "rgba(15, 23, 42, 0.35)",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 900, color: "#e2e8f0" }}>{r.time || "—"}</span>
-                      <span style={{ fontWeight: 800, color: "#e2e8f0" }}>{r.customerName || "—"}</span>
-                      <span style={{ fontWeight: 700, color: "#94a3b8", fontSize: 13 }}>
-                        {r.partySize ? `${r.partySize} pax` : "—"}
-                      </span>
-                      {r.tableLabel ? (
-                        <span style={{ fontWeight: 700, color: "#cbd5f5", fontSize: 13 }}>{r.tableLabel}</span>
-                      ) : null}
-                    </div>
-                    {r.status === "booked" ? (
-                      <button
-                        type="button"
-                        style={{ ...primaryBtn, padding: "8px 12px" }}
-                        onClick={() => void handleSeatReservation(r)}
-                        disabled={busy}
-                      >
-                        Ha llegado
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
+              <div className="hostly-mobile-header-actions">
+                <button
+                  type="button"
+                  className="hostly-button-primary !min-h-9 !px-3.5 !py-0 !text-[13px]"
+                  onClick={() => {
+                    setSaveError(null);
+                    setDraft((d) => ({ ...d, date: viewDate }));
+                    setCreating(true);
+                  }}
+                >
+                  Nueva reserva
+                </button>
               </div>
             </div>
-          ) : null}
+          </header>
 
-          {delayed.length > 0 ? (
-            <div>
-              <div style={{ color: "#fecaca", fontWeight: 800, fontSize: 12, marginBottom: 8 }}>
-                Retrasadas
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {delayed.map((r) => (
-                  <div
-                    key={`dl-${r.id}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      border: "1px solid rgba(248, 113, 113, 0.35)",
-                      background: "rgba(248, 113, 113, 0.06)",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 900, color: "#e2e8f0" }}>{r.time || "—"}</span>
-                      <span style={{ fontWeight: 800, color: "#e2e8f0" }}>{r.customerName || "—"}</span>
-                      <span style={{ fontWeight: 700, color: "#94a3b8", fontSize: 13 }}>
-                        {r.partySize ? `${r.partySize} pax` : "—"}
-                      </span>
-                      {r.tableLabel ? (
-                        <span style={{ fontWeight: 700, color: "#cbd5f5", fontSize: 13 }}>{r.tableLabel}</span>
-                      ) : null}
-                      <span style={{ ...statusBadgeStyle("cancelled"), background: "rgba(248, 113, 113, 0.14)" }}>
-                        Retrasada
-                      </span>
-                    </div>
-                    {r.status === "booked" ? (
-                      <button
-                        type="button"
-                        style={{ ...primaryBtn, padding: "8px 12px" }}
-                        onClick={() => void handleSeatReservation(r)}
-                        disabled={busy}
-                      >
-                        Ha llegado
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {creating ? (
-        <div
-          style={{
-            ...cardStyle,
-            display: "flex",
-            flexDirection: "column",
-            gap: 0,
-            minHeight: 0,
-            maxHeight: "min(calc(100dvh - 32px), calc(100vh - 32px))",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ flexShrink: 0, marginBottom: 14 }}>
-            <h4
-              style={{
-                margin: "0 0 6px 0",
-                fontSize: 17,
-                fontWeight: 800,
-                color: "#f1f5f9",
-                letterSpacing: "-0.02em",
+          <div className="hostly-mobile-section !hidden md:!flex md:justify-end md:!pb-2 md:!pt-3">
+            <button
+              type="button"
+              className="hostly-button-primary shrink-0"
+              onClick={() => {
+                setSaveError(null);
+                setDraft((d) => ({ ...d, date: viewDate }));
+                setCreating(true);
               }}
             >
               Nueva reserva
-            </h4>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
-              Desplázate dentro del recuadro si hace falta. Los botones quedan fijos abajo; pulsa{" "}
-              <strong style={{ color: "#e2e8f0" }}>Guardar reserva</strong> cuando termines.
-            </p>
+            </button>
           </div>
 
-          <form
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              flex: 1,
-              minHeight: 0,
-              gap: 0,
-            }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              void handleCreateReservation();
-            }}
-          >
-            <div
-              style={{
-                overflowY: "auto",
-                overflowX: "hidden",
-                WebkitOverflowScrolling: "touch",
-                flex: 1,
-                minHeight: 0,
-                paddingRight: 6,
-                marginRight: -4,
-              }}
-            >
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={labelStyle}>Nombre</label>
+          <section className="hostly-mobile-section !pt-2 !pb-0">
+            <div className="hostly-mobile-filter-bar !border-0 !bg-transparent !px-0 !py-0">
+              <div className="hostly-mobile-card hostly-mobile-card--compact w-full min-w-0 shrink-0">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="hostly-mobile-text-caption">Día seleccionado</div>
+                    <div className="mt-0.5 text-base font-semibold capitalize text-[var(--hostly-navy-deep)]">
+                      {formatDayLabel(viewDate)}
+                    </div>
+                  </div>
                   <input
-                    style={inputStyle}
-                    value={draft.customerName}
-                    onChange={(e) => setDraft((d) => ({ ...d, customerName: e.target.value }))}
-                    autoComplete="name"
-                    disabled={savingReservation}
+                    type="date"
+                    className="hostly-input max-w-[158px] !min-h-10 !py-2 !text-sm"
+                    value={viewDate}
+                    onChange={(e) => setViewDate(e.target.value)}
+                    aria-label="Cambiar fecha"
                   />
                 </div>
-                {saveError ? (
-                  <div
-                    style={{
-                      gridColumn: "1 / -1",
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(248, 113, 113, 0.42)",
-                      background: "rgba(248, 113, 113, 0.08)",
-                      color: "#fecaca",
-                      fontSize: 13,
-                      fontWeight: 600,
-                    }}
-                    role="alert"
+              </div>
+            </div>
+          </section>
+
+          <section className="hostly-mobile-section !py-2">
+            <div className="hostly-mobile-kpi-grid hostly-mobile-kpi-grid--cols-4" aria-label="Métricas de reservas del día">
+              <div className="hostly-mobile-kpi hostly-mobile-kpi--warning">
+                <div className="hostly-mobile-kpi__label">Previstas</div>
+                <div className="hostly-mobile-kpi__value">{metrics.booked}</div>
+              </div>
+              <div className="hostly-mobile-kpi hostly-mobile-kpi--info">
+                <div className="hostly-mobile-kpi__label">Llegadas</div>
+                <div className="hostly-mobile-kpi__value">{metrics.seated}</div>
+              </div>
+              <div className="hostly-mobile-kpi hostly-mobile-kpi--success">
+                <div className="hostly-mobile-kpi__label">Completadas</div>
+                <div className="hostly-mobile-kpi__value">{metrics.completed}</div>
+              </div>
+              <div className="hostly-mobile-kpi hostly-mobile-kpi--danger">
+                <div className="hostly-mobile-kpi__label">No show</div>
+                <div className="hostly-mobile-kpi__value">{metrics.noShow}</div>
+              </div>
+              <div className="hostly-mobile-kpi hostly-mobile-kpi--neutral">
+                <div className="hostly-mobile-kpi__label">Canceladas</div>
+                <div className="hostly-mobile-kpi__value">{metrics.cancelled}</div>
+              </div>
+              <div className="hostly-mobile-kpi hostly-mobile-kpi--neutral">
+                <div className="hostly-mobile-kpi__label">Pax previstas</div>
+                <div className="hostly-mobile-kpi__value">{metrics.paxPlanned}</div>
+              </div>
+              <div className="hostly-mobile-kpi hostly-mobile-kpi--neutral">
+                <div className="hostly-mobile-kpi__label">Pax llegadas</div>
+                <div className="hostly-mobile-kpi__value">{metrics.paxSeated}</div>
+              </div>
+            </div>
+          </section>
+
+          {listError ? (
+            <section className="hostly-mobile-section !py-0">
+              <div
+                className="hostly-mobile-card-soft"
+                style={{
+                  borderColor: "rgba(180, 70, 70, 0.28)",
+                  color: "#7f1d1d",
+                }}
+                role="alert"
+              >
+                <p className="m-0 text-sm font-semibold">{listError}</p>
+              </div>
+            </section>
+          ) : null}
+
+          {upcoming.length > 0 || delayed.length > 0 ? (
+            <section className="hostly-mobile-section !py-2">
+              <div className="hostly-mobile-card flex flex-col gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <span className="hostly-mobile-pill pointer-events-none text-[12px] font-bold text-[var(--hostly-navy-deep)]">
+                    {upcoming.length} próximas
+                  </span>
+                  <span
+                    className="hostly-mobile-pill pointer-events-none text-[12px] font-bold"
+                    style={{ color: "#7f1d1d", borderColor: "rgba(180, 70, 70, 0.22)" }}
                   >
-                    {saveError}
+                    {delayed.length} retrasadas
+                  </span>
+                </div>
+
+                {upcoming.length > 0 ? (
+                  <div>
+                    <div className="hostly-mobile-text-caption mb-2">Próximas</div>
+                    <div className="flex flex-col gap-2">
+                      {upcoming.map((r) => {
+                        const tableZone = [r.tableLabel, r.zoneName].filter(Boolean).join(" · ");
+                        return (
+                          <div key={`up-${r.id}`} style={upcomingRowStyle}>
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-[var(--hostly-ink)]">
+                              <span className="text-base font-bold tabular-nums text-[var(--hostly-navy-deep)]">
+                                {r.time || "—"}
+                              </span>
+                              <span className="font-semibold">{r.customerName || "—"}</span>
+                              <span className="text-sm text-[var(--hostly-ink-muted)]">
+                                {r.partySize ? `${r.partySize} pax` : "—"}
+                              </span>
+                              {tableZone ? (
+                                <span className="text-sm font-medium text-[var(--hostly-accent)]">{tableZone}</span>
+                              ) : null}
+                            </div>
+                            {r.status === "booked" ? (
+                              <button
+                                type="button"
+                                className="hostly-button-primary !min-h-9 shrink-0 !px-3 !text-[13px]"
+                                onClick={() => void handleSeatReservation(r)}
+                                disabled={busy}
+                              >
+                                Ha llegado
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : null}
-                <div>
-                  <label style={labelStyle}>Teléfono</label>
-                  <input
-                    style={inputStyle}
-                    value={draft.customerPhone}
-                    onChange={(e) => setDraft((d) => ({ ...d, customerPhone: e.target.value }))}
-                    autoComplete="tel"
-                    disabled={savingReservation}
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Personas</label>
-                  <input
-                    style={inputStyle}
-                    type="number"
-                    min={1}
-                    value={draft.partySize}
-                    onChange={(e) => setDraft((d) => ({ ...d, partySize: e.target.value }))}
-                    disabled={savingReservation}
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Fecha</label>
-                  <input
-                    style={inputStyle}
-                    type="date"
-                    value={draft.date}
-                    onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
-                    required
-                    disabled={savingReservation}
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Hora</label>
-                  <input
-                    style={inputStyle}
-                    type="time"
-                    value={draft.time}
-                    onChange={(e) => setDraft((d) => ({ ...d, time: e.target.value }))}
-                    required
-                    disabled={savingReservation}
-                  />
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={labelStyle}>Mesa (opcional)</label>
-                  <select
-                    style={inputStyle}
-                    value={draft.tableId}
-                    onChange={(e) => setDraft((d) => ({ ...d, tableId: e.target.value }))}
-                    disabled={savingReservation}
-                  >
-                    <option value="">—</option>
-                    {tablesOptions.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={labelStyle}>Notas</label>
-                  <input
-                    style={inputStyle}
-                    value={draft.notes}
-                    onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-                    disabled={savingReservation}
-                  />
-                </div>
+
+                {delayed.length > 0 ? (
+                  <div>
+                    <div className="hostly-mobile-text-caption mb-2 !text-red-800">Retrasadas</div>
+                    <div className="flex flex-col gap-2">
+                      {delayed.map((r) => {
+                        const tableZone = [r.tableLabel, r.zoneName].filter(Boolean).join(" · ");
+                        return (
+                          <div key={`dl-${r.id}`} style={delayedRowStyle}>
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-[var(--hostly-ink)]">
+                              <span className="text-base font-bold tabular-nums text-[var(--hostly-navy-deep)]">
+                                {r.time || "—"}
+                              </span>
+                              <span className="font-semibold">{r.customerName || "—"}</span>
+                              <span className="text-sm text-[var(--hostly-ink-muted)]">
+                                {r.partySize ? `${r.partySize} pax` : "—"}
+                              </span>
+                              {tableZone ? (
+                                <span className="text-sm font-medium text-[var(--hostly-accent)]">{tableZone}</span>
+                              ) : null}
+                              <span
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: 999,
+                                  fontSize: 11,
+                                  fontWeight: 720,
+                                  letterSpacing: "0.04em",
+                                  textTransform: "uppercase",
+                                  background: "var(--hostly-danger-soft)",
+                                  border: "1px solid rgba(180, 70, 70, 0.22)",
+                                  color: "#7f1d1d",
+                                }}
+                              >
+                                Retrasada
+                              </span>
+                            </div>
+                            {r.status === "booked" ? (
+                              <button
+                                type="button"
+                                className="hostly-button-primary !min-h-9 shrink-0 !px-3 !text-[13px]"
+                                onClick={() => void handleSeatReservation(r)}
+                                disabled={busy}
+                              >
+                                Ha llegado
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </div>
+            </section>
+          ) : null}
 
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                justifyContent: "flex-end",
-                alignItems: "center",
-                gap: 12,
-                marginTop: 0,
-                paddingTop: 16,
-                borderTop: "1px solid rgba(148, 163, 184, 0.22)",
-                flexShrink: 0,
-                background: "rgba(15, 23, 42, 0.75)",
-                paddingBottom: 2,
-              }}
-            >
-              <button
-                type="button"
-                style={{
-                  ...secondaryBtn,
-                  opacity: savingReservation ? 0.55 : 1,
-                  cursor: savingReservation ? "not-allowed" : "pointer",
-                }}
-                onClick={() => {
-                  setCreating(false);
-                  setSaveError(null);
-                }}
-                disabled={savingReservation}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                style={{
-                  ...formSaveBtn,
-                  opacity: savingReservation ? 0.88 : 1,
-                  cursor: savingReservation ? "wait" : "pointer",
-                }}
-                disabled={savingReservation}
-              >
-                {savingReservation ? "Guardando…" : "Guardar reserva"}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-
-      {reservations.length === 0 ? (
-        <div style={{ ...cardStyle, color: "#94a3b8", fontWeight: 600, fontSize: 14 }}>
-          No hay reservas para el {day}
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {reservations.map((r) => (
-            <div key={r.id} style={cardStyle}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 16, fontWeight: 900, color: "#e2e8f0" }}>{r.time || "—"}</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#e2e8f0" }}>{r.customerName || "—"}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8" }}>
-                    {r.partySize ? `${r.partySize} pax` : "—"}
-                  </span>
-                  {r.tableLabel ? (
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5f5" }}>{r.tableLabel}</span>
-                  ) : null}
+          {creating ? (
+            <section className="hostly-mobile-section !py-2">
+              <div className="hostly-mobile-card flex max-h-[min(calc(100dvh-120px),calc(100vh-120px))] flex-col gap-0 overflow-hidden md:max-h-[920px]">
+                <div className="mb-4 shrink-0">
+                  <h4 className="hostly-mobile-title !text-[19px]">Nueva reserva</h4>
+                  <p className="hostly-mobile-subtitle !mt-2">
+                    Desplázate dentro del recuadro si hace falta. Los botones quedan fijos abajo; pulsa{" "}
+                    <strong>Guardar reserva</strong> cuando termines.
+                  </p>
                 </div>
-                <span style={statusBadgeStyle(r.status)}>{statusLabel(r.status)}</span>
-              </div>
 
-              <div style={{ marginTop: 10 }}>
-                <label style={labelStyle}>Mesa</label>
-                <select
-                  style={inputStyle}
-                  value={r.tableId ?? ""}
-                  onChange={(e) => void handleAssignReservationTable(r.id, e.target.value)}
-                  disabled={busy}
+                <form
+                  className="flex min-h-0 flex-1 flex-col gap-0"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleCreateReservation();
+                  }}
                 >
-                  <option value="">Sin mesa</option>
-                  {tablesOptions.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div
+                    className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+                    style={{ WebkitOverflowScrolling: "touch", paddingRight: 4 }}
+                  >
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
+                      <div className="md:col-span-2">
+                        <label style={labelStyle}>Nombre</label>
+                        <input
+                          className="hostly-input"
+                          value={draft.customerName}
+                          onChange={(e) => setDraft((d) => ({ ...d, customerName: e.target.value }))}
+                          autoComplete="name"
+                          disabled={savingReservation}
+                        />
+                      </div>
+                      {saveError ? (
+                        <div
+                          className="hostly-mobile-card-soft md:col-span-2"
+                          style={{
+                            borderColor: "rgba(180, 70, 70, 0.28)",
+                            color: "#7f1d1d",
+                          }}
+                          role="alert"
+                        >
+                          <p className="m-0 text-sm font-semibold">{saveError}</p>
+                        </div>
+                      ) : null}
+                      <div>
+                        <label style={labelStyle}>Teléfono</label>
+                        <input
+                          className="hostly-input"
+                          value={draft.customerPhone}
+                          onChange={(e) => setDraft((d) => ({ ...d, customerPhone: e.target.value }))}
+                          autoComplete="tel"
+                          disabled={savingReservation}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Personas</label>
+                        <input
+                          className="hostly-input"
+                          type="number"
+                          min={1}
+                          value={draft.partySize}
+                          onChange={(e) => setDraft((d) => ({ ...d, partySize: e.target.value }))}
+                          disabled={savingReservation}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Fecha</label>
+                        <input
+                          className="hostly-input"
+                          type="date"
+                          value={draft.date}
+                          onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+                          required
+                          disabled={savingReservation}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Hora</label>
+                        <input
+                          className="hostly-input"
+                          type="time"
+                          value={draft.time}
+                          onChange={(e) => setDraft((d) => ({ ...d, time: e.target.value }))}
+                          required
+                          disabled={savingReservation}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label style={labelStyle}>Mesa (opcional)</label>
+                        <select
+                          className="hostly-select"
+                          value={draft.tableId}
+                          onChange={(e) => setDraft((d) => ({ ...d, tableId: e.target.value }))}
+                          disabled={savingReservation}
+                        >
+                          <option value="">—</option>
+                          {tablesOptions.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label style={labelStyle}>Notas</label>
+                        <input
+                          className="hostly-input"
+                          value={draft.notes}
+                          onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+                          disabled={savingReservation}
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-              {r.status === "booked" ? (
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    style={primaryBtn}
-                    onClick={() => void handleSeatReservation(r)}
-                    disabled={busy}
-                  >
-                    Ha llegado
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      ...primaryBtn,
-                      background: "transparent",
-                      border: "1px solid rgba(248, 113, 113, 0.32)",
-                      color: "#fecaca",
-                      fontWeight: 800,
-                    }}
-                    onClick={() => void handleUpdateReservationStatus(r.id, "no_show")}
-                    disabled={busy}
-                  >
-                    No show
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      ...primaryBtn,
-                      background: "transparent",
-                      border: "1px solid rgba(148, 163, 184, 0.28)",
-                      color: "#e2e8f0",
-                      fontWeight: 800,
-                    }}
-                    onClick={() => void handleUpdateReservationStatus(r.id, "cancelled")}
-                    disabled={busy}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              ) : r.status === "seated" ? (
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-                  {r.tableId ? (
+                  <div className="mt-0 flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-[var(--hostly-line)] bg-[var(--hostly-surface-card-solid)] pt-4">
                     <button
                       type="button"
-                      style={primaryBtn}
-                      onClick={() => handleOpenTable(r)}
-                      disabled={busy}
+                      className="hostly-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => {
+                        setCreating(false);
+                        setSaveError(null);
+                      }}
+                      disabled={savingReservation}
                     >
-                      Abrir mesa
+                      Cancelar
                     </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    style={{
-                      ...primaryBtn,
-                      background: "rgba(34, 197, 94, 0.16)",
-                      border: "1px solid rgba(34, 197, 94, 0.32)",
-                      color: "#bbf7d0",
-                      fontWeight: 900,
-                    }}
-                    onClick={() => void handleUpdateReservationStatus(r.id, "completed")}
-                    disabled={busy}
-                  >
-                    Completar
-                  </button>
+                    <button
+                      type="submit"
+                      className="hostly-button-primary disabled:cursor-wait disabled:opacity-90"
+                      disabled={savingReservation}
+                    >
+                      {savingReservation ? "Guardando…" : "Guardar reserva"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </section>
+          ) : null}
+
+          {reservations.length === 0 ? (
+            <section className="hostly-mobile-section !py-6">
+              <div className="hostly-mobile-empty-state hostly-mobile-card hostly-mobile-card--compact">
+                <div className="hostly-mobile-empty-state__icon" aria-hidden>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M8 2v3m8-3v3M4 9h16M5 5h14a2 2 0 012 2v13a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </div>
-              ) : null}
-              {r.notes && r.notes.length <= 80 ? (
-                <div style={{ marginTop: 8, color: "#94a3b8", fontSize: 13, fontWeight: 600 }}>
-                  {r.notes}
-                </div>
-              ) : null}
-            </div>
-          ))}
+                <h3 className="hostly-mobile-empty-state__title">No hay reservas para este día</h3>
+                <p className="hostly-mobile-empty-state__desc">
+                  Crea una reserva o cambia la fecha seleccionada.
+                </p>
+              </div>
+            </section>
+          ) : (
+            <section className="hostly-mobile-section !py-2">
+              <div className="flex flex-col gap-2.5">
+                {reservations.map((r) => {
+                  const tableZone = [r.tableLabel, r.zoneName].filter(Boolean).join(" · ");
+                  return (
+                    <div
+                      key={r.id}
+                      className="hostly-mobile-card hostly-mobile-card--compact flex flex-col gap-3 border-l-[3px] border-l-[var(--hostly-ice-200)]"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <span className="text-lg font-bold tabular-nums text-[var(--hostly-navy-deep)]">
+                            {r.time || "—"}
+                          </span>
+                          <span className="font-semibold text-[var(--hostly-ink)]">{r.customerName || "—"}</span>
+                          <span className="text-sm font-medium text-[var(--hostly-ink-muted)]">
+                            {r.partySize ? `${r.partySize} pax` : "—"}
+                          </span>
+                          {tableZone ? (
+                            <span className="text-sm font-semibold text-[var(--hostly-accent)]">{tableZone}</span>
+                          ) : null}
+                        </div>
+                        <span style={statusBadgeStyle(r.status)} className="shrink-0">
+                          {statusLabel(r.status)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>Mesa</label>
+                        <select
+                          className="hostly-select"
+                          value={r.tableId ?? ""}
+                          onChange={(e) => void handleAssignReservationTable(r.id, e.target.value)}
+                          disabled={busy}
+                        >
+                          <option value="">Sin mesa</option>
+                          {tablesOptions.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {r.status === "booked" ? (
+                        <div className="mt-1 flex flex-wrap justify-end gap-2">
+                          <button
+                            type="button"
+                            className="hostly-button-primary !min-h-9 !px-3 !text-[13px]"
+                            onClick={() => void handleSeatReservation(r)}
+                            disabled={busy}
+                          >
+                            Ha llegado
+                          </button>
+                          <button
+                            type="button"
+                            className="hostly-button-secondary !min-h-9 !px-3 !text-[13px] font-semibold text-red-800"
+                            style={{ background: "var(--hostly-danger-soft)", borderColor: "rgba(180, 70, 70, 0.22)" }}
+                            onClick={() => void handleUpdateReservationStatus(r.id, "no_show")}
+                            disabled={busy}
+                          >
+                            No show
+                          </button>
+                          <button
+                            type="button"
+                            className="hostly-button-secondary !min-h-9 !px-3 !text-[13px] font-semibold"
+                            onClick={() => void handleUpdateReservationStatus(r.id, "cancelled")}
+                            disabled={busy}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : r.status === "seated" ? (
+                        <div className="mt-1 flex flex-wrap justify-end gap-2">
+                          {r.tableId ? (
+                            <button
+                              type="button"
+                              className="hostly-button-secondary !min-h-9 !px-3 !text-[13px]"
+                              onClick={() => handleOpenTable(r)}
+                              disabled={busy}
+                            >
+                              Abrir mesa
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="hostly-button-secondary !min-h-9 !px-3 !text-[13px] font-semibold"
+                            style={{
+                              background: "var(--hostly-success-soft)",
+                              borderColor: "rgba(46, 125, 80, 0.22)",
+                              color: "var(--hostly-navy-deep)",
+                            }}
+                            onClick={() => void handleUpdateReservationStatus(r.id, "completed")}
+                            disabled={busy}
+                          >
+                            Completar
+                          </button>
+                        </div>
+                      ) : null}
+                      {r.notes && r.notes.length <= 80 ? (
+                        <div className="text-sm font-medium text-[var(--hostly-ink-muted)]">{r.notes}</div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
-      )}
+      </div>
     </div>
-  </div>
   );
 }

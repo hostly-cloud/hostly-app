@@ -485,29 +485,29 @@ function urgencyTone(minutes: number): {
 } {
   if (minutes >= 20) {
     return {
-      border: "1px solid rgba(239, 68, 68, 0.55)",
-      badgeBg: "rgba(239, 68, 68, 0.22)",
-      badgeColor: "#fecaca",
+      border: "1px solid rgba(180, 70, 70, 0.35)",
+      badgeBg: "var(--hostly-danger-soft)",
+      badgeColor: "#7f1d1d",
     };
   }
   if (minutes >= 10) {
     return {
-      border: "1px solid rgba(251, 146, 60, 0.55)",
-      badgeBg: "rgba(251, 146, 60, 0.22)",
-      badgeColor: "#fed7aa",
+      border: "1px solid rgba(200, 120, 60, 0.35)",
+      badgeBg: "var(--hostly-warning-soft)",
+      badgeColor: "var(--hostly-navy-deep)",
     };
   }
   return {
-    border: "1px solid rgba(148, 163, 184, 0.22)",
-    badgeBg: "rgba(148, 163, 184, 0.18)",
-    badgeColor: "#cbd5f5",
+    border: "1px solid var(--hostly-line)",
+    badgeBg: "var(--hostly-ice-100)",
+    badgeColor: "var(--hostly-navy-mid)",
   };
 }
 
 const servedTone = {
-  border: "1px solid rgba(34, 197, 94, 0.32)",
-  badgeBg: "rgba(34, 197, 94, 0.18)",
-  badgeColor: "#bbf7d0",
+  border: "1px solid rgba(46, 125, 80, 0.22)",
+  badgeBg: "var(--hostly-success-soft)",
+  badgeColor: "var(--hostly-navy-deep)",
 };
 
 function formatMinutes(minutes: number): string {
@@ -524,7 +524,7 @@ const boardStyle: CSSProperties = {
   minHeight: 0,
   display: "grid",
   gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: 12,
+  gap: 8,
 };
 
 const columnStyle: CSSProperties = {
@@ -532,46 +532,49 @@ const columnStyle: CSSProperties = {
   flexDirection: "column",
   minHeight: 0,
   minWidth: 0,
-  borderRadius: 14,
-  border: "1px solid rgba(148, 163, 184, 0.18)",
-  background: "rgba(15, 23, 42, 0.45)",
+  borderRadius: 10,
+  border: "1px solid var(--hostly-line)",
+  background: "var(--hostly-surface-card-solid)",
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
 const columnHeaderStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "10px 14px",
-  borderBottom: "1px solid rgba(148, 163, 184, 0.16)",
-  color: "#e2e8f0",
+  padding: "6px 10px",
+  borderBottom: "1px solid var(--hostly-line)",
+  color: "var(--hostly-navy-deep)",
+  background: "var(--hostly-ice-50)",
 };
 
 const columnTitleStyle: CSSProperties = {
   margin: 0,
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 800,
-  letterSpacing: "0.08em",
+  letterSpacing: "0.07em",
   textTransform: "uppercase",
-  color: "#cbd5f5",
+  color: "var(--hostly-navy-mid)",
 };
 
 const columnCountStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
-  padding: "2px 8px",
+  padding: "1px 7px",
   borderRadius: 999,
-  background: "rgba(148, 163, 184, 0.18)",
-  color: "#e2e8f0",
+  background: "var(--hostly-ice-100)",
+  color: "var(--hostly-navy-deep)",
+  border: "1px solid var(--hostly-line)",
 };
 
 const columnBodyStyle: CSSProperties = {
   flex: 1,
   minHeight: 0,
   overflow: "auto",
-  padding: 10,
+  padding: 6,
   display: "flex",
   flexDirection: "column",
-  gap: 10,
+  gap: 6,
 };
 
 /** Contenedor vertical métricas + rail en modo comandero (cocina). */
@@ -582,7 +585,7 @@ const ticketRailOuterBodyStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
-  paddingTop: 10,
+  paddingTop: 6,
 };
 
 /** Carril horizontal de tickets por estado (scroll táctil). */
@@ -591,13 +594,13 @@ const ticketRailStripStyle: CSSProperties = {
   minHeight: 0,
   display: "flex",
   flexDirection: "row",
-  gap: 12,
+  gap: 8,
   alignItems: "stretch",
   overflowX: "auto",
   overflowY: "hidden",
-  paddingLeft: 10,
-  paddingRight: 10,
-  paddingBottom: 12,
+  paddingLeft: 6,
+  paddingRight: 6,
+  paddingBottom: 8,
   overscrollBehaviorX: "contain",
   scrollSnapType: "x proximity",
   touchAction: "pan-x",
@@ -607,29 +610,29 @@ const ticketRailStripStyle: CSSProperties = {
 /** Una tarjeta-ticket dentro del rail: ancho estable + snap + scroll vertical interno. */
 const ticketRailCardWrapStyle: CSSProperties = {
   flex: "0 0 auto",
-  width: "clamp(260px, 82vw, 328px)",
-  minWidth: "clamp(260px, 82vw, 328px)",
+  width: "clamp(220px, 76vw, 288px)",
+  minWidth: "clamp(220px, 76vw, 288px)",
   maxHeight: "100%",
   overflowY: "auto",
   scrollSnapAlign: "start",
 };
 
 const ticketRailCardChromeStyle: CSSProperties = {
-  border: "1px solid rgba(51, 65, 85, 0.65)",
-  boxShadow: "4px 4px 0 rgba(15, 23, 42, 0.75)",
+  border: "1px solid var(--hostly-line)",
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
 /** Ticket dentro del archivo servidos (menos contraste). */
 const archiveTicketChromeStyle: CSSProperties = {
-  border: "1px solid rgba(71, 85, 105, 0.45)",
-  boxShadow: "2px 2px 0 rgba(15, 23, 42, 0.42)",
-  opacity: 0.93,
+  border: "1px solid var(--hostly-line)",
+  boxShadow: "none",
+  opacity: 0.97,
 };
 
 const emptyColumnStyle: CSSProperties = {
-  padding: "24px 12px",
+  padding: "14px 8px",
   textAlign: "center",
-  color: "#64748b",
+  color: "var(--hostly-ink-muted)",
   fontSize: 12,
   fontWeight: 600,
 };
@@ -641,7 +644,7 @@ const ticketRailEmptyAreaStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "0 10px 16px",
+  padding: "0 8px 12px",
 };
 
 /** Columna interna cuando no hay rail (lista vertical clásica). */
@@ -650,83 +653,58 @@ const ticketRailInnerLegacyStyle: CSSProperties = {
   minHeight: 0,
   display: "flex",
   flexDirection: "column",
-  gap: 10,
+  gap: 6,
 };
 
 /** Panel desplegable cocina: archivo de líneas servidas (solo UI). */
 const kitchenServedArchivePanelStyle: CSSProperties = {
   flexShrink: 0,
   borderRadius: 12,
-  border: "1px solid rgba(71, 85, 105, 0.42)",
-  background:
-    "linear-gradient(180deg, rgba(22, 36, 28, 0.55) 0%, rgba(15, 23, 42, 0.72) 100%)",
-  maxHeight: "min(42vh, 380px)",
+  border: "1px solid var(--hostly-line)",
+  background: "var(--hostly-surface-card-solid)",
+  maxHeight: "min(40vh, 360px)",
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
-  boxShadow: "0 14px 36px -22px rgba(0, 0, 0, 0.55)",
-};
-
-const emptyBoardStyle: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "40px 24px",
-  borderRadius: 14,
-  border: "1px dashed rgba(148, 163, 184, 0.28)",
-  background: "rgba(15, 23, 42, 0.45)",
-  color: "#94a3b8",
-  fontSize: 14,
-  fontWeight: 600,
-  textAlign: "center",
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
 const cardBaseStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 8,
-  padding: 12,
-  borderRadius: 12,
-  background: "rgba(15, 23, 42, 0.72)",
-  color: "#e2e8f0",
-  boxShadow: "0 8px 24px -18px rgba(2, 6, 23, 0.9)",
+  gap: 6,
+  padding: 8,
+  borderRadius: 8,
+  background: "#ffffff",
+  color: "var(--hostly-ink)",
+  border: "1px solid var(--hostly-line)",
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
-const tableTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 14,
-  fontWeight: 700,
-  letterSpacing: "-0.01em",
-  color: "#f8fafc",
-};
-
-/** Mesa destacada en KDS (legible a distancia). */
 const mesaChipStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   alignSelf: "flex-start",
-  padding: "6px 12px",
-  borderRadius: 999,
-  background: "#0f172a",
+  padding: "3px 8px",
+  borderRadius: 6,
+  background: "var(--hostly-navy-deep)",
   color: "#ffffff",
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 800,
-  letterSpacing: "0.04em",
+  letterSpacing: "0.03em",
   lineHeight: 1,
 };
 
 const mesaChipArchiveStyle: CSSProperties = {
   ...mesaChipStyle,
-  padding: "5px 10px",
-  fontSize: 12,
+  padding: "3px 8px",
+  fontSize: 11,
 };
 
 const archiveLineProductStyle: CSSProperties = {
-  fontSize: 15,
+  fontSize: 14,
   fontWeight: 800,
-  color: "#0f172a",
+  color: "var(--hostly-navy-deep)",
   lineHeight: 1.3,
   letterSpacing: "-0.02em",
 };
@@ -734,114 +712,101 @@ const archiveLineProductStyle: CSSProperties = {
 const archiveLineSecondaryRowStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
-  color: "#64748b",
+  color: "var(--hostly-ink-muted)",
   lineHeight: 1.35,
 };
 
 const archiveServedRowSurfaceStyle: CSSProperties = {
-  border: "1px solid rgba(148, 163, 184, 0.38)",
-  background: "rgba(248, 250, 252, 0.96)",
+  border: "1px solid var(--hostly-line)",
+  background: "var(--hostly-ice-50)",
 };
 
 const badgeStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 700,
-  padding: "2px 8px",
+  padding: "2px 7px",
   borderRadius: 999,
-  letterSpacing: "0.02em",
+  letterSpacing: "0.03em",
 };
 
 const lineRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: 8,
-  padding: "8px 10px",
-  borderRadius: 10,
-  background: "rgba(148, 163, 184, 0.08)",
-  border: "1px solid rgba(148, 163, 184, 0.12)",
+  gap: 6,
+  padding: "6px 8px",
+  borderRadius: 8,
+  background: "var(--hostly-ice-50)",
+  border: "1px solid var(--hostly-line)",
 };
 
 const lineNameStyle: CSSProperties = {
-  fontSize: 14,
-  fontWeight: 600,
-  color: "#f1f5f9",
+  fontSize: 13,
+  fontWeight: 700,
+  color: "var(--hostly-navy-deep)",
   lineHeight: 1.2,
 };
 
 const lineMetaStyle: CSSProperties = {
-  fontSize: 12,
-  color: "#94a3b8",
-  marginTop: 6,
+  fontSize: 11,
+  color: "var(--hostly-ink-muted)",
+  marginTop: 4,
 };
 
 const lineNoteStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 500,
+  fontSize: 11,
+  fontWeight: 600,
   fontStyle: "italic",
-  color: "#fde047",
+  color: "#9a5d16",
   lineHeight: 1.3,
-  marginTop: 4,
+  marginTop: 3,
   wordBreak: "break-word",
 };
 
 const lineCourseTypeStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 400,
-  color: "#9ca3af",
+  fontSize: 11,
+  fontWeight: 500,
+  color: "var(--hostly-ink-muted)",
   lineHeight: 1.2,
   marginTop: 2,
 };
 
 const lineMesaLabelStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 600,
-  color: "#9ca3af",
+  color: "var(--hostly-ink-muted)",
   lineHeight: 1.2,
 };
 
 const lineExtrasJoinedStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 500,
-  color: "#93c5fd",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--hostly-accent)",
   lineHeight: 1.25,
-  marginTop: 4,
+  marginTop: 3,
   wordBreak: "break-word",
 };
 
 const lineRemovedStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 500,
-  color: "#cbd5e1",
+  color: "var(--hostly-ink-soft)",
   lineHeight: 1.25,
-  marginTop: 4,
+  marginTop: 3,
   wordBreak: "break-word",
 };
 
 const coursePillStyle: CSSProperties = {
   flexShrink: 0,
-  fontSize: 10,
+  fontSize: 9,
   fontWeight: 800,
   letterSpacing: "0.06em",
   padding: "2px 6px",
-  borderRadius: 6,
-  background: "rgba(96, 165, 250, 0.2)",
-  color: "#bfdbfe",
-  border: "1px solid rgba(96, 165, 250, 0.35)",
+  borderRadius: 4,
+  background: "var(--hostly-info-soft)",
+  color: "var(--hostly-navy-deep)",
+  border: "1px solid rgba(49, 95, 125, 0.18)",
   lineHeight: 1.1,
-};
-
-const markButtonStyle: CSSProperties = {
-  appearance: "none",
-  border: "1px solid rgba(34, 197, 94, 0.45)",
-  background: "rgba(34, 197, 94, 0.18)",
-  color: "#bbf7d0",
-  borderRadius: 8,
-  padding: "6px 10px",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
 };
 
 type DecoratedLine = BoardLine & {
@@ -1021,20 +986,23 @@ function kitchenPassChunkTypeLabel(chunk: BoardLine[]): string {
 }
 
 function getPassChunkClassName(label: string): string {
-  if (label === "Bebidas") return "rounded-xl border border-blue-200 bg-blue-50 p-2";
+  if (label === "Bebidas")
+    return "rounded-lg border border-sky-200/80 bg-sky-50/90 p-1.5";
   if (label === "Entrantes")
-    return "rounded-xl border border-emerald-200 bg-emerald-50 p-2";
-  if (label === "Segundos") return "rounded-xl border border-orange-200 bg-orange-50 p-2";
-  if (label === "Postres") return "rounded-xl border border-purple-200 bg-purple-50 p-2";
-  return "rounded-xl border border-gray-200 bg-gray-50 p-2";
+    return "rounded-lg border border-emerald-200/80 bg-emerald-50/80 p-1.5";
+  if (label === "Segundos")
+    return "rounded-lg border border-amber-200/80 bg-amber-50/70 p-1.5";
+  if (label === "Postres")
+    return "rounded-lg border border-violet-200/80 bg-violet-50/70 p-1.5";
+  return "rounded-lg border border-[var(--hostly-line)] bg-[var(--hostly-ice-50)] p-1.5";
 }
 
 function getPassHeaderTextClassName(label: string): string {
-  if (label === "Bebidas") return "text-xs font-semibold text-blue-700";
-  if (label === "Entrantes") return "text-xs font-semibold text-emerald-700";
-  if (label === "Segundos") return "text-xs font-semibold text-orange-700";
-  if (label === "Postres") return "text-xs font-semibold text-purple-700";
-  return "text-xs font-semibold text-gray-500";
+  if (label === "Bebidas") return "text-[11px] font-bold text-sky-800";
+  if (label === "Entrantes") return "text-[11px] font-bold text-emerald-800";
+  if (label === "Segundos") return "text-[11px] font-bold text-amber-900";
+  if (label === "Postres") return "text-[11px] font-bold text-violet-800";
+  return "text-[11px] font-bold text-[var(--hostly-ink-muted)]";
 }
 
 export default function OrderItemsBoard({
@@ -1423,7 +1391,29 @@ export default function OrderItemsBoard({
     columns.served.reduce((acc, g) => acc + g.lines.length, 0);
 
   if (totalLines === 0) {
-    return <div style={emptyBoardStyle}>{emptyMessage}</div>;
+    const idleCopy =
+      emptyMessage.toLowerCase().includes("barra")
+        ? "La barra está al día."
+        : emptyMessage.toLowerCase().includes("sala") ||
+            emptyMessage.toLowerCase().includes("servir")
+          ? "Todo servido o sin platos listos."
+          : "La cocina está al día.";
+    return (
+      <div className="hostly-mobile-empty-state hostly-mobile-card-soft flex min-h-[200px] flex-1 flex-col justify-center">
+        <div className="hostly-mobile-empty-state__icon" aria-hidden>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+        <h3 className="hostly-mobile-empty-state__title">{emptyMessage}</h3>
+        <p className="hostly-mobile-empty-state__desc">{idleCopy}</p>
+      </div>
+    );
   }
 
   return (
@@ -1439,9 +1429,9 @@ export default function OrderItemsBoard({
         </div>
       )}
       {kitchenHideServedColumn && servedArchiveOpen ? (
-        <div
+        <figure
+          className="hostly-mobile-operational-card !gap-0 !p-0 !shadow-none ring-1 ring-emerald-500/10"
           style={kitchenServedArchivePanelStyle}
-          className="ring-1 ring-emerald-500/15"
           role="region"
           aria-label="Histórico de líneas servidas"
           id="kds-served-archive-panel"
@@ -1471,7 +1461,7 @@ export default function OrderItemsBoard({
               sentPassesGrouping={false}
             />
           </div>
-        </div>
+        </figure>
       ) : null}
       <div
         className={
@@ -1561,7 +1551,7 @@ export default function OrderItemsBoard({
       </div>
       {boardFeedbackMessage && (
         <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
-          <div className="rounded-full bg-green-600 px-4 py-2 text-sm text-white shadow">
+          <div className="hostly-mobile-card--compact hostly-button-primary cursor-default rounded-full !px-4 !py-2 !text-[13px] !shadow-md">
             {boardFeedbackMessage}
           </div>
         </div>
@@ -1596,14 +1586,9 @@ function BoardLineRow({
     line.sentAtMs != null ? Math.floor((nowMs - line.sentAtMs) / 60000) : 0;
   const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
   const isServeAction = action?.nextStatus === "served";
-  const servedMarkStyles: CSSProperties = isServeAction
-    ? {
-        color: "#14532d",
-        background: "rgba(34, 197, 94, 0.35)",
-        border: "1px solid rgba(22, 101, 52, 0.55)",
-        fontSize: 11,
-      }
-    : {};
+  const markBtnClass = isServeAction
+    ? "hostly-button-secondary !min-h-8 !border-emerald-200 !bg-emerald-600 !px-2.5 !py-1.5 !text-[11px] !font-semibold !text-white hover:!bg-emerald-700"
+    : "hostly-button-primary !min-h-8 !px-2.5 !py-1.5 !text-[11px]";
   const markLabel = isServeAction ? "Servir" : (action?.label ?? "");
 
   const archiveProductRow =
@@ -1671,14 +1656,8 @@ function BoardLineRow({
           <button
             type="button"
             disabled={busy}
-            style={{
-              ...markButtonStyle,
-              ...servedMarkStyles,
-              alignSelf: "center",
-              flexShrink: 0,
-              opacity: busy ? 0.6 : 1,
-              cursor: busy ? "progress" : "pointer",
-            }}
+            className={`${markBtnClass} shrink-0 self-center disabled:opacity-60`}
+            style={{ cursor: busy ? "progress" : "pointer" }}
             onClick={() =>
               onMark(line.orderId, line.itemId, action.nextStatus)
             }
@@ -1781,14 +1760,8 @@ function BoardLineRow({
         <button
           type="button"
           disabled={busy}
-          style={{
-            ...markButtonStyle,
-            ...servedMarkStyles,
-            alignSelf: "center",
-            flexShrink: 0,
-            opacity: busy ? 0.6 : 1,
-            cursor: busy ? "progress" : "pointer",
-          }}
+          className={`${markBtnClass} shrink-0 self-center disabled:opacity-60`}
+          style={{ cursor: busy ? "progress" : "pointer" }}
           onClick={() =>
             onMark(line.orderId, line.itemId, action.nextStatus)
           }
@@ -1987,8 +1960,8 @@ function BoardColumn({
       : {}),
     ...(archiveMuted
       ? {
-          background: "rgba(15, 23, 42, 0.42)",
-          borderColor: "rgba(71, 85, 105, 0.38)",
+          background: "var(--hostly-success-soft)",
+          borderColor: "rgba(46, 125, 80, 0.22)",
         }
       : {}),
   };
@@ -2005,8 +1978,8 @@ function BoardColumn({
   if (archiveMuted) {
     resolvedTitleStyle = {
       ...resolvedTitleStyle,
-      color: "#86efac",
-      opacity: 0.84,
+      color: "var(--hostly-navy-deep)",
+      opacity: 1,
       fontSize: ticketRailLayout ? 12 : (resolvedTitleStyle.fontSize ?? 12),
     };
   }
@@ -2016,8 +1989,8 @@ function BoardColumn({
   if (archiveMuted) {
     resolvedHeaderStyle = {
       ...resolvedHeaderStyle,
-      borderBottom: "1px solid rgba(71, 85, 105, 0.35)",
-      background: "rgba(21, 32, 28, 0.42)",
+      borderBottom: "1px solid rgba(46, 125, 80, 0.2)",
+      background: "rgba(255, 255, 255, 0.35)",
     };
   }
   if (ticketRailLayout && railVerticalBand === "compact") {
@@ -2056,7 +2029,7 @@ function BoardColumn({
             : railVerticalBand === "main"
               ? "flex w-full min-w-0 flex-[2_1_0] basis-0 flex-col min-h-[240px] sm:min-h-[260px]"
               : railVerticalBand === "compact"
-                ? "flex w-full min-w-0 flex-[1_1_0] basis-0 flex-col min-h-[200px] border-t border-white/10 pt-0.5 sm:min-h-[220px]"
+                ? "flex w-full min-w-0 flex-[1_1_0] basis-0 flex-col min-h-[200px] border-t border-[var(--hostly-line)] pt-0.5 sm:min-h-[220px]"
                 : "flex w-full min-w-0 flex-1 lg:min-h-0 min-h-[260px] flex-col"
           : compactArchiveColumn
             ? "flex min-h-0 flex-1 flex-col min-w-0"
@@ -2081,24 +2054,24 @@ function BoardColumn({
           >
             {stationStatus ? (
               <div
-                className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${getStationStatusClass(stationStatus)}`}
+                className={`hostly-mobile-pill pointer-events-none mb-1.5 !px-2 !py-0.5 !text-[10px] font-bold ${getStationStatusClass(stationStatus)}`}
               >
                 {stationStatusLabel}
               </div>
             ) : null}
             {pendingCount > 0 ? (
               <>
-                <div className="flex gap-2">
-                  <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium">
+                <div className="flex flex-wrap gap-1.5">
+                  <div className="hostly-mobile-pill pointer-events-none !px-2 !py-0.5 !text-[10px] font-bold text-[var(--hostly-navy-deep)]">
                     {pendingCount} {pendingLabel}
                   </div>
                   {attentionCount > 0 ? (
-                    <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700">
+                    <div className="hostly-mobile-pill pointer-events-none !border-amber-200/80 !bg-amber-50 !px-2 !py-0.5 !text-[10px] font-bold text-amber-900">
                       {attentionCount} atención
                     </div>
                   ) : null}
                   {urgentCount > 0 ? (
-                    <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+                    <div className="hostly-mobile-pill pointer-events-none !border-red-200 !bg-red-50 !px-2 !py-0.5 !text-[10px] font-bold text-red-800">
                       {urgentCount} urgentes
                     </div>
                   ) : null}
@@ -2251,9 +2224,10 @@ function BoardColumn({
                   <div
                     style={{
                       display: "flex",
-                      flexDirection: "column",
-                      alignItems: "stretch",
-                      gap: 8,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      flexWrap: "wrap",
                       minWidth: 0,
                       flex: "1 1 auto",
                     }}
@@ -2264,29 +2238,17 @@ function BoardColumn({
                         tableKey: g.tableKey,
                       })}
                     </span>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <h4 style={{ ...tableTitleStyle, fontWeight: 600, opacity: 0.92 }}>
-                        {g.tableLabel}
-                      </h4>
-                      {urgencyLabel ? (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
-                            urgencyLabel === "Urgente"
-                              ? "border-red-300/80 bg-transparent text-red-600"
-                              : "border-orange-300/80 bg-transparent text-orange-700"
-                          }`}
-                        >
-                          {urgencyLabel}
-                        </span>
-                      ) : null}
-                    </div>
+                    {urgencyLabel ? (
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                          urgencyLabel === "Urgente"
+                            ? "border border-red-200 bg-red-50 text-red-800"
+                            : "border border-amber-200 bg-amber-50 text-amber-900"
+                        }`}
+                      >
+                        {urgencyLabel}
+                      </span>
+                    ) : null}
                   </div>
                   {showUrgency && g.oldestSentAtMs != null ? (
                     <span
@@ -2303,8 +2265,8 @@ function BoardColumn({
                 {ticketRailLayout ? (
                   <div
                     style={{
-                      margin: "6px 0 10px",
-                      borderTop: "1px dashed rgba(148, 163, 184, 0.45)",
+                      margin: "4px 0 6px",
+                      borderTop: "1px dashed rgba(54, 86, 116, 0.18)",
                     }}
                     aria-hidden
                   />
@@ -2367,7 +2329,7 @@ function BoardColumn({
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <span style={mesaChipStyle}>{passMesaHeadline}</span>
-                              <span className="text-sm font-extrabold text-slate-800 tracking-tight">
+                              <span className="text-[13px] font-extrabold tracking-tight text-[var(--hostly-navy-deep)]">
                                 Pase {originalIndex + 1}
                                 {` · ${progressLabel}`}
                               </span>
@@ -2408,9 +2370,9 @@ function BoardColumn({
                           passTargets.length > 0 ? (
                             <button
                               type="button"
-                              className={`rounded-full bg-green-600 px-2 py-1 text-xs font-medium text-white shrink-0 ${
+                              className={`hostly-button-primary !min-h-8 !px-3 !py-1.5 !text-[11px] !font-semibold shrink-0 ${
                                 !!busyPassKey || passBulkBusy
-                                  ? "opacity-60 cursor-not-allowed"
+                                  ? "cursor-not-allowed opacity-60"
                                   : ""
                               }`}
                               disabled={!!busyPassKey || passBulkBusy}
@@ -2450,11 +2412,11 @@ function BoardColumn({
                         {!servedHistoryPresentation ? (
                         <div
                           style={{
-                            fontSize: 11,
-                            fontWeight: 900,
-                            letterSpacing: "0.08em",
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: "0.07em",
                             textTransform: "uppercase",
-                            color: "#94a3b8",
+                            color: "var(--hostly-ink-muted)",
                             marginTop: 2,
                           }}
                         >
