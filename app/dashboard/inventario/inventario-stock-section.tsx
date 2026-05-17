@@ -925,7 +925,7 @@ export default function InventarioStockSection() {
           font-size: 16px;
           font-weight: 850;
           line-height: 1.2;
-          color: #0f172a;
+          color: var(--hostly-ink-strong);
           letter-spacing: -0.02em;
         }
         .hostly-inventory-head-sub {
@@ -1032,7 +1032,7 @@ export default function InventarioStockSection() {
           border: 1px solid rgba(100, 116, 139, 0.16);
           outline: none;
           background: rgba(255, 255, 255, 0.96);
-          color: #0f172a;
+          color: var(--hostly-ink-strong);
           font-size: 13px;
           font-weight: 650;
         }
@@ -1049,7 +1049,7 @@ export default function InventarioStockSection() {
           border-radius: 10px;
           background: rgba(241, 248, 252, 0.65);
           border: 1px solid rgba(100, 116, 139, 0.1);
-          color: #0f172a;
+          color: var(--hostly-ink-strong);
         }
         .hostly-inventory-switch-row--compact {
           min-height: 0;
@@ -1110,7 +1110,7 @@ export default function InventarioStockSection() {
           margin: 0;
           font-size: 13px;
           font-weight: 800;
-          color: #0f172a;
+          color: var(--hostly-ink-strong);
           letter-spacing: -0.01em;
         }
         .hostly-inventory-media-hint {
@@ -1187,7 +1187,7 @@ export default function InventarioStockSection() {
         .hostly-inventory-movements-delta {
           font-weight: 850;
           font-variant-numeric: tabular-nums;
-          color: #0f172a;
+          color: var(--hostly-ink-strong);
         }
         .hostly-inventory-movements-delta[data-sign="plus"] {
           color: #0f766e;

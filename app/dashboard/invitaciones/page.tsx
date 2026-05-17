@@ -18,24 +18,27 @@ import {
 } from "@/lib/firestore/user-restaurant-profile";
 
 const inputStyle: CSSProperties = {
-  padding: "12px 14px",
+  padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid #334155",
-  backgroundColor: "#0f172a",
-  color: "#f8fafc",
+  border: "1px solid var(--hostly-line-strong)",
+  backgroundColor: "#ffffff",
+  color: "var(--hostly-ink)",
   fontSize: 15,
   width: "100%",
   maxWidth: 400,
   boxSizing: "border-box",
   outline: "none",
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
 const labelStyle: CSSProperties = {
   display: "block",
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 600,
-  color: "#94a3b8",
-  marginBottom: 8,
+  color: "var(--hostly-ink-muted)",
+  marginBottom: 6,
+  letterSpacing: "0.055em",
+  textTransform: "uppercase",
 };
 
 function isValidInviteEmail(raw: string): boolean {

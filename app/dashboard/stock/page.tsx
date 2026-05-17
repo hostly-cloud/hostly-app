@@ -59,29 +59,32 @@ const qtyFormInputStyle = {
 } satisfies CSSProperties;
 
 const inputStyle = {
-  padding: "12px 14px",
+  padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid #334155",
-  backgroundColor: "#0f172a",
-  color: "#f8fafc",
-  fontSize: 16,
+  border: "1px solid var(--hostly-line-strong)",
+  backgroundColor: "#ffffff",
+  color: "var(--hostly-ink)",
+  fontSize: 15,
   width: "100%",
   boxSizing: "border-box",
+  boxShadow: "var(--hostly-shadow-hairline)",
 } satisfies CSSProperties;
 
 const labelStyle = {
   display: "block",
-  fontSize: 13,
+  fontSize: 11,
   fontWeight: 600,
-  color: "#94a3b8",
-  marginBottom: 8,
+  color: "var(--hostly-ink-muted)",
+  marginBottom: 6,
+  letterSpacing: "0.055em",
+  textTransform: "uppercase",
 } satisfies CSSProperties;
 
 const colHeadStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  color: "#64748b",
-  letterSpacing: "0.07em",
+  fontSize: 10,
+  fontWeight: 600,
+  color: "var(--hostly-ink-muted)",
+  letterSpacing: "0.08em",
   textTransform: "uppercase",
   lineHeight: 1.2,
 };
@@ -111,10 +114,10 @@ function statusPillStyle(tone: StatusTone): CSSProperties {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "10px 14px",
+    padding: "8px 12px",
     borderRadius: 10,
-    fontSize: 13,
-    fontWeight: 800,
+    fontSize: 12,
+    fontWeight: 600,
     letterSpacing: "0.04em",
     textTransform: "uppercase",
     lineHeight: 1.2,
@@ -124,30 +127,30 @@ function statusPillStyle(tone: StatusTone): CSSProperties {
     case "ok":
       return {
         ...base,
-        background: "rgba(34, 197, 94, 0.2)",
-        border: "1px solid rgba(74, 222, 128, 0.4)",
-        color: "#bbf7d0",
+        background: "var(--hostly-success-soft)",
+        border: "1px solid rgba(22, 163, 74, 0.35)",
+        color: "#166534",
       };
     case "bajo":
       return {
         ...base,
-        background: "rgba(245, 158, 11, 0.14)",
-        border: "1px solid rgba(251, 191, 36, 0.45)",
-        color: "#fde68a",
+        background: "var(--hostly-warning-soft)",
+        border: "1px solid rgba(217, 119, 6, 0.35)",
+        color: "#92400e",
       };
     case "critico":
       return {
         ...base,
-        background: "rgba(239, 68, 68, 0.15)",
-        border: "1px solid rgba(248, 113, 113, 0.45)",
-        color: "#fecaca",
+        background: "var(--hostly-danger-soft)",
+        border: "1px solid rgba(220, 38, 38, 0.32)",
+        color: "#991b1b",
       };
     default:
       return {
         ...base,
-        background: "rgba(127, 29, 29, 0.35)",
-        border: "1px solid rgba(248, 113, 113, 0.55)",
-        color: "#fecaca",
+        background: "var(--hostly-danger-soft)",
+        border: "1px solid rgba(127, 29, 29, 0.35)",
+        color: "#7f1d1d",
       };
   }
 }
@@ -243,7 +246,7 @@ export default function StockPage() {
         label: t("stock.metricTotalProducts"),
         value: String(stockStats.total),
         sub: t("stock.kpiTotalSub"),
-        accent: "#94a3b8",
+        accent: "var(--hostly-ink-muted)",
       },
       {
         key: "crit",
@@ -272,10 +275,10 @@ export default function StockPage() {
 
   const metricNum: CSSProperties = {
     ...tabularFigures,
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: 700,
-    letterSpacing: "-0.03em",
-    color: "#f8fafc",
+    letterSpacing: "-0.025em",
+    color: "var(--hostly-navy-deep)",
     lineHeight: 1.1,
   };
 
@@ -364,7 +367,7 @@ export default function StockPage() {
         operationalFocus
         lockViewport
       >
-        <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
+        <p style={{ color: "var(--hostly-ink-muted)", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
   }
@@ -381,9 +384,9 @@ export default function StockPage() {
           type="button"
           onClick={openCreate}
           style={{
-            border: "1px solid rgba(34, 197, 94, 0.38)",
-            background: "rgba(34, 197, 94, 0.1)",
-            color: "#86efac",
+            border: "1px solid rgba(34, 197, 94, 0.32)",
+            background: "var(--hostly-success-soft)",
+            color: "var(--hostly-navy-deep)",
             padding: "9px 14px",
             borderRadius: 10,
             fontWeight: 600,
@@ -413,9 +416,9 @@ export default function StockPage() {
               flexShrink: 0,
               padding: "12px 14px",
               borderRadius: 10,
-              background: "rgba(34, 197, 94, 0.12)",
-              border: "1px solid rgba(34, 197, 94, 0.3)",
-              color: "#bbf7d0",
+              background: "var(--hostly-success-soft)",
+              border: "1px solid rgba(22, 163, 74, 0.28)",
+              color: "#166534",
               fontSize: 14,
               lineHeight: 1.35,
             }}
@@ -430,11 +433,11 @@ export default function StockPage() {
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
-              padding: "12px 14px",
+              padding: "10px 12px",
               borderRadius: 10,
-              background: "rgba(245, 158, 11, 0.08)",
-              border: "1px solid rgba(245, 158, 11, 0.32)",
-              color: "#fcd34d",
+              background: "var(--hostly-warning-soft)",
+              border: "1px solid rgba(217, 119, 6, 0.28)",
+              color: "#92400e",
               fontSize: 13,
               fontWeight: 600,
               lineHeight: 1.35,
@@ -456,11 +459,11 @@ export default function StockPage() {
             <div
               key={m.key}
               style={{
-                background: "#1e293b",
+                background: "var(--hostly-surface-card-solid)",
                 borderRadius: 12,
-                padding: "9px 11px",
-                border: "1px solid #334155",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.14)",
+                padding: "8px 10px",
+                border: "1px solid var(--hostly-line)",
+                boxShadow: "var(--hostly-shadow-card)",
                 borderTop: `2px solid ${m.accent}`,
                 minWidth: 0,
               }}
@@ -469,8 +472,8 @@ export default function StockPage() {
                 style={{
                   margin: 0,
                   fontSize: 10,
-                  fontWeight: 700,
-                  color: "#64748b",
+                  fontWeight: 600,
+                  color: "var(--hostly-ink-muted)",
                   textTransform: "uppercase",
                   letterSpacing: "0.07em",
                   lineHeight: 1.2,
@@ -494,7 +497,7 @@ export default function StockPage() {
                 style={{
                   margin: "4px 0 0",
                   fontSize: 10,
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-soft)",
                   lineHeight: 1.3,
                   display: "-webkit-box",
                   WebkitLineClamp: 2,
@@ -516,16 +519,16 @@ export default function StockPage() {
             flexDirection: "column",
             overflow: "hidden",
             borderRadius: 12,
-            background: "#1e293b",
-            border: "1px solid #334155",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.14)",
+            background: "var(--hostly-surface-card-soft)",
+            border: "1px solid var(--hostly-line)",
+            boxShadow: "var(--hostly-shadow-card)",
           }}
         >
             <div
             style={{
               flexShrink: 0,
-              padding: "8px 12px 6px",
-              borderBottom: "1px solid #334155",
+              padding: "7px 10px 5px",
+              borderBottom: "1px solid var(--hostly-line)",
               display: "flex",
               flexWrap: "wrap",
               alignItems: "flex-end",
@@ -574,7 +577,7 @@ export default function StockPage() {
                 textAlign: "center",
               }}
             >
-              <p style={{ margin: 0, fontSize: 14, color: "#94a3b8" }}>{t("stock.noProducts")}</p>
+              <p style={{ margin: 0, fontSize: 14, color: "var(--hostly-ink-muted)" }}>{t("stock.noProducts")}</p>
               <button
                 type="button"
                 onClick={openCreate}
@@ -609,8 +612,8 @@ export default function StockPage() {
                 <span
                   style={{
                     fontSize: 12,
-                    fontWeight: 800,
-                    color: "#94a3b8",
+                    fontWeight: 600,
+                    color: "var(--hostly-ink-muted)",
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
                   }}
@@ -633,12 +636,12 @@ export default function StockPage() {
                       type="button"
                       onClick={() => setListFilter(f.id)}
                       style={{
-                        border: active ? "1px solid rgba(96, 165, 250, 0.55)" : "1px solid #334155",
-                        background: active ? "rgba(59, 130, 246, 0.18)" : "#0f172a",
-                        color: active ? "#e2e8f0" : "#94a3b8",
-                        padding: "8px 14px",
+                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-line)",
+                        background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
+                        color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
+                        padding: "7px 12px",
                         borderRadius: 999,
-                        fontWeight: 700,
+                        fontWeight: 600,
                         cursor: "pointer",
                         fontSize: 13,
                         lineHeight: 1.25,
@@ -658,13 +661,14 @@ export default function StockPage() {
                     maxHeight: "min(240px, 32vh)",
                     overflowY: "auto",
                     margin: "0 10px 8px",
-                    padding: "10px 12px",
-                    background: "#0f172a",
+                    padding: "9px 11px",
+                    background: "var(--hostly-surface-card-solid)",
                     borderRadius: 10,
-                    border: "1px solid #334155",
+                    border: "1px solid var(--hostly-line)",
+                    boxShadow: "var(--hostly-shadow-card)",
                   }}
                 >
-                  <h3 style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 700, lineHeight: 1.2, color: "#f8fafc" }}>
+                  <h3 style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 600, lineHeight: 1.2, color: "var(--hostly-ink-strong)" }}>
                     {editingId ? t("stock.editProduct") : t("stock.newProduct")}
                   </h3>
                   <div
@@ -726,11 +730,11 @@ export default function StockPage() {
                       onClick={submitForm}
                       style={{
                         border: "none",
-                        background: "#3b82f6",
-                        color: "#fff",
-                        padding: "12px 20px",
+                        background: "var(--hostly-accent)",
+                        color: "#ffffff",
+                        padding: "10px 18px",
                         borderRadius: 10,
-                        fontWeight: 700,
+                        fontWeight: 600,
                         cursor: "pointer",
                         fontSize: 15,
                       }}
@@ -741,10 +745,10 @@ export default function StockPage() {
                       type="button"
                       onClick={closeForm}
                       style={{
-                        border: "1px solid #475569",
+                        border: "1px solid var(--hostly-line)",
                         background: "transparent",
-                        color: "#e2e8f0",
-                        padding: "12px 20px",
+                        color: "var(--hostly-ink-muted)",
+                        padding: "10px 18px",
                         borderRadius: 10,
                         fontWeight: 600,
                         cursor: "pointer",
@@ -768,20 +772,20 @@ export default function StockPage() {
                 }}
               >
                 {tierFilteredSorted.length === 0 ? (
-                  <div style={{ padding: "16px 8px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+                  <div style={{ padding: "16px 8px", textAlign: "center", color: "var(--hostly-ink-muted)", fontSize: 13 }}>
                     {t("stock.filterEmpty")}
                   </div>
                 ) : displayedProducts.length === 0 ? (
-                  <div style={{ padding: "16px 8px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+                  <div style={{ padding: "16px 8px", textAlign: "center", color: "var(--hostly-ink-muted)", fontSize: 13 }}>
                     {t("stock.searchNoResults")}
                   </div>
                 ) : (
                   <div
                     style={{
                       borderRadius: 8,
-                      border: "1px solid #334155",
+                      border: "1px solid var(--hostly-line)",
                       overflow: "hidden",
-                      background: "#0f172a",
+                      background: "var(--hostly-surface-card-solid)",
                       flex: 1,
                       minHeight: 0,
                       display: "flex",
@@ -791,9 +795,9 @@ export default function StockPage() {
                     <div
                       style={{
                         ...stockRowGrid,
-                        padding: "11px 14px",
-                        background: "#1e293b",
-                        borderBottom: "1px solid #334155",
+                        padding: "10px 12px",
+                        background: "var(--hostly-surface-page-soft)",
+                        borderBottom: "1px solid var(--hostly-line)",
                       }}
                     >
                       <span style={colHeadStyle}>{t("stock.colProduct")}</span>
@@ -821,9 +825,9 @@ export default function StockPage() {
                             onMouseLeave={() => setHoverRowId(null)}
                             style={{
                               ...stockRowGrid,
-                              padding: "15px 14px",
-                              borderBottom: isLast ? "none" : "1px solid #1e293b",
-                              background: isHover ? "#172033" : "#0f172a",
+                              padding: "12px 12px",
+                              borderBottom: isLast ? "none" : "1px solid var(--hostly-line)",
+                              background: isHover ? "var(--hostly-surface-page-soft)" : "var(--hostly-surface-card-solid)",
                               boxShadow: `inset 3px 0 0 ${rowStripeColor(st.tone)}`,
                               transition: "background 0.12s ease",
                             }}
@@ -832,9 +836,9 @@ export default function StockPage() {
                               <div
                                 style={{
                                   fontSize: 13,
-                                  fontWeight: 700,
-                                  color: "#f8fafc",
-                                  letterSpacing: "-0.02em",
+                                  fontWeight: 600,
+                                  color: "var(--hostly-ink-strong)",
+                                  letterSpacing: "-0.015em",
                                   lineHeight: 1.25,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
@@ -844,21 +848,21 @@ export default function StockPage() {
                               >
                                 {p.nombre}
                               </div>
-                              <div style={{ fontSize: 10, color: "#475569", marginTop: 2, lineHeight: 1.2 }}>
+                              <div style={{ fontSize: 10, color: "var(--hostly-ink-muted)", marginTop: 2, lineHeight: 1.2 }}>
                                 {t("common.unit")}: {p.unidad}
                               </div>
                             </div>
                             <div style={{ textAlign: "right" }}>
-                              <span style={{ ...tabularFigures, fontSize: 14, fontWeight: 700, color: "#f8fafc" }}>
+                              <span style={{ ...tabularFigures, fontSize: 14, fontWeight: 700, color: "var(--hostly-navy-deep)" }}>
                                 {formatQtyDisplay(p.stock_actual, locale)}
                               </span>
-                              <div style={{ fontSize: 10, color: "#64748b", marginTop: 1 }}>{p.unidad}</div>
+                              <div style={{ fontSize: 10, color: "var(--hostly-ink-muted)", marginTop: 1 }}>{p.unidad}</div>
                             </div>
                             <div style={{ textAlign: "right" }}>
-                              <span style={{ ...tabularFigures, fontSize: 13, fontWeight: 600, color: "#cbd5e1" }}>
+                              <span style={{ ...tabularFigures, fontSize: 13, fontWeight: 600, color: "var(--hostly-ink)" }}>
                                 {formatQtyDisplay(p.stock_minimo, locale)}
                               </span>
-                              <div style={{ fontSize: 10, color: "#64748b", marginTop: 1 }}>{p.unidad}</div>
+                              <div style={{ fontSize: 10, color: "var(--hostly-ink-muted)", marginTop: 1 }}>{p.unidad}</div>
                             </div>
                             <div style={{ display: "flex", justifyContent: "center" }}>
                               <span style={statusPillStyle(st.tone)}>{st.label}</span>
@@ -868,10 +872,10 @@ export default function StockPage() {
                                 type="button"
                                 onClick={() => openEdit(p)}
                                 style={{
-                                  border: "1px solid #475569",
-                                  background: "rgba(30, 41, 59, 0.6)",
-                                  color: "#e2e8f0",
-                                  padding: "12px 16px",
+                                  border: "1px solid var(--hostly-line)",
+                                  background: "var(--hostly-surface-page-soft)",
+                                  color: "var(--hostly-ink-muted)",
+                                  padding: "10px 14px",
                                   borderRadius: 10,
                                   cursor: "pointer",
                                   fontWeight: 600,
@@ -885,10 +889,10 @@ export default function StockPage() {
                                 type="button"
                                 onClick={() => openEdit(p)}
                                 style={{
-                                  border: "1px solid rgba(59, 130, 246, 0.4)",
-                                  background: "rgba(59, 130, 246, 0.12)",
-                                  color: "#93c5fd",
-                                  padding: "12px 16px",
+                                  border: "1px solid rgba(49, 95, 125, 0.35)",
+                                  background: "var(--hostly-info-soft)",
+                                  color: "var(--hostly-navy-deep)",
+                                  padding: "10px 14px",
                                   borderRadius: 10,
                                   cursor: "pointer",
                                   fontWeight: 600,
@@ -902,13 +906,13 @@ export default function StockPage() {
                                 type="button"
                                 onClick={() => removeProduct(p.id)}
                                 style={{
-                                  border: "1px solid rgba(239, 68, 68, 0.45)",
-                                  background: "rgba(127, 29, 29, 0.25)",
-                                  color: "#fecaca",
-                                  padding: "12px 16px",
+                                  border: "1px solid rgba(220, 38, 38, 0.35)",
+                                  background: "var(--hostly-danger-soft)",
+                                  color: "#991b1b",
+                                  padding: "10px 14px",
                                   borderRadius: 10,
                                   cursor: "pointer",
-                                  fontWeight: 700,
+                                  fontWeight: 600,
                                   fontSize: 13,
                                   lineHeight: 1.2,
                                 }}

@@ -11,11 +11,19 @@
   --hostly-surface-page-soft: #f7fcff;
   --hostly-surface-card: rgba(255, 255, 255, 0.94);
   --hostly-surface-card-solid: #ffffff;
+  /* Tarjetas / paneles con más aire hielo (listas, rails secundarios) */
+  --hostly-surface-card-soft: rgba(255, 255, 255, 0.78);
+  /* Zonas de trabajo táctil: ligero tinte sin competir con el page */
+  --hostly-surface-operational: #f3f9fd;
   --hostly-surface-muted: #e2f0fb;
   --hostly-surface-raised: #ffffff;
   --hostly-ink: #1f2933;
+  /* Títulos y números primarios */
+  --hostly-ink-strong: #121a22;
   --hostly-ink-muted: #667085;
   --hostly-ink-soft: #7b8794;
+  /* Captions / meta muy ligera */
+  --hostly-ink-faint: #9aa5b2;
   --hostly-line: rgba(54, 86, 116, 0.15);
   --hostly-line-strong: rgba(54, 86, 116, 0.25);
   --hostly-accent: #315f7d;
@@ -52,7 +60,9 @@
   --hostly-content-max: 1180px; /* single global dashboard width */
   --hostly-content-max-wide: 1400px; /* TPV / workbench layouts */
   --hostly-page-pad-x: clamp(12px, 2.2vw, 22px);
-  --hostly-page-pad-y: clamp(12px, 2.2vw, 22px);
+  --hostly-page-pad-y: clamp(10px, 1.9vw, 20px);
+  --hostly-stack-gap-y: 10px;
+  --hostly-card-grid-gap: 10px;
   --hostly-radius-lg: 18px;
   --hostly-radius-md: 14px;
   --hostly-border-subtle: var(--hostly-line);
@@ -149,16 +159,29 @@ body {
 
 .hostly-page-title {
   font-size: 18px;
-  font-weight: 720;
-  letter-spacing: -0.02em;
-  color: var(--hostly-ink);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--hostly-ink-strong);
   line-height: 1.1;
 }
 
 .hostly-page-subtitle {
   margin-top: 2px;
   font-size: 12px;
+  color: var(--hostly-ink-soft);
+  line-height: 1.35;
+}
+
+/* Label de formulario operativo (uppercase suave; sin tocar lógica de campos) */
+.hostly-form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
   color: var(--hostly-ink-muted);
+  margin-bottom: 6px;
+  line-height: 1.2;
 }
 
 .hostly-card {

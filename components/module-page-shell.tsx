@@ -106,31 +106,22 @@ export default function ModulePageShell({
 
   const isWide = maxWidth > DEFAULT_MAX || Boolean(stretchContentWidth);
   const configLight = shellSurface === "configLight";
-  const premiumLight = configLight || shellSurface === "default";
 
   const headerSurface =
     mapEditorDenseChrome && laptopFit
       ? {
           paddingTop: 2,
           paddingBottom: 2,
-          borderBottom: "1px solid rgba(148, 163, 184, 0.07)",
+          borderBottom: "1px solid var(--hostly-line)",
         }
-      : premiumLight
-        ? {
-            paddingTop: denseWorkbench ? 8 : 10,
-            paddingBottom: denseWorkbench ? 8 : 10,
-            borderBottom: "1px solid var(--hostly-line)",
-            background: "rgba(247, 252, 255, 0.92)",
-            backdropFilter: "blur(6px)",
-            WebkitBackdropFilter: "blur(6px)",
-          }
-        : laptopFit
-          ? {
-              paddingTop: mapEditorDenseChrome ? 3 : 6,
-              paddingBottom: mapEditorDenseChrome ? 3 : 6,
-              borderBottom: "1px solid rgba(148, 163, 184, 0.07)",
-            }
-          : undefined;
+      : {
+          paddingTop: denseWorkbench ? 8 : 10,
+          paddingBottom: denseWorkbench ? 8 : 10,
+          borderBottom: "1px solid var(--hostly-line)",
+          background: "rgba(247, 252, 255, 0.92)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
+        };
 
   const titleStyleResolved = {
     fontSize: laptopFit
@@ -152,20 +143,12 @@ export default function ModulePageShell({
         ? 600
         : 700,
     lineHeight: compactLayout ? (operationalFocus ? 1.08 : 1.12) : 1.15,
-    color:
-      premiumLight
-        ? "#1f2933"
-        : compactLayout && operationalFocus
-          ? "#8b9aad"
-          : undefined,
+    letterSpacing: compactLayout ? (operationalFocus ? "-0.012em" : "-0.015em") : "-0.018em",
+    color: "var(--hostly-ink-strong)",
   };
 
   const subtitleStyleResolved = {
-    color: premiumLight
-      ? "#667085"
-      : compactLayout && operationalFocus
-        ? "#5c6570"
-        : "#94a3b8",
+    color: "var(--hostly-ink-soft)",
     fontSize: compactLayout ? (operationalFocus ? 11 : denseWorkbench ? 12 : 13) : 17,
     lineHeight: compactLayout ? (operationalFocus ? 1.32 : denseWorkbench ? 1.3 : 1.35) : 1.45,
     maxWidth: compactLayout ? (operationalFocus ? 480 : denseWorkbench ? 520 : 560) : 640,
@@ -175,10 +158,9 @@ export default function ModulePageShell({
     <main
       style={{
         boxSizing: "border-box",
-        background: premiumLight
-          ? "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 46%, #dbeefa 100%)"
-          : "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
-        color: premiumLight ? "#1f2933" : "#f8fafc",
+        background:
+          "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 46%, #dbeefa 100%)",
+        color: "var(--hostly-ink)",
         paddingTop: padTop,
         paddingLeft: 0,
         paddingRight: 0,
@@ -241,7 +223,7 @@ export default function ModulePageShell({
               href={backHref}
               label={resolvedBack}
               ariaLabel={String(resolvedBack)}
-              tone={premiumLight ? "light" : "dark"}
+              tone="light"
             />
           )
         }
@@ -261,12 +243,12 @@ export default function ModulePageShell({
             {!hideLogoutButton && hideBackLink && backHref === "/dashboard" ? (
               <LogoutButton
                 compact={Boolean(compactLayout && operationalFocus)}
-                surface={premiumLight ? "light" : "dark"}
+                surface="light"
               />
             ) : null}
             <LanguageSwitcher
               compact={Boolean(compactLayout && operationalFocus)}
-              surface={premiumLight ? "light" : "dark"}
+              surface="light"
             />
           </div>
         }

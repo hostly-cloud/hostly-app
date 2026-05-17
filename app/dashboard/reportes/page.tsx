@@ -482,16 +482,17 @@ export default function ReportesPage() {
             void loadEscandallos();
           }}
           style={{
-            border: "1px solid #334155",
-            background: "#0f172a",
-            color: "#e2e8f0",
-            padding: "10px 16px",
+            border: "1px solid var(--hostly-line)",
+            background: "var(--hostly-surface-card-solid)",
+            color: "var(--hostly-ink-muted)",
+            padding: "9px 14px",
             borderRadius: 10,
-            fontWeight: 700,
+            fontWeight: 600,
             cursor: "pointer",
             fontSize: 14,
             lineHeight: 1.2,
             whiteSpace: "nowrap",
+            boxShadow: "var(--hostly-shadow-hairline)",
           }}
         >
           {t("common.reload")}

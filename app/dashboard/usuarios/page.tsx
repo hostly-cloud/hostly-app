@@ -18,36 +18,40 @@ import {
 } from "@/lib/usuarios-local";
 
 const tpvSearchInput: CSSProperties = {
-  padding: "12px 14px",
+  padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid #334155",
-  backgroundColor: "#0f172a",
-  color: "#f8fafc",
+  border: "1px solid var(--hostly-line-strong)",
+  backgroundColor: "#ffffff",
+  color: "var(--hostly-ink)",
   fontSize: 15,
   width: "100%",
   boxSizing: "border-box",
   outline: "none",
   minHeight: 48,
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
 const modalInput: CSSProperties = {
   padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  backgroundColor: "rgba(15, 23, 42, 0.85)",
-  color: "#f8fafc",
+  border: "1px solid var(--hostly-line-strong)",
+  backgroundColor: "#ffffff",
+  color: "var(--hostly-ink)",
   fontSize: 14,
   width: "100%",
   boxSizing: "border-box",
   outline: "none",
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
 const modalLabel: CSSProperties = {
   display: "block",
   fontSize: 11,
   fontWeight: 600,
-  color: "#94a3b8",
+  color: "var(--hostly-ink-muted)",
   marginBottom: 6,
+  letterSpacing: "0.055em",
+  textTransform: "uppercase",
 };
 
 function isValidEmailOrId(s: string): boolean {
@@ -68,11 +72,11 @@ function normalizeForSearch(s: string): string {
 function roleBadgeStyle(rol: UsuarioRol): { bg: string; border: string; color: string } {
   switch (rol) {
     case "admin":
-      return { bg: "rgba(167, 139, 250, 0.22)", border: "rgba(196, 181, 253, 0.55)", color: "#e9d5ff" };
+      return { bg: "rgba(237, 233, 254, 0.95)", border: "rgba(124, 58, 237, 0.32)", color: "#5b21b6" };
     case "encargado":
-      return { bg: "rgba(59, 130, 246, 0.22)", border: "rgba(96, 165, 250, 0.5)", color: "#bfdbfe" };
+      return { bg: "var(--hostly-info-soft)", border: "rgba(49, 95, 125, 0.35)", color: "var(--hostly-navy-deep)" };
     default:
-      return { bg: "rgba(52, 211, 153, 0.18)", border: "rgba(52, 211, 153, 0.45)", color: "#a7f3d0" };
+      return { bg: "var(--hostly-success-soft)", border: "rgba(22, 163, 74, 0.32)", color: "#166534" };
   }
 }
 
@@ -134,9 +138,9 @@ const userRowGrid: CSSProperties = {
 
 const colHeadStyle: CSSProperties = {
   fontSize: 9,
-  fontWeight: 700,
-  color: "#64748b",
-  letterSpacing: "0.07em",
+  fontWeight: 600,
+  color: "var(--hostly-ink-muted)",
+  letterSpacing: "0.08em",
   textTransform: "uppercase",
   lineHeight: 1.2,
 };
@@ -251,7 +255,7 @@ export default function UsuariosPage() {
         title: t("users.kpiInactiveTitle"),
         value: stats.inactivos,
         sub: t("users.kpiInactiveSub"),
-        accent: "#94a3b8",
+        accent: "var(--hostly-ink-muted)",
       },
     ],
     [t, stats],
@@ -260,10 +264,10 @@ export default function UsuariosPage() {
   const metricFigure: CSSProperties = {
     fontVariantNumeric: "tabular-nums",
     fontFeatureSettings: '"tnum" 1',
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: 700,
-    letterSpacing: "-0.03em",
-    color: "#f8fafc",
+    letterSpacing: "-0.025em",
+    color: "var(--hostly-navy-deep)",
     lineHeight: 1,
   };
 
@@ -341,7 +345,7 @@ export default function UsuariosPage() {
   if (!hydrated) {
     return (
       <ModulePageShell title={t("users.title")} subtitle={t("users.subtitle")} maxWidth={1180} compactLayout lockViewport>
-        <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparing")}</p>
+        <p style={{ color: "var(--hostly-ink-muted)", fontSize: 13 }}>{t("common.preparing")}</p>
       </ModulePageShell>
     );
   }
@@ -400,11 +404,11 @@ export default function UsuariosPage() {
             <div
               key={card.title}
               style={{
-                background: "#1e293b",
+                background: "var(--hostly-surface-card-solid)",
                 borderRadius: 10,
-                padding: "8px 10px",
-                border: "1px solid #334155",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.14)",
+                padding: "7px 9px",
+                border: "1px solid var(--hostly-line)",
+                boxShadow: "var(--hostly-shadow-card)",
                 borderTop: `2px solid ${card.accent}`,
                 minWidth: 0,
               }}
@@ -413,8 +417,8 @@ export default function UsuariosPage() {
                 style={{
                   margin: 0,
                   fontSize: 10,
-                  fontWeight: 700,
-                  color: "#64748b",
+                  fontWeight: 600,
+                  color: "var(--hostly-ink-muted)",
                   textTransform: "uppercase",
                   letterSpacing: "0.07em",
                   lineHeight: 1.2,
@@ -427,7 +431,7 @@ export default function UsuariosPage() {
                 style={{
                   margin: "4px 0 0",
                   fontSize: 10,
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-soft)",
                   lineHeight: 1.35,
                   display: "-webkit-box",
                   WebkitLineClamp: 2,
@@ -449,16 +453,16 @@ export default function UsuariosPage() {
             flexDirection: "column",
             overflow: "hidden",
             borderRadius: 12,
-            background: "#1e293b",
-            border: "1px solid #334155",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.14)",
+            background: "var(--hostly-surface-card-soft)",
+            border: "1px solid var(--hostly-line)",
+            boxShadow: "var(--hostly-shadow-card)",
           }}
         >
           <div
             style={{
               flexShrink: 0,
-              padding: "8px 10px 6px",
-              borderBottom: "1px solid #334155",
+              padding: "7px 10px 5px",
+              borderBottom: "1px solid var(--hostly-line)",
               display: "flex",
               flexWrap: "wrap",
               alignItems: "flex-end",
@@ -471,16 +475,16 @@ export default function UsuariosPage() {
                 style={{
                   margin: 0,
                   fontSize: 15,
-                  fontWeight: 700,
-                  letterSpacing: "-0.02em",
-                  color: "#f8fafc",
+                  fontWeight: 600,
+                  letterSpacing: "-0.015em",
+                  color: "var(--hostly-ink-strong)",
                   lineHeight: 1.2,
                 }}
               >
                 {t("users.listTitle")}
               </h2>
               {items.length > 0 ? (
-                <p style={{ margin: "4px 0 0", fontSize: 11, color: "#64748b", lineHeight: 1.3 }}>
+                <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--hostly-ink-muted)", lineHeight: 1.3 }}>
                   {t("users.listCount", { shown: sortedDisplay.length, total: roleFiltered.length })}
                 </p>
               ) : null}
@@ -500,8 +504,8 @@ export default function UsuariosPage() {
                 textAlign: "center",
               }}
             >
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e2e8f0" }}>{t("users.emptyTitle")}</p>
-              <p style={{ margin: "8px 0 0", fontSize: 12, color: "#94a3b8", lineHeight: 1.45, maxWidth: 360 }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-strong)" }}>{t("users.emptyTitle")}</p>
+              <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--hostly-ink-muted)", lineHeight: 1.45, maxWidth: 360 }}>
                 {t("users.emptyBody")}
               </p>
               <button
@@ -574,12 +578,12 @@ export default function UsuariosPage() {
                       type="button"
                       onClick={() => setListFilter(f.id)}
                       style={{
-                        border: active ? "1px solid rgba(96, 165, 250, 0.55)" : "1px solid rgba(71, 85, 105, 0.55)",
-                        background: active ? "rgba(59, 130, 246, 0.18)" : "transparent",
-                        color: active ? "#e2e8f0" : "#94a3b8",
-                        padding: "10px 16px",
+                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-line)",
+                        background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
+                        color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
+                        padding: "8px 14px",
                         borderRadius: 999,
-                        fontWeight: 700,
+                        fontWeight: 600,
                         cursor: "pointer",
                         fontSize: 13,
                         lineHeight: 1.25,
@@ -605,24 +609,24 @@ export default function UsuariosPage() {
                 }}
               >
                 {sortedDisplay.length === 0 ? (
-                  <div style={{ padding: "14px 10px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+                  <div style={{ padding: "14px 10px", textAlign: "center", color: "var(--hostly-ink-muted)", fontSize: 13 }}>
                     {t("users.searchNoResults")}
                   </div>
                 ) : (
                   <div
                     style={{
                       borderRadius: 8,
-                      border: "1px solid #334155",
+                      border: "1px solid var(--hostly-line)",
                       overflow: "hidden",
-                      background: "#0f172a",
+                      background: "var(--hostly-surface-card-solid)",
                     }}
                   >
                     <div
                       style={{
                         ...userRowGrid,
-                        padding: "9px 12px",
-                        background: "#1e293b",
-                        borderBottom: "1px solid #334155",
+                        padding: "8px 11px",
+                        background: "var(--hostly-surface-page-soft)",
+                        borderBottom: "1px solid var(--hostly-line)",
                       }}
                     >
                       <span style={colHeadStyle}>{t("users.colEmployee")}</span>
@@ -645,10 +649,10 @@ export default function UsuariosPage() {
                           onMouseLeave={() => setHoverRowId(null)}
                           style={{
                             ...userRowGrid,
-                            padding: "11px 12px",
-                            borderBottom: isLast ? "none" : "1px solid #1e293b",
-                            background: isHover ? "#172033" : "#0f172a",
-                            boxShadow: u.activo ? "inset 3px 0 0 #22c55e" : "inset 3px 0 0 #64748b",
+                            padding: "10px 11px",
+                            borderBottom: isLast ? "none" : "1px solid var(--hostly-line)",
+                            background: isHover ? "var(--hostly-surface-page-soft)" : "var(--hostly-surface-card-solid)",
+                            boxShadow: u.activo ? "inset 3px 0 0 #22c55e" : "inset 3px 0 0 var(--hostly-line-strong)",
                             transition: "background 0.12s ease",
                           }}
                         >
@@ -656,9 +660,9 @@ export default function UsuariosPage() {
                             <div
                               style={{
                                 fontSize: 13,
-                                fontWeight: 700,
-                                color: "#f8fafc",
-                                letterSpacing: "-0.02em",
+                                fontWeight: 600,
+                                color: "var(--hostly-ink-strong)",
+                                letterSpacing: "-0.015em",
                                 lineHeight: 1.25,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -673,7 +677,7 @@ export default function UsuariosPage() {
                                 marginTop: 3,
                                 fontSize: 10,
                                 fontWeight: 500,
-                                color: "#475569",
+                                color: "var(--hostly-ink-muted)",
                                 letterSpacing: "0.01em",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -723,7 +727,7 @@ export default function UsuariosPage() {
                             >
                               {t(accessTierLabelKey(tier))}
                             </div>
-                            <div style={{ marginTop: 3, fontSize: 10, fontWeight: 600, color: "#64748b", lineHeight: 1.2 }}>
+                            <div style={{ marginTop: 3, fontSize: 10, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.2 }}>
                               {modulesCountLine(modCount, t)}
                             </div>
                           </div>
@@ -739,12 +743,12 @@ export default function UsuariosPage() {
                                 padding: "7px 10px",
                                 borderRadius: 999,
                                 fontSize: 10,
-                                fontWeight: 800,
+                                fontWeight: 600,
                                 letterSpacing: "0.05em",
                                 textTransform: "uppercase",
-                                background: u.activo ? "rgba(34, 197, 94, 0.2)" : "rgba(51, 65, 85, 0.35)",
-                                border: u.activo ? "1px solid rgba(74, 222, 128, 0.45)" : "1px solid #64748b",
-                                color: u.activo ? "#f0fdf4" : "#e2e8f0",
+                                background: u.activo ? "var(--hostly-success-soft)" : "var(--hostly-surface-operational)",
+                                border: u.activo ? "1px solid rgba(22, 163, 74, 0.35)" : "1px solid var(--hostly-line)",
+                                color: u.activo ? "#166534" : "var(--hostly-ink-muted)",
                                 boxSizing: "border-box",
                                 lineHeight: 1.15,
                               }}
@@ -758,10 +762,10 @@ export default function UsuariosPage() {
                               type="button"
                               onClick={() => openEdit(u)}
                               style={{
-                                border: "1px solid #475569",
-                                background: "rgba(30, 41, 59, 0.5)",
-                                color: "#e2e8f0",
-                                padding: "11px 16px",
+                                border: "1px solid var(--hostly-line)",
+                                background: "var(--hostly-surface-page-soft)",
+                                color: "var(--hostly-ink-muted)",
+                                padding: "10px 14px",
                                 borderRadius: 10,
                                 cursor: "pointer",
                                 fontWeight: 600,
@@ -775,10 +779,10 @@ export default function UsuariosPage() {
                               type="button"
                               onClick={() => toggleActivo(u)}
                               style={{
-                                border: u.activo ? "1px solid rgba(248, 113, 113, 0.45)" : "1px solid rgba(74, 222, 128, 0.45)",
-                                background: u.activo ? "rgba(127, 29, 29, 0.2)" : "rgba(6, 78, 59, 0.25)",
-                                color: u.activo ? "#fca5a5" : "#86efac",
-                                padding: "11px 16px",
+                                border: u.activo ? "1px solid rgba(220, 38, 38, 0.35)" : "1px solid rgba(22, 163, 74, 0.35)",
+                                background: u.activo ? "var(--hostly-danger-soft)" : "var(--hostly-success-soft)",
+                                color: u.activo ? "#991b1b" : "#166534",
+                                padding: "10px 14px",
                                 borderRadius: 10,
                                 cursor: "pointer",
                                 fontWeight: 600,
@@ -813,7 +817,7 @@ export default function UsuariosPage() {
             alignItems: "center",
             justifyContent: "center",
             padding: 20,
-            background: "rgba(2, 6, 23, 0.62)",
+            background: "rgba(15, 39, 61, 0.28)",
             backdropFilter: "blur(8px)",
             WebkitBackdropFilter: "blur(8px)",
           }}
@@ -828,16 +832,16 @@ export default function UsuariosPage() {
               maxHeight: "min(90vh, 640px)",
               overflowY: "auto",
               borderRadius: 18,
-              padding: "22px 22px 20px",
-              background: "linear-gradient(165deg, #1e293b 0%, #0f172a 100%)",
-              border: "1px solid rgba(148, 163, 184, 0.12)",
-              boxShadow: "0 20px 56px rgba(0,0,0,0.42)",
+              padding: "20px 20px 18px",
+              background: "var(--hostly-surface-card-solid)",
+              border: "1px solid var(--hostly-line)",
+              boxShadow: "var(--hostly-shadow-float)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <h2
               id="user-modal-title"
-              style={{ margin: 0, fontSize: 18, fontWeight: 800, letterSpacing: "-0.03em", color: "#f8fafc" }}
+              style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--hostly-ink-strong)" }}
             >
               {editingId ? t("users.modalEditTitle") : t("users.modalNewTitle")}
             </h2>
@@ -882,7 +886,7 @@ export default function UsuariosPage() {
                   {USUARIO_MODULOS.map((m) => (
                     <label
                       key={m}
-                      style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "#cbd5e1" }}
+                      style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--hostly-ink)" }}
                     >
                       <input
                         type="checkbox"
@@ -894,7 +898,7 @@ export default function UsuariosPage() {
                   ))}
                 </div>
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "#cbd5e1" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--hostly-ink)" }}>
                 <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} />
                 {t("users.fieldActive")}
               </label>
@@ -909,9 +913,9 @@ export default function UsuariosPage() {
                 type="button"
                 onClick={submitForm}
                 style={{
-                  border: "1px solid rgba(96, 165, 250, 0.2)",
-                  background: "#2563eb",
-                  color: "#f8fafc",
+                  border: "1px solid var(--hostly-line)",
+                  background: "var(--hostly-accent)",
+                  color: "#ffffff",
                   padding: "10px 18px",
                   borderRadius: 10,
                   fontWeight: 600,
@@ -926,9 +930,9 @@ export default function UsuariosPage() {
                 type="button"
                 onClick={closeForm}
                 style={{
-                  border: "1px solid rgba(148, 163, 184, 0.16)",
-                  background: "rgba(30, 41, 59, 0.55)",
-                  color: "#cbd5e1",
+                  border: "1px solid var(--hostly-line)",
+                  background: "var(--hostly-surface-page-soft)",
+                  color: "var(--hostly-ink-muted)",
                   padding: "10px 16px",
                   borderRadius: 10,
                   fontWeight: 600,

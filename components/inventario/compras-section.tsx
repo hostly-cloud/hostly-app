@@ -31,37 +31,40 @@ type OperationalFocus = "pendientes" | "entregas" | "sin_factura" | "sin_vincula
 const QUICK_CREATE_ESTADOS = ["pendiente", "recibido"] as const satisfies readonly CompraEstado[];
 
 const inputStyle = {
-  padding: "12px 14px",
+  padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid #334155",
-  backgroundColor: "#0f172a",
-  color: "#f8fafc",
-  fontSize: 16,
+  border: "1px solid var(--hostly-line-strong)",
+  backgroundColor: "#ffffff",
+  color: "var(--hostly-ink)",
+  fontSize: 15,
   width: "100%",
   boxSizing: "border-box" as const,
+  boxShadow: "var(--hostly-shadow-hairline)",
 } satisfies CSSProperties;
 
 const labelStyle = {
   display: "block",
-  fontSize: 13,
+  fontSize: 11,
   fontWeight: 600,
-  color: "#94a3b8",
-  marginBottom: 8,
+  letterSpacing: "0.055em",
+  textTransform: "uppercase" as const,
+  color: "var(--hostly-ink-muted)",
+  marginBottom: 6,
 } satisfies CSSProperties;
 
 /** Select en filas: control principal, táctil y claro. */
 const selectRow: CSSProperties = {
-  padding: "14px 12px",
+  padding: "12px 10px",
   fontSize: 15,
-  fontWeight: 700,
+  fontWeight: 600,
   lineHeight: 1.2,
   minWidth: 120,
-  minHeight: 52,
+  minHeight: 48,
   maxWidth: "100%",
   borderRadius: 10,
-  border: "1px solid rgba(100, 116, 139, 0.32)",
-  backgroundColor: "rgba(15, 23, 42, 0.72)",
-  color: "#cbd5e1",
+  border: "1px solid var(--hostly-line-strong)",
+  backgroundColor: "#ffffff",
+  color: "var(--hostly-ink)",
   cursor: "pointer",
   boxSizing: "border-box",
 };
@@ -70,27 +73,27 @@ function rowTone(estado: CompraEstado): { bg: string; border: string; stripe: st
   switch (estado) {
     case "recibido":
       return {
-        bg: "linear-gradient(90deg, rgba(51, 65, 85, 0.22) 0%, rgba(30, 41, 59, 0.48) 44%)",
-        border: "rgba(71, 85, 105, 0.38)",
-        stripe: "rgba(100, 116, 139, 0.45)",
+        bg: "linear-gradient(90deg, rgba(232, 244, 239, 0.95) 0%, rgba(255, 255, 255, 0.98) 52%)",
+        border: "rgba(54, 86, 116, 0.16)",
+        stripe: "rgba(49, 95, 125, 0.5)",
       };
     case "cancelado":
       return {
-        bg: "linear-gradient(90deg, rgba(239, 68, 68, 0.06) 0%, rgba(30, 41, 59, 0.42) 42%)",
+        bg: "linear-gradient(90deg, rgba(245, 232, 232, 0.92) 0%, rgba(255, 255, 255, 0.97) 48%)",
         border: "rgba(248, 113, 113, 0.22)",
-        stripe: "rgba(248, 113, 113, 0.75)",
+        stripe: "rgba(220, 38, 38, 0.55)",
       };
     case "pendiente":
       return {
-        bg: "linear-gradient(90deg, rgba(251, 191, 36, 0.07) 0%, rgba(30, 41, 59, 0.48) 40%)",
-        border: "rgba(251, 191, 36, 0.22)",
-        stripe: "rgba(251, 191, 36, 0.78)",
+        bg: "linear-gradient(90deg, rgba(245, 237, 220, 0.95) 0%, rgba(255, 255, 255, 0.98) 45%)",
+        border: "rgba(251, 191, 36, 0.28)",
+        stripe: "rgba(217, 119, 6, 0.72)",
       };
     default:
       return {
-        bg: "rgba(30, 41, 59, 0.45)",
-        border: "rgba(51, 65, 85, 0.55)",
-        stripe: "rgba(100, 116, 139, 0.45)",
+        bg: "rgba(255, 255, 255, 0.94)",
+        border: "rgba(54, 86, 116, 0.14)",
+        stripe: "rgba(54, 86, 116, 0.22)",
       };
   }
 }
@@ -220,19 +223,19 @@ function estadoLabelCompra(estado: CompraEstado, t: (key: string) => string): st
 
 const estadoSelectLook: Record<CompraEstado, { border: string; bg: string; color: string }> = {
   recibido: {
-    border: "rgba(148, 163, 184, 0.45)",
-    bg: "rgba(15, 23, 42, 0.88)",
-    color: "#e2e8f0",
+    border: "rgba(49, 95, 125, 0.35)",
+    bg: "rgba(232, 244, 239, 0.92)",
+    color: "var(--hostly-ink-strong)",
   },
   pendiente: {
-    border: "rgba(251, 191, 36, 0.55)",
-    bg: "rgba(66, 32, 6, 0.42)",
-    color: "#fffbeb",
+    border: "rgba(217, 119, 6, 0.42)",
+    bg: "rgba(254, 243, 199, 0.88)",
+    color: "#78350f",
   },
   cancelado: {
-    border: "rgba(252, 165, 165, 0.45)",
-    bg: "rgba(69, 10, 10, 0.36)",
-    color: "#ffe4e6",
+    border: "rgba(220, 38, 38, 0.34)",
+    bg: "rgba(254, 226, 226, 0.82)",
+    color: "#7f1d1d",
   },
 };
 
@@ -242,7 +245,7 @@ const metaHairlineSep: CSSProperties = {
   width: 1,
   height: 9,
   margin: "0 8px",
-  background: "rgba(148, 163, 184, 0.12)",
+  background: "var(--hostly-line)",
   borderRadius: 1,
   verticalAlign: "middle",
   flexShrink: 0,
@@ -688,7 +691,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
             padding: 24,
           }}
         >
-          <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
+          <p style={{ color: "var(--hostly-ink-muted)", fontSize: 13 }}>{t("common.preparingData")}</p>
         </div>
       );
     }
@@ -701,7 +704,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
         operationalFocus
         lockViewport
       >
-        <p style={{ color: "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
+        <p style={{ color: "var(--hostly-ink-muted)", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
   }
@@ -726,9 +729,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
         type="button"
         onClick={openCreate}
         style={{
-          border: "1px solid rgba(34, 197, 94, 0.38)",
-          background: "rgba(34, 197, 94, 0.1)",
-          color: "#86efac",
+          border: "1px solid rgba(34, 197, 94, 0.32)",
+          background: "var(--hostly-success-soft)",
+          color: "var(--hostly-navy-deep)",
           padding: "9px 14px",
           borderRadius: 10,
           fontWeight: 600,
@@ -754,10 +757,10 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               touch-action: manipulation;
             }
             .hostly-compras-chip.hostly-compras-chip-idle:hover {
-              border-color: rgba(148, 163, 184, 0.32) !important;
-              background: rgba(30, 41, 59, 0.68) !important;
-              color: #e2e8f0 !important;
-              box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.12);
+              border-color: rgba(54, 86, 116, 0.22) !important;
+              background: var(--hostly-surface-page-soft) !important;
+              color: var(--hostly-ink-strong) !important;
+              box-shadow: var(--hostly-shadow-hairline);
             }
             .hostly-compras-chip.hostly-compras-chip-idle:active {
               transform: scale(0.98);
@@ -793,9 +796,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               flexShrink: 0,
               padding: "12px 14px",
               borderRadius: 10,
-              background: "rgba(59, 130, 246, 0.1)",
-              border: "1px solid rgba(59, 130, 246, 0.32)",
-              color: "#93c5fd",
+              background: "var(--hostly-info-soft)",
+              border: "1px solid rgba(59, 130, 246, 0.22)",
+              color: "var(--hostly-navy-mid)",
               fontSize: 14,
               lineHeight: 1.35,
             }}
@@ -816,44 +819,44 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
             {
               label: t("compras.metricTotalPurchases"),
               value: String(resumenCompras.totalCount),
-              valueColor: "#f8fafc",
+              valueColor: "var(--hostly-navy-deep)",
             },
             {
               label: t("compras.metricTotalSpend"),
               value: formatEuro(resumenCompras.gastoTotal, locale),
-              valueColor: "#fde68a",
+              valueColor: "#9a3412",
             },
             {
               label: t("compras.metricPending"),
               value: String(resumenCompras.pendientes),
-              valueColor: "#fcd34d",
+              valueColor: "#b45309",
             },
             {
               label: t("compras.metricReceived"),
               value: String(resumenCompras.recibidas),
-              valueColor: "#8da399",
+              valueColor: "#166534",
             },
           ].map((m) => (
             <div
               key={m.label}
               style={{
-                border: "1px solid rgba(51, 65, 85, 0.42)",
+                border: "1px solid var(--hostly-line)",
                 borderRadius: 10,
-                background: "linear-gradient(155deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.78) 100%)",
-                padding: "10px 12px",
-                minHeight: 76,
+                background: "var(--hostly-surface-card-solid)",
+                padding: "8px 10px",
+                minHeight: 68,
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
                 boxSizing: "border-box",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+                boxShadow: "var(--hostly-shadow-card)",
               }}
             >
               <div
                 style={{
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   fontSize: 10,
-                  fontWeight: 700,
+                  fontWeight: 600,
                   letterSpacing: "0.07em",
                   textTransform: "uppercase",
                   lineHeight: 1.25,
@@ -863,14 +866,13 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               </div>
               <div
                 style={{
-                  marginTop: 4,
-                  fontSize: 22,
-                  fontWeight: 800,
+                  marginTop: 3,
+                  fontSize: 20,
+                  fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
                   color: m.valueColor,
                   lineHeight: 1.08,
-                  letterSpacing: "-0.03em",
-                  textShadow: "0 1px 14px rgba(0,0,0,0.35)",
+                  letterSpacing: "-0.025em",
                 }}
               >
                 {m.value}
@@ -894,8 +896,8 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
           <span
             style={{
               fontSize: 11,
-              fontWeight: 700,
-              color: "#64748b",
+              fontWeight: 600,
+              color: "var(--hostly-ink-muted)",
               letterSpacing: "0.07em",
               textTransform: "uppercase",
               flexShrink: 0,
@@ -910,15 +912,15 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 label: t("compras.operChipPendientes"),
                 n: operationalCounts.pendientes,
                 idle: {
-                  border: "1px solid rgba(148, 163, 184, 0.12)",
-                  background: "rgba(15, 23, 42, 0.45)",
-                  color: "#a8b0c0",
+                  border: "1px solid var(--hostly-line)",
+                  background: "var(--hostly-surface-card-solid)",
+                  color: "var(--hostly-ink-soft)",
                 },
                 act: {
-                  border: "1px solid rgba(148, 163, 184, 0.14)",
-                  background: "rgba(30, 27, 19, 0.5)",
-                  color: "#d6c9a8",
-                  boxShadow: "inset 0 -2px 0 rgba(234, 179, 8, 0.45)",
+                  border: "1px solid rgba(217, 119, 6, 0.35)",
+                  background: "var(--hostly-warning-soft)",
+                  color: "#92400e",
+                  boxShadow: "inset 0 -2px 0 rgba(217, 119, 6, 0.35)",
                 },
               },
               {
@@ -926,15 +928,15 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 label: t("compras.operChipEntregas"),
                 n: operationalCounts.entregas,
                 idle: {
-                  border: "1px solid rgba(148, 163, 184, 0.12)",
-                  background: "rgba(15, 23, 42, 0.45)",
-                  color: "#9db0c4",
+                  border: "1px solid var(--hostly-line)",
+                  background: "var(--hostly-surface-card-solid)",
+                  color: "var(--hostly-ink-soft)",
                 },
                 act: {
-                  border: "1px solid rgba(148, 163, 184, 0.14)",
-                  background: "rgba(12, 26, 38, 0.48)",
-                  color: "#b8d4e8",
-                  boxShadow: "inset 0 -2px 0 rgba(56, 189, 248, 0.38)",
+                  border: "1px solid rgba(49, 95, 125, 0.32)",
+                  background: "var(--hostly-info-soft)",
+                  color: "var(--hostly-navy-deep)",
+                  boxShadow: "inset 0 -2px 0 rgba(49, 95, 125, 0.28)",
                 },
               },
               {
@@ -942,15 +944,15 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 label: t("compras.operChipSinFactura"),
                 n: operationalCounts.sinFactura,
                 idle: {
-                  border: "1px solid rgba(148, 163, 184, 0.12)",
-                  background: "rgba(15, 23, 42, 0.45)",
-                  color: "#b4a8a8",
+                  border: "1px solid var(--hostly-line)",
+                  background: "var(--hostly-surface-card-solid)",
+                  color: "var(--hostly-ink-soft)",
                 },
                 act: {
-                  border: "1px solid rgba(148, 163, 184, 0.14)",
-                  background: "rgba(38, 18, 18, 0.35)",
-                  color: "#d4b8b8",
-                  boxShadow: "inset 0 -2px 0 rgba(248, 113, 113, 0.28)",
+                  border: "1px solid rgba(220, 38, 38, 0.28)",
+                  background: "var(--hostly-danger-soft)",
+                  color: "#991b1b",
+                  boxShadow: "inset 0 -2px 0 rgba(220, 38, 38, 0.28)",
                 },
               },
               {
@@ -958,15 +960,15 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 label: t("compras.operChipSinVincular"),
                 n: operationalCounts.sinVincular,
                 idle: {
-                  border: "1px solid rgba(148, 163, 184, 0.12)",
-                  background: "rgba(15, 23, 42, 0.45)",
-                  color: "#a8b0c3",
+                  border: "1px solid var(--hostly-line)",
+                  background: "var(--hostly-surface-card-solid)",
+                  color: "var(--hostly-ink-soft)",
                 },
                 act: {
-                  border: "1px solid rgba(148, 163, 184, 0.14)",
-                  background: "rgba(22, 22, 38, 0.45)",
-                  color: "#c4c8e0",
-                  boxShadow: "inset 0 -2px 0 rgba(129, 140, 248, 0.32)",
+                  border: "1px solid rgba(79, 70, 229, 0.28)",
+                  background: "rgba(238, 242, 255, 0.92)",
+                  color: "#3730a3",
+                  boxShadow: "inset 0 -2px 0 rgba(79, 70, 229, 0.25)",
                 },
               },
             ] as const
@@ -992,7 +994,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                   whiteSpace: "nowrap",
                   minHeight: 36,
                   boxSizing: "border-box",
-                  boxShadow: active ? undefined : "inset 0 1px 0 rgba(255,255,255,0.04)",
+                  boxShadow: active ? undefined : "var(--hostly-shadow-hairline)",
                   ...(active ? chip.act : chip.idle),
                 }}
               >
@@ -1011,13 +1013,14 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
             flexWrap: "nowrap",
             alignItems: "center",
             gap: 6,
-            padding: "5px 8px",
+            padding: "4px 8px",
             borderRadius: 10,
-            border: "1px solid #334155",
-            background: "#0f172a",
+            border: "1px solid var(--hostly-line)",
+            background: "var(--hostly-surface-card-solid)",
             overflowX: "auto",
             overflowY: "hidden",
             WebkitOverflowScrolling: "touch",
+            boxShadow: "var(--hostly-shadow-hairline)",
           }}
         >
           <input
@@ -1032,14 +1035,15 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               flexBasis: "140px",
               minWidth: 140,
               minHeight: 36,
-              padding: "8px 12px",
+              padding: "7px 10px",
               borderRadius: 10,
-              border: "1px solid #334155",
-              background: "#020617",
-              color: "#f8fafc",
-              fontSize: 16,
+              border: "1px solid var(--hostly-line-strong)",
+              background: "#ffffff",
+              color: "var(--hostly-ink)",
+              fontSize: 15,
               boxSizing: "border-box",
               touchAction: "manipulation",
+              boxShadow: "var(--hostly-shadow-hairline)",
             }}
           />
           <div
@@ -1065,10 +1069,10 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                     setListFilter(key);
                   }}
                   style={{
-                    border: active ? "1px solid rgba(100, 116, 139, 0.28)" : "1px solid rgba(51, 65, 85, 0.55)",
-                    background: active ? "rgba(30, 41, 59, 0.75)" : "transparent",
-                    color: active ? "#d1d9e6" : "#7c8798",
-                    padding: "7px 12px",
+                    border: active ? "1px solid var(--hostly-line-strong)" : "1px solid var(--hostly-line)",
+                    background: active ? "var(--hostly-accent-soft)" : "transparent",
+                    color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
+                    padding: "6px 10px",
                     borderRadius: 10,
                     fontWeight: 600,
                     fontSize: 13,
@@ -1090,24 +1094,24 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               display: "flex",
               alignItems: "center",
               gap: 8,
-              fontSize: 13,
-              color: "#64748b",
+              fontSize: 12,
+              color: "var(--hostly-ink-muted)",
               flexShrink: 0,
               minHeight: 36,
             }}
           >
-            <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+            <span style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
               {t("compras.sortBy")}
             </span>
             <select
               value={listSort}
               onChange={(e) => setListSort(e.target.value as CompraListSort)}
               style={{
-                padding: "7px 10px",
+                padding: "6px 10px",
                 borderRadius: 10,
-                border: "1px solid #334155",
-                background: "#020617",
-                color: "#e2e8f0",
+                border: "1px solid var(--hostly-line-strong)",
+                background: "#ffffff",
+                color: "var(--hostly-ink)",
                 fontSize: 14,
                 fontWeight: 600,
                 minHeight: 36,
@@ -1115,6 +1119,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 boxSizing: "border-box",
                 cursor: "pointer",
                 touchAction: "manipulation",
+                boxShadow: "var(--hostly-shadow-hairline)",
               }}
             >
               <option value="fecha_desc">{t("compras.sortFechaDesc")}</option>
@@ -1131,15 +1136,19 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               flexShrink: 0,
               maxHeight: "min(300px, 36vh)",
               overflowY: "auto",
-              background: "#1e293b",
+              background: "var(--hostly-surface-card-solid)",
               borderRadius: 12,
-              padding: "12px 14px",
-              border: "1px solid #334155",
-              boxShadow: "0 4px 18px rgba(0,0,0,0.18)",
+              padding: "10px 12px",
+              border: "1px solid var(--hostly-line)",
+              boxShadow: "var(--hostly-shadow-card)",
             }}
           >
-            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#f8fafc", lineHeight: 1.2 }}>{t("compras.newPurchaseForm")}</h2>
-            <p style={{ margin: "6px 0 0", fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>{t("compras.quickFormHint")}</p>
+            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--hostly-ink-strong)", lineHeight: 1.2 }}>
+              {t("compras.newPurchaseForm")}
+            </h2>
+            <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--hostly-ink-muted)", lineHeight: 1.4 }}>
+              {t("compras.quickFormHint")}
+            </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
               <div>
@@ -1171,9 +1180,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                         top: "calc(100% + 4px)",
                         zIndex: 50,
                         borderRadius: 10,
-                        border: "1px solid #334155",
-                        background: "#0f172a",
-                        boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                        border: "1px solid var(--hostly-line)",
+                        background: "var(--hostly-surface-card-solid)",
+                        boxShadow: "var(--hostly-shadow-float)",
                         maxHeight: 200,
                         overflowY: "auto",
                       }}
@@ -1191,14 +1200,14 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                             textAlign: "left",
                             padding: "10px 12px",
                             border: "none",
-                            borderBottom: "1px solid rgba(51,65,85,0.5)",
+                            borderBottom: "1px solid var(--hostly-line)",
                             background: "transparent",
                             cursor: "pointer",
                             boxSizing: "border-box",
                           }}
                         >
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#f8fafc" }}>{s.displayName}</div>
-                          <div style={{ marginTop: 2, fontSize: 11, fontWeight: 500, color: "#94a3b8" }}>{s.legalName}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-strong)" }}>{s.displayName}</div>
+                          <div style={{ marginTop: 2, fontSize: 11, fontWeight: 500, color: "var(--hostly-ink-muted)" }}>{s.legalName}</div>
                         </button>
                       ))}
                     </div>
@@ -1237,15 +1246,15 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 </div>
                 <div
                   style={{
-                    padding: "10px 14px",
+                    padding: "8px 12px",
                     borderRadius: 10,
-                    border: "1px solid #334155",
-                    background: "#0f172a",
-                    color: selectedStockProduct ? "#e2e8f0" : "#64748b",
-                    fontWeight: 700,
+                    border: "1px solid var(--hostly-line)",
+                    background: "var(--hostly-surface-operational)",
+                    color: selectedStockProduct ? "var(--hostly-ink-strong)" : "var(--hostly-ink-muted)",
+                    fontWeight: 600,
                     fontSize: 14,
                     minWidth: 56,
-                    minHeight: 48,
+                    minHeight: 44,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1276,12 +1285,12 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                       marginTop: 12,
                       padding: "14px 16px",
                       borderRadius: 12,
-                      border: "1px solid rgba(74, 222, 128, 0.45)",
-                      background: "linear-gradient(145deg, rgba(22, 163, 74, 0.22) 0%, rgba(21, 128, 61, 0.14) 100%)",
-                      boxShadow: "0 0 0 1px rgba(34, 197, 94, 0.08) inset, 0 4px 18px rgba(34, 197, 94, 0.12)",
-                      fontSize: 16,
-                      fontWeight: 700,
-                      color: "#bbf7d0",
+                      border: "1px solid rgba(22, 163, 74, 0.35)",
+                      background: "var(--hostly-success-soft)",
+                      boxShadow: "var(--hostly-shadow-card)",
+                      fontSize: 15,
+                      fontWeight: 600,
+                      color: "#14532d",
                       letterSpacing: "0.02em",
                       fontVariantNumeric: "tabular-nums",
                       lineHeight: 1.35,
@@ -1298,20 +1307,20 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                       marginTop: quickUnitPriceHighlightLine ? 10 : 12,
                       padding: "12px 16px",
                       borderRadius: 12,
-                      border: "1px solid rgba(251, 191, 36, 0.42)",
-                      background: "linear-gradient(145deg, rgba(180, 83, 9, 0.2) 0%, rgba(120, 53, 15, 0.18) 100%)",
-                      boxShadow: "0 0 0 1px rgba(245, 158, 11, 0.06) inset, 0 4px 16px rgba(245, 158, 11, 0.1)",
+                      border: "1px solid rgba(217, 119, 6, 0.32)",
+                      background: "var(--hostly-warning-soft)",
+                      boxShadow: "var(--hostly-shadow-card)",
                     }}
                   >
-                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#fde68a", lineHeight: 1.4 }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#78350f", lineHeight: 1.4 }}>
                       {t("compras.priceIncreaseWarningTitle")}
                     </p>
                     <p
                       style={{
                         margin: "8px 0 0",
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: 600,
-                        color: "#fcd34d",
+                        color: "#92400e",
                         fontVariantNumeric: "tabular-nums",
                         lineHeight: 1.45,
                         opacity: 0.95,
@@ -1368,9 +1377,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 type="button"
                 onClick={closeForm}
                 style={{
-                  border: "1px solid #475569",
+                  border: "1px solid var(--hostly-line)",
                   background: "transparent",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   padding: "12px 16px",
                   borderRadius: 10,
                   fontWeight: 600,
@@ -1393,15 +1402,15 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               flexShrink: 0,
               maxHeight: "min(340px, 42vh)",
               overflowY: "auto",
-              background: "#1e293b",
+              background: "var(--hostly-surface-card-solid)",
               borderRadius: 12,
-              padding: "12px 14px",
-              border: "1px solid #334155",
-              boxShadow: "0 4px 18px rgba(0,0,0,0.18)",
+              padding: "10px 12px",
+              border: "1px solid var(--hostly-line)",
+              boxShadow: "var(--hostly-shadow-card)",
             }}
           >
-            <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#f8fafc", lineHeight: 1.2 }}>{t("compras.editPurchase")}</h2>
-            <p style={{ margin: "0 0 12px", fontSize: 11, color: "#94a3b8", lineHeight: 1.4 }}>
+            <h2 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600, color: "var(--hostly-ink-strong)", lineHeight: 1.2 }}>{t("compras.editPurchase")}</h2>
+            <p style={{ margin: "0 0 12px", fontSize: 11, color: "var(--hostly-ink-muted)", lineHeight: 1.4 }}>
               {t("compras.formHintBeforeStrong")} <strong>{t("compras.received")}</strong>
               {t("compras.formHintAfterStrong")}
             </p>
@@ -1436,9 +1445,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                         top: "calc(100% + 4px)",
                         zIndex: 50,
                         borderRadius: 10,
-                        border: "1px solid #334155",
-                        background: "#0f172a",
-                        boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                        border: "1px solid var(--hostly-line)",
+                        background: "var(--hostly-surface-card-solid)",
+                        boxShadow: "var(--hostly-shadow-float)",
                         maxHeight: 200,
                         overflowY: "auto",
                       }}
@@ -1456,14 +1465,14 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                             textAlign: "left",
                             padding: "10px 12px",
                             border: "none",
-                            borderBottom: "1px solid rgba(51,65,85,0.5)",
+                            borderBottom: "1px solid var(--hostly-line)",
                             background: "transparent",
                             cursor: "pointer",
                             boxSizing: "border-box",
                           }}
                         >
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#f8fafc" }}>{s.displayName}</div>
-                          <div style={{ marginTop: 2, fontSize: 11, fontWeight: 500, color: "#94a3b8" }}>{s.legalName}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-strong)" }}>{s.displayName}</div>
+                          <div style={{ marginTop: 2, fontSize: 11, fontWeight: 500, color: "var(--hostly-ink-muted)" }}>{s.legalName}</div>
                         </button>
                       ))}
                     </div>
@@ -1509,7 +1518,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                       display: "flex",
                       alignItems: "center",
                       minHeight: 38,
-                      color: selectedStockProduct ? "#e2e8f0" : "#64748b",
+                      color: selectedStockProduct ? "var(--hostly-ink-strong)" : "var(--hostly-ink-muted)",
                       fontWeight: 600,
                     }}
                   >
@@ -1520,19 +1529,35 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
 
               <div
                 style={{
-                  padding: "10px 12px",
+                  padding: "8px 12px",
                   borderRadius: 10,
-                  background: "#0f172a",
-                  border: "1px solid #334155",
+                  background: "var(--hostly-surface-operational)",
+                  border: "1px solid var(--hostly-line)",
                 }}
               >
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "var(--hostly-ink-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                  }}
+                >
                   {t("compras.unitPriceLabel")}
                 </div>
-                <div style={{ marginTop: 4, fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#fde68a" }}>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 17,
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    color: "#b45309",
+                  }}
+                >
                   {draftPrecioUnitario != null ? formatEuro(draftPrecioUnitario, locale) : t("common.emDash")}
                 </div>
-                <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
+                <div style={{ marginTop: 4, fontSize: 12, color: "var(--hostly-ink-muted)" }}>
                   {draftPrecioUnitario != null ? t("compras.unitPriceDerivedHint") : t("compras.unitPriceEmpty")}
                 </div>
               </div>
@@ -1611,9 +1636,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 type="button"
                 onClick={closeForm}
                 style={{
-                  border: "1px solid #475569",
+                  border: "1px solid var(--hostly-line)",
                   background: "transparent",
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-muted)",
                   padding: "12px 18px",
                   borderRadius: 10,
                   fontWeight: 600,
@@ -1638,10 +1663,10 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            background: "linear-gradient(180deg, #1e293b 0%, #1a2332 100%)",
+            background: "var(--hostly-surface-card-soft)",
             borderRadius: 14,
-            border: "1px solid rgba(51, 65, 85, 0.5)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
+            border: "1px solid var(--hostly-line)",
+            boxShadow: "var(--hostly-shadow-card)",
           }}
         >
           <div
@@ -1651,8 +1676,8 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               alignItems: "center",
               justifyContent: "space-between",
               gap: 8,
-              padding: "7px 10px",
-              borderBottom: "1px solid rgba(51, 65, 85, 0.4)",
+              padding: "6px 10px",
+              borderBottom: "1px solid var(--hostly-line)",
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -1679,7 +1704,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 flexBasis: 0,
                 padding: 24,
                 textAlign: "center",
-                color: "#94a3b8",
+                color: "var(--hostly-ink-muted)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -1714,7 +1739,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                 flexBasis: 0,
                 padding: 20,
                 textAlign: "center",
-                color: "#94a3b8",
+                color: "var(--hostly-ink-muted)",
                 fontSize: 13,
                 display: "flex",
                 alignItems: "center",
@@ -1746,13 +1771,13 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                   alignItems: "center",
                   minHeight: 36,
                   padding: "8px 11px",
-                  background: "linear-gradient(180deg, rgba(30, 41, 59, 0.92) 0%, rgba(30, 41, 59, 0.78) 100%)",
-                  borderBottom: "1px solid rgba(51, 65, 85, 0.45)",
+                  background: "var(--hostly-surface-page-soft)",
+                  borderBottom: "1px solid var(--hostly-line)",
                   fontSize: 10,
                   fontWeight: 600,
-                  letterSpacing: "0.09em",
+                  letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: "#7b8a9e",
+                  color: "var(--hostly-ink-muted)",
                   boxSizing: "border-box",
                 }}
               >
@@ -1808,12 +1833,12 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                         background: tone.bg,
                         borderRadius: 14,
                         border: `1px solid ${tone.border}`,
-                        padding: "18px 16px",
+                        padding: "14px 14px",
                         minHeight: 48,
                         boxSizing: "border-box",
                         cursor: "pointer",
                         touchAction: "manipulation",
-                        boxShadow: `inset 3px 0 0 ${tone.stripe}, inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 14px rgba(0,0,0,0.18)`,
+                        boxShadow: `inset 3px 0 0 ${tone.stripe}, var(--hostly-shadow-card)`,
                       }}
                       title={notasHint ? `${supplierPrimary} — ${notasHint}` : supplierPrimary}
                     >
@@ -1841,9 +1866,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                         <div style={{ minWidth: 0 }}>
                           <div
                             style={{
-                              fontSize: 18,
-                              fontWeight: 800,
-                              color: "#f8fafc",
+                              fontSize: 17,
+                              fontWeight: 700,
+                              color: "var(--hostly-ink-strong)",
                               letterSpacing: "-0.025em",
                               lineHeight: 1.22,
                               overflow: "hidden",
@@ -1859,7 +1884,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                                 marginTop: 3,
                                 fontSize: 11,
                                 fontWeight: 600,
-                                color: "#94a3b8",
+                                color: "var(--hostly-ink-muted)",
                                 letterSpacing: "0.01em",
                                 lineHeight: 1.25,
                                 overflow: "hidden",
@@ -1874,7 +1899,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                             style={{
                               marginTop: 10,
                               paddingTop: 9,
-                              borderTop: "1px solid rgba(148, 163, 184, 0.14)",
+                              borderTop: "1px solid var(--hostly-line)",
                               display: "flex",
                               flexWrap: "wrap",
                               alignItems: "center",
@@ -1896,15 +1921,14 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                         </div>
                         <div
                           style={{
-                            fontSize: 19,
-                            fontWeight: 800,
+                            fontSize: 18,
+                            fontWeight: 700,
                             fontVariantNumeric: "tabular-nums",
-                            color: "#fffbeb",
+                            color: "var(--hostly-navy-deep)",
                             textAlign: "right",
-                            letterSpacing: "-0.03em",
+                            letterSpacing: "-0.025em",
                             lineHeight: 1.12,
                             paddingTop: 8,
-                            textShadow: "0 0 24px rgba(251, 191, 36, 0.14)",
                           }}
                         >
                           {formatEuro(typeof c.total === "number" && Number.isFinite(c.total) ? c.total : 0, locale)}
@@ -1929,7 +1953,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                             minWidth: 0,
                             width: "100%",
                             maxWidth: "100%",
-                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+                            boxShadow: "var(--hostly-shadow-hairline)",
                           }}
                         >
                           {COMPRA_ESTADOS.map((e) => (
@@ -1943,7 +1967,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                             style={{
                               fontSize: 12,
                               fontWeight: 600,
-                              color: invLabel === t("compras.notLinked") ? "#6b7a8f" : "#c4cdd8",
+                              color: invLabel === t("compras.notLinked") ? "var(--hostly-ink-muted)" : "var(--hostly-ink)",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
@@ -2021,7 +2045,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                               {t("compras.notAppliedStock")}
                             </span>
                           ) : (
-                            <span style={{ fontSize: 12, fontWeight: 500, color: "#64748b" }}>{t("common.emDash")}</span>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--hostly-ink-muted)" }}>{t("common.emDash")}</span>
                           )}
                         </div>
                         <div
@@ -2044,20 +2068,20 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                               type="button"
                               onClick={() => updateEstado(c.id, "recibido")}
                               style={{
-                                border: "1px solid rgba(34, 197, 94, 0.45)",
-                                background: "rgba(34, 197, 94, 0.16)",
-                                color: "#dcfce7",
-                                padding: "10px 14px",
+                                border: "1px solid rgba(34, 197, 94, 0.35)",
+                                background: "var(--hostly-success-soft)",
+                                color: "var(--hostly-navy-deep)",
+                                padding: "9px 12px",
                                 borderRadius: 10,
                                 cursor: "pointer",
-                                fontWeight: 700,
+                                fontWeight: 600,
                                 fontSize: 13,
                                 lineHeight: 1.2,
                                 minHeight: 44,
                                 boxSizing: "border-box",
                                 whiteSpace: "nowrap",
                                 touchAction: "manipulation",
-                                boxShadow: "0 1px 0 rgba(255,255,255,0.06) inset",
+                                boxShadow: "var(--hostly-shadow-hairline)",
                               }}
                             >
                               {t("compras.actionMarkReceived")}
@@ -2069,21 +2093,21 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                               onClick={() => openEdit(c)}
                               style={{
                                 border: facturaEsPrincipal
-                                  ? "1px solid rgba(59, 130, 246, 0.5)"
-                                  : "1px solid rgba(51, 65, 85, 0.45)",
-                                background: facturaEsPrincipal ? "rgba(37, 99, 235, 0.22)" : "transparent",
-                                color: facturaEsPrincipal ? "#dbeafe" : "#94a3b8",
-                                padding: "10px 14px",
+                                  ? "1px solid rgba(49, 95, 125, 0.45)"
+                                  : "1px solid var(--hostly-line)",
+                                background: facturaEsPrincipal ? "var(--hostly-accent-soft)" : "transparent",
+                                color: facturaEsPrincipal ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
+                                padding: "9px 12px",
                                 borderRadius: 10,
                                 cursor: "pointer",
-                                fontWeight: facturaEsPrincipal ? 700 : 600,
+                                fontWeight: facturaEsPrincipal ? 600 : 600,
                                 fontSize: 13,
                                 lineHeight: 1.2,
                                 minHeight: 44,
                                 boxSizing: "border-box",
                                 whiteSpace: "nowrap",
                                 touchAction: "manipulation",
-                                boxShadow: facturaEsPrincipal ? "0 1px 0 rgba(255,255,255,0.06) inset" : undefined,
+                                boxShadow: facturaEsPrincipal ? "var(--hostly-shadow-hairline)" : undefined,
                               }}
                             >
                               {t("compras.actionInvoice")}
@@ -2094,9 +2118,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                               type="button"
                               onClick={() => openEdit(c)}
                               style={{
-                                border: "1px solid rgba(51, 65, 85, 0.45)",
+                                border: "1px solid var(--hostly-line)",
                                 background: "transparent",
-                                color: "#94a3b8",
+                                color: "var(--hostly-ink-muted)",
                                 padding: "10px 14px",
                                 borderRadius: 10,
                                 cursor: "pointer",
@@ -2123,9 +2147,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                               aria-label={t("compras.menuEditDelete")}
                               aria-expanded={rowMenuOpenId === c.id}
                               style={{
-                                border: "1px solid rgba(71, 85, 105, 0.55)",
+                                border: "1px solid var(--hostly-line)",
                                 background: "transparent",
-                                color: "#94a3b8",
+                                color: "var(--hostly-ink-muted)",
                                 padding: "0 12px",
                                 borderRadius: 10,
                                 cursor: "pointer",
@@ -2154,9 +2178,9 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                                   zIndex: 30,
                                   minWidth: 212,
                                   borderRadius: 12,
-                                  border: "1px solid #334155",
-                                  background: "#020617",
-                                  boxShadow: "0 12px 28px rgba(0,0,0,0.5)",
+                                  border: "1px solid var(--hostly-line)",
+                                  background: "var(--hostly-surface-card-solid)",
+                                  boxShadow: "var(--hostly-shadow-float)",
                                   padding: 8,
                                   display: "flex",
                                   flexDirection: "column",
@@ -2172,7 +2196,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                                   style={{
                                     border: "none",
                                     background: "transparent",
-                                    color: "#cbd5e1",
+                                    color: "var(--hostly-ink)",
                                     textAlign: "left",
                                     padding: "14px 16px",
                                     borderRadius: 10,
