@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import InventarioStockSection from "@/app/dashboard/inventario/inventario-stock-section";
+import HostlyComprasSection from "@/components/inventario/compras-section";
 import ModulePageShell from "@/components/module-page-shell";
 
 type InventarioTab = "stock" | "compras" | "recepciones" | "mermas";
@@ -62,7 +63,9 @@ export default function InventarioPage() {
         </div>
 
         {tab === "compras" ? (
-          <div className="hostly-panel-soft" style={placeholderStyle}>Compras — próximamente</div>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <HostlyComprasSection embedded />
+          </div>
         ) : null}
         {tab === "recepciones" ? (
           <div className="hostly-panel-soft" style={placeholderStyle}>Recepciones — próximamente</div>

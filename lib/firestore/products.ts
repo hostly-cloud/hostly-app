@@ -6,15 +6,19 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
+  type DocumentSnapshot,
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -81,12 +85,50 @@ export type ProductInventoryWrite = {
   categoryId?: string | null;
   station?: string | null;
   active?: boolean;
+  /** Precio de venta (catálogo central); omitir en merge para no pisar el valor existente. */
+  price?: number | null;
+  /** p. ej. `inventory` para artículos gestionados solo por stock. */
+  type?: string | null;
   unit: "kg" | "g" | "l" | "ml" | "ud" | string;
   currentStock: number;
   minStock: number;
   costPerUnit: number;
   supplierName?: string;
   image?: string;
+};
+
+export type StockMovementListItem = {
+  id: string;
+  type: string;
+  previousStock: number;
+  newStock: number;
+  delta: number;
+  unit: string;
+  reason: string | null;
+  source: string;
+  receiptId: string | null;
+  createdAtMs: number | null;
+  createdBy: string | null;
+};
+
+export type InventoryReceiptItemInput = {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  costPerUnit: number | null;
+};
+
+export type ApplyInventoryReceiptInput = {
+  restaurantId: string;
+  createdBy: string | null;
+  supplierName: string | null;
+  notes: string | null;
+  items: InventoryReceiptItemInput[];
+};
+
+export type ApplyInventoryReceiptResult = {
+  receiptId: string;
 };
 
 function rethrowWithMessage(e: unknown): never {
@@ -132,6 +174,152 @@ function normalizeInventoryUnit(value: unknown): ProductInventoryDocument["unit"
     return value;
   }
   return "ud";
+}
+
+/** Alinea unidades de Compras/Stock local (`uds`) con el inventario central (`ud`). */
+function normalizeReceiptItemUnit(unitRaw: unknown): ProductInventoryDocument["unit"] {
+  if (unitRaw === "uds") return "ud";
+  return normalizeInventoryUnit(unitRaw);
+}
+
+type AggregatedReceiptLine = {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unit: ProductInventoryDocument["unit"];
+  costPerUnit: number | null;
+};
+
+function aggregateInventoryReceiptItems(
+  items: InventoryReceiptItemInput[],
+): AggregatedReceiptLine[] {
+  const map = new Map<string, AggregatedReceiptLine>();
+  for (const raw of items) {
+    const productId = raw.productId.trim();
+    if (!productId) {
+      throw new Error("applyInventoryReceipt: productId vacío");
+    }
+    const qty = readFiniteNumber(raw.quantity);
+    if (qty == null || qty <= 0) {
+      throw new Error(`applyInventoryReceipt: cantidad inválida (${productId})`);
+    }
+    const name = (raw.productName ?? "").trim() || "Sin nombre";
+    const unit = normalizeReceiptItemUnit(raw.unit ?? "ud");
+    let costPerUnit: number | null = null;
+    if (raw.costPerUnit != null) {
+      const c = readFiniteNumber(raw.costPerUnit);
+      if (c != null && c >= 0) costPerUnit = c;
+    }
+    const prev = map.get(productId);
+    if (prev) {
+      prev.quantity += qty;
+      if (!prev.productName || prev.productName === "Sin nombre") prev.productName = name;
+      if (costPerUnit != null) prev.costPerUnit = costPerUnit;
+    } else {
+      map.set(productId, {
+        productId,
+        productName: name,
+        quantity: qty,
+        unit,
+        costPerUnit,
+      });
+    }
+  }
+  return [...map.values()];
+}
+
+/**
+ * Registra una recepción de inventario: documento en `inventoryReceipts`, incremento atómico de
+ * `inventory.currentStock` por producto y movimiento `type: "receipt"` en `stockMovements`.
+ */
+export async function applyInventoryReceipt(
+  input: ApplyInventoryReceiptInput,
+): Promise<ApplyInventoryReceiptResult> {
+  const rid = input.restaurantId.trim();
+  if (!rid) throw new Error("applyInventoryReceipt: restaurantId requerido");
+  if (!input.items.length) throw new Error("applyInventoryReceipt: sin líneas");
+  if (!auth.currentUser) throw new Error("applyInventoryReceipt: sin sesión");
+
+  const aggregated = aggregateInventoryReceiptItems(input.items);
+  const receiptRef = doc(collection(db, "restaurants", rid, "inventoryReceipts"));
+  const receiptId = receiptRef.id;
+  const supplierReason =
+    input.supplierName?.trim() ? input.supplierName.trim() : null;
+  const notesTrim = input.notes?.trim() ? input.notes.trim() : null;
+
+  await runTransaction(db, async (transaction) => {
+    const lines: { line: AggregatedReceiptLine; snap: DocumentSnapshot<DocumentData> }[] = [];
+
+    for (const line of aggregated) {
+      const pref = doc(db, "restaurants", rid, "products", line.productId);
+      const snap = await transaction.get(pref);
+      if (!snap.exists()) {
+        throw new Error(
+          `Producto no encontrado en inventario central: ${line.productId}. Vincula el id del producto Firestore en Compras.`,
+        );
+      }
+      const data = snap.data() as Record<string, unknown>;
+      assertProductRestaurantAccess(data, rid);
+      lines.push({ line, snap });
+    }
+
+    const receiptItems = aggregated.map((a) => ({
+      productId: a.productId,
+      productName: a.productName,
+      quantity: a.quantity,
+      unit: a.unit,
+      costPerUnit: a.costPerUnit,
+    }));
+
+    let totalCost = 0;
+    for (const a of aggregated) {
+      if (a.costPerUnit != null) totalCost += a.quantity * a.costPerUnit;
+    }
+
+    transaction.set(receiptRef, {
+      supplierName: supplierReason,
+      notes: notesTrim,
+      createdAt: serverTimestamp(),
+      createdBy: input.createdBy,
+      items: receiptItems,
+      totalCost,
+    } as DocumentData);
+
+    for (const { line, snap } of lines) {
+      const data = snap.data() as Record<string, unknown>;
+      const previousStock = readInventoryCurrentStockFromDoc(data);
+      const newStock = previousStock + line.quantity;
+      const productRef = doc(db, "restaurants", rid, "products", line.productId);
+      const movementRef = doc(
+        collection(db, "restaurants", rid, "products", line.productId, "stockMovements"),
+      );
+
+      const patch: Record<string, unknown> = {
+        "inventory.currentStock": newStock,
+        updatedAt: serverTimestamp(),
+      };
+      if (line.costPerUnit != null) {
+        patch["inventory.costPerUnit"] = line.costPerUnit;
+      }
+
+      transaction.update(productRef, patch as DocumentData);
+
+      transaction.set(movementRef, {
+        type: "receipt",
+        previousStock,
+        newStock,
+        delta: line.quantity,
+        unit: line.unit,
+        reason: supplierReason,
+        source: "inventory_receipt",
+        receiptId,
+        createdAt: serverTimestamp(),
+        createdBy: input.createdBy,
+      } as DocumentData);
+    }
+  });
+
+  return { receiptId };
 }
 
 export const UNAUTHORIZED_PRODUCT_ACCESS = "UNAUTHORIZED_PRODUCT_ACCESS";
@@ -619,10 +807,10 @@ export function listenProductsForInventory(
   let centralItems: ProductDocument[] = [];
   let legacyItems: ProductDocument[] = [];
   let centralReady = false;
-  let legacyReady = false;
 
+  /** Inventario depende del snapshot central; legacy solo enriquece si hay permiso/datos. */
   const emit = () => {
-    if (!centralReady || !legacyReady) return;
+    if (!centralReady) return;
     const merged = new Map<string, ProductDocument>();
     const centralIds = new Set(centralItems.map((item) => item.id));
     for (const item of legacyItems) {
@@ -660,13 +848,10 @@ export function listenProductsForInventory(
       query(legacyInventoryProductsCollection(rid)),
       (snap) => {
         legacyItems = snap.docs.map(mapLegacyInventoryDocToProductDocument);
-        legacyReady = true;
         emit();
       },
-      (error) => {
-        onListenError?.(error);
+      (_error: unknown) => {
         legacyItems = [];
-        legacyReady = true;
         emit();
       },
     ),
@@ -677,6 +862,101 @@ export function listenProductsForInventory(
   };
 }
 
+function readInventoryCurrentStockFromDoc(
+  data: Record<string, unknown> | undefined,
+): number {
+  if (!data) return 0;
+  const inv =
+    data.inventory && typeof data.inventory === "object"
+      ? (data.inventory as Record<string, unknown>)
+      : {};
+  return readFiniteNumberWithDefault(inv.currentStock, 0);
+}
+
+function mapStockMovementSnapshot(
+  snap: QueryDocumentSnapshot<DocumentData>,
+): StockMovementListItem {
+  const d = snap.data() as Record<string, unknown>;
+  const createdAt = d.createdAt;
+  let createdAtMs: number | null = null;
+  if (typeof createdAt === "number" && Number.isFinite(createdAt)) {
+    createdAtMs = createdAt;
+  } else if (createdAt instanceof Timestamp) {
+    createdAtMs = createdAt.toMillis();
+  }
+  const createdBy =
+    typeof d.createdBy === "string" && d.createdBy.trim() !== ""
+      ? d.createdBy.trim()
+      : null;
+  const reason =
+    d.reason === null || d.reason === undefined
+      ? null
+      : typeof d.reason === "string"
+        ? d.reason
+        : null;
+  const unit =
+    typeof d.unit === "string" && d.unit.trim() !== "" ? d.unit.trim() : "ud";
+  const type =
+    typeof d.type === "string" && d.type.trim() !== ""
+      ? d.type.trim()
+      : "manual_adjustment";
+  const source =
+    typeof d.source === "string" && d.source.trim() !== ""
+      ? d.source.trim()
+      : "inventory_panel";
+
+  const receiptId =
+    typeof d.receiptId === "string" && d.receiptId.trim() !== ""
+      ? d.receiptId.trim()
+      : null;
+
+  return {
+    id: snap.id,
+    type,
+    previousStock: readFiniteNumberWithDefault(d.previousStock, 0),
+    newStock: readFiniteNumberWithDefault(d.newStock, 0),
+    delta: readFiniteNumberWithDefault(d.delta, 0),
+    unit,
+    reason,
+    source,
+    receiptId,
+    createdAtMs,
+    createdBy,
+  };
+}
+
+/**
+ * Últimos movimientos de stock del producto (tiempo real).
+ */
+export function listenLatestStockMovements(
+  restaurantId: string,
+  productId: string,
+  onData: (items: StockMovementListItem[]) => void,
+  options?: { limit?: number; onError?: (e: unknown) => void },
+): Unsubscribe {
+  const rid = restaurantId.trim();
+  const pid = productId.trim();
+  const lim = Math.min(Math.max(options?.limit ?? 5, 1), 50);
+  if (!rid || !pid || !auth.currentUser) {
+    onData([]);
+    return () => {};
+  }
+
+  const col = collection(db, "restaurants", rid, "products", pid, "stockMovements");
+  const q = query(col, orderBy("createdAt", "desc"), limit(lim));
+
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map(mapStockMovementSnapshot));
+    },
+    (error) => {
+      options?.onError?.(error);
+      onData([]);
+    },
+  );
+}
+
 function centralInventoryPayload(
   restaurantId: string,
   payload: ProductInventoryWrite,
@@ -684,7 +964,7 @@ function centralInventoryPayload(
   const name = payload.name?.trim() || "Sin nombre";
   const categoryId = payload.categoryId?.trim() || null;
   const station = payload.station?.trim() || null;
-  return {
+  const doc: Record<string, unknown> = {
     restaurantId,
     name,
     categoryId,
@@ -703,7 +983,18 @@ function centralInventoryPayload(
     },
     recipe: defaultRecipe(),
     updatedAt: serverTimestamp(),
-  } as DocumentData;
+  };
+  if (payload.price !== undefined) {
+    doc.price =
+      payload.price === null ? null : readFiniteNumberWithDefault(payload.price, 0);
+  }
+  if (payload.type !== undefined) {
+    doc.type =
+      typeof payload.type === "string" && payload.type.trim() !== ""
+        ? payload.type.trim()
+        : null;
+  }
+  return doc as DocumentData;
 }
 
 export async function upsertProductInventory(
@@ -714,23 +1005,79 @@ export async function upsertProductInventory(
   const rid = restaurantId.trim();
   if (!rid) throw new Error("upsertProductInventory: restaurantId no disponible");
 
+  const newStock = readFiniteNumberWithDefault(payload.currentStock, 0);
+  const unitStr = String(normalizeInventoryUnit(payload.unit));
+
   try {
     if (productId?.trim()) {
       const id = productId.trim();
-      await setDoc(
-        doc(db, "restaurants", rid, "products", id),
-        centralInventoryPayload(rid, payload),
-        { merge: true },
-      );
+      const productRef = doc(db, "restaurants", rid, "products", id);
+      let previousStock = 0;
+      const snap = await getDoc(productRef);
+      if (snap.exists()) {
+        previousStock = readInventoryCurrentStockFromDoc(
+          snap.data() as Record<string, unknown>,
+        );
+      }
+
+      const batch = writeBatch(db);
+      batch.set(productRef, centralInventoryPayload(rid, payload), { merge: true });
+
+      if (previousStock !== newStock) {
+        const movRef = doc(
+          collection(db, "restaurants", rid, "products", id, "stockMovements"),
+        );
+        batch.set(movRef, {
+          type: "manual_adjustment",
+          previousStock,
+          newStock,
+          delta: newStock - previousStock,
+          unit: unitStr,
+          reason: null,
+          source: "inventory_panel",
+          createdAt: serverTimestamp(),
+          createdBy: auth.currentUser?.uid ?? null,
+        } as DocumentData);
+      }
+
+      await batch.commit();
       return id;
     }
 
-    const ref = doc(centralProductsCollection(rid));
-    await setDoc(ref, {
+    const productRef = doc(centralProductsCollection(rid));
+    const previousStock = 0;
+    const batch = writeBatch(db);
+    batch.set(productRef, {
       ...centralInventoryPayload(rid, payload),
       createdAt: serverTimestamp(),
     });
-    return ref.id;
+
+    if (previousStock !== newStock) {
+      const movRef = doc(
+        collection(
+          db,
+          "restaurants",
+          rid,
+          "products",
+          productRef.id,
+          "stockMovements",
+        ),
+      );
+      batch.set(movRef, {
+        type: "manual_adjustment",
+        previousStock,
+        newStock,
+        delta: newStock - previousStock,
+        unit: unitStr,
+        reason: null,
+        source: "inventory_panel",
+        createdAt: serverTimestamp(),
+        createdBy: auth.currentUser?.uid ?? null,
+      } as DocumentData);
+    }
+
+    await batch.commit();
+    return productRef.id;
   } catch (e) {
     rethrowWithMessage(e);
   }

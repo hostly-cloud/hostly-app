@@ -16,8 +16,33 @@ service cloud.firestore {
         );
     }
 
+    function profileHasRestaurant(profile, restaurantId) {
+      return profile.restaurantId == restaurantId
+        || (profile.restaurantIds is list && restaurantId in profile.restaurantIds)
+        || (
+          profile.restaurantIds is map
+          && profile.restaurantIds.keys().hasAny([restaurantId])
+        );
+    }
+
     function sameRestaurant(resourceRestaurantId) {
-      return isAuth() && resourceRestaurantId == userRestaurantId();
+      return isAuth()
+        && (
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && profileHasRestaurant(
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data,
+              resourceRestaurantId
+            )
+          )
+          || (
+            exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+            && profileHasRestaurant(
+              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data,
+              resourceRestaurantId
+            )
+          )
+        );
     }
 
     // USERS
@@ -49,7 +74,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // RESTAURANTS
+    // Catálogo central por restaurante (ruta explícita; no inferir desde el doc padre).
+    match /restaurants/{restaurantId}/products/{productId} {
+      allow read, write: if sameRestaurant(restaurantId);
+
+      // Movimientos de stock: solo lectura y alta (append-only). Update/delete no declarados → denegados.
+      match /stockMovements/{movementId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId);
+      }
+    }
+
+    // Recepciones de inventario central (solo alta y lectura en fase 1).
+    match /restaurants/{restaurantId}/inventoryReceipts/{receiptId} {
+      allow read, create: if sameRestaurant(restaurantId);
+    }
+
+    // RESTAURANTS (doc del restaurante + subcolecciones distintas de products/)
     match /restaurants/{restaurantId} {
       allow read, write: if sameRestaurant(restaurantId);
 
@@ -63,10 +104,6 @@ service cloud.firestore {
       match /inventoryProducts/{inventoryProductId} {
         allow read: if sameRestaurant(restaurantId);
         allow create, update, delete: if false;
-      }
-
-      match /products/{productId} {
-        allow read, write: if sameRestaurant(restaurantId);
       }
     }
 

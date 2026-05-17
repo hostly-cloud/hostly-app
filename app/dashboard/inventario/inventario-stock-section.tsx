@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import {
   disableProductInventory,
+  listenLatestStockMovements,
   listenProductsForInventory,
   upsertProductInventory,
   type ProductDocument,
+  type StockMovementListItem,
 } from "@/lib/firestore/products";
 import { mockInventarioProductos } from "@/lib/inventario-productos";
 
@@ -48,6 +50,18 @@ const UNIDADES: Unidad[] = ["kg", "g", "l", "ml", "ud"];
 function roundTo(n: number, decimals: number): number {
   const f = 10 ** decimals;
   return Math.round((n + Number.EPSILON) * f) / f;
+}
+
+function formatMovementDelta(delta: number): string {
+  if (!Number.isFinite(delta)) return "0";
+  const r = roundTo(delta, 3);
+  if (r === 0) return "0";
+  return r > 0 ? `+${r}` : String(r);
+}
+
+function stockMovementKindLabel(m: StockMovementListItem): string {
+  if (m.type === "receipt" || m.source === "inventory_receipt") return "Recepción";
+  return "Ajuste manual";
 }
 
 function formatMoney2(value: number | null | undefined): string {
@@ -112,6 +126,14 @@ export default function InventarioStockSection() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  /** Tras crear producto, priorizar su selección cuando llegue el snapshot. */
+  const preferSelectIdRef = useRef<string | null>(null);
+  const [stockMovements, setStockMovements] = useState<StockMovementListItem[]>([]);
+
+  const movementDateFmt = useMemo(
+    () => new Intl.DateTimeFormat("es", { dateStyle: "short", timeStyle: "short" }),
+    [],
+  );
 
   useEffect(() => {
     if (!ready || !profileReady) {
@@ -152,6 +174,28 @@ export default function InventarioStockSection() {
   }, [profileReady, ready, reloadNonce, restaurantId]);
 
   useEffect(() => {
+    if (!ready || !profileReady || usingMock) {
+      setStockMovements([]);
+      return;
+    }
+    const rid = restaurantId?.trim() ?? "";
+    const pid = selectedId?.trim() ?? "";
+    if (!rid || !pid) {
+      setStockMovements([]);
+      return;
+    }
+    return listenLatestStockMovements(rid, pid, setStockMovements, { limit: 5 });
+  }, [profileReady, ready, usingMock, restaurantId, selectedId]);
+
+  useEffect(() => {
+    const prefer = preferSelectIdRef.current;
+    if (prefer) {
+      if (items.some((item) => String(item.id) === prefer)) {
+        setSelectedId(prefer);
+        preferSelectIdRef.current = null;
+      }
+      return;
+    }
     setSelectedId((prev) => {
       if (prev && items.some((item) => String(item.id) === prev)) return prev;
       return items[0] ? String(items[0].id) : null;
@@ -192,16 +236,21 @@ export default function InventarioStockSection() {
       if (!rid) {
         throw new Error("No hay restaurante activo para crear inventario");
       }
-      await upsertProductInventory(rid, null, {
-        name: null,
+      const newId = await upsertProductInventory(rid, null, {
+        name: "Nuevo producto",
         categoryId: null,
         station: null,
         active: true,
+        price: 0,
+        type: "inventory",
         unit: "ud",
         currentStock: 0,
         minStock: 0,
         costPerUnit: 0,
       });
+      preferSelectIdRef.current = newId;
+      setSelectedId(newId);
+      setMobilePanelOpen(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("inventory.errorSave"));
     }
@@ -329,39 +378,6 @@ export default function InventarioStockSection() {
       }
     : null;
 
-  const inputStyle = {
-    width: "100%",
-    padding: "10px 11px",
-    borderRadius: 12,
-    border: "1px solid rgba(77, 107, 128, 0.18)",
-    outline: "none",
-    background: "rgba(255,255,255,0.9)",
-    color: "#102033",
-    boxSizing: "border-box" as const,
-  };
-  const sectionStyle = {
-    border: "1px solid rgba(77, 107, 128, 0.14)",
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.76)",
-    padding: 14,
-    boxShadow: "0 10px 24px rgba(49, 95, 125, 0.06)",
-  };
-  const sectionTitleStyle = {
-    margin: "0 0 10px",
-    fontSize: 12,
-    fontWeight: 900,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase" as const,
-    color: "#49667a",
-  };
-  const labelStyle = {
-    display: "grid",
-    gap: 6,
-    fontSize: 12,
-    fontWeight: 800,
-    color: "#4a6475",
-  };
-
   const renderConfigPanel = () => {
     if (!selectedRow || !selectedDraft) {
       return (
@@ -373,21 +389,37 @@ export default function InventarioStockSection() {
 
     const isSaving = Boolean(savingById[selectedKey]);
     const isDeleting = Boolean(deletingById[selectedKey]);
+    const stationTrim = selectedDraft.station.trim();
+    const displayName = selectedDraft.nombre.trim() || "Producto sin nombre";
+    const headInitial = displayName.charAt(0).toUpperCase() || "P";
 
     return (
       <div className="hostly-inventory-config-panel">
         <div className="hostly-inventory-panel-head">
-          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-            <div className="hostly-inventory-image-thumb">
-              {selectedRow.image ? "IMG" : "IA"}
+          <div className="hostly-inventory-head-main">
+            <div className="hostly-inventory-avatar" aria-hidden>
+              {selectedRow.image ? (
+                <span className="hostly-inventory-avatar-dot" />
+              ) : (
+                headInitial
+              )}
             </div>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: "#102033" }}>
-                {selectedDraft.nombre.trim() || "Producto sin nombre"}
-              </p>
-              <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: 700, color: "#6a7f8f" }}>
-                Configuración operacional de producto
-              </p>
+            <div className="hostly-inventory-head-text">
+              <h2 className="hostly-inventory-head-title">{displayName}</h2>
+              <p className="hostly-inventory-head-sub">Ficha inventario · catálogo central</p>
+              <div className="hostly-inventory-head-badges">
+                <span
+                  className={`hostly-inventory-head-badge${selectedDraft.active ? " is-active" : " is-inactive"}`}
+                >
+                  {selectedDraft.active ? "Activo" : "Inactivo"}
+                </span>
+                <span className="hostly-inventory-head-badge is-neutral">
+                  {selectedDraft.unidad || "ud"}
+                </span>
+                {stationTrim ? (
+                  <span className="hostly-inventory-head-badge is-neutral">{stationTrim}</span>
+                ) : null}
+              </div>
             </div>
           </div>
           <button
@@ -399,142 +431,186 @@ export default function InventarioStockSection() {
           </button>
         </div>
 
-        <section style={sectionStyle}>
-          <h3 style={sectionTitleStyle}>General</h3>
-          <div className="hostly-inventory-form-grid">
-            <label style={labelStyle}>
-              {t("common.name")}
-              <input
-                value={selectedDraft.nombre}
-                onChange={(e) => updateDraft(selectedRow.id, { nombre: e.target.value })}
-                placeholder={selectedRow.nombre ?? t("inventory.placeholderProduct")}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Categoría
-              <input
-                value={selectedDraft.categoryId}
-                onChange={(e) => updateDraft(selectedRow.id, { categoryId: e.target.value })}
-                placeholder="Sin categoría"
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Estación
-              <input
-                value={selectedDraft.station}
-                onChange={(e) => updateDraft(selectedRow.id, { station: e.target.value })}
-                placeholder="cocina, barra, sala..."
-                style={inputStyle}
-              />
-            </label>
-            <label className="hostly-inventory-switch-row">
-              <span>
-                <strong>Activo</strong>
-                <small>Visible para operación cuando se conecte al catálogo central.</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={selectedDraft.active}
-                onChange={(e) => updateDraft(selectedRow.id, { active: e.target.checked })}
-              />
-            </label>
-          </div>
-        </section>
-
-        <section style={sectionStyle}>
-          <h3 style={sectionTitleStyle}>Inventario</h3>
-          <div className="hostly-inventory-form-grid">
-            <label className="hostly-inventory-switch-row">
-              <span>
-                <strong>Inventario activo</strong>
-                <small>Este producto participa en control de stock.</small>
-              </span>
-              <input type="checkbox" checked readOnly />
-            </label>
-            <label style={labelStyle}>
-              {t("common.unit")}
-              <select
-                value={selectedDraft.unidad}
-                onChange={(e) => updateDraft(selectedRow.id, { unidad: e.target.value })}
-                style={inputStyle}
-              >
-                {UNIDADES.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label style={labelStyle}>
-              {t("common.currentStock")}
-              <input
-                type="number"
-                step="any"
-                inputMode="decimal"
-                value={selectedDraft.stock_actual}
-                onChange={(e) => updateDraft(selectedRow.id, { stock_actual: e.target.value })}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              {t("common.minStock")}
-              <input
-                type="number"
-                step="any"
-                inputMode="decimal"
-                value={selectedDraft.stock_minimo}
-                onChange={(e) => updateDraft(selectedRow.id, { stock_minimo: e.target.value })}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Coste por unidad
-              <input
-                type="number"
-                step="0.01"
-                inputMode="decimal"
-                value={selectedDraft.coste_unitario}
-                onChange={(e) => updateDraft(selectedRow.id, { coste_unitario: e.target.value })}
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              Proveedor
-              <input
-                value={selectedDraft.supplierName}
-                onChange={(e) => updateDraft(selectedRow.id, { supplierName: e.target.value })}
-                placeholder="Proveedor habitual"
-                style={inputStyle}
-              />
-            </label>
-          </div>
-        </section>
-
-        <section style={sectionStyle}>
-          <h3 style={sectionTitleStyle}>Media</h3>
-          <div className="hostly-inventory-media-box">
-            <div className="hostly-inventory-media-placeholder">Foto / IA</div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 900, color: "#102033" }}>Imagen del producto</p>
-              <p style={{ margin: "4px 0 0", color: "#6a7f8f", fontSize: 13 }}>
-                Preparado para futura subida de foto, OCR o identificación por IA.
-              </p>
+        <div className="hostly-inventory-config-body">
+          <section className="hostly-inventory-fiche-section">
+            <h3 className="hostly-inventory-fiche-section-title">General</h3>
+            <div className="hostly-inventory-fiche-grid">
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">{t("common.name")}</span>
+                <input
+                  value={selectedDraft.nombre}
+                  onChange={(e) => updateDraft(selectedRow.id, { nombre: e.target.value })}
+                  placeholder={selectedRow.nombre ?? t("inventory.placeholderProduct")}
+                  className="hostly-inventory-field-input"
+                />
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">Categoría</span>
+                <input
+                  value={selectedDraft.categoryId}
+                  onChange={(e) => updateDraft(selectedRow.id, { categoryId: e.target.value })}
+                  placeholder="Sin categoría"
+                  className="hostly-inventory-field-input"
+                />
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">Estación</span>
+                <input
+                  value={selectedDraft.station}
+                  onChange={(e) => updateDraft(selectedRow.id, { station: e.target.value })}
+                  placeholder="Barra, cocina, sala…"
+                  className="hostly-inventory-field-input"
+                />
+              </label>
+              <label className="hostly-inventory-switch-row hostly-inventory-switch-row--compact">
+                <span className="hostly-inventory-switch-label">
+                  <strong>Activo</strong>
+                  <small>Visible cuando el producto esté enlazado al catálogo.</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={selectedDraft.active}
+                  onChange={(e) => updateDraft(selectedRow.id, { active: e.target.checked })}
+                />
+              </label>
             </div>
-          </div>
-        </section>
 
-        <section style={sectionStyle}>
-          <h3 style={sectionTitleStyle}>Próximamente</h3>
-          <div className="hostly-inventory-future-grid">
-            {["Recetas", "IA", "Escandallos", "Compras automáticas"].map((item) => (
-              <span key={item}>{item}</span>
-            ))}
-          </div>
-        </section>
+            <h3 className="hostly-inventory-fiche-section-title hostly-inventory-fiche-section-title--spaced">
+              Inventario
+            </h3>
+            <div className="hostly-inventory-fiche-grid">
+              <label className="hostly-inventory-switch-row hostly-inventory-switch-row--compact">
+                <span className="hostly-inventory-switch-label">
+                  <strong>Inventario activo</strong>
+                  <small>Control de stock habilitado para este artículo.</small>
+                </span>
+                <input type="checkbox" checked readOnly />
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">{t("common.unit")}</span>
+                <select
+                  value={selectedDraft.unidad}
+                  onChange={(e) => updateDraft(selectedRow.id, { unidad: e.target.value })}
+                  className="hostly-inventory-field-input"
+                >
+                  {UNIDADES.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">{t("common.currentStock")}</span>
+                <input
+                  type="number"
+                  step="any"
+                  inputMode="decimal"
+                  value={selectedDraft.stock_actual}
+                  onChange={(e) => updateDraft(selectedRow.id, { stock_actual: e.target.value })}
+                  className="hostly-inventory-field-input"
+                />
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">{t("common.minStock")}</span>
+                <input
+                  type="number"
+                  step="any"
+                  inputMode="decimal"
+                  value={selectedDraft.stock_minimo}
+                  onChange={(e) => updateDraft(selectedRow.id, { stock_minimo: e.target.value })}
+                  className="hostly-inventory-field-input"
+                />
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">Coste por unidad</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={selectedDraft.coste_unitario}
+                  onChange={(e) =>
+                    updateDraft(selectedRow.id, { coste_unitario: e.target.value })
+                  }
+                  className="hostly-inventory-field-input"
+                />
+              </label>
+              <label className="hostly-inventory-field hostly-inventory-field--full">
+                <span className="hostly-inventory-field-label">Proveedor</span>
+                <input
+                  value={selectedDraft.supplierName}
+                  onChange={(e) => updateDraft(selectedRow.id, { supplierName: e.target.value })}
+                  placeholder="Proveedor habitual"
+                  className="hostly-inventory-field-input"
+                />
+              </label>
+            </div>
+          </section>
 
-        <div className="hostly-inventory-panel-actions">
+          <section className="hostly-inventory-fiche-section hostly-inventory-fiche-section--movements">
+            <h3 className="hostly-inventory-fiche-section-title">Últimos movimientos</h3>
+            {stockMovements.length === 0 ? (
+              <p className="hostly-inventory-movements-empty">
+                Sin movimientos. Al cambiar el stock y guardar, aparecerán aquí.
+              </p>
+            ) : (
+              <ul className="hostly-inventory-movements-list">
+                {stockMovements.map((m) => {
+                  const when =
+                    m.createdAtMs != null
+                      ? movementDateFmt.format(m.createdAtMs)
+                      : "—";
+                  const deltaStr = formatMovementDelta(m.delta);
+                  const finalStr = `${roundTo(m.newStock, 3)} ${m.unit}`;
+                  const deltaTone =
+                    m.delta > 0 ? "plus" : m.delta < 0 ? "minus" : "zero";
+                  return (
+                    <li key={m.id} className="hostly-inventory-movements-row">
+                      <span className="hostly-inventory-movements-date">{when}</span>
+                      <span
+                        className="hostly-inventory-movements-delta"
+                        data-sign={deltaTone}
+                      >
+                        {deltaStr}
+                      </span>
+                      <span className="hostly-inventory-movements-final" title="Stock tras el movimiento">
+                        → {finalStr}
+                      </span>
+                      <span className="hostly-inventory-movements-kind">{stockMovementKindLabel(m)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="hostly-inventory-fiche-section hostly-inventory-fiche-section--media">
+            <h3 className="hostly-inventory-fiche-section-title">Media</h3>
+            <div className="hostly-inventory-media-card">
+              <div className="hostly-inventory-media-icon-wrap" aria-hidden>
+                <span className="hostly-inventory-media-icon">✦</span>
+              </div>
+              <div className="hostly-inventory-media-copy">
+                <p className="hostly-inventory-media-cta">Imagen e identificación por IA</p>
+                <p className="hostly-inventory-media-hint">
+                  Próximamente: foto, OCR y enriquecimiento automático de ficha.
+                </p>
+                <span className="hostly-inventory-media-chip">Placeholder · sin subida</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="hostly-inventory-fiche-section hostly-inventory-fiche-section--future">
+            <h3 className="hostly-inventory-fiche-future-title">Próximamente</h3>
+            <div className="hostly-inventory-future-chips">
+              {["Recetas", "IA", "Escandallos", "Compras"].map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <div className="hostly-inventory-panel-footer">
           <button
             type="button"
             onClick={() => guardarFila(selectedRow.id)}
@@ -669,6 +745,14 @@ export default function InventarioStockSection() {
           gap: 14px;
           align-items: start;
         }
+        @media (min-width: 768px) {
+          .hostly-inventory-panel-shell {
+            display: flex;
+            flex-direction: column;
+            max-height: min(82vh, 720px);
+            min-height: 280px;
+          }
+        }
         .hostly-inventory-list-panel,
         .hostly-inventory-panel-shell {
           border: 1px solid rgba(77, 107, 128, 0.14);
@@ -715,21 +799,17 @@ export default function InventarioStockSection() {
           background: linear-gradient(90deg, rgba(219, 238, 250, 0.82), rgba(255,255,255,0.72));
           box-shadow: inset 3px 0 0 #4f9fc8;
         }
-        .hostly-inventory-row-image,
-        .hostly-inventory-image-thumb,
-        .hostly-inventory-media-placeholder {
+        .hostly-inventory-row-image {
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          width: 42px;
+          height: 42px;
+          border-radius: 12px;
           background: linear-gradient(180deg, #e9f5fb, #d9ecf7);
           color: #2f6f91;
           border: 1px solid rgba(77, 107, 128, 0.12);
           font-weight: 950;
-        }
-        .hostly-inventory-row-image {
-          width: 42px;
-          height: 42px;
-          border-radius: 12px;
         }
         .hostly-inventory-row-main {
           min-width: 0;
@@ -775,70 +855,374 @@ export default function InventarioStockSection() {
           color: #9a5d11;
         }
         .hostly-inventory-config-panel {
-          display: grid;
-          gap: 12px;
-          padding: 14px;
-        }
-        .hostly-inventory-panel-head,
-        .hostly-inventory-panel-actions,
-        .hostly-inventory-media-box {
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
+          flex-direction: column;
+          min-height: 0;
+          flex: 1;
         }
-        .hostly-inventory-image-thumb {
-          width: 50px;
-          height: 50px;
-          border-radius: 16px;
+        .hostly-inventory-config-body {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          padding: 10px 12px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .hostly-inventory-panel-head {
           flex-shrink: 0;
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 10px 12px;
+          border-bottom: 1px solid rgba(100, 116, 139, 0.12);
+          background: linear-gradient(
+            180deg,
+            rgba(247, 252, 255, 0.97) 0%,
+            rgba(241, 248, 252, 0.88) 100%
+          );
         }
-        .hostly-inventory-form-grid {
+        .hostly-inventory-head-main {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          min-width: 0;
+        }
+        .hostly-inventory-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 999px;
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 15px;
+          font-weight: 850;
+          letter-spacing: -0.02em;
+          color: #1e4d67;
+          background: radial-gradient(
+            circle at 30% 28%,
+            rgba(255, 255, 255, 0.95) 0%,
+            rgba(227, 242, 252, 0.92) 45%,
+            rgba(207, 231, 245, 0.85) 100%
+          );
+          border: 1px solid rgba(100, 116, 139, 0.14);
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+        .hostly-inventory-avatar-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 999px;
+          background: rgba(56, 142, 184, 0.55);
+          box-shadow: 0 0 0 3px rgba(186, 224, 240, 0.45);
+        }
+        .hostly-inventory-head-text {
+          min-width: 0;
+        }
+        .hostly-inventory-head-title {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 850;
+          line-height: 1.2;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+        }
+        .hostly-inventory-head-sub {
+          margin: 3px 0 0;
+          font-size: 11px;
+          font-weight: 650;
+          color: rgba(71, 85, 105, 0.92);
+          letter-spacing: 0.01em;
+        }
+        .hostly-inventory-head-badges {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+          margin-top: 8px;
+        }
+        .hostly-inventory-head-badge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 20px;
+          padding: 0 8px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.02em;
+          border: 1px solid rgba(100, 116, 139, 0.14);
+          background: rgba(255, 255, 255, 0.72);
+          color: #475569;
+        }
+        .hostly-inventory-head-badge.is-active {
+          background: rgba(224, 242, 254, 0.65);
+          border-color: rgba(125, 211, 252, 0.35);
+          color: #0c4a6e;
+        }
+        .hostly-inventory-head-badge.is-inactive {
+          background: rgba(241, 245, 249, 0.85);
+          color: #64748b;
+        }
+        .hostly-inventory-head-badge.is-neutral {
+          font-variant-numeric: tabular-nums;
+        }
+        .hostly-inventory-fiche-section {
+          border: 1px solid rgba(100, 116, 139, 0.12);
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.82);
+          padding: 10px 11px 11px;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+        }
+        .hostly-inventory-fiche-section--media {
+          padding: 10px 11px;
+        }
+        .hostly-inventory-fiche-section--future {
+          padding: 8px 10px 9px;
+          background: rgba(248, 250, 252, 0.65);
+          border-style: dashed;
+          border-color: rgba(100, 116, 139, 0.12);
+          box-shadow: none;
+        }
+        .hostly-inventory-fiche-section-title {
+          margin: 0 0 8px;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: #64748b;
+        }
+        .hostly-inventory-fiche-section-title--spaced {
+          margin-top: 12px;
+        }
+        .hostly-inventory-fiche-future-title {
+          margin: 0 0 6px;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(100, 116, 139, 0.72);
+        }
+        .hostly-inventory-fiche-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
+          gap: 8px 10px;
+          align-items: start;
+        }
+        .hostly-inventory-field {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-width: 0;
+        }
+        .hostly-inventory-field--full {
+          grid-column: 1 / -1;
+        }
+        .hostly-inventory-field-label {
+          font-size: 10px;
+          font-weight: 750;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: #64748b;
+        }
+        .hostly-inventory-field-input {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 6px 9px;
+          border-radius: 9px;
+          border: 1px solid rgba(100, 116, 139, 0.16);
+          outline: none;
+          background: rgba(255, 255, 255, 0.96);
+          color: #0f172a;
+          font-size: 13px;
+          font-weight: 650;
+        }
+        .hostly-inventory-field-input:focus {
+          border-color: rgba(56, 142, 184, 0.45);
+          box-shadow: 0 0 0 3px rgba(186, 224, 240, 0.35);
         }
         .hostly-inventory-switch-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          min-height: 44px;
-          padding: 10px 11px;
-          border-radius: 14px;
-          background: rgba(244, 248, 252, 0.82);
-          border: 1px solid rgba(77, 107, 128, 0.12);
-          color: #102033;
+          gap: 10px;
+          padding: 7px 9px;
+          border-radius: 10px;
+          background: rgba(241, 248, 252, 0.65);
+          border: 1px solid rgba(100, 116, 139, 0.1);
+          color: #0f172a;
         }
-        .hostly-inventory-switch-row small {
+        .hostly-inventory-switch-row--compact {
+          min-height: 0;
+        }
+        .hostly-inventory-switch-label {
+          min-width: 0;
+        }
+        .hostly-inventory-switch-label strong {
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .hostly-inventory-switch-label small {
           display: block;
           margin-top: 2px;
-          color: #6a7f8f;
-          font-size: 11px;
-          font-weight: 700;
+          color: rgba(71, 85, 105, 0.88);
+          font-size: 10px;
+          font-weight: 650;
+          line-height: 1.25;
         }
-        .hostly-inventory-media-placeholder {
-          width: 92px;
-          height: 72px;
-          border-radius: 18px;
+        .hostly-inventory-media-card {
+          display: flex;
+          align-items: stretch;
+          gap: 12px;
+          padding: 10px 11px;
+          border-radius: 12px;
+          background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.92) 0%,
+            rgba(238, 248, 253, 0.55) 100%
+          );
+          border: 1px solid rgba(100, 116, 139, 0.12);
+        }
+        .hostly-inventory-media-icon-wrap {
+          width: 56px;
+          height: 56px;
+          border-radius: 14px;
           flex-shrink: 0;
-        }
-        .hostly-inventory-future-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 8px;
-        }
-        .hostly-inventory-future-grid span {
-          display: inline-flex;
+          display: flex;
           align-items: center;
           justify-content: center;
-          min-height: 34px;
+          background: rgba(224, 242, 254, 0.45);
+          border: 1px solid rgba(125, 211, 252, 0.25);
+        }
+        .hostly-inventory-media-icon {
+          font-size: 22px;
+          line-height: 1;
+          color: rgba(14, 116, 144, 0.55);
+          font-weight: 300;
+        }
+        .hostly-inventory-media-copy {
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 3px;
+        }
+        .hostly-inventory-media-cta {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: -0.01em;
+        }
+        .hostly-inventory-media-hint {
+          margin: 0;
+          font-size: 11px;
+          font-weight: 650;
+          color: #64748b;
+          line-height: 1.35;
+        }
+        .hostly-inventory-media-chip {
+          display: inline-flex;
+          align-self: flex-start;
+          margin-top: 4px;
+          padding: 3px 8px;
           border-radius: 999px;
-          background: rgba(244, 248, 252, 0.82);
-          border: 1px dashed rgba(77, 107, 128, 0.2);
-          color: #6a7f8f;
-          font-size: 12px;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(14, 116, 144, 0.85);
+          background: rgba(224, 242, 254, 0.5);
+          border: 1px solid rgba(125, 211, 252, 0.28);
+        }
+        .hostly-inventory-future-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+        .hostly-inventory-future-chips span {
+          display: inline-flex;
+          align-items: center;
+          padding: 3px 8px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 750;
+          color: rgba(71, 85, 105, 0.78);
+          background: rgba(255, 255, 255, 0.55);
+          border: 1px solid rgba(100, 116, 139, 0.1);
+        }
+        .hostly-inventory-fiche-section--movements {
+          padding: 9px 10px 10px;
+          background: rgba(248, 250, 252, 0.55);
+        }
+        .hostly-inventory-movements-empty {
+          margin: 0;
+          font-size: 11px;
+          font-weight: 650;
+          color: rgba(100, 116, 139, 0.88);
+          line-height: 1.35;
+        }
+        .hostly-inventory-movements-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 6px;
+        }
+        .hostly-inventory-movements-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1.1fr) auto auto auto;
+          gap: 8px 10px;
+          align-items: center;
+          padding: 6px 8px;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.72);
+          border: 1px solid rgba(100, 116, 139, 0.1);
+          font-size: 11px;
+        }
+        .hostly-inventory-movements-date {
+          color: #64748b;
+          font-weight: 650;
+          font-variant-numeric: tabular-nums;
+        }
+        .hostly-inventory-movements-delta {
           font-weight: 850;
+          font-variant-numeric: tabular-nums;
+          color: #0f172a;
+        }
+        .hostly-inventory-movements-delta[data-sign="plus"] {
+          color: #0f766e;
+        }
+        .hostly-inventory-movements-delta[data-sign="minus"] {
+          color: #b45309;
+        }
+        .hostly-inventory-movements-final {
+          font-weight: 750;
+          color: #334155;
+          font-variant-numeric: tabular-nums;
+        }
+        .hostly-inventory-movements-kind {
+          font-size: 9px;
+          font-weight: 750;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: rgba(100, 116, 139, 0.85);
+          justify-self: end;
+          white-space: nowrap;
+        }
+        .hostly-inventory-panel-footer {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          flex-wrap: wrap;
+          gap: 8px;
+          padding: 10px 12px;
+          border-top: 1px solid rgba(100, 116, 139, 0.12);
+          background: rgba(247, 252, 255, 0.92);
+          backdrop-filter: blur(8px);
+        }
+        .hostly-inventory-panel-footer .hostly-inventory-primary-btn {
+          min-width: 112px;
         }
         .hostly-inventory-primary-btn,
         .hostly-inventory-secondary-btn,
@@ -921,14 +1305,27 @@ export default function InventarioStockSection() {
           .hostly-inventory-mobile-close {
             display: inline-flex;
           }
-          .hostly-inventory-form-grid,
-          .hostly-inventory-future-grid {
+          .hostly-inventory-config-panel {
+            flex: none;
+          }
+          .hostly-inventory-config-body {
+            flex: none;
+            overflow: visible;
+            min-height: 0;
+          }
+          .hostly-inventory-fiche-grid {
             grid-template-columns: 1fr;
           }
-          .hostly-inventory-panel-actions,
-          .hostly-inventory-media-box {
+          .hostly-inventory-panel-footer {
             align-items: stretch;
             flex-direction: column;
+          }
+          .hostly-inventory-movements-row {
+            grid-template-columns: 1fr;
+            justify-items: start;
+          }
+          .hostly-inventory-movements-kind {
+            justify-self: start;
           }
           .hostly-inventory-primary-btn,
           .hostly-inventory-secondary-btn {
