@@ -485,32 +485,32 @@ export default function AnalisisVentasPage() {
 
         <div className="grid gap-3 sm:grid-cols-5">
           <div className="hostly-panel p-4">
-            <div className="text-sm text-slate-500">Ventas del día</div>
-            <div className="mt-1 text-2xl font-extrabold text-slate-900">
+            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Ventas del día</div>
+            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
               {formatEur(totals.totalVentas)}
             </div>
           </div>
           <div className="hostly-panel p-4">
-            <div className="text-sm text-slate-500">Propinas</div>
-            <div className="mt-1 text-2xl font-extrabold text-slate-900">
+            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Propinas</div>
+            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
               {formatEur(totals.totalPropinas)}
             </div>
           </div>
           <div className="hostly-panel p-4">
-            <div className="text-sm text-slate-500">Total cobrado</div>
-            <div className="mt-1 text-2xl font-extrabold text-slate-900">
+            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Total cobrado</div>
+            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
               {formatEur(totals.totalCobrado)}
             </div>
           </div>
           <div className="hostly-panel p-4">
-            <div className="text-sm text-slate-500">Ticket medio</div>
-            <div className="mt-1 text-2xl font-extrabold text-slate-900">
+            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Ticket medio</div>
+            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
               {avgTicket.toFixed(2)} €
             </div>
           </div>
           <div className="hostly-panel p-4">
-            <div className="text-sm text-slate-500">Tickets</div>
-            <div className="mt-1 text-2xl font-extrabold text-slate-900">
+            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Tickets</div>
+            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
               {paymentsCount}
             </div>
           </div>
@@ -601,7 +601,7 @@ export default function AnalisisVentasPage() {
 
         <div className="hostly-panel p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-slate-900">Últimos pagos</div>
+            <div className="text-sm font-semibold text-[color:var(--hostly-ink-strong)]">Últimos pagos</div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -609,14 +609,14 @@ export default function AnalisisVentasPage() {
                   setIsPrintReady(true);
                   window.requestAnimationFrame(() => window.print());
                 }}
-                className="bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg text-sm"
+                className="hostly-button-secondary !min-h-0 px-3 py-2 text-sm"
               >
                 Imprimir cierre
               </button>
               <button
                 type="button"
                 onClick={handleExportCSV}
-                className="bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg text-sm"
+                className="hostly-button-secondary !min-h-0 px-3 py-2 text-sm"
               >
                 Exportar CSV
               </button>
@@ -640,10 +640,10 @@ export default function AnalisisVentasPage() {
                   className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2"
                 >
                   <div style={{ minWidth: 0 }}>
-                    <div className="text-sm font-semibold text-slate-900 truncate">
+                    <div className="text-sm font-semibold text-[color:var(--hostly-ink-strong)] truncate">
                       {p.ticketNumber ?? "—"}
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-[color:var(--hostly-ink-muted)]">
                       {formatTime(ms)} · {methodLabel}
                     </div>
                     {method === "voucher" && p.voucherNumber && (
@@ -652,17 +652,17 @@ export default function AnalisisVentasPage() {
                   </div>
 
                   <div className="flex items-baseline gap-3">
-                    <div className="text-sm font-semibold text-slate-900">
+                    <div className="text-sm font-semibold text-[color:var(--hostly-ink-strong)]">
                       {formatEur(paymentSaleAmount(p))}
                     </div>
-                    <div className="text-xs text-slate-500">Tip {formatEur(n(p.tip))}</div>
+                    <div className="text-xs text-[color:var(--hostly-ink-muted)]">Tip {formatEur(n(p.tip))}</div>
                   </div>
                 </div>
               );
             })}
 
             {filteredPayments.length === 0 && (
-              <div className="text-sm text-slate-500">Sin pagos.</div>
+              <div className="text-sm text-[color:var(--hostly-ink-muted)]">Sin pagos.</div>
             )}
           </div>
         </div>

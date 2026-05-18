@@ -16,14 +16,14 @@ export function ComensalesHeaderBlock({
   return (
     <>
       <div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: "#e2e8f0", letterSpacing: "-0.02em" }}>Comensales</div>
-        <div style={{ marginTop: 4, fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--hostly-ink-strong)", letterSpacing: "-0.02em" }}>Comensales</div>
+        <div style={{ marginTop: 4, fontSize: 13, fontWeight: 600, color: "var(--hostly-ink-muted)" }}>
           Del {formatDateEs(dateFrom)} al {formatDateEs(dateTo)}
         </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <label style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+        <label style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
           Desde
         </label>
         <input
@@ -34,15 +34,15 @@ export function ComensalesHeaderBlock({
             padding: "10px 12px",
             borderRadius: 10,
             border: "1px solid rgba(148, 163, 184, 0.22)",
-            background: "rgba(15, 23, 42, 0.5)",
-            color: "#f8fafc",
+            background: "var(--hostly-surface-card-solid)",
+            color: "var(--hostly-ink-strong)",
             fontSize: 14,
             fontWeight: 700,
             outline: "none",
           }}
           aria-label="Desde"
         />
-        <label style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+        <label style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
           Hasta
         </label>
         <input
@@ -53,8 +53,8 @@ export function ComensalesHeaderBlock({
             padding: "10px 12px",
             borderRadius: 10,
             border: "1px solid rgba(148, 163, 184, 0.22)",
-            background: "rgba(15, 23, 42, 0.5)",
-            color: "#f8fafc",
+            background: "var(--hostly-surface-card-solid)",
+            color: "var(--hostly-ink-strong)",
             fontSize: 14,
             fontWeight: 700,
             outline: "none",

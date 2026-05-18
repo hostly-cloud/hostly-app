@@ -21,9 +21,9 @@ const btnBase: CSSProperties = {
   borderRadius: 10,
   fontSize: 12,
   fontWeight: 700,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.45)",
-  color: "#e2e8f0",
+  border: "1px solid var(--hostly-line)",
+  background: "var(--hostly-surface-card-solid)",
+  color: "var(--hostly-ink-strong)",
   cursor: "pointer",
 };
 

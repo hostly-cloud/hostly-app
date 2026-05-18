@@ -1,7 +1,13 @@
 "use client";
 
 import type { CSSProperties, Dispatch, SetStateAction } from "react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  ANALYSIS_CHART_HEIGHT,
+  analysisRechartsAxisProps,
+  analysisRechartsGridProps,
+  analysisRechartsOnDark,
+  analysisRechartsTooltipProps,
+} from "@/components/analysis/analysis-recharts-surface";
 import { AnalysisSectionEnd } from "@/components/analysis/AnalysisSectionEnd";
 import { ZonasActions } from "@/components/analysis/ZonasActions";
 import { ZonasKpiBlock } from "@/components/analysis/ZonasKpiBlock";
@@ -17,6 +23,7 @@ import type {
   ZonasSelectorsKpis,
   ZonasSelectorsTable,
 } from "@/components/analysis/hooks/useZonasSelectors";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type ZonasAnalyticsSnapshot = ReturnType<
   typeof import("@/components/analysis/hooks/useZonasAnalytics").useZonasAnalytics
@@ -32,13 +39,14 @@ const placeholderStyle: CSSProperties = {
   justifyContent: "center",
   padding: "40px 24px",
   borderRadius: 14,
-  border: "1px solid rgba(148, 163, 184, 0.18)",
-  background: "rgba(15, 23, 42, 0.55)",
-  color: "#94a3b8",
+  border: "1px solid rgba(180, 200, 230, 0.22)",
+  background: "var(--hostly-surface-card-solid)",
+  color: "var(--hostly-ink-muted)",
   fontSize: 14,
   fontWeight: 600,
   textAlign: "center",
   lineHeight: 1.5,
+  boxShadow: "var(--hostly-shadow-hairline)",
 };
 
 export type ZonasAnalyticsSectionProps = {
@@ -199,7 +207,7 @@ export function ZonasAnalyticsSection({
     <>
             <div className="mt-6">
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500 mb-3">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)] mb-3">Sin datos por zona</p>
               ) : (
                 <ZonasKpiBlock data={zonasKpis} />
               )}
@@ -222,9 +230,9 @@ export function ZonasAnalyticsSection({
                     style={{
                       padding: "8px 14px",
                       borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: compactViewZonas ? "rgba(56, 189, 248, 0.12)" : "rgba(15, 23, 42, 0.5)",
-                      color: compactViewZonas ? "#e0f2fe" : "#94a3b8",
+                      border: "1px solid var(--hostly-line)",
+                      background: compactViewZonas ? "var(--hostly-ice-100)" : "var(--hostly-surface-card-solid)",
+                      color: compactViewZonas ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
@@ -242,7 +250,7 @@ export function ZonasAnalyticsSection({
                       fontWeight: 800,
                       letterSpacing: "0.04em",
                       textTransform: "uppercase",
-                      color: "#94a3b8",
+                      color: "var(--hostly-ink-muted)",
                     }}
                   >
                     Ordenar por
@@ -256,8 +264,8 @@ export function ZonasAnalyticsSection({
                         padding: "8px 10px",
                         borderRadius: 10,
                         border: "1px solid rgba(148, 163, 184, 0.22)",
-                        background: "rgba(15, 23, 42, 0.5)",
-                        color: "#f8fafc",
+                        background: "var(--hostly-surface-card-solid)",
+                        color: "var(--hostly-ink-strong)",
                         fontSize: 13,
                         fontWeight: 700,
                         outline: "none",
@@ -285,8 +293,8 @@ export function ZonasAnalyticsSection({
                         padding: "8px 12px",
                         borderRadius: 10,
                         border: "1px solid rgba(148, 163, 184, 0.22)",
-                        background: "rgba(15, 23, 42, 0.5)",
-                        color: "#f8fafc",
+                        background: "var(--hostly-surface-card-solid)",
+                        color: "var(--hostly-ink-strong)",
                         fontSize: 13,
                         fontWeight: 600,
                         outline: "none",
@@ -300,8 +308,8 @@ export function ZonasAnalyticsSection({
                           padding: "6px 10px",
                           borderRadius: 8,
                           border: "1px solid rgba(148, 163, 184, 0.22)",
-                          background: "rgba(15, 23, 42, 0.5)",
-                          color: "#94a3b8",
+                          background: "var(--hostly-surface-card-solid)",
+                          color: "var(--hostly-ink-muted)",
                           fontSize: 12,
                           fontWeight: 600,
                           letterSpacing: "-0.02em",
@@ -322,7 +330,7 @@ export function ZonasAnalyticsSection({
                       fontWeight: 800,
                       letterSpacing: "0.04em",
                       textTransform: "uppercase",
-                      color: "#94a3b8",
+                      color: "var(--hostly-ink-muted)",
                     }}
                   >
                     Mostrar
@@ -334,8 +342,8 @@ export function ZonasAnalyticsSection({
                         padding: "8px 10px",
                         borderRadius: 10,
                         border: "1px solid rgba(148, 163, 184, 0.22)",
-                        background: "rgba(15, 23, 42, 0.5)",
-                        color: "#f8fafc",
+                        background: "var(--hostly-surface-card-solid)",
+                        color: "var(--hostly-ink-strong)",
                         fontSize: 13,
                         fontWeight: 700,
                         outline: "none",
@@ -358,8 +366,8 @@ export function ZonasAnalyticsSection({
                         padding: "6px 10px",
                         borderRadius: 8,
                         border: "1px solid rgba(148, 163, 184, 0.22)",
-                        background: "rgba(15, 23, 42, 0.5)",
-                        color: "#94a3b8",
+                        background: "var(--hostly-surface-card-solid)",
+                        color: "var(--hostly-ink-muted)",
                         fontSize: 12,
                         fontWeight: 600,
                         letterSpacing: "-0.02em",
@@ -378,8 +386,8 @@ export function ZonasAnalyticsSection({
                         padding: "6px 10px",
                         borderRadius: 8,
                         border: "1px solid rgba(148, 163, 184, 0.22)",
-                        background: "rgba(15, 23, 42, 0.5)",
-                        color: "#94a3b8",
+                        background: "var(--hostly-surface-card-solid)",
+                        color: "var(--hostly-ink-muted)",
                         fontSize: 12,
                         fontWeight: 600,
                         letterSpacing: "-0.02em",
@@ -405,7 +413,7 @@ export function ZonasAnalyticsSection({
                         fontWeight: 800,
                         letterSpacing: "0.04em",
                         textTransform: "uppercase",
-                        color: "#94a3b8",
+                        color: "var(--hostly-ink-muted)",
                       }}
                     >
                       Columnas
@@ -417,7 +425,7 @@ export function ZonasAnalyticsSection({
                         gap: 4,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "#cbd5e1",
+                        color: "var(--hostly-ink-muted)",
                         cursor: "pointer",
                       }}
                     >
@@ -437,7 +445,7 @@ export function ZonasAnalyticsSection({
                         gap: 4,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "#cbd5e1",
+                        color: "var(--hostly-ink-muted)",
                         cursor: "pointer",
                       }}
                     >
@@ -457,7 +465,7 @@ export function ZonasAnalyticsSection({
                         gap: 4,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "#cbd5e1",
+                        color: "var(--hostly-ink-muted)",
                         cursor: "pointer",
                       }}
                     >
@@ -477,7 +485,7 @@ export function ZonasAnalyticsSection({
                         gap: 4,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "#cbd5e1",
+                        color: "var(--hostly-ink-muted)",
                         cursor: "pointer",
                       }}
                     >
@@ -497,7 +505,7 @@ export function ZonasAnalyticsSection({
                         gap: 4,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "#cbd5e1",
+                        color: "var(--hostly-ink-muted)",
                         cursor: "pointer",
                       }}
                     >
@@ -517,7 +525,7 @@ export function ZonasAnalyticsSection({
                         gap: 4,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "#cbd5e1",
+                        color: "var(--hostly-ink-muted)",
                         cursor: "pointer",
                       }}
                     >
@@ -537,7 +545,7 @@ export function ZonasAnalyticsSection({
                         gap: 4,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "#cbd5e1",
+                        color: "var(--hostly-ink-muted)",
                         cursor: "pointer",
                       }}
                     >
@@ -558,8 +566,8 @@ export function ZonasAnalyticsSection({
                       padding: "8px 14px",
                       borderRadius: 10,
                       border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "rgba(15, 23, 42, 0.5)",
-                      color: "#94a3b8",
+                      background: "var(--hostly-surface-card-solid)",
+                      color: "var(--hostly-ink-muted)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
@@ -575,8 +583,8 @@ export function ZonasAnalyticsSection({
                       padding: "8px 14px",
                       borderRadius: 10,
                       border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "rgba(15, 23, 42, 0.5)",
-                      color: "#94a3b8",
+                      background: "var(--hostly-surface-card-solid)",
+                      color: "var(--hostly-ink-muted)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
@@ -592,8 +600,8 @@ export function ZonasAnalyticsSection({
                       padding: "8px 14px",
                       borderRadius: 10,
                       border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "rgba(15, 23, 42, 0.5)",
-                      color: "#94a3b8",
+                      background: "var(--hostly-surface-card-solid)",
+                      color: "var(--hostly-ink-muted)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
@@ -609,8 +617,8 @@ export function ZonasAnalyticsSection({
                       padding: "8px 14px",
                       borderRadius: 10,
                       border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "rgba(15, 23, 42, 0.5)",
-                      color: "#94a3b8",
+                      background: "var(--hostly-surface-card-solid)",
+                      color: "var(--hostly-ink-muted)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
@@ -626,8 +634,8 @@ export function ZonasAnalyticsSection({
                       padding: "8px 14px",
                       borderRadius: 10,
                       border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "rgba(15, 23, 42, 0.5)",
-                      color: "#94a3b8",
+                      background: "var(--hostly-surface-card-solid)",
+                      color: "var(--hostly-ink-muted)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
@@ -655,8 +663,8 @@ export function ZonasAnalyticsSection({
                       padding: "8px 14px",
                       borderRadius: 10,
                       border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "rgba(15, 23, 42, 0.5)",
-                      color: "#94a3b8",
+                      background: "var(--hostly-surface-card-solid)",
+                      color: "var(--hostly-ink-muted)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
@@ -672,8 +680,8 @@ export function ZonasAnalyticsSection({
                       padding: "8px 14px",
                       borderRadius: 10,
                       border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "rgba(15, 23, 42, 0.5)",
-                      color: "#94a3b8",
+                      background: "var(--hostly-surface-card-solid)",
+                      color: "var(--hostly-ink-muted)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
@@ -690,7 +698,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 4,
                     marginBottom: 8,
                   }}
@@ -705,7 +713,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -719,7 +727,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -733,7 +741,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -746,7 +754,7 @@ export function ZonasAnalyticsSection({
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginTop: 0,
                   marginBottom: 8,
                 }}
@@ -759,7 +767,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -773,7 +781,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -787,7 +795,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -801,7 +809,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -815,7 +823,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -832,7 +840,7 @@ export function ZonasAnalyticsSection({
                     flexWrap: "wrap",
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -846,8 +854,8 @@ export function ZonasAnalyticsSection({
                         padding: "4px 10px",
                         borderRadius: 999,
                         border: "1px solid rgba(148, 163, 184, 0.18)",
-                        background: "rgba(15, 23, 42, 0.35)",
-                        color: "#94a3b8",
+                        background: "var(--hostly-ice-50)",
+                        color: "var(--hostly-ink-muted)",
                         fontSize: 11,
                         fontWeight: 600,
                         letterSpacing: "-0.01em",
@@ -864,7 +872,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -877,7 +885,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -890,7 +898,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -903,7 +911,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -916,7 +924,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -929,7 +937,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -942,7 +950,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -955,7 +963,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -968,7 +976,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -981,7 +989,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -994,7 +1002,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -1006,7 +1014,7 @@ export function ZonasAnalyticsSection({
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginTop: 0,
                   marginBottom: 8,
                 }}
@@ -1025,8 +1033,8 @@ export function ZonasAnalyticsSection({
                     padding: "6px 10px",
                     borderRadius: 999,
                     border: "1px solid rgba(148, 163, 184, 0.18)",
-                    background: "rgba(15, 23, 42, 0.3)",
-                    color: "#94a3b8",
+                    background: "rgba(248, 250, 252, 0.92)",
+                    color: "var(--hostly-ink-muted)",
                     fontSize: 11,
                     fontWeight: 600,
                     letterSpacing: "-0.01em",
@@ -1044,7 +1052,7 @@ export function ZonasAnalyticsSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "var(--hostly-ink-muted)",
                     marginTop: 0,
                     marginBottom: 8,
                   }}
@@ -1056,7 +1064,7 @@ export function ZonasAnalyticsSection({
               <ZonasViewState data={zonasInsights} />
 
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : zonasTableData.zoneMetricsFiltered.length === 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1085,7 +1093,7 @@ export function ZonasAnalyticsSection({
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="py-4 text-sm text-gray-500" colSpan={zonasTableData.columnasZonasTablaCount}>
+                        <td className="py-4 text-sm text-[var(--hostly-ink-muted)]" colSpan={zonasTableData.columnasZonasTablaCount}>
                           Sin resultados
                         </td>
                       </tr>
@@ -1102,19 +1110,13 @@ export function ZonasAnalyticsSection({
             {!compactViewZonas ? (
               <>
             <div
-              className="hostly-card mt-6"
-              style={{
-                borderRadius: "var(--hostly-radius-md)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.55)",
-                padding: 14,
-              }}
+              className="hostly-panel mt-6 p-4"
             >
               <div
                 style={{
                   fontSize: 13,
                   fontWeight: 800,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   letterSpacing: "-0.01em",
                   marginBottom: 10,
                 }}
@@ -1122,33 +1124,35 @@ export function ZonasAnalyticsSection({
                 Reservas por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={zoneMetrics}>
-                    <XAxis dataKey="zoneName" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip formatter={(value) => [value, "Reservas"]} />
-                    <Bar dataKey="total" />
+                <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
+                  <BarChart
+                    data={zoneMetrics}
+                    margin={{ top: 6, right: 6, left: 4, bottom: 2 }}
+                    style={{ background: "transparent" }}
+                  >
+                    <CartesianGrid {...analysisRechartsGridProps} />
+                    <XAxis dataKey="zoneName" {...analysisRechartsAxisProps} />
+                    <YAxis allowDecimals={false} {...analysisRechartsAxisProps} />
+                    <Tooltip
+                      {...analysisRechartsTooltipProps}
+                      formatter={(value) => [value, "Reservas"]}
+                    />
+                    <Bar dataKey="total" fill={analysisRechartsOnDark.barPrimary} radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </div>
 
             <div
-              className="hostly-card mt-6"
-              style={{
-                borderRadius: "var(--hostly-radius-md)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.55)",
-                padding: 14,
-              }}
+              className="hostly-panel mt-6 p-4"
             >
               <div
                 style={{
                   fontSize: 13,
                   fontWeight: 800,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   letterSpacing: "-0.01em",
                   marginBottom: 10,
                 }}
@@ -1156,34 +1160,33 @@ export function ZonasAnalyticsSection({
                 Llegadas vs No-show por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={zoneMetrics}>
-                    <XAxis dataKey="zoneName" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="llegadas" />
-                    <Bar dataKey="noShow" />
+                <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
+                  <BarChart
+                    data={zoneMetrics}
+                    margin={{ top: 6, right: 6, left: 4, bottom: 2 }}
+                    style={{ background: "transparent" }}
+                  >
+                    <CartesianGrid {...analysisRechartsGridProps} />
+                    <XAxis dataKey="zoneName" {...analysisRechartsAxisProps} />
+                    <YAxis allowDecimals={false} {...analysisRechartsAxisProps} />
+                    <Tooltip {...analysisRechartsTooltipProps} />
+                    <Bar dataKey="llegadas" fill={analysisRechartsOnDark.barPrimary} radius={[5, 5, 0, 0]} />
+                    <Bar dataKey="noShow" fill={analysisRechartsOnDark.barAccent} radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </div>
 
             <div
-              className="hostly-card mt-6"
-              style={{
-                borderRadius: "var(--hostly-radius-md)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.55)",
-                padding: 14,
-              }}
+              className="hostly-panel mt-6 p-4"
             >
               <div
                 style={{
                   fontSize: 13,
                   fontWeight: 800,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   letterSpacing: "-0.01em",
                   marginBottom: 10,
                 }}
@@ -1191,33 +1194,39 @@ export function ZonasAnalyticsSection({
                 Peso de reservas por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={zoneMetrics}>
-                    <XAxis dataKey="zoneName" />
-                    <YAxis tickFormatter={(v) => `${Math.round(Number(v) * 100)}%`} domain={[0, 1]} />
-                    <Tooltip formatter={(value) => [`${Math.round(Number(value) * 100)}%`, "Peso"]} />
-                    <Bar dataKey="share" />
+                <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
+                  <BarChart
+                    data={zoneMetrics}
+                    margin={{ top: 6, right: 6, left: 4, bottom: 2 }}
+                    style={{ background: "transparent" }}
+                  >
+                    <CartesianGrid {...analysisRechartsGridProps} />
+                    <XAxis dataKey="zoneName" {...analysisRechartsAxisProps} />
+                    <YAxis
+                      tickFormatter={(v) => `${Math.round(Number(v) * 100)}%`}
+                      domain={[0, 1]}
+                      {...analysisRechartsAxisProps}
+                    />
+                    <Tooltip
+                      {...analysisRechartsTooltipProps}
+                      formatter={(value) => [`${Math.round(Number(value) * 100)}%`, "Peso"]}
+                    />
+                    <Bar dataKey="share" fill={analysisRechartsOnDark.barSecondary} radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </div>
 
             <div
-              className="hostly-card mt-6"
-              style={{
-                borderRadius: "var(--hostly-radius-md)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.55)",
-                padding: 14,
-              }}
+              className="hostly-panel mt-6 p-4"
             >
               <div
                 style={{
                   fontSize: 13,
                   fontWeight: 800,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   letterSpacing: "-0.01em",
                   marginBottom: 10,
                 }}
@@ -1225,7 +1234,7 @@ export function ZonasAnalyticsSection({
                 Zonas a revisar
               </div>
               {zonasProblema.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin zonas problemáticas</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin zonas problemáticas</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {zonasProblema.map((z: ZonaMetricRow, i: number) => (
@@ -1235,15 +1244,15 @@ export function ZonasAnalyticsSection({
                         padding: "12px 14px",
                         borderRadius: 10,
                         border: "1px solid rgba(148, 163, 184, 0.14)",
-                        background: "rgba(15, 23, 42, 0.35)",
+                        background: "var(--hostly-ice-50)",
                       }}
                     >
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "#e2e8f0", marginBottom: 8 }}>{z.zoneName}</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--hostly-ink-strong)", marginBottom: 8 }}>{z.zoneName}</div>
                       <div
                         style={{
                           fontSize: 13,
                           fontWeight: 600,
-                          color: "#94a3b8",
+                          color: "var(--hostly-ink-muted)",
                           display: "flex",
                           flexDirection: "column",
                           gap: 4,
@@ -1260,19 +1269,13 @@ export function ZonasAnalyticsSection({
             </div>
 
             <div
-              className="hostly-card mt-6"
-              style={{
-                borderRadius: "var(--hostly-radius-md)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.55)",
-                padding: 14,
-              }}
+              className="hostly-panel mt-6 p-4"
             >
               <div
                 style={{
                   fontSize: 13,
                   fontWeight: 800,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   letterSpacing: "-0.01em",
                   marginBottom: 12,
                 }}
@@ -1280,7 +1283,7 @@ export function ZonasAnalyticsSection({
                 Ranking de zonas
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div
                   style={{
@@ -1290,7 +1293,7 @@ export function ZonasAnalyticsSection({
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
                       Top ocupación
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1301,17 +1304,17 @@ export function ZonasAnalyticsSection({
                             padding: "10px 12px",
                             borderRadius: 10,
                             border: "1px solid rgba(148, 163, 184, 0.14)",
-                            background: "rgba(15, 23, 42, 0.35)",
+                            background: "var(--hostly-ice-50)",
                           }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
+                              <span className="text-sm font-medium" style={{ color: "var(--hostly-ink-strong)" }}>
                                 #{i + 1}
                               </span>
                               <div className="flex flex-col">
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0" }}>{z.zoneName}</span>
-                                <span className="text-xs text-gray-500">
+                                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>{z.zoneName}</span>
+                                <span className="text-xs text-[var(--hostly-ink-muted)]">
                                   Ocupación → {Math.round(z.ocupacion * 100)}% · Reservas → {z.total}
                                 </span>
                               </div>
@@ -1322,7 +1325,7 @@ export function ZonasAnalyticsSection({
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
                       Baja ocupación
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1333,17 +1336,17 @@ export function ZonasAnalyticsSection({
                             padding: "10px 12px",
                             borderRadius: 10,
                             border: "1px solid rgba(148, 163, 184, 0.14)",
-                            background: "rgba(15, 23, 42, 0.35)",
+                            background: "var(--hostly-ice-50)",
                           }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
+                              <span className="text-sm font-medium" style={{ color: "var(--hostly-ink-strong)" }}>
                                 #{i + 1}
                               </span>
                               <div className="flex flex-col">
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0" }}>{z.zoneName}</span>
-                                <span className="text-xs text-gray-500">
+                                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>{z.zoneName}</span>
+                                <span className="text-xs text-[var(--hostly-ink-muted)]">
                                   Ocupación → {Math.round(z.ocupacion * 100)}% · Reservas → {z.total}
                                 </span>
                               </div>
@@ -1364,13 +1367,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Insight
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {insightZona}
               </p>
             </div>
@@ -1382,31 +1385,25 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Tendencia
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {tendenciaZonas}
               </p>
             </div>
 
             <div
-              className="hostly-card mt-6"
-              style={{
-                borderRadius: "var(--hostly-radius-md)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.55)",
-                padding: 14,
-              }}
+              className="hostly-panel mt-6 p-4"
             >
               <div
                 style={{
                   fontSize: 13,
                   fontWeight: 800,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   letterSpacing: "-0.01em",
                   marginBottom: 12,
                 }}
@@ -1414,7 +1411,7 @@ export function ZonasAnalyticsSection({
                 Ranking por eficiencia
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div
                   style={{
@@ -1424,7 +1421,7 @@ export function ZonasAnalyticsSection({
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
                       Alta eficiencia
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1435,17 +1432,17 @@ export function ZonasAnalyticsSection({
                             padding: "10px 12px",
                             borderRadius: 10,
                             border: "1px solid rgba(148, 163, 184, 0.14)",
-                            background: "rgba(15, 23, 42, 0.35)",
+                            background: "var(--hostly-ice-50)",
                           }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
+                              <span className="text-sm font-medium" style={{ color: "var(--hostly-ink-strong)" }}>
                                 #{i + 1}
                               </span>
                               <div className="flex flex-col">
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0" }}>{z.zoneName}</span>
-                                <span className="text-xs text-gray-500">
+                                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>{z.zoneName}</span>
+                                <span className="text-xs text-[var(--hostly-ink-muted)]">
                                   Eficiencia → {Math.round(z.eficiencia * 100)}% · Reservas → {z.total}
                                 </span>
                               </div>
@@ -1456,7 +1453,7 @@ export function ZonasAnalyticsSection({
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
                       Baja eficiencia
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1467,17 +1464,17 @@ export function ZonasAnalyticsSection({
                             padding: "10px 12px",
                             borderRadius: 10,
                             border: "1px solid rgba(148, 163, 184, 0.14)",
-                            background: "rgba(15, 23, 42, 0.35)",
+                            background: "var(--hostly-ice-50)",
                           }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
+                              <span className="text-sm font-medium" style={{ color: "var(--hostly-ink-strong)" }}>
                                 #{i + 1}
                               </span>
                               <div className="flex flex-col">
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0" }}>{z.zoneName}</span>
-                                <span className="text-xs text-gray-500">
+                                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>{z.zoneName}</span>
+                                <span className="text-xs text-[var(--hostly-ink-muted)]">
                                   Eficiencia → {Math.round(z.eficiencia * 100)}% · Reservas → {z.total}
                                 </span>
                               </div>
@@ -1498,13 +1495,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Insight de eficiencia
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {insightEficienciaZona}
               </p>
             </div>
@@ -1516,14 +1513,14 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Fiabilidad por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {zoneMetrics.map((z: ZonaMetricRow, i: number) => (
@@ -1533,15 +1530,15 @@ export function ZonasAnalyticsSection({
                         padding: "10px 12px",
                         borderRadius: 10,
                         border: "1px solid rgba(148, 163, 184, 0.14)",
-                        background: "rgba(15, 23, 42, 0.35)",
+                        background: "var(--hostly-ice-50)",
                       }}
                     >
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0", marginBottom: 6 }}>{z.zoneName}</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", marginBottom: 6 }}>{z.zoneName}</div>
                       <div
                         style={{
                           fontSize: 12,
                           fontWeight: 600,
-                          color: "#94a3b8",
+                          color: "var(--hostly-ink-muted)",
                           display: "flex",
                           flexDirection: "column",
                           gap: 4,
@@ -1563,13 +1560,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Resumen ejecutivo
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {resumenZonas}
               </p>
             </div>
@@ -1581,13 +1578,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Alerta de concentración
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {alertaConcentracionZona}
               </p>
             </div>
@@ -1599,14 +1596,14 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Peso de comensales por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {zoneMetrics.map((z: ZonaMetricRow, i: number) => (
@@ -1616,15 +1613,15 @@ export function ZonasAnalyticsSection({
                         padding: "10px 12px",
                         borderRadius: 10,
                         border: "1px solid rgba(148, 163, 184, 0.14)",
-                        background: "rgba(15, 23, 42, 0.35)",
+                        background: "var(--hostly-ice-50)",
                       }}
                     >
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0", marginBottom: 6 }}>{z.zoneName}</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", marginBottom: 6 }}>{z.zoneName}</div>
                       <div
                         style={{
                           fontSize: 12,
                           fontWeight: 600,
-                          color: "#94a3b8",
+                          color: "var(--hostly-ink-muted)",
                           display: "flex",
                           flexDirection: "column",
                           gap: 4,
@@ -1646,14 +1643,14 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Desajuste reservas vs pax
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[...zoneMetrics]
@@ -1665,15 +1662,15 @@ export function ZonasAnalyticsSection({
                           padding: "10px 12px",
                           borderRadius: 10,
                           border: "1px solid rgba(148, 163, 184, 0.14)",
-                          background: "rgba(15, 23, 42, 0.35)",
+                          background: "var(--hostly-ice-50)",
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0", marginBottom: 6 }}>{z.zoneName}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", marginBottom: 6 }}>{z.zoneName}</div>
                         <div
                           style={{
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#94a3b8",
+                            color: "var(--hostly-ink-muted)",
                             display: "flex",
                             flexDirection: "column",
                             gap: 4,
@@ -1683,9 +1680,9 @@ export function ZonasAnalyticsSection({
                           <div>Reservas → {z.total}</div>
                           <div>Pax → {z.pax}</div>
                           {z.gapReservasPax > 0 ? (
-                            <span className="text-xs text-gray-500">Más peso en pax</span>
+                            <span className="text-xs text-[var(--hostly-ink-muted)]">Más peso en pax</span>
                           ) : z.gapReservasPax < 0 ? (
-                            <span className="text-xs text-gray-500">Más peso en reservas</span>
+                            <span className="text-xs text-[var(--hostly-ink-muted)]">Más peso en reservas</span>
                           ) : null}
                         </div>
                       </div>
@@ -1701,14 +1698,14 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Conversión de pax por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[...zoneMetrics]
@@ -1720,15 +1717,15 @@ export function ZonasAnalyticsSection({
                           padding: "10px 12px",
                           borderRadius: 10,
                           border: "1px solid rgba(148, 163, 184, 0.14)",
-                          background: "rgba(15, 23, 42, 0.35)",
+                          background: "var(--hostly-ice-50)",
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0", marginBottom: 6 }}>{z.zoneName}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", marginBottom: 6 }}>{z.zoneName}</div>
                         <div
                           style={{
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#94a3b8",
+                            color: "var(--hostly-ink-muted)",
                             display: "flex",
                             flexDirection: "column",
                             gap: 4,
@@ -1751,14 +1748,14 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Rendimiento global por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[...zoneMetrics]
@@ -1770,15 +1767,15 @@ export function ZonasAnalyticsSection({
                           padding: "10px 12px",
                           borderRadius: 10,
                           border: "1px solid rgba(148, 163, 184, 0.14)",
-                          background: "rgba(15, 23, 42, 0.35)",
+                          background: "var(--hostly-ice-50)",
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0", marginBottom: 6 }}>{z.zoneName}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", marginBottom: 6 }}>{z.zoneName}</div>
                         <div
                           style={{
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#94a3b8",
+                            color: "var(--hostly-ink-muted)",
                             display: "flex",
                             flexDirection: "column",
                             gap: 4,
@@ -1795,19 +1792,13 @@ export function ZonasAnalyticsSection({
             </div>
 
             <div
-              className="hostly-card mt-6"
-              style={{
-                borderRadius: "var(--hostly-radius-md)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.55)",
-                padding: 14,
-              }}
+              className="hostly-panel mt-6 p-4"
             >
               <div
                 style={{
                   fontSize: 13,
                   fontWeight: 800,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   letterSpacing: "-0.01em",
                   marginBottom: 12,
                 }}
@@ -1815,7 +1806,7 @@ export function ZonasAnalyticsSection({
                 Ranking final por score
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div
                   style={{
@@ -1825,7 +1816,7 @@ export function ZonasAnalyticsSection({
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
                       Mayor score
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1836,17 +1827,17 @@ export function ZonasAnalyticsSection({
                             padding: "10px 12px",
                             borderRadius: 10,
                             border: "1px solid rgba(148, 163, 184, 0.14)",
-                            background: "rgba(15, 23, 42, 0.35)",
+                            background: "var(--hostly-ice-50)",
                           }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
+                              <span className="text-sm font-medium" style={{ color: "var(--hostly-ink-strong)" }}>
                                 #{i + 1}
                               </span>
                               <div className="flex flex-col">
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0" }}>{z.zoneName}</span>
-                                <span className="text-xs text-gray-500">
+                                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>{z.zoneName}</span>
+                                <span className="text-xs text-[var(--hostly-ink-muted)]">
                                   Score → {(z.score * 100).toFixed(1)} · Reservas → {z.total}
                                 </span>
                               </div>
@@ -1857,7 +1848,7 @@ export function ZonasAnalyticsSection({
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
                       Menor score
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1868,17 +1859,17 @@ export function ZonasAnalyticsSection({
                             padding: "10px 12px",
                             borderRadius: 10,
                             border: "1px solid rgba(148, 163, 184, 0.14)",
-                            background: "rgba(15, 23, 42, 0.35)",
+                            background: "var(--hostly-ice-50)",
                           }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium" style={{ color: "#e2e8f0" }}>
+                              <span className="text-sm font-medium" style={{ color: "var(--hostly-ink-strong)" }}>
                                 #{i + 1}
                               </span>
                               <div className="flex flex-col">
-                                <span style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0" }}>{z.zoneName}</span>
-                                <span className="text-xs text-gray-500">
+                                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>{z.zoneName}</span>
+                                <span className="text-xs text-[var(--hostly-ink-muted)]">
                                   Score → {(z.score * 100).toFixed(1)} · Reservas → {z.total}
                                 </span>
                               </div>
@@ -1899,13 +1890,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Insight final por score
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {insightScoreZona}
               </p>
             </div>
@@ -1917,7 +1908,7 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
@@ -1930,7 +1921,7 @@ export function ZonasAnalyticsSection({
                   gap: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: "#cbd5e1",
+                  color: "var(--hostly-ink-muted)",
                   lineHeight: 1.55,
                 }}
               >
@@ -1949,7 +1940,7 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
@@ -1962,7 +1953,7 @@ export function ZonasAnalyticsSection({
                   gap: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: "#cbd5e1",
+                  color: "var(--hostly-ink-muted)",
                   lineHeight: 1.55,
                 }}
               >
@@ -1981,7 +1972,7 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
@@ -1994,7 +1985,7 @@ export function ZonasAnalyticsSection({
                   gap: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: "#cbd5e1",
+                  color: "var(--hostly-ink-muted)",
                   lineHeight: 1.55,
                 }}
               >
@@ -2013,14 +2004,14 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Semáforo por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[...zoneMetrics]
@@ -2032,15 +2023,15 @@ export function ZonasAnalyticsSection({
                           padding: "10px 12px",
                           borderRadius: 10,
                           border: "1px solid rgba(148, 163, 184, 0.14)",
-                          background: "rgba(15, 23, 42, 0.35)",
+                          background: "var(--hostly-ice-50)",
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0", marginBottom: 6 }}>{z.zoneName}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", marginBottom: 6 }}>{z.zoneName}</div>
                         <div
                           style={{
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#94a3b8",
+                            color: "var(--hostly-ink-muted)",
                             display: "flex",
                             flexDirection: "column",
                             gap: 4,
@@ -2063,14 +2054,14 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Evolución por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[...zoneMetrics]
@@ -2082,15 +2073,15 @@ export function ZonasAnalyticsSection({
                           padding: "10px 12px",
                           borderRadius: 10,
                           border: "1px solid rgba(148, 163, 184, 0.14)",
-                          background: "rgba(15, 23, 42, 0.35)",
+                          background: "var(--hostly-ice-50)",
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0", marginBottom: 6 }}>{z.zoneName}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", marginBottom: 6 }}>{z.zoneName}</div>
                         <div
                           style={{
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#94a3b8",
+                            color: "var(--hostly-ink-muted)",
                             display: "flex",
                             flexDirection: "column",
                             gap: 4,
@@ -2112,13 +2103,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Insight de evolución
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {insightEvolucionZona}
               </p>
             </div>
@@ -2130,13 +2121,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Resumen de evolución
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {resumenEvolucionZona}
               </p>
             </div>
@@ -2148,13 +2139,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Balance operativo
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {balanceOperativoZonas}
               </p>
             </div>
@@ -2166,7 +2157,7 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
@@ -2179,7 +2170,7 @@ export function ZonasAnalyticsSection({
                   gap: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: "#cbd5e1",
+                  color: "var(--hostly-ink-muted)",
                   lineHeight: 1.55,
                 }}
               >
@@ -2198,7 +2189,7 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
@@ -2211,7 +2202,7 @@ export function ZonasAnalyticsSection({
                   gap: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: "#cbd5e1",
+                  color: "var(--hostly-ink-muted)",
                   lineHeight: 1.55,
                 }}
               >
@@ -2232,7 +2223,7 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
@@ -2242,7 +2233,7 @@ export function ZonasAnalyticsSection({
                 style={{
                   fontSize: 16,
                   fontWeight: 700,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   lineHeight: 1.45,
                   margin: 0,
                 }}
@@ -2260,13 +2251,13 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Confianza del análisis
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                 {confianzaZonas}
               </p>
             </div>
@@ -2278,7 +2269,7 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
@@ -2304,35 +2295,29 @@ export function ZonasAnalyticsSection({
                   fontWeight: 800,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "var(--hostly-ink-muted)",
                   marginBottom: 8,
                 }}
               >
                 Tamaño medio por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
-                <p style={{ fontSize: 14, fontWeight: 600, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.55, margin: 0 }}>
                   {zonaMayorPaxReserva?.zoneName}: {zonaMayorPaxReserva?.paxPorReserva.toFixed(1)}
                 </p>
               )}
             </div>
 
             <div
-              className="hostly-card mt-6"
-              style={{
-                borderRadius: "var(--hostly-radius-md)",
-                border: "1px solid rgba(148, 163, 184, 0.18)",
-                background: "rgba(15, 23, 42, 0.55)",
-                padding: 14,
-              }}
+              className="hostly-panel mt-6 p-4"
             >
               <div
                 style={{
                   fontSize: 13,
                   fontWeight: 800,
-                  color: "#e2e8f0",
+                  color: "var(--hostly-ink-strong)",
                   letterSpacing: "-0.01em",
                   marginBottom: 10,
                 }}
@@ -2340,14 +2325,22 @@ export function ZonasAnalyticsSection({
                 Pax medio por reserva por zona
               </div>
               {zoneMetrics.length === 0 ? (
-                <p className="text-sm text-gray-500">Sin datos por zona</p>
+                <p className="text-sm text-[var(--hostly-ink-muted)]">Sin datos por zona</p>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={zoneMetrics}>
-                    <XAxis dataKey="zoneName" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}`, "Pax/reserva"]} />
-                    <Bar dataKey="paxPorReserva" />
+                <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
+                  <BarChart
+                    data={zoneMetrics}
+                    margin={{ top: 6, right: 6, left: 4, bottom: 2 }}
+                    style={{ background: "transparent" }}
+                  >
+                    <CartesianGrid {...analysisRechartsGridProps} />
+                    <XAxis dataKey="zoneName" {...analysisRechartsAxisProps} />
+                    <YAxis {...analysisRechartsAxisProps} />
+                    <Tooltip
+                      {...analysisRechartsTooltipProps}
+                      formatter={(value) => [`${Number(value).toFixed(1)}`, "Pax/reserva"]}
+                    />
+                    <Bar dataKey="paxPorReserva" fill={analysisRechartsOnDark.barPrimary} radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -2361,10 +2354,10 @@ export function ZonasAnalyticsSection({
               </div>
             ) : null}
             <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(148, 163, 184, 0.14)" }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#e2e8f0", letterSpacing: "-0.01em" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)", letterSpacing: "-0.01em" }}>
                 Resumen global
               </div>
-              <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: "#94a3b8", lineHeight: 1.4 }}>
+              <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: "var(--hostly-ink-muted)", lineHeight: 1.4 }}>
                 {totalZonasBase > 0 ? resumenGlobalZonas : "Sin uso del módulo de zonas"}
               </div>
               <AnalysisSectionEnd label="zonas" />

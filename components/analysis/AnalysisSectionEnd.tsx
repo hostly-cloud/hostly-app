@@ -10,8 +10,8 @@ export function AnalysisSectionEnd({
   className?: string
 }) {
   return (
-    <div className={`mt-4 text-center text-xs text-gray-400 ${className || ""}`}>
-      {withDivider && <div className="mb-2 border-t border-gray-200" />}
+    <div className={`mt-4 text-center text-xs text-[var(--hostly-ink-faint)] ${className || ""}`}>
+      {withDivider && <div className="mb-2 border-t border-[var(--hostly-line)]" />}
 
       <div>— Fin análisis de {label} —</div>
 

@@ -4,13 +4,13 @@ const boxStyle: CSSProperties = {
   padding: 12,
   borderRadius: 12,
   border: "1px solid rgba(148, 163, 184, 0.14)",
-  background: "rgba(15, 23, 42, 0.35)",
+  background: "var(--hostly-ice-50)",
 };
 
 const textStyle: CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "#94a3b8",
+  color: "var(--hostly-ink-muted)",
   lineHeight: 1.45,
 };
 

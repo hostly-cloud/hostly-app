@@ -1,7 +1,13 @@
 "use client";
 
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  analysisRechartsAxisProps,
+  analysisRechartsGridProps,
+  analysisRechartsOnDark,
+  analysisRechartsTooltipProps,
+} from "@/components/analysis/analysis-recharts-surface";
 import type { VentasSelectorsCharts } from "@/components/analysis/hooks/useVentasSelectors";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const formatEuroValue = (value: number): string => {
   return `${value.toFixed(2)} €`;
@@ -28,33 +34,30 @@ export function VentasChartsBlock({ data }: VentasChartsBlockProps) {
   }
 
   return (
-    <div
-      className="hostly-card"
-      style={{
-        padding: 14,
-        borderRadius: "var(--hostly-radius-md)",
-        border: "1px solid rgba(148, 163, 184, 0.18)",
-        background: "rgba(15, 23, 42, 0.55)",
-      }}
-    >
+    <div className="hostly-panel p-4">
       <div
-        style={{
-          fontSize: 13,
-          fontWeight: 800,
-          color: "#e2e8f0",
-          letterSpacing: "-0.01em",
-          marginBottom: 10,
-        }}
+        className="mb-2.5 text-[13px] font-extrabold tracking-tight text-[var(--hostly-ink-strong)]"
       >
         Ventas por día
       </div>
-      <div style={{ height: 260, width: "100%" }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data.dailySales}>
-            <XAxis dataKey="label" />
-            <YAxis tickFormatter={(value) => formatEuroAxisValue(Number(value))} />
-            <Tooltip formatter={(value) => [formatEuroValue(Number(value)), "Ventas"]} />
-            <Bar dataKey="value" />
+      <div className="h-[220px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%" className="min-w-0 [&_.recharts-surface]:outline-none">
+          <BarChart
+            data={data.dailySales}
+            margin={{ top: 6, right: 6, left: 4, bottom: 2 }}
+            style={{ background: "transparent" }}
+          >
+            <CartesianGrid {...analysisRechartsGridProps} />
+            <XAxis dataKey="label" {...analysisRechartsAxisProps} />
+            <YAxis
+              tickFormatter={(value) => formatEuroAxisValue(Number(value))}
+              {...analysisRechartsAxisProps}
+            />
+            <Tooltip
+              {...analysisRechartsTooltipProps}
+              formatter={(value) => [formatEuroValue(Number(value)), "Ventas"]}
+            />
+            <Bar dataKey="value" fill={analysisRechartsOnDark.barPrimary} radius={[5, 5, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

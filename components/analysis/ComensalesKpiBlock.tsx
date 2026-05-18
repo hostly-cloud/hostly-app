@@ -15,8 +15,8 @@ const metricsGridStyle: CSSProperties = {
 
 const metricCardBase: CSSProperties = {
   borderRadius: 14,
-  border: "1px solid rgba(148, 163, 184, 0.18)",
-  background: "rgba(15, 23, 42, 0.55)",
+  border: "1px solid var(--hostly-line)",
+  background: "var(--hostly-surface-card-solid)",
   padding: 14,
   display: "flex",
   flexDirection: "column",
@@ -36,10 +36,10 @@ function metricTone(tone: "amber" | "blue" | "green" | "red" | "gray" | "neutral
 function MetricCard({ label, value, tone }: { label: string; value: string | number; tone: "amber" | "blue" | "green" | "red" | "gray" | "neutral" }) {
   return (
     <div style={{ ...metricCardBase, ...metricTone(tone) }}>
-      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#94a3b8" }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
         {label}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.02em", color: "#e2e8f0" }}>
+      <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.02em", color: "var(--hostly-ink-strong)" }}>
         {value}
       </div>
     </div>

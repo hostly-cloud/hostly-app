@@ -1,11 +1,18 @@
 "use client";
 
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  ANALYSIS_CHART_HEIGHT,
+  analysisRechartsAxisProps,
+  analysisRechartsGridProps,
+  analysisRechartsOnDark,
+  analysisRechartsTooltipProps,
+} from "@/components/analysis/analysis-recharts-surface";
 import type {
   ComensalesDailyAttendanceRow,
   ComensalesDailyReservationsRow,
   ComensalesSelectorsCharts,
 } from "@/components/analysis/hooks/useComensalesSelectors";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export type { ComensalesDailyAttendanceRow, ComensalesDailyReservationsRow } from "@/components/analysis/hooks/useComensalesSelectors";
 
@@ -26,31 +33,21 @@ export function ComensalesChartsBlock({ data }: ComensalesChartsBlockProps) {
 
   return (
     <>
-      <div
-        className="hostly-card"
-        style={{
-          borderRadius: "var(--hostly-radius-md)",
-          border: "1px solid rgba(148, 163, 184, 0.18)",
-          background: "rgba(15, 23, 42, 0.55)",
-          padding: 14,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 800,
-            color: "#e2e8f0",
-            letterSpacing: "-0.01em",
-            marginBottom: 10,
-          }}
-        >
+      <div className="hostly-panel p-4">
+        <div className="mb-2.5 text-[13px] font-extrabold tracking-tight text-[var(--hostly-ink-strong)]">
           Reservas por día
         </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={dailyReservations}>
-            <XAxis dataKey="label" />
-            <YAxis allowDecimals={false} />
+        <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
+          <BarChart
+            data={dailyReservations}
+            margin={{ top: 6, right: 6, left: 4, bottom: 2 }}
+            style={{ background: "transparent" }}
+          >
+            <CartesianGrid {...analysisRechartsGridProps} />
+            <XAxis dataKey="label" {...analysisRechartsAxisProps} />
+            <YAxis allowDecimals={false} {...analysisRechartsAxisProps} />
             <Tooltip
+              {...analysisRechartsTooltipProps}
               labelFormatter={(label, payload) => {
                 const row = payload?.[0] as { payload?: { date?: string } } | undefined;
                 const d = row?.payload?.date;
@@ -58,44 +55,34 @@ export function ComensalesChartsBlock({ data }: ComensalesChartsBlockProps) {
               }}
               formatter={(value) => [value, "Reservas"]}
             />
-            <Bar dataKey="total" />
+            <Bar dataKey="total" fill={analysisRechartsOnDark.barPrimary} radius={[5, 5, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <div
-        className="hostly-card"
-        style={{
-          borderRadius: "var(--hostly-radius-md)",
-          border: "1px solid rgba(148, 163, 184, 0.18)",
-          background: "rgba(15, 23, 42, 0.55)",
-          padding: 14,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 800,
-            color: "#e2e8f0",
-            letterSpacing: "-0.01em",
-            marginBottom: 10,
-          }}
-        >
+      <div className="hostly-panel p-4">
+        <div className="mb-2.5 text-[13px] font-extrabold tracking-tight text-[var(--hostly-ink-strong)]">
           Llegadas vs No-show
         </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={dailyAttendance}>
-            <XAxis dataKey="label" />
-            <YAxis allowDecimals={false} />
+        <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
+          <BarChart
+            data={dailyAttendance}
+            margin={{ top: 6, right: 6, left: 4, bottom: 2 }}
+            style={{ background: "transparent" }}
+          >
+            <CartesianGrid {...analysisRechartsGridProps} />
+            <XAxis dataKey="label" {...analysisRechartsAxisProps} />
+            <YAxis allowDecimals={false} {...analysisRechartsAxisProps} />
             <Tooltip
+              {...analysisRechartsTooltipProps}
               labelFormatter={(label, payload) => {
                 const row = payload?.[0] as { payload?: { date?: string } } | undefined;
                 const d = row?.payload?.date;
                 return d ? formatDateEs(String(d)) : String(label);
               }}
             />
-            <Bar dataKey="llegadas" />
-            <Bar dataKey="noShow" />
+            <Bar dataKey="llegadas" fill={analysisRechartsOnDark.barPrimary} radius={[5, 5, 0, 0]} />
+            <Bar dataKey="noShow" fill={analysisRechartsOnDark.barAccent} radius={[5, 5, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

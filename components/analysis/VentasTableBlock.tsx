@@ -10,20 +10,12 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
   }
 
   return (
-    <div
-      className="hostly-card"
-      style={{
-        padding: 14,
-        borderRadius: "var(--hostly-radius-md)",
-        border: "1px solid rgba(148, 163, 184, 0.18)",
-        background: "rgba(15, 23, 42, 0.55)",
-      }}
-    >
+    <div className="hostly-panel p-4">
       <div
         style={{
           fontSize: 13,
           fontWeight: 800,
-          color: "#e2e8f0",
+          color: "var(--hostly-ink-strong)",
           letterSpacing: "-0.01em",
           marginBottom: 10,
         }}
@@ -37,9 +29,9 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
               style={{
                 textAlign: "left",
                 padding: "8px 10px",
-                color: "#94a3b8",
+                color: "var(--hostly-ink-muted)",
                 fontWeight: 800,
-                borderBottom: "1px solid rgba(148, 163, 184, 0.18)",
+                borderBottom: "1px solid var(--hostly-line)",
               }}
             >
               Fecha
@@ -48,9 +40,9 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
               style={{
                 textAlign: "left",
                 padding: "8px 10px",
-                color: "#94a3b8",
+                color: "var(--hostly-ink-muted)",
                 fontWeight: 800,
-                borderBottom: "1px solid rgba(148, 163, 184, 0.18)",
+                borderBottom: "1px solid var(--hostly-line)",
               }}
             >
               Pedido
@@ -59,9 +51,9 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
               style={{
                 textAlign: "right",
                 padding: "8px 10px",
-                color: "#94a3b8",
+                color: "var(--hostly-ink-muted)",
                 fontWeight: 800,
-                borderBottom: "1px solid rgba(148, 163, 184, 0.18)",
+                borderBottom: "1px solid var(--hostly-line)",
               }}
             >
               Total
@@ -71,11 +63,11 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
         <tbody>
           {data.rows.map((row, i) => (
             <tr key={`${row.label}:${row.shortId ?? ""}:${i}`}>
-              <td style={{ padding: "8px 10px", color: "#e2e8f0", fontWeight: 600 }}>{row.label}</td>
-              <td style={{ padding: "8px 10px", color: "#e2e8f0", fontWeight: 600 }}>
+              <td style={{ padding: "8px 10px", color: "var(--hostly-ink-strong)", fontWeight: 600 }}>{row.label}</td>
+              <td style={{ padding: "8px 10px", color: "var(--hostly-ink-strong)", fontWeight: 600 }}>
                 {row.shortId ?? "—"}
               </td>
-              <td style={{ padding: "8px 10px", textAlign: "right", color: "#cbd5e1", fontWeight: 600 }}>
+              <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--hostly-ink)", fontWeight: 600 }}>
                 {row.total.toFixed(2)} €
               </td>
             </tr>

@@ -49,22 +49,14 @@ export function VentasInsightsBlock({
   }
 
   return (
-    <div
-      className="hostly-card"
-      style={{
-        padding: 14,
-        borderRadius: "var(--hostly-radius-md)",
-        border: "1px solid rgba(148, 163, 184, 0.18)",
-        background: "rgba(15, 23, 42, 0.55)",
-      }}
-    >
+    <div className="hostly-panel p-4">
       {hasSummary ? (
         <>
           <div
             style={{
               fontSize: 13,
               fontWeight: 800,
-              color: "#e2e8f0",
+              color: "var(--hostly-ink-strong)",
               letterSpacing: "-0.01em",
               marginBottom: 10,
             }}
@@ -80,7 +72,7 @@ export function VentasInsightsBlock({
               gap: 8,
               fontSize: 13,
               fontWeight: 600,
-              color: "#cbd5e1",
+              color: "var(--hostly-ink-muted)",
               lineHeight: 1.45,
             }}
           >
