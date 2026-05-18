@@ -11,6 +11,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { getJoinTargetFromPoint } from "@/lib/map/join-hit-test";
+import {
+  HOSTLY_MAP_JOIN_ABORTED,
+  HOSTLY_MAP_JOIN_ARMED,
+} from "@/lib/map/join-pinch-bridge";
+
 /** Sincroniza highlight de destino entre fichas durante join-drag. */
 const HOSTLY_MAP_JOIN_DRAG_HOVER = "hostly-map-join-drag-hover";
 const HOSTLY_MAP_JOIN_DRAG_END = "hostly-map-join-drag-end";
@@ -106,6 +112,12 @@ const SURFACE_TOKENS: Record<
 
 const LONG_PRESS_GROUP_MS = 1000;
 const LONG_PRESS_MOVE_PX_SQ = 64;
+
+/** Hold antes de capturar puntero en táctil (coordinado con PinchZoomMap). */
+const MAP_JOIN_ARM_MS = 420;
+/** Si mueves demasiado durante el hold, cuenta como pan del mapa (abort join). */
+const MAP_JOIN_ARM_CANCEL_PX_SQ = 14 * 14;
+const MAP_JOIN_DRAG_START_PX_SQ = 8 * 8;
 
 const RESERVAS_LIVE_SKINS: Record<
   "booked" | "seated" | "completed" | "no_show",
@@ -260,11 +272,14 @@ export const ElementCard = memo(
     reservasLiveFollowUpHint = null,
   }: ElementMapCardProps) {
     const joinDragStateRef = useRef<{
-      startX: number;
-      startY: number;
-      armed: boolean;
-      active: boolean;
+      pointerId: number;
+      originX: number;
+      originY: number;
+      mode: "arming" | "armed" | "dragging";
     } | null>(null);
+    const joinArmTimerRef = useRef<number | null>(null);
+    /** Última posición en dragging (pointerup en iOS a veces devuelve 0,0). */
+    const joinDragLastClientRef = useRef<{ x: number; y: number } | null>(null);
     const joinSuppressClickRef = useRef(false);
     const longPressMenuSuppressClickRef = useRef(false);
     const longPressTimerRef = useRef<number | null>(null);
@@ -276,6 +291,7 @@ export const ElementCard = memo(
     const [isPressedPulse, setIsPressedPulse] = useState(false);
     const [joinDropHighlight, setJoinDropHighlight] = useState(false);
     const [isJoinGestureActive, setIsJoinGestureActive] = useState(false);
+    const [isJoinArmReady, setIsJoinArmReady] = useState(false);
     const [joinDragPreviewPos, setJoinDragPreviewPos] = useState<{
       x: number;
       y: number;
@@ -365,6 +381,19 @@ export const ElementCard = memo(
       };
     }, [clearLongPressTimer]);
 
+    const clearJoinArmTimer = useCallback(() => {
+      if (joinArmTimerRef.current != null) {
+        window.clearTimeout(joinArmTimerRef.current);
+        joinArmTimerRef.current = null;
+      }
+    }, []);
+
+    useEffect(() => {
+      return () => {
+        clearJoinArmTimer();
+      };
+    }, [clearJoinArmTimer]);
+
     const mergedTileRef = useCallback(
       (el: HTMLDivElement | null) => {
         tileElRef.current = el;
@@ -373,25 +402,90 @@ export const ElementCard = memo(
       [setNodeRef],
     );
 
+    const emitJoinArmed = useCallback((pointerId: number) => {
+      document.dispatchEvent(
+        new CustomEvent(HOSTLY_MAP_JOIN_ARMED, {
+          bubbles: true,
+          detail: { pointerId },
+        }),
+      );
+    }, []);
+
+    const emitJoinAborted = useCallback(
+      (pointerId: number, clientX: number, clientY: number) => {
+        document.dispatchEvent(
+          new CustomEvent(HOSTLY_MAP_JOIN_ABORTED, {
+            bubbles: true,
+            detail: { pointerId, clientX, clientY },
+          }),
+        );
+      },
+      [],
+    );
+
     const handleJoinPointerDown = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
         if (!mapJoinDragEnabled || !onMapTableJoinDrop) return;
         if (e.button !== 0) return;
+        clearJoinArmTimer();
         setIsJoinGestureActive(false);
+        setIsJoinArmReady(false);
         setJoinDragPreviewPos(null);
-        joinDragStateRef.current = {
-          startX: e.clientX,
-          startY: e.clientY,
-          armed: true,
-          active: false,
-        };
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId);
-        } catch {
-          /* ignore */
+        joinDragStateRef.current = null;
+        joinDragLastClientRef.current = null;
+
+        const isTouchLike =
+          e.pointerType === "touch" || e.pointerType === "pen";
+
+        if (!isTouchLike) {
+          joinDragStateRef.current = {
+            pointerId: e.pointerId,
+            originX: e.clientX,
+            originY: e.clientY,
+            mode: "armed",
+          };
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            /* ignore */
+          }
+          emitJoinArmed(e.pointerId);
+          return;
         }
+
+        joinDragStateRef.current = {
+          pointerId: e.pointerId,
+          originX: e.clientX,
+          originY: e.clientY,
+          mode: "arming",
+        };
+
+        const pid = e.pointerId;
+        const ox = e.clientX;
+        const oy = e.clientY;
+
+        joinArmTimerRef.current = window.setTimeout(() => {
+          joinArmTimerRef.current = null;
+          const st = joinDragStateRef.current;
+          if (!st || st.mode !== "arming" || st.pointerId !== pid) return;
+          const el = tileElRef.current;
+          if (!el) return;
+          st.mode = "armed";
+          setIsJoinArmReady(true);
+          try {
+            el.setPointerCapture(pid);
+          } catch {
+            /* ignore */
+          }
+          emitJoinArmed(pid);
+        }, MAP_JOIN_ARM_MS);
       },
-      [mapJoinDragEnabled, onMapTableJoinDrop],
+      [
+        clearJoinArmTimer,
+        emitJoinArmed,
+        mapJoinDragEnabled,
+        onMapTableJoinDrop,
+      ],
     );
 
     const draggedJoinClusterMain = String(
@@ -401,33 +495,54 @@ export const ElementCard = memo(
     const handleJoinPointerMove = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
         const st = joinDragStateRef.current;
-        if (!st?.armed) return;
-        const dx = e.clientX - st.startX;
-        const dy = e.clientY - st.startY;
-        if (dx * dx + dy * dy > 64) {
-          if (!st.active) {
-            st.active = true;
+        if (!st) return;
+
+        const dx = e.clientX - st.originX;
+        const dy = e.clientY - st.originY;
+        const distSq = dx * dx + dy * dy;
+
+        if (st.mode === "arming") {
+          if (distSq > MAP_JOIN_ARM_CANCEL_PX_SQ) {
+            clearJoinArmTimer();
+            joinDragStateRef.current = null;
+            setIsJoinArmReady(false);
+            emitJoinAborted(st.pointerId, e.clientX, e.clientY);
+          }
+          return;
+        }
+
+        if (st.mode === "armed") {
+          if (distSq > MAP_JOIN_DRAG_START_PX_SQ) {
+            st.mode = "dragging";
             setIsJoinGestureActive(true);
+            setIsJoinArmReady(false);
+          } else {
+            return;
           }
         }
-        if (!st.active || !mapJoinDragEnabled || !onMapTableJoinDrop) return;
+
+        if (st.mode !== "dragging") return;
+        if (!mapJoinDragEnabled || !onMapTableJoinDrop) return;
+
+        if (e.cancelable) {
+          e.preventDefault();
+        }
 
         const rootEl = e.currentTarget as HTMLElement;
         const prevPe = rootEl.style.pointerEvents;
         rootEl.style.pointerEvents = "none";
         let hoverId: string | null = null;
         try {
-          const els = document.elementsFromPoint(e.clientX, e.clientY);
-          for (const node of els) {
-            if (!(node instanceof HTMLElement)) continue;
-            const host = node.closest("[data-hostly-map-table]");
-            if (!host || host === rootEl) continue;
-            const tid = host.getAttribute("data-hostly-map-table")?.trim();
-            if (tid && tid !== tableId) {
-              hoverId = tid;
-              break;
-            }
-          }
+          joinDragLastClientRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+          };
+          hoverId = getJoinTargetFromPoint(
+            e.clientX,
+            e.clientY,
+            tableId,
+            rootEl,
+          );
         } finally {
           rootEl.style.pointerEvents = prevPe;
         }
@@ -449,7 +564,9 @@ export const ElementCard = memo(
         setJoinDragPreviewPos({ x: e.clientX, y: e.clientY });
       },
       [
+        clearJoinArmTimer,
         draggedJoinClusterMain,
+        emitJoinAborted,
         mapJoinDragEnabled,
         onMapTableJoinDrop,
         tableId,
@@ -464,41 +581,50 @@ export const ElementCard = memo(
 
     const handleJoinPointerUp = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
+        clearJoinArmTimer();
         const st = joinDragStateRef.current;
         joinDragStateRef.current = null;
         setIsJoinGestureActive(false);
+        setIsJoinArmReady(false);
         setJoinDragPreviewPos(null);
         emitJoinDragEnd();
+
         try {
           e.currentTarget.releasePointerCapture(e.pointerId);
         } catch {
           /* ignore */
         }
-        if (!st?.armed) return;
-        if (st.active) {
+
+        if (!st) {
+          joinDragLastClientRef.current = null;
+          return;
+        }
+        if (st.mode === "arming" || st.mode === "armed") {
+          joinDragLastClientRef.current = null;
+          return;
+        }
+
+        if (st.mode === "dragging") {
           joinSuppressClickRef.current = true;
           const rootEl = e.currentTarget as HTMLElement;
           const prevPe = rootEl.style.pointerEvents;
           rootEl.style.pointerEvents = "none";
-          let els: Element[];
+          let targetId: string | null = null;
           try {
-            els = document.elementsFromPoint(e.clientX, e.clientY);
+            const last = joinDragLastClientRef.current;
+            const cx = last?.x ?? e.clientX;
+            const cy = last?.y ?? e.clientY;
+            targetId = getJoinTargetFromPoint(cx, cy, tableId, rootEl);
           } finally {
             rootEl.style.pointerEvents = prevPe;
           }
-          for (const node of els) {
-            if (!(node instanceof HTMLElement)) continue;
-            const host = node.closest("[data-hostly-map-table]");
-            if (!host || host === rootEl) continue;
-            const tid = host.getAttribute("data-hostly-map-table")?.trim();
-            if (tid && tid !== tableId) {
-              onMapTableJoinDrop?.(tableId, tid);
-              break;
-            }
+          joinDragLastClientRef.current = null;
+          if (targetId) {
+            onMapTableJoinDrop?.(tableId, targetId);
           }
         }
       },
-      [emitJoinDragEnd, onMapTableJoinDrop, tableId],
+      [clearJoinArmTimer, emitJoinDragEnd, onMapTableJoinDrop, tableId],
     );
 
     useEffect(() => {
@@ -608,7 +734,7 @@ export const ElementCard = memo(
         }
         handleJoinPointerMove(e);
         const st = joinDragStateRef.current;
-        if (st?.active) {
+        if (st?.mode === "dragging") {
           clearLongPressTimer();
           longPressStartRef.current = null;
         }
@@ -789,6 +915,18 @@ export const ElementCard = memo(
       boxShadow = baseTileShadow;
     }
 
+    if (mapJoinDragEnabled) {
+      if (isJoinGestureActive) {
+        transform = transform
+          ? `${transform} scale(1.065)`
+          : "scale(1.065)";
+      } else if (isJoinArmReady) {
+        transform = transform
+          ? `${transform} scale(1.028)`
+          : "scale(1.028)";
+      }
+    }
+
     const isGroupedPrimaryTile = Boolean(groupCorner);
 
     if (isGroupedPrimaryTile && !isMapGroupedSelectionElevated) {
@@ -804,7 +942,11 @@ export const ElementCard = memo(
     }
 
     if (joinDropHighlight && mapJoinDragEnabled) {
-      boxShadow = `${boxShadow}, 0 10px 28px rgba(15, 23, 42, 0.08), 0 5px 16px rgba(63, 100, 120, 0.14), 0 0 0 2px rgba(63, 100, 120, 0.35)`;
+      boxShadow = `${boxShadow}, 0 0 0 2px rgba(186, 230, 253, 0.95), 0 0 26px rgba(56, 189, 248, 0.42), 0 10px 28px rgba(15, 23, 42, 0.08), 0 5px 16px rgba(63, 100, 120, 0.12)`;
+    }
+
+    if (isJoinArmReady && mapJoinDragEnabled) {
+      boxShadow = `${boxShadow}, 0 0 0 2px rgba(125, 211, 252, 0.55)`;
     }
 
     if (isJoinGestureActive && mapJoinDragEnabled) {
@@ -955,25 +1097,30 @@ export const ElementCard = memo(
         ? createPortal(
             <div
               aria-hidden
+              data-hostly-map-join-preview="1"
               style={{
                 position: "fixed",
                 left: joinDragPreviewPos.x,
                 top: joinDragPreviewPos.y,
-                transform: "translate(-50%, -50%)",
+                transform: "translate(-50%, -50%) scale(1.06)",
                 width: mapTileWidth,
                 height: mapTileHeight,
                 boxSizing: "border-box",
                 borderRadius: tileBorderRadius,
                 background: skin.background,
-                border: tileBorder,
-                opacity: 0.88,
+                border: "1px solid rgba(51, 65, 85, 0.32)",
+                opacity: 0.92,
                 pointerEvents: "none",
                 zIndex: 10100,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 padding: 6,
-                boxShadow: "var(--hostly-shadow-float)",
+                boxShadow:
+                  "0 0 0 1px rgba(15, 23, 42, 0.1), 0 10px 24px rgba(15, 23, 42, 0.1), var(--hostly-shadow-float)",
+                transition: animationsOff
+                  ? undefined
+                  : "transform 90ms ease, opacity 90ms ease, box-shadow 120ms ease",
               }}
             >
               {groupCorner ? (
@@ -1023,6 +1170,13 @@ export const ElementCard = memo(
         tabIndex={0}
         ref={mergedTileRef}
         data-hostly-map-table={tableId}
+        data-hostly-map-table-id={tableId}
+        data-hostly-map-join-target={
+          mapJoinDragEnabled && onMapTableJoinDrop ? "1" : undefined
+        }
+        data-hostly-map-join={
+          mapJoinDragEnabled && onMapTableJoinDrop ? "1" : undefined
+        }
         className={`hostly-map-table ${baseSurface}`}
         aria-label={ariaLabel}
         onKeyDown={(e) => {
@@ -1063,7 +1217,9 @@ export const ElementCard = memo(
             10 +
             priorityLevel +
             (isMapGroupedSelectionElevated ? 5 : 0) +
-            (joinDropHighlight && mapJoinDragEnabled ? 6 : 0),
+            (joinDropHighlight && mapJoinDragEnabled ? 6 : 0) +
+            (isJoinGestureActive && mapJoinDragEnabled ? 40 : 0) +
+            (isJoinArmReady && mapJoinDragEnabled ? 8 : 0),
           transform,
           transition,
           borderRadius: tileBorderRadius,
@@ -1077,8 +1233,22 @@ export const ElementCard = memo(
                 ? "1px solid rgba(45, 82, 97, 0.24)"
                 : tileBorder,
           boxShadow,
+          touchAction:
+            mapJoinDragEnabled && onMapTableJoinDrop ? "none" : undefined,
+          userSelect:
+            (isJoinGestureActive || isJoinArmReady) && mapJoinDragEnabled
+              ? "none"
+              : undefined,
+          WebkitUserSelect:
+            (isJoinGestureActive || isJoinArmReady) && mapJoinDragEnabled
+              ? "none"
+              : undefined,
           opacity:
-            isJoinGestureActive && mapJoinDragEnabled ? 0.56 : 1,
+            isJoinGestureActive && mapJoinDragEnabled
+              ? 0.56
+              : isJoinArmReady && mapJoinDragEnabled
+                ? 0.88
+                : 1,
         }}
       >
         {planType === "table" ? (

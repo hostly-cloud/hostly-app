@@ -34,6 +34,10 @@ export type Reservation = {
   status: ReservationStatus;
   tableId?: string;
   tableLabel?: string;
+  /** Plano operativo (colección `floorPlans`); opcional en reservas legacy. */
+  floorPlanId?: string;
+  /** Nombre del plano en el momento de guardar (denormalizado). */
+  floorName?: string;
   zoneId?: string;
   zoneName?: string;
   notes?: string;
@@ -84,6 +88,12 @@ function mapDocToReservation(d: QueryDocumentSnapshot): Reservation {
     status: parseStatus(data.status),
     ...(typeof data.tableId === "string" && data.tableId.trim() ? { tableId: data.tableId.trim() } : {}),
     ...(typeof data.tableLabel === "string" && data.tableLabel.trim() ? { tableLabel: data.tableLabel.trim() } : {}),
+    ...(typeof data.floorPlanId === "string" && data.floorPlanId.trim()
+      ? { floorPlanId: data.floorPlanId.trim() }
+      : {}),
+    ...(typeof data.floorName === "string" && data.floorName.trim()
+      ? { floorName: data.floorName.trim() }
+      : {}),
     ...(typeof data.zoneId === "string" && data.zoneId.trim() ? { zoneId: data.zoneId.trim() } : {}),
     ...(typeof data.zoneName === "string" && data.zoneName.trim() ? { zoneName: data.zoneName.trim() } : {}),
     ...(typeof data.notes === "string" && data.notes.trim() ? { notes: data.notes.trim() } : {}),
@@ -199,6 +209,12 @@ export async function createReservation(
     docPayload.zoneId = payload.zoneId;
     docPayload.zoneName = payload.zoneName;
   }
+  const fpId = String(payload.floorPlanId ?? "").trim();
+  if (fpId) {
+    docPayload.floorPlanId = fpId;
+    const fn = String(payload.floorName ?? "").trim();
+    if (fn) docPayload.floorName = fn;
+  }
   if (payload.notes && String(payload.notes).trim()) {
     docPayload.notes = String(payload.notes).trim();
   }
@@ -223,6 +239,8 @@ export async function updateReservation(
       | "status"
       | "tableId"
       | "tableLabel"
+      | "floorPlanId"
+      | "floorName"
       | "zoneId"
       | "zoneName"
       | "notes"
@@ -246,6 +264,12 @@ export async function updateReservation(
 
   if (updates.tableId !== undefined) payload.tableId = updates.tableId ? String(updates.tableId).trim() : null;
   if (updates.tableLabel !== undefined) payload.tableLabel = updates.tableLabel ? String(updates.tableLabel).trim() : null;
+  if (updates.floorPlanId !== undefined) {
+    payload.floorPlanId = updates.floorPlanId ? String(updates.floorPlanId).trim() : null;
+  }
+  if (updates.floorName !== undefined) {
+    payload.floorName = updates.floorName ? String(updates.floorName).trim() : null;
+  }
   if (updates.zoneId !== undefined) payload.zoneId = updates.zoneId ? String(updates.zoneId).trim() : null;
   if (updates.zoneName !== undefined) payload.zoneName = updates.zoneName ? String(updates.zoneName).trim() : null;
   if (updates.notes !== undefined) payload.notes = updates.notes ? String(updates.notes).trim() : null;

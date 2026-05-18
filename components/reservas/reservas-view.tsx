@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { getTables, type Table } from "@/lib/firestore/tables";
+import { getFloorPlans, type FloorPlan } from "@/lib/firestore/floorPlans";
 import {
   createReservation,
   listenReservationsForDate,
@@ -15,7 +16,10 @@ import {
   type ReservationStatus,
 } from "@/lib/firestore/reservations";
 import { computeReservationDayMetrics } from "@/lib/reservas/reservation-metrics";
-import { ReservationFloorMapPicker } from "@/components/reservas/reservation-floor-map-picker";
+import {
+  ReservationFloorMapPicker,
+  type ReservationFloorMapPickerConfirm,
+} from "@/components/reservas/reservation-floor-map-picker";
 
 const upcomingRowStyle: CSSProperties = {
   display: "flex",
@@ -160,6 +164,7 @@ export default function ReservasView() {
   const [savingReservation, setSavingReservation] = useState(false);
 
   const [tables, setTables] = useState<Table[]>([]);
+  const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
 
   const [floorMapPicker, setFloorMapPicker] = useState<
     | null
@@ -216,6 +221,26 @@ export default function ReservasView() {
         setTables(t);
       } catch {
         if (!cancelled) setTables([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, restaurantId]);
+
+  useEffect(() => {
+    if (!authReady || !restaurantId || !isFirebaseConfigured) {
+      setFloorPlans([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const fp = await getFloorPlans(restaurantId);
+        if (cancelled) return;
+        setFloorPlans(fp);
+      } catch {
+        if (!cancelled) setFloorPlans([]);
       }
     })();
     return () => {
@@ -296,6 +321,10 @@ export default function ReservasView() {
 
     const partySize = Math.max(1, pax);
     const table = draft.tableId ? tablesOptions.find((t) => t.id === draft.tableId) : undefined;
+    const fpId = table?.floorPlanId?.trim() ?? "";
+    const fpName = fpId
+      ? floorPlans.find((p) => p.id === fpId)?.name?.trim() ?? ""
+      : "";
     const payload = {
       customerName: draft.customerName,
       customerPhone: draft.customerPhone,
@@ -304,6 +333,7 @@ export default function ReservasView() {
       partySize,
       status: "booked" as const,
       ...(table ? { tableId: table.id, tableLabel: table.name } : {}),
+      ...(fpId ? { floorPlanId: fpId, ...(fpName ? { floorName: fpName } : {}) } : {}),
       notes: draft.notes,
     };
     setSavingReservation(true);
@@ -394,14 +424,23 @@ export default function ReservasView() {
           await updateReservation(reservationId, {
             tableId: "",
             tableLabel: "",
+            floorPlanId: "",
+            floorName: "",
             zoneId: "",
             zoneName: "",
           });
           return;
         }
+        const fpId = table.floorPlanId?.trim() ?? "";
+        const fpName = fpId
+          ? floorPlans.find((p) => p.id === fpId)?.name?.trim() ?? ""
+          : "";
         await updateReservation(reservationId, {
           tableId: table.id,
           tableLabel: table.name,
+          ...(fpId
+            ? { floorPlanId: fpId, ...(fpName ? { floorName: fpName } : {}) }
+            : { floorPlanId: "", floorName: "" }),
           zoneId: table.zoneId ?? "",
           zoneName: table.zoneName ?? table.zone ?? "",
         });
@@ -409,7 +448,7 @@ export default function ReservasView() {
         setBusy(false);
       }
     },
-    [restaurantId, tablesOptions],
+    [restaurantId, tablesOptions, floorPlans],
   );
 
   const floorMapPickerContext = useMemo(() => {
@@ -418,13 +457,9 @@ export default function ReservasView() {
       return {
         reservationDateYmd: String(draft.date ?? "").trim(),
         initialTableId: draft.tableId.trim() || null,
+        initialFloorPlanId: null as string | null,
         excludeReservationId: null as string | null,
-        onConfirm: (payload: {
-          tableId: string;
-          tableLabel: string;
-          zoneId: string;
-          zoneName: string;
-        }) => {
+        onConfirm: (payload: ReservationFloorMapPickerConfirm) => {
           setDraft((d) => ({ ...d, tableId: payload.tableId }));
           setFloorMapPicker(null);
         },
@@ -438,25 +473,32 @@ export default function ReservasView() {
         typeof r.tableId === "string" && r.tableId.trim()
           ? r.tableId.trim()
           : null,
+      initialFloorPlanId:
+        typeof r.floorPlanId === "string" && r.floorPlanId.trim()
+          ? r.floorPlanId.trim()
+          : null,
       excludeReservationId: r.id,
-        onConfirm: (payload: {
-          tableId: string;
-          tableLabel: string;
-          zoneId: string;
-          zoneName: string;
-        }) => {
-          void (async () => {
-            try {
-              await handleAssignReservationTable(
-                floorMapPicker.reservationId,
-                payload.tableId,
-              );
-              setFloorMapPicker(null);
-            } catch (e) {
-              console.error(e);
-            }
-          })();
-        },
+      onConfirm: (payload: ReservationFloorMapPickerConfirm) => {
+        void (async () => {
+          try {
+            await updateReservation(floorMapPicker.reservationId, {
+              tableId: payload.tableId,
+              tableLabel: payload.tableLabel,
+              floorPlanId: payload.floorPlanId.trim()
+                ? payload.floorPlanId.trim()
+                : "",
+              floorName: payload.floorName.trim()
+                ? payload.floorName.trim()
+                : "",
+              zoneId: payload.zoneId ?? "",
+              zoneName: payload.zoneName ?? "",
+            });
+            setFloorMapPicker(null);
+          } catch (e) {
+            console.error(e);
+          }
+        })();
+      },
     };
   }, [
     floorMapPicker,
@@ -464,7 +506,6 @@ export default function ReservasView() {
     draft.date,
     draft.tableId,
     reservations,
-    handleAssignReservationTable,
   ]);
 
   useEffect(() => {
@@ -619,7 +660,7 @@ export default function ReservasView() {
                     <div className="hostly-mobile-text-caption mb-2">Próximas</div>
                     <div className="flex flex-col gap-2">
                       {upcoming.map((r) => {
-                        const tableZone = [r.tableLabel, r.zoneName].filter(Boolean).join(" · ");
+                        const tableZone = [r.tableLabel, r.floorName, r.zoneName].filter(Boolean).join(" · ");
                         return (
                           <div key={`up-${r.id}`} style={upcomingRowStyle}>
                             <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-[var(--hostly-ink)]">
@@ -656,7 +697,7 @@ export default function ReservasView() {
                     <div className="hostly-mobile-text-caption mb-2 !text-red-800">Retrasadas</div>
                     <div className="flex flex-col gap-2">
                       {delayed.map((r) => {
-                        const tableZone = [r.tableLabel, r.zoneName].filter(Boolean).join(" · ");
+                        const tableZone = [r.tableLabel, r.floorName, r.zoneName].filter(Boolean).join(" · ");
                         return (
                           <div key={`dl-${r.id}`} style={delayedRowStyle}>
                             <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-[var(--hostly-ink)]">
@@ -882,7 +923,7 @@ export default function ReservasView() {
             <section className="hostly-mobile-section !py-2">
               <div className="flex flex-col gap-2.5">
                 {reservations.map((r) => {
-                  const tableZone = [r.tableLabel, r.zoneName].filter(Boolean).join(" · ");
+                  const tableZone = [r.tableLabel, r.floorName, r.zoneName].filter(Boolean).join(" · ");
                   return (
                     <div
                       key={r.id}
@@ -1011,6 +1052,7 @@ export default function ReservasView() {
           reservationDateYmd={floorMapPickerContext.reservationDateYmd}
           tables={tables}
           initialTableId={floorMapPickerContext.initialTableId}
+          initialFloorPlanId={floorMapPickerContext.initialFloorPlanId}
           excludeReservationId={floorMapPickerContext.excludeReservationId}
           onClose={() => setFloorMapPicker(null)}
           onConfirm={floorMapPickerContext.onConfirm}

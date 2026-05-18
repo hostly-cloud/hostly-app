@@ -64,9 +64,10 @@ import {
   type Table,
 } from "@/lib/firestore/tables";
 import {
-  DEFAULT_FLOOR_PLAN_HEIGHT,
-  DEFAULT_FLOOR_PLAN_WIDTH,
+  effectiveTableFloorPlanId,
+  entityBelongsToFloorPlan,
   getFloorPlans,
+  resolveFloorPlanCanvasSize,
   type FloorPlan,
 } from "@/lib/firestore/floorPlans";
 import { getZones, type Zone } from "@/lib/firestore/zones";
@@ -74,7 +75,6 @@ import { getUsersByRestaurant } from "@/lib/firestore/users";
 import {
   EditableFloorMap,
   getPlanElementBaseVisualStyle,
-  type FloorPlanCanvasSize,
 } from "@/components/map/EditableFloorMap";
 import { PinchZoomMap } from "./_components/pinch-zoom-map";
 import { ElementCard } from "@/components/map/element-map-card";
@@ -119,23 +119,6 @@ function tpvDecorativeElementStyle(
     pointerEvents: "none",
     zIndex: readonlyLayer,
     ...baseVisual,
-  };
-}
-
-function floorPlanSizeForTpv(plan: FloorPlan | null | undefined): FloorPlanCanvasSize {
-  return {
-    width:
-      typeof plan?.width === "number" &&
-      Number.isFinite(plan.width) &&
-      plan.width > 0
-        ? plan.width
-        : DEFAULT_FLOOR_PLAN_WIDTH,
-    height:
-      typeof plan?.height === "number" &&
-      Number.isFinite(plan.height) &&
-      plan.height > 0
-        ? plan.height
-        : DEFAULT_FLOOR_PLAN_HEIGHT,
   };
 }
 
@@ -1551,6 +1534,10 @@ export function CartaPageContent({
   const [zonesList, setZonesList] = useState<Zone[]>([]);
   const [selectedTpvFloorPlanId, setSelectedTpvFloorPlanId] =
     useState<string | null>(null);
+  const operationalFloorPlansForTpv = useMemo(
+    () => floorPlans.filter((p) => p.active !== false),
+    [floorPlans],
+  );
   /** Nombre de categoría de carta resaltada; null si aún no hay categorías en el grupo (comida/bebida). */
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   /**
@@ -3017,9 +3004,16 @@ export function CartaPageContent({
         setFloorPlans(plans);
         setZonesList(zones);
         setSelectedTpvFloorPlanId((current) => {
-          if (current && plans.some((p) => p.id === current)) return current;
-          const def = plans.find((p) => p.isDefault === true);
-          return def?.id ?? plans[0]?.id ?? null;
+          const op = plans.filter((p) => p.active !== false);
+          const pool = op.length > 0 ? op : plans;
+          if (current) {
+            const cur = plans.find((p) => p.id === current);
+            if (cur && cur.active !== false && pool.some((p) => p.id === current)) {
+              return current;
+            }
+          }
+          const def = pool.find((p) => p.isDefault === true);
+          return def?.id ?? pool[0]?.id ?? null;
         });
       } catch {
         if (cancelled) return;
@@ -4375,31 +4369,22 @@ export function CartaPageContent({
     });
   }, [tablesList, ordersByTable]);
 
-  const activeFloorPlanHasElements = useMemo(() => {
-    if (!selectedTpvFloorPlanId) return false;
-    return tablesList.some(
-      (element) =>
-        element.isActive !== false &&
-        element.floorPlanId === selectedTpvFloorPlanId,
-    );
-  }, [tablesList, selectedTpvFloorPlanId]);
-
   const planElementsForTpvMap = useMemo(() => {
-    const activeElements = tablesList.filter((element) => element.isActive !== false);
-    if (!selectedTpvFloorPlanId) return activeElements;
-    if (!activeFloorPlanHasElements) return activeElements;
-    return activeElements.filter(
-      (element) => element.floorPlanId === selectedTpvFloorPlanId,
+    const activeElements = tablesList.filter(
+      (element) => element.isActive !== false,
     );
-  }, [tablesList, selectedTpvFloorPlanId, activeFloorPlanHasElements]);
+    if (!selectedTpvFloorPlanId) return activeElements;
+    return activeElements.filter((element) =>
+      entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
+    );
+  }, [tablesList, selectedTpvFloorPlanId, floorPlans]);
 
   const zonesForTpvMap = useMemo(() => {
     if (!selectedTpvFloorPlanId) return zonesList;
-    const scoped = zonesList.filter(
-      (zone) => zone.floorPlanId === selectedTpvFloorPlanId,
+    return zonesList.filter((zone) =>
+      entityBelongsToFloorPlan(zone, selectedTpvFloorPlanId, floorPlans),
     );
-    return scoped.length > 0 ? scoped : zonesList.filter((zone) => !zone.floorPlanId);
-  }, [zonesList, selectedTpvFloorPlanId]);
+  }, [zonesList, selectedTpvFloorPlanId, floorPlans]);
 
   const selectedTpvFloorPlan = useMemo(() => {
     if (!selectedTpvFloorPlanId) return null;
@@ -4407,8 +4392,8 @@ export function CartaPageContent({
   }, [floorPlans, selectedTpvFloorPlanId]);
 
   const selectedTpvFloorPlanSize = useMemo(
-    () => floorPlanSizeForTpv(selectedTpvFloorPlan),
-    [selectedTpvFloorPlan],
+    () => resolveFloorPlanCanvasSize(selectedTpvFloorPlan, floorPlans),
+    [selectedTpvFloorPlan, floorPlans],
   );
 
   const tablesForTpvMap = useMemo(() => {
@@ -5525,9 +5510,23 @@ export function CartaPageContent({
       const d = String(draggedTableId).trim();
       const t = String(targetTableId).trim();
       if (!d || !t || d === t) return;
+      const ta = tablesById[d];
+      const tb = tablesById[t];
+      if (!ta || !tb) return;
+      const fpA = effectiveTableFloorPlanId(
+        ta,
+        selectedTpvFloorPlanId,
+        floorPlans,
+      );
+      const fpB = effectiveTableFloorPlanId(
+        tb,
+        selectedTpvFloorPlanId,
+        floorPlans,
+      );
+      if (fpA !== fpB) return;
       join(t, d);
     },
-    [groupedTablesMapHandlers],
+    [groupedTablesMapHandlers, tablesById, selectedTpvFloorPlanId, floorPlans],
   );
 
   const handleBackToMap = useCallback(() => {
@@ -7247,6 +7246,16 @@ export function CartaPageContent({
   box-sizing: border-box !important;
 }
 
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"]
+  .carta-map-page-fill.hostly-container-wide {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  width: 100% !important;
+}
+
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
   position: absolute !important;
@@ -7265,7 +7274,7 @@ export function CartaPageContent({
   border-radius: 0 !important;
   border-width: 0 0 1px !important;
   box-shadow: none !important;
-  background: rgba(247, 252, 255, 0.82) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main {
@@ -8471,8 +8480,8 @@ export function CartaPageContent({
 .carta-comanda-line.is-pending {
   position: relative;
   padding-left: 14px !important;
-  background: rgba(59, 130, 246, 0.06) !important;
-  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+  background: rgba(15, 23, 42, 0.04) !important;
+  border: 1px solid rgba(15, 23, 42, 0.11) !important;
 }
 
 .carta-comanda-line.is-pending::before {
@@ -8481,11 +8490,11 @@ export function CartaPageContent({
   left: 6px;
   top: 50%;
   transform: translateY(-50%);
-  width: 4px;
+  width: 3px;
   height: calc(100% - 10px);
-  max-height: 36px;
+  max-height: 32px;
   border-radius: 2px;
-  background: #3b82f6;
+  background: rgba(30, 41, 59, 0.72);
   pointer-events: none;
 }
 
@@ -8600,7 +8609,7 @@ export function CartaPageContent({
 }
 
 .carta-comanda-status-chip--clickable:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline: 2px solid rgba(15, 23, 42, 0.26);
   outline-offset: 1px;
 }
 
@@ -9526,7 +9535,7 @@ export function CartaPageContent({
   flex: 1 1 0% !important;
   min-height: 0 !important;
   overflow: hidden !important;
-  gap: 3px !important;
+  gap: 2px !important;
   height: auto !important;
   display: flex !important;
   flex-direction: column !important;
@@ -9535,10 +9544,12 @@ export function CartaPageContent({
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda {
   flex: 0 1 auto !important;
   min-height: 0 !important;
-  max-height: 40dvh !important;
+  max-height: 36dvh !important;
   padding: 3px !important;
   border-radius: 8px !important;
   overflow: hidden !important;
+  border-right: none !important;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06) !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-top-shell {
   gap: 1px !important;
@@ -9572,7 +9583,9 @@ export function CartaPageContent({
   gap: 4px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline {
-  font-size: 14px !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.02em !important;
   line-height: 1 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline-time {
@@ -9792,6 +9805,18 @@ export function CartaPageContent({
   display: none !important;
 }
 
+/* TPV táctil: quita highlight/focus azul del motor en teselas del plano (role=button). */
+.carta-root[data-carta-mobile="true"] .hostly-map-table {
+  -webkit-tap-highlight-color: transparent;
+}
+.carta-root[data-carta-mobile="true"] .hostly-map-table:focus {
+  outline: none;
+}
+.carta-root[data-carta-mobile="true"] .hostly-map-table:focus-visible {
+  outline: 2px solid rgba(15, 23, 42, 0.22);
+  outline-offset: 2px;
+}
+
 @keyframes fade-in {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
@@ -9981,7 +10006,7 @@ export function CartaPageContent({
               mapSummaryAlertLevel === "normal" &&
               activeMapFilter === "all" &&
               mapZoneOptions.length <= 1 &&
-              floorPlans.length <= 1 ? null : (
+              operationalFloorPlansForTpv.length <= 1 ? null : (
                 <div
                   role="status"
                   aria-live="polite"
@@ -10106,7 +10131,7 @@ export function CartaPageContent({
                       ))}
                     </div>
                   ) : null}
-                  {floorPlans.length > 1 ? (
+                  {operationalFloorPlansForTpv.length > 1 ? (
                     <label className="carta-map-waiter-compact" style={{ maxWidth: 190 }}>
                       <span style={{ opacity: 0.75 }}>Plano</span>
                       <select
@@ -10118,7 +10143,7 @@ export function CartaPageContent({
                           setActiveMapFilter("all");
                         }}
                       >
-                        {floorPlans.map((plan) => (
+                        {operationalFloorPlansForTpv.map((plan) => (
                           <option key={plan.id} value={plan.id}>
                             {plan.name}
                           </option>
@@ -10241,6 +10266,12 @@ export function CartaPageContent({
                     editorPlanSurface
                     editorVisualPreset="premium"
                     mapLayoutEmphasis
+                    hideZoneOverlays
+                    floorSurfacePreset={
+                      cartaHeaderMobile && embeddedInOperacion
+                        ? "stone"
+                        : "ice"
+                    }
                     viewportFitPaddingPx={
                       cartaHeaderMobile && embeddedInOperacion ? 0 : 16
                     }

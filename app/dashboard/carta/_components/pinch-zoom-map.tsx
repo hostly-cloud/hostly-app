@@ -3,6 +3,14 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  HOSTLY_MAP_JOIN_ABORTED,
+  HOSTLY_MAP_JOIN_ARMED,
+  HOSTLY_MAP_JOIN_SELECTOR,
+  type HostlyMapJoinAbortedDetail,
+  type HostlyMapJoinArmedDetail,
+} from "@/lib/map/join-pinch-bridge";
+
 /**
  * Wrapper de gestos táctiles para el mapa de mesas de Carta/TPV.
  *
@@ -87,6 +95,8 @@ export function PinchZoomMap({
     startClientY: number;
     startPan: { x: number; y: number };
     isPanning: boolean;
+    /** Dedos táctil/lápiz sobre tesela join: no iniciar pan hasta arm o abort. */
+    joinTileDefer?: boolean;
   } | null>(null);
   const justPannedRef = useRef<boolean>(false);
   const justPannedTimeoutRef = useRef<number | null>(null);
@@ -109,6 +119,46 @@ export function PinchZoomMap({
       }
     };
   }, []);
+
+  /** Join-mesas: mesa suelta el dedo al armarse; sincronizar estado interno de punteros. */
+  useEffect(() => {
+    if (!enabled) return;
+
+    const onJoinArmed = (ev: Event) => {
+      const d = (ev as CustomEvent<HostlyMapJoinArmedDetail>).detail;
+      if (!d) return;
+      pointersRef.current.delete(d.pointerId);
+      const session = panSessionRef.current;
+      if (session?.pointerId === d.pointerId) {
+        panSessionRef.current = null;
+      }
+      try {
+        containerRef.current?.releasePointerCapture(d.pointerId);
+      } catch {
+        /* noop */
+      }
+    };
+
+    const onJoinAborted = (ev: Event) => {
+      const d = (ev as CustomEvent<HostlyMapJoinAbortedDetail>).detail;
+      if (!d) return;
+      const session = panSessionRef.current;
+      if (!session || session.pointerId !== d.pointerId) return;
+      if (!session.joinTileDefer) return;
+      session.joinTileDefer = false;
+      session.startClientX = d.clientX;
+      session.startClientY = d.clientY;
+      session.startPan = { ...panRef.current };
+      session.isPanning = false;
+    };
+
+    document.addEventListener(HOSTLY_MAP_JOIN_ARMED, onJoinArmed);
+    document.addEventListener(HOSTLY_MAP_JOIN_ABORTED, onJoinAborted);
+    return () => {
+      document.removeEventListener(HOSTLY_MAP_JOIN_ARMED, onJoinArmed);
+      document.removeEventListener(HOSTLY_MAP_JOIN_ABORTED, onJoinAborted);
+    };
+  }, [enabled]);
 
   /**
    * Mide el contenido real (sin escalar) del transform layer iterando sus hijos
@@ -240,12 +290,20 @@ export function PinchZoomMap({
       const count = pointersRef.current.size;
 
       if (count === 1) {
+        const target = e.target;
+        const coarse = e.pointerType === "touch" || e.pointerType === "pen";
+        const joinTileDefer =
+          coarse &&
+          target instanceof Element &&
+          Boolean(target.closest(HOSTLY_MAP_JOIN_SELECTOR));
+
         panSessionRef.current = {
           pointerId: e.pointerId,
           startClientX: e.clientX,
           startClientY: e.clientY,
           startPan: { ...panRef.current },
           isPanning: false,
+          joinTileDefer: joinTileDefer || undefined,
         };
       } else if (count === 2) {
         panSessionRef.current = null;
@@ -312,6 +370,9 @@ export function PinchZoomMap({
 
       const session = panSessionRef.current;
       if (count === 1 && session && session.pointerId === e.pointerId) {
+        if (session.joinTileDefer) {
+          return;
+        }
         const dx = e.clientX - session.startClientX;
         const dy = e.clientY - session.startClientY;
         if (!session.isPanning) {

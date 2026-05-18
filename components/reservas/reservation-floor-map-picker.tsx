@@ -7,22 +7,22 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import {
   EditableFloorMap,
   getPlanElementBaseVisualStyle,
-  type FloorPlanCanvasSize,
 } from "@/components/map/EditableFloorMap";
 import { ElementCard } from "@/components/map/element-map-card";
 import { PinchZoomMap } from "@/app/dashboard/carta/_components/pinch-zoom-map";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import {
-  DEFAULT_FLOOR_PLAN_HEIGHT,
-  DEFAULT_FLOOR_PLAN_WIDTH,
+  entityBelongsToFloorPlan,
   getFloorPlans,
+  resolveFloorPlanCanvasSize,
   type FloorPlan,
 } from "@/lib/firestore/floorPlans";
 import {
@@ -48,23 +48,6 @@ import {
 } from "@/lib/reservas/reservation-map-live";
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
-
-function floorPlanSizeForPicker(plan: FloorPlan | null | undefined): FloorPlanCanvasSize {
-  return {
-    width:
-      typeof plan?.width === "number" &&
-      Number.isFinite(plan.width) &&
-      plan.width > 0
-        ? plan.width
-        : DEFAULT_FLOOR_PLAN_WIDTH,
-    height:
-      typeof plan?.height === "number" &&
-      Number.isFinite(plan.height) &&
-      plan.height > 0
-        ? plan.height
-        : DEFAULT_FLOOR_PLAN_HEIGHT,
-  };
-}
 
 function pickerDecorativeStyle(
   element: Table,
@@ -198,6 +181,8 @@ function overlayStatusChipStyle(status: Reservation["status"]): {
 export type ReservationFloorMapPickerConfirm = {
   tableId: string;
   tableLabel: string;
+  floorPlanId: string;
+  floorName: string;
   zoneId: string;
   zoneName: string;
 };
@@ -211,6 +196,8 @@ export type ReservationFloorMapPickerProps = {
   tables: Table[];
   /** Mesa ya guardada: id Firestore (se normaliza a principal al abrir). */
   initialTableId?: string | null;
+  /** Plano guardado en la reserva (prioridad sobre la mesa al abrir). */
+  initialFloorPlanId?: string | null;
   /** Reserva en edición: se excluye del badge “reservada” para no ensuciar la mesa propia. */
   excludeReservationId?: string | null;
   onConfirm: (payload: ReservationFloorMapPickerConfirm) => void;
@@ -223,6 +210,7 @@ export function ReservationFloorMapPicker({
   reservationDateYmd,
   tables,
   initialTableId,
+  initialFloorPlanId,
   excludeReservationId: _excludeReservationId,
   onConfirm,
 }: ReservationFloorMapPickerProps) {
@@ -266,6 +254,13 @@ export function ReservationFloorMapPicker({
     null,
   );
 
+  const operationalFloorPlans = useMemo(
+    () => floorPlans.filter((p) => p.active !== false),
+    [floorPlans],
+  );
+
+  const didAlignPlanRef = useRef(false);
+
   const [livePreview, setLivePreview] = useState<
     | null
     | {
@@ -294,13 +289,15 @@ export function ReservationFloorMapPicker({
         if (cancelled) return;
         setFloorPlans(plans);
         setZonesList(zones);
-        const def =
-          plans.find((p) => p.isDefault === true) ??
-          plans[0] ??
-          null;
+        const op = plans.filter((p) => p.active !== false);
+        const pool = op.length > 0 ? op : plans;
         setSelectedFloorPlanId((prev) => {
-          if (prev && plans.some((p) => p.id === prev)) return prev;
-          return def?.id ?? null;
+          if (prev && pool.some((p) => p.id === prev)) return prev;
+          return (
+            pool.find((p) => p.isDefault === true)?.id ??
+            pool[0]?.id ??
+            null
+          );
         });
       } catch {
         if (!cancelled) {
@@ -313,6 +310,57 @@ export function ReservationFloorMapPicker({
       cancelled = true;
     };
   }, [open, restaurantId, authReady]);
+
+  useEffect(() => {
+    if (!open) {
+      didAlignPlanRef.current = false;
+      return;
+    }
+    if (didAlignPlanRef.current) return;
+    if (floorPlans.length === 0) return;
+    const op = floorPlans.filter((p) => p.active !== false);
+    const pool = op.length > 0 ? op : floorPlans;
+    const initFp = String(initialFloorPlanId ?? "").trim();
+    if (initFp && pool.some((p) => p.id === initFp)) {
+      setSelectedFloorPlanId(initFp);
+      didAlignPlanRef.current = true;
+      return;
+    }
+    const raw = String(initialTableId ?? "").trim();
+    if (raw) {
+      const main =
+        groupedTablesMapHandlers?.resolveMainTableId?.(raw) ?? raw;
+      const t = tables.find(
+        (x) => String(x.id).trim() === String(main).trim(),
+      );
+      const fp = t?.floorPlanId?.trim();
+      if (fp && pool.some((p) => p.id === fp)) {
+        setSelectedFloorPlanId(fp);
+      }
+    }
+    didAlignPlanRef.current = true;
+  }, [
+    open,
+    floorPlans,
+    initialFloorPlanId,
+    initialTableId,
+    tables,
+    groupedTablesMapHandlers,
+  ]);
+
+  useEffect(() => {
+    if (!open) return;
+    const op = floorPlans.filter((p) => p.active !== false);
+    if (op.length === 0) return;
+    if (
+      !selectedFloorPlanId ||
+      !op.some((p) => p.id === selectedFloorPlanId)
+    ) {
+      setSelectedFloorPlanId(
+        op.find((p) => p.isDefault === true)?.id ?? op[0]?.id ?? null,
+      );
+    }
+  }, [open, floorPlans, selectedFloorPlanId]);
 
   useEffect(() => {
     if (!open) return;
@@ -397,37 +445,26 @@ export function ReservationFloorMapPicker({
   }, [floorPlans, selectedFloorPlanId]);
 
   const planSize = useMemo(
-    () => floorPlanSizeForPicker(selectedFloorPlan),
-    [selectedFloorPlan],
+    () => resolveFloorPlanCanvasSize(selectedFloorPlan, floorPlans),
+    [selectedFloorPlan, floorPlans],
   );
 
-  const activeFloorPlanHasElements = useMemo(() => {
-    if (!selectedFloorPlanId) return false;
-    return tables.some(
-      (element) =>
-        element.isActive !== false &&
-        element.floorPlanId === selectedFloorPlanId,
-    );
-  }, [tables, selectedFloorPlanId]);
-
   const planElementsForPicker = useMemo(() => {
-    const activeElements = tables.filter((element) => element.isActive !== false);
-    if (!selectedFloorPlanId) return activeElements;
-    if (!activeFloorPlanHasElements) return activeElements;
-    return activeElements.filter(
-      (element) => element.floorPlanId === selectedFloorPlanId,
+    const activeElements = tables.filter(
+      (element) => element.isActive !== false,
     );
-  }, [tables, selectedFloorPlanId, activeFloorPlanHasElements]);
+    if (!selectedFloorPlanId) return activeElements;
+    return activeElements.filter((element) =>
+      entityBelongsToFloorPlan(element, selectedFloorPlanId, floorPlans),
+    );
+  }, [tables, selectedFloorPlanId, floorPlans]);
 
   const zonesForPicker = useMemo(() => {
     if (!selectedFloorPlanId) return zonesList;
-    const scoped = zonesList.filter(
-      (zone) => zone.floorPlanId === selectedFloorPlanId,
+    return zonesList.filter((zone) =>
+      entityBelongsToFloorPlan(zone, selectedFloorPlanId, floorPlans),
     );
-    return scoped.length > 0
-      ? scoped
-      : zonesList.filter((zone) => !zone.floorPlanId);
-  }, [zonesList, selectedFloorPlanId]);
+  }, [zonesList, selectedFloorPlanId, floorPlans]);
 
   const mapTablesForPicker = useMemo(() => {
     const list = filterTablesForTpvMap(planElementsForPicker);
@@ -624,13 +661,24 @@ export function ReservationFloorMapPicker({
     if (!selectedMainTableId || assignDisabledReason) return;
     const table = tablesById.get(selectedMainTableId);
     if (!table) return;
+    const plan =
+      floorPlans.find((p) => p.id === selectedFloorPlanId) ?? null;
     onConfirm({
       tableId: table.id,
       tableLabel: table.name,
+      floorPlanId: selectedFloorPlanId?.trim() ?? "",
+      floorName: plan?.name?.trim() ?? "",
       zoneId: table.zoneId ?? "",
       zoneName: table.zoneName ?? table.zone ?? "",
     });
-  }, [selectedMainTableId, assignDisabledReason, tablesById, onConfirm]);
+  }, [
+    selectedMainTableId,
+    assignDisabledReason,
+    tablesById,
+    onConfirm,
+    floorPlans,
+    selectedFloorPlanId,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -688,7 +736,7 @@ export function ReservationFloorMapPicker({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {floorPlans.length > 1 ? (
+              {operationalFloorPlans.length > 1 ? (
                 <label className="flex flex-col gap-0.5 text-[11px] font-bold uppercase tracking-wide text-[var(--hostly-navy-mid,#334155)]">
                   Plano
                   <select
@@ -698,7 +746,7 @@ export function ReservationFloorMapPicker({
                       setSelectedFloorPlanId(e.target.value.trim() || null)
                     }
                   >
-                    {floorPlans.map((p) => (
+                    {operationalFloorPlans.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
@@ -812,6 +860,7 @@ export function ReservationFloorMapPicker({
                     editorPlanSurface
                     editorVisualPreset="premium"
                     mapLayoutEmphasis
+                    hideZoneOverlays
                     viewportFitPaddingPx={16}
                     viewportFitMode="content"
                     viewportFitElements={planElementsForPicker}

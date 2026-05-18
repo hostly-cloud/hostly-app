@@ -38,7 +38,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
 import {
   EditableFloorMap,
-  type FloorPlanCanvasSize,
   type FloorSurfacePresetId,
   type EditableFloorMapViewportControls,
 } from "@/components/map/EditableFloorMap";
@@ -56,11 +55,16 @@ import {
   type PlanElementType,
 } from "@/lib/firestore/tables";
 import {
+  canvasSizeForNewFloorPlan,
   createDefaultFloorPlanIfNeeded,
   createFloorPlan,
-  DEFAULT_FLOOR_PLAN_HEIGHT,
-  DEFAULT_FLOOR_PLAN_WIDTH,
+  duplicateFloorPlan,
+  entityBelongsToFloorPlan,
   getFloorPlans,
+  legacyUnscopedFloorPlanAnchorId,
+  moveFloorPlanOrder,
+  slugifyFloorPlanName,
+  updateFloorPlan,
   type FloorPlan,
 } from "@/lib/firestore/floorPlans";
 import {
@@ -1038,23 +1042,6 @@ function sortFloorPlansForSelector(list: FloorPlan[]): FloorPlan[] {
   });
 }
 
-function floorPlanSizeForEditor(plan: FloorPlan | null | undefined): FloorPlanCanvasSize {
-  return {
-    width:
-      typeof plan?.width === "number" &&
-      Number.isFinite(plan.width) &&
-      plan.width > 0
-        ? plan.width
-        : DEFAULT_FLOOR_PLAN_WIDTH,
-    height:
-      typeof plan?.height === "number" &&
-      Number.isFinite(plan.height) &&
-      plan.height > 0
-        ? plan.height
-        : DEFAULT_FLOOR_PLAN_HEIGHT,
-  };
-}
-
 function nextUniqueZoneBaseName(baseName: string, zones: Zone[]): string {
   const names = new Set(zones.map((z) => z.name.trim()));
   const base = baseName.trim();
@@ -1514,28 +1501,36 @@ export default function ConfigMesasPage({
     return floorPlans.find((p) => p.id === selectedFloorPlanId) ?? null;
   }, [floorPlans, selectedFloorPlanId]);
 
-  const selectedFloorPlanSize = useMemo(
-    () => floorPlanSizeForEditor(selectedFloorPlan),
-    [selectedFloorPlan],
+  /**
+   * Mundo del mapa en config: un solo lienzo lógico para todos los planos (= canvas del plano canónico,
+   * igual que al crear un plano nuevo). Así zoom 100 %, ajuste y clamp no dependen del plano seleccionado.
+   */
+  const mapEditorWorldSize = useMemo(
+    () => canvasSizeForNewFloorPlan(floorPlans),
+    [floorPlans],
+  );
+
+  /**
+   * Ancla legacy (mesas/zonas sin `floorPlanId`): mismo id en editor y TPV.
+   */
+  const legacyFloorPlanAnchorId = useMemo(
+    () => legacyUnscopedFloorPlanAnchorId(floorPlans),
+    [floorPlans],
   );
 
   const visibleElements = useMemo(() => {
-    return elements.filter((el) => {
-      if (el.floorPlanId) {
-        return el.floorPlanId === selectedFloorPlanId;
-      }
-      return true;
-    });
-  }, [elements, selectedFloorPlanId]);
+    if (!selectedFloorPlanId) return [];
+    return elements.filter((el) =>
+      entityBelongsToFloorPlan(el, selectedFloorPlanId, floorPlans),
+    );
+  }, [elements, selectedFloorPlanId, floorPlans]);
 
   const visibleZones = useMemo(() => {
-    return zones.filter((z) => {
-      if (z.floorPlanId) {
-        return z.floorPlanId === selectedFloorPlanId;
-      }
-      return true;
-    });
-  }, [zones, selectedFloorPlanId]);
+    if (!selectedFloorPlanId) return [];
+    return zones.filter((z) =>
+      entityBelongsToFloorPlan(z, selectedFloorPlanId, floorPlans),
+    );
+  }, [zones, selectedFloorPlanId, floorPlans]);
 
   const canReorderSelectionFront = useMemo(() => {
     if (selectedIds.length < 1) return false;
@@ -1571,6 +1566,25 @@ export default function ConfigMesasPage({
 
   const [mapFitNonce, setMapFitNonce] = useState(0);
   const prevVisibleCountRef = useRef(-1);
+
+  /** Al cambiar de plano: selección y cámara no deben “arrastrar” el contexto visual anterior. */
+  useEffect(() => {
+    if (!selectedFloorPlanId) return;
+    setSelectedIds([]);
+    setSelectedZoneId(null);
+    setEditingZones(false);
+    setSelectionScreenRect(null);
+    setZoneHudScreenRect(null);
+    setPlacementRequest(null);
+    setPreferredPlacementMapPoint(null);
+    setZoneHighlight("all");
+    setMapFitNonce((n) => n + 1);
+    const raf = requestAnimationFrame(() => {
+      mapViewportControlsRef.current?.fitToViewport();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [selectedFloorPlanId]);
+
   useEffect(() => {
     if (!premiumSpatialEditor) return;
     const n = visibleElements.length;
@@ -1794,9 +1808,8 @@ export default function ConfigMesasPage({
       if (selectedIds.length < 2) return;
       const refSid = String(selectedIds[0]).trim();
       const restSids = selectedIds.slice(1).map((s) => String(s).trim());
-      const floor = document.querySelector<HTMLElement>(".hostly-floor-editor-map");
-      const floorW = floor?.clientWidth ?? 0;
-      const floorH = floor?.clientHeight ?? 0;
+      const floorW = mapEditorWorldSize.width;
+      const floorH = mapEditorWorldSize.height;
 
       const persistLater: {
         id: string;
@@ -1871,16 +1884,22 @@ export default function ConfigMesasPage({
 
       setHasUnsavedChanges(true);
     },
-    [selectedIds, editingZones, persistElementZoneFromLayout, commitElements],
+    [
+      selectedIds,
+      editingZones,
+      persistElementZoneFromLayout,
+      commitElements,
+      mapEditorWorldSize.width,
+      mapEditorWorldSize.height,
+    ],
   );
 
   const distributeSelectedElements = useCallback(
     (axis: "horizontal" | "vertical") => {
       if (editingZones) return;
       if (selectedIds.length < 3) return;
-      const floor = document.querySelector<HTMLElement>(".hostly-floor-editor-map");
-      const floorW = floor?.clientWidth ?? 0;
-      const floorH = floor?.clientHeight ?? 0;
+      const floorW = mapEditorWorldSize.width;
+      const floorH = mapEditorWorldSize.height;
 
       const persistLater: {
         id: string;
@@ -1952,16 +1971,22 @@ export default function ConfigMesasPage({
 
       setHasUnsavedChanges(true);
     },
-    [selectedIds, editingZones, persistElementZoneFromLayout, commitElements],
+    [
+      selectedIds,
+      editingZones,
+      persistElementZoneFromLayout,
+      commitElements,
+      mapEditorWorldSize.width,
+      mapEditorWorldSize.height,
+    ],
   );
 
   const handleMove = useCallback(
     async (id: string, x: number, y: number) => {
       if (!restaurantId || !isFirebaseConfigured) return;
       if (editingZones) return;
-      const floor = document.querySelector<HTMLElement>(".hostly-floor-editor-map");
-      const floorW = floor?.clientWidth ?? 0;
-      const floorH = floor?.clientHeight ?? 0;
+      const floorW = mapEditorWorldSize.width;
+      const floorH = mapEditorWorldSize.height;
       const moved = elements.find((el) => el.id === id);
       if (moved && floorW > 0 && floorH > 0) {
         const def = getDefaultSizeForPlanElementType(moved.type);
@@ -1981,7 +2006,15 @@ export default function ConfigMesasPage({
       }
       setHasUnsavedChanges(true);
     },
-    [restaurantId, editingZones, elements, persistElementZoneFromLayout, commitElements],
+    [
+      restaurantId,
+      editingZones,
+      elements,
+      persistElementZoneFromLayout,
+      commitElements,
+      mapEditorWorldSize.width,
+      mapEditorWorldSize.height,
+    ],
   );
 
   const handleMoveMany = useCallback(
@@ -1989,11 +2022,8 @@ export default function ConfigMesasPage({
       if (!restaurantId || !isFirebaseConfigured) return;
       if (editingZones) return;
       if (updates.length === 0) return;
-      const floor = document.querySelector<HTMLElement>(
-        ".hostly-floor-editor-map",
-      );
-      const floorW = floor?.clientWidth ?? 0;
-      const floorH = floor?.clientHeight ?? 0;
+      const floorW = mapEditorWorldSize.width;
+      const floorH = mapEditorWorldSize.height;
 
       const nextCoords = new Map(
         updates.map((u) => [String(u.id).trim(), { x: u.x, y: u.y }] as const),
@@ -2044,6 +2074,8 @@ export default function ConfigMesasPage({
       elements,
       persistElementZoneFromLayout,
       commitElements,
+      mapEditorWorldSize.width,
+      mapEditorWorldSize.height,
     ],
   );
 
@@ -2578,9 +2610,8 @@ export default function ConfigMesasPage({
     const def = getDefaultSizeForPlanElementType(selectedElement.type);
     const width = selectedElement.width ?? def.width;
     const height = selectedElement.height ?? def.height;
-    const floor = document.querySelector<HTMLElement>(".hostly-floor-editor-map");
-    const floorW = floor?.clientWidth ?? 0;
-    const floorH = floor?.clientHeight ?? 0;
+    const floorW = mapEditorWorldSize.width;
+    const floorH = mapEditorWorldSize.height;
     let x = snapToGrid((selectedElement.x ?? 0) + DUPLICATE_OFFSET);
     let y = snapToGrid((selectedElement.y ?? 0) + DUPLICATE_OFFSET);
     if (floorW > 0 && floorH > 0) {
@@ -2623,16 +2654,23 @@ export default function ConfigMesasPage({
           }
         : {}),
     });
-  }, [selectedElement, restaurantId, elements, editingZones, createFloorElement]);
+  }, [
+    selectedElement,
+    restaurantId,
+    elements,
+    editingZones,
+    createFloorElement,
+    mapEditorWorldSize.width,
+    mapEditorWorldSize.height,
+  ]);
 
   const handleDuplicateSelection = useCallback(() => {
     if (!restaurantId || !isFirebaseConfigured) return;
     if (editingZones) return;
     if (selectedIds.length < 1) return;
 
-    const floor = document.querySelector<HTMLElement>(".hostly-floor-editor-map");
-    const floorW = floor?.clientWidth ?? 0;
-    const floorH = floor?.clientHeight ?? 0;
+    const floorW = mapEditorWorldSize.width;
+    const floorH = mapEditorWorldSize.height;
 
     let cloneCount = 0;
 
@@ -2723,6 +2761,8 @@ export default function ConfigMesasPage({
     editingZones,
     commitElements,
     selectedFloorPlanId,
+    mapEditorWorldSize.width,
+    mapEditorWorldSize.height,
   ]);
 
   const copySelectionToClipboard = useCallback(() => {
@@ -2742,9 +2782,8 @@ export default function ConfigMesasPage({
     if (editingZones) return;
     if (!clipboardElements || clipboardElements.length === 0) return;
 
-    const floor = document.querySelector<HTMLElement>(".hostly-floor-editor-map");
-    const floorW = floor?.clientWidth ?? 0;
-    const floorH = floor?.clientHeight ?? 0;
+    const floorW = mapEditorWorldSize.width;
+    const floorH = mapEditorWorldSize.height;
 
     let cloneCount = 0;
 
@@ -2825,6 +2864,8 @@ export default function ConfigMesasPage({
     clipboardElements,
     commitElements,
     selectedFloorPlanId,
+    mapEditorWorldSize.width,
+    mapEditorWorldSize.height,
   ]);
 
   const handleDeleteSelection = useCallback(() => {
@@ -3165,8 +3206,8 @@ export default function ConfigMesasPage({
         id: created.id,
         restaurantId,
         name: created.name,
-        width: DEFAULT_FLOOR_PLAN_WIDTH,
-        height: DEFAULT_FLOOR_PLAN_HEIGHT,
+        width: created.width,
+        height: created.height,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -3185,20 +3226,81 @@ export default function ConfigMesasPage({
         const merged = withCreated.length > 0 ? withCreated : prev;
         return sortFloorPlansForSelector(merged);
       });
-      if (premiumSpatialEditor) {
-        await runPremiumVenueBaseline(created.id);
-      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       window.alert(`No se pudo crear el plano.\n\nDetalle: ${detail}`);
     }
-  }, [restaurantId, premiumSpatialEditor, runPremiumVenueBaseline]);
+  }, [restaurantId]);
+
+  const handleRenameSelectedFloorPlan = useCallback(async () => {
+    if (!restaurantId || !isFirebaseConfigured || !selectedFloorPlanId) return;
+    const plan = floorPlans.find((p) => p.id === selectedFloorPlanId);
+    const raw = window.prompt("Nombre del plano", plan?.name ?? "");
+    if (raw == null) return;
+    const name = raw.trim();
+    if (!name) return;
+    try {
+      await updateFloorPlan(selectedFloorPlanId, {
+        name,
+        slug: slugifyFloorPlanName(name),
+      });
+      const updated = await getFloorPlans(restaurantId);
+      setFloorPlans(sortFloorPlansForSelector(updated));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      window.alert(`No se pudo renombrar el plano.\n\nDetalle: ${detail}`);
+    }
+  }, [restaurantId, isFirebaseConfigured, selectedFloorPlanId, floorPlans]);
+
+  const handleDuplicateSelectedFloorPlan = useCallback(async () => {
+    if (!restaurantId || !isFirebaseConfigured || !selectedFloorPlanId) return;
+    try {
+      const created = await duplicateFloorPlan(restaurantId, selectedFloorPlanId);
+      const updated = await getFloorPlans(restaurantId);
+      setFloorPlans(sortFloorPlansForSelector(updated));
+      setSelectedFloorPlanId(created.id);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      window.alert(`No se pudo duplicar el plano.\n\nDetalle: ${detail}`);
+    }
+  }, [restaurantId, isFirebaseConfigured, selectedFloorPlanId]);
+
+  const handleToggleSelectedFloorPlanActive = useCallback(async () => {
+    if (!restaurantId || !isFirebaseConfigured || !selectedFloorPlanId) return;
+    const plan = floorPlans.find((p) => p.id === selectedFloorPlanId);
+    const currentlyActive = plan?.active !== false;
+    try {
+      await updateFloorPlan(selectedFloorPlanId, { active: !currentlyActive });
+      const updated = await getFloorPlans(restaurantId);
+      setFloorPlans(sortFloorPlansForSelector(updated));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      window.alert(`No se pudo actualizar el plano.\n\nDetalle: ${detail}`);
+    }
+  }, [restaurantId, isFirebaseConfigured, selectedFloorPlanId, floorPlans]);
+
+  const handleMoveSelectedFloorPlanOrder = useCallback(
+    async (direction: "up" | "down") => {
+      if (!restaurantId || !isFirebaseConfigured || !selectedFloorPlanId) return;
+      try {
+        await moveFloorPlanOrder(restaurantId, selectedFloorPlanId, direction);
+        const updated = await getFloorPlans(restaurantId);
+        setFloorPlans(sortFloorPlansForSelector(updated));
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        window.alert(`No se pudo reordenar.\n\nDetalle: ${detail}`);
+      }
+    },
+    [restaurantId, isFirebaseConfigured, selectedFloorPlanId],
+  );
 
   useEffect(() => {
     if (!premiumSpatialEditor || !restaurantId || !isFirebaseConfigured) return;
     if (configuracionMapEditorLayout) return;
     if (!selectedFloorPlanId || loading || editingZones) return;
     if (visibleElements.length > 0) return;
+    /** Solo el plano ancla legacy se auto-rellena vacío; planos nuevos permanecen en blanco. */
+    if (legacyFloorPlanAnchorId !== selectedFloorPlanId) return;
     let cancelled = false;
     void (async () => {
       await runPremiumVenueBaseline(selectedFloorPlanId);
@@ -3216,6 +3318,7 @@ export default function ConfigMesasPage({
     loading,
     editingZones,
     visibleElements.length,
+    legacyFloorPlanAnchorId,
     runPremiumVenueBaseline,
   ]);
 
@@ -3311,8 +3414,8 @@ export default function ConfigMesasPage({
         {
           id: selectedFloorPlanId,
           restaurantId,
-          width: selectedFloorPlanSize.width,
-          height: selectedFloorPlanSize.height,
+          width: mapEditorWorldSize.width,
+          height: mapEditorWorldSize.height,
           updatedAt: serverTimestamp(),
         } as DocumentData,
         { merge: true },
@@ -3458,7 +3561,7 @@ export default function ConfigMesasPage({
     loadedZones,
     areaTemplateBusy,
     selectedFloorPlanId,
-    selectedFloorPlanSize,
+    mapEditorWorldSize,
   ]);
 
   const handleDiscardPlanChanges = useCallback(() => {
@@ -4027,6 +4130,7 @@ export default function ConfigMesasPage({
               {floorPlans.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
+                  {p.active === false ? " (inactivo)" : ""}
                 </option>
               ))}
             </select>
@@ -4145,6 +4249,7 @@ export default function ConfigMesasPage({
                 {floorPlans.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
+                    {p.active === false ? " (inactivo)" : ""}
                   </option>
                 ))}
               </select>
@@ -4159,6 +4264,56 @@ export default function ConfigMesasPage({
               >
                 Nuevo plano
               </button>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 6,
+                  marginTop: 4,
+                  width: "100%",
+                }}
+              >
+                <button
+                  type="button"
+                  style={{ ...smallBtn, fontSize: 11, padding: "4px 8px" }}
+                  disabled={!selectedFloorPlanId || editingZones}
+                  onClick={() => void handleRenameSelectedFloorPlan()}
+                >
+                  Renombrar
+                </button>
+                <button
+                  type="button"
+                  style={{ ...smallBtn, fontSize: 11, padding: "4px 8px" }}
+                  disabled={!selectedFloorPlanId || editingZones}
+                  onClick={() => void handleDuplicateSelectedFloorPlan()}
+                >
+                  Duplicar
+                </button>
+                <button
+                  type="button"
+                  style={{ ...smallBtn, fontSize: 11, padding: "4px 8px" }}
+                  disabled={!selectedFloorPlanId || editingZones}
+                  onClick={() => void handleToggleSelectedFloorPlanActive()}
+                >
+                  {selectedFloorPlan?.active === false ? "Activar" : "Desactivar"}
+                </button>
+                <button
+                  type="button"
+                  style={{ ...smallBtn, fontSize: 11, padding: "4px 8px" }}
+                  disabled={!selectedFloorPlanId || editingZones}
+                  onClick={() => void handleMoveSelectedFloorPlanOrder("up")}
+                >
+                  Subir
+                </button>
+                <button
+                  type="button"
+                  style={{ ...smallBtn, fontSize: 11, padding: "4px 8px" }}
+                  disabled={!selectedFloorPlanId || editingZones}
+                  onClick={() => void handleMoveSelectedFloorPlanOrder("down")}
+                >
+                  Bajar
+                </button>
+              </div>
             </div>
           </div>
         )
@@ -4215,6 +4370,7 @@ export default function ConfigMesasPage({
                 {floorPlans.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
+                    {p.active === false ? " (inactivo)" : ""}
                   </option>
                 ))}
               </select>
@@ -4238,6 +4394,59 @@ export default function ConfigMesasPage({
                 >
                   Nuevo
                 </button>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 6,
+                  marginTop: 8,
+                }}
+              >
+                <button
+                  type="button"
+                  style={mapToolboxGhostSm}
+                  disabled={!selectedFloorPlanId || editingZones}
+                  onClick={() => void handleRenameSelectedFloorPlan()}
+                >
+                  Renombrar
+                </button>
+                <button
+                  type="button"
+                  style={mapToolboxGhostSm}
+                  disabled={!selectedFloorPlanId || editingZones}
+                  onClick={() => void handleDuplicateSelectedFloorPlan()}
+                >
+                  Duplicar
+                </button>
+                <button
+                  type="button"
+                  style={mapToolboxGhostSm}
+                  disabled={!selectedFloorPlanId || editingZones}
+                  onClick={() => void handleToggleSelectedFloorPlanActive()}
+                >
+                  {selectedFloorPlan?.active === false ? "Activar" : "Desactivar"}
+                </button>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button
+                    type="button"
+                    style={{ ...mapToolboxGhostSm, flex: 1, minWidth: 0 }}
+                    disabled={!selectedFloorPlanId || editingZones}
+                    title="Subir en la lista"
+                    onClick={() => void handleMoveSelectedFloorPlanOrder("up")}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    style={{ ...mapToolboxGhostSm, flex: 1, minWidth: 0 }}
+                    disabled={!selectedFloorPlanId || editingZones}
+                    title="Bajar en la lista"
+                    onClick={() => void handleMoveSelectedFloorPlanOrder("down")}
+                  >
+                    ↓
+                  </button>
+                </div>
               </div>
               <button
                 type="button"
@@ -5168,11 +5377,12 @@ export default function ConfigMesasPage({
               <EditableFloorMap
                 editable
                 editorPlanSurface
+                hideZoneOverlays={!editingZones}
                 editorVisualPreset={
                   premiumSpatialEditor ? "premium" : "default"
                 }
                 floorSurfacePreset={floorSurfacePreset}
-                planSize={selectedFloorPlanSize}
+                planSize={mapEditorWorldSize}
                 className="hostly-floor-editor-map"
                 createType={activeCreateType}
                 elements={visibleElements}
@@ -5231,7 +5441,8 @@ export default function ConfigMesasPage({
                     ? 12
                     : undefined
                 }
-                viewportFitMode="content"
+                /** "plan": el encuadre usa width/height del floor plan. "content" vacío caía a bounds 800×560 y el marco del lienzo parecía un recuadro interior. */
+                viewportFitMode="plan"
                 viewportFitElements={visibleElements}
                 viewportFitZones={visibleZones}
                 viewportFitZoomMax={

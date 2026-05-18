@@ -103,6 +103,9 @@ export function OperacionModuleShell({
       <div style={contentStyle}>{children}</div>
       <style>{`
         @media (max-width: 767.98px) {
+          .hostly-operation-shell[data-operation-module="tpv"] {
+            background: var(--hostly-surface-page) !important;
+          }
           .hostly-operation-shell[data-operation-module="tpv"]
             .hostly-operation-topbar {
             min-height: 26px !important;

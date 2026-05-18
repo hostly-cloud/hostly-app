@@ -17,6 +17,7 @@ import {
   type PlanElementType,
   type Table,
 } from "@/lib/firestore/tables";
+import type { FloorPlanCanvasSize } from "@/lib/firestore/floorPlans";
 import { inferSpatialAreaVisual } from "@/lib/map/editor-spatial-visual";
 import {
   MAP_TABLE_CHAIR_BORDER,
@@ -25,6 +26,8 @@ import {
   mapTableChairLayouts,
   mapTableSeatCount,
 } from "./map-table-chairs-visual";
+
+export type { FloorPlanCanvasSize } from "@/lib/firestore/floorPlans";
 
 export const DEFAULT_MAP_TILE_WIDTH =
   getDefaultSizeForPlanElementType("table").width;
@@ -54,11 +57,6 @@ export type FloorSurfacePresetId =
   | "cement"
   | "lightWood"
   | "slate";
-
-export type FloorPlanCanvasSize = {
-  width: number;
-  height: number;
-};
 
 const FLOOR_SURFACE_PRESETS: Record<
   FloorSurfacePresetId,
@@ -142,6 +140,22 @@ function clampPositionKeepVisible(
     x: clamp(x, minX, maxX),
     y: clamp(y, minY, maxY),
   };
+}
+
+/**
+ * Editor de planos (superficie operativa): la etiqueta escala con el área lógica del tile
+ * para que al agrandar mesa/cama/tumbona el nombre siga proporcionado (TPV no usa `editorPlanSurface`).
+ */
+function editorOperativoSurfaceLabelFontPx(
+  mapTileWidth: number,
+  mapTileHeight: number,
+  selected: boolean,
+): number {
+  const area = Math.max(1, mapTileWidth) * Math.max(1, mapTileHeight);
+  const geo = Math.sqrt(area);
+  const bump = selected ? 0.75 : 0;
+  const raw = geo * 0.132 + bump;
+  return Math.round(clamp(raw, 10, 20) * 4) / 4;
 }
 
 export type FloorMapRenderContext = {
@@ -248,6 +262,11 @@ export type EditableFloorMapProps = {
   viewportFitPaddingPx?: number;
   /** Editor de plano “denso”: mesas más presentes, encaje algo más cercano, lienzo con más relieve. */
   mapLayoutEmphasis?: boolean;
+  /**
+   * Oculta la capa visual de zonas (rectángulos de ambiente). En edición de zonas
+   * (`editingZones`) se fuerza la capa visible para no bloquear el layout.
+   */
+  hideZoneOverlays?: boolean;
   /** Ref con `selectedIds` actualizado en el mismo tick que `onSelect` (arrastre en grupo). */
   selectedIdsRef?: MutableRefObject<string[]>;
   /** Rectángulo de pantalla del bloque seleccionado (toolbar contextual). */
@@ -705,6 +724,7 @@ export function EditableFloorMap({
   viewportControlsRef,
   viewportFitPaddingPx,
   mapLayoutEmphasis = false,
+  hideZoneOverlays = false,
   selectedIdsRef,
   onSelectionScreenRect,
   onZoneScreenRect,
@@ -718,6 +738,7 @@ export function EditableFloorMap({
     }
     return map;
   })();
+  const showZoneLayer = !hideZoneOverlays || editingZones;
   const floorRef = useRef<HTMLDivElement | null>(null);
   const spaceHeldRef = useRef(false);
   const panRef = useRef({ x: 0, y: 0 });
@@ -1691,7 +1712,7 @@ export function EditableFloorMap({
           }}
         >
           {logicalFrameStyle ? <div aria-hidden style={logicalFrameStyle} /> : null}
-          {zones
+          {zones && showZoneLayer
             ? zones.map((z) => {
                 const hasRect =
                   typeof z.x === "number" &&
@@ -2035,7 +2056,7 @@ export function EditableFloorMap({
           pointerEvents: "none",
         }}
       >
-        {zones
+        {zones && showZoneLayer
           ? zones.map((z) => {
               const hasRect =
                 typeof z.x === "number" &&
@@ -2309,6 +2330,14 @@ export function EditableFloorMap({
             element.type === "sunbed" ||
             element.type === "bed" ||
             element.type === "custom";
+          const editorOperativoLabelPx =
+            editorPlanSurface && operativoSuperficie
+              ? editorOperativoSurfaceLabelFontPx(
+                  mapTileWidth,
+                  mapTileHeight,
+                  selected,
+                )
+              : null;
           if (
             editorVisualPreset === "premium" &&
             operativoSuperficie &&
@@ -2377,7 +2406,10 @@ export function EditableFloorMap({
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 2,
+                gap:
+                  editorOperativoLabelPx != null
+                    ? Math.max(1, Math.round(editorOperativoLabelPx * 0.12))
+                    : 2,
                 cursor: panSession
                   ? "grabbing"
                   : spacePressed
@@ -2658,7 +2690,16 @@ export function EditableFloorMap({
                     width: "100%",
                     maxWidth: "calc(100% - 12px)",
                     fontWeight: selected ? 800 : 600,
-                    fontSize: selected ? 13 : 12,
+                    fontSize:
+                      editorOperativoLabelPx != null
+                        ? clamp(
+                            editorOperativoLabelPx + (selected ? 0.35 : 0),
+                            11,
+                            18,
+                          )
+                        : selected
+                          ? 13
+                          : 12,
                     color: "#0f172a",
                     textAlign: "center",
                     padding: "2px 4px",
@@ -2689,17 +2730,31 @@ export function EditableFloorMap({
                           ? 800
                           : 600,
                     fontSize:
-                      editorVisualPreset === "premium" && operativoSuperficie
-                        ? selected
-                          ? mapLayoutEmphasis
-                            ? 14.5
-                            : 14
-                          : mapLayoutEmphasis
-                            ? 13.5
-                            : 13
-                        : selected
-                          ? 13
-                          : 12,
+                      editorOperativoLabelPx != null
+                        ? editorOperativoLabelPx +
+                          (darkDecorLabel
+                            ? 0
+                            : editorVisualPreset === "premium" &&
+                                operativoSuperficie
+                              ? 0.35
+                              : 0)
+                        : editorVisualPreset === "premium" && operativoSuperficie
+                          ? selected
+                            ? mapLayoutEmphasis
+                              ? 14.5
+                              : 14
+                            : mapLayoutEmphasis
+                              ? 13.5
+                              : 13
+                          : selected
+                            ? 13
+                            : 12,
+                    maxWidth: "100%",
+                    boxSizing: "border-box",
+                    padding:
+                      editorOperativoLabelPx != null
+                        ? `0 ${Math.max(4, Math.min(14, Math.round(editorOperativoLabelPx * 0.42)))}px`
+                        : "0 6px",
                     color: darkDecorLabel
                       ? selected
                         ? "#f8fafc"
@@ -2714,8 +2769,12 @@ export function EditableFloorMap({
                           ? "#0f172a"
                           : "#1e293b",
                     textAlign: "center",
-                    padding: "0 6px",
-                    lineHeight: 1.25,
+                    lineHeight:
+                      editorOperativoLabelPx != null
+                        ? editorOperativoLabelPx >= 15
+                          ? 1.2
+                          : 1.22
+                        : 1.25,
                     textShadow:
                       editorVisualPreset === "premium" && operativoSuperficie
                         ? mapLayoutEmphasis
