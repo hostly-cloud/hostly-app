@@ -15,6 +15,7 @@ import {
 import type { Firestore } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createPortal } from "react-dom";
 import type { CSSProperties, WheelEvent as ReactWheelEvent } from "react";
 import {
   useCallback,
@@ -1591,6 +1592,15 @@ export function CartaPageContent({
   >("all");
   /** Filtro de camarero en mapa: todas, las del usuario actual, o id de usuario. */
   const [waiterFilter, setWaiterFilter] = useState<"all" | "me" | string>("all");
+  /** Menú compacto de cambio de plano (TPV mapa); solo UX, misma `setSelectedTpvFloorPlanId`. */
+  const [tpvFloorPlanMenuOpen, setTpvFloorPlanMenuOpen] = useState(false);
+  const tpvFloorPlanMenuRef = useRef<HTMLDivElement | null>(null);
+  const tpvFloorPlanMenuPanelRef = useRef<HTMLDivElement | null>(null);
+  const [tpvFloorPlanMenuRect, setTpvFloorPlanMenuRect] = useState<{
+    top: number;
+    left: number;
+    minWidth: number;
+  } | null>(null);
 
   useEffect(() => {
     setWaiterFilter(readStoredMapWaiterFilter());
@@ -1603,6 +1613,86 @@ export function CartaPageContent({
       /* ignore */
     }
   }, [waiterFilter]);
+
+  useEffect(() => {
+    if (!tpvFloorPlanMenuOpen || !cartaHeaderMobile) return;
+    const onDocPointer = (e: PointerEvent) => {
+      const t = e.target as Node;
+      const wrap = tpvFloorPlanMenuRef.current;
+      const panel = tpvFloorPlanMenuPanelRef.current;
+      if (wrap?.contains(t) || panel?.contains(t)) return;
+      setTpvFloorPlanMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTpvFloorPlanMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onDocPointer, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDocPointer, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [tpvFloorPlanMenuOpen, cartaHeaderMobile]);
+
+  useEffect(() => {
+    if (!tpvFloorPlanMenuOpen || !cartaHeaderMobile) return;
+    const onScroll = () => setTpvFloorPlanMenuOpen(false);
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, [tpvFloorPlanMenuOpen, cartaHeaderMobile]);
+
+  useLayoutEffect(() => {
+    if (!tpvFloorPlanMenuOpen || !cartaHeaderMobile) {
+      setTpvFloorPlanMenuRect(null);
+      return;
+    }
+    const place = () => {
+      const wrap = tpvFloorPlanMenuRef.current;
+      if (!wrap) return;
+      const trig = wrap.querySelector(
+        ".carta-tpv-floor-plan-trigger",
+      ) as HTMLElement | null;
+      if (!trig) return;
+      const br = trig.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const pad = 10;
+      const targetW = Math.min(260, Math.max(200, br.width));
+      let left = br.left;
+      if (left + targetW > vw - pad) {
+        left = Math.max(pad, vw - pad - targetW);
+      }
+      if (left < pad) left = pad;
+      let top = br.bottom + 6;
+      const estH = Math.min(288, vh * 0.46);
+      if (top + estH > vh - pad) {
+        top = Math.max(pad, br.top - estH - 6);
+      }
+      setTpvFloorPlanMenuRect({
+        top,
+        left,
+        minWidth: targetW,
+      });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [tpvFloorPlanMenuOpen, cartaHeaderMobile]);
+
+  useEffect(() => {
+    setTpvFloorPlanMenuOpen(false);
+  }, [selectedTpvFloorPlanId]);
+
+  useEffect(() => {
+    if (!cartaHeaderMobile) setTpvFloorPlanMenuOpen(false);
+  }, [cartaHeaderMobile]);
+
+  const selectOperationalTpvFloorPlan = useCallback((planId: string) => {
+    setSelectedTpvFloorPlanId(planId);
+    setMapZoneFilter("__all__");
+    setActiveMapFilter("all");
+    setTpvFloorPlanMenuOpen(false);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -7336,6 +7426,43 @@ export function CartaPageContent({
   line-height: 1 !important;
 }
 
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-wrap {
+  flex: 0 0 auto !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-trigger {
+  max-width: min(148px, 30vw) !important;
+  min-height: 20px !important;
+  height: 20px !important;
+  max-height: 20px !important;
+  padding: 1px 6px 1px 5px !important;
+  gap: 3px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-trigger-label {
+  display: none !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-trigger-name {
+  font-size: 8.5px !important;
+  font-weight: 750 !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-trigger-chevron {
+  font-size: 8px !important;
+}
+
+.carta-tpv-floor-plan-menu--portal[data-carta-tpv-compact-menu="true"] {
+  min-width: min(220px, calc(100vw - 20px)) !important;
+  max-height: min(260px, 50vh) !important;
+  padding: 4px !important;
+}
+
+.carta-tpv-floor-plan-menu--portal[data-carta-tpv-compact-menu="true"] .carta-tpv-floor-plan-option {
+  padding: 7px 8px !important;
+  font-size: 12px !important;
+}
+
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-summary-status {
   flex: 0 0 auto !important;
   width: auto !important;
@@ -7471,6 +7598,231 @@ export function CartaPageContent({
   color: var(--hostly-ink);
   cursor: pointer;
   box-sizing: border-box;
+}
+
+.carta-tpv-floor-plan-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+  z-index: 4;
+}
+
+/* Desktop/tablet (≥768px): pills segmentadas; móvil sigue con chip + popover. */
+.carta-tpv-floor-plan-seg {
+  display: flex;
+  flex: 0 1 auto;
+  align-self: center;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: min(400px, 48vw);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  padding: 1px 0 2px;
+  box-sizing: border-box;
+  flex-shrink: 1;
+  z-index: 4;
+}
+
+.carta-tpv-floor-plan-seg::-webkit-scrollbar {
+  height: 3px;
+}
+
+.carta-tpv-floor-plan-seg::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+}
+
+.carta-tpv-floor-plan-seg-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 3px 11px;
+  min-height: 26px;
+  max-width: 148px;
+  border-radius: 999px;
+  border: 1px solid var(--hostly-line);
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  box-sizing: border-box;
+}
+
+.carta-tpv-floor-plan-seg-pill:hover {
+  background: rgba(241, 245, 249, 0.92);
+  color: #334155;
+}
+
+.carta-tpv-floor-plan-seg-pill:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.5);
+  outline-offset: 1px;
+}
+
+.carta-tpv-floor-plan-seg-pill--active {
+  background: linear-gradient(
+    180deg,
+    rgba(239, 246, 255, 0.98) 0%,
+    rgba(224, 242, 254, 0.86) 100%
+  );
+  border-color: rgba(30, 58, 95, 0.22);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.07);
+  color: #0f172a;
+  font-weight: 750;
+}
+
+.carta-tpv-floor-plan-seg-pill--active:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(239, 246, 255, 1) 0%,
+    rgba(224, 242, 254, 0.94) 100%
+  );
+  color: #0f172a;
+}
+
+.carta-tpv-floor-plan-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(210px, 38vw);
+  padding: 3px 9px 3px 8px;
+  min-height: 28px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid var(--hostly-line);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(246, 250, 253, 0.94) 100%
+  );
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  font-family: inherit;
+  color: #0f172a;
+}
+
+.carta-tpv-floor-plan-trigger:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.55);
+  outline-offset: 1px;
+}
+
+.carta-tpv-floor-plan-trigger-label {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.58);
+}
+
+.carta-tpv-floor-plan-trigger-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carta-tpv-floor-plan-trigger-chevron {
+  flex: 0 0 auto;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.55;
+  margin-left: 1px;
+}
+
+.carta-tpv-floor-plan-menu {
+  max-width: min(280px, calc(100vw - 24px));
+  max-height: min(288px, 46vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.1),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+  box-sizing: border-box;
+}
+
+.carta-tpv-floor-plan-menu--portal {
+  margin: 0;
+}
+
+.carta-tpv-floor-plan-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.carta-tpv-floor-plan-option:hover {
+  background: rgba(241, 245, 249, 0.75);
+}
+
+.carta-tpv-floor-plan-option:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.5);
+  outline-offset: 0;
+}
+
+.carta-tpv-floor-plan-option--active {
+  background: linear-gradient(
+    180deg,
+    rgba(239, 246, 255, 0.95) 0%,
+    rgba(224, 242, 254, 0.65) 100%
+  );
+  color: #0f172a;
+  font-weight: 750;
+}
+
+.carta-tpv-floor-plan-option-check {
+  flex: 0 0 auto;
+  width: 1em;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0369a1;
+  line-height: 1;
+}
+
+.carta-tpv-floor-plan-option-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .carta-map-zones-inline {
@@ -10132,25 +10484,124 @@ export function CartaPageContent({
                     </div>
                   ) : null}
                   {operationalFloorPlansForTpv.length > 1 ? (
-                    <label className="carta-map-waiter-compact" style={{ maxWidth: 190 }}>
-                      <span style={{ opacity: 0.75 }}>Plano</span>
-                      <select
-                        value={selectedTpvFloorPlanId ?? ""}
-                        onChange={(e) => {
-                          const next = e.target.value.trim();
-                          setSelectedTpvFloorPlanId(next || null);
-                          setMapZoneFilter("__all__");
-                          setActiveMapFilter("all");
-                        }}
+                    cartaHeaderMobile ? (
+                      <div
+                        ref={tpvFloorPlanMenuRef}
+                        className="carta-tpv-floor-plan-wrap"
                       >
-                        {operationalFloorPlansForTpv.map((plan) => (
-                          <option key={plan.id} value={plan.id}>
-                            {plan.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                        <button
+                          type="button"
+                          className="carta-tpv-floor-plan-trigger"
+                          aria-haspopup="listbox"
+                          aria-expanded={tpvFloorPlanMenuOpen}
+                          aria-label={`Plano operativo: ${selectedTpvFloorPlan?.name?.trim() ?? "plano"}. Elegir otro plano.`}
+                          onClick={() =>
+                            setTpvFloorPlanMenuOpen((open) => !open)
+                          }
+                        >
+                          <span className="carta-tpv-floor-plan-trigger-label">
+                            Plano
+                          </span>
+                          <span className="carta-tpv-floor-plan-trigger-name">
+                            {selectedTpvFloorPlan?.name?.trim() ?? "—"}
+                          </span>
+                          <span
+                            className="carta-tpv-floor-plan-trigger-chevron"
+                            aria-hidden
+                          >
+                            ▾
+                          </span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        className="carta-tpv-floor-plan-seg"
+                        role="tablist"
+                        aria-label="Planos operativos"
+                      >
+                        {operationalFloorPlansForTpv.map((plan) => {
+                          const active =
+                            plan.id === selectedTpvFloorPlanId;
+                          return (
+                            <button
+                              key={plan.id}
+                              type="button"
+                              role="tab"
+                              aria-selected={active}
+                              className={
+                                active
+                                  ? "carta-tpv-floor-plan-seg-pill carta-tpv-floor-plan-seg-pill--active"
+                                  : "carta-tpv-floor-plan-seg-pill"
+                              }
+                              onClick={() =>
+                                selectOperationalTpvFloorPlan(plan.id)
+                              }
+                            >
+                              {plan.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )
                   ) : null}
+                  {operationalFloorPlansForTpv.length > 1 &&
+                  cartaHeaderMobile &&
+                  tpvFloorPlanMenuOpen &&
+                  tpvFloorPlanMenuRect &&
+                  typeof document !== "undefined"
+                    ? createPortal(
+                        <div
+                          ref={tpvFloorPlanMenuPanelRef}
+                          className="carta-tpv-floor-plan-menu carta-tpv-floor-plan-menu--portal"
+                          role="listbox"
+                          aria-label="Planos operativos"
+                          data-carta-tpv-compact-menu={
+                            embeddedInOperacion && cartaHeaderMobile
+                              ? "true"
+                              : undefined
+                          }
+                          style={{
+                            position: "fixed",
+                            top: tpvFloorPlanMenuRect.top,
+                            left: tpvFloorPlanMenuRect.left,
+                            minWidth: tpvFloorPlanMenuRect.minWidth,
+                            zIndex: 4500,
+                          }}
+                        >
+                          {operationalFloorPlansForTpv.map((plan) => {
+                            const active =
+                              plan.id === selectedTpvFloorPlanId;
+                            return (
+                              <button
+                                key={plan.id}
+                                type="button"
+                                role="option"
+                                aria-selected={active}
+                                className={
+                                  active
+                                    ? "carta-tpv-floor-plan-option carta-tpv-floor-plan-option--active"
+                                    : "carta-tpv-floor-plan-option"
+                                }
+                                onClick={() =>
+                                  selectOperationalTpvFloorPlan(plan.id)
+                                }
+                              >
+                                <span
+                                  className="carta-tpv-floor-plan-option-check"
+                                  aria-hidden
+                                >
+                                  {active ? "✓" : "\u00a0"}
+                                </span>
+                                <span className="carta-tpv-floor-plan-option-name">
+                                  {plan.name}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>,
+                        document.body,
+                      )
+                    : null}
                 </div>
                 {cartaHeaderMobile &&
                 embeddedInOperacion &&
