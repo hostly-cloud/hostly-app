@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
-import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
+import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import {
   type MermaLocal,
   type MermaMotivo,
@@ -149,7 +149,7 @@ function motivoBadgeStyles(motivo: MermaMotivo): { bg: string; border: string; c
     case "invitación":
       return { bg: "rgba(237, 233, 254, 0.85)", border: "rgba(124, 58, 237, 0.28)", color: "#5b21b6" };
     default:
-      return { bg: "var(--hostly-surface-operational)", border: "var(--hostly-line)", color: "var(--hostly-ink-muted)" };
+      return { bg: "var(--hostly-surface-operational)", border: "var(--hostly-table-divider-soft)", color: "var(--hostly-ink-muted)" };
   }
 }
 
@@ -169,9 +169,6 @@ export default function MermasPage() {
   const [draftMotivo, setDraftMotivo] = useState<MermaMotivo>("otro");
   const [draftNotas, setDraftNotas] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [kpiHover, setKpiHover] = useState<number | null>(null);
-  const [ctaHover, setCtaHover] = useState(false);
-  const [hoveredMermaId, setHoveredMermaId] = useState<string | null>(null);
   const [listSearch, setListSearch] = useState("");
   const [motivoListFilter, setMotivoListFilter] = useState<MotivoListFilter>("todos");
 
@@ -373,15 +370,6 @@ export default function MermasPage() {
     ],
   );
 
-  const metricFigure: CSSProperties = {
-    ...tabularQty,
-    fontSize: 19,
-    fontWeight: 700,
-    letterSpacing: "-0.025em",
-    color: "var(--hostly-navy-deep)",
-    lineHeight: 1,
-  };
-
   if (!hydrated) {
     return (
       <ModulePageShell
@@ -391,8 +379,9 @@ export default function MermasPage() {
         compactLayout
         operationalFocus
         lockViewport
+        shellSurface="configLight"
       >
-        <p style={{ color: "var(--hostly-ink-muted)", fontSize: 13 }}>{t("common.preparing")}</p>
+        <p className="hostly-muted mb-0 !text-[13px]">{t("common.preparing")}</p>
       </ModulePageShell>
     );
   }
@@ -405,144 +394,74 @@ export default function MermasPage() {
       compactLayout
       operationalFocus
       lockViewport
+      shellSurface="configLight"
       headerRight={
         <button
           type="button"
           onClick={openCreate}
-          onMouseEnter={() => setCtaHover(true)}
-          onMouseLeave={() => setCtaHover(false)}
-          style={{
-            border: ctaHover ? "1px solid rgba(217, 119, 6, 0.4)" : "1px solid rgba(217, 119, 6, 0.28)",
-            background: ctaHover ? "rgba(254, 243, 199, 0.95)" : "var(--hostly-warning-soft)",
-            color: "#78350f",
-            padding: "9px 14px",
-            borderRadius: 10,
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: 13,
-            letterSpacing: "-0.01em",
-            lineHeight: 1.2,
-            whiteSpace: "nowrap",
-            transition: "background 0.2s ease, border-color 0.2s ease",
-          }}
+          className="hostly-button-secondary shrink-0 !min-h-0 whitespace-nowrap px-3.5 py-2 text-sm !border-amber-400/40 !bg-amber-50 !font-semibold !text-[color:#78350f] hover:!border-amber-400/55 hover:!bg-amber-100/90"
         >
           {t("mermas.registerMermaCta")}
         </button>
       }
     >
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 5,
-          overflow: "hidden",
-        }}
-      >
-        {/* KPI — tarjetas claras con acento superior (alineado con Compras / Stock) */}
+      <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
+        {/* KPI — tarjetas claras con acento superior */}
         <div
           style={{
             flexShrink: 0,
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))",
-            gap: 6,
+            gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
+            gap: 12,
           }}
         >
-          {kpiCards.map((card, i) => (
-            <div
+          {kpiCards.map((card) => (
+            <HostlyKpiCard
               key={card.title}
-              onMouseEnter={() => setKpiHover(i)}
-              onMouseLeave={() => setKpiHover(null)}
-              style={{
-                background: "var(--hostly-surface-card-solid)",
-                borderRadius: 10,
-                padding: "7px 9px",
-                border: "1px solid var(--hostly-line)",
-                boxShadow: kpiHover === i ? "var(--hostly-shadow-float)" : "var(--hostly-shadow-card)",
-                borderTop: `2px solid ${card.accent}`,
-                transform: kpiHover === i ? "translateY(-1px)" : "translateY(0)",
-                transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                minWidth: 0,
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--hostly-ink-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  lineHeight: 1.2,
-                }}
-              >
-                {card.title}
-              </p>
-              <p
-                style={{
-                  margin: "3px 0 0",
-                  ...metricFigure,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-                title={card.value}
-              >
-                {card.value}
-              </p>
-              <p
-                style={{
-                  margin: "3px 0 0",
-                  fontSize: 10,
-                  color: "var(--hostly-ink-soft)",
-                  lineHeight: 1.35,
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {card.sub}
-              </p>
-            </div>
+              title={card.title}
+              value={card.value}
+              helper={card.sub}
+              accentColor={card.accent}
+              valueTitle={card.value}
+              className="px-3 py-2.5"
+            />
           ))}
         </div>
 
-        {/* Listado TPV: buscador + filtros fijos; scroll solo en filas */}
-        <section
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            borderRadius: 12,
-            background: "var(--hostly-surface-card-soft)",
-            border: "1px solid var(--hostly-line)",
-            boxShadow: "var(--hostly-shadow-card)",
-          }}
-        >
+        {/* Listado */}
+        <HostlySurface variant="ice" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden box-border">
           <div
             style={{
               flexShrink: 0,
               padding: "7px 10px 5px",
-              borderBottom: sorted.length > 0 ? "1px solid var(--hostly-line)" : undefined,
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              gap: 10,
+              borderBottom: sorted.length > 0 ? "1px solid var(--hostly-table-divider-soft)" : undefined,
             }}
           >
-            <div style={{ minWidth: 0, flex: "1 1 200px" }}>
-              <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("mermas.activityTitle")}</h2>
+            <HostlySectionHeader
+              title={t("mermas.activityTitle")}
+              description={sorted.length > 0 ? `${displayedMermas.length} / ${sorted.length}` : undefined}
+              descriptionClassName="m-0 !text-[11px] !leading-snug text-[color:var(--hostly-ink-muted)] !font-semibold tabular-nums"
+              className="w-full min-w-0 flex-wrap items-end"
+            >
               {sorted.length > 0 ? (
-                <p style={OPER_PRIMARY_COUNT_META}>
-                  {displayedMermas.length} / {sorted.length}
-                </p>
+                <input
+                  type="search"
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  placeholder={t("mermas.searchPlaceholder")}
+                  autoComplete="off"
+                  aria-label={t("mermas.searchPlaceholder")}
+                  style={{
+                    ...tpvSearchInput,
+                    minWidth: 160,
+                    flexGrow: 1,
+                    flexShrink: 1,
+                    flexBasis: "220px",
+                    maxWidth: 400,
+                  }}
+                />
               ) : null}
-            </div>
+            </HostlySectionHeader>
           </div>
 
           {sorted.length === 0 ? (
@@ -566,21 +485,8 @@ export default function MermasPage() {
                 }}
               >
                 <div style={{ flex: "1 1 280px", maxWidth: 560 }}>
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: 16,
-                      fontWeight: 600,
-                      color: "var(--hostly-ink-strong)",
-                      letterSpacing: "-0.015em",
-                      lineHeight: 1.25,
-                    }}
-                  >
-                    {t("mermas.emptyPremiumTitle")}
-                  </h3>
-                  <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--hostly-ink-muted)", lineHeight: 1.5 }}>
-                    {t("mermas.emptyPremiumBody")}
-                  </p>
+                  <h3 className="hostly-heading mb-0 !text-base !font-semibold">{t("mermas.emptyPremiumTitle")}</h3>
+                  <p className="hostly-muted mb-0 mt-2 text-[13px] leading-normal">{t("mermas.emptyPremiumBody")}</p>
                 </div>
               </div>
 
@@ -598,56 +504,15 @@ export default function MermasPage() {
                     { title: t("mermas.insight3Title"), body: t("mermas.insight3Body") },
                   ] as const
                 ).map((ins) => (
-                  <div
-                    key={ins.title}
-                    style={{
-                      borderRadius: 10,
-                      padding: "8px 10px",
-                      background: "var(--hostly-surface-card-solid)",
-                      border: "1px solid var(--hostly-line)",
-                      boxShadow: "var(--hostly-shadow-hairline)",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "var(--hostly-ink-strong)",
-                        letterSpacing: "-0.012em",
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {ins.title}
-                    </p>
-                    <p
-                      style={{
-                        margin: "6px 0 0",
-                        fontSize: 11,
-                        color: "var(--hostly-ink-muted)",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {ins.body}
-                    </p>
-                  </div>
+                  <HostlySurface variant="ice" key={ins.title} className="box-border px-3 py-2">
+                    <p className="m-0 text-xs font-semibold leading-snug text-[color:var(--hostly-ink-strong)]">{ins.title}</p>
+                    <p className="hostly-muted m-0 mt-1 !text-[11px] !leading-snug">{ins.body}</p>
+                  </HostlySurface>
                 ))}
               </div>
             </div>
           ) : (
             <>
-              <div style={{ flexShrink: 0, padding: "4px 8px 0" }}>
-                <input
-                  type="search"
-                  value={listSearch}
-                  onChange={(e) => setListSearch(e.target.value)}
-                  placeholder={t("mermas.searchPlaceholder")}
-                  autoComplete="off"
-                  aria-label={t("mermas.searchPlaceholder")}
-                  style={tpvSearchInput}
-                />
-              </div>
-
               <div
                 style={{
                   flexShrink: 0,
@@ -659,26 +524,14 @@ export default function MermasPage() {
                   padding: "6px 10px 7px",
                 }}
               >
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {t("stock.filterHint")}
-                </span>
-                <button
+                <span className="hostly-kpi-label !text-[10px]">{t("stock.filterHint")}</span>                <button
                   type="button"
                   onClick={() => setMotivoListFilter("todos")}
                   style={{
                     border:
                       motivoListFilter === "todos"
                         ? "1px solid rgba(49, 95, 125, 0.4)"
-                        : "1px solid var(--hostly-line)",
-                    background: motivoListFilter === "todos" ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
+                        : "1px solid var(--hostly-table-divider-soft)",                    background: motivoListFilter === "todos" ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
                     color: motivoListFilter === "todos" ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
                     padding: "7px 12px",
                     borderRadius: 999,
@@ -698,8 +551,7 @@ export default function MermasPage() {
                       type="button"
                       onClick={() => setMotivoListFilter(mo)}
                       style={{
-                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-line)",
-                        background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
+                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-table-divider-soft)",                        background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
                         color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
                         padding: "7px 12px",
                         borderRadius: 999,
@@ -726,34 +578,27 @@ export default function MermasPage() {
                 }}
               >
                 {displayedMermas.length === 0 ? (
-                  <div style={{ padding: "14px 10px", textAlign: "center", color: "var(--hostly-ink-muted)", fontSize: 13 }}>
-                    {t("mermas.searchNoResults")}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div className="hostly-muted px-2 py-4 text-center text-[13px]">{t("mermas.searchNoResults")}</div>
+                ) : (                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {displayedMermas.map((m) => {
-                      const isHover = hoveredMermaId === m.id;
                       const badge = motivoBadgeStyles(m.motivo);
                       return (
                         <div
                           key={m.id}
-                          onMouseEnter={() => setHoveredMermaId(m.id)}
-                          onMouseLeave={() => setHoveredMermaId(null)}
                           style={{
                             borderRadius: 8,
                             padding: "9px 11px",
-                            background: isHover ? "var(--hostly-surface-page-soft)" : "var(--hostly-surface-card-solid)",
-                            border: `1px solid ${isHover ? "var(--hostly-line-strong)" : "var(--hostly-line)"}`,
+                            background: "var(--hostly-surface-card-solid)",
+                            border: "1px solid var(--hostly-table-divider-faint)",
                             display: "flex",
                             flexWrap: "wrap",
                             alignItems: "center",
                             justifyContent: "space-between",
                             gap: 10,
-                            transition: "border-color 0.15s ease, background 0.15s ease",
-                            boxShadow: isHover ? "var(--hostly-shadow-card)" : "var(--hostly-shadow-hairline)",
+                            transition: "background 0.14s ease, border-color 0.14s ease",
                           }}
-                        >
-                          <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                          className="transition-[background,border-color] hover:border-[color:var(--hostly-table-divider-soft)] hover:bg-[color:var(--hostly-table-row-hover)]"
+                        >                          <div style={{ flex: "1 1 180px", minWidth: 0 }}>
                             <div
                               style={{
                                 display: "flex",
@@ -833,7 +678,7 @@ export default function MermasPage() {
                                 padding: "8px 12px",
                                 borderRadius: 8,
                                 background: "var(--hostly-surface-operational)",
-                                border: "1px solid var(--hostly-line)",
+                                border: "1px solid var(--hostly-table-divider-soft)",
                               }}
                             >
                               <span
@@ -850,37 +695,13 @@ export default function MermasPage() {
                               </span>
                               <span style={{ fontSize: 11, fontWeight: 600, color: "var(--hostly-ink-muted)" }}>{m.unidad}</span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => openEdit(m)}
-                              style={{
-                                border: "1px solid var(--hostly-line)",
-                                background: "transparent",
-                                color: "var(--hostly-ink-muted)",
-                                padding: "10px 14px",
-                                borderRadius: 10,
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                fontSize: 13,
-                                lineHeight: 1.2,
-                              }}
-                            >
+                            <button type="button" onClick={() => openEdit(m)} className="hostly-button-secondary !min-h-9 !px-3.5 !py-2 !text-[13px] !shadow-none">
                               {t("common.edit")}
                             </button>
                             <button
                               type="button"
                               onClick={() => remove(m.id)}
-                              style={{
-                                border: "1px solid rgba(248, 113, 113, 0.45)",
-                                background: "transparent",
-                                color: "#f87171",
-                                padding: "11px 16px",
-                                borderRadius: 10,
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                fontSize: 13,
-                                lineHeight: 1.2,
-                              }}
+                              className="hostly-button-secondary !min-h-9 !px-3.5 !py-2 !text-[13px] !shadow-none !border-red-200/70 !bg-[var(--hostly-danger-soft)] !font-semibold !text-red-900 hover:!border-red-300"
                             >
                               {t("common.delete")}
                             </button>
@@ -893,8 +714,8 @@ export default function MermasPage() {
               </div>
             </>
           )}
-        </section>
-      </div>
+        </HostlySurface>
+      </HostlySection>
 
       {formOpen ? (
         <div
@@ -917,28 +738,16 @@ export default function MermasPage() {
             if (e.target === e.currentTarget) closeForm();
           }}
         >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 520,
-              maxHeight: "min(90vh, 720px)",
-              overflowY: "auto",
-              borderRadius: 22,
-              padding: "22px 24px 20px",
-              background: "var(--hostly-surface-card-solid)",
-              border: "1px solid var(--hostly-line)",
-              boxShadow: "var(--hostly-shadow-float)",
-            }}
+          <HostlySurface
+            variant="elevated"
+            className="w-full max-h-[min(90vh,720px)] box-border overflow-y-auto p-5 max-w-[520px]"
+            style={{ borderRadius: 22 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2
-              id="merma-modal-title"
-              style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--hostly-ink-strong)" }}
-            >
+            <h2 id="merma-modal-title" className="hostly-heading mb-0 !text-[20px] !font-semibold">
               {editingId ? t("mermas.modalEditTitle") : t("mermas.modalNewTitle")}
             </h2>
-            <p style={{ margin: "10px 0 0", fontSize: 14, color: "var(--hostly-ink-muted)", lineHeight: 1.5 }}>{t("mermas.formHint")}</p>
-
+            <p className="hostly-muted mb-0 mt-2 text-sm leading-normal">{t("mermas.formHint")}</p>
             <div style={{ display: "grid", gap: 18, marginTop: 24 }}>
               <div>
                 <label style={labelStyle}>{t("common.date")}</label>
@@ -993,49 +802,18 @@ export default function MermasPage() {
             </div>
 
             {formError ? (
-              <p style={{ color: "#fca5a5", marginTop: 16, marginBottom: 0, fontSize: 14, lineHeight: 1.45 }}>{formError}</p>
+              <p className="mb-0 mt-4 text-sm font-semibold leading-snug text-[color:#b91c1c]">{formError}</p>
             ) : null}
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 26 }}>
-              <button
-                type="button"
-                onClick={submit}
-                style={{
-                  border: "1px solid var(--hostly-line)",
-                  background: "var(--hostly-accent)",
-                  color: "#ffffff",
-                  padding: "11px 22px",
-                  borderRadius: 12,
-                  fontWeight: 600,
-                  fontSize: 15,
-                  letterSpacing: "-0.01em",
-                  cursor: "pointer",
-                  boxShadow: "var(--hostly-shadow-card)",
-                  flex: "1 1 160px",
-                }}
-              >
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              <button type="button" onClick={submit} className="hostly-button-primary !min-h-0 px-5 py-2.5 text-[15px]" style={{ flex: "1 1 160px" }}>
                 {t("mermas.saveMerma")}
               </button>
-              <button
-                type="button"
-                onClick={closeForm}
-                style={{
-                  border: "1px solid var(--hostly-line)",
-                  background: "var(--hostly-surface-page-soft)",
-                  color: "var(--hostly-ink-muted)",
-                  padding: "11px 20px",
-                  borderRadius: 12,
-                  fontWeight: 600,
-                  fontSize: 15,
-                  letterSpacing: "-0.01em",
-                  cursor: "pointer",
-                }}
-              >
+              <button type="button" onClick={closeForm} className="hostly-button-secondary !min-h-0 px-5 py-2.5 text-[15px]">
                 {t("common.cancel")}
               </button>
             </div>
-          </div>
-        </div>
+          </HostlySurface>        </div>
       ) : null}
     </ModulePageShell>
   );

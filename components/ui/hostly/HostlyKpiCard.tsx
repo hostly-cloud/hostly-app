@@ -36,7 +36,7 @@ export function HostlyKpiCard({
 
   return (
     <HostlySurface variant={variant} className={hostlyCx("min-w-0 px-3.5 py-3", className)} style={mergedStyle}>
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-[var(--hostly-stack-gap-sm)]">
         <span className="hostly-kpi-label min-w-0">{title}</span>
         {icon ? (
           <span className="pointer-events-none shrink-0 text-[var(--hostly-ink-soft)] [&_svg]:block">

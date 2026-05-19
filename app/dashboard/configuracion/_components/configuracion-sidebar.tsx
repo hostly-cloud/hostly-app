@@ -57,11 +57,11 @@ function pathnameMatches(pathname: string, href: string) {
 
 function navLinkClass(active: boolean, nested = false) {
   const base =
-    "block rounded-[var(--hostly-config-radius)] text-[11px] font-semibold transition-[background-color,color,border-color,box-shadow] duration-200 ease-out outline-none focus-visible:ring-2 focus-visible:ring-sky-300/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[#203449]";
-  const pad = nested ? "py-1.5 pl-7 pr-2" : "px-2.5 py-2";
+    "block rounded-lg text-[10.5px] font-medium leading-snug tracking-[-0.01em] transition-[background-color,color,border-color] duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-sky-400/[0.32] focus-visible:ring-offset-2 focus-visible:ring-offset-[#303845]";
+  const pad = nested ? "py-[5px] pl-6 pr-2" : "px-2 py-[7px]";
   const colors = active
-    ? "border border-sky-200/22 bg-sky-100/[0.13] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_8px_rgba(15,23,42,0.1)]"
-    : "border border-transparent text-slate-200/90 hover:border-sky-200/12 hover:bg-sky-100/[0.07] hover:text-white";
+    ? "border border-white/[0.11] bg-white/[0.075] text-slate-50/98 shadow-none"
+    : "border border-transparent text-slate-400/93 hover:bg-white/[0.042] hover:text-slate-100/96";
   return `${base} ${pad} ${colors}`;
 }
 
@@ -88,7 +88,8 @@ export function ConfiguracionSidebar({
   const asideClass = useMemo(
     () =>
       [
-        "fixed z-50 flex min-h-screen w-[min(196px,88vw)] flex-col border-r border-sky-100/[0.09] bg-[linear-gradient(180deg,#274258_0%,#20374c_46%,#1a2d40_100%)] text-slate-200 shadow-[2px_0_24px_-10px_rgba(15,23,42,0.2)] transition-transform duration-200 ease-out lg:static lg:z-auto lg:min-h-[100dvh] lg:w-[196px] lg:translate-x-0 lg:shadow-none xl:w-[200px]",
+        /* Graphite/navy helado: menos bloque oscuro; hairline derecho suave */
+        "fixed z-50 flex min-h-screen w-[min(196px,88vw)] flex-col border-r border-white/[0.055] bg-[linear-gradient(168deg,#3d4654_0%,#363f4d_38%,#2f3743_72%,#2a313c_100%)] text-slate-300/88 shadow-[1px_0_0_rgba(255,255,255,0.04)_inset,4px_0_18px_-12px_rgba(15,23,42,0.14)] transition-transform duration-200 ease-out lg:static lg:z-auto lg:min-h-[100dvh] lg:w-[196px] lg:translate-x-0 lg:shadow-[1px_0_0_rgba(255,255,255,0.035)_inset] xl:w-[200px]",
         mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       ].join(" "),
     [mobileOpen],
@@ -99,36 +100,36 @@ export function ConfiguracionSidebar({
       {mobileOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-slate-900/45 backdrop-blur-[1px] lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/32 backdrop-blur-[0.5px] lg:hidden"
           aria-label="Cerrar menú"
           onClick={onCloseMobile}
         />
       ) : null}
 
       <aside className={asideClass}>
-        <div className="flex h-12 shrink-0 items-center border-b border-sky-100/[0.09] px-3 lg:h-12">
+        <div className="flex h-11 shrink-0 items-center border-b border-white/[0.055] px-2.5 lg:h-11">
           <Link
             href="/dashboard/configuracion/carta/productos"
-            className="flex min-w-0 items-center gap-2 text-left"
+            className="flex min-w-0 items-center gap-1.5 text-left"
             onClick={onCloseMobile}
           >
             <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--hostly-config-radius)] bg-sky-100/[0.13] text-[13px] text-sky-100 ring-1 ring-sky-100/15"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.065] text-[12px] text-slate-200/90 ring-1 ring-white/[0.08]"
               aria-hidden
             >
               ⚙
             </span>
-            <span className="truncate text-[13px] font-semibold tracking-tight text-white">
+            <span className="truncate text-[12.5px] font-medium tracking-tight text-slate-100/95">
               Configuración
             </span>
           </Link>
         </div>
 
         <nav
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 lg:py-3.5"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2.5 lg:py-3"
           aria-label="Configuración"
         >
-          <ul className="space-y-4">
+          <ul className="space-y-[1.125rem]">
             {NAV.map((item) => {
               if (isGroup(item)) {
                 const anyChildActive = item.children.some((c) =>
@@ -137,13 +138,13 @@ export function ConfiguracionSidebar({
                 return (
                   <li key={item.id}>
                     <div
-                      className={`px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${
-                        anyChildActive ? "text-sky-100" : "text-slate-300/70"
+                      className={`px-2 pb-1 pt-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] ${
+                        anyChildActive ? "text-slate-400/88" : "text-slate-500/62"
                       }`}
                     >
                       {item.label}
                     </div>
-                    <ul className="ml-2 space-y-0.5 border-l border-sky-100/[0.11] pl-2.5">
+                    <ul className="ml-1.5 space-y-px border-l border-white/[0.055] pl-2">
                       {item.children.map((c) => {
                         const active = pathnameMatches(pathname, c.href);
                         return (
@@ -170,7 +171,7 @@ export function ConfiguracionSidebar({
                 : pathnameMatches(pathname, item.href);
 
               return (
-                <li key={item.href} className="px-0.5">
+                <li key={item.href} className="px-0">
                   <Link
                     href={item.href}
                     className={navLinkClass(active)}
@@ -185,10 +186,10 @@ export function ConfiguracionSidebar({
           </ul>
         </nav>
 
-        <div className="grid shrink-0 gap-2 border-t border-sky-100/[0.09] px-2.5 py-2.5 text-[10px] leading-snug text-slate-300/75">
+        <div className="shrink-0 border-t border-white/[0.05] px-2 py-2">
           <Link
             href="/dashboard"
-            className="rounded-[var(--hostly-config-radius)] border border-sky-100/[0.12] bg-sky-100/[0.08] px-2.5 py-2 text-[11px] font-semibold text-sky-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-200 hover:bg-sky-100/[0.13] hover:text-white"
+            className="block rounded-lg px-2 py-1.5 text-[10.5px] font-medium tracking-[-0.01em] text-slate-500/88 outline-none transition-colors duration-150 hover:bg-white/[0.04] hover:text-slate-200/94 focus-visible:ring-2 focus-visible:ring-sky-400/[0.32] focus-visible:ring-offset-2 focus-visible:ring-offset-[#303845]"
             onClick={onCloseMobile}
           >
             ← Volver al panel

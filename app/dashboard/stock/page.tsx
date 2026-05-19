@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
-import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
+import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import {
   type StockProducto,
   type UnidadStock,
@@ -81,12 +81,12 @@ const labelStyle = {
 } satisfies CSSProperties;
 
 const colHeadStyle: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 600,
-  color: "var(--hostly-ink-muted)",
-  letterSpacing: "0.08em",
+  fontSize: 9,
+  fontWeight: 590,
+  color: "var(--hostly-ink-faint)",
+  letterSpacing: "0.1em",
   textTransform: "uppercase",
-  lineHeight: 1.2,
+  lineHeight: 1.22,
 };
 
 /** Rejilla alineada cabecera + filas (TPV). */
@@ -114,9 +114,9 @@ function statusPillStyle(tone: StatusTone): CSSProperties {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "8px 12px",
-    borderRadius: 10,
-    fontSize: 12,
+    padding: "6px 10px",
+    borderRadius: 8,
+    fontSize: 11,
     fontWeight: 600,
     letterSpacing: "0.04em",
     textTransform: "uppercase",
@@ -128,28 +128,28 @@ function statusPillStyle(tone: StatusTone): CSSProperties {
       return {
         ...base,
         background: "var(--hostly-success-soft)",
-        border: "1px solid rgba(22, 163, 74, 0.35)",
+        border: "1px solid rgba(22, 163, 74, 0.22)",
         color: "#166534",
       };
     case "bajo":
       return {
         ...base,
         background: "var(--hostly-warning-soft)",
-        border: "1px solid rgba(217, 119, 6, 0.35)",
+        border: "1px solid rgba(217, 119, 6, 0.24)",
         color: "#92400e",
       };
     case "critico":
       return {
         ...base,
         background: "var(--hostly-danger-soft)",
-        border: "1px solid rgba(220, 38, 38, 0.32)",
+        border: "1px solid rgba(220, 38, 38, 0.22)",
         color: "#991b1b",
       };
     default:
       return {
         ...base,
         background: "var(--hostly-danger-soft)",
-        border: "1px solid rgba(127, 29, 29, 0.35)",
+        border: "1px solid rgba(127, 29, 29, 0.24)",
         color: "#7f1d1d",
       };
   }
@@ -158,13 +158,13 @@ function statusPillStyle(tone: StatusTone): CSSProperties {
 function rowStripeColor(tone: StatusTone): string {
   switch (tone) {
     case "ok":
-      return "rgba(34, 197, 94, 0.55)";
+      return "rgba(34, 197, 94, 0.32)";
     case "bajo":
-      return "rgba(251, 191, 36, 0.55)";
+      return "rgba(251, 191, 36, 0.32)";
     case "critico":
-      return "rgba(248, 113, 113, 0.65)";
+      return "rgba(248, 113, 113, 0.36)";
     default:
-      return "rgba(220, 38, 38, 0.75)";
+      return "rgba(220, 38, 38, 0.4)";
   }
 }
 
@@ -273,15 +273,6 @@ export default function StockPage() {
     [t, stockStats, locale],
   );
 
-  const metricNum: CSSProperties = {
-    ...tabularFigures,
-    fontSize: 18,
-    fontWeight: 700,
-    letterSpacing: "-0.025em",
-    color: "var(--hostly-navy-deep)",
-    lineHeight: 1.1,
-  };
-
   function openCreate() {
     setEditingId(null);
     setDraftNombre("");
@@ -366,8 +357,9 @@ export default function StockPage() {
         compactLayout
         operationalFocus
         lockViewport
+        shellSurface="configLight"
       >
-        <p style={{ color: "var(--hostly-ink-muted)", fontSize: 13 }}>{t("common.preparingData")}</p>
+        <p className="hostly-muted mb-0 !text-[13px]">{t("common.preparingData")}</p>
       </ModulePageShell>
     );
   }
@@ -379,72 +371,28 @@ export default function StockPage() {
       compactLayout
       operationalFocus
       lockViewport
+      shellSurface="configLight"
       headerRight={
         <button
           type="button"
           onClick={openCreate}
-          style={{
-            border: "1px solid rgba(34, 197, 94, 0.32)",
-            background: "var(--hostly-success-soft)",
-            color: "var(--hostly-navy-deep)",
-            padding: "9px 14px",
-            borderRadius: 10,
-            fontWeight: 600,
-            cursor: "pointer",
-            fontSize: 13,
-            lineHeight: 1.2,
-            whiteSpace: "nowrap",
-          }}
+          className="hostly-button-secondary shrink-0 !min-h-0 whitespace-nowrap px-3.5 py-2 text-sm !border-emerald-400/35 !bg-emerald-50 !text-[color:var(--hostly-navy-deep)] hover:!bg-emerald-100/90 hover:!border-emerald-400/50"
         >
           {t("stock.addProduct")}
         </button>
       }
     >
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          overflow: "hidden",
-        }}
-      >
+      <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
         {notice ? (
-          <div
-            style={{
-              flexShrink: 0,
-              padding: "12px 14px",
-              borderRadius: 10,
-              background: "var(--hostly-success-soft)",
-              border: "1px solid rgba(22, 163, 74, 0.28)",
-              color: "#166534",
-              fontSize: 14,
-              lineHeight: 1.35,
-            }}
-          >
-            {notice}
-          </div>
+          <HostlySurface variant="soft" className="box-border shrink-0 border border-emerald-400/25 px-3.5 py-3">
+            <p className="m-0 text-sm font-semibold leading-snug text-[color:#15803d]">{notice}</p>
+          </HostlySurface>
         ) : null}
 
         {bajosCount > 0 ? (
-          <div
-            style={{
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              padding: "10px 12px",
-              borderRadius: 10,
-              background: "var(--hostly-warning-soft)",
-              border: "1px solid rgba(217, 119, 6, 0.28)",
-              color: "#92400e",
-              fontSize: 13,
-              fontWeight: 600,
-              lineHeight: 1.35,
-            }}
-          >
-            {t("stock.lowStockBanner", { count: bajosCount })}
-          </div>
+          <HostlySurface variant="soft" className="box-border flex shrink-0 items-center border border-amber-300/30 px-3 py-2.5">
+            <p className="m-0 text-[13px] font-semibold leading-snug text-[color:#92400e]">{t("stock.lowStockBanner", { count: bajosCount })}</p>
+          </HostlySurface>
         ) : null}
 
         <div
@@ -452,116 +400,56 @@ export default function StockPage() {
             flexShrink: 0,
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-            gap: 7,
+            gap: 12,
           }}
         >
           {kpiCards.map((m) => (
-            <div
+            <HostlyKpiCard
               key={m.key}
-              style={{
-                background: "var(--hostly-surface-card-solid)",
-                borderRadius: 12,
-                padding: "8px 10px",
-                border: "1px solid var(--hostly-line)",
-                boxShadow: "var(--hostly-shadow-card)",
-                borderTop: `2px solid ${m.accent}`,
-                minWidth: 0,
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--hostly-ink-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  lineHeight: 1.2,
-                }}
-              >
-                {m.label}
-              </p>
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  ...metricNum,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-                title={m.value}
-              >
-                {m.value}
-              </p>
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: 10,
-                  color: "var(--hostly-ink-soft)",
-                  lineHeight: 1.3,
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {m.sub}
-              </p>
-            </div>
+              title={m.label}
+              value={m.value}
+              helper={m.sub}
+              accentColor={m.accent}
+              valueTitle={m.value}
+              valueClassName={m.key === "crit" ? "!text-[#e11d48]" : m.key === "zero" ? "!text-[#dc2626]" : undefined}
+              className="px-3 py-2.5"
+            />
           ))}
         </div>
 
-        <section
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            borderRadius: 12,
-            background: "var(--hostly-surface-card-soft)",
-            border: "1px solid var(--hostly-line)",
-            boxShadow: "var(--hostly-shadow-card)",
-          }}
-        >
+        <HostlySurface variant="ice" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden box-border">
             <div
             style={{
               flexShrink: 0,
               padding: "7px 10px 5px",
-              borderBottom: "1px solid var(--hostly-line)",
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              gap: 10,
+              borderBottom: "1px solid var(--hostly-table-divider-soft)",
             }}
           >
-            <div style={{ minWidth: 0, flex: "1 1 200px" }}>
-              <h2 style={OPER_PRIMARY_SECTION_TITLE}>{t("stock.listTitle")}</h2>
+            <HostlySectionHeader
+              title={t("stock.listTitle")}
+              description={items.length > 0 ? t("stock.listCount", { shown: displayedProducts.length, total: tierFilteredSorted.length }) : undefined}
+              descriptionClassName="m-0 !text-[11px] !leading-snug text-[color:var(--hostly-ink-muted)] !font-semibold"
+              className="w-full min-w-0 flex-wrap items-end"
+            >
               {items.length > 0 ? (
-                <p style={OPER_PRIMARY_COUNT_META}>
-                  {t("stock.listCount", { shown: displayedProducts.length, total: tierFilteredSorted.length })}
-                </p>
+                <input
+                  type="search"
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  placeholder={t("stock.searchPlaceholder")}
+                  autoComplete="off"
+                  aria-label={t("stock.searchPlaceholder")}
+                  style={{
+                    ...inputStyle,
+                    minWidth: 160,
+                    flexGrow: 1,
+                    flexShrink: 1,
+                    flexBasis: "220px",
+                    maxWidth: 400,
+                  }}
+                />
               ) : null}
-            </div>
-            {items.length > 0 ? (
-              <input
-                type="search"
-                value={listSearch}
-                onChange={(e) => setListSearch(e.target.value)}
-                placeholder={t("stock.searchPlaceholder")}
-                autoComplete="off"
-                aria-label={t("stock.searchPlaceholder")}
-                style={{
-                  ...inputStyle,
-                  minWidth: 160,
-                  flexGrow: 1,
-                  flexShrink: 1,
-                  flexBasis: "220px",
-                  maxWidth: 400,
-                }}
-              />
-            ) : null}
+            </HostlySectionHeader>
           </div>
 
           {items.length === 0 ? (
@@ -577,21 +465,11 @@ export default function StockPage() {
                 textAlign: "center",
               }}
             >
-              <p style={{ margin: 0, fontSize: 14, color: "var(--hostly-ink-muted)" }}>{t("stock.noProducts")}</p>
+              <p className="hostly-muted m-0 max-w-md text-sm">{t("stock.noProducts")}</p>
               <button
                 type="button"
                 onClick={openCreate}
-                style={{
-                  marginTop: 12,
-                  border: "none",
-                  background: "#22c55e",
-                  color: "#fff",
-                  padding: "12px 22px",
-                  borderRadius: 10,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: 15,
-                }}
+                className="hostly-button-secondary mt-3 !min-h-[48px] whitespace-nowrap px-5 py-2.5 text-[15px] !font-bold !border-emerald-500/40 !bg-emerald-600 !text-white hover:!bg-emerald-700 hover:!border-emerald-500/55"
               >
                 {t("stock.addFirst")}
               </button>
@@ -609,17 +487,7 @@ export default function StockPage() {
                   padding: "6px 10px 8px",
                 }}
               >
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--hostly-ink-muted)",
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {t("stock.filterHint")}
-                </span>
+                <span className="hostly-kpi-label !text-[10px]">{t("stock.filterHint")}</span>
                 {(
                   [
                     { id: "todos" as const, label: t("stock.filterAll") },
@@ -636,7 +504,7 @@ export default function StockPage() {
                       type="button"
                       onClick={() => setListFilter(f.id)}
                       style={{
-                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-line)",
+                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-table-divider-soft)",
                         background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
                         color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
                         padding: "7px 12px",
@@ -655,19 +523,14 @@ export default function StockPage() {
               </div>
 
               {formOpen ? (
-                <div
-                  style={{
-                    flexShrink: 0,
-                    maxHeight: "min(240px, 32vh)",
-                    overflowY: "auto",
-                    margin: "0 10px 8px",
-                    padding: "9px 11px",
-                    background: "var(--hostly-surface-card-solid)",
-                    borderRadius: 10,
-                    border: "1px solid var(--hostly-line)",
-                    boxShadow: "var(--hostly-shadow-card)",
-                  }}
-                >
+                <HostlySurface variant="soft" className="mx-2.5 mb-2 box-border shrink-0 rounded-[var(--hostly-radius-md)]">
+                  <div
+                    style={{
+                      maxHeight: "min(240px, 32vh)",
+                      overflowY: "auto",
+                      padding: "9px 11px",
+                    }}
+                  >
                   <h3 style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 600, lineHeight: 1.2, color: "var(--hostly-ink-strong)" }}>
                     {editingId ? t("stock.editProduct") : t("stock.newProduct")}
                   </h3>
@@ -722,43 +585,18 @@ export default function StockPage() {
                     </div>
                   </div>
                   {formError ? (
-                    <p style={{ color: "#fca5a5", marginTop: 8, marginBottom: 0, fontSize: 12 }}>{formError}</p>
+                    <p className="mb-0 mt-2 text-xs font-semibold text-[color:#b91c1c]">{formError}</p>
                   ) : null}
-                  <div style={{ display: "flex", gap: 14, marginTop: 14, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={submitForm}
-                      style={{
-                        border: "none",
-                        background: "var(--hostly-accent)",
-                        color: "#ffffff",
-                        padding: "10px 18px",
-                        borderRadius: 10,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontSize: 15,
-                      }}
-                    >
+                  <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+                    <button type="button" onClick={submitForm} className="hostly-button-primary !min-h-0 px-4 py-2.5 text-[15px]">
                       {t("common.saveChanges")}
                     </button>
-                    <button
-                      type="button"
-                      onClick={closeForm}
-                      style={{
-                        border: "1px solid var(--hostly-line)",
-                        background: "transparent",
-                        color: "var(--hostly-ink-muted)",
-                        padding: "10px 18px",
-                        borderRadius: 10,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontSize: 15,
-                      }}
-                    >
+                    <button type="button" onClick={closeForm} className="hostly-button-secondary !min-h-0 px-4 py-2.5 text-[15px]">
                       {t("common.cancel")}
                     </button>
                   </div>
                 </div>
+              </HostlySurface>
               ) : null}
 
               <div
@@ -772,18 +610,14 @@ export default function StockPage() {
                 }}
               >
                 {tierFilteredSorted.length === 0 ? (
-                  <div style={{ padding: "16px 8px", textAlign: "center", color: "var(--hostly-ink-muted)", fontSize: 13 }}>
-                    {t("stock.filterEmpty")}
-                  </div>
+                  <div className="hostly-muted px-2 py-4 text-center text-[13px]">{t("stock.filterEmpty")}</div>
                 ) : displayedProducts.length === 0 ? (
-                  <div style={{ padding: "16px 8px", textAlign: "center", color: "var(--hostly-ink-muted)", fontSize: 13 }}>
-                    {t("stock.searchNoResults")}
-                  </div>
+                  <div className="hostly-muted px-2 py-4 text-center text-[13px]">{t("stock.searchNoResults")}</div>
                 ) : (
                   <div
                     style={{
                       borderRadius: 8,
-                      border: "1px solid var(--hostly-line)",
+                      border: "1px solid var(--hostly-table-divider-soft)",
                       overflow: "hidden",
                       background: "var(--hostly-surface-card-solid)",
                       flex: 1,
@@ -796,8 +630,8 @@ export default function StockPage() {
                       style={{
                         ...stockRowGrid,
                         padding: "10px 12px",
-                        background: "var(--hostly-surface-page-soft)",
-                        borderBottom: "1px solid var(--hostly-line)",
+                        background: "var(--hostly-table-head-surface)",
+                        borderBottom: "1px solid var(--hostly-table-divider-soft)",
                       }}
                     >
                       <span style={colHeadStyle}>{t("stock.colProduct")}</span>
@@ -826,10 +660,10 @@ export default function StockPage() {
                             style={{
                               ...stockRowGrid,
                               padding: "12px 12px",
-                              borderBottom: isLast ? "none" : "1px solid var(--hostly-line)",
-                              background: isHover ? "var(--hostly-surface-page-soft)" : "var(--hostly-surface-card-solid)",
+                              borderBottom: isLast ? "none" : "1px solid var(--hostly-table-divider-faint)",
+                              background: isHover ? "var(--hostly-table-row-hover)" : "var(--hostly-surface-card-solid)",
                               boxShadow: `inset 3px 0 0 ${rowStripeColor(st.tone)}`,
-                              transition: "background 0.12s ease",
+                              transition: "background 0.16s ease",
                             }}
                           >
                             <div style={{ minWidth: 0, paddingLeft: 4 }}>
@@ -848,7 +682,7 @@ export default function StockPage() {
                               >
                                 {p.nombre}
                               </div>
-                              <div style={{ fontSize: 10, color: "var(--hostly-ink-muted)", marginTop: 2, lineHeight: 1.2 }}>
+                              <div style={{ fontSize: 10, color: "var(--hostly-ink-soft)", marginTop: 2, lineHeight: 1.2 }}>
                                 {t("common.unit")}: {p.unidad}
                               </div>
                             </div>
@@ -867,55 +701,25 @@ export default function StockPage() {
                             <div style={{ display: "flex", justifyContent: "center" }}>
                               <span style={statusPillStyle(st.tone)}>{st.label}</span>
                             </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 14, justifyContent: "flex-end", alignItems: "center" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
                               <button
                                 type="button"
                                 onClick={() => openEdit(p)}
-                                style={{
-                                  border: "1px solid var(--hostly-line)",
-                                  background: "var(--hostly-surface-page-soft)",
-                                  color: "var(--hostly-ink-muted)",
-                                  padding: "10px 14px",
-                                  borderRadius: 10,
-                                  cursor: "pointer",
-                                  fontWeight: 600,
-                                  fontSize: 13,
-                                  lineHeight: 1.2,
-                                }}
+                                className="hostly-button-secondary !min-h-9 !px-3.5 !py-2 !text-[13px] !shadow-none"
                               >
                                 {t("common.edit")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => openEdit(p)}
-                                style={{
-                                  border: "1px solid rgba(49, 95, 125, 0.35)",
-                                  background: "var(--hostly-info-soft)",
-                                  color: "var(--hostly-navy-deep)",
-                                  padding: "10px 14px",
-                                  borderRadius: 10,
-                                  cursor: "pointer",
-                                  fontWeight: 600,
-                                  fontSize: 13,
-                                  lineHeight: 1.2,
-                                }}
+                                className="hostly-button-secondary !min-h-9 !px-3.5 !py-2 !text-[13px] !border-[rgba(49,95,125,0.22)] !bg-[var(--hostly-info-soft)] !text-[color:var(--hostly-navy-deep)] hover:!bg-[rgba(224,242,254,0.65)]"
                               >
                                 {t("stock.actionAdjust")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => removeProduct(p.id)}
-                                style={{
-                                  border: "1px solid rgba(220, 38, 38, 0.35)",
-                                  background: "var(--hostly-danger-soft)",
-                                  color: "#991b1b",
-                                  padding: "10px 14px",
-                                  borderRadius: 10,
-                                  cursor: "pointer",
-                                  fontWeight: 600,
-                                  fontSize: 13,
-                                  lineHeight: 1.2,
-                                }}
+                                className="hostly-button-secondary !min-h-9 !px-3.5 !py-2 !text-[13px] !border-red-200/60 !bg-[var(--hostly-danger-soft)] !font-semibold !text-red-900 hover:!border-red-300/80"
                               >
                                 {t("common.delete")}
                               </button>
@@ -929,8 +733,8 @@ export default function StockPage() {
               </div>
             </>
           )}
-        </section>
-      </div>
+        </HostlySurface>
+      </HostlySection>
     </ModulePageShell>
   );
 }

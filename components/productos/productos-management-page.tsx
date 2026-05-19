@@ -1,12 +1,13 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode, SVGProps } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
 import ModulePageShell from "@/components/module-page-shell";
+import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import { fetchCartaCategorias, fetchCartaFamilias, createCartaCategoriaApi } from "@/lib/carta-categorias/api-client";
 import { buildCartaGroupedSections } from "@/lib/carta-categorias/grouping";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
@@ -47,6 +48,7 @@ type CartaFilter = "todos" | "activos" | "inactivos" | "conEscandallo" | "sinEsc
 
 const PRODUCTOS_ROW_HOVER_CLASS = "hostly-productos-data-row";
 const PRODUCTOS_ROW_TEXT_BTN_CLASS = "hostly-productos-row-text-btn";
+const PRODUCTOS_ROW_ICON_BTN_CLASS = "hostly-productos-row-icon-btn";
 
 /** Data-grid: hover suave en fila + botones de acción compactos (config TPV). */
 const productosTableInteractionStyles = `
@@ -63,6 +65,13 @@ const productosTableInteractionStyles = `
   cursor: not-allowed;
   opacity: 0.48;
 }
+.hostly-productos-row-icon-btn {
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+}
+.hostly-productos-row-icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 @media (hover: hover) and (pointer: fine) {
   .hostly-productos-row-text-btn:hover:not(:disabled) {
     background-color: rgba(255, 255, 255, 0.07) !important;
@@ -72,14 +81,65 @@ const productosTableInteractionStyles = `
   .hostly-productos-row-text-btn:active:not(:disabled) {
     background-color: rgba(255, 255, 255, 0.04) !important;
   }
+  .hostly-productos-row-icon-btn:hover:not(:disabled) {
+    background-color: rgba(255, 255, 255, 0.09) !important;
+    border-color: rgba(148, 163, 184, 0.32) !important;
+    color: #e2e8f0 !important;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .hostly-productos-data-row,
-  .hostly-productos-row-text-btn {
+  .hostly-productos-row-text-btn,
+  .hostly-productos-row-icon-btn {
     transition: none;
   }
 }
 `;
+
+/** Contenedor principal de la tabla (modo claro: superficie ice del design system; modo oscuro: legacy). */
+const PRODUCTOS_TABLE_SECTION_DARK_STYLE: CSSProperties = {
+  flexGrow: 1,
+  flexShrink: 1,
+  flexBasis: 0,
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  borderRadius: 10,
+  border: "1px solid rgba(51, 65, 85, 0.5)",
+  background: "#1e293b",
+  boxShadow: "none",
+};
+
+function ProductosTableChrome({
+  iceVisual,
+  embedFlatChrome,
+  children,
+}: {
+  iceVisual: boolean;
+  /** Menos “tarjeta sobre tarjeta” en Config → Carta → Productos */
+  embedFlatChrome?: boolean;
+  children: ReactNode;
+}) {
+  if (iceVisual) {
+    if (embedFlatChrome) {
+      return (
+        <HostlySurface
+          variant="flat"
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none"
+        >
+          {children}
+        </HostlySurface>
+      );
+    }
+    return (
+      <HostlySurface variant="ice" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {children}
+      </HostlySurface>
+    );
+  }
+  return <section style={PRODUCTOS_TABLE_SECTION_DARK_STYLE}>{children}</section>;
+}
 
 /** Botones de texto en columna Acciones: compactos, misma altura, no “texto flotante”. */
 const productRowActionBtnShell: CSSProperties = {
@@ -214,6 +274,8 @@ const labelStyle: CSSProperties = {
 const PRODUCTOS_SHELL_MAX_WIDTH = 1520;
 /** Mínimo horizontal del grid: scroll horizontal en pantallas estrechas, sin “tabla mini”. */
 const PRODUCTOS_TABLE_MIN_WIDTH_PX = 980;
+/** Con columna Acciones sólo iconos hay menos anchura útil tabular. */
+const PRODUCTOS_TABLE_MIN_WIDTH_EMBED_ICONS_PX = 840;
 
 const colHeadStyle: CSSProperties = {
   fontSize: 10,
@@ -230,13 +292,16 @@ const colHeadStyle: CSSProperties = {
 
 /**
  * Data-grid: misma plantilla en cabecera, filas y barra de grupo.
- * Checkbox · nombre · tipo · categoría · PVP · carta · escandallo · acciones (texto).
+ * Checkbox · nombre · tipo · categoría · PVP · carta · escandallo · acciones (embed config: sólo iconos).
  */
 const PRODUCTOS_TABLE_GRID_TEMPLATE =
   "32px minmax(200px, 4fr) 80px minmax(124px, 2fr) 76px minmax(86px, 1fr) 78px minmax(248px, 1.55fr)";
 
 const PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED =
   "28px minmax(200px, 4fr) 80px minmax(124px, 2fr) 76px minmax(86px, 1fr) 78px minmax(248px, 1.55fr)";
+/** Config Carta embed: columna Acciones sólo iconos — más protagonismo datos. */
+const PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED_ICONS =
+  "28px minmax(208px, 4.35fr) 80px minmax(124px, 2fr) 76px minmax(86px, 1fr) 78px minmax(108px, 0.92fr)";
 
 const rowGrid: CSSProperties = {
   display: "grid",
@@ -252,6 +317,13 @@ const rowGrid: CSSProperties = {
 const rowGridEmbed: CSSProperties = {
   ...rowGrid,
   gridTemplateColumns: PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED,
+  columnGap: 10,
+};
+
+const rowGridEmbedIcons: CSSProperties = {
+  ...rowGrid,
+  gridTemplateColumns: PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED_ICONS,
+  columnGap: 10,
 };
 
 /** Barra de grupo: misma rejilla; contenido en una sola celda ancha. */
@@ -267,10 +339,22 @@ const rowGridGroupBar: CSSProperties = {
 const rowGridGroupBarEmbed: CSSProperties = {
   ...rowGridGroupBar,
   gridTemplateColumns: PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED,
+  columnGap: 10,
+};
+
+const rowGridGroupBarEmbedIcons: CSSProperties = {
+  ...rowGridGroupBar,
+  gridTemplateColumns: PRODUCTOS_TABLE_GRID_TEMPLATE_EMBED_ICONS,
+  columnGap: 10,
 };
 
 const productTableRowPadding = "5px 10px";
+/** Modo hielo: mayor ritmo vertical (inventory / Shopify-like). */
+const productTableRowPaddingIce = "8px 12px";
 const productRowMinHeight = 36;
+const productRowMinHeightIce = 44;
+/** Divisor de filas en tema claro: menos ruido que --hostly-line pleno */
+const PRODUCTOS_ROW_DIVIDER_ICE = "1px solid var(--hostly-table-divider-faint)";
 
 const productGridPriceCell: CSSProperties = {
   justifySelf: "stretch",
@@ -334,20 +418,20 @@ function ProductRowPublicationCell({
   const tone = embedLight
     ? status === "onMenu"
       ? {
-          border: "1px solid rgba(16, 185, 129, 0.4)",
-          background: "rgba(236, 253, 245, 0.92)",
-          color: "#166534",
+          border: "1px solid rgba(148, 163, 184, 0.11)",
+          background: "rgba(248, 250, 252, 0.38)",
+          color: "#64748b",
         }
       : status === "offMenu"
         ? {
-            border: "1px solid rgba(245, 158, 11, 0.45)",
-            background: "rgba(255, 251, 235, 0.95)",
-            color: "#92400e",
+            border: "1px solid rgba(148, 163, 184, 0.095)",
+            background: "rgba(248, 250, 252, 0.28)",
+            color: "#64748b",
           }
         : {
-            border: "1px solid rgba(248, 113, 113, 0.4)",
-            background: "rgba(254, 242, 242, 0.95)",
-            color: "#b91c1c",
+            border: "1px solid rgba(148, 163, 184, 0.11)",
+            background: "rgba(248, 250, 252, 0.32)",
+            color: "#64748b",
           }
     : status === "onMenu"
       ? {
@@ -391,11 +475,11 @@ function ProductRowPublicationCell({
           gap: 4,
           maxWidth: "100%",
           boxSizing: "border-box",
-          padding: "2px 7px",
-          borderRadius: 999,
-          fontSize: 9,
-          fontWeight: 600,
-          letterSpacing: "0.04em",
+          padding: embedLight ? "1px 6px" : "2px 7px",
+          borderRadius: embedLight ? 6 : 999,
+          fontSize: embedLight ? 8 : 9,
+          fontWeight: embedLight ? 500 : 600,
+          letterSpacing: embedLight ? "0.06em" : "0.04em",
           textTransform: "uppercase",
           lineHeight: 1.15,
           whiteSpace: "nowrap",
@@ -408,11 +492,12 @@ function ProductRowPublicationCell({
           aria-hidden
           style={{
             flexShrink: 0,
-            width: 5,
-            height: 5,
+            width: embedLight ? 4 : 5,
+            height: embedLight ? 4 : 5,
             borderRadius: "50%",
             background: dotColor,
-            boxShadow: embedLight ? "0 0 0 1px rgb(241 245 249)" : `0 0 0 1px rgba(15, 23, 42, 0.5)`,
+            opacity: embedLight ? 0.55 : 1,
+            boxShadow: embedLight ? "none" : `0 0 0 1px rgba(15, 23, 42, 0.5)`,
           }}
         />
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
@@ -434,14 +519,14 @@ function ProductRowEscandalloCell({
   const escTone = embedLight
     ? tiene
       ? {
-          border: "1px solid rgba(148, 163, 184, 0.45)",
-          background: "rgba(248, 250, 252, 0.95)",
-          color: "#475569",
+          border: "1px solid rgba(148, 163, 184, 0.1)",
+          background: "rgba(248, 250, 252, 0.35)",
+          color: "#8896a9",
         }
       : {
-          border: "1px solid rgba(203, 213, 225, 0.85)",
-          background: "rgba(255, 255, 255, 0.6)",
-          color: "#64748b",
+          border: "1px solid rgba(148, 163, 184, 0.085)",
+          background: "rgba(248, 250, 252, 0.28)",
+          color: "#8b98ab",
         }
     : tiene
       ? {
@@ -473,12 +558,12 @@ function ProductRowEscandalloCell({
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: 4,
-          padding: "2px 6px",
-          borderRadius: 5,
-          fontSize: 9,
-          fontWeight: 600,
-          letterSpacing: "0.05em",
+          gap: embedLight ? 3 : 4,
+          padding: embedLight ? "1px 5px" : "2px 6px",
+          borderRadius: embedLight ? 5 : 5,
+          fontSize: embedLight ? 8 : 9,
+          fontWeight: embedLight ? 500 : 600,
+          letterSpacing: embedLight ? "0.06em" : "0.05em",
           textTransform: "uppercase",
           maxWidth: "100%",
           boxSizing: "border-box",
@@ -495,7 +580,13 @@ function ProductRowEscandalloCell({
             height: 4,
             borderRadius: 2,
             flexShrink: 0,
-            background: tiene ? "rgba(148, 163, 184, 0.55)" : "rgba(71, 85, 105, 0.65)",
+            background: embedLight
+              ? tiene
+                ? "rgba(148, 163, 184, 0.3)"
+                : "rgba(148, 163, 184, 0.16)"
+              : tiene
+                ? "rgba(148, 163, 184, 0.55)"
+                : "rgba(71, 85, 105, 0.65)",
           }}
         />
         {label}
@@ -509,26 +600,110 @@ const productRowActionBtnShellLight: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   flexShrink: 0,
-  minHeight: 28,
-  height: 28,
-  padding: "0 9px",
+  minHeight: 26,
+  height: 26,
+  padding: "0 7px",
   borderRadius: 6,
-  fontSize: 10,
+  fontSize: 9,
   fontWeight: 500,
   lineHeight: 1,
   whiteSpace: "nowrap",
   boxSizing: "border-box",
   cursor: "pointer",
-  border: "1px solid rgb(226 232 240)",
-  background: "#ffffff",
-  color: "#475569",
+  border: "1px solid rgba(148, 163, 184, 0.28)",
+  background: "rgba(255, 255, 255, 0.35)",
+  color: "#64748b",
 };
+
+/** Botón icónico hielo (Config → Carta → Productos). */
+const productRowIconBtnShellLight: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  width: 26,
+  height: 26,
+  padding: 0,
+  borderRadius: 7,
+  boxSizing: "border-box",
+  cursor: "pointer",
+  border: "1px solid rgba(148, 163, 184, 0.2)",
+  background: "rgba(255, 255, 255, 0.34)",
+  color: "#64748b",
+};
+
+function RowActionGlyph(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={14}
+      height={14}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.65}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...props}
+    />
+  );
+}
+
+function IconGlCartaPrimary({ status }: { status: "onMenu" | "offMenu" | "inactive" }) {
+  if (status === "inactive") {
+    return (
+      <RowActionGlyph>
+        <path d="M13 2L4 14h6l-1.5 8L20 9h-6.5L13 2z" />
+      </RowActionGlyph>
+    );
+  }
+  if (status === "onMenu") {
+    return (
+      <RowActionGlyph strokeWidth={1.55}>
+        <circle cx="12" cy="12" r="8.75" />
+        <path d="M8 12h8" />
+      </RowActionGlyph>
+    );
+  }
+  return (
+    <RowActionGlyph>
+      <path d="M12 5v14M5 12h14" />
+    </RowActionGlyph>
+  );
+}
+
+function IconGlPencil() {
+  return (
+    <RowActionGlyph>
+      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </RowActionGlyph>
+  );
+}
+
+function IconGlChart() {
+  return (
+    <RowActionGlyph>
+      <path d="M4 19V10M12 19V6M16 19v-5M20 19v-2" />
+    </RowActionGlyph>
+  );
+}
+
+function IconGlTrash() {
+  return (
+    <RowActionGlyph>
+      <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+      <path d="M10 11v6M14 11v6" />
+    </RowActionGlyph>
+  );
+}
 
 function ProductRowActions({
   p,
   busyEsc,
   t,
   embedLight = false,
+  inventoryIconToolbar = false,
   onEdit,
   onToggleCarta,
   onActivateProduct,
@@ -539,6 +714,7 @@ function ProductRowActions({
   busyEsc: boolean;
   t: (key: string) => string;
   embedLight?: boolean;
+  inventoryIconToolbar?: boolean;
   onEdit: () => void;
   onToggleCarta: () => void;
   onActivateProduct: () => void;
@@ -567,24 +743,24 @@ function ProductRowActions({
     ? status === "inactive"
       ? {
           ...shell,
-          border: "1px solid rgb(186 230 253)",
-          background: "rgb(240 249 255)",
-          color: "rgb(3 105 161)",
+          border: "1px solid rgba(148, 163, 184, 0.28)",
+          background: "rgba(255, 255, 255, 0.45)",
+          color: "#475569",
           fontWeight: 500,
         }
       : status === "onMenu"
         ? {
             ...shell,
-            border: "1px solid rgb(253 230 138)",
-            background: "rgb(254 252 232)",
-            color: "rgb(133 77 14)",
+            border: "1px solid rgba(148, 163, 184, 0.3)",
+            background: "rgba(255, 255, 255, 0.4)",
+            color: "#64748b",
             fontWeight: 500,
           }
         : {
             ...shell,
-            border: "1px solid rgb(187 247 208)",
-            background: "rgb(240 253 244)",
-            color: "rgb(22 101 52)",
+            border: "1px solid rgba(148, 163, 184, 0.28)",
+            background: "rgba(255, 255, 255, 0.45)",
+            color: "#64748b",
             fontWeight: 500,
           }
     : status === "inactive"
@@ -609,9 +785,106 @@ function ProductRowActions({
             color: "#bbf7d0",
           };
 
+  const primaryCartaIconStyle: CSSProperties =
+    status === "inactive"
+      ? {
+          ...productRowIconBtnShellLight,
+          border: "1px solid rgba(56, 189, 248, 0.22)",
+          background: "rgba(224, 242, 254, 0.55)",
+          color: "#0369a1",
+        }
+      : status === "onMenu"
+        ? {
+            ...productRowIconBtnShellLight,
+            border: "1px solid rgba(251, 191, 36, 0.28)",
+            background: "rgba(255, 251, 235, 0.65)",
+            color: "#b45309",
+          }
+        : {
+            ...productRowIconBtnShellLight,
+            border: "1px solid rgba(74, 222, 128, 0.24)",
+            background: "rgba(220, 252, 231, 0.55)",
+            color: "#166534",
+          };
+
   const onPrimaryCarta = status === "inactive" ? onActivateProduct : onToggleCarta;
 
   const escLabel = busyEsc ? t("carta.escPending") : t("carta.actionEscandallo");
+  const escTitle =
+    busyEsc ? t("carta.escPending") : !enCarta ? t("productos.escNeedCartaHint") : t("carta.actionEscandallo");
+
+  if (inventoryIconToolbar && embedLight) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "nowrap",
+          gap: 2,
+          justifyContent: "flex-end",
+          alignItems: "center",
+          justifySelf: "stretch",
+          width: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
+          overflowX: "auto",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        <button
+          type="button"
+          className={PRODUCTOS_ROW_ICON_BTN_CLASS}
+          onClick={onPrimaryCarta}
+          style={primaryCartaIconStyle}
+          title={primaryCartaTitle}
+          aria-label={primaryCartaTitle}
+        >
+          <IconGlCartaPrimary status={status} />
+        </button>
+
+        <button
+          type="button"
+          className={PRODUCTOS_ROW_ICON_BTN_CLASS}
+          onClick={onEdit}
+          style={productRowIconBtnShellLight}
+          title={t("carta.actionEdit")}
+          aria-label={t("carta.actionEdit")}
+        >
+          <IconGlPencil />
+        </button>
+
+        <button
+          type="button"
+          className={PRODUCTOS_ROW_ICON_BTN_CLASS}
+          disabled={!escEnabled}
+          title={escTitle}
+          aria-label={escLabel}
+          onClick={onEsc}
+          style={{
+            ...productRowIconBtnShellLight,
+            cursor: escEnabled ? "pointer" : "not-allowed",
+          }}
+        >
+          <IconGlChart />
+        </button>
+
+        <button
+          type="button"
+          className={PRODUCTOS_ROW_ICON_BTN_CLASS}
+          onClick={onDelete}
+          style={{
+            ...productRowIconBtnShellLight,
+            border: "1px solid rgba(248, 113, 113, 0.22)",
+            background: "rgba(254, 242, 242, 0.45)",
+            color: "#b91c1c",
+          }}
+          title={t("common.delete")}
+          aria-label={t("common.delete")}
+        >
+          <IconGlTrash />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -646,6 +919,7 @@ function ProductRowActions({
         onClick={onEdit}
         style={shell}
         title={t("carta.actionEdit")}
+        aria-label={t("carta.actionEdit")}
       >
         {t("carta.actionEdit")}
       </button>
@@ -654,13 +928,7 @@ function ProductRowActions({
         type="button"
         className={PRODUCTOS_ROW_TEXT_BTN_CLASS}
         disabled={!escEnabled}
-        title={
-          busyEsc
-            ? t("carta.escPending")
-            : !enCarta
-              ? t("productos.escNeedCartaHint")
-              : t("carta.actionEscandallo")
-        }
+        title={escTitle}
         aria-label={escLabel}
         onClick={onEsc}
         style={{
@@ -677,11 +945,12 @@ function ProductRowActions({
         onClick={onDelete}
         style={{
           ...shell,
-          border: embedLight ? "1px solid rgb(226 232 240)" : "1px solid rgba(248, 113, 113, 0.28)",
-          background: embedLight ? "#ffffff" : "rgba(127, 29, 29, 0.12)",
-          color: embedLight ? "#64748b" : "#fca5a5",
+          border: embedLight ? "1px solid rgba(148, 163, 184, 0.22)" : "1px solid rgba(248, 113, 113, 0.28)",
+          background: embedLight ? "transparent" : "rgba(127, 29, 29, 0.12)",
+          color: embedLight ? "#94a3b8" : "#fca5a5",
         }}
         title={t("common.delete")}
+        aria-label={t("common.delete")}
       >
         {t("common.delete")}
       </button>
@@ -709,6 +978,16 @@ export default function ProductosManagementPage({
   const router = useRouter();
   const emb = Boolean(embedConfigVisual);
   const iceVisual = emb || Boolean(dashboardListIceVisual);
+  /** Solo Config → Carta → Productos: menos ruido, prioridad en la tabla */
+  const configCartaProductosChrome = emb && iceVisual;
+  const iceProductosDataGridStyle = iceVisual ? (configCartaProductosChrome ? rowGridEmbedIcons : rowGridEmbed) : rowGrid;
+  const iceProductosGroupBarGridStyle = iceVisual
+    ? configCartaProductosChrome
+      ? rowGridGroupBarEmbedIcons
+      : rowGridGroupBarEmbed
+    : rowGridGroupBar;
+  const productosTableMinInnerWidthPx =
+    iceVisual && configCartaProductosChrome ? PRODUCTOS_TABLE_MIN_WIDTH_EMBED_ICONS_PX : PRODUCTOS_TABLE_MIN_WIDTH_PX;
   const [hydrated, setHydrated] = useState(false);
   const [items, setItems] = useState<PlatoCarta[]>([]);
   const [meta, setMeta] = useState<EscandalloMetaMap>(new Map());
@@ -1047,19 +1326,55 @@ export default function ProductosManagementPage({
   );
 
   const rowNombreStyleResolved = useMemo(
-    () => (iceVisual ? { ...productRowNombreStyle, color: "#0f172a" } : productRowNombreStyle),
+    () =>
+      iceVisual
+        ? {
+            ...productRowNombreStyle,
+            color: "var(--hostly-navy-deep)",
+            fontWeight: 650,
+            fontSize: 15,
+            lineHeight: 1.38,
+            letterSpacing: "-0.022em",
+          }
+        : productRowNombreStyle,
     [iceVisual],
   );
   const rowPrecioStyleResolved = useMemo(
-    () => (iceVisual ? { ...productRowPrecioStyle, color: "#0f172a" } : productRowPrecioStyle),
+    () =>
+      iceVisual
+        ? {
+            ...productRowPrecioStyle,
+            color: "var(--hostly-navy-deep)",
+            fontWeight: 650,
+            fontSize: 13,
+            lineHeight: 1.34,
+          }
+        : productRowPrecioStyle,
     [iceVisual],
   );
   const rowTipoStyleResolved = useMemo(
-    () => (iceVisual ? { ...productRowTipoStyle, color: "#64748b" } : productRowTipoStyle),
+    () =>
+      iceVisual
+        ? {
+            ...productRowTipoStyle,
+            fontSize: 9,
+            fontWeight: 520,
+            letterSpacing: "0.065em",
+            color: "#9ca8ba",
+          }
+        : productRowTipoStyle,
     [iceVisual],
   );
   const rowCategoriaStyleResolved = useMemo(
-    () => (iceVisual ? { ...productRowCategoriaStyle, color: "#475569" } : productRowCategoriaStyle),
+    () =>
+      iceVisual
+        ? {
+            ...productRowCategoriaStyle,
+            fontSize: 10,
+            fontWeight: 420,
+            color: "#94a3b8",
+          }
+        : productRowCategoriaStyle,
     [iceVisual],
   );
   const colHeadStyleResolved = useMemo(
@@ -1067,11 +1382,11 @@ export default function ProductosManagementPage({
       iceVisual
         ? {
             ...colHeadStyle,
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            color: "#64748b",
-            padding: "6px 8px",
+            fontSize: 9,
+            fontWeight: 560,
+            letterSpacing: "0.12em",
+            color: "var(--hostly-ink-faint)",
+            padding: "6px 5px",
           }
         : colHeadStyle,
     [iceVisual],
@@ -1376,6 +1691,203 @@ export default function ProductosManagementPage({
     window.setTimeout(() => setNotice(null), 2200);
   }
 
+  const iceToolbarFilterSpecs = [
+    { id: "todos" as const, label: t("carta.filterAll") },
+    { id: "activos" as const, label: t("carta.filterActive") },
+    { id: "inactivos" as const, label: t("carta.filterInactive") },
+    { id: "conEscandallo" as const, label: t("carta.filterConEsc") },
+    { id: "sinEscandallo" as const, label: t("carta.filterSinEsc") },
+  ] as const;
+
+  /** UI only: filtros rápidos hielo; `cfgMergedStripe` = barra ultra compacta (config carta embed). */
+  function iceToolbarFilterButtons(cfgMergedStripe: boolean): ReactNode {
+    const dense = cfgMergedStripe;
+    return iceToolbarFilterSpecs.map((f) => {
+      const active = listFilter === f.id;
+      const passiveBorder =
+        dense
+          ? "1px solid rgba(148, 163, 184, 0.16)"
+          : configCartaProductosChrome
+            ? "1px solid rgba(148, 163, 184, 0.18)"
+            : iceVisual
+              ? "1px solid var(--hostly-line)"
+              : "1px solid #334155";
+      const inactiveBg =
+        dense
+          ? "rgba(255, 255, 255, 0.42)"
+          : configCartaProductosChrome && iceVisual
+            ? "rgba(255, 255, 255, 0.5)"
+            : iceVisual
+              ? "#fff"
+              : "#0f172a";
+      const inactiveInk =
+        dense ? "var(--hostly-ink-muted)" : configCartaProductosChrome ? "var(--hostly-ink-muted)" : "#94a3b8";
+      return (
+        <button
+          key={f.id}
+          type="button"
+          onClick={() => setListFilter(f.id)}
+          style={{
+            border: active ? "1px solid rgba(34, 197, 94, 0.55)" : passiveBorder,
+            background: active
+              ? iceVisual
+                ? "rgba(220, 252, 231, 0.95)"
+                : "rgba(34, 197, 94, 0.18)"
+              : inactiveBg,
+            color: active ? (iceVisual ? "#166534" : "#ecfdf5") : inactiveInk,
+            padding: dense ? "3px 7px" : configCartaProductosChrome ? "4px 9px" : "5px 11px",
+            borderRadius: 999,
+            fontWeight: active ? 700 : dense ? 640 : configCartaProductosChrome ? 650 : 700,
+            cursor: "pointer",
+            fontSize: dense ? 10 : configCartaProductosChrome ? 11 : 12,
+            lineHeight: dense ? 1.1 : 1.2,
+            minHeight: dense ? 22 : configCartaProductosChrome ? 26 : 30,
+          }}
+        >
+          {f.label}
+        </button>
+      );
+    });
+  }
+
+  function iceToolbarViewControls(cfgMergedStripe: boolean): ReactNode {
+    const dense = cfgMergedStripe;
+    const shellStyle: CSSProperties = {
+      display: "flex",
+      gap: dense ? 4 : configCartaProductosChrome ? 5 : 6,
+      alignItems: "center",
+      flexWrap: "wrap",
+      flexShrink: 0,
+      ...(dense ? {} : { marginLeft: "auto" }),
+    };
+    return (
+      <span style={shellStyle}>
+        {!dense ? (
+          <span
+            style={{
+              fontSize: configCartaProductosChrome ? 9 : 10,
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "#64748b",
+            }}
+          >
+            Vista
+          </span>
+        ) : (
+          <span
+            style={{
+              fontSize: 8,
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#94a3b8",
+              opacity: 0.85,
+            }}
+          >
+            Vista
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setViewMode("grouped")}
+          style={{
+            border:
+              viewMode === "grouped"
+                ? "1px solid rgba(56, 189, 248, 0.55)"
+                : dense
+                  ? "1px solid rgba(148, 163, 184, 0.16)"
+                  : configCartaProductosChrome
+                    ? "1px solid rgba(148, 163, 184, 0.18)"
+                    : iceVisual
+                      ? "1px solid var(--hostly-line)"
+                      : "1px solid #334155",
+            background:
+              viewMode === "grouped"
+                ? iceVisual
+                  ? "rgba(224, 242, 254, 0.95)"
+                  : "rgba(14, 165, 233, 0.14)"
+                : dense && iceVisual
+                  ? "rgba(255, 255, 255, 0.42)"
+                  : configCartaProductosChrome && iceVisual
+                    ? "rgba(255, 255, 255, 0.5)"
+                    : iceVisual
+                      ? "#fff"
+                      : "#0f172a",
+            color:
+              viewMode === "grouped"
+                ? iceVisual
+                  ? "#0369a1"
+                  : "#bae6fd"
+                : dense && iceVisual
+                  ? "var(--hostly-ink-muted)"
+                  : configCartaProductosChrome
+                    ? "var(--hostly-ink-muted)"
+                    : "#94a3b8",
+            padding: dense ? "3px 8px" : configCartaProductosChrome ? "4px 9px" : "5px 11px",
+            borderRadius: 999,
+            fontWeight: dense ? 720 : 800,
+            cursor: "pointer",
+            fontSize: dense ? 10 : configCartaProductosChrome ? 11 : 12,
+            lineHeight: dense ? 1.1 : 1.2,
+            minHeight: dense ? 22 : configCartaProductosChrome ? 26 : 30,
+            whiteSpace: "nowrap",
+          }}
+        >
+          Vista agrupada
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("list")}
+          style={{
+            border:
+              viewMode === "list"
+                ? "1px solid rgba(56, 189, 248, 0.55)"
+                : dense
+                  ? "1px solid rgba(148, 163, 184, 0.16)"
+                  : configCartaProductosChrome
+                    ? "1px solid rgba(148, 163, 184, 0.18)"
+                    : iceVisual
+                      ? "1px solid var(--hostly-line)"
+                      : "1px solid #334155",
+            background:
+              viewMode === "list"
+                ? iceVisual
+                  ? "rgba(224, 242, 254, 0.95)"
+                  : "rgba(14, 165, 233, 0.14)"
+                : dense && iceVisual
+                  ? "rgba(255, 255, 255, 0.42)"
+                  : configCartaProductosChrome && iceVisual
+                    ? "rgba(255, 255, 255, 0.5)"
+                    : iceVisual
+                      ? "#fff"
+                      : "#0f172a",
+            color:
+              viewMode === "list"
+                ? iceVisual
+                  ? "#0369a1"
+                  : "#bae6fd"
+                : dense && iceVisual
+                  ? "var(--hostly-ink-muted)"
+                  : configCartaProductosChrome
+                    ? "var(--hostly-ink-muted)"
+                    : "#94a3b8",
+            padding: dense ? "3px 8px" : configCartaProductosChrome ? "4px 9px" : "5px 11px",
+            borderRadius: 999,
+            fontWeight: dense ? 720 : 800,
+            cursor: "pointer",
+            fontSize: dense ? 10 : configCartaProductosChrome ? 11 : 12,
+            lineHeight: dense ? 1.1 : 1.2,
+            minHeight: dense ? 22 : configCartaProductosChrome ? 26 : 30,
+            whiteSpace: "nowrap",
+          }}
+        >
+          Vista lista
+        </button>
+      </span>
+    );
+  }
+
   if (!hydrated) {
     return (
       <ModulePageShell
@@ -1388,6 +1900,7 @@ export default function ProductosManagementPage({
         lockViewport
         lockViewportFillParent={lockViewportFillParent}
         shellSurface={iceVisual ? "configLight" : "default"}
+        denseInventoryHeader={emb}
       >
         <p style={{ color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
@@ -1407,6 +1920,7 @@ export default function ProductosManagementPage({
       lockViewport
       lockViewportFillParent={lockViewportFillParent}
       shellSurface={iceVisual ? "configLight" : "default"}
+      denseInventoryHeader={emb}
       headerBelow={
         <div
           style={{
@@ -1415,7 +1929,7 @@ export default function ProductosManagementPage({
             flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 8,
+            gap: configCartaProductosChrome ? 4 : 8,
             width: "100%",
             minWidth: 0,
             boxSizing: "border-box",
@@ -1427,7 +1941,7 @@ export default function ProductosManagementPage({
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
-              gap: 6,
+              gap: configCartaProductosChrome ? 3 : 6,
               minWidth: 0,
               flex: "1 1 200px",
             }}
@@ -1435,15 +1949,15 @@ export default function ProductosManagementPage({
             <Link
               href={emb ? "/dashboard/configuracion/carta/categorias" : "/dashboard/carta/categorias"}
               style={{
-                border: iceVisual ? "1px solid #e2e8f0" : "1px solid rgba(148, 163, 184, 0.14)",
+                border: iceVisual ? "1px solid var(--hostly-line)" : "1px solid rgba(148, 163, 184, 0.14)",
                 background: iceVisual ? "rgba(255,255,255,0.92)" : "rgba(15, 23, 42, 0.28)",
                 color: iceVisual ? "#475569" : "#94a3b8",
-                padding: "5px 10px",
-                borderRadius: 8,
+                padding: configCartaProductosChrome ? "3px 8px" : "5px 10px",
+                borderRadius: configCartaProductosChrome ? 6 : 8,
                 fontWeight: 600,
-                fontSize: 11,
-                lineHeight: 1.2,
-                minHeight: 30,
+                fontSize: configCartaProductosChrome ? 9 : 11,
+                lineHeight: configCartaProductosChrome ? 1.08 : 1.2,
+                minHeight: configCartaProductosChrome ? 26 : 30,
                 whiteSpace: "nowrap",
                 textDecoration: "none",
                 display: "inline-flex",
@@ -1461,16 +1975,16 @@ export default function ProductosManagementPage({
                 router.push(emb ? "/dashboard/configuracion/carta/modificadores" : "/dashboard/carta/modificadores")
               }
               style={{
-                border: iceVisual ? "1px solid #e2e8f0" : "1px solid rgba(148, 163, 184, 0.14)",
+                border: iceVisual ? "1px solid var(--hostly-line)" : "1px solid rgba(148, 163, 184, 0.14)",
                 background: iceVisual ? "rgba(255,255,255,0.92)" : "rgba(15, 23, 42, 0.28)",
                 color: iceVisual ? "#475569" : "#94a3b8",
-                padding: "5px 10px",
-                borderRadius: 8,
+                padding: configCartaProductosChrome ? "3px 8px" : "5px 10px",
+                borderRadius: configCartaProductosChrome ? 6 : 8,
                 fontWeight: 600,
                 cursor: "pointer",
-                fontSize: 11,
-                lineHeight: 1.2,
-                minHeight: 30,
+                fontSize: configCartaProductosChrome ? 9 : 11,
+                lineHeight: configCartaProductosChrome ? 1.08 : 1.2,
+                minHeight: configCartaProductosChrome ? 26 : 30,
                 whiteSpace: "nowrap",
                 letterSpacing: "-0.01em",
                 maxWidth: "100%",
@@ -1486,7 +2000,7 @@ export default function ProductosManagementPage({
               flexWrap: "wrap",
               alignItems: "center",
               justifyContent: "flex-end",
-              gap: 8,
+              gap: configCartaProductosChrome ? 5 : 8,
               minWidth: 0,
               marginLeft: "auto",
             }}
@@ -1498,40 +2012,75 @@ export default function ProductosManagementPage({
                 e.stopPropagation();
                 router.push(emb ? "/dashboard/configuracion/carta/importacion" : "/dashboard/carta/importar");
               }}
-              style={{
-                border: iceVisual ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(251, 191, 36, 0.22)",
-                background: iceVisual ? "rgba(255, 251, 235, 0.95)" : "rgba(120, 53, 15, 0.12)",
-                color: iceVisual ? "#92400e" : "#fcd34d",
-                padding: "5px 11px",
-                borderRadius: 8,
-                fontWeight: 700,
-                cursor: "pointer",
-                fontSize: 11,
-                lineHeight: 1.2,
-                minHeight: 30,
-                whiteSpace: "nowrap",
-                letterSpacing: "-0.01em",
-              }}
+              style={
+                configCartaProductosChrome
+                  ? {
+                      border: "1px solid rgba(148, 163, 184, 0.22)",
+                      background: "transparent",
+                      color: "var(--hostly-ink-muted)",
+                      padding: "3px 8px",
+                      borderRadius: 6,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontSize: 9,
+                      lineHeight: 1.1,
+                      minHeight: 26,
+                      whiteSpace: "nowrap",
+                      letterSpacing: "-0.01em",
+                    }
+                  : {
+                      border: iceVisual ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(251, 191, 36, 0.22)",
+                      background: iceVisual ? "rgba(255, 251, 235, 0.95)" : "rgba(120, 53, 15, 0.12)",
+                      color: iceVisual ? "#92400e" : "#fcd34d",
+                      padding: "5px 11px",
+                      borderRadius: 8,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontSize: 11,
+                      lineHeight: 1.2,
+                      minHeight: 30,
+                      whiteSpace: "nowrap",
+                      letterSpacing: "-0.01em",
+                    }
+              }
             >
               {t("carta.ctaImportMenu")}
             </button>
             <button
               type="button"
               onClick={openCreate}
-              style={{
-                border: iceVisual ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.42)",
-                background: iceVisual ? "rgba(220, 252, 231, 0.9)" : "rgba(6, 78, 59, 0.22)",
-                color: iceVisual ? "#166534" : "#bbf7d0",
-                padding: "6px 12px",
-                borderRadius: 8,
-                fontWeight: 700,
-                cursor: "pointer",
-                fontSize: 12,
-                lineHeight: 1.2,
-                minHeight: 30,
-                whiteSpace: "nowrap",
-                letterSpacing: "-0.01em",
-              }}
+              style={
+                configCartaProductosChrome
+                  ? {
+                      border: "1px solid rgba(34, 197, 94, 0.5)",
+                      background: "rgba(220, 252, 231, 0.98)",
+                      color: "#15803d",
+                      padding: "5px 12px",
+                      borderRadius: 8,
+                      fontWeight: 760,
+                      cursor: "pointer",
+                      fontSize: 11,
+                      lineHeight: 1.15,
+                      minHeight: 28,
+                      whiteSpace: "nowrap",
+                      letterSpacing: "-0.02em",
+                      boxShadow: "0 1px 2px rgba(15, 23, 42, 0.05)",
+                    }
+                  : {
+                      border: iceVisual ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.42)",
+                      background: iceVisual ? "rgba(220, 252, 231, 0.9)" : "rgba(6, 78, 59, 0.22)",
+                      color: iceVisual ? "#166534" : "#bbf7d0",
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      lineHeight: 1.2,
+                      minHeight: 30,
+                      whiteSpace: "nowrap",
+                      letterSpacing: "-0.01em",
+                    }
+              }
             >
               {t("carta.ctaNew")}
             </button>
@@ -1539,29 +2088,30 @@ export default function ProductosManagementPage({
         </div>
       }
     >
-      <div
-        className={iceVisual ? "hostly-productos-config-skin" : undefined}
+      <HostlySection
+        stack="sm"
+        className={
+          iceVisual
+            ? `hostly-productos-config-skin min-h-0 min-w-0 flex-1 overflow-hidden${configCartaProductosChrome ? " !gap-1" : ""}`
+            : "min-h-0 min-w-0 flex-1 overflow-hidden"
+        }
         style={{
           flexGrow: 1,
           flexShrink: 1,
           flexBasis: 0,
           minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 0,
-          overflow: "hidden",
         }}
       >
         {notice ? (
           <div
             style={{
               flexShrink: 0,
-              padding: "8px 11px",
+              padding: configCartaProductosChrome ? "5px 8px" : "8px 11px",
               borderRadius: 8,
               background: iceVisual ? "rgba(220, 252, 231, 0.85)" : "rgba(34, 197, 94, 0.12)",
               border: iceVisual ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.3)",
               color: iceVisual ? "#166534" : "#bbf7d0",
-              fontSize: 13,
+              fontSize: configCartaProductosChrome ? 11 : 13,
               lineHeight: 1.32,
             }}
           >
@@ -1573,70 +2123,235 @@ export default function ProductosManagementPage({
           <div
             style={{
               flexShrink: 0,
-              padding: "8px 11px",
+              padding: configCartaProductosChrome ? "5px 8px" : "8px 11px",
               borderRadius: 8,
               background: iceVisual ? "rgba(254, 242, 242, 0.95)" : "rgba(248, 113, 113, 0.12)",
               border: iceVisual ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(248, 113, 113, 0.35)",
               color: iceVisual ? "#b91c1c" : "#fecaca",
-              fontSize: 13,
+              fontSize: configCartaProductosChrome ? 11 : 13,
             }}
           >
             {formError}
           </div>
         ) : null}
 
-        <div style={{ flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", marginBottom: 2 }}>
-          {kpiPills.map((m) => (
-            <span
-              key={m.key}
-              style={{
-                display: "inline-flex",
-                gap: 6,
-                alignItems: "baseline",
-                padding: "4px 9px",
-                borderRadius: 999,
-                border: iceVisual ? "1px solid #e2e8f0" : "1px solid rgba(51, 65, 85, 0.65)",
-                background: iceVisual ? "rgba(255,255,255,0.9)" : "rgba(15, 23, 42, 0.28)",
-                minHeight: 26,
-                whiteSpace: "nowrap",
-              }}
+        {iceVisual ? (
+          configCartaProductosChrome ? (
+            <div
+              aria-label="Indicadores de catálogo"
+              className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-px border-b border-[rgba(148,163,184,0.16)] px-0.5 pb-px pt-0"
+              style={{ color: "var(--hostly-ink-muted)" }}
             >
+              {kpiPills.map((m, i) => (
+                <span key={m.key} className="inline-flex items-baseline gap-0.5">
+                  {i > 0 ? (
+                    <span className="select-none opacity-[0.28]" aria-hidden>
+                      ·
+                    </span>
+                  ) : null}
+                  <span className="text-[7px] font-bold uppercase tracking-[0.1em] opacity-[0.78]">{m.label}</span>
+                  <span
+                    className="tabular-nums text-[11px] font-semibold leading-none"
+                    style={{ color: "var(--hostly-ink-strong)" }}
+                  >
+                    {m.value}
+                  </span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div
+              className="grid shrink-0 gap-2"
+              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
+            >
+              {kpiPills.map((m) => (
+                <HostlyKpiCard key={m.key} title={m.label} value={m.value} className="px-3 py-2.5" />
+              ))}
+            </div>
+          )
+        ) : (
+          <div style={{ flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", marginBottom: 2 }}>
+            {kpiPills.map((m) => (
               <span
+                key={m.key}
                 style={{
-                  fontSize: 10,
-                  fontWeight: 900,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: iceVisual ? "#64748b" : "#64748b",
+                  display: "inline-flex",
+                  gap: 6,
+                  alignItems: "baseline",
+                  padding: "4px 9px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(51, 65, 85, 0.65)",
+                  background: "rgba(15, 23, 42, 0.28)",
+                  minHeight: 26,
+                  whiteSpace: "nowrap",
                 }}
               >
-                {m.label}
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 900,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "#64748b",
+                  }}
+                >
+                  {m.label}
+                </span>
+                <span style={{ ...metricNum, fontSize: 14, lineHeight: 1, color: "#e2e8f0" }}>{m.value}</span>
               </span>
-              <span style={{ ...metricNum, fontSize: 14, lineHeight: 1, color: iceVisual ? "#0f172a" : "#e2e8f0" }}>{m.value}</span>
-            </span>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        <section
-          style={{
-            flexGrow: 1,
-            flexShrink: 1,
-            flexBasis: 0,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            borderRadius: 10,
-            background: iceVisual ? "rgba(255,255,255,0.92)" : "#1e293b",
-            border: iceVisual ? "1px solid rgb(226 232 240)" : "1px solid rgba(51, 65, 85, 0.5)",
-            boxShadow: iceVisual ? "0 1px 2px rgba(15,23,42,0.04), 0 10px 28px -22px rgba(15,23,42,0.07)" : "none",
-          }}
-        >
+        <ProductosTableChrome iceVisual={iceVisual} embedFlatChrome={configCartaProductosChrome}>
+          {iceVisual ? (
+            configCartaProductosChrome ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 5,
+                  rowGap: 4,
+                  padding: "3px 4px",
+                  borderBottom: "1px solid rgba(148, 163, 184, 0.2)",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: 6,
+                    minWidth: 0,
+                    flex: "1 1 min(520px, 100%)",
+                    rowGap: 4,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "baseline",
+                      gap: "2px 8px",
+                      minWidth: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 750,
+                        letterSpacing: "-0.02em",
+                        color: "var(--hostly-ink-strong)",
+                        lineHeight: 1.1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t("carta.listTitle")}
+                    </span>
+                    <span
+                      className="tabular-nums"
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 600,
+                        color: "var(--hostly-ink-muted)",
+                        lineHeight: 1.1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t("carta.listCount", { shown: displayed.length, total: items.length })}
+                    </span>
+                  </div>
+                  <span
+                    aria-hidden
+                    style={{
+                      opacity: 0.16,
+                      color: "#475569",
+                      fontWeight: 900,
+                      userSelect: "none",
+                      fontSize: 10,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ·
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 800,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      color: "#94a3b8",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {t("stock.filterHint")}
+                  </span>
+                  {iceToolbarFilterButtons(true)}
+                </div>
+                <input
+                  type="search"
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  placeholder={t("carta.searchPlaceholder")}
+                  aria-label={t("carta.searchPlaceholder")}
+                  style={{
+                    minWidth: 116,
+                    flex: "1 1 200px",
+                    maxWidth: 420,
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(148, 163, 184, 0.26)",
+                    background: "var(--hostly-surface-page-soft)",
+                    color: "var(--hostly-ink-strong)",
+                    fontSize: 11,
+                    outline: "none",
+                    boxSizing: "border-box",
+                    minHeight: 26,
+                  }}
+                />
+                {iceToolbarViewControls(true)}
+              </div>
+            ) : (
+            <HostlySectionHeader
+              title={t("carta.listTitle")}
+              description={t("carta.listCount", { shown: displayed.length, total: items.length })}
+              descriptionClassName="!text-[10px] !font-semibold !leading-snug !m-0"
+              className="shrink-0 border-b border-[var(--hostly-line)] px-1.5 py-1"
+            >
+              <input
+                type="search"
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder={t("carta.searchPlaceholder")}
+                aria-label={t("carta.searchPlaceholder")}
+                style={{
+                  minWidth: 160,
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: "220px",
+                  maxWidth: 360,
+                  padding: "6px 11px",
+                  borderRadius: 999,
+                  border: "1px solid var(--hostly-line)",
+                  background: "var(--hostly-surface-page-soft)",
+                  color: "var(--hostly-ink-strong)",
+                  fontSize: 13,
+                  outline: "none",
+                  boxSizing: "border-box",
+                  minHeight: 34,
+                }}
+              />
+            </HostlySectionHeader>
+            )
+          ) : (
           <div
             style={{
               flexShrink: 0,
               padding: "3px 6px",
-              borderBottom: iceVisual ? "1px solid rgb(241 245 249)" : "1px solid #334155",
+              borderBottom: "1px solid #334155",
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
@@ -1645,8 +2360,8 @@ export default function ProductosManagementPage({
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 200px" }}>
-              <h2 style={{ ...OPER_PRIMARY_SECTION_TITLE, fontSize: "clamp(13px, 1.35vw, 16px)", lineHeight: 1.06, color: iceVisual ? "#0f172a" : undefined }}>{t("carta.listTitle")}</h2>
-              <p style={{ ...OPER_PRIMARY_COUNT_META, margin: "1px 0 0", fontSize: 10, color: iceVisual ? "#64748b" : undefined }}>{t("carta.listCount", { shown: displayed.length, total: items.length })}</p>
+              <h2 style={{ ...OPER_PRIMARY_SECTION_TITLE, fontSize: "clamp(13px, 1.35vw, 16px)", lineHeight: 1.06 }}>{t("carta.listTitle")}</h2>
+              <p style={{ ...OPER_PRIMARY_COUNT_META, margin: "1px 0 0", fontSize: 10 }}>{t("carta.listCount", { shown: displayed.length, total: items.length })}</p>
             </div>
             <input
               type="search"
@@ -1662,9 +2377,9 @@ export default function ProductosManagementPage({
                 maxWidth: 360,
                 padding: "6px 11px",
                 borderRadius: 999,
-                border: iceVisual ? "1px solid #cbd5e1" : "1px solid #475569",
-                background: iceVisual ? "#f8fafc" : "#0f172a",
-                color: iceVisual ? "#0f172a" : "#f8fafc",
+                border: "1px solid #475569",
+                background: "#0f172a",
+                color: "#f8fafc",
                 fontSize: 13,
                 outline: "none",
                 boxSizing: "border-box",
@@ -1672,7 +2387,9 @@ export default function ProductosManagementPage({
               }}
             />
           </div>
+          )}
 
+          {!configCartaProductosChrome ? (
           <div
             style={{
               flexShrink: 0,
@@ -1681,105 +2398,35 @@ export default function ProductosManagementPage({
               gap: 6,
               padding: "3px 6px",
               alignItems: "center",
-              borderBottom: iceVisual ? "1px solid rgb(241 245 249)" : "1px solid #334155",
+              borderBottom: iceVisual ? "1px solid var(--hostly-line)" : "1px solid #334155",
             }}
           >
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginRight: 2 }}>{t("stock.filterHint")}</span>
-            {(
-              [
-                { id: "todos" as const, label: t("carta.filterAll") },
-                { id: "activos" as const, label: t("carta.filterActive") },
-                { id: "inactivos" as const, label: t("carta.filterInactive") },
-                { id: "conEscandallo" as const, label: t("carta.filterConEsc") },
-                { id: "sinEscandallo" as const, label: t("carta.filterSinEsc") },
-              ] as const
-            ).map((f) => {
-              const active = listFilter === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setListFilter(f.id)}
-                  style={{
-                    border: active
-                      ? "1px solid rgba(34, 197, 94, 0.55)"
-                      : iceVisual
-                        ? "1px solid #e2e8f0"
-                        : "1px solid #334155",
-                    background: active ? (iceVisual ? "rgba(220, 252, 231, 0.95)" : "rgba(34, 197, 94, 0.18)") : iceVisual ? "#fff" : "#0f172a",
-                    color: active ? (iceVisual ? "#166534" : "#ecfdf5") : "#94a3b8",
-                    padding: "5px 11px",
-                    borderRadius: 999,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontSize: 12,
-                    lineHeight: 1.2,
-                    minHeight: 30,
-                  }}
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-
-            <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#64748b" }}>Vista</span>
-              <button
-                type="button"
-                onClick={() => setViewMode("grouped")}
-                style={{
-                  border:
-                    viewMode === "grouped"
-                      ? "1px solid rgba(56, 189, 248, 0.55)"
-                      : iceVisual
-                        ? "1px solid #e2e8f0"
-                        : "1px solid #334155",
-                  background:
-                    viewMode === "grouped" ? (iceVisual ? "rgba(224, 242, 254, 0.95)" : "rgba(14, 165, 233, 0.14)") : iceVisual ? "#fff" : "#0f172a",
-                  color: viewMode === "grouped" ? (iceVisual ? "#0369a1" : "#bae6fd") : "#94a3b8",
-                  padding: "5px 11px",
-                  borderRadius: 999,
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  lineHeight: 1.2,
-                  minHeight: 30,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Vista agrupada
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                style={{
-                  border:
-                    viewMode === "list" ? "1px solid rgba(56, 189, 248, 0.55)" : iceVisual ? "1px solid #e2e8f0" : "1px solid #334155",
-                  background:
-                    viewMode === "list" ? (iceVisual ? "rgba(224, 242, 254, 0.95)" : "rgba(14, 165, 233, 0.14)") : iceVisual ? "#fff" : "#0f172a",
-                  color: viewMode === "list" ? (iceVisual ? "#0369a1" : "#bae6fd") : "#94a3b8",
-                  padding: "5px 11px",
-                  borderRadius: 999,
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  lineHeight: 1.2,
-                  minHeight: 30,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Vista lista
-              </button>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                marginRight: 2,
+              }}
+            >
+              {t("stock.filterHint")}
             </span>
+            {iceToolbarFilterButtons(false)}
+            {iceToolbarViewControls(false)}
           </div>
+          ) : null}
 
           <div
             style={{
               flexShrink: 0,
-              padding: "2px 6px 3px",
-              borderBottom: iceVisual ? "1px solid rgb(241 245 249)" : "1px solid rgba(51, 65, 85, 0.75)",
+              padding: configCartaProductosChrome ? "1px 3px" : "2px 6px 3px",
+              borderBottom: iceVisual
+                ? configCartaProductosChrome
+                  ? "1px solid rgba(148, 163, 184, 0.2)"
+                  : "1px solid var(--hostly-line)"
+                : "1px solid rgba(51, 65, 85, 0.75)",
               display: "flex",
-              gap: 6,
+              gap: configCartaProductosChrome ? 4 : 6,
               overflowX: "auto",
               WebkitOverflowScrolling: "touch",
             }}
@@ -1798,18 +2445,34 @@ export default function ProductosManagementPage({
                     flexShrink: 0,
                     border: active
                       ? "1px solid rgba(56, 189, 248, 0.55)"
-                      : iceVisual
-                        ? "1px solid #e2e8f0"
-                        : "1px solid rgba(51, 65, 85, 0.8)",
-                    background: active ? (iceVisual ? "rgba(224, 242, 254, 0.95)" : "rgba(8,47,73,0.35)") : iceVisual ? "rgba(248,250,252,0.9)" : "rgba(2,6,23,0.12)",
-                    color: active ? (iceVisual ? "#0369a1" : "#bae6fd") : "#94a3b8",
-                    padding: "5px 10px",
+                      : configCartaProductosChrome
+                        ? "1px solid rgba(148, 163, 184, 0.18)"
+                        : iceVisual
+                          ? "1px solid var(--hostly-line)"
+                          : "1px solid rgba(51, 65, 85, 0.8)",
+                    background: active
+                      ? iceVisual
+                        ? "rgba(224, 242, 254, 0.95)"
+                        : "rgba(8,47,73,0.35)"
+                      : configCartaProductosChrome && iceVisual
+                        ? "rgba(255, 255, 255, 0.5)"
+                        : iceVisual
+                          ? "rgba(248,250,252,0.9)"
+                          : "rgba(2,6,23,0.12)",
+                    color: active
+                      ? iceVisual
+                        ? "#0369a1"
+                        : "#bae6fd"
+                      : configCartaProductosChrome
+                        ? "var(--hostly-ink-muted)"
+                        : "#94a3b8",
+                    padding: configCartaProductosChrome ? "3px 7px" : "5px 10px",
                     borderRadius: 999,
-                    fontWeight: 850,
+                    fontWeight: 820,
                     cursor: "pointer",
-                    fontSize: 11,
-                    lineHeight: 1.15,
-                    minHeight: 28,
+                    fontSize: configCartaProductosChrome ? 9 : 11,
+                    lineHeight: configCartaProductosChrome ? 1.06 : 1.15,
+                    minHeight: configCartaProductosChrome ? 22 : 28,
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -1867,7 +2530,7 @@ export default function ProductosManagementPage({
                   display: "flex",
                   flexDirection: "column",
                   overflow: "hidden",
-                  background: iceVisual ? "#f1f5f9" : "rgba(2, 6, 23, 0.18)",
+                  background: iceVisual ? "var(--hostly-surface-operational)" : "rgba(2, 6, 23, 0.18)",
                   border: "none",
                   borderRadius: 0,
                   boxShadow: "none",
@@ -1878,7 +2541,7 @@ export default function ProductosManagementPage({
                     style={{
                       flexShrink: 0,
                       padding: "4px 8px",
-                      borderBottom: iceVisual ? "1px solid rgba(186, 230, 253, 0.9)" : "1px solid #334155",
+                      borderBottom: iceVisual ? "1px solid var(--hostly-table-divider-soft)" : "1px solid #334155",
                       display: "flex",
                       flexWrap: "wrap",
                       alignItems: "center",
@@ -1954,17 +2617,21 @@ export default function ProductosManagementPage({
                   </div>
                 ) : null}
                 <div style={{ overflowX: "auto", flex: 1, minHeight: 0, width: "100%", WebkitOverflowScrolling: "touch" }}>
-                  <div style={{ width: "100%", minWidth: PRODUCTOS_TABLE_MIN_WIDTH_PX, minHeight: 0, boxSizing: "border-box" }}>
+                  <div style={{ width: "100%", minWidth: productosTableMinInnerWidthPx, minHeight: 0, boxSizing: "border-box" }}>
                     <div
                       className={iceVisual ? "hostly-config-table-head sticky top-0 z-[2]" : undefined}
                       style={{
-                        ...(iceVisual ? rowGridEmbed : rowGrid),
-                        padding: productTableRowPadding,
+                        ...(iceProductosDataGridStyle),
+                        padding: iceVisual ? productTableRowPaddingIce : productTableRowPadding,
                         ...(iceVisual
-                          ? {}
+                          ? {
+                              background: "var(--hostly-table-head-surface)",
+                              borderBottom: "1px solid var(--hostly-table-divider-soft)",
+                              boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.52)",
+                            }
                           : {
                               background: "rgba(2, 6, 23, 0.35)",
-                              borderBottom: "1px solid rgba(148, 163, 184, 0.08)",
+                              borderBottom: "1px solid var(--hostly-table-divider-faint)",
                             }),
                       }}
                     >
@@ -2005,13 +2672,13 @@ export default function ProductosManagementPage({
                               <div
                                 role="presentation"
                                 style={{
-                                  ...(iceVisual ? rowGridGroupBarEmbed : rowGridGroupBar),
+                                  ...(iceProductosGroupBarGridStyle),
                                   marginTop: gi === 0 ? 0 : 8,
                                   paddingTop: gi === 0 ? 5 : 9,
                                   paddingBottom: 3,
                                   paddingLeft: 10,
                                   paddingRight: 10,
-                                  borderTop: gi === 0 ? "none" : iceVisual ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.07)",
+                                  borderTop: gi === 0 ? "none" : iceVisual ? PRODUCTOS_ROW_DIVIDER_ICE : "1px solid var(--hostly-table-divider-faint)",
                                   background: "transparent",
                                 }}
                               >
@@ -2027,11 +2694,11 @@ export default function ProductosManagementPage({
                                 >
                                   <div
                                     style={{
-                                      fontSize: 10,
+                                      fontSize: iceVisual ? 9 : 10,
                                       fontWeight: 600,
-                                      letterSpacing: "0.12em",
+                                      letterSpacing: iceVisual ? "0.1em" : "0.12em",
                                       textTransform: "uppercase",
-                                      color: iceVisual ? "#475569" : "#94a3b8",
+                                      color: iceVisual ? "rgba(71, 85, 105, 0.72)" : "#94a3b8",
                                       overflow: "hidden",
                                       textOverflow: "ellipsis",
                                       whiteSpace: "nowrap",
@@ -2050,8 +2717,8 @@ export default function ProductosManagementPage({
                                       fontVariantNumeric: "tabular-nums",
                                       padding: "2px 7px",
                                       borderRadius: 999,
-                                      border: iceVisual ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.1)",
-                                      background: iceVisual ? "rgba(255,255,255,0.75)" : "rgba(248, 250, 252, 0.03)",
+                                      border: iceVisual ? "1px solid var(--hostly-table-divider-soft)" : "1px solid var(--hostly-table-divider-faint)",
+                                      background: iceVisual ? "rgba(255, 255, 255, 0.4)" : "rgba(248, 250, 252, 0.03)",
                                     }}
                                   >
                                     {g.items.length}
@@ -2067,16 +2734,16 @@ export default function ProductosManagementPage({
                                     key={p.id}
                                     className={PRODUCTOS_ROW_HOVER_CLASS}
                                     style={{
-                                      ...(iceVisual ? rowGridEmbed : rowGrid),
-                                      padding: productTableRowPadding,
+                                      ...(iceProductosDataGridStyle),
+                                      padding: iceVisual ? productTableRowPaddingIce : productTableRowPadding,
                                       borderBottom:
                                         isLastInCat && gi === groupedByCategoria.length - 1
                                           ? "none"
                                           : iceVisual
-                                            ? "1px solid rgb(241 245 249)"
+                                            ? PRODUCTOS_ROW_DIVIDER_ICE
                                             : "1px solid rgba(148, 163, 184, 0.06)",
                                       background: "transparent",
-                                      minHeight: productRowMinHeight,
+                                      minHeight: iceVisual ? productRowMinHeightIce : productRowMinHeight,
                                     }}
                                   >
                                     <label
@@ -2106,11 +2773,12 @@ export default function ProductosManagementPage({
                                       <div
                                         style={{
                                           display: "flex",
-                                          gap: 6,
+                                          gap: iceVisual ? 8 : 6,
                                           alignItems: "center",
                                           minWidth: 0,
                                           overflow: "hidden",
                                           width: "100%",
+                                          paddingTop: iceVisual ? 1 : 0,
                                         }}
                                         title={p.nombre}
                                       >
@@ -2119,17 +2787,17 @@ export default function ProductosManagementPage({
                                           <span
                                             style={{
                                               flexShrink: 0,
-                                              fontSize: iceVisual ? 8 : 9,
+                                              fontSize: iceVisual ? 7 : 9,
                                               fontWeight: iceVisual ? 600 : 900,
                                               letterSpacing: "0.08em",
                                               textTransform: "uppercase",
-                                              padding: iceVisual ? "1px 5px" : "2px 6px",
-                                              borderRadius: iceVisual ? 5 : 999,
+                                              padding: iceVisual ? "0px 4px" : "2px 6px",
+                                              borderRadius: iceVisual ? 4 : 999,
                                               border: iceVisual
-                                                ? "1px solid rgb(226 232 240)"
+                                                ? "1px solid rgba(148, 163, 184, 0.2)"
                                                 : "1px solid rgba(56,189,248,0.28)",
-                                              background: iceVisual ? "rgb(248 250 252)" : "rgba(8,47,73,0.18)",
-                                              color: iceVisual ? "rgb(71 85 105)" : "#7dd3fc",
+                                              background: iceVisual ? "transparent" : "rgba(8,47,73,0.18)",
+                                              color: iceVisual ? "#94a3b8" : "#7dd3fc",
                                             }}
                                           >
                                             IA
@@ -2153,6 +2821,7 @@ export default function ProductosManagementPage({
                                       busyEsc={busyEsc}
                                       t={t}
                                       embedLight={iceVisual}
+                                      inventoryIconToolbar={configCartaProductosChrome}
                                       onEdit={() => openEdit(p)}
                                       onToggleCarta={() => toggleActivo(p)}
                                       onActivateProduct={() => activateProducto(p)}
@@ -2173,11 +2842,11 @@ export default function ProductosManagementPage({
                                 key={p.id}
                                 className={PRODUCTOS_ROW_HOVER_CLASS}
                                 style={{
-                                  ...(iceVisual ? rowGridEmbed : rowGrid),
-                                  padding: productTableRowPadding,
-                                  borderBottom: isLast ? "none" : iceVisual ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.06)",
+                                  ...(iceProductosDataGridStyle),
+                                  padding: iceVisual ? productTableRowPaddingIce : productTableRowPadding,
+                                  borderBottom: isLast ? "none" : iceVisual ? PRODUCTOS_ROW_DIVIDER_ICE : "1px solid var(--hostly-table-divider-faint)",
                                   background: "transparent",
-                                  minHeight: productRowMinHeight,
+                                  minHeight: iceVisual ? productRowMinHeightIce : productRowMinHeight,
                                 }}
                               >
                                 <label
@@ -2207,11 +2876,12 @@ export default function ProductosManagementPage({
                                   <div
                                     style={{
                                       display: "flex",
-                                      gap: 6,
+                                      gap: iceVisual ? 8 : 6,
                                       alignItems: "center",
                                       minWidth: 0,
                                       overflow: "hidden",
                                       width: "100%",
+                                      paddingTop: iceVisual ? 1 : 0,
                                     }}
                                     title={p.nombre}
                                   >
@@ -2220,17 +2890,17 @@ export default function ProductosManagementPage({
                                       <span
                                         style={{
                                           flexShrink: 0,
-                                          fontSize: iceVisual ? 8 : 9,
+                                          fontSize: iceVisual ? 7 : 9,
                                           fontWeight: iceVisual ? 600 : 900,
                                           letterSpacing: "0.08em",
                                           textTransform: "uppercase",
-                                          padding: iceVisual ? "1px 5px" : "2px 6px",
-                                          borderRadius: iceVisual ? 5 : 999,
+                                          padding: iceVisual ? "0px 4px" : "2px 6px",
+                                          borderRadius: iceVisual ? 4 : 999,
                                           border: iceVisual
-                                            ? "1px solid rgb(226 232 240)"
+                                            ? "1px solid rgba(148, 163, 184, 0.2)"
                                             : "1px solid rgba(56,189,248,0.28)",
-                                          background: iceVisual ? "rgb(248 250 252)" : "rgba(8,47,73,0.18)",
-                                          color: iceVisual ? "rgb(71 85 105)" : "#7dd3fc",
+                                          background: iceVisual ? "transparent" : "rgba(8,47,73,0.18)",
+                                          color: iceVisual ? "#94a3b8" : "#7dd3fc",
                                         }}
                                       >
                                         IA
@@ -2254,6 +2924,7 @@ export default function ProductosManagementPage({
                                   busyEsc={busyEsc}
                                   t={t}
                                   embedLight={iceVisual}
+                                  inventoryIconToolbar={configCartaProductosChrome}
                                   onEdit={() => openEdit(p)}
                                   onToggleCarta={() => toggleActivo(p)}
                                   onActivateProduct={() => activateProducto(p)}
@@ -2269,9 +2940,8 @@ export default function ProductosManagementPage({
               </div>
             )}
           </div>
-        </section>
-      </div>
-
+        </ProductosTableChrome>
+      </HostlySection>
       {formOpen ? (
         <div
           role="dialog"

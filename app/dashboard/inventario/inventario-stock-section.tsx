@@ -1048,7 +1048,7 @@ export default function InventarioStockSection() {
           padding: 7px 9px;
           border-radius: 10px;
           background: rgba(241, 248, 252, 0.65);
-          border: 1px solid rgba(100, 116, 139, 0.1);
+          border: 1px solid var(--hostly-table-divider-soft);
           color: var(--hostly-ink-strong);
         }
         .hostly-inventory-switch-row--compact {
@@ -1148,7 +1148,7 @@ export default function InventarioStockSection() {
           font-weight: 750;
           color: rgba(71, 85, 105, 0.78);
           background: rgba(255, 255, 255, 0.55);
-          border: 1px solid rgba(100, 116, 139, 0.1);
+          border: 1px solid var(--hostly-table-divider-soft);
         }
         .hostly-inventory-fiche-section--movements {
           padding: 9px 10px 10px;
@@ -1176,7 +1176,7 @@ export default function InventarioStockSection() {
           padding: 6px 8px;
           border-radius: 8px;
           background: rgba(255, 255, 255, 0.72);
-          border: 1px solid rgba(100, 116, 139, 0.1);
+          border: 1px solid var(--hostly-table-divider-soft);
           font-size: 11px;
         }
         .hostly-inventory-movements-date {

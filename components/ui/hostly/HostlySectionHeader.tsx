@@ -38,12 +38,12 @@ export function HostlySectionHeader({
     );
 
   return (
-    <header className={hostlyCx("flex flex-wrap items-start justify-between gap-3", className)}>
+    <header className={hostlyCx("flex flex-wrap items-start justify-between gap-[var(--hostly-stack-gap-md)]", className)}>
       <div className="hostly-stack-sm min-w-0 flex-1">
         {renderPlainTitle(title, titleVariant)}
         {desc}
       </div>
-      {children ? <div className="flex shrink-0 flex-wrap items-center gap-2">{children}</div> : null}
+      {children ? <div className="flex shrink-0 flex-wrap items-center gap-[var(--hostly-stack-gap-sm)]">{children}</div> : null}
     </header>
   );
 }

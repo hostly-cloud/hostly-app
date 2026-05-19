@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import { loadCompras, type CompraLocal } from "@/lib/compras-local";
 import { loadMermas, type MermaLocal, type MermaMotivo } from "@/lib/mermas-local";
 import { fetchEscandalloMergedRowsForBrowser } from "@/lib/platos-escandallo-bridge";
@@ -169,59 +170,25 @@ type InsightCardProps = {
   accent?: "rose" | "teal" | "amber" | "sky" | "slate";
 };
 
-const insightAccentBorder: Record<NonNullable<InsightCardProps["accent"]>, string> = {
-  rose: "rgba(251, 113, 133, 0.22)",
-  teal: "rgba(45, 212, 191, 0.22)",
-  amber: "rgba(251, 191, 36, 0.22)",
-  sky: "rgba(56, 189, 248, 0.22)",
-  slate: "rgba(148, 163, 184, 0.14)",
+const insightAccentBar: Record<NonNullable<InsightCardProps["accent"]>, string> = {
+  rose: "#fb7185",
+  teal: "#2dd4bf",
+  amber: "#fbbf24",
+  sky: "#38bdf8",
+  slate: "var(--hostly-table-divider-soft)",
 };
 
 function InsightCard({ label, value, sub, accent = "slate" }: InsightCardProps) {
   return (
-    <div
-      style={{
-        borderRadius: 12,
-        padding: "12px 14px",
-        border: `1px solid ${insightAccentBorder[accent]}`,
-        background: "linear-gradient(155deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.72) 100%)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-        minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
+    <HostlySurface
+      variant="ice"
+      className="flex min-h-0 min-w-0 flex-col gap-2 px-3.5 py-3 box-border"
+      style={{ borderTop: `2px solid ${insightAccentBar[accent]}` }}
     >
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "#64748b",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: 14,
-          fontWeight: 700,
-          letterSpacing: "-0.02em",
-          lineHeight: 1.25,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-        }}
-      >
-        {value}
-      </span>
-      {sub ? (
-        <span style={{ fontSize: 11, color: "#64748b", lineHeight: 1.3, marginTop: "auto" }}>{sub}</span>
-      ) : null}
-    </div>
+      <span className="hostly-kpi-label !text-[9px]">{label}</span>
+      <span className="line-clamp-2 text-sm font-semibold leading-snug text-[color:var(--hostly-ink-strong)]">{value}</span>
+      {sub ? <span className="hostly-muted mt-auto !text-[11px]">{sub}</span> : null}
+    </HostlySurface>
   );
 }
 
@@ -232,32 +199,18 @@ type PanelShellProps = {
 
 function PanelShell({ title, children }: PanelShellProps) {
   return (
-    <div
-      style={{
-        borderRadius: 14,
-        border: "1px solid rgba(148, 163, 184, 0.12)",
-        background: "linear-gradient(160deg, rgba(30, 41, 59, 0.45) 0%, rgba(15, 23, 42, 0.85) 100%)",
-        boxShadow: "0 12px 32px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.04)",
-        minHeight: 0,
-        minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
+    <HostlySurface variant="ice" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden box-border">
       <div
         style={{
           flexShrink: 0,
-          padding: "10px 12px 8px",
-          borderBottom: "1px solid rgba(148, 163, 184, 0.08)",
+          padding: "7px 10px 5px",
+          borderBottom: "1px solid var(--hostly-table-divider-soft)",
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#94a3b8" }}>
-          {title}
-        </h3>
+        <HostlySectionHeader title={title} titleVariant="section" className="[&_.hostly-section-label]:!mb-0" />
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px 12px" }}>{children}</div>
-    </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px 12px", WebkitOverflowScrolling: "touch" }}>{children}</div>
+    </HostlySurface>
   );
 }
 
@@ -276,12 +229,21 @@ function BarRow({
   return (
     <div style={{ display: "grid", gap: 5 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "var(--hostly-ink-strong)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {label}
         </span>
-        <span style={{ fontSize: 11, color: "#94a3b8", ...tabularNums, flexShrink: 0 }}>{valueLabel}</span>
+        <span style={{ fontSize: 11, color: "var(--hostly-ink-muted)", ...tabularNums, flexShrink: 0 }}>{valueLabel}</span>
       </div>
-      <div style={{ height: 5, borderRadius: 4, background: "rgba(148, 163, 184, 0.1)" }}>
+      <div style={{ height: 5, borderRadius: 4, background: "var(--hostly-table-divider-faint)" }}>
         <div
           style={{
             width: `${pct}%`,
@@ -445,28 +407,6 @@ export default function ReportesPage() {
 
   const mermaCostHasEstimate = mermaCost30d > 0;
 
-  const kpiShell: CSSProperties = {
-    background: "linear-gradient(155deg, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.78) 100%)",
-    border: "1px solid rgba(148, 163, 184, 0.12)",
-    borderRadius: 14,
-    padding: "12px 14px",
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    boxShadow: "0 10px 28px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255,255,255,0.04)",
-  };
-
-  const sectionEyebrow: CSSProperties = {
-    margin: "0 0 8px",
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    color: "#64748b",
-    flexShrink: 0,
-  };
-
   return (
     <ModulePageShell
       title={t("reportes.title")}
@@ -474,6 +414,7 @@ export default function ReportesPage() {
       maxWidth={1180}
       compactLayout
       lockViewport
+      shellSurface="configLight"
       headerRight={
         <button
           type="button"
@@ -481,34 +422,13 @@ export default function ReportesPage() {
             refreshLocal();
             void loadEscandallos();
           }}
-          style={{
-            border: "1px solid var(--hostly-line)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-muted)",
-            padding: "9px 14px",
-            borderRadius: 10,
-            fontWeight: 600,
-            cursor: "pointer",
-            fontSize: 14,
-            lineHeight: 1.2,
-            whiteSpace: "nowrap",
-            boxShadow: "var(--hostly-shadow-hairline)",
-          }}
+          className="hostly-button-secondary shrink-0 !min-h-0 px-3.5 py-2 text-sm whitespace-nowrap"
         >
           {t("common.reload")}
         </button>
       }
     >
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          overflow: "hidden",
-        }}
-      >
+      <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
         {/* KPIs */}
         <div
           style={{
@@ -518,73 +438,64 @@ export default function ReportesPage() {
             flexShrink: 0,
           }}
         >
-          <div style={kpiShell}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              {t("reportes.kpiMermaCost")}
-            </span>
-            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em", ...tabularNums }}>
-              {hydrated ? formatEuro(mermaCost30d, locale) : t("reportes.marginDash")}
-            </span>
-            <span style={{ fontSize: 11, color: "#64748b", marginTop: "auto", lineHeight: 1.3 }}>
-              {mermaCostHasEstimate ? t("reportes.kpiMermaSubEstimated") : t("reportes.kpiMermaSub")}
-            </span>
-          </div>
-          <div style={kpiShell}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              {t("reportes.kpiMermaCount")}
-            </span>
-            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em", ...tabularNums, color: "#fda4af" }}>
-              {hydrated ? mermas30Count : t("reportes.marginDash")}
-            </span>
-            <span style={{ fontSize: 11, color: "#64748b", marginTop: "auto" }}>{t("reportes.kpiMermaCountSub")}</span>
-          </div>
-          <div style={kpiShell}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              {t("reportes.kpiMargin")}
-            </span>
-            <span
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: "-0.03em",
-                ...tabularNums,
-                color: avgMarginPct != null && !escandalloError ? "#5eead4" : "#e2e8f0",
-              }}
-            >
-              {marginDisplay}
-            </span>
-            <span style={{ fontSize: 11, color: "#64748b", marginTop: "auto" }}>
-              {escandalloError ? t("reportes.escandalloSyncError") : t("reportes.kpiMarginSub")}
-            </span>
-          </div>
-          <div style={kpiShell}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              {t("reportes.kpiCritical")}
-            </span>
-            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em", ...tabularNums, color: criticalCount > 0 ? "#fcd34d" : "#f8fafc" }}>
-              {hydrated ? criticalCount : t("reportes.marginDash")}
-            </span>
-            <span style={{ fontSize: 11, color: "#64748b", marginTop: "auto" }}>{t("reportes.kpiCriticalSub")}</span>
-          </div>
-          <div style={kpiShell}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              {t("reportes.kpiOrders")}
-            </span>
-            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em", ...tabularNums }}>{hydrated ? pedidosRealizados : t("reportes.marginDash")}</span>
-            <span style={{ fontSize: 11, color: "#64748b", marginTop: "auto" }}>{t("reportes.kpiOrdersSub")}</span>
-          </div>
-          <div style={kpiShell}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              {t("reportes.kpiSpend")}
-            </span>
-            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em", ...tabularNums }}>{hydrated ? formatEuro(totalCompraSpend, locale) : t("reportes.marginDash")}</span>
-            <span style={{ fontSize: 11, color: "#64748b", marginTop: "auto" }}>{t("reportes.kpiSpendSub")}</span>
-          </div>
+          <HostlyKpiCard
+            title={t("reportes.kpiMermaCost")}
+            value={hydrated ? formatEuro(mermaCost30d, locale) : t("reportes.marginDash")}
+            helper={mermaCostHasEstimate ? t("reportes.kpiMermaSubEstimated") : t("reportes.kpiMermaSub")}
+            accentColor="#fb7185"
+            valueTitle={hydrated ? formatEuro(mermaCost30d, locale) : undefined}
+            className="px-3 py-2.5"
+          />
+          <HostlyKpiCard
+            title={t("reportes.kpiMermaCount")}
+            value={hydrated ? mermas30Count : t("reportes.marginDash")}
+            helper={t("reportes.kpiMermaCountSub")}
+            accentColor="#fda4af"
+            valueTitle={hydrated ? String(mermas30Count) : undefined}
+            valueClassName="!text-[#e11d48]"
+            className="px-3 py-2.5"
+          />
+          <HostlyKpiCard
+            title={t("reportes.kpiMargin")}
+            value={marginDisplay}
+            helper={escandalloError ? t("reportes.escandalloSyncError") : t("reportes.kpiMarginSub")}
+            accentColor="#34d399"
+            valueClassName={
+              avgMarginPct != null && !escandalloError ? "!text-[#0f766e]" : undefined
+            }
+            valueTitle={typeof marginDisplay === "string" ? marginDisplay : undefined}
+            className="px-3 py-2.5"
+          />
+          <HostlyKpiCard
+            title={t("reportes.kpiCritical")}
+            value={hydrated ? criticalCount : t("reportes.marginDash")}
+            helper={t("reportes.kpiCriticalSub")}
+            accentColor="#fcd34d"
+            valueTitle={hydrated ? String(criticalCount) : undefined}
+            valueClassName={criticalCount > 0 ? "!text-[#b45309]" : undefined}
+            className="px-3 py-2.5"
+          />
+          <HostlyKpiCard
+            title={t("reportes.kpiOrders")}
+            value={hydrated ? pedidosRealizados : t("reportes.marginDash")}
+            helper={t("reportes.kpiOrdersSub")}
+            accentColor="#38bdf8"
+            valueTitle={hydrated ? String(pedidosRealizados) : undefined}
+            className="px-3 py-2.5"
+          />
+          <HostlyKpiCard
+            title={t("reportes.kpiSpend")}
+            value={hydrated ? formatEuro(totalCompraSpend, locale) : t("reportes.marginDash")}
+            helper={t("reportes.kpiSpendSub")}
+            accentColor="#a78bfa"
+            valueTitle={hydrated ? formatEuro(totalCompraSpend, locale) : undefined}
+            className="px-3 py-2.5"
+          />
         </div>
 
         {/* Insights */}
         <div style={{ flexShrink: 0, minHeight: 0 }}>
-          <h2 style={sectionEyebrow}>{t("reportes.sectionInsights")}</h2>
+          <HostlySectionHeader title={t("reportes.sectionInsights")} titleVariant="section" className="[&_.hostly-section-label]:!mb-2" />
           <div
             style={{
               display: "grid",
@@ -669,23 +580,15 @@ export default function ReportesPage() {
         </div>
 
         {showDataOnboarding ? (
-          <div
-            style={{
-              flexShrink: 0,
-              borderRadius: 12,
-              padding: "10px 14px",
-              border: "1px solid rgba(94, 234, 212, 0.18)",
-              background: "linear-gradient(125deg, rgba(13, 148, 136, 0.1) 0%, rgba(15, 23, 42, 0.9) 100%)",
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{t("reportes.emptyTitle")}</div>
-            <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45 }}>{t("reportes.emptyBody")}</div>
-          </div>
+          <HostlySurface variant="soft" className="box-border shrink-0 border border-teal-200/25 px-3.5 py-2.5">
+            <p className="m-0 text-[13px] font-semibold leading-snug text-[color:var(--hostly-ink-strong)]">{t("reportes.emptyTitle")}</p>
+            <p className="hostly-muted mb-0 mt-1 !text-[12px] !leading-snug">{t("reportes.emptyBody")}</p>
+          </HostlySurface>
         ) : null}
 
         {/* Paneles inferiores */}
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-          <h2 style={{ ...sectionEyebrow, marginBottom: 0 }}>{t("reportes.sectionPanels")}</h2>
+          <HostlySectionHeader title={t("reportes.sectionPanels")} titleVariant="section" className="[&_.hostly-section-label]:!mb-2 shrink-0" />
           <div
             style={{
               flex: 1,
@@ -698,7 +601,7 @@ export default function ReportesPage() {
           >
             <PanelShell title={t("reportes.panelTopMermas")}>
               {topMermaRows.length === 0 ? (
-                <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>{t("reportes.noData")}</p>
+                <p className="hostly-muted mb-0 !text-[12px]">{t("reportes.noData")}</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {topMermaRows.map((row) => (
@@ -720,7 +623,7 @@ export default function ReportesPage() {
             <PanelShell title={t("reportes.panelMotivos")}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {motivoRows.length === 0 ? (
-                  <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>{t("reportes.noData")}</p>
+                  <p className="hostly-muted mb-0 !text-[12px]">{t("reportes.noData")}</p>
                 ) : (
                   motivoRows.map((row) => (
                     <BarRow
@@ -736,16 +639,14 @@ export default function ReportesPage() {
                   style={{
                     marginTop: 8,
                     paddingTop: 10,
-                    borderTop: "1px solid rgba(148, 163, 184, 0.1)",
+                    borderTop: "1px solid var(--hostly-table-divider-soft)",
                   }}
                 >
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b", marginBottom: 6 }}>
-                    {t("reportes.panelComprasHint")}
-                  </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0", lineHeight: 1.35 }}>
+                  <div className="hostly-kpi-label mb-2 !text-[9px]">{t("reportes.panelComprasHint")}</div>
+                  <div className="text-xs font-semibold leading-snug text-[color:var(--hostly-ink-strong)]">
                     {formatEuro(totalCompraSpend, locale)}
                   </div>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, lineHeight: 1.35 }}>
+                  <div className="hostly-muted mb-0 mt-1 text-[11px] leading-snug">
                     {lastCompra
                       ? t("reportes.lastOrder", {
                           supplier: lastCompra.proveedor,
@@ -761,11 +662,11 @@ export default function ReportesPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
                   {criticalList.length === 0 ? (
-                    <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>{t("reportes.noData")}</p>
+                    <p className="hostly-muted mb-0 !text-[12px]">{t("reportes.noData")}</p>
                   ) : (
                     <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
                       {criticalList.map((p) => (
-                        <li key={p.id} style={{ fontSize: 12, color: "#e2e8f0", lineHeight: 1.35 }}>
+                        <li key={p.id} className="text-xs leading-snug text-[color:var(--hostly-ink)]">
                           {t("reportes.stockLine", {
                             name: p.nombre,
                             actual: formatQtyDisplay(p.stock_actual, locale),
@@ -777,17 +678,15 @@ export default function ReportesPage() {
                     </ul>
                   )}
                 </div>
-                <div style={{ paddingTop: 10, borderTop: "1px solid rgba(148, 163, 184, 0.1)" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b", marginBottom: 8 }}>
-                    {t("reportes.panelMargins")}
-                  </div>
+                <div style={{ paddingTop: 10, borderTop: "1px solid var(--hostly-table-divider-soft)" }}>
+                  <div className="hostly-kpi-label mb-2 !text-[9px]">{t("reportes.panelMargins")}</div>
                   {escandalloError ? (
-                    <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{t("reportes.escandalloSyncError")}</p>
+                    <p className="mb-0 text-xs font-semibold text-[color:#b91c1c]">{t("reportes.escandalloSyncError")}</p>
                   ) : rankedMargins.length === 0 ? (
-                    <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>{t("reportes.noData")}</p>
+                    <p className="hostly-muted mb-0 !text-[12px]">{t("reportes.noData")}</p>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#5eead4", letterSpacing: "0.04em" }}>{t("reportes.marginWinners")}</div>
+                      <div className="hostly-kpi-label !text-[10px] !text-[color:#0d9488]">{t("reportes.marginWinners")}</div>
                       {[...rankedMargins].sort((a, b) => b.pct - a.pct).slice(0, 3).map(({ row, pct }) => (
                         <BarRow
                           key={`b-${String(row.id)}`}
@@ -797,9 +696,7 @@ export default function ReportesPage() {
                           barColor="linear-gradient(90deg, #34d399, #2dd4bf)"
                         />
                       ))}
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#fdba74", letterSpacing: "0.04em", marginTop: 4 }}>
-                        {t("reportes.marginLosers")}
-                      </div>
+                      <div className="hostly-kpi-label mt-1 !text-[10px] !text-[color:#d97706]">{t("reportes.marginLosers")}</div>
                       {[...rankedMargins].sort((a, b) => a.pct - b.pct).slice(0, 3).map(({ row, pct }) => (
                         <BarRow
                           key={`w-${String(row.id)}`}
@@ -816,7 +713,7 @@ export default function ReportesPage() {
             </PanelShell>
           </div>
         </div>
-      </div>
+      </HostlySection>
     </ModulePageShell>
   );
 }

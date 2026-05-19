@@ -45,6 +45,8 @@ export type ModulePageShellProps = {
   shellSurface?: "default" | "configLight";
   /** Oculta logout en herramientas inmersivas donde ya existe navegación global. */
   hideLogoutButton?: boolean;
+  /** Listado inventario/config carta: cabecera y franja bajo-título más bajos (solo presentación). */
+  denseInventoryHeader?: boolean;
 };
 
 const DEFAULT_MAX = 1180;
@@ -70,6 +72,7 @@ export default function ModulePageShell({
   mapEditorDenseChrome,
   shellSurface = "default",
   hideLogoutButton,
+  denseInventoryHeader,
 }: ModulePageShellProps) {
   const { t } = useI18n();
   const [isMobile, setIsMobile] = useState(false);
@@ -106,6 +109,9 @@ export default function ModulePageShell({
 
   const isWide = maxWidth > DEFAULT_MAX || Boolean(stretchContentWidth);
   const configLight = shellSurface === "configLight";
+  const effectiveDenseInventory = Boolean(
+    denseInventoryHeader && compactLayout && operationalFocus && denseWorkbench && headerBelow && shellSurface === "configLight",
+  );
 
   const headerSurface =
     mapEditorDenseChrome && laptopFit
@@ -115,8 +121,18 @@ export default function ModulePageShell({
           borderBottom: "1px solid var(--hostly-line)",
         }
       : {
-          paddingTop: denseWorkbench ? 8 : 10,
-          paddingBottom: denseWorkbench ? 8 : 10,
+          paddingTop:
+            effectiveDenseInventory && !laptopFit
+              ? 5
+              : denseWorkbench
+                ? 8
+                : 10,
+          paddingBottom:
+            effectiveDenseInventory && !laptopFit
+              ? 5
+              : denseWorkbench
+                ? 8
+                : 10,
           borderBottom: "1px solid var(--hostly-line)",
           background: "rgba(247, 252, 255, 0.92)",
           backdropFilter: "blur(6px)",
@@ -128,30 +144,51 @@ export default function ModulePageShell({
       ? configLight && mapEditorDenseChrome
         ? "clamp(11px, 1.12vw, 13px)"
         : "clamp(11px, 1.25vw, 14px)"
-      : compactLayout && operationalFocus
-        ? "clamp(13px, 1.65vw, 17px)"
-        : compactLayout && denseWorkbench
-          ? "clamp(18px, 2.3vw, 24px)"
-          : compactLayout
-            ? "clamp(20px, 2.8vw, 28px)"
-            : "clamp(28px, 4vw, 42px)",
+      : compactLayout && operationalFocus && effectiveDenseInventory && !laptopFit
+        ? "clamp(15px, 1.85vw, 19px)"
+        : compactLayout && operationalFocus
+          ? "clamp(13px, 1.65vw, 17px)"
+          : compactLayout && denseWorkbench
+            ? "clamp(18px, 2.3vw, 24px)"
+            : compactLayout
+              ? "clamp(20px, 2.8vw, 28px)"
+              : "clamp(28px, 4vw, 42px)",
     fontWeight: laptopFit
       ? configLight && mapEditorDenseChrome
         ? 500
         : 600
       : compactLayout && operationalFocus
-        ? 600
+        ? effectiveDenseInventory
+          ? 650
+          : 600
         : 700,
-    lineHeight: compactLayout ? (operationalFocus ? 1.08 : 1.12) : 1.15,
+    lineHeight:
+      compactLayout && operationalFocus ? (effectiveDenseInventory ? 1.06 : 1.08) : compactLayout ? 1.12 : 1.15,
     letterSpacing: compactLayout ? (operationalFocus ? "-0.012em" : "-0.015em") : "-0.018em",
     color: "var(--hostly-ink-strong)",
   };
 
   const subtitleStyleResolved = {
     color: "var(--hostly-ink-soft)",
-    fontSize: compactLayout ? (operationalFocus ? 11 : denseWorkbench ? 12 : 13) : 17,
-    lineHeight: compactLayout ? (operationalFocus ? 1.32 : denseWorkbench ? 1.3 : 1.35) : 1.45,
-    maxWidth: compactLayout ? (operationalFocus ? 480 : denseWorkbench ? 520 : 560) : 640,
+    fontSize: compactLayout
+      ? operationalFocus
+        ? effectiveDenseInventory
+          ? 10
+          : 11
+        : denseWorkbench
+          ? 12
+          : 13
+      : 17,
+    lineHeight: compactLayout
+      ? operationalFocus
+        ? effectiveDenseInventory
+          ? 1.28
+          : 1.32
+        : denseWorkbench
+          ? 1.3
+          : 1.35
+      : 1.45,
+    maxWidth: compactLayout ? (operationalFocus ? (effectiveDenseInventory ? 460 : 480) : denseWorkbench ? 520 : 560) : 640,
   };
 
   return (
@@ -254,6 +291,7 @@ export default function ModulePageShell({
         }
         titleStyle={titleStyleResolved}
         subtitleStyle={subtitleStyleResolved}
+        belowStripe={effectiveDenseInventory ? "ultraCompact" : "default"}
       />
 
       <HostlyPageContainer
@@ -279,7 +317,9 @@ export default function ModulePageShell({
               : compactLayout
               ? operationalFocus
                 ? denseWorkbench
-                  ? 6
+                  ? effectiveDenseInventory
+                    ? 4
+                    : 6
                   : 8
                 : denseWorkbench
                   ? 12

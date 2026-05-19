@@ -22,54 +22,20 @@ export function VentasTableBlock({ data }: VentasTableBlockProps) {
       >
         Últimos tickets
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <table className="hostly-inv-native-table">
         <thead>
           <tr>
-            <th
-              style={{
-                textAlign: "left",
-                padding: "8px 10px",
-                color: "var(--hostly-ink-muted)",
-                fontWeight: 800,
-                borderBottom: "1px solid var(--hostly-line)",
-              }}
-            >
-              Fecha
-            </th>
-            <th
-              style={{
-                textAlign: "left",
-                padding: "8px 10px",
-                color: "var(--hostly-ink-muted)",
-                fontWeight: 800,
-                borderBottom: "1px solid var(--hostly-line)",
-              }}
-            >
-              Pedido
-            </th>
-            <th
-              style={{
-                textAlign: "right",
-                padding: "8px 10px",
-                color: "var(--hostly-ink-muted)",
-                fontWeight: 800,
-                borderBottom: "1px solid var(--hostly-line)",
-              }}
-            >
-              Total
-            </th>
+            <th>Fecha</th>
+            <th>Pedido</th>
+            <th className="hostly-inv-th-num">Total</th>
           </tr>
         </thead>
         <tbody>
           {data.rows.map((row, i) => (
             <tr key={`${row.label}:${row.shortId ?? ""}:${i}`}>
-              <td style={{ padding: "8px 10px", color: "var(--hostly-ink-strong)", fontWeight: 600 }}>{row.label}</td>
-              <td style={{ padding: "8px 10px", color: "var(--hostly-ink-strong)", fontWeight: 600 }}>
-                {row.shortId ?? "—"}
-              </td>
-              <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--hostly-ink)", fontWeight: 600 }}>
-                {row.total.toFixed(2)} €
-              </td>
+              <td className="hostly-inv-td-muted">{row.label}</td>
+              <td className="hostly-inv-td-primary">{row.shortId ?? "—"}</td>
+              <td className="hostly-inv-td-amount">{row.total.toFixed(2)} €</td>
             </tr>
           ))}
         </tbody>

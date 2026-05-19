@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import {
   type UsuarioLocal,
   type UsuarioModulo,
@@ -138,11 +139,11 @@ const userRowGrid: CSSProperties = {
 
 const colHeadStyle: CSSProperties = {
   fontSize: 9,
-  fontWeight: 600,
-  color: "var(--hostly-ink-muted)",
-  letterSpacing: "0.08em",
+  fontWeight: 590,
+  color: "var(--hostly-ink-faint)",
+  letterSpacing: "0.1em",
   textTransform: "uppercase",
-  lineHeight: 1.2,
+  lineHeight: 1.22,
 };
 
 type ListFilter = "todos" | UsuarioRol | "inactivo";
@@ -261,16 +262,6 @@ export default function UsuariosPage() {
     [t, stats],
   );
 
-  const metricFigure: CSSProperties = {
-    fontVariantNumeric: "tabular-nums",
-    fontFeatureSettings: '"tnum" 1',
-    fontSize: 19,
-    fontWeight: 700,
-    letterSpacing: "-0.025em",
-    color: "var(--hostly-navy-deep)",
-    lineHeight: 1,
-  };
-
   function openCreate() {
     setEditingId(null);
     setDraftNombre("");
@@ -344,8 +335,8 @@ export default function UsuariosPage() {
 
   if (!hydrated) {
     return (
-      <ModulePageShell title={t("users.title")} subtitle={t("users.subtitle")} maxWidth={1180} compactLayout lockViewport>
-        <p style={{ color: "var(--hostly-ink-muted)", fontSize: 13 }}>{t("common.preparing")}</p>
+      <ModulePageShell title={t("users.title")} subtitle={t("users.subtitle")} maxWidth={1180} compactLayout lockViewport shellSurface="configLight">
+        <p className="hostly-muted mb-0 !text-[13px]">{t("common.preparing")}</p>
       </ModulePageShell>
     );
   }
@@ -357,6 +348,7 @@ export default function UsuariosPage() {
       maxWidth={1180}
       compactLayout
       lockViewport
+      shellSurface="configLight"
       headerRight={
         <button
           type="button"
@@ -382,87 +374,34 @@ export default function UsuariosPage() {
         </button>
       }
     >
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          overflow: "hidden",
-        }}
-      >
+      <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
         <div
           style={{
             flexShrink: 0,
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))",
-            gap: 6,
+            gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
+            gap: 12,
           }}
         >
           {kpiCards.map((card) => (
-            <div
+            <HostlyKpiCard
               key={card.title}
-              style={{
-                background: "var(--hostly-surface-card-solid)",
-                borderRadius: 10,
-                padding: "7px 9px",
-                border: "1px solid var(--hostly-line)",
-                boxShadow: "var(--hostly-shadow-card)",
-                borderTop: `2px solid ${card.accent}`,
-                minWidth: 0,
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--hostly-ink-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  lineHeight: 1.2,
-                }}
-              >
-                {card.title}
-              </p>
-              <p style={{ margin: "4px 0 0", ...metricFigure }}>{card.value}</p>
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: 10,
-                  color: "var(--hostly-ink-soft)",
-                  lineHeight: 1.35,
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {card.sub}
-              </p>
-            </div>
+              title={card.title}
+              value={card.value}
+              helper={card.sub}
+              accentColor={card.accent}
+              valueTitle={String(card.value)}
+              className="px-3 py-2.5"
+            />
           ))}
         </div>
 
-        <section
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            borderRadius: 12,
-            background: "var(--hostly-surface-card-soft)",
-            border: "1px solid var(--hostly-line)",
-            boxShadow: "var(--hostly-shadow-card)",
-          }}
-        >
+        <HostlySurface variant="ice" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden box-border">
           <div
             style={{
               flexShrink: 0,
               padding: "7px 10px 5px",
-              borderBottom: "1px solid var(--hostly-line)",
+              borderBottom: "1px solid var(--hostly-table-divider-soft)",
               display: "flex",
               flexWrap: "wrap",
               alignItems: "flex-end",
@@ -470,25 +409,12 @@ export default function UsuariosPage() {
               gap: 8,
             }}
           >
-            <div style={{ minWidth: 0, flex: "1 1 200px" }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  letterSpacing: "-0.015em",
-                  color: "var(--hostly-ink-strong)",
-                  lineHeight: 1.2,
-                }}
-              >
-                {t("users.listTitle")}
-              </h2>
-              {items.length > 0 ? (
-                <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--hostly-ink-muted)", lineHeight: 1.3 }}>
-                  {t("users.listCount", { shown: sortedDisplay.length, total: roleFiltered.length })}
-                </p>
-              ) : null}
-            </div>
+            <HostlySectionHeader
+              title={t("users.listTitle")}
+              description={items.length > 0 ? t("users.listCount", { shown: sortedDisplay.length, total: roleFiltered.length }) : undefined}
+              descriptionClassName="m-0 !text-[11px] !leading-snug text-[color:var(--hostly-ink-muted)] !font-semibold"
+              className="min-w-0 flex-1"
+            />
           </div>
 
           {items.length === 0 ? (
@@ -504,10 +430,8 @@ export default function UsuariosPage() {
                 textAlign: "center",
               }}
             >
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--hostly-ink-strong)" }}>{t("users.emptyTitle")}</p>
-              <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--hostly-ink-muted)", lineHeight: 1.45, maxWidth: 360 }}>
-                {t("users.emptyBody")}
-              </p>
+              <p className="m-0 text-sm font-semibold text-[color:var(--hostly-ink-strong)]">{t("users.emptyTitle")}</p>
+              <p className="hostly-muted mt-2 max-w-[360px] !text-[12px] !leading-snug">{t("users.emptyBody")}</p>
               <button
                 type="button"
                 onClick={openCreate}
@@ -551,17 +475,7 @@ export default function UsuariosPage() {
                   padding: "8px 10px 8px",
                 }}
               >
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: "#64748b",
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {t("stock.filterHint")}
-                </span>
+                <span className="hostly-kpi-label !text-[10px]">{t("stock.filterHint")}</span>
                 {(
                   [
                     { id: "todos" as const, label: t("stock.filterAll") },
@@ -578,7 +492,7 @@ export default function UsuariosPage() {
                       type="button"
                       onClick={() => setListFilter(f.id)}
                       style={{
-                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-line)",
+                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-table-divider-soft)",
                         background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
                         color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
                         padding: "8px 14px",
@@ -616,7 +530,7 @@ export default function UsuariosPage() {
                   <div
                     style={{
                       borderRadius: 8,
-                      border: "1px solid var(--hostly-line)",
+                      border: "1px solid var(--hostly-table-divider-soft)",
                       overflow: "hidden",
                       background: "var(--hostly-surface-card-solid)",
                     }}
@@ -624,9 +538,9 @@ export default function UsuariosPage() {
                     <div
                       style={{
                         ...userRowGrid,
-                        padding: "8px 11px",
-                        background: "var(--hostly-surface-page-soft)",
-                        borderBottom: "1px solid var(--hostly-line)",
+                        padding: "10px 12px",
+                        background: "var(--hostly-table-head-surface)",
+                        borderBottom: "1px solid var(--hostly-table-divider-soft)",
                       }}
                     >
                       <span style={colHeadStyle}>{t("users.colEmployee")}</span>
@@ -649,9 +563,9 @@ export default function UsuariosPage() {
                           onMouseLeave={() => setHoverRowId(null)}
                           style={{
                             ...userRowGrid,
-                            padding: "10px 11px",
-                            borderBottom: isLast ? "none" : "1px solid var(--hostly-line)",
-                            background: isHover ? "var(--hostly-surface-page-soft)" : "var(--hostly-surface-card-solid)",
+                            padding: "11px 12px",
+                            borderBottom: isLast ? "none" : "1px solid var(--hostly-table-divider-faint)",
+                            background: isHover ? "var(--hostly-table-row-hover)" : "var(--hostly-surface-card-solid)",
                             boxShadow: u.activo ? "inset 3px 0 0 #22c55e" : "inset 3px 0 0 var(--hostly-line-strong)",
                             transition: "background 0.12s ease",
                           }}
@@ -677,7 +591,7 @@ export default function UsuariosPage() {
                                 marginTop: 3,
                                 fontSize: 10,
                                 fontWeight: 500,
-                                color: "var(--hostly-ink-muted)",
+                                color: "var(--hostly-ink-soft)",
                                 letterSpacing: "0.01em",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -697,7 +611,7 @@ export default function UsuariosPage() {
                                 padding: "6px 11px",
                                 borderRadius: 8,
                                 fontSize: 12,
-                                fontWeight: 800,
+                                fontWeight: 700,
                                 letterSpacing: "-0.02em",
                                 lineHeight: 1.2,
                                 background: rb.bg,
@@ -747,7 +661,7 @@ export default function UsuariosPage() {
                                 letterSpacing: "0.05em",
                                 textTransform: "uppercase",
                                 background: u.activo ? "var(--hostly-success-soft)" : "var(--hostly-surface-operational)",
-                                border: u.activo ? "1px solid rgba(22, 163, 74, 0.35)" : "1px solid var(--hostly-line)",
+                                border: u.activo ? "1px solid rgba(22, 163, 74, 0.22)" : "1px solid var(--hostly-table-divider-soft)",
                                 color: u.activo ? "#166534" : "var(--hostly-ink-muted)",
                                 boxSizing: "border-box",
                                 lineHeight: 1.15,
@@ -762,7 +676,7 @@ export default function UsuariosPage() {
                               type="button"
                               onClick={() => openEdit(u)}
                               style={{
-                                border: "1px solid var(--hostly-line)",
+                                border: "1px solid var(--hostly-table-divider-soft)",
                                 background: "var(--hostly-surface-page-soft)",
                                 color: "var(--hostly-ink-muted)",
                                 padding: "10px 14px",
@@ -801,8 +715,8 @@ export default function UsuariosPage() {
               </div>
             </>
           )}
-        </section>
-      </div>
+        </HostlySurface>
+      </HostlySection>
 
       {formOpen ? (
         <div
@@ -825,24 +739,13 @@ export default function UsuariosPage() {
             if (e.target === e.currentTarget) closeForm();
           }}
         >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 480,
-              maxHeight: "min(90vh, 640px)",
-              overflowY: "auto",
-              borderRadius: 18,
-              padding: "20px 20px 18px",
-              background: "var(--hostly-surface-card-solid)",
-              border: "1px solid var(--hostly-line)",
-              boxShadow: "var(--hostly-shadow-float)",
-            }}
+          <HostlySurface
+            variant="elevated"
+            className="w-full max-h-[min(90vh,640px)] box-border overflow-y-auto p-5 max-w-[480px]"
+            style={{ borderRadius: 18 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2
-              id="user-modal-title"
-              style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--hostly-ink-strong)" }}
-            >
+            <h2 id="user-modal-title" className="hostly-heading mb-0 !text-[18px]">
               {editingId ? t("users.modalEditTitle") : t("users.modalNewTitle")}
             </h2>
 
@@ -913,7 +816,7 @@ export default function UsuariosPage() {
                 type="button"
                 onClick={submitForm}
                 style={{
-                  border: "1px solid var(--hostly-line)",
+                  border: "none",
                   background: "var(--hostly-accent)",
                   color: "#ffffff",
                   padding: "10px 18px",
@@ -930,10 +833,7 @@ export default function UsuariosPage() {
                 type="button"
                 onClick={closeForm}
                 style={{
-                  border: "1px solid var(--hostly-line)",
-                  background: "var(--hostly-surface-page-soft)",
-                  color: "var(--hostly-ink-muted)",
-                  padding: "10px 16px",
+                  border: "1px solid var(--hostly-table-divider-soft)",
                   borderRadius: 10,
                   fontWeight: 600,
                   fontSize: 14,
@@ -943,7 +843,7 @@ export default function UsuariosPage() {
                 {t("common.cancel")}
               </button>
             </div>
-          </div>
+          </HostlySurface>
         </div>
       ) : null}
     </ModulePageShell>

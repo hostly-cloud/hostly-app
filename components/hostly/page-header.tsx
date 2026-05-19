@@ -24,6 +24,11 @@ export type HostlyPageHeaderProps = {
   subtitleStyle?: React.CSSProperties;
   /** Estilo del elemento `<header>` (p. ej. padding vertical reducido en editores a pantalla completa). */
   surfaceStyle?: React.CSSProperties;
+  /**
+   * Márgenes de la franja opcional (`below`): por defecto hereda de compactSpacing.
+   * `ultraCompact`: menos aire antes de los controles (listados tipo inventario / config carta).
+   */
+  belowStripe?: "default" | "ultraCompact";
 };
 
 export function HostlyPageHeader({
@@ -42,6 +47,7 @@ export function HostlyPageHeader({
   titleStyle,
   subtitleStyle,
   surfaceStyle,
+  belowStripe = "default",
 }: HostlyPageHeaderProps) {
   const rowGap =
     compactSpacing
@@ -57,6 +63,23 @@ export function HostlyPageHeader({
           : 12;
   const leftColGap = compactSpacing ? 6 : 10;
   const rightMarginLeft = compactSpacing ? 6 : 12;
+
+  const belowMarginTop =
+    below === undefined
+      ? undefined
+      : compactSpacing
+        ? belowStripe === "ultraCompact"
+          ? 3
+          : 6
+        : 18;
+  const belowPaddingTop =
+    below === undefined
+      ? undefined
+      : compactSpacing
+        ? belowStripe === "ultraCompact"
+          ? 5
+          : 8
+        : 16;
 
   return (
     <header
@@ -145,10 +168,12 @@ export function HostlyPageHeader({
                 width: "100%",
                 minWidth: 0,
                 boxSizing: "border-box",
-                marginTop: compactSpacing ? 6 : 18,
-                paddingTop: compactSpacing ? 8 : 16,
+                marginTop: belowMarginTop,
+                paddingTop: belowPaddingTop,
                 borderTop: compactSpacing
-                  ? "1px solid rgba(148, 163, 184, 0.1)"
+                  ? belowStripe === "ultraCompact"
+                    ? "1px solid rgba(148, 163, 184, 0.08)"
+                    : "1px solid rgba(148, 163, 184, 0.1)"
                   : "1px solid rgba(148, 163, 184, 0.16)",
               }}
             >

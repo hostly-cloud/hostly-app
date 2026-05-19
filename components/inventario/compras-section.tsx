@@ -1200,7 +1200,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                             textAlign: "left",
                             padding: "10px 12px",
                             border: "none",
-                            borderBottom: "1px solid var(--hostly-line)",
+                            borderBottom: "1px solid var(--hostly-table-divider-soft)",
                             background: "transparent",
                             cursor: "pointer",
                             boxSizing: "border-box",
@@ -1465,7 +1465,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                             textAlign: "left",
                             padding: "10px 12px",
                             border: "none",
-                            borderBottom: "1px solid var(--hostly-line)",
+                            borderBottom: "1px solid var(--hostly-table-divider-soft)",
                             background: "transparent",
                             cursor: "pointer",
                             boxSizing: "border-box",
@@ -1677,7 +1677,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
               justifyContent: "space-between",
               gap: 8,
               padding: "6px 10px",
-              borderBottom: "1px solid var(--hostly-line)",
+              borderBottom: "1px solid var(--hostly-table-divider-soft)",
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -1771,13 +1771,13 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
                   alignItems: "center",
                   minHeight: 36,
                   padding: "8px 11px",
-                  background: "var(--hostly-surface-page-soft)",
-                  borderBottom: "1px solid var(--hostly-line)",
-                  fontSize: 10,
+                  background: "var(--hostly-table-head-surface)",
+                  borderBottom: "1px solid var(--hostly-table-divider-soft)",
+                  fontSize: 9.5,
                   fontWeight: 600,
-                  letterSpacing: "0.08em",
+                  letterSpacing: "0.1em",
                   textTransform: "uppercase",
-                  color: "var(--hostly-ink-muted)",
+                  color: "var(--hostly-ink-faint)",
                   boxSizing: "border-box",
                 }}
               >

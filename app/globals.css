@@ -4,9 +4,18 @@
   --background: #eef7ff;
   --foreground: #1f2933;
 
-  /* ------------------------------------------------------------------------ */
-  /* Hostly — premium claro global (Apple / SevenRooms / Shopify POS)          */
-  /* ------------------------------------------------------------------------ */
+  /* ------------------------------------------------------------------------
+   * Hostly — sistema de diseño (dashboard POS / configuración).
+   *
+   * Orden conceptual (buscar por sección):
+   * [A] Canvas & tintes de página · [B] Tinta · [C] Bordes & acento
+   * [D] Sombras · [E] Superficies (gradient/sólidos) · [F] Spacing stacks
+   * [G] Radios canónicos · [H] Tablas/listados premium · [I] Controles táctiles
+   * [J] Mobile shell (aliases → canónicos) · [K] Tokens config dedicados
+   * ------------------------------------------------------------------------
+   */
+
+  /* [A–B] Page + ink */
   --hostly-surface-page: #eef7ff;
   --hostly-surface-page-soft: #f7fcff;
   --hostly-surface-card: rgba(255, 255, 255, 0.94);
@@ -32,13 +41,14 @@
   --hostly-warning-soft: #f5eddc;
   --hostly-danger-soft: #f5e8e8;
   --hostly-info-soft: #e6f0f6;
+
+  /* [D] Elevación — evitar shadows manuales en JSX */
   --hostly-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.045);
   --hostly-shadow-float: 0 10px 28px rgba(15, 23, 42, 0.08);
   --hostly-shadow-hairline: 0 1px 0 rgba(15, 23, 42, 0.04);
-  /* Entre card y float: jerárquico “elevated” sin ruido */
   --hostly-shadow-elevated: 0 2px 12px rgba(15, 23, 42, 0.055);
 
-  /* Superficies: fondos reutilizables (evitar rgba / slate sueltos en JSX) */
+  /* [E] Superficies / gradient base (paneles tipo “ice”) */
   --hostly-surface-ice-bg: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.98) 0%,
@@ -46,12 +56,12 @@
   );
   --hostly-surface-hover-brightness: rgba(255, 255, 255, 0.65);
 
-  /* Espaciado vertical entre bloques hijos (column flex) */
+  /* [F] Stacks — mismo ritmo entre .hostly-stack-* y wrappers flex columna */
   --hostly-stack-gap-sm: 8px;
   --hostly-stack-gap-md: 12px;
   --hostly-stack-gap-lg: 16px;
 
-  /* Navy + ice (operativo premium; mobile-first) */
+  /* [G] Navy + ice + foco táctil */
   --hostly-navy-deep: #0f2744;
   --hostly-navy-mid: #173a55;
   --hostly-ice-50: #f5fbff;
@@ -61,7 +71,13 @@
   --hostly-ice-ring: rgba(90, 160, 200, 0.28);
   --hostly-focus-ring: 0 0 0 3px var(--hostly-ice-ring);
 
-  /* Mobile spacing system (tokens compartidos; tablet/desktop reutilizan mismos nombres) */
+  /*
+   * Bordes de “segment / tab” seleccionado (pill, hostly-tab, segmented móvil).
+   * Sustituye rgba(49,95,125,0.18) disperso por un único canon.
+   */
+  --hostly-control-well-border: rgba(49, 95, 125, 0.18);
+
+  /* Inputs / táctiles móvil (pad + radios de control) */
   --hostly-mobile-pad-x: clamp(14px, 4.2vw, 22px);
   --hostly-mobile-gap-section: clamp(14px, 3.5vw, 20px);
   --hostly-mobile-gap-block: 12px;
@@ -71,25 +87,35 @@
   --hostly-radius-input: 17px;
   --hostly-radius-button: 14px;
 
-  /* Layout / rhythm */
-  --hostly-content-max: 1180px; /* single global dashboard width */
-  --hostly-content-max-wide: 1400px; /* TPV / workbench layouts */
+  /* Layout / página */
+  --hostly-content-max: 1180px; /* dashboard estándar */
+  --hostly-content-max-wide: 1400px; /* workbench tipo TPV */
   --hostly-page-pad-x: clamp(12px, 2.2vw, 22px);
   --hostly-page-pad-y: clamp(10px, 1.9vw, 20px);
-  --hostly-stack-gap-y: 10px;
-  --hostly-card-grid-gap: 10px;
-  --hostly-radius-lg: 18px;
+
+  /*
+   * [H] Radios canónicos (escritorio + compartidos). Los --hostly-m-* reutilizan
+   * estos valores para que no diverjan al ajustar el sistema visual.
+   */
+  --hostly-radius-sm: 12px;
   --hostly-radius-md: 14px;
+  --hostly-radius-lg: 18px;
+  --hostly-radius-xl: 22px;
   --hostly-border-subtle: var(--hostly-line);
 
-  /* ------------------------------------------------------------------------ */
-  /* Hostly — mobile / tablet táctil: tokens unificados (primitives)          */
-  /* ------------------------------------------------------------------------ */
-  --hostly-m-radius-sm: 12px;
-  --hostly-m-radius-md: 14px;
-  --hostly-m-radius-lg: 18px;
-  --hostly-m-radius-xl: 22px;
-  --hostly-m-stack-gap: 12px;
+  /* [I] Tablas / listados “inventory premium” */
+  --hostly-table-divider: rgba(54, 86, 116, 0.085);
+  --hostly-table-divider-soft: rgba(54, 86, 116, 0.052);
+  --hostly-table-divider-faint: rgba(54, 86, 116, 0.034);
+  --hostly-table-head-surface: rgba(249, 252, 254, 0.44);
+  --hostly-table-row-hover: rgba(246, 252, 255, 0.74);
+
+  /* [J] Mobile shell — primitives (aliases estables sobre tokens canónicos) */
+  --hostly-m-radius-sm: var(--hostly-radius-sm);
+  --hostly-m-radius-md: var(--hostly-radius-md);
+  --hostly-m-radius-lg: var(--hostly-radius-lg);
+  --hostly-m-radius-xl: var(--hostly-radius-xl);
+  --hostly-m-stack-gap: var(--hostly-stack-gap-md);
   --hostly-m-section-gap: clamp(14px, 3.2vw, 20px);
   --hostly-m-reading-max: 720px;
   --hostly-m-transition: 160ms ease;
@@ -101,6 +127,8 @@
   --hostly-m-drawer-radius: 20px 20px 0 0;
   --hostly-m-card-pad-compact: 12px 14px;
   --hostly-m-card-pad-comfortable: 18px 16px;
+
+  /* [K] Config dashboard dedicado */
   --hostly-config-radius: 10px;
   --hostly-config-card-border: var(--hostly-line);
   --hostly-config-card-shadow: var(--hostly-shadow-card);
@@ -206,6 +234,8 @@ body {
   box-shadow: var(--hostly-shadow-card);
 }
 
+/* Legacy shells (compat): para nuevos listados usar `HostlySurface` (+ clases `.hostly-surface-*`). */
+
 .hostly-surface {
   border: 1px solid var(--hostly-line);
   border-radius: var(--hostly-radius-lg);
@@ -223,18 +253,21 @@ body {
 /* -------------------------------------------------------------------------- */
 /* Hostly — sistema de superficies (ice / soft / flat / elevated)            */
 /* Jerarquía: flat < soft < ice < elevated (sombra). Radios = --hostly-radius-lg */
-/* -------------------------------------------------------------------------- */
 
-.hostly-surface-flat {
+.hostly-surface-flat,
+.hostly-surface-soft,
+.hostly-surface-ice,
+.hostly-surface-elevated {
   border: 1px solid var(--hostly-line);
   border-radius: var(--hostly-radius-lg);
+}
+
+.hostly-surface-flat {
   background: var(--hostly-surface-card-solid);
   box-shadow: none;
 }
 
 .hostly-surface-soft {
-  border: 1px solid var(--hostly-line);
-  border-radius: var(--hostly-radius-lg);
   background: var(--hostly-ice-50);
   box-shadow: var(--hostly-shadow-hairline);
 }
@@ -243,16 +276,12 @@ body {
  * Bloque “hielo” (gradiente blanco → ice-50): paneles de lectura, KPIs, rails.
  */
 .hostly-surface-ice {
-  border: 1px solid var(--hostly-line);
-  border-radius: var(--hostly-radius-lg);
   background: var(--hostly-surface-ice-bg);
   box-shadow: var(--hostly-shadow-card);
 }
 
 /** Ligera elevación (drawers, callouts): sigue siendo premium, sin peso Toast antiguo */
 .hostly-surface-elevated {
-  border: 1px solid var(--hostly-line);
-  border-radius: var(--hostly-radius-lg);
   background: var(--hostly-surface-card-solid);
   box-shadow: var(--hostly-shadow-elevated);
 }
@@ -426,7 +455,7 @@ body {
 .hostly-pill[aria-pressed="true"],
 .hostly-tab[aria-selected="true"],
 .hostly-tab[data-active="true"] {
-  border-color: rgba(49, 95, 125, 0.18);
+  border-color: var(--hostly-control-well-border);
   background: var(--hostly-ice-100);
   color: var(--hostly-navy-deep);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
@@ -437,7 +466,10 @@ body {
   transform: scale(0.985);
 }
 
-.hostly-segmented {
+/* Contenedor segmented (desktop dashboard + shells móviles táctiles — misma geometría base) */
+
+.hostly-segmented,
+.hostly-mobile-segmented {
   display: inline-flex;
   align-items: stretch;
   gap: 2px;
@@ -447,6 +479,7 @@ body {
   background: var(--hostly-ice-50);
   box-shadow: none;
   max-width: 100%;
+  box-sizing: border-box;
 }
 
 .hostly-mobile-title {
@@ -714,21 +747,9 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Hostly — MOBILE SEGMENTED / PILL (unificación; convive con .hostly-segmented) */
+/* Hostly — MOBILE SEGMENT / PILL (comparte tokens con `.hostly-pill`/`.hostly-tab`) */
+/* `.hostly-mobile-segmented` reutiliza la base de `.hostly-segmented` arriba.      */
 /* -------------------------------------------------------------------------- */
-
-.hostly-mobile-segmented {
-  display: inline-flex;
-  align-items: stretch;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--hostly-line);
-  border-radius: var(--hostly-m-radius-sm);
-  background: var(--hostly-ice-50);
-  box-shadow: none;
-  max-width: 100%;
-  box-sizing: border-box;
-}
 
 .hostly-mobile-segment,
 .hostly-mobile-pill {
@@ -770,7 +791,7 @@ body {
 .hostly-mobile-segment[aria-selected="true"],
 .hostly-mobile-segment[data-active="true"],
 .hostly-mobile-pill[aria-pressed="true"] {
-  border-color: rgba(49, 95, 125, 0.18);
+  border-color: var(--hostly-control-well-border);
   background: var(--hostly-ice-100);
   color: var(--hostly-navy-deep);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
@@ -1151,15 +1172,74 @@ body {
   color: var(--hostly-ink);
 }
 
-/* Tablas listado en Config (Categorías, Familias, etc.) */
+/* Tablas listado en Config (Categorías, Familias, etc.) + tono inventario premium */
 .hostly-config-table-head {
-  border-bottom: 1px solid var(--hostly-line);
-  background-color: rgba(248, 251, 254, 0.86);
-  font-size: 11px;
+  border-bottom: 1px solid var(--hostly-table-divider-soft);
+  background-color: var(--hostly-table-head-surface);
+  font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
+  color: var(--hostly-ink-faint);
+}
+
+/* Tablas tipo inventario (<table> semánticas, reportes) */
+.hostly-inv-native-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.hostly-inv-native-table thead th {
+  padding: 6px 10px 5px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-faint);
+  border-bottom: 1px solid var(--hostly-table-divider-soft);
+  background: transparent;
+}
+
+.hostly-inv-native-table thead th.hostly-inv-th-num,
+.hostly-inv-native-table tbody td.hostly-inv-td-num {
+  text-align: right;
+}
+
+.hostly-inv-native-table tbody td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  vertical-align: middle;
+}
+
+.hostly-inv-native-table tbody tr {
+  transition: background-color 0.16s ease;
+}
+
+.hostly-inv-native-table tbody tr:hover {
+  background-color: var(--hostly-table-row-hover);
+}
+
+.hostly-inv-native-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.hostly-inv-td-primary,
+.hostly-inv-td-strong {
+  font-weight: 600;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-inv-td-muted {
   color: var(--hostly-ink-muted);
+  font-weight: 500;
+}
+
+.hostly-inv-td-amount {
+  text-align: right;
+  font-weight: 600;
+  color: var(--hostly-ink);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Marco claro alrededor del editor de plano (lienzo sigue oscuro dentro) */
@@ -1191,13 +1271,44 @@ body {
 }
 
 .hostly-productos-config-skin .hostly-productos-data-row:hover {
-  background-color: var(--hostly-ice-50) !important;
+  background-color: var(--hostly-table-row-hover) !important;
+}
+
+.hostly-productos-config-skin .hostly-productos-data-row:not(:hover) .hostly-productos-row-text-btn:not(:disabled) {
+  opacity: 0.74;
+}
+
+.hostly-productos-config-skin .hostly-productos-data-row:hover .hostly-productos-row-text-btn:not(:disabled) {
+  opacity: 1;
 }
 
 .hostly-productos-config-skin .hostly-productos-row-text-btn:hover:not(:disabled) {
   background-color: var(--hostly-ice-100) !important;
   border-color: var(--hostly-line-strong) !important;
   color: var(--hostly-navy-deep) !important;
+}
+
+.hostly-productos-config-skin .hostly-productos-data-row:not(:hover) .hostly-productos-row-icon-btn:not(:disabled) {
+  opacity: 0.62;
+}
+
+.hostly-productos-config-skin .hostly-productos-data-row:hover .hostly-productos-row-icon-btn:not(:disabled) {
+  opacity: 1;
+}
+
+.hostly-productos-config-skin .hostly-productos-row-icon-btn:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--hostly-surface-page) 78%, white) !important;
+  border-color: var(--hostly-line-strong) !important;
+  color: var(--hostly-navy-deep) !important;
+}
+
+.hostly-productos-config-skin .hostly-productos-row-icon-btn:disabled {
+  opacity: 0.42;
+}
+
+.hostly-productos-config-skin .hostly-productos-row-icon-btn:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.5);
+  outline-offset: 1px;
 }
 
 /* -------------------------------------------------------------------------- */
