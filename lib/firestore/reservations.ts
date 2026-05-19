@@ -13,7 +13,7 @@ import {
   type Unsubscribe,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase/client";
+import { db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 
 export type ReservationStatus =
@@ -110,7 +110,7 @@ export function listenReservationsForDate(
 ): Unsubscribe {
   const rid = restaurantId.trim();
   const d = date.trim();
-  if (!rid || !d || !auth.currentUser) {
+  if (!rid || !d || !isAuthReady()) {
     onData([]);
     return () => {};
   }

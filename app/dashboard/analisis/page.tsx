@@ -1092,6 +1092,7 @@ export default function AnalisisPage() {
       compactLayout
       operationalFocus
       lockViewport
+      shellSurface="configLight"
     >
       <div
         style={{

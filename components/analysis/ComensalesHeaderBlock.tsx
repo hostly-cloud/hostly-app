@@ -1,3 +1,5 @@
+import { HostlySectionHeader } from "@/components/ui/hostly";
+
 export type ComensalesHeaderBlockProps = {
   dateFrom: string;
   dateTo: string;
@@ -15,12 +17,10 @@ export function ComensalesHeaderBlock({
 }: ComensalesHeaderBlockProps) {
   return (
     <>
-      <div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--hostly-ink-strong)", letterSpacing: "-0.02em" }}>Comensales</div>
-        <div style={{ marginTop: 4, fontSize: 13, fontWeight: 600, color: "var(--hostly-ink-muted)" }}>
-          Del {formatDateEs(dateFrom)} al {formatDateEs(dateTo)}
-        </div>
-      </div>
+      <HostlySectionHeader
+        title="Comensales"
+        description={`Del ${formatDateEs(dateFrom)} al ${formatDateEs(dateTo)}`}
+      />
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <label style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>

@@ -4,6 +4,7 @@
  */
 
 import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import fs from "node:fs";
 
@@ -71,6 +72,26 @@ export function getFirestoreAdminStatus(): FirestoreAdminStatus {
   if (!rawKey) missing.push("FIREBASE_PRIVATE_KEY");
   missing.push("or GOOGLE_APPLICATION_CREDENTIALS");
   return { ok: false, method: "none", projectId: "", missing };
+}
+
+let cachedAuth: Auth | null | undefined;
+
+/**
+ * Auth Admin (verificación de ID tokens). Requiere la misma configuración que Firestore.
+ */
+export function getHostlyAuth(): Auth | null {
+  if (cachedAuth !== undefined) return cachedAuth;
+  if (!getHostlyFirestore()) {
+    cachedAuth = null;
+    return null;
+  }
+  try {
+    cachedAuth = getAuth();
+    return cachedAuth;
+  } catch {
+    cachedAuth = null;
+    return null;
+  }
 }
 
 export function getHostlyFirestore(): Firestore | null {

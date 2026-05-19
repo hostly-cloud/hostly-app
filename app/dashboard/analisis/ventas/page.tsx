@@ -484,63 +484,53 @@ export default function AnalisisVentasPage() {
         )}
 
         <div className="grid gap-3 sm:grid-cols-5">
-          <div className="hostly-panel p-4">
-            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Ventas del día</div>
-            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
-              {formatEur(totals.totalVentas)}
-            </div>
+          <div className="hostly-surface-ice p-4">
+            <div className="hostly-kpi-label">Ventas del día</div>
+            <div className="hostly-kpi-value mt-1">{formatEur(totals.totalVentas)}</div>
           </div>
-          <div className="hostly-panel p-4">
-            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Propinas</div>
-            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
-              {formatEur(totals.totalPropinas)}
-            </div>
+          <div className="hostly-surface-ice p-4">
+            <div className="hostly-kpi-label">Propinas</div>
+            <div className="hostly-kpi-value mt-1">{formatEur(totals.totalPropinas)}</div>
           </div>
-          <div className="hostly-panel p-4">
-            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Total cobrado</div>
-            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
-              {formatEur(totals.totalCobrado)}
-            </div>
+          <div className="hostly-surface-ice p-4">
+            <div className="hostly-kpi-label">Total cobrado</div>
+            <div className="hostly-kpi-value mt-1">{formatEur(totals.totalCobrado)}</div>
           </div>
-          <div className="hostly-panel p-4">
-            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Ticket medio</div>
-            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
-              {avgTicket.toFixed(2)} €
-            </div>
+          <div className="hostly-surface-ice p-4">
+            <div className="hostly-kpi-label">Ticket medio</div>
+            <div className="hostly-kpi-value mt-1">{avgTicket.toFixed(2)} €</div>
           </div>
-          <div className="hostly-panel p-4">
-            <div className="text-sm text-[color:var(--hostly-ink-muted)]">Tickets</div>
-            <div className="mt-1 text-2xl font-extrabold text-[color:var(--hostly-ink-strong)]">
-              {paymentsCount}
-            </div>
+          <div className="hostly-surface-ice p-4">
+            <div className="hostly-kpi-label">Tickets</div>
+            <div className="hostly-kpi-value mt-1">{paymentsCount}</div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4">
-          <div className="hostly-panel-soft p-3">
-            <div className="text-sm text-gray-500">Efectivo</div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="hostly-surface-soft p-3">
+            <div className="hostly-muted text-sm">Efectivo</div>
             <div className="text-lg font-semibold">{byMethod.cash.toFixed(2)} €</div>
           </div>
 
-          <div className="hostly-panel-soft p-3">
-            <div className="text-sm text-gray-500">Tarjeta</div>
+          <div className="hostly-surface-soft p-3">
+            <div className="hostly-muted text-sm">Tarjeta</div>
             <div className="text-lg font-semibold">{byMethod.card.toFixed(2)} €</div>
           </div>
 
-          <div className="hostly-panel-soft p-3">
-            <div className="text-sm text-gray-500">Voucher</div>
+          <div className="hostly-surface-soft p-3">
+            <div className="hostly-muted text-sm">Voucher</div>
             <div className="text-lg font-semibold">{totalVoucher.toFixed(2)} €</div>
           </div>
 
-          <div className="hostly-panel-soft p-3">
-            <div className="text-sm text-gray-500">Propinas</div>
+          <div className="hostly-surface-soft p-3">
+            <div className="hostly-muted text-sm">Propinas</div>
             <div className="text-lg font-semibold text-green-600">
               {byMethod.tips.toFixed(2)} €
             </div>
           </div>
 
-          <div className="hostly-panel-soft p-3">
-            <div className="text-sm text-gray-500">Descuentos</div>
+          <div className="hostly-surface-soft p-3">
+            <div className="hostly-muted text-sm">Descuentos</div>
             <div className="text-lg font-semibold text-red-600">
               -{formatNumberEU(totals.totalDiscounts)} €
             </div>
@@ -553,7 +543,7 @@ export default function AnalisisVentasPage() {
           <div className="space-y-1">
             {salesByHour.rows.map((h) => (
               <div key={h.hour} className="flex items-center gap-2">
-                <div className="w-10 text-xs text-gray-500">{h.hour}:00</div>
+                <div className="hostly-muted w-10 text-xs">{h.hour}:00</div>
 
                 <div className="flex-1 bg-[var(--hostly-surface-muted)] rounded h-3">
                   <div
@@ -583,7 +573,7 @@ export default function AnalisisVentasPage() {
                   <div className="font-medium">
                     {w.email ? w.email.split("@")[0] : id}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="hostly-muted text-xs">
                     {w.email || "Sin email"} · {w.count} tickets
                   </div>
                 </div>
@@ -647,7 +637,7 @@ export default function AnalisisVentasPage() {
                       {formatTime(ms)} · {methodLabel}
                     </div>
                     {method === "voucher" && p.voucherNumber && (
-                      <div className="text-xs text-gray-500">Voucher: {p.voucherNumber}</div>
+                      <div className="hostly-muted text-xs">Voucher: {p.voucherNumber}</div>
                     )}
                   </div>
 

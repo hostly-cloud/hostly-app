@@ -1722,6 +1722,17 @@ export function CartaPageContent({
   const [firestoreOccupiedTableIds, setFirestoreOccupiedTableIds] = useState<
     Set<string>
   >(() => new Set());
+  /**
+   * Señal estable para efectos que deben reaccionar solo si la MESA SELECCIONADA
+   * entra/sale de ocupación en Firestore. Evita re-disparar en cada cambio en otras mesas.
+   */
+  const selectedTableIsFirestoreOccupied = useMemo(() => {
+    if (!selectedTableId) return false;
+    const t = selectedTableId.trim();
+    return t ? firestoreOccupiedTableIds.has(t) : false;
+  }, [selectedTableId, firestoreOccupiedTableIds]);
+  const firestoreOccupiedTableIdsRef = useRef<Set<string>>(firestoreOccupiedTableIds);
+  firestoreOccupiedTableIdsRef.current = firestoreOccupiedTableIds;
   /** Por `table.id`: `createdAt` (ms) de la order activa más antigua de esa mesa. */
   const [firestoreOccupancyStartMsByTable, setFirestoreOccupancyStartMsByTable] =
     useState<Record<string, number>>({});
@@ -3501,13 +3512,7 @@ export function CartaPageContent({
     const id = tableIdFromUrl.trim();
     setSelectedTableId(id);
     setTpvEntryMode(tpvViewFromUrl === "summary" ? "summary" : "tpv");
-  }, [
-    orderIdFromUrl,
-    tableIdFromUrl,
-    tpvViewFromUrl,
-    firestoreOccupiedTableIds,
-    restaurantId,
-  ]);
+  }, [orderIdFromUrl, tableIdFromUrl, tpvViewFromUrl]);
 
   useEffect(() => {
     if (orderIdFromUrl) return;
@@ -3555,7 +3560,7 @@ export function CartaPageContent({
         const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
         if (cancelled) return;
         if (!snapDoc) {
-          if (!firestoreOccupiedTableIds.has(tid)) {
+          if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrder([]);
             setOrdersByTable((prev) => {
               const next = { ...prev };
@@ -3568,7 +3573,7 @@ export function CartaPageContent({
         const data = snapDoc.data() as FirestoreOrderDocForCart;
         const mapped = mapFirestoreOrderDocToCartLines(data, restaurantId);
         if (!mapped || mapped.length === 0) {
-          if (!firestoreOccupiedTableIds.has(tid)) {
+          if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrder([]);
             setOrdersByTable((prev) => {
               const next = { ...prev };
@@ -3599,7 +3604,7 @@ export function CartaPageContent({
     restaurantId,
     isFirebaseConfigured,
     ordersByTable,
-    firestoreOccupiedTableIds,
+    selectedTableIsFirestoreOccupied,
   ]);
 
   useEffect(() => {
@@ -4476,6 +4481,12 @@ export function CartaPageContent({
     );
   }, [zonesList, selectedTpvFloorPlanId, floorPlans]);
 
+  /** TPV embebido: un plano = un espacio; no capa ni fitting por zonas legacy. */
+  const zonesForOperationalMapRender = useMemo(
+    () => (embeddedInOperacion ? [] : zonesForTpvMap),
+    [embeddedInOperacion, zonesForTpvMap],
+  );
+
   const selectedTpvFloorPlan = useMemo(() => {
     if (!selectedTpvFloorPlanId) return null;
     return floorPlans.find((plan) => plan.id === selectedTpvFloorPlanId) ?? null;
@@ -4492,19 +4503,21 @@ export function CartaPageContent({
   }, [planElementsForTpvMap]);
 
   const mapZoneOptions = useMemo(() => {
+    if (embeddedInOperacion) return [];
     const set = new Set<string>();
     for (const t of tablesForTpvMap) {
       set.add(t.zone ?? "restaurante");
     }
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
-  }, [tablesForTpvMap]);
+  }, [embeddedInOperacion, tablesForTpvMap]);
 
   const tablesVisibleOnMap = useMemo(() => {
+    if (embeddedInOperacion) return tablesForTpvMap;
     if (mapZoneFilter === "__all__") return tablesForTpvMap;
     return tablesForTpvMap.filter(
       (t) => (t.zone ?? "restaurante") === mapZoneFilter,
     );
-  }, [tablesForTpvMap, mapZoneFilter]);
+  }, [embeddedInOperacion, tablesForTpvMap, mapZoneFilter]);
 
   const tablesFilteredByWaiter = useMemo(() => {
     const waiterScoped = embeddedInOperacion
@@ -5050,7 +5063,7 @@ export function CartaPageContent({
       selectedTpvFloorPlanSize.height,
       mapElementsForTpvRender.length,
       planElementsForTpvMap.length,
-      zonesForTpvMap.length,
+      zonesForOperationalMapRender.length,
       mapElementsForTpvRender
         .map((element) =>
           [
@@ -5075,7 +5088,7 @@ export function CartaPageContent({
           ].join(":"),
         )
         .join("|"),
-      zonesForTpvMap
+      zonesForOperationalMapRender
         .map((zone) =>
           [zone.id, zone.x, zone.y, zone.width, zone.height].join(":"),
         )
@@ -5086,7 +5099,7 @@ export function CartaPageContent({
     selectedTpvFloorPlanSize,
     mapElementsForTpvRender,
     planElementsForTpvMap,
-    zonesForTpvMap,
+    zonesForOperationalMapRender,
   ]);
 
   const formatMapOccupiedDuration = useCallback(
@@ -6529,8 +6542,9 @@ export function CartaPageContent({
       data-carta-mobile={cartaHeaderMobile ? "true" : undefined}
       data-carta-embedded={embeddedInOperacion ? "true" : undefined}
       style={{
-        background:
-          "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 48%, #e8eff6 100%)",
+        background: embeddedInOperacion
+          ? "linear-gradient(180deg, #f5f8fc 0%, #eef3f9 42%, #e8f0f8 100%)"
+          : "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 48%, #e8eff6 100%)",
         color: "var(--hostly-ink)",
         ...(embeddedInOperacion
           ? {
@@ -8405,7 +8419,7 @@ export function CartaPageContent({
 .carta-tpv-payment-dock-stack {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
 }
 
 .carta-tpv-payment-dock-total {
@@ -8417,7 +8431,7 @@ export function CartaPageContent({
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: rgba(71, 85, 105, 0.85);
   margin-bottom: 2px;
 }
 
@@ -8425,14 +8439,15 @@ export function CartaPageContent({
   font-size: 26px;
   font-weight: 900;
   letter-spacing: -0.03em;
-  color: #f8fafc;
+  color: #0f172a;
   line-height: 1.1;
 }
 
 .carta-tpv-payment-dock-total-eur {
   font-size: 17px;
   font-weight: 800;
-  opacity: 0.92;
+  opacity: 0.72;
+  color: #475569;
 }
 
 .carta-tpv-final-actions {
@@ -8467,68 +8482,73 @@ export function CartaPageContent({
 .carta-tpv-to-map-btn {
   flex-shrink: 0;
   margin-left: 6px;
-  padding: 6px 12px;
+  padding: 5px 11px;
   border-radius: 999px;
-  border: 1px solid var(--hostly-line);
-  background: rgba(255, 255, 255, 0.88);
-  color: var(--hostly-ink);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.72);
+  color: #334155;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-weight: 650;
+  letter-spacing: 0.02em;
   cursor: pointer;
   white-space: nowrap;
   box-sizing: border-box;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
-  box-shadow: var(--hostly-shadow-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(8px);
   transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.09s ease;
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.08s ease;
 }
 
 .carta-tpv-to-map-btn:hover {
-  background: #ffffff;
-  border-color: var(--hostly-line-strong);
-  color: var(--hostly-ink);
-  box-shadow: var(--hostly-shadow-card);
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(56, 189, 248, 0.42);
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 .carta-tpv-to-map-btn:active {
   transform: translateY(0.5px);
-  background: var(--hostly-surface-muted);
-  border-color: var(--hostly-line-strong);
+  background: rgba(241, 245, 249, 0.95);
+  border-color: rgba(56, 189, 248, 0.35);
   box-shadow: none;
 }
 
 .carta-tpv-to-map-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(63, 100, 120, 0.18);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
 }
 
 .carta-cats-wrap {
-  padding-bottom: 8px;
+  padding-bottom: 10px;
   margin-bottom: 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .carta-cat-btn-active {
-  background: rgba(56, 189, 248, 0.26) !important;
+  background: linear-gradient(
+    180deg,
+    rgba(239, 246, 255, 0.98) 0%,
+    rgba(224, 242, 254, 0.88) 100%
+  ) !important;
   border-color: rgba(56, 189, 248, 0.38) !important;
-  color: #e0f2fe !important;
-  box-shadow: 0 10px 20px rgba(56, 189, 248, 0.10);
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 .carta-current-cat-title {
-  margin: 0 0 8px;
-  font-size: 15px;
-  font-weight: 950;
-  letter-spacing: 0.02em;
-  color: #e5e7eb;
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #64748b;
   text-transform: uppercase;
-  opacity: 0.92;
+  opacity: 1;
 }
 
 .carta-table-map-shell {
@@ -8778,7 +8798,7 @@ export function CartaPageContent({
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -8799,8 +8819,8 @@ export function CartaPageContent({
   align-self: stretch;
   position: relative;
   z-index: 1;
-  background: #ffffff;
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
+  border-right: 1px solid rgba(148, 163, 184, 0.22);
   box-sizing: border-box;
 }
 
@@ -8809,8 +8829,9 @@ export function CartaPageContent({
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 4px;
-  padding-bottom: 0;
+  padding-right: 6px;
+  padding-bottom: 4px;
+  padding-left: 2px;
 }
 
 .carta-aside-footer {
@@ -8821,11 +8842,11 @@ export function CartaPageContent({
 }
 
 .carta-comanda-line {
-  padding: 1px 6px 1px 8px;
+  padding: 6px 8px 7px 10px;
   margin-left: 0;
   margin-right: 0;
-  border-radius: 6px;
-  border-bottom: 1px solid #eeeeee;
+  border-radius: 8px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
   transition: background-color 0.1s ease;
 }
 
@@ -8855,10 +8876,12 @@ export function CartaPageContent({
 }
 
 .carta-comanda-group-title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  color: #6b7280;
-  margin: 4px 0 3px;
+  color: #94a3b8;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 8px 0 5px;
 }
 
 .carta-comanda-line-grid {
@@ -9421,12 +9444,29 @@ export function CartaPageContent({
   width: 100%;
 }
 
+.carta-products-empty-state {
+  box-sizing: border-box;
+  max-width: 360px;
+  margin: 12px auto 0;
+  padding: 24px 20px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px dashed rgba(186, 198, 212, 0.85);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
 .carta-product-grid {
   display: grid;
   width: 100%;
   grid-template-columns: repeat(4, 1fr);
   align-items: stretch;
-  gap: 9px;
+  gap: 10px;
 }
 
 .carta-product-card {
@@ -9445,16 +9485,29 @@ export function CartaPageContent({
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   min-width: 0;
-  background-color: #f5f5f5;
-  color: #111827;
-  border-radius: 16px;
-  border: 1px solid #e5e5e5;
-  box-shadow: 0 6px 14px rgba(2,6,23,0.08);
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 6px 16px rgba(15, 23, 42, 0.04);
   transform: scale(1);
   transform-origin: center center;
   will-change: transform;
-  transition: transform 80ms ease, box-shadow 120ms ease;
+  transition:
+    transform 80ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease;
   width: 100%;
+}
+
+.carta-product-card:hover {
+  border-color: rgba(186, 230, 253, 0.95);
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.05),
+    0 8px 20px rgba(15, 23, 42, 0.06);
 }
 
 .carta-product-card * {
@@ -9463,7 +9516,9 @@ export function CartaPageContent({
 
 .carta-product-card:active {
   transform: scale(0.97);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22);
+  box-shadow:
+    0 0 0 2px rgba(56, 189, 248, 0.35),
+    0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 .carta-product-card--adding {
@@ -9485,7 +9540,7 @@ export function CartaPageContent({
   min-width: 20px;
   text-align: center;
   pointer-events: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
   line-height: 1;
   z-index: 2;
 }
@@ -9504,20 +9559,21 @@ export function CartaPageContent({
   position: absolute;
   bottom: 6px;
   right: 6px;
-  background: #111;
+  background: rgba(30, 58, 95, 0.88);
   color: white;
   font-size: 10px;
   font-weight: 700;
-  border-radius: 4px;
-  padding: 2px 4px;
+  border-radius: 6px;
+  padding: 2px 5px;
   pointer-events: none;
-  opacity: 0.9;
+  opacity: 0.95;
   line-height: 1;
   z-index: 2;
 }
 
 .carta-comanda-button:hover:not(:disabled) {
-  background: #d1d5db !important;
+  background: #f1f5f9 !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
 }
 
 .carta-comanda-button:disabled {
@@ -9572,12 +9628,14 @@ export function CartaPageContent({
   position: absolute;
   top: 6px;
   left: 6px;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f766e;
   font-size: 10px;
   line-height: 1;
+  font-weight: 800;
   border-radius: 999px;
   padding: 2px 5px;
+  border: 1px solid rgba(45, 212, 191, 0.45);
   pointer-events: none;
   z-index: 2;
 }
@@ -9587,7 +9645,7 @@ export function CartaPageContent({
    retira al soltar/cancelar. El color rojo señala "vas a quitar". */
 .carta-product-card.holding {
   transform: scale(0.92);
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.28);
 }
 
 .carta-product-media {
@@ -10357,7 +10415,6 @@ export function CartaPageContent({
               embeddedInOperacion &&
               mapSummaryAlertLevel === "normal" &&
               activeMapFilter === "all" &&
-              mapZoneOptions.length <= 1 &&
               operationalFloorPlansForTpv.length <= 1 ? null : (
                 <div
                   role="status"
@@ -10454,7 +10511,7 @@ export function CartaPageContent({
                       ? "retrasada"
                       : "retrasadas"}
                   </button>
-                  {mapZoneOptions.length > 1 ? (
+                  {!embeddedInOperacion && mapZoneOptions.length > 1 ? (
                     <div className="carta-map-zones-inline" role="tablist">
                       <button
                         type="button"
@@ -10728,14 +10785,14 @@ export function CartaPageContent({
                     }
                     viewportFitMode="content"
                     viewportFitElements={planElementsForTpvMap}
-                    viewportFitZones={zonesForTpvMap}
+                    viewportFitZones={zonesForOperationalMapRender}
                     viewportFitZoomMax={
                       cartaHeaderMobile && embeddedInOperacion ? 2.35 : 1.78
                     }
                     mapAutoFitKey={tpvMapAutoFitKey}
                     planSize={selectedTpvFloorPlanSize}
                     elements={mapElementsForTpvRender}
-                    zones={zonesForTpvMap}
+                    zones={zonesForOperationalMapRender}
                     renderElement={(ctx) => {
                       const tableId = ctx.elementId;
                       if (isDecorativePlanElementType(ctx.element.type)) {
@@ -11319,7 +11376,7 @@ export function CartaPageContent({
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
+                  gap: 12,
                   alignItems: "stretch",
                 }}
               >
@@ -11353,8 +11410,8 @@ export function CartaPageContent({
                         ? "not-allowed"
                         : "pointer",
                     borderRadius: 14,
-                    border: "1px solid rgba(15, 23, 42, 0.12)",
-                    background: "#e5e7eb",
+                    border: "1px solid rgba(203, 213, 225, 0.9)",
+                    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
                     color: "#111827",
                     minHeight: 44,
                     opacity:
@@ -11365,10 +11422,10 @@ export function CartaPageContent({
                             !hasPendingItems
                           ? 0.5
                           : 1,
-                    filter: comandaSentFlash ? "brightness(1.06)" : "none",
+                    filter: comandaSentFlash ? "brightness(1.03)" : "none",
                     transition:
                       "filter 120ms ease, opacity 120ms ease, background-color 120ms ease",
-                    boxShadow: "0 1px 2px rgba(2,6,23,0.06)",
+                    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.05)",
                   }}
                 >
                   {comandaSentFlash ? "Comanda enviada" : "Comanda"}
@@ -11380,7 +11437,7 @@ export function CartaPageContent({
                   <button
                     type="button"
                     onClick={handlePrintPreTicket}
-                    className="carta-tpv-dock-pre-ticket w-full bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-xl text-sm font-medium transition"
+                    className="carta-tpv-dock-pre-ticket w-full py-3 rounded-xl text-sm font-semibold transition border border-amber-200/80 bg-amber-50/90 text-amber-900 hover:bg-amber-100/95 active:bg-amber-100 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                     style={{ minHeight: 44 }}
                   >
                     Pre-ticket
@@ -11393,7 +11450,7 @@ export function CartaPageContent({
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
+                  gap: 12,
                   alignItems: "stretch",
                 }}
               >
@@ -11405,12 +11462,13 @@ export function CartaPageContent({
                     minHeight: 44,
                     padding: "10px 12px",
                     borderRadius: 14,
-                    background: "rgba(2, 6, 23, 0.35)",
-                    border: "1px solid rgba(148, 163, 184, 0.16)",
+                    background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+                    border: "1px solid rgba(203, 213, 225, 0.75)",
                     boxSizing: "border-box",
                     display: "flex",
                     flexDirection: "column",
                     justifyContent: "center",
+                    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
                   }}
                 >
                   <div className="carta-tpv-payment-dock-total-label">Total</div>
@@ -11453,11 +11511,11 @@ export function CartaPageContent({
                             ? "not-allowed"
                             : "pointer",
                         borderRadius: 14,
-                        border: "1px solid rgba(37, 99, 235, 0.35)",
+                        border: "1px solid rgba(56, 189, 248, 0.42)",
                         background:
-                          "linear-gradient(180deg, rgba(59,130,246,1) 0%, rgba(29,78,216,1) 100%)",
+                          "linear-gradient(180deg, #38bdf8 0%, #0ea5e9 48%, #0284c7 100%)",
                         color: "#fff",
-                        boxShadow: "0 12px 22px rgba(37,99,235,0.38)",
+                        boxShadow: "0 4px 16px rgba(14, 165, 233, 0.28)",
                         opacity:
                           isPayTableOrderSending ||
                           order.length === 0 ||
@@ -13779,10 +13837,12 @@ export function CartaPageContent({
             style={{
               padding: 12,
               boxSizing: "border-box",
-              borderRadius: 18,
-              background: "rgba(2, 6, 23, 0.55)",
-              border: "1px solid rgba(148, 163, 184, 0.14)",
-              boxShadow: "0 18px 50px rgba(2,6,23,0.35)",
+              borderRadius: 16,
+              background:
+                "linear-gradient(180deg, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%)",
+              border: "1px solid rgba(203, 213, 225, 0.65)",
+              boxShadow:
+                "0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 28px rgba(15, 23, 42, 0.05)",
               minHeight: 0,
             }}
           >
@@ -13804,10 +13864,11 @@ export function CartaPageContent({
                           maxWidth: 320,
                           padding: 3,
                           boxSizing: "border-box",
-                          borderRadius: 11,
-                          background: "rgba(2, 6, 23, 0.42)",
-                          border: "1px solid rgba(148, 163, 184, 0.16)",
+                          borderRadius: 12,
+                          background: "rgba(255, 255, 255, 0.82)",
+                          border: "1px solid rgba(203, 213, 225, 0.75)",
                           gap: 4,
+                          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
                         }}
                       >
                       {(["bebida", "comida"] as const).map((g) => {
@@ -13828,9 +13889,9 @@ export function CartaPageContent({
                                 ? "1px solid rgba(56, 189, 248, 0.45)"
                                 : "1px solid transparent",
                               background: active
-                                ? "rgba(56, 189, 248, 0.16)"
+                                ? "linear-gradient(180deg, rgba(239, 246, 255, 0.98) 0%, rgba(224, 242, 254, 0.75) 100%)"
                                 : "transparent",
-                              color: active ? "#e0f2fe" : "#94a3b8",
+                              color: active ? "#0f172a" : "#64748b",
                               fontSize: 12,
                               fontWeight: 800,
                               letterSpacing: "0.02em",
@@ -13880,17 +13941,20 @@ export function CartaPageContent({
                             minWidth: 84,
                             padding: "8px 12px",
                             borderRadius: 999,
-                            border: "1px solid rgba(148,163,184,0.28)",
+                            border: "1px solid rgba(226, 232, 240, 0.95)",
                             background: isSelected
-                              ? "rgba(56,189,248,0.18)"
-                              : "rgba(2,6,23,0.15)",
-                            color: isSelected ? "#bae6fd" : "#cbd5e1",
+                              ? "linear-gradient(180deg, rgba(239, 246, 255, 0.98) 0%, rgba(224, 242, 254, 0.82) 100%)"
+                              : "rgba(255, 255, 255, 0.65)",
+                            color: isSelected ? "#0f172a" : "#64748b",
                             fontSize: 12,
                             fontWeight: 800,
                             cursor: "pointer",
                             boxSizing: "border-box",
                             lineHeight: 1.1,
                             minHeight: 34,
+                            boxShadow: isSelected
+                              ? "0 1px 3px rgba(15, 23, 42, 0.05)"
+                              : "none",
                           }}
                         >
                           {name}
@@ -13927,17 +13991,7 @@ export function CartaPageContent({
                 !error &&
                 products.length === 0 &&
                 visibleOrderLines.length > 0 && (
-                  <div
-                    className="carta-products-empty-state"
-                    style={{
-                      fontSize: 14,
-                      opacity: 0.7,
-                      padding: 16,
-                      textAlign: "center",
-                      margin: 0,
-                      boxSizing: "border-box",
-                    }}
-                  >
+                  <div className="carta-products-empty-state">
                     No hay productos activos
                   </div>
                 )}
@@ -13947,17 +14001,7 @@ export function CartaPageContent({
                 products.length > 0 &&
                 !hasVisibleProductsForCurrentMenu &&
                 visibleOrderLines.length > 0 && (
-                  <div
-                    className="carta-products-empty-state"
-                    style={{
-                      fontSize: 13,
-                      opacity: 0.78,
-                      padding: 10,
-                      textAlign: "center",
-                      margin: 0,
-                      boxSizing: "border-box",
-                    }}
-                  >
+                  <div className="carta-products-empty-state">
                     No hay productos visibles en esta categoría
                   </div>
                 )}
@@ -13978,12 +14022,12 @@ export function CartaPageContent({
                               <h3
                                 style={{
                                   margin: "0 0 10px",
-                                  color: "#cbd5e1",
-                                  fontSize: 14,
-                                  fontWeight: 900,
-                                  letterSpacing: "0.06em",
+                                  color: "#64748b",
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  letterSpacing: "0.08em",
                                   textTransform: "uppercase",
-                                  opacity: 0.9,
+                                  opacity: 1,
                                 }}
                               >
                                 {catName}
@@ -14040,7 +14084,7 @@ export function CartaPageContent({
                                     key={product.id}
                                     className={`carta-product-card transition transform duration-100${
                                       isAdding ? " carta-product-card--adding" : ""
-                                    }${isActive ? " scale-95 bg-gray-200" : ""}${
+                                    }${isActive ? " scale-95 ring-2 ring-sky-200/70 bg-sky-50/90" : ""}${
                                       holdingProductId === product.id ? " holding" : ""
                                     }${hasSent ? " has-sent" : ""}`}
                                     type="button"
@@ -14285,13 +14329,13 @@ export function CartaPageContent({
                                     </div>
                                     <div className="flex-1 min-h-0 flex items-center justify-center px-1 w-full">
                                       <div
-                                        className="text-xs font-semibold leading-tight text-center line-clamp-2"
+                                        className="text-xs font-semibold leading-tight text-center line-clamp-2 text-slate-800"
                                         title={product.nombre}
                                       >
                                         {product.nombre}
                                       </div>
                                     </div>
-                                    <div className="h-5 shrink-0 text-sm font-bold text-center w-full">
+                                    <div className="h-5 shrink-0 text-sm font-extrabold text-center w-full text-slate-900 tabular-nums">
                                       {showPrecio ? `${product.precio.toFixed(2)} €` : ""}
                                     </div>
                                   </button>

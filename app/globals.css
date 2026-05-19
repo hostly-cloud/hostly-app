@@ -35,6 +35,21 @@
   --hostly-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.045);
   --hostly-shadow-float: 0 10px 28px rgba(15, 23, 42, 0.08);
   --hostly-shadow-hairline: 0 1px 0 rgba(15, 23, 42, 0.04);
+  /* Entre card y float: jerárquico “elevated” sin ruido */
+  --hostly-shadow-elevated: 0 2px 12px rgba(15, 23, 42, 0.055);
+
+  /* Superficies: fondos reutilizables (evitar rgba / slate sueltos en JSX) */
+  --hostly-surface-ice-bg: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    var(--hostly-ice-50) 100%
+  );
+  --hostly-surface-hover-brightness: rgba(255, 255, 255, 0.65);
+
+  /* Espaciado vertical entre bloques hijos (column flex) */
+  --hostly-stack-gap-sm: 8px;
+  --hostly-stack-gap-md: 12px;
+  --hostly-stack-gap-lg: 16px;
 
   /* Navy + ice (operativo premium; mobile-first) */
   --hostly-navy-deep: #0f2744;
@@ -130,9 +145,9 @@ body {
   z-index: 5;
   padding: 14px 0;
   border-bottom: 1px solid var(--hostly-border-subtle);
-  background: rgba(248, 251, 254, 0.88);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(247, 252, 255, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 /* Móvil dashboard: pestañas horizontales con scroll si no caben */
@@ -205,6 +220,151 @@ body {
   box-shadow: var(--hostly-shadow-card);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Hostly — sistema de superficies (ice / soft / flat / elevated)            */
+/* Jerarquía: flat < soft < ice < elevated (sombra). Radios = --hostly-radius-lg */
+/* -------------------------------------------------------------------------- */
+
+.hostly-surface-flat {
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: none;
+}
+
+.hostly-surface-soft {
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-ice-50);
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
+/**
+ * Bloque “hielo” (gradiente blanco → ice-50): paneles de lectura, KPIs, rails.
+ */
+.hostly-surface-ice {
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-surface-ice-bg);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+/** Ligera elevación (drawers, callouts): sigue siendo premium, sin peso Toast antiguo */
+.hostly-surface-elevated {
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: var(--hostly-shadow-elevated);
+}
+
+/**
+ * Modificador: tarjetas/list items clicables (border + sombra suave al hover).
+ * No sustituye estados focus-visible de botones nativos.
+ */
+.hostly-surface--interactive {
+  transition:
+    border-color var(--hostly-m-transition),
+    box-shadow var(--hostly-m-transition),
+    background-color var(--hostly-m-transition),
+    filter var(--hostly-m-transition);
+}
+
+.hostly-surface-ice.hostly-surface--interactive:hover {
+  border-color: var(--hostly-line-strong);
+  box-shadow: var(--hostly-shadow-elevated);
+}
+
+.hostly-surface-soft.hostly-surface--interactive:hover {
+  border-color: var(--hostly-line-strong);
+  background: var(--hostly-ice-100);
+}
+
+.hostly-surface-flat.hostly-surface--interactive:hover {
+  border-color: var(--hostly-line-strong);
+  background: var(--hostly-ice-50);
+}
+
+.hostly-surface-elevated.hostly-surface--interactive:hover {
+  border-color: var(--hostly-line-strong);
+  box-shadow: var(--hostly-shadow-float);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — tipografía auxiliar (dashboard / análisis; sin tocar TPV)          */
+/* -------------------------------------------------------------------------- */
+
+.hostly-heading {
+  margin: 0;
+  font-size: clamp(16px, 2.1vw, 20px);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.15;
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-section-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-muted);
+  line-height: 1.2;
+}
+
+.hostly-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-muted);
+  line-height: 1.2;
+}
+
+.hostly-kpi-value {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: clamp(17px, 2.4vw, 22px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-muted {
+  margin: 0;
+  color: var(--hostly-ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly — ritmo vertical (hijos en columna)                                 */
+/* -------------------------------------------------------------------------- */
+
+.hostly-stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-stack-gap-sm);
+  min-width: 0;
+}
+
+.hostly-stack-md {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-stack-gap-md);
+  min-width: 0;
+}
+
+.hostly-stack-lg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-stack-gap-lg);
+  min-width: 0;
+}
+
 .hostly-panel-soft {
   border: 1px solid var(--hostly-line);
   border-radius: var(--hostly-radius-md);
@@ -228,7 +388,7 @@ body {
   gap: 6px;
   border: 1px solid var(--hostly-line);
   border-radius: 999px;
-  background: rgba(248, 251, 254, 0.82);
+  background: var(--hostly-ice-50);
   color: var(--hostly-ink-muted);
   font-size: 12px;
   font-weight: 650;
@@ -259,7 +419,7 @@ body {
 .hostly-pill:hover,
 .hostly-tab:hover {
   border-color: var(--hostly-line);
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--hostly-surface-hover-brightness);
   color: var(--hostly-ink);
 }
 
@@ -1031,13 +1191,13 @@ body {
 }
 
 .hostly-productos-config-skin .hostly-productos-data-row:hover {
-  background-color: rgba(248, 250, 252, 0.9) !important;
+  background-color: var(--hostly-ice-50) !important;
 }
 
 .hostly-productos-config-skin .hostly-productos-row-text-btn:hover:not(:disabled) {
-  background-color: rgb(248 250 252) !important;
-  border-color: rgb(226 232 240) !important;
-  color: rgb(30 41 59) !important;
+  background-color: var(--hostly-ice-100) !important;
+  border-color: var(--hostly-line-strong) !important;
+  color: var(--hostly-navy-deep) !important;
 }
 
 /* -------------------------------------------------------------------------- */

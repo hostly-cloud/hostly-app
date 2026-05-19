@@ -694,15 +694,21 @@ export type ProductosManagementPageProps = {
   lockViewportFillParent?: boolean;
   /** Vista alineada con Configuración: shell claro, tabla y chips legibles sobre fondo global. */
   embedConfigVisual?: boolean;
+  /**
+   * `/dashboard/productos`: mismo tratamiento visual “hielo” que en Config, manteniendo enlaces a rutas de carta (no a Config).
+   */
+  dashboardListIceVisual?: boolean;
 };
 
 export default function ProductosManagementPage({
   lockViewportFillParent = false,
   embedConfigVisual = false,
+  dashboardListIceVisual = false,
 }: ProductosManagementPageProps = {}) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const emb = Boolean(embedConfigVisual);
+  const iceVisual = emb || Boolean(dashboardListIceVisual);
   const [hydrated, setHydrated] = useState(false);
   const [items, setItems] = useState<PlatoCarta[]>([]);
   const [meta, setMeta] = useState<EscandalloMetaMap>(new Map());
@@ -1041,24 +1047,24 @@ export default function ProductosManagementPage({
   );
 
   const rowNombreStyleResolved = useMemo(
-    () => (emb ? { ...productRowNombreStyle, color: "#0f172a" } : productRowNombreStyle),
-    [emb],
+    () => (iceVisual ? { ...productRowNombreStyle, color: "#0f172a" } : productRowNombreStyle),
+    [iceVisual],
   );
   const rowPrecioStyleResolved = useMemo(
-    () => (emb ? { ...productRowPrecioStyle, color: "#0f172a" } : productRowPrecioStyle),
-    [emb],
+    () => (iceVisual ? { ...productRowPrecioStyle, color: "#0f172a" } : productRowPrecioStyle),
+    [iceVisual],
   );
   const rowTipoStyleResolved = useMemo(
-    () => (emb ? { ...productRowTipoStyle, color: "#64748b" } : productRowTipoStyle),
-    [emb],
+    () => (iceVisual ? { ...productRowTipoStyle, color: "#64748b" } : productRowTipoStyle),
+    [iceVisual],
   );
   const rowCategoriaStyleResolved = useMemo(
-    () => (emb ? { ...productRowCategoriaStyle, color: "#475569" } : productRowCategoriaStyle),
-    [emb],
+    () => (iceVisual ? { ...productRowCategoriaStyle, color: "#475569" } : productRowCategoriaStyle),
+    [iceVisual],
   );
   const colHeadStyleResolved = useMemo(
     () =>
-      emb
+      iceVisual
         ? {
             ...colHeadStyle,
             fontSize: 11,
@@ -1068,7 +1074,7 @@ export default function ProductosManagementPage({
             padding: "6px 8px",
           }
         : colHeadStyle,
-    [emb],
+    [iceVisual],
   );
 
   const editingPlato = useMemo(() => (editingId ? (items.find((p) => p.id === editingId) ?? null) : null), [editingId, items]);
@@ -1106,7 +1112,7 @@ export default function ProductosManagementPage({
     fontSize: 19,
     fontWeight: 700,
     letterSpacing: "-0.03em",
-    color: emb ? "#0f172a" : "#f8fafc",
+    color: iceVisual ? "#0f172a" : "#f8fafc",
     lineHeight: 1.1,
   };
 
@@ -1381,9 +1387,9 @@ export default function ProductosManagementPage({
         denseWorkbench
         lockViewport
         lockViewportFillParent={lockViewportFillParent}
-        shellSurface={emb ? "configLight" : "default"}
+        shellSurface={iceVisual ? "configLight" : "default"}
       >
-        <p style={{ color: emb ? "#64748b" : "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
+        <p style={{ color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 13 }}>{t("common.preparingData")}</p>
       </ModulePageShell>
     );
   }
@@ -1400,7 +1406,7 @@ export default function ProductosManagementPage({
       denseWorkbench
       lockViewport
       lockViewportFillParent={lockViewportFillParent}
-      shellSurface={emb ? "configLight" : "default"}
+      shellSurface={iceVisual ? "configLight" : "default"}
       headerBelow={
         <div
           style={{
@@ -1429,9 +1435,9 @@ export default function ProductosManagementPage({
             <Link
               href={emb ? "/dashboard/configuracion/carta/categorias" : "/dashboard/carta/categorias"}
               style={{
-                border: emb ? "1px solid #e2e8f0" : "1px solid rgba(148, 163, 184, 0.14)",
-                background: emb ? "rgba(255,255,255,0.92)" : "rgba(15, 23, 42, 0.28)",
-                color: emb ? "#475569" : "#94a3b8",
+                border: iceVisual ? "1px solid #e2e8f0" : "1px solid rgba(148, 163, 184, 0.14)",
+                background: iceVisual ? "rgba(255,255,255,0.92)" : "rgba(15, 23, 42, 0.28)",
+                color: iceVisual ? "#475569" : "#94a3b8",
                 padding: "5px 10px",
                 borderRadius: 8,
                 fontWeight: 600,
@@ -1455,9 +1461,9 @@ export default function ProductosManagementPage({
                 router.push(emb ? "/dashboard/configuracion/carta/modificadores" : "/dashboard/carta/modificadores")
               }
               style={{
-                border: emb ? "1px solid #e2e8f0" : "1px solid rgba(148, 163, 184, 0.14)",
-                background: emb ? "rgba(255,255,255,0.92)" : "rgba(15, 23, 42, 0.28)",
-                color: emb ? "#475569" : "#94a3b8",
+                border: iceVisual ? "1px solid #e2e8f0" : "1px solid rgba(148, 163, 184, 0.14)",
+                background: iceVisual ? "rgba(255,255,255,0.92)" : "rgba(15, 23, 42, 0.28)",
+                color: iceVisual ? "#475569" : "#94a3b8",
                 padding: "5px 10px",
                 borderRadius: 8,
                 fontWeight: 600,
@@ -1493,9 +1499,9 @@ export default function ProductosManagementPage({
                 router.push(emb ? "/dashboard/configuracion/carta/importacion" : "/dashboard/carta/importar");
               }}
               style={{
-                border: emb ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(251, 191, 36, 0.22)",
-                background: emb ? "rgba(255, 251, 235, 0.95)" : "rgba(120, 53, 15, 0.12)",
-                color: emb ? "#92400e" : "#fcd34d",
+                border: iceVisual ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(251, 191, 36, 0.22)",
+                background: iceVisual ? "rgba(255, 251, 235, 0.95)" : "rgba(120, 53, 15, 0.12)",
+                color: iceVisual ? "#92400e" : "#fcd34d",
                 padding: "5px 11px",
                 borderRadius: 8,
                 fontWeight: 700,
@@ -1513,9 +1519,9 @@ export default function ProductosManagementPage({
               type="button"
               onClick={openCreate}
               style={{
-                border: emb ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.42)",
-                background: emb ? "rgba(220, 252, 231, 0.9)" : "rgba(6, 78, 59, 0.22)",
-                color: emb ? "#166534" : "#bbf7d0",
+                border: iceVisual ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.42)",
+                background: iceVisual ? "rgba(220, 252, 231, 0.9)" : "rgba(6, 78, 59, 0.22)",
+                color: iceVisual ? "#166534" : "#bbf7d0",
                 padding: "6px 12px",
                 borderRadius: 8,
                 fontWeight: 700,
@@ -1534,7 +1540,7 @@ export default function ProductosManagementPage({
       }
     >
       <div
-        className={emb ? "hostly-productos-config-skin" : undefined}
+        className={iceVisual ? "hostly-productos-config-skin" : undefined}
         style={{
           flexGrow: 1,
           flexShrink: 1,
@@ -1552,9 +1558,9 @@ export default function ProductosManagementPage({
               flexShrink: 0,
               padding: "8px 11px",
               borderRadius: 8,
-              background: emb ? "rgba(220, 252, 231, 0.85)" : "rgba(34, 197, 94, 0.12)",
-              border: emb ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.3)",
-              color: emb ? "#166534" : "#bbf7d0",
+              background: iceVisual ? "rgba(220, 252, 231, 0.85)" : "rgba(34, 197, 94, 0.12)",
+              border: iceVisual ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.3)",
+              color: iceVisual ? "#166534" : "#bbf7d0",
               fontSize: 13,
               lineHeight: 1.32,
             }}
@@ -1569,9 +1575,9 @@ export default function ProductosManagementPage({
               flexShrink: 0,
               padding: "8px 11px",
               borderRadius: 8,
-              background: emb ? "rgba(254, 242, 242, 0.95)" : "rgba(248, 113, 113, 0.12)",
-              border: emb ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(248, 113, 113, 0.35)",
-              color: emb ? "#b91c1c" : "#fecaca",
+              background: iceVisual ? "rgba(254, 242, 242, 0.95)" : "rgba(248, 113, 113, 0.12)",
+              border: iceVisual ? "1px solid rgba(248, 113, 113, 0.4)" : "1px solid rgba(248, 113, 113, 0.35)",
+              color: iceVisual ? "#b91c1c" : "#fecaca",
               fontSize: 13,
             }}
           >
@@ -1589,8 +1595,8 @@ export default function ProductosManagementPage({
                 alignItems: "baseline",
                 padding: "4px 9px",
                 borderRadius: 999,
-                border: emb ? "1px solid #e2e8f0" : "1px solid rgba(51, 65, 85, 0.65)",
-                background: emb ? "rgba(255,255,255,0.9)" : "rgba(15, 23, 42, 0.28)",
+                border: iceVisual ? "1px solid #e2e8f0" : "1px solid rgba(51, 65, 85, 0.65)",
+                background: iceVisual ? "rgba(255,255,255,0.9)" : "rgba(15, 23, 42, 0.28)",
                 minHeight: 26,
                 whiteSpace: "nowrap",
               }}
@@ -1601,12 +1607,12 @@ export default function ProductosManagementPage({
                   fontWeight: 900,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: emb ? "#64748b" : "#64748b",
+                  color: iceVisual ? "#64748b" : "#64748b",
                 }}
               >
                 {m.label}
               </span>
-              <span style={{ ...metricNum, fontSize: 14, lineHeight: 1, color: emb ? "#0f172a" : "#e2e8f0" }}>{m.value}</span>
+              <span style={{ ...metricNum, fontSize: 14, lineHeight: 1, color: iceVisual ? "#0f172a" : "#e2e8f0" }}>{m.value}</span>
             </span>
           ))}
         </div>
@@ -1621,16 +1627,16 @@ export default function ProductosManagementPage({
             flexDirection: "column",
             overflow: "hidden",
             borderRadius: 10,
-            background: emb ? "rgba(255,255,255,0.92)" : "#1e293b",
-            border: emb ? "1px solid rgb(226 232 240)" : "1px solid rgba(51, 65, 85, 0.5)",
-            boxShadow: emb ? "0 1px 2px rgba(15,23,42,0.04), 0 10px 28px -22px rgba(15,23,42,0.07)" : "none",
+            background: iceVisual ? "rgba(255,255,255,0.92)" : "#1e293b",
+            border: iceVisual ? "1px solid rgb(226 232 240)" : "1px solid rgba(51, 65, 85, 0.5)",
+            boxShadow: iceVisual ? "0 1px 2px rgba(15,23,42,0.04), 0 10px 28px -22px rgba(15,23,42,0.07)" : "none",
           }}
         >
           <div
             style={{
               flexShrink: 0,
               padding: "3px 6px",
-              borderBottom: emb ? "1px solid rgb(241 245 249)" : "1px solid #334155",
+              borderBottom: iceVisual ? "1px solid rgb(241 245 249)" : "1px solid #334155",
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
@@ -1639,8 +1645,8 @@ export default function ProductosManagementPage({
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 200px" }}>
-              <h2 style={{ ...OPER_PRIMARY_SECTION_TITLE, fontSize: "clamp(13px, 1.35vw, 16px)", lineHeight: 1.06, color: emb ? "#0f172a" : undefined }}>{t("carta.listTitle")}</h2>
-              <p style={{ ...OPER_PRIMARY_COUNT_META, margin: "1px 0 0", fontSize: 10, color: emb ? "#64748b" : undefined }}>{t("carta.listCount", { shown: displayed.length, total: items.length })}</p>
+              <h2 style={{ ...OPER_PRIMARY_SECTION_TITLE, fontSize: "clamp(13px, 1.35vw, 16px)", lineHeight: 1.06, color: iceVisual ? "#0f172a" : undefined }}>{t("carta.listTitle")}</h2>
+              <p style={{ ...OPER_PRIMARY_COUNT_META, margin: "1px 0 0", fontSize: 10, color: iceVisual ? "#64748b" : undefined }}>{t("carta.listCount", { shown: displayed.length, total: items.length })}</p>
             </div>
             <input
               type="search"
@@ -1656,9 +1662,9 @@ export default function ProductosManagementPage({
                 maxWidth: 360,
                 padding: "6px 11px",
                 borderRadius: 999,
-                border: emb ? "1px solid #cbd5e1" : "1px solid #475569",
-                background: emb ? "#f8fafc" : "#0f172a",
-                color: emb ? "#0f172a" : "#f8fafc",
+                border: iceVisual ? "1px solid #cbd5e1" : "1px solid #475569",
+                background: iceVisual ? "#f8fafc" : "#0f172a",
+                color: iceVisual ? "#0f172a" : "#f8fafc",
                 fontSize: 13,
                 outline: "none",
                 boxSizing: "border-box",
@@ -1675,7 +1681,7 @@ export default function ProductosManagementPage({
               gap: 6,
               padding: "3px 6px",
               alignItems: "center",
-              borderBottom: emb ? "1px solid rgb(241 245 249)" : "1px solid #334155",
+              borderBottom: iceVisual ? "1px solid rgb(241 245 249)" : "1px solid #334155",
             }}
           >
             <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginRight: 2 }}>{t("stock.filterHint")}</span>
@@ -1697,11 +1703,11 @@ export default function ProductosManagementPage({
                   style={{
                     border: active
                       ? "1px solid rgba(34, 197, 94, 0.55)"
-                      : emb
+                      : iceVisual
                         ? "1px solid #e2e8f0"
                         : "1px solid #334155",
-                    background: active ? (emb ? "rgba(220, 252, 231, 0.95)" : "rgba(34, 197, 94, 0.18)") : emb ? "#fff" : "#0f172a",
-                    color: active ? (emb ? "#166534" : "#ecfdf5") : "#94a3b8",
+                    background: active ? (iceVisual ? "rgba(220, 252, 231, 0.95)" : "rgba(34, 197, 94, 0.18)") : iceVisual ? "#fff" : "#0f172a",
+                    color: active ? (iceVisual ? "#166534" : "#ecfdf5") : "#94a3b8",
                     padding: "5px 11px",
                     borderRadius: 999,
                     fontWeight: 700,
@@ -1725,12 +1731,12 @@ export default function ProductosManagementPage({
                   border:
                     viewMode === "grouped"
                       ? "1px solid rgba(56, 189, 248, 0.55)"
-                      : emb
+                      : iceVisual
                         ? "1px solid #e2e8f0"
                         : "1px solid #334155",
                   background:
-                    viewMode === "grouped" ? (emb ? "rgba(224, 242, 254, 0.95)" : "rgba(14, 165, 233, 0.14)") : emb ? "#fff" : "#0f172a",
-                  color: viewMode === "grouped" ? (emb ? "#0369a1" : "#bae6fd") : "#94a3b8",
+                    viewMode === "grouped" ? (iceVisual ? "rgba(224, 242, 254, 0.95)" : "rgba(14, 165, 233, 0.14)") : iceVisual ? "#fff" : "#0f172a",
+                  color: viewMode === "grouped" ? (iceVisual ? "#0369a1" : "#bae6fd") : "#94a3b8",
                   padding: "5px 11px",
                   borderRadius: 999,
                   fontWeight: 800,
@@ -1748,10 +1754,10 @@ export default function ProductosManagementPage({
                 onClick={() => setViewMode("list")}
                 style={{
                   border:
-                    viewMode === "list" ? "1px solid rgba(56, 189, 248, 0.55)" : emb ? "1px solid #e2e8f0" : "1px solid #334155",
+                    viewMode === "list" ? "1px solid rgba(56, 189, 248, 0.55)" : iceVisual ? "1px solid #e2e8f0" : "1px solid #334155",
                   background:
-                    viewMode === "list" ? (emb ? "rgba(224, 242, 254, 0.95)" : "rgba(14, 165, 233, 0.14)") : emb ? "#fff" : "#0f172a",
-                  color: viewMode === "list" ? (emb ? "#0369a1" : "#bae6fd") : "#94a3b8",
+                    viewMode === "list" ? (iceVisual ? "rgba(224, 242, 254, 0.95)" : "rgba(14, 165, 233, 0.14)") : iceVisual ? "#fff" : "#0f172a",
+                  color: viewMode === "list" ? (iceVisual ? "#0369a1" : "#bae6fd") : "#94a3b8",
                   padding: "5px 11px",
                   borderRadius: 999,
                   fontWeight: 800,
@@ -1771,7 +1777,7 @@ export default function ProductosManagementPage({
             style={{
               flexShrink: 0,
               padding: "2px 6px 3px",
-              borderBottom: emb ? "1px solid rgb(241 245 249)" : "1px solid rgba(51, 65, 85, 0.75)",
+              borderBottom: iceVisual ? "1px solid rgb(241 245 249)" : "1px solid rgba(51, 65, 85, 0.75)",
               display: "flex",
               gap: 6,
               overflowX: "auto",
@@ -1792,11 +1798,11 @@ export default function ProductosManagementPage({
                     flexShrink: 0,
                     border: active
                       ? "1px solid rgba(56, 189, 248, 0.55)"
-                      : emb
+                      : iceVisual
                         ? "1px solid #e2e8f0"
                         : "1px solid rgba(51, 65, 85, 0.8)",
-                    background: active ? (emb ? "rgba(224, 242, 254, 0.95)" : "rgba(8,47,73,0.35)") : emb ? "rgba(248,250,252,0.9)" : "rgba(2,6,23,0.12)",
-                    color: active ? (emb ? "#0369a1" : "#bae6fd") : "#94a3b8",
+                    background: active ? (iceVisual ? "rgba(224, 242, 254, 0.95)" : "rgba(8,47,73,0.35)") : iceVisual ? "rgba(248,250,252,0.9)" : "rgba(2,6,23,0.12)",
+                    color: active ? (iceVisual ? "#0369a1" : "#bae6fd") : "#94a3b8",
                     padding: "5px 10px",
                     borderRadius: 999,
                     fontWeight: 850,
@@ -1824,10 +1830,10 @@ export default function ProductosManagementPage({
                   justifyContent: "center",
                   padding: "28px 16px",
                   textAlign: "center",
-                  color: emb ? "#64748b" : "#94a3b8",
+                  color: iceVisual ? "#64748b" : "#94a3b8",
                 }}
               >
-                <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: emb ? "#0f172a" : "#e2e8f0" }}>{t("carta.emptyTitle")}</p>
+                <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: iceVisual ? "#0f172a" : "#e2e8f0" }}>{t("carta.emptyTitle")}</p>
                 <p style={{ margin: "12px 0 0", maxWidth: 400, fontSize: 14, lineHeight: 1.5 }}>{t("carta.emptyBody")}</p>
                 <button
                   type="button"
@@ -1843,16 +1849,16 @@ export default function ProductosManagementPage({
                     cursor: "pointer",
                     fontSize: 15,
                     minHeight: 48,
-                    boxShadow: emb ? "0 10px 28px -14px rgba(22, 163, 74, 0.55)" : undefined,
+                    boxShadow: iceVisual ? "0 10px 28px -14px rgba(22, 163, 74, 0.55)" : undefined,
                   }}
                 >
                   {t("carta.emptyCta")}
                 </button>
               </div>
             ) : filteredSorted.length === 0 ? (
-              <div style={{ padding: "24px 8px", textAlign: "center", color: emb ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("stock.filterEmpty")}</div>
+              <div style={{ padding: "24px 8px", textAlign: "center", color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("stock.filterEmpty")}</div>
             ) : displayed.length === 0 ? (
-              <div style={{ padding: "24px 8px", textAlign: "center", color: emb ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("carta.searchNoResults")}</div>
+              <div style={{ padding: "24px 8px", textAlign: "center", color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("carta.searchNoResults")}</div>
             ) : (
               <div
                 style={{
@@ -1861,7 +1867,7 @@ export default function ProductosManagementPage({
                   display: "flex",
                   flexDirection: "column",
                   overflow: "hidden",
-                  background: emb ? "#f1f5f9" : "rgba(2, 6, 23, 0.18)",
+                  background: iceVisual ? "#f1f5f9" : "rgba(2, 6, 23, 0.18)",
                   border: "none",
                   borderRadius: 0,
                   boxShadow: "none",
@@ -1872,15 +1878,15 @@ export default function ProductosManagementPage({
                     style={{
                       flexShrink: 0,
                       padding: "4px 8px",
-                      borderBottom: emb ? "1px solid rgba(186, 230, 253, 0.9)" : "1px solid #334155",
+                      borderBottom: iceVisual ? "1px solid rgba(186, 230, 253, 0.9)" : "1px solid #334155",
                       display: "flex",
                       flexWrap: "wrap",
                       alignItems: "center",
                       gap: 8,
-                      background: emb ? "rgba(224, 242, 254, 0.92)" : "rgba(56, 189, 248, 0.07)",
+                      background: iceVisual ? "rgba(224, 242, 254, 0.92)" : "rgba(56, 189, 248, 0.07)",
                     }}
                   >
-                    <span style={{ fontSize: 12, fontWeight: 850, color: emb ? "#0369a1" : "#bae6fd" }}>
+                    <span style={{ fontSize: 12, fontWeight: 850, color: iceVisual ? "#0369a1" : "#bae6fd" }}>
                       {t("productos.bulkSelectedCount", { count: String(selectedIds.size) })}
                     </span>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
@@ -1950,11 +1956,11 @@ export default function ProductosManagementPage({
                 <div style={{ overflowX: "auto", flex: 1, minHeight: 0, width: "100%", WebkitOverflowScrolling: "touch" }}>
                   <div style={{ width: "100%", minWidth: PRODUCTOS_TABLE_MIN_WIDTH_PX, minHeight: 0, boxSizing: "border-box" }}>
                     <div
-                      className={emb ? "hostly-config-table-head sticky top-0 z-[2]" : undefined}
+                      className={iceVisual ? "hostly-config-table-head sticky top-0 z-[2]" : undefined}
                       style={{
-                        ...(emb ? rowGridEmbed : rowGrid),
+                        ...(iceVisual ? rowGridEmbed : rowGrid),
                         padding: productTableRowPadding,
-                        ...(emb
+                        ...(iceVisual
                           ? {}
                           : {
                               background: "rgba(2, 6, 23, 0.35)",
@@ -1979,7 +1985,7 @@ export default function ProductosManagementPage({
                           checked={displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id))}
                           onChange={toggleSelectAllDisplayed}
                           aria-label={t("productos.selectAllVisible")}
-                          style={{ width: emb ? 14 : 16, height: emb ? 14 : 16, cursor: displayed.length === 0 ? "not-allowed" : "pointer", accentColor: "#38bdf8" }}
+                          style={{ width: iceVisual ? 14 : 16, height: iceVisual ? 14 : 16, cursor: displayed.length === 0 ? "not-allowed" : "pointer", accentColor: "#38bdf8" }}
                         />
                       </label>
                       <span style={{ ...colHeadStyleResolved, textAlign: "left" }}>{t("carta.colNombre")}</span>
@@ -1999,13 +2005,13 @@ export default function ProductosManagementPage({
                               <div
                                 role="presentation"
                                 style={{
-                                  ...(emb ? rowGridGroupBarEmbed : rowGridGroupBar),
+                                  ...(iceVisual ? rowGridGroupBarEmbed : rowGridGroupBar),
                                   marginTop: gi === 0 ? 0 : 8,
                                   paddingTop: gi === 0 ? 5 : 9,
                                   paddingBottom: 3,
                                   paddingLeft: 10,
                                   paddingRight: 10,
-                                  borderTop: gi === 0 ? "none" : emb ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.07)",
+                                  borderTop: gi === 0 ? "none" : iceVisual ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.07)",
                                   background: "transparent",
                                 }}
                               >
@@ -2025,7 +2031,7 @@ export default function ProductosManagementPage({
                                       fontWeight: 600,
                                       letterSpacing: "0.12em",
                                       textTransform: "uppercase",
-                                      color: emb ? "#475569" : "#94a3b8",
+                                      color: iceVisual ? "#475569" : "#94a3b8",
                                       overflow: "hidden",
                                       textOverflow: "ellipsis",
                                       whiteSpace: "nowrap",
@@ -2044,8 +2050,8 @@ export default function ProductosManagementPage({
                                       fontVariantNumeric: "tabular-nums",
                                       padding: "2px 7px",
                                       borderRadius: 999,
-                                      border: emb ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.1)",
-                                      background: emb ? "rgba(255,255,255,0.75)" : "rgba(248, 250, 252, 0.03)",
+                                      border: iceVisual ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.1)",
+                                      background: iceVisual ? "rgba(255,255,255,0.75)" : "rgba(248, 250, 252, 0.03)",
                                     }}
                                   >
                                     {g.items.length}
@@ -2061,12 +2067,12 @@ export default function ProductosManagementPage({
                                     key={p.id}
                                     className={PRODUCTOS_ROW_HOVER_CLASS}
                                     style={{
-                                      ...(emb ? rowGridEmbed : rowGrid),
+                                      ...(iceVisual ? rowGridEmbed : rowGrid),
                                       padding: productTableRowPadding,
                                       borderBottom:
                                         isLastInCat && gi === groupedByCategoria.length - 1
                                           ? "none"
-                                          : emb
+                                          : iceVisual
                                             ? "1px solid rgb(241 245 249)"
                                             : "1px solid rgba(148, 163, 184, 0.06)",
                                       background: "transparent",
@@ -2089,8 +2095,8 @@ export default function ProductosManagementPage({
                                         onChange={() => toggleRowSelected(p.id)}
                                         aria-label={t("productos.selectRowAria", { name: p.nombre })}
                                         style={{
-                                          width: emb ? 14 : 16,
-                                          height: emb ? 14 : 16,
+                                          width: iceVisual ? 14 : 16,
+                                          height: iceVisual ? 14 : 16,
                                           accentColor: "#38bdf8",
                                           cursor: "pointer",
                                         }}
@@ -2113,17 +2119,17 @@ export default function ProductosManagementPage({
                                           <span
                                             style={{
                                               flexShrink: 0,
-                                              fontSize: emb ? 8 : 9,
-                                              fontWeight: emb ? 600 : 900,
+                                              fontSize: iceVisual ? 8 : 9,
+                                              fontWeight: iceVisual ? 600 : 900,
                                               letterSpacing: "0.08em",
                                               textTransform: "uppercase",
-                                              padding: emb ? "1px 5px" : "2px 6px",
-                                              borderRadius: emb ? 5 : 999,
-                                              border: emb
+                                              padding: iceVisual ? "1px 5px" : "2px 6px",
+                                              borderRadius: iceVisual ? 5 : 999,
+                                              border: iceVisual
                                                 ? "1px solid rgb(226 232 240)"
                                                 : "1px solid rgba(56,189,248,0.28)",
-                                              background: emb ? "rgb(248 250 252)" : "rgba(8,47,73,0.18)",
-                                              color: emb ? "rgb(71 85 105)" : "#7dd3fc",
+                                              background: iceVisual ? "rgb(248 250 252)" : "rgba(8,47,73,0.18)",
+                                              color: iceVisual ? "rgb(71 85 105)" : "#7dd3fc",
                                             }}
                                           >
                                             IA
@@ -2140,13 +2146,13 @@ export default function ProductosManagementPage({
                                     <div style={productGridPriceCell}>
                                       <span style={rowPrecioStyleResolved}>{formatEuro(p.precioVenta, locale as Locale)}</span>
                                     </div>
-                                    <ProductRowPublicationCell p={p} t={t} embedLight={emb} />
-                                    <ProductRowEscandalloCell tiene={tiene} t={t} embedLight={emb} />
+                                    <ProductRowPublicationCell p={p} t={t} embedLight={iceVisual} />
+                                    <ProductRowEscandalloCell tiene={tiene} t={t} embedLight={iceVisual} />
                                     <ProductRowActions
                                       p={p}
                                       busyEsc={busyEsc}
                                       t={t}
-                                      embedLight={emb}
+                                      embedLight={iceVisual}
                                       onEdit={() => openEdit(p)}
                                       onToggleCarta={() => toggleActivo(p)}
                                       onActivateProduct={() => activateProducto(p)}
@@ -2167,9 +2173,9 @@ export default function ProductosManagementPage({
                                 key={p.id}
                                 className={PRODUCTOS_ROW_HOVER_CLASS}
                                 style={{
-                                  ...(emb ? rowGridEmbed : rowGrid),
+                                  ...(iceVisual ? rowGridEmbed : rowGrid),
                                   padding: productTableRowPadding,
-                                  borderBottom: isLast ? "none" : emb ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.06)",
+                                  borderBottom: isLast ? "none" : iceVisual ? "1px solid rgb(241 245 249)" : "1px solid rgba(148, 163, 184, 0.06)",
                                   background: "transparent",
                                   minHeight: productRowMinHeight,
                                 }}
@@ -2190,8 +2196,8 @@ export default function ProductosManagementPage({
                                     onChange={() => toggleRowSelected(p.id)}
                                     aria-label={t("productos.selectRowAria", { name: p.nombre })}
                                     style={{
-                                      width: emb ? 14 : 16,
-                                      height: emb ? 14 : 16,
+                                      width: iceVisual ? 14 : 16,
+                                      height: iceVisual ? 14 : 16,
                                       accentColor: "#38bdf8",
                                       cursor: "pointer",
                                     }}
@@ -2214,17 +2220,17 @@ export default function ProductosManagementPage({
                                       <span
                                         style={{
                                           flexShrink: 0,
-                                          fontSize: emb ? 8 : 9,
-                                          fontWeight: emb ? 600 : 900,
+                                          fontSize: iceVisual ? 8 : 9,
+                                          fontWeight: iceVisual ? 600 : 900,
                                           letterSpacing: "0.08em",
                                           textTransform: "uppercase",
-                                          padding: emb ? "1px 5px" : "2px 6px",
-                                          borderRadius: emb ? 5 : 999,
-                                          border: emb
+                                          padding: iceVisual ? "1px 5px" : "2px 6px",
+                                          borderRadius: iceVisual ? 5 : 999,
+                                          border: iceVisual
                                             ? "1px solid rgb(226 232 240)"
                                             : "1px solid rgba(56,189,248,0.28)",
-                                          background: emb ? "rgb(248 250 252)" : "rgba(8,47,73,0.18)",
-                                          color: emb ? "rgb(71 85 105)" : "#7dd3fc",
+                                          background: iceVisual ? "rgb(248 250 252)" : "rgba(8,47,73,0.18)",
+                                          color: iceVisual ? "rgb(71 85 105)" : "#7dd3fc",
                                         }}
                                       >
                                         IA
@@ -2241,13 +2247,13 @@ export default function ProductosManagementPage({
                                 <div style={productGridPriceCell}>
                                   <span style={rowPrecioStyleResolved}>{formatEuro(p.precioVenta, locale as Locale)}</span>
                                 </div>
-                                <ProductRowPublicationCell p={p} t={t} embedLight={emb} />
-                                <ProductRowEscandalloCell tiene={tiene} t={t} embedLight={emb} />
+                                <ProductRowPublicationCell p={p} t={t} embedLight={iceVisual} />
+                                <ProductRowEscandalloCell tiene={tiene} t={t} embedLight={iceVisual} />
                                 <ProductRowActions
                                   p={p}
                                   busyEsc={busyEsc}
                                   t={t}
-                                  embedLight={emb}
+                                  embedLight={iceVisual}
                                   onEdit={() => openEdit(p)}
                                   onToggleCarta={() => toggleActivo(p)}
                                   onActivateProduct={() => activateProducto(p)}

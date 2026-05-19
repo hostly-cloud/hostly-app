@@ -2,6 +2,7 @@ import type {
   VentasSelectorsKpis,
   VentasZonaMasVentas,
 } from "@/components/analysis/hooks/useVentasSelectors";
+import { HostlyKpiCard } from "@/components/ui/hostly";
 
 export type VentasKpiBlockData = VentasSelectorsKpis & {
   zonaMasVentas?: VentasZonaMasVentas;
@@ -22,32 +23,14 @@ export function VentasKpiBlock({ data }: VentasKpiBlockProps) {
         gap: 12,
       }}
     >
-      <div className="hostly-card" style={{ padding: 16 }}>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>Ventas totales</div>
-        <div style={{ fontSize: 24, fontWeight: 700 }}>{totalVentas.toFixed(2)} €</div>
-      </div>
-
-      <div className="hostly-card" style={{ padding: 16 }}>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>Total tickets</div>
-        <div style={{ fontSize: 24, fontWeight: 700 }}>{totalTickets}</div>
-      </div>
-
-      <div className="hostly-card" style={{ padding: 16 }}>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>Ticket medio</div>
-        <div style={{ fontSize: 24, fontWeight: 700 }}>{ticketMedio.toFixed(2)} €</div>
-      </div>
-
-      <div className="hostly-card" style={{ padding: 16 }}>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>Zona top</div>
-        <div style={{ fontSize: 24, fontWeight: 700 }}>
-          {zonaMasVentas?.zoneName ?? "—"}
-        </div>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>
-          {zonaMasVentas
-            ? `${zonaMasVentas.total.toFixed(2)} €`
-            : "Sin datos"}
-        </div>
-      </div>
+      <HostlyKpiCard title="Ventas totales" value={`${totalVentas.toFixed(2)} €`} />
+      <HostlyKpiCard title="Total tickets" value={totalTickets} />
+      <HostlyKpiCard title="Ticket medio" value={`${ticketMedio.toFixed(2)} €`} />
+      <HostlyKpiCard
+        title="Zona top"
+        value={zonaMasVentas?.zoneName ?? "—"}
+        helper={zonaMasVentas ? `${zonaMasVentas.total.toFixed(2)} €` : "Sin datos"}
+      />
     </div>
   );
 }

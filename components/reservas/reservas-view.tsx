@@ -151,7 +151,11 @@ function statusBadgeStyle(s: ReservationStatus): CSSProperties {
 
 export default function ReservasView() {
   const router = useRouter();
-  const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
+  const {
+    restaurantId: profileRestaurantId,
+    ready: authReady,
+    user,
+  } = useAuth();
   const restaurantId = profileRestaurantId ?? null;
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -183,7 +187,7 @@ export default function ReservasView() {
   });
 
   useEffect(() => {
-    if (!authReady || !restaurantId || !isFirebaseConfigured) {
+    if (!authReady || !user?.uid || !restaurantId || !isFirebaseConfigured) {
       setReservations([]);
       setListError(null);
       return;
@@ -206,7 +210,7 @@ export default function ReservasView() {
       },
     );
     return () => unsub();
-  }, [authReady, restaurantId, viewDate]);
+  }, [authReady, user?.uid, restaurantId, viewDate]);
 
   useEffect(() => {
     if (!authReady || !restaurantId || !isFirebaseConfigured) {

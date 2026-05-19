@@ -366,7 +366,13 @@ export function ReservationFloorMapPicker({
     if (!open) return;
     const rid = restaurantId?.trim() ?? "";
     const d = reservationDateYmd.trim();
-    if (!rid || !d || !authReady || !isFirebaseConfigured) {
+    if (
+      !rid ||
+      !d ||
+      !authReady ||
+      !user?.uid ||
+      !isFirebaseConfigured
+    ) {
       setDayReservations([]);
       return;
     }
@@ -374,7 +380,7 @@ export function ReservationFloorMapPicker({
       setDayReservations([]),
     );
     return () => unsub();
-  }, [open, restaurantId, reservationDateYmd, authReady]);
+  }, [open, restaurantId, reservationDateYmd, authReady, user?.uid, isFirebaseConfigured]);
 
   useEffect(() => {
     if (!open) {
@@ -394,35 +400,46 @@ export function ReservationFloorMapPicker({
       setOccupancyStartMsByTable({});
       return;
     }
+    let cancelled = false;
     const q = query(collection(db, "orders"), where("restaurantId", "==", rid));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const ids = new Set<string>();
-      const startMs: Record<string, number> = {};
-      for (const d of snapshot.docs) {
-        const data = d.data() as {
-          tableId?: string | null;
-          status?: string;
-          createdAt?: unknown;
-          openedAt?: unknown;
-          items?: unknown;
-          total?: unknown;
-        };
-        if (!orderDocHasActiveLinesForMapOccupancy(data)) continue;
-        const tid = typeof data.tableId === "string" ? data.tableId.trim() : "";
-        if (!tid) continue;
-        ids.add(tid);
-        const openedMs = readOrderCreatedAtMs(data.openedAt);
-        const createdMs = readOrderCreatedAtMs(data.createdAt);
-        const ms = openedMs ?? createdMs;
-        if (ms == null) continue;
-        const prev = startMs[tid];
-        if (prev == null || ms < prev) startMs[tid] = ms;
-      }
-      setOccupiedTableIds(ids);
-      setOccupancyStartMsByTable(startMs);
-    });
-    return () => unsub();
-  }, [open, restaurantId, user?.uid, authReady]);
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        if (cancelled) return;
+        const ids = new Set<string>();
+        const startMs: Record<string, number> = {};
+        for (const d of snapshot.docs) {
+          const data = d.data() as {
+            tableId?: string | null;
+            status?: string;
+            createdAt?: unknown;
+            openedAt?: unknown;
+            items?: unknown;
+            total?: unknown;
+          };
+          if (!orderDocHasActiveLinesForMapOccupancy(data)) continue;
+          const tid = typeof data.tableId === "string" ? data.tableId.trim() : "";
+          if (!tid) continue;
+          ids.add(tid);
+          const openedMs = readOrderCreatedAtMs(data.openedAt);
+          const createdMs = readOrderCreatedAtMs(data.createdAt);
+          const ms = openedMs ?? createdMs;
+          if (ms == null) continue;
+          const prev = startMs[tid];
+          if (prev == null || ms < prev) startMs[tid] = ms;
+        }
+        setOccupiedTableIds(ids);
+        setOccupancyStartMsByTable(startMs);
+      },
+      (err) => {
+        console.error("[ReservationFloorMapPicker] orders onSnapshot", err);
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [open, restaurantId, user?.uid, authReady, isFirebaseConfigured]);
 
   useEffect(() => {
     if (!open) {
