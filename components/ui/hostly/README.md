@@ -21,4 +21,6 @@ La clase legacy **`.hostly-surface`** (sin sufijo) sigue disponible solo por com
 
 Fuente única en `:root` dentro de `globals.css`; el bloque lleva índice de secciones (`[A]` … `[K]`).
 
+Ritmo vertical de listados: `--hostly-stack-gap-sm/md/lg` gobiernan `.hostly-stack-*` (véase `HostlySection`); **`--hostly-m-stack-gap`** puede quedar ligeramente más holgado en móvil para shells que lo opt‑in sin perder táctiles.
+
 Radio canónico adicional **`--hostly-radius-sm`** y **`--hostly-radius-xl`**; los prefijos **`--hostly-m-*`** reutilizan esos valores (alias) para que no diverjan.

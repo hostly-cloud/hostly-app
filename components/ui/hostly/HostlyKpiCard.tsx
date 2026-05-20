@@ -35,7 +35,7 @@ export function HostlyKpiCard({
     accentColor != null ? { ...style, borderTop: `2px solid ${accentColor}` } : style;
 
   return (
-    <HostlySurface variant={variant} className={hostlyCx("min-w-0 px-3.5 py-3", className)} style={mergedStyle}>
+    <HostlySurface variant={variant} className={hostlyCx("min-w-0 px-3 py-2", className)} style={mergedStyle}>
       <div className="flex items-start justify-between gap-[var(--hostly-stack-gap-sm)]">
         <span className="hostly-kpi-label min-w-0">{title}</span>
         {icon ? (
@@ -46,7 +46,7 @@ export function HostlyKpiCard({
       </div>
       <div
         className={hostlyCx(
-          "hostly-kpi-value mt-1 overflow-hidden text-ellipsis whitespace-nowrap",
+          "hostly-kpi-value mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap",
           valueClassName,
         )}
         title={valueTitle}
@@ -54,7 +54,7 @@ export function HostlyKpiCard({
         {value}
       </div>
       {helper != null ? (
-        <div className="hostly-muted mt-1 line-clamp-2 text-[10px] leading-snug">{helper}</div>
+        <div className="mt-0.5 line-clamp-2 text-[10px] font-medium leading-[1.25] text-[var(--hostly-ink-soft)]">{helper}</div>
       ) : null}
     </HostlySurface>
   );

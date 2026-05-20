@@ -32,14 +32,16 @@ export function HostlySectionHeader({
 }: HostlySectionHeaderProps) {
   const desc =
     description == null ? null : typeof description === "string" || typeof description === "number" ? (
-      <p className={hostlyCx("hostly-muted", descriptionClassName)}>{description}</p>
+      <p className={hostlyCx("hostly-muted hostly-muted--section-lead", descriptionClassName)}>{description}</p>
     ) : (
       description
     );
 
   return (
-    <header className={hostlyCx("flex flex-wrap items-start justify-between gap-[var(--hostly-stack-gap-md)]", className)}>
-      <div className="hostly-stack-sm min-w-0 flex-1">
+    <header
+      className={hostlyCx("flex flex-wrap items-start justify-between gap-[var(--hostly-section-header-gap)]", className)}
+    >
+      <div className="hostly-section-header__stack min-w-0 flex-1">
         {renderPlainTitle(title, titleVariant)}
         {desc}
       </div>

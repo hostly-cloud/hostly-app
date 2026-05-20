@@ -74,17 +74,17 @@ const productosTableInteractionStyles = `
 }
 @media (hover: hover) and (pointer: fine) {
   .hostly-productos-row-text-btn:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.07) !important;
-    border-color: rgba(148, 163, 184, 0.24) !important;
-    color: #e2e8f0 !important;
+    background-color: rgba(255, 255, 255, 0.04) !important;
+    border-color: rgba(148, 163, 184, 0.16) !important;
+    color: #cbd5e1 !important;
   }
   .hostly-productos-row-text-btn:active:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.04) !important;
+    background-color: rgba(255, 255, 255, 0.025) !important;
   }
   .hostly-productos-row-icon-btn:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.09) !important;
-    border-color: rgba(148, 163, 184, 0.32) !important;
-    color: #e2e8f0 !important;
+    background-color: rgba(255, 255, 255, 0.052) !important;
+    border-color: rgba(148, 163, 184, 0.2) !important;
+    color: #cbd5e1 !important;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -150,15 +150,15 @@ const productRowActionBtnShell: CSSProperties = {
   padding: "2px 6px",
   borderRadius: 5,
   fontSize: 9,
-  fontWeight: 600,
+  fontWeight: 550,
   lineHeight: 1.2,
   whiteSpace: "nowrap",
   minHeight: 22,
   boxSizing: "border-box",
   cursor: "pointer",
-  border: "1px solid rgba(51, 65, 85, 0.85)",
-  background: "rgba(15, 23, 42, 0.35)",
-  color: "#94a3b8",
+  border: "1px solid rgba(51, 65, 85, 0.38)",
+  background: "rgba(15, 23, 42, 0.2)",
+  color: "#8896a8",
 };
 
 function normCatKey(s: string): string {
@@ -198,10 +198,10 @@ const tabularFigures: CSSProperties = {
 
 /** Nombre: columna dominante (Stripe-like). */
 const productRowNombreStyle: CSSProperties = {
-  fontWeight: 600,
+  fontWeight: 700,
   color: "#f8fafc",
   fontSize: 14,
-  lineHeight: 1.32,
+  lineHeight: 1.28,
   letterSpacing: "-0.02em",
   minWidth: 0,
   flex: "1 1 0%",
@@ -225,12 +225,12 @@ const productRowPrecioStyle: CSSProperties = {
 
 /** Tipo: micro-etiqueta estrecha. */
 const productRowTipoStyle: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 600,
-  letterSpacing: "0.08em",
+  fontSize: 9,
+  fontWeight: 590,
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
-  color: "#64748b",
-  lineHeight: 1.25,
+  color: "#5b6a7d",
+  lineHeight: 1.2,
   display: "block",
   minWidth: 0,
   overflow: "hidden",
@@ -240,10 +240,10 @@ const productRowTipoStyle: CSSProperties = {
 
 /** Categoría carta: secundaria legible. */
 const productRowCategoriaStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 500,
-  color: "#94a3b8",
-  lineHeight: 1.3,
+  fontSize: 10,
+  fontWeight: 480,
+  color: "#758193",
+  lineHeight: 1.26,
   display: "block",
   minWidth: 0,
   overflow: "hidden",
@@ -278,16 +278,16 @@ const PRODUCTOS_TABLE_MIN_WIDTH_PX = 980;
 const PRODUCTOS_TABLE_MIN_WIDTH_EMBED_ICONS_PX = 840;
 
 const colHeadStyle: CSSProperties = {
-  fontSize: 10,
-  fontWeight: 600,
-  color: "#64748b",
-  letterSpacing: "0.11em",
+  fontSize: 9,
+  fontWeight: 560,
+  color: "#5f7082",
+  letterSpacing: "0.12em",
   textTransform: "uppercase",
-  lineHeight: 1.2,
+  lineHeight: 1.18,
   display: "block",
   minWidth: 0,
   boxSizing: "border-box",
-  padding: "4px 6px",
+  padding: "3px 4px",
 };
 
 /**
@@ -348,11 +348,11 @@ const rowGridGroupBarEmbedIcons: CSSProperties = {
   columnGap: 10,
 };
 
-const productTableRowPadding = "5px 10px";
+const productTableRowPadding = "3px 8px";
 /** Modo hielo: mayor ritmo vertical (inventory / Shopify-like). */
-const productTableRowPaddingIce = "8px 12px";
-const productRowMinHeight = 36;
-const productRowMinHeightIce = 44;
+const productTableRowPaddingIce = "6px 10px";
+const productRowMinHeight = 32;
+const productRowMinHeightIce = 40;
 /** Divisor de filas en tema claro: menos ruido que --hostly-line pleno */
 const PRODUCTOS_ROW_DIVIDER_ICE = "1px solid var(--hostly-table-divider-faint)";
 
@@ -365,13 +365,13 @@ const productGridPriceCell: CSSProperties = {
 };
 
 const rowActionBtn: CSSProperties = {
-  padding: "5px 8px",
+  padding: "4px 7px",
   borderRadius: 6,
-  fontSize: 11,
-  fontWeight: 700,
+  fontSize: 10,
+  fontWeight: 630,
   cursor: "pointer",
   minHeight: 28,
-  lineHeight: 1.2,
+  lineHeight: 1.18,
 };
 
 function tieneEscandalloForPlato(p: PlatoCarta, meta: EscandalloMetaMap): boolean {
@@ -602,17 +602,17 @@ const productRowActionBtnShellLight: CSSProperties = {
   flexShrink: 0,
   minHeight: 26,
   height: 26,
-  padding: "0 7px",
+  padding: "0 6px",
   borderRadius: 6,
   fontSize: 9,
-  fontWeight: 500,
+  fontWeight: 520,
   lineHeight: 1,
   whiteSpace: "nowrap",
   boxSizing: "border-box",
   cursor: "pointer",
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "rgba(255, 255, 255, 0.35)",
-  color: "#64748b",
+  border: "1px solid rgba(148, 163, 184, 0.18)",
+  background: "rgba(255, 255, 255, 0.22)",
+  color: "#7b8798",
 };
 
 /** Botón icónico hielo (Config → Carta → Productos). */
@@ -627,9 +627,9 @@ const productRowIconBtnShellLight: CSSProperties = {
   borderRadius: 7,
   boxSizing: "border-box",
   cursor: "pointer",
-  border: "1px solid rgba(148, 163, 184, 0.2)",
-  background: "rgba(255, 255, 255, 0.34)",
-  color: "#64748b",
+  border: "1px solid rgba(148, 163, 184, 0.14)",
+  background: "rgba(255, 255, 255, 0.22)",
+  color: "#7b8798",
 };
 
 function RowActionGlyph(props: SVGProps<SVGSVGElement>) {
@@ -1331,10 +1331,10 @@ export default function ProductosManagementPage({
         ? {
             ...productRowNombreStyle,
             color: "var(--hostly-navy-deep)",
-            fontWeight: 650,
+            fontWeight: 750,
             fontSize: 15,
-            lineHeight: 1.38,
-            letterSpacing: "-0.022em",
+            lineHeight: 1.34,
+            letterSpacing: "-0.024em",
           }
         : productRowNombreStyle,
     [iceVisual],
@@ -1345,9 +1345,9 @@ export default function ProductosManagementPage({
         ? {
             ...productRowPrecioStyle,
             color: "var(--hostly-navy-deep)",
-            fontWeight: 650,
+            fontWeight: 680,
             fontSize: 13,
-            lineHeight: 1.34,
+            lineHeight: 1.3,
           }
         : productRowPrecioStyle,
     [iceVisual],
@@ -1358,9 +1358,9 @@ export default function ProductosManagementPage({
         ? {
             ...productRowTipoStyle,
             fontSize: 9,
-            fontWeight: 520,
-            letterSpacing: "0.065em",
-            color: "#9ca8ba",
+            fontWeight: 540,
+            letterSpacing: "0.05em",
+            color: "color-mix(in srgb, var(--hostly-ink-muted) 94%, var(--hostly-ink))",
           }
         : productRowTipoStyle,
     [iceVisual],
@@ -1370,9 +1370,9 @@ export default function ProductosManagementPage({
       iceVisual
         ? {
             ...productRowCategoriaStyle,
-            fontSize: 10,
+            fontSize: 9.5,
             fontWeight: 420,
-            color: "#94a3b8",
+            color: "color-mix(in srgb, var(--hostly-ink-muted) 92%, var(--hostly-ink))",
           }
         : productRowCategoriaStyle,
     [iceVisual],
@@ -1382,11 +1382,11 @@ export default function ProductosManagementPage({
       iceVisual
         ? {
             ...colHeadStyle,
-            fontSize: 9,
-            fontWeight: 560,
-            letterSpacing: "0.12em",
+            fontSize: 8.5,
+            fontWeight: 540,
+            letterSpacing: "0.13em",
             color: "var(--hostly-ink-faint)",
-            padding: "6px 5px",
+            padding: "5px 4px",
           }
         : colHeadStyle,
     [iceVisual],
@@ -2161,11 +2161,11 @@ export default function ProductosManagementPage({
             </div>
           ) : (
             <div
-              className="grid shrink-0 gap-2"
+              className="grid shrink-0 gap-1.5"
               style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
             >
               {kpiPills.map((m) => (
-                <HostlyKpiCard key={m.key} title={m.label} value={m.value} className="px-3 py-2.5" />
+                <HostlyKpiCard key={m.key} title={m.label} value={m.value} className="px-3 py-2" />
               ))}
             </div>
           )
@@ -2212,9 +2212,9 @@ export default function ProductosManagementPage({
                   display: "flex",
                   flexWrap: "wrap",
                   alignItems: "center",
-                  gap: 5,
-                  rowGap: 4,
-                  padding: "3px 4px",
+                  gap: 4,
+                  rowGap: 3,
+                  padding: "2px 4px",
                   borderBottom: "1px solid rgba(148, 163, 184, 0.2)",
                   boxSizing: "border-box",
                 }}
@@ -2224,10 +2224,10 @@ export default function ProductosManagementPage({
                     display: "flex",
                     flexWrap: "wrap",
                     alignItems: "center",
-                    gap: 6,
+                    gap: 5,
                     minWidth: 0,
                     flex: "1 1 min(520px, 100%)",
-                    rowGap: 4,
+                    rowGap: 3,
                   }}
                 >
                   <div
@@ -2301,7 +2301,7 @@ export default function ProductosManagementPage({
                     minWidth: 116,
                     flex: "1 1 200px",
                     maxWidth: 420,
-                    padding: "4px 10px",
+                    padding: "3px 9px",
                     borderRadius: 999,
                     border: "1px solid rgba(148, 163, 184, 0.26)",
                     background: "var(--hostly-surface-page-soft)",
@@ -2309,7 +2309,7 @@ export default function ProductosManagementPage({
                     fontSize: 11,
                     outline: "none",
                     boxSizing: "border-box",
-                    minHeight: 26,
+                    minHeight: 24,
                   }}
                 />
                 {iceToolbarViewControls(true)}
@@ -2319,7 +2319,7 @@ export default function ProductosManagementPage({
               title={t("carta.listTitle")}
               description={t("carta.listCount", { shown: displayed.length, total: items.length })}
               descriptionClassName="!text-[10px] !font-semibold !leading-snug !m-0"
-              className="shrink-0 border-b border-[var(--hostly-line)] px-1.5 py-1"
+              className="shrink-0 border-b border-[var(--hostly-line)] px-1.5 py-0.5"
             >
               <input
                 type="search"
@@ -2333,15 +2333,15 @@ export default function ProductosManagementPage({
                   flexShrink: 1,
                   flexBasis: "220px",
                   maxWidth: 360,
-                  padding: "6px 11px",
+                  padding: "5px 10px",
                   borderRadius: 999,
                   border: "1px solid var(--hostly-line)",
                   background: "var(--hostly-surface-page-soft)",
                   color: "var(--hostly-ink-strong)",
-                  fontSize: 13,
+                  fontSize: 12,
                   outline: "none",
                   boxSizing: "border-box",
-                  minHeight: 34,
+                  minHeight: 32,
                 }}
               />
             </HostlySectionHeader>
@@ -2395,8 +2395,8 @@ export default function ProductosManagementPage({
               flexShrink: 0,
               display: "flex",
               flexWrap: "wrap",
-              gap: 6,
-              padding: "3px 6px",
+              gap: 5,
+              padding: "2px 5px",
               alignItems: "center",
               borderBottom: iceVisual ? "1px solid var(--hostly-line)" : "1px solid #334155",
             }}
@@ -2419,7 +2419,7 @@ export default function ProductosManagementPage({
           <div
             style={{
               flexShrink: 0,
-              padding: configCartaProductosChrome ? "1px 3px" : "2px 6px 3px",
+              padding: configCartaProductosChrome ? "1px 3px" : "1px 5px 2px",
               borderBottom: iceVisual
                 ? configCartaProductosChrome
                   ? "1px solid rgba(148, 163, 184, 0.2)"
@@ -2466,13 +2466,13 @@ export default function ProductosManagementPage({
                       : configCartaProductosChrome
                         ? "var(--hostly-ink-muted)"
                         : "#94a3b8",
-                    padding: configCartaProductosChrome ? "3px 7px" : "5px 10px",
+                    padding: configCartaProductosChrome ? "3px 7px" : "4px 9px",
                     borderRadius: 999,
                     fontWeight: 820,
                     cursor: "pointer",
                     fontSize: configCartaProductosChrome ? 9 : 11,
                     lineHeight: configCartaProductosChrome ? 1.06 : 1.15,
-                    minHeight: configCartaProductosChrome ? 22 : 28,
+                    minHeight: configCartaProductosChrome ? 22 : 26,
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -2673,11 +2673,11 @@ export default function ProductosManagementPage({
                                 role="presentation"
                                 style={{
                                   ...(iceProductosGroupBarGridStyle),
-                                  marginTop: gi === 0 ? 0 : 8,
-                                  paddingTop: gi === 0 ? 5 : 9,
-                                  paddingBottom: 3,
-                                  paddingLeft: 10,
-                                  paddingRight: 10,
+                                  marginTop: gi === 0 ? 0 : 6,
+                                  paddingTop: gi === 0 ? 4 : 8,
+                                  paddingBottom: 2,
+                                  paddingLeft: 8,
+                                  paddingRight: 8,
                                   borderTop: gi === 0 ? "none" : iceVisual ? PRODUCTOS_ROW_DIVIDER_ICE : "1px solid var(--hostly-table-divider-faint)",
                                   background: "transparent",
                                 }}

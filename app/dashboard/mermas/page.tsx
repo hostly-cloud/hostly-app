@@ -3,6 +3,8 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
+import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
+import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
 import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import {
@@ -43,7 +45,7 @@ const labelStyle: CSSProperties = {
 
 /** Input de búsqueda alineado con inventario / shell claro. */
 const tpvSearchInput: CSSProperties = {
-  padding: "7px 10px",
+  padding: "5px 8px",
   borderRadius: 10,
   border: "1px solid var(--hostly-line-strong)",
   backgroundColor: "#ffffff",
@@ -52,7 +54,7 @@ const tpvSearchInput: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   outline: "none",
-  minHeight: 40,
+  minHeight: 30,
   boxShadow: "var(--hostly-shadow-hairline)",
 };
 
@@ -373,13 +375,10 @@ export default function MermasPage() {
   if (!hydrated) {
     return (
       <ModulePageShell
+        {...inventoryHubShellLayout}
         title={t("mermas.title")}
         subtitle={t("mermas.loadingSubtitle")}
-        maxWidth={1180}
-        compactLayout
-        operationalFocus
-        lockViewport
-        shellSurface="configLight"
+        headerBelow={<InventarioRouteTabs />}
       >
         <p className="hostly-muted mb-0 !text-[13px]">{t("common.preparing")}</p>
       </ModulePageShell>
@@ -388,13 +387,10 @@ export default function MermasPage() {
 
   return (
     <ModulePageShell
+      {...inventoryHubShellLayout}
       title={t("mermas.title")}
       subtitle={t("mermas.subtitle")}
-      maxWidth={1180}
-      compactLayout
-      operationalFocus
-      lockViewport
-      shellSurface="configLight"
+      headerBelow={<InventarioRouteTabs />}
       headerRight={
         <button
           type="button"
@@ -412,7 +408,7 @@ export default function MermasPage() {
             flexShrink: 0,
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-            gap: 12,
+            gap: 10,
           }}
         >
           {kpiCards.map((card) => (
@@ -423,7 +419,7 @@ export default function MermasPage() {
               helper={card.sub}
               accentColor={card.accent}
               valueTitle={card.value}
-              className="px-3 py-2.5"
+              className="px-3 py-2"
             />
           ))}
         </div>
@@ -433,7 +429,7 @@ export default function MermasPage() {
           <div
             style={{
               flexShrink: 0,
-              padding: "7px 10px 5px",
+              padding: "5px 8px 3px",
               borderBottom: sorted.length > 0 ? "1px solid var(--hostly-table-divider-soft)" : undefined,
             }}
           >
@@ -504,7 +500,7 @@ export default function MermasPage() {
                     { title: t("mermas.insight3Title"), body: t("mermas.insight3Body") },
                   ] as const
                 ).map((ins) => (
-                  <HostlySurface variant="ice" key={ins.title} className="box-border px-3 py-2">
+                  <HostlySurface variant="ice" key={ins.title} className="box-border px-2.5 py-1.5">
                     <p className="m-0 text-xs font-semibold leading-snug text-[color:var(--hostly-ink-strong)]">{ins.title}</p>
                     <p className="hostly-muted m-0 mt-1 !text-[11px] !leading-snug">{ins.body}</p>
                   </HostlySurface>
@@ -520,8 +516,8 @@ export default function MermasPage() {
                   flexWrap: "wrap",
                   gap: 8,
                   alignItems: "center",
-                  rowGap: 8,
-                  padding: "6px 10px 7px",
+                  rowGap: 6,
+                  padding: "4px 8px 6px",
                 }}
               >
                 <span className="hostly-kpi-label !text-[10px]">{t("stock.filterHint")}</span>                <button
@@ -533,7 +529,7 @@ export default function MermasPage() {
                         ? "1px solid rgba(49, 95, 125, 0.4)"
                         : "1px solid var(--hostly-table-divider-soft)",                    background: motivoListFilter === "todos" ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
                     color: motivoListFilter === "todos" ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
-                    padding: "7px 12px",
+                    padding: "6px 10px",
                     borderRadius: 999,
                     fontWeight: 600,
                     cursor: "pointer",
@@ -553,7 +549,7 @@ export default function MermasPage() {
                       style={{
                         border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-table-divider-soft)",                        background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
                         color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
-                        padding: "7px 12px",
+                        padding: "6px 10px",
                         borderRadius: 999,
                         fontWeight: 600,
                         cursor: "pointer",
@@ -587,14 +583,14 @@ export default function MermasPage() {
                           key={m.id}
                           style={{
                             borderRadius: 8,
-                            padding: "9px 11px",
+                            padding: "7px 9px",
                             background: "var(--hostly-surface-card-solid)",
                             border: "1px solid var(--hostly-table-divider-faint)",
                             display: "flex",
                             flexWrap: "wrap",
                             alignItems: "center",
                             justifyContent: "space-between",
-                            gap: 10,
+                            gap: 8,
                             transition: "background 0.14s ease, border-color 0.14s ease",
                           }}
                           className="transition-[background,border-color] hover:border-[color:var(--hostly-table-divider-soft)] hover:bg-[color:var(--hostly-table-row-hover)]"
@@ -604,7 +600,7 @@ export default function MermasPage() {
                                 display: "flex",
                                 flexWrap: "wrap",
                                 alignItems: "center",
-                                gap: "6px 10px",
+                                gap: "5px 8px",
                               }}
                             >
                               <span
@@ -627,7 +623,7 @@ export default function MermasPage() {
                               </span>
                               <span
                                 style={{
-                                  padding: "6px 12px",
+                                  padding: "5px 10px",
                                   borderRadius: 999,
                                   fontSize: 11,
                                   fontWeight: 600,
@@ -666,7 +662,7 @@ export default function MermasPage() {
                               flexWrap: "wrap",
                               alignItems: "center",
                               justifyContent: "flex-end",
-                              gap: 12,
+                              gap: 10,
                               flexShrink: 0,
                             }}
                           >
@@ -675,7 +671,7 @@ export default function MermasPage() {
                                 display: "flex",
                                 alignItems: "baseline",
                                 gap: 8,
-                                padding: "8px 12px",
+                                padding: "6px 10px",
                                 borderRadius: 8,
                                 background: "var(--hostly-surface-operational)",
                                 border: "1px solid var(--hostly-table-divider-soft)",

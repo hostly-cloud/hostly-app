@@ -3,6 +3,8 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
+import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
+import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
 import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import {
@@ -81,19 +83,19 @@ const labelStyle = {
 } satisfies CSSProperties;
 
 const colHeadStyle: CSSProperties = {
-  fontSize: 9,
-  fontWeight: 590,
+  fontSize: 8.75,
+  fontWeight: 560,
   color: "var(--hostly-ink-faint)",
-  letterSpacing: "0.1em",
+  letterSpacing: "0.12em",
   textTransform: "uppercase",
-  lineHeight: 1.22,
+  lineHeight: 1.18,
 };
 
 /** Rejilla alineada cabecera + filas (TPV). */
 const stockRowGrid: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0, 1.55fr) minmax(72px, 0.75fr) minmax(72px, 0.75fr) minmax(92px, 0.95fr) minmax(148px, auto)",
-  gap: 12,
+  gap: 8,
   alignItems: "center",
 };
 
@@ -114,10 +116,10 @@ function statusPillStyle(tone: StatusTone): CSSProperties {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "6px 10px",
-    borderRadius: 8,
-    fontSize: 11,
-    fontWeight: 600,
+    padding: "5px 8px",
+    borderRadius: 7,
+    fontSize: 10,
+    fontWeight: 650,
     letterSpacing: "0.04em",
     textTransform: "uppercase",
     lineHeight: 1.2,
@@ -352,12 +354,10 @@ export default function StockPage() {
   if (!hydrated) {
     return (
       <ModulePageShell
+        {...inventoryHubShellLayout}
         title={t("stock.title")}
         subtitle={t("stock.loadingSubtitle")}
-        compactLayout
-        operationalFocus
-        lockViewport
-        shellSurface="configLight"
+        headerBelow={<InventarioRouteTabs />}
       >
         <p className="hostly-muted mb-0 !text-[13px]">{t("common.preparingData")}</p>
       </ModulePageShell>
@@ -366,12 +366,10 @@ export default function StockPage() {
 
   return (
     <ModulePageShell
+      {...inventoryHubShellLayout}
       title={t("stock.title")}
       subtitle={t("stock.subtitle")}
-      compactLayout
-      operationalFocus
-      lockViewport
-      shellSurface="configLight"
+      headerBelow={<InventarioRouteTabs />}
       headerRight={
         <button
           type="button"
@@ -384,13 +382,13 @@ export default function StockPage() {
     >
       <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
         {notice ? (
-          <HostlySurface variant="soft" className="box-border shrink-0 border border-emerald-400/25 px-3.5 py-3">
+          <HostlySurface variant="soft" className="box-border shrink-0 border border-emerald-400/25 px-3 py-2">
             <p className="m-0 text-sm font-semibold leading-snug text-[color:#15803d]">{notice}</p>
           </HostlySurface>
         ) : null}
 
         {bajosCount > 0 ? (
-          <HostlySurface variant="soft" className="box-border flex shrink-0 items-center border border-amber-300/30 px-3 py-2.5">
+          <HostlySurface variant="soft" className="box-border flex shrink-0 items-center border border-amber-300/30 px-2.5 py-2">
             <p className="m-0 text-[13px] font-semibold leading-snug text-[color:#92400e]">{t("stock.lowStockBanner", { count: bajosCount })}</p>
           </HostlySurface>
         ) : null}
@@ -400,7 +398,7 @@ export default function StockPage() {
             flexShrink: 0,
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-            gap: 12,
+            gap: 10,
           }}
         >
           {kpiCards.map((m) => (
@@ -412,7 +410,7 @@ export default function StockPage() {
               accentColor={m.accent}
               valueTitle={m.value}
               valueClassName={m.key === "crit" ? "!text-[#e11d48]" : m.key === "zero" ? "!text-[#dc2626]" : undefined}
-              className="px-3 py-2.5"
+              className="px-3 py-2"
             />
           ))}
         </div>
@@ -421,7 +419,7 @@ export default function StockPage() {
             <div
             style={{
               flexShrink: 0,
-              padding: "7px 10px 5px",
+              padding: "5px 8px 3px",
               borderBottom: "1px solid var(--hostly-table-divider-soft)",
             }}
           >
@@ -446,6 +444,9 @@ export default function StockPage() {
                     flexShrink: 1,
                     flexBasis: "220px",
                     maxWidth: 400,
+                    padding: "5px 8px",
+                    fontSize: 13,
+                    minHeight: 30,
                   }}
                 />
               ) : null}
@@ -481,10 +482,10 @@ export default function StockPage() {
                   flexShrink: 0,
                   display: "flex",
                   flexWrap: "wrap",
-                  gap: 10,
+                  gap: 8,
                   alignItems: "center",
-                  rowGap: 8,
-                  padding: "6px 10px 8px",
+                  rowGap: 6,
+                  padding: "5px 8px 6px",
                 }}
               >
                 <span className="hostly-kpi-label !text-[10px]">{t("stock.filterHint")}</span>
@@ -507,13 +508,13 @@ export default function StockPage() {
                         border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-table-divider-soft)",
                         background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
                         color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
-                        padding: "7px 12px",
+                        padding: "6px 10px",
                         borderRadius: 999,
                         fontWeight: 600,
                         cursor: "pointer",
                         fontSize: 13,
                         lineHeight: 1.25,
-                        minHeight: 38,
+                        minHeight: 34,
                       }}
                     >
                       {f.label}
@@ -629,7 +630,7 @@ export default function StockPage() {
                     <div
                       style={{
                         ...stockRowGrid,
-                        padding: "10px 12px",
+                        padding: "6px 9px",
                         background: "var(--hostly-table-head-surface)",
                         borderBottom: "1px solid var(--hostly-table-divider-soft)",
                       }}
@@ -659,7 +660,7 @@ export default function StockPage() {
                             onMouseLeave={() => setHoverRowId(null)}
                             style={{
                               ...stockRowGrid,
-                              padding: "12px 12px",
+                              padding: "8px 10px",
                               borderBottom: isLast ? "none" : "1px solid var(--hostly-table-divider-faint)",
                               background: isHover ? "var(--hostly-table-row-hover)" : "var(--hostly-surface-card-solid)",
                               boxShadow: `inset 3px 0 0 ${rowStripeColor(st.tone)}`,
@@ -669,11 +670,11 @@ export default function StockPage() {
                             <div style={{ minWidth: 0, paddingLeft: 4 }}>
                               <div
                                 style={{
-                                  fontSize: 13,
-                                  fontWeight: 600,
+                                  fontSize: 14,
+                                  fontWeight: 720,
                                   color: "var(--hostly-ink-strong)",
-                                  letterSpacing: "-0.015em",
-                                  lineHeight: 1.25,
+                                  letterSpacing: "-0.018em",
+                                  lineHeight: 1.2,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
@@ -682,44 +683,44 @@ export default function StockPage() {
                               >
                                 {p.nombre}
                               </div>
-                              <div style={{ fontSize: 10, color: "var(--hostly-ink-soft)", marginTop: 2, lineHeight: 1.2 }}>
+                              <div style={{ fontSize: 9, color: "var(--hostly-ink-faint)", marginTop: 1, lineHeight: 1.15 }}>
                                 {t("common.unit")}: {p.unidad}
                               </div>
                             </div>
                             <div style={{ textAlign: "right" }}>
-                              <span style={{ ...tabularFigures, fontSize: 14, fontWeight: 700, color: "var(--hostly-navy-deep)" }}>
+                              <span style={{ ...tabularFigures, fontSize: 13, fontWeight: 720, color: "var(--hostly-navy-deep)" }}>
                                 {formatQtyDisplay(p.stock_actual, locale)}
                               </span>
-                              <div style={{ fontSize: 10, color: "var(--hostly-ink-muted)", marginTop: 1 }}>{p.unidad}</div>
+                              <div style={{ fontSize: 9, color: "color-mix(in srgb, var(--hostly-ink-muted) 82%, transparent)", marginTop: 1 }}>{p.unidad}</div>
                             </div>
                             <div style={{ textAlign: "right" }}>
-                              <span style={{ ...tabularFigures, fontSize: 13, fontWeight: 600, color: "var(--hostly-ink)" }}>
+                              <span style={{ ...tabularFigures, fontSize: 12.5, fontWeight: 620, color: "var(--hostly-ink)" }}>
                                 {formatQtyDisplay(p.stock_minimo, locale)}
                               </span>
-                              <div style={{ fontSize: 10, color: "var(--hostly-ink-muted)", marginTop: 1 }}>{p.unidad}</div>
+                              <div style={{ fontSize: 9, color: "color-mix(in srgb, var(--hostly-ink-muted) 82%, transparent)", marginTop: 1 }}>{p.unidad}</div>
                             </div>
                             <div style={{ display: "flex", justifyContent: "center" }}>
                               <span style={statusPillStyle(st.tone)}>{st.label}</span>
                             </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
                               <button
                                 type="button"
                                 onClick={() => openEdit(p)}
-                                className="hostly-button-secondary !min-h-9 !px-3.5 !py-2 !text-[13px] !shadow-none"
+                                className="border border-[var(--hostly-table-divider-soft)] bg-transparent px-2 py-1.5 text-xs font-medium text-[color:var(--hostly-ink-muted)] shadow-none hover:bg-[var(--hostly-table-row-hover)] min-h-8"
                               >
                                 {t("common.edit")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => openEdit(p)}
-                                className="hostly-button-secondary !min-h-9 !px-3.5 !py-2 !text-[13px] !border-[rgba(49,95,125,0.22)] !bg-[var(--hostly-info-soft)] !text-[color:var(--hostly-navy-deep)] hover:!bg-[rgba(224,242,254,0.65)]"
+                                className="border border-[var(--hostly-table-divider-soft)] bg-[color-mix(in_srgb,var(--hostly-info-soft)_35%,transparent)] px-2 py-1.5 text-xs font-medium text-[color:var(--hostly-navy-deep)] shadow-none hover:bg-[rgba(224,242,254,0.65)] min-h-8"
                               >
                                 {t("stock.actionAdjust")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => removeProduct(p.id)}
-                                className="hostly-button-secondary !min-h-9 !px-3.5 !py-2 !text-[13px] !border-red-200/60 !bg-[var(--hostly-danger-soft)] !font-semibold !text-red-900 hover:!border-red-300/80"
+                                className="border border-[color-mix(in_srgb,var(--hostly-danger-soft)_85%,transparent)] bg-[color-mix(in_srgb,var(--hostly-danger-soft)_40%,transparent)] px-2 py-1.5 text-xs font-medium text-red-950/85 shadow-none hover:bg-[var(--hostly-danger-soft)] min-h-8"
                               >
                                 {t("common.delete")}
                               </button>

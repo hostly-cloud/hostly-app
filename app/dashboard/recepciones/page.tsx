@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
 import { useI18n } from "@/components/i18n-provider";
+import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
+import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
 import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import {
@@ -1525,14 +1527,10 @@ export default function RecepcionesPage() {
   if (!hydrated) {
     return (
       <ModulePageShell
+        {...inventoryHubShellLayout}
         title={t("recepciones.title")}
         subtitle={t("recepciones.loadingSubtitle")}
-        compactLayout
-        denseWorkbench
-        operationalFocus
-        lockViewport
-        maxWidth={1380}
-        shellSurface="configLight"
+        headerBelow={<InventarioRouteTabs />}
       >
         <p className="hostly-muted mb-0 !text-[13px]">{t("common.preparingData")}</p>
       </ModulePageShell>
@@ -1541,14 +1539,10 @@ export default function RecepcionesPage() {
 
   return (
     <ModulePageShell
+      {...inventoryHubShellLayout}
       title={t("recepciones.title")}
       subtitle={t("recepciones.subtitle")}
-      maxWidth={1380}
-      compactLayout
-      denseWorkbench
-      operationalFocus
-      lockViewport
-      shellSurface="configLight"
+      headerBelow={<InventarioRouteTabs />}
       headerRight={
         <button
           type="button"
@@ -1569,7 +1563,7 @@ export default function RecepcionesPage() {
               min-height: 40px !important;
             }
             .hostly-recepciones-skin.hostly-recepciones-skin .hostly-recep-row-actions button {
-              min-height: 28px !important;
+              min-height: 30px !important;
             }
             .hostly-recepciones-skin .hostly-recep-validate:hover {
               filter: brightness(0.985);
@@ -1611,21 +1605,22 @@ export default function RecepcionesPage() {
               min-height: 28px;
               padding: 0 6px;
               border-radius: 6px;
-              border: 1px solid rgba(0, 0, 0, 0.08);
-              background: color-mix(in srgb, var(--hostly-surface-card-solid) 94%, var(--hostly-ink) 3%);
+              border: 1px solid var(--hostly-table-divider-soft);
+              background: color-mix(in srgb, var(--hostly-surface-card-solid) 96%, transparent);
               font-size: 12px;
-              font-weight: 600;
+              font-weight: 560;
               line-height: 1;
               cursor: pointer;
-              color: var(--hostly-ink-muted);
+              color: color-mix(in srgb, var(--hostly-ink-muted) 90%, transparent);
               transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
               box-sizing: border-box;
               touch-action: manipulation;
+              box-shadow: none;
             }
             .hostly-recep-line-tool-btn:hover {
-              background: color-mix(in srgb, var(--hostly-surface-card-solid) 85%, var(--hostly-ink) 5%);
-              border-color: rgba(0, 0, 0, 0.11);
-              color: var(--hostly-ink);
+              background: var(--hostly-table-row-hover);
+              border-color: color-mix(in srgb, var(--hostly-ink-soft) 25%, var(--hostly-table-divider-soft));
+              color: color-mix(in srgb, var(--hostly-ink) 70%, var(--hostly-ink-muted));
             }
             @media (max-width: 960px) {
               .hostly-recep-row {
@@ -1654,7 +1649,7 @@ export default function RecepcionesPage() {
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-            gap: 12,
+            gap: 10,
           }}
         >
           {[
@@ -1941,7 +1936,7 @@ export default function RecepcionesPage() {
             <div
               style={{
                 flexShrink: 0,
-                padding: "7px 10px 5px",
+                padding: "6px 10px 4px",
                 borderBottom: "1px solid var(--hostly-table-divider-soft)",
                 background: "var(--hostly-table-head-surface)",
               }}
@@ -2064,9 +2059,9 @@ export default function RecepcionesPage() {
                           display: "grid",
                           gridTemplateColumns:
                             "minmax(168px, 0.62fr) minmax(292px, 1.72fr) minmax(86px, auto) minmax(192px, auto)",
-                          gap: 3,
+                          gap: 2,
                           alignItems: "center",
-                          padding: "4px 8px",
+                          padding: "3px 8px",
                           borderBottom: "1px solid var(--hostly-table-divider-faint)",
                           borderLeft: rowBorderLeft,
                           background: rowSurface,
@@ -2089,21 +2084,21 @@ export default function RecepcionesPage() {
                             <span
                               style={{
                                 fontSize: 14,
-                                fontWeight: 700,
-                                color: "var(--hostly-ink)",
+                                fontWeight: 740,
+                                color: "var(--hostly-ink-strong)",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                                 maxWidth: "100%",
-                                letterSpacing: "-0.02em",
+                                letterSpacing: "-0.022em",
                               }}
                             >
                               {supPrimary}
                             </span>
                             <span
                               style={{
-                                fontSize: 10,
-                                color: "color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink))",
+                                fontSize: 9,
+                                color: "color-mix(in srgb, var(--hostly-ink-muted) 75%, transparent)",
                                 fontVariantNumeric: "tabular-nums",
                                 flexShrink: 0,
                                 fontWeight: 500,
@@ -2115,10 +2110,10 @@ export default function RecepcionesPage() {
                           {supLegal ? (
                             <div
                               style={{
-                                fontSize: 9,
-                                color: "color-mix(in srgb, var(--hostly-ink-soft) 90%, var(--hostly-ink-muted))",
-                                fontWeight: 500,
-                                letterSpacing: "-0.01em",
+                                fontSize: 8.5,
+                                color: "color-mix(in srgb, var(--hostly-ink-soft) 88%, transparent)",
+                                fontWeight: 480,
+                                letterSpacing: "0.015em",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
@@ -2129,10 +2124,10 @@ export default function RecepcionesPage() {
                           ) : null}
                           <div
                             style={{
-                              fontSize: 10,
-                              color: "color-mix(in srgb, var(--hostly-ink-soft) 88%, var(--hostly-ink-muted))",
+                              fontSize: 9,
+                              color: "color-mix(in srgb, var(--hostly-ink-muted) 70%, transparent)",
                               fontVariantNumeric: "tabular-nums",
-                              fontWeight: 500,
+                              fontWeight: 480,
                             }}
                             title={c.id}
                           >
@@ -2147,11 +2142,11 @@ export default function RecepcionesPage() {
                               rowGap: 2,
                             }}
                           >
-                            <span style={{ fontSize: 10, color: "color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink))", fontWeight: 500 }}>{itemStr}</span>
+                            <span style={{ fontSize: 9, color: "color-mix(in srgb, var(--hostly-ink-soft) 90%, transparent)", fontWeight: 480 }}>{itemStr}</span>
                             {refSnippet ? (
                               <>
                                 <span style={metaHairlineSep} aria-hidden />
-                                <span style={{ fontSize: 10, color: "color-mix(in srgb, var(--hostly-ink-soft) 85%, var(--hostly-ink-muted))", fontWeight: 500 }}>
+                                <span style={{ fontSize: 9, color: "color-mix(in srgb, var(--hostly-ink-soft) 88%, transparent)", fontWeight: 480 }}>
                                   {t("recepciones.rowAlbaran")} {refSnippet}
                                 </span>
                               </>
@@ -2318,11 +2313,11 @@ export default function RecepcionesPage() {
                         >
                           <span
                             style={{
-                              fontSize: 13,
-                              fontWeight: 700,
-                              color: "color-mix(in srgb, var(--hostly-ink) 96%, var(--hostly-ink-muted))",
+                              fontSize: 13.25,
+                              fontWeight: 720,
+                              color: "color-mix(in srgb, var(--hostly-ink-strong) 95%, var(--hostly-ink-muted))",
                               fontVariantNumeric: "tabular-nums",
-                              letterSpacing: "-0.014em",
+                              letterSpacing: "-0.016em",
                               lineHeight: 1,
                               whiteSpace: "nowrap",
                             }}
@@ -2341,7 +2336,7 @@ export default function RecepcionesPage() {
                             flexWrap: "wrap",
                             alignItems: "center",
                             justifyContent: "flex-end",
-                            gap: 3,
+                            gap: 2,
                             minWidth: 0,
                           }}
                         >
@@ -2354,20 +2349,20 @@ export default function RecepcionesPage() {
                             style={{
                               flex: "0 0 auto",
                               border: validatePrimary
-                                ? "1px solid color-mix(in srgb, var(--hostly-accent) 34%, transparent)"
+                                ? "1px solid color-mix(in srgb, var(--hostly-accent) 26%, var(--hostly-table-divider-soft))"
                                 : "1px solid var(--hostly-table-divider-soft)",
                               borderRadius: 6,
-                              padding: "3px 8px",
+                              padding: "4px 8px",
                               fontSize: 10,
-                              fontWeight: 700,
-                              letterSpacing: "-0.01em",
+                              fontWeight: 620,
+                              letterSpacing: "-0.008em",
                               cursor: "pointer",
                               boxSizing: "border-box",
                               touchAction: "manipulation",
-                              color: validatePrimary ? "var(--hostly-ink)" : "var(--hostly-ink-muted)",
+                              color: validatePrimary ? "var(--hostly-ink-strong)" : "color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink))",
                               background: validatePrimary
-                                ? "color-mix(in srgb, var(--hostly-accent) 11%, var(--hostly-surface-card-solid))"
-                                : "rgba(248, 251, 254, 0.52)",
+                                ? "color-mix(in srgb, var(--hostly-accent) 8%, var(--hostly-surface-card-solid))"
+                                : "transparent",
                               boxShadow: "none",
                               lineHeight: 1.25,
                             }}
@@ -2379,13 +2374,16 @@ export default function RecepcionesPage() {
                             onClick={() => setSelectedReceptionId(c.id)}
                             className="hostly-btn-soft"
                             style={{
-                              padding: "3px 8px",
+                              padding: "4px 8px",
                               borderRadius: 6,
                               fontSize: 10,
-                              fontWeight: 600,
+                              fontWeight: 560,
                               cursor: "pointer",
                               whiteSpace: "nowrap",
-                              color: "var(--hostly-ink)",
+                              color: "color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink))",
+                              border: "1px solid var(--hostly-table-divider-soft)",
+                              background: "transparent",
+                              boxShadow: "none",
                               lineHeight: 1.25,
                             }}
                           >
@@ -2397,13 +2395,16 @@ export default function RecepcionesPage() {
                             onClick={() => void applyCentralInventoryReceipt(c)}
                             className="hostly-btn-soft"
                             style={{
-                              padding: "3px 8px",
+                              padding: "4px 8px",
                               borderRadius: 6,
                               fontSize: 10,
-                              fontWeight: 600,
+                              fontWeight: 560,
                               cursor: receiptBusyId === c.id ? "wait" : "pointer",
                               whiteSpace: "nowrap",
-                              color: "var(--hostly-ink)",
+                              color: "color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink))",
+                              border: "1px solid var(--hostly-table-divider-soft)",
+                              background: "transparent",
+                              boxShadow: "none",
                               opacity: receiptBusyId === c.id ? 0.65 : 1,
                               lineHeight: 1.25,
                             }}
@@ -2421,17 +2422,20 @@ export default function RecepcionesPage() {
                               aria-expanded={menuRowId === c.id}
                               className="hostly-btn-soft"
                               style={{
-                                padding: "3px 8px",
+                                padding: "4px 8px",
                                 minWidth: 30,
-                                fontSize: 12,
-                                fontWeight: 700,
+                                fontSize: 11,
+                                fontWeight: 620,
                                 cursor: "pointer",
                                 borderRadius: 6,
                                 boxSizing: "border-box",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                color: "var(--hostly-ink-muted)",
+                                color: "color-mix(in srgb, var(--hostly-ink-muted) 88%, transparent)",
+                                border: "1px solid var(--hostly-table-divider-soft)",
+                                background: "transparent",
+                                boxShadow: "none",
                                 lineHeight: 1.25,
                               }}
                             >

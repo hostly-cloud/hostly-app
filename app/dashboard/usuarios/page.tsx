@@ -19,7 +19,7 @@ import {
 } from "@/lib/usuarios-local";
 
 const tpvSearchInput: CSSProperties = {
-  padding: "10px 12px",
+  padding: "8px 10px",
   borderRadius: 10,
   border: "1px solid var(--hostly-line-strong)",
   backgroundColor: "#ffffff",
@@ -28,7 +28,7 @@ const tpvSearchInput: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   outline: "none",
-  minHeight: 48,
+  minHeight: 42,
   boxShadow: "var(--hostly-shadow-hairline)",
 };
 
@@ -380,7 +380,7 @@ export default function UsuariosPage() {
             flexShrink: 0,
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-            gap: 12,
+            gap: 10,
           }}
         >
           {kpiCards.map((card) => (
@@ -391,7 +391,7 @@ export default function UsuariosPage() {
               helper={card.sub}
               accentColor={card.accent}
               valueTitle={String(card.value)}
-              className="px-3 py-2.5"
+              className="px-2.5 py-2"
             />
           ))}
         </div>
@@ -400,7 +400,7 @@ export default function UsuariosPage() {
           <div
             style={{
               flexShrink: 0,
-              padding: "7px 10px 5px",
+              padding: "6px 9px 4px",
               borderBottom: "1px solid var(--hostly-table-divider-soft)",
               display: "flex",
               flexWrap: "wrap",
@@ -452,7 +452,7 @@ export default function UsuariosPage() {
             </div>
           ) : (
             <>
-              <div style={{ flexShrink: 0, padding: "6px 10px 0" }}>
+              <div style={{ flexShrink: 0, padding: "5px 8px 0" }}>
                 <input
                   type="search"
                   value={listSearch}
@@ -471,8 +471,8 @@ export default function UsuariosPage() {
                   flexWrap: "wrap",
                   gap: 6,
                   alignItems: "center",
-                  rowGap: 6,
-                  padding: "8px 10px 8px",
+                  rowGap: 5,
+                  padding: "6px 8px 6px",
                 }}
               >
                 <span className="hostly-kpi-label !text-[10px]">{t("stock.filterHint")}</span>
@@ -495,14 +495,14 @@ export default function UsuariosPage() {
                         border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-table-divider-soft)",
                         background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
                         color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
-                        padding: "8px 14px",
+                        padding: "6px 11px",
                         borderRadius: 999,
                         fontWeight: 600,
                         cursor: "pointer",
                         fontSize: 13,
                         lineHeight: 1.25,
                         maxWidth: "100%",
-                        minHeight: 44,
+                        minHeight: 38,
                         boxSizing: "border-box",
                         touchAction: "manipulation",
                       }}
@@ -563,7 +563,7 @@ export default function UsuariosPage() {
                           onMouseLeave={() => setHoverRowId(null)}
                           style={{
                             ...userRowGrid,
-                            padding: "11px 12px",
+                            padding: "9px 10px",
                             borderBottom: isLast ? "none" : "1px solid var(--hostly-table-divider-faint)",
                             background: isHover ? "var(--hostly-table-row-hover)" : "var(--hostly-surface-card-solid)",
                             boxShadow: u.activo ? "inset 3px 0 0 #22c55e" : "inset 3px 0 0 var(--hostly-line-strong)",

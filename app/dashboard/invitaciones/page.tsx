@@ -88,6 +88,9 @@ export default function InvitacionesPage() {
     { id: string; email?: string; role?: string }[]
   >([]);
   const [invitesLoading, setInvitesLoading] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  useEffect(() => {
     const fromAuth = authRestaurantName?.trim();
     if (fromAuth) {
       setSnapshotName(fromAuth);

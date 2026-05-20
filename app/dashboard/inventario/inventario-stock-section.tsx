@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
+import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import {
   disableProductInventory,
   listenLatestStockMovements,
@@ -406,7 +408,7 @@ export default function InventarioStockSection() {
             </div>
             <div className="hostly-inventory-head-text">
               <h2 className="hostly-inventory-head-title">{displayName}</h2>
-              <p className="hostly-inventory-head-sub">Ficha inventario · catálogo central</p>
+              <p className="hostly-inventory-head-sub hostly-muted">Ficha inventario · catálogo central</p>
               <div className="hostly-inventory-head-badges">
                 <span
                   className={`hostly-inventory-head-badge${selectedDraft.active ? " is-active" : " is-inactive"}`}
@@ -432,8 +434,8 @@ export default function InventarioStockSection() {
         </div>
 
         <div className="hostly-inventory-config-body">
-          <section className="hostly-inventory-fiche-section">
-            <h3 className="hostly-inventory-fiche-section-title">General</h3>
+          <section className="hostly-inventory-inspector-block">
+            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">General</h3>
             <div className="hostly-inventory-fiche-grid">
               <label className="hostly-inventory-field">
                 <span className="hostly-inventory-field-label">{t("common.name")}</span>
@@ -474,10 +476,10 @@ export default function InventarioStockSection() {
                 />
               </label>
             </div>
+          </section>
 
-            <h3 className="hostly-inventory-fiche-section-title hostly-inventory-fiche-section-title--spaced">
-              Inventario
-            </h3>
+          <section className="hostly-inventory-inspector-block">
+            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">Inventario</h3>
             <div className="hostly-inventory-fiche-grid">
               <label className="hostly-inventory-switch-row hostly-inventory-switch-row--compact">
                 <span className="hostly-inventory-switch-label">
@@ -547,8 +549,8 @@ export default function InventarioStockSection() {
             </div>
           </section>
 
-          <section className="hostly-inventory-fiche-section hostly-inventory-fiche-section--movements">
-            <h3 className="hostly-inventory-fiche-section-title">Últimos movimientos</h3>
+          <section className="hostly-inventory-inspector-block hostly-inventory-inspector-block--movements">
+            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">Últimos movimientos</h3>
             {stockMovements.length === 0 ? (
               <p className="hostly-inventory-movements-empty">
                 Sin movimientos. Al cambiar el stock y guardar, aparecerán aquí.
@@ -584,8 +586,8 @@ export default function InventarioStockSection() {
             )}
           </section>
 
-          <section className="hostly-inventory-fiche-section hostly-inventory-fiche-section--media">
-            <h3 className="hostly-inventory-fiche-section-title">Media</h3>
+          <section className="hostly-inventory-inspector-block hostly-inventory-inspector-block--media">
+            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">Media</h3>
             <div className="hostly-inventory-media-card">
               <div className="hostly-inventory-media-icon-wrap" aria-hidden>
                 <span className="hostly-inventory-media-icon">✦</span>
@@ -600,8 +602,8 @@ export default function InventarioStockSection() {
             </div>
           </section>
 
-          <section className="hostly-inventory-fiche-section hostly-inventory-fiche-section--future">
-            <h3 className="hostly-inventory-fiche-future-title">Próximamente</h3>
+          <section className="hostly-inventory-inspector-block hostly-inventory-inspector-block--future">
+            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">Próximamente</h3>
             <div className="hostly-inventory-future-chips">
               {["Recetas", "IA", "Escandallos", "Compras"].map((item) => (
                 <span key={item}>{item}</span>
@@ -633,7 +635,12 @@ export default function InventarioStockSection() {
   };
 
   return (
-    <ModulePageShell title={t("inventory.title")} subtitle={t("inventory.subtitle")} maxWidth={1180} compactLayout>
+    <ModulePageShell
+      {...inventoryHubShellLayout}
+      title={t("inventory.title")}
+      subtitle={t("inventory.subtitle")}
+      headerBelow={<InventarioRouteTabs />}
+    >
       <div className="hostly-inventory-workbench">
         <div className="hostly-inventory-toolbar">
           <div>
@@ -726,14 +733,14 @@ export default function InventarioStockSection() {
       <style jsx global>{`
         .hostly-inventory-workbench {
           display: grid;
-          gap: 14px;
+          gap: 10px;
         }
         .hostly-inventory-toolbar {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          padding: 12px;
+          gap: 10px;
+          padding: 9px 10px;
           border: 1px solid rgba(77, 107, 128, 0.14);
           border-radius: 18px;
           background: rgba(255, 255, 255, 0.72);
@@ -741,8 +748,8 @@ export default function InventarioStockSection() {
         }
         .hostly-inventory-split {
           display: grid;
-          grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.45fr);
-          gap: 14px;
+          grid-template-columns: minmax(300px, 1.02fr) minmax(280px, 1.06fr);
+          gap: 16px;
           align-items: start;
         }
         @media (min-width: 768px) {
@@ -757,12 +764,19 @@ export default function InventarioStockSection() {
         .hostly-inventory-panel-shell {
           border: 1px solid rgba(77, 107, 128, 0.14);
           border-radius: 20px;
-          background: rgba(255, 255, 255, 0.78);
-          box-shadow: 0 14px 34px rgba(49, 95, 125, 0.07);
           overflow: hidden;
         }
+        .hostly-inventory-list-panel {
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow: 0 16px 38px rgba(49, 95, 125, 0.085);
+        }
+        .hostly-inventory-panel-shell {
+          border-color: rgba(77, 107, 128, 0.1);
+          background: rgba(252, 252, 253, 0.86);
+          box-shadow: 0 6px 20px rgba(49, 95, 125, 0.045);
+        }
         .hostly-inventory-search-wrap {
-          padding: 12px;
+          padding: 8px 10px;
           border-bottom: 1px solid rgba(77, 107, 128, 0.1);
           background: rgba(244, 248, 252, 0.7);
         }
@@ -770,8 +784,8 @@ export default function InventarioStockSection() {
           width: 100%;
           box-sizing: border-box;
           border: 1px solid rgba(77, 107, 128, 0.16);
-          border-radius: 14px;
-          padding: 10px 12px;
+          border-radius: 12px;
+          padding: 7px 10px;
           outline: none;
           background: white;
           color: #102033;
@@ -864,41 +878,55 @@ export default function InventarioStockSection() {
           flex: 1;
           min-height: 0;
           overflow-y: auto;
-          padding: 10px 12px 12px;
+          overflow-x: hidden;
+          scrollbar-gutter: stable;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(100, 116, 139, 0.32) transparent;
+          padding: 6px 8px 18px 10px;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 0;
+        }
+        .hostly-inventory-config-body::-webkit-scrollbar {
+          width: 7px;
+        }
+        .hostly-inventory-config-body::-webkit-scrollbar-thumb {
+          background: rgba(100, 116, 139, 0.26);
+          border-radius: 99px;
+          border: 2px solid transparent;
+          background-clip: padding-box;
+        }
+        .hostly-inventory-config-body::-webkit-scrollbar-thumb:hover {
+          background: rgba(71, 85, 105, 0.35);
+          border: 2px solid transparent;
+          background-clip: padding-box;
         }
         .hostly-inventory-panel-head {
           flex-shrink: 0;
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
-          gap: 10px;
-          padding: 10px 12px;
-          border-bottom: 1px solid rgba(100, 116, 139, 0.12);
-          background: linear-gradient(
-            180deg,
-            rgba(247, 252, 255, 0.97) 0%,
-            rgba(241, 248, 252, 0.88) 100%
-          );
+          gap: 8px;
+          padding: 7px 10px;
+          border-bottom: 1px solid var(--hostly-table-divider-faint);
+          background: color-mix(in srgb, var(--hostly-surface-page-soft) 55%, transparent);
         }
         .hostly-inventory-head-main {
           display: flex;
           align-items: flex-start;
-          gap: 10px;
+          gap: 8px;
           min-width: 0;
         }
         .hostly-inventory-avatar {
-          width: 40px;
-          height: 40px;
+          width: 34px;
+          height: 34px;
           border-radius: 999px;
           flex-shrink: 0;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 15px;
-          font-weight: 850;
+          font-size: 13px;
+          font-weight: 780;
           letter-spacing: -0.02em;
           color: #1e4d67;
           background: radial-gradient(
@@ -922,34 +950,40 @@ export default function InventarioStockSection() {
         }
         .hostly-inventory-head-title {
           margin: 0;
-          font-size: 16px;
-          font-weight: 850;
-          line-height: 1.2;
-          color: var(--hostly-ink-strong);
+          font-size: 14px;
+          font-weight: 780;
+          line-height: 1.22;
+          color: color-mix(in srgb, var(--hostly-ink-strong) 92%, var(--hostly-ink-muted));
           letter-spacing: -0.02em;
         }
         .hostly-inventory-head-sub {
-          margin: 3px 0 0;
-          font-size: 11px;
-          font-weight: 650;
-          color: rgba(71, 85, 105, 0.92);
-          letter-spacing: 0.01em;
+          margin: 2px 0 0;
+          font-size: 10px;
+          font-weight: 600;
+          line-height: 1.25;
+          letter-spacing: 0.02em;
+        }
+        .hostly-inventory-head-sub.hostly-muted {
+          font-size: 10px;
+          font-weight: 600;
+          line-height: 1.25;
+          color: var(--hostly-ink-soft);
         }
         .hostly-inventory-head-badges {
           display: flex;
           flex-wrap: wrap;
-          gap: 5px;
-          margin-top: 8px;
+          gap: 4px;
+          margin-top: 6px;
         }
         .hostly-inventory-head-badge {
           display: inline-flex;
           align-items: center;
-          min-height: 20px;
-          padding: 0 8px;
+          min-height: 18px;
+          padding: 0 7px;
           border-radius: 999px;
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.02em;
+          font-size: 9px;
+          font-weight: 750;
+          letter-spacing: 0.04em;
           border: 1px solid rgba(100, 116, 139, 0.14);
           background: rgba(255, 255, 255, 0.72);
           color: #475569;
@@ -966,90 +1000,95 @@ export default function InventarioStockSection() {
         .hostly-inventory-head-badge.is-neutral {
           font-variant-numeric: tabular-nums;
         }
-        .hostly-inventory-fiche-section {
-          border: 1px solid rgba(100, 116, 139, 0.12);
-          border-radius: 14px;
-          background: rgba(255, 255, 255, 0.82);
-          padding: 10px 11px 11px;
-          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
-        }
-        .hostly-inventory-fiche-section--media {
-          padding: 10px 11px;
-        }
-        .hostly-inventory-fiche-section--future {
-          padding: 8px 10px 9px;
-          background: rgba(248, 250, 252, 0.65);
-          border-style: dashed;
-          border-color: rgba(100, 116, 139, 0.12);
+        /* Side inspector: secciones técnicas con hairline (sin “mega-card”) */
+        .hostly-inventory-inspector-block {
+          padding: 10px 0 11px;
+          margin: 0;
+          border: none;
+          border-radius: 0;
+          border-top: 1px solid var(--hostly-table-divider-faint);
+          background: transparent;
           box-shadow: none;
         }
-        .hostly-inventory-fiche-section-title {
-          margin: 0 0 8px;
+        .hostly-inventory-config-body > .hostly-inventory-inspector-block:first-of-type {
+          border-top: none;
+          padding-top: 4px;
+        }
+        .hostly-inventory-inspector-block--movements {
+          padding-bottom: 9px;
+          background: color-mix(in srgb, var(--hostly-surface-page-soft) 42%, transparent);
+        }
+        .hostly-inventory-inspector-block--media {
+          padding-top: 9px;
+        }
+        .hostly-inventory-inspector-block--future {
+          padding: 9px 0 6px;
+          margin-top: 2px;
+          border-top-style: dashed;
+          border-top-color: color-mix(in srgb, var(--hostly-table-divider-soft) 75%, transparent);
+          background: color-mix(in srgb, var(--hostly-surface-page-soft) 35%, transparent);
+          border-radius: 0;
+        }
+        .hostly-inventory-inspector-section-title.hostly-kpi-label {
+          margin: 0 0 5px;
           font-size: 10px;
-          font-weight: 800;
+          font-weight: 750;
           letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: #64748b;
-        }
-        .hostly-inventory-fiche-section-title--spaced {
-          margin-top: 12px;
-        }
-        .hostly-inventory-fiche-future-title {
-          margin: 0 0 6px;
-          font-size: 9px;
-          font-weight: 800;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: rgba(100, 116, 139, 0.72);
+          line-height: 1.2;
+          color: color-mix(in srgb, var(--hostly-ink-muted) 88%, transparent);
         }
         .hostly-inventory-fiche-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px 10px;
+          gap: 6px 8px;
           align-items: start;
         }
         .hostly-inventory-field {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 3px;
           min-width: 0;
         }
         .hostly-inventory-field--full {
           grid-column: 1 / -1;
         }
         .hostly-inventory-field-label {
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 750;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.07em;
           text-transform: uppercase;
-          color: #64748b;
+          color: color-mix(in srgb, var(--hostly-ink-muted) 90%, transparent);
+          line-height: 1.15;
         }
         .hostly-inventory-field-input {
           width: 100%;
           box-sizing: border-box;
-          padding: 6px 9px;
-          border-radius: 9px;
-          border: 1px solid rgba(100, 116, 139, 0.16);
+          padding: 5px 8px;
+          min-height: 32px;
+          border-radius: 8px;
+          border: 1px solid color-mix(in srgb, var(--hostly-table-divider-soft) 92%, var(--hostly-ink-muted) 4%);
           outline: none;
-          background: rgba(255, 255, 255, 0.96);
+          background: color-mix(in srgb, var(--hostly-surface-card-solid) 96%, transparent);
           color: var(--hostly-ink-strong);
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 650;
         }
         .hostly-inventory-field-input:focus {
-          border-color: rgba(56, 142, 184, 0.45);
-          box-shadow: 0 0 0 3px rgba(186, 224, 240, 0.35);
+          border-color: color-mix(in srgb, var(--hostly-accent) 38%, var(--hostly-table-divider-soft));
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--hostly-accent) 18%, transparent);
         }
         .hostly-inventory-switch-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
-          padding: 7px 9px;
-          border-radius: 10px;
-          background: rgba(241, 248, 252, 0.65);
-          border: 1px solid var(--hostly-table-divider-soft);
+          gap: 8px;
+          padding: 5px 8px;
+          min-height: 32px;
+          border-radius: 8px;
+          background: color-mix(in srgb, var(--hostly-surface-page-soft) 65%, transparent);
+          border: 1px solid var(--hostly-table-divider-faint);
           color: var(--hostly-ink-strong);
+          box-sizing: border-box;
         }
         .hostly-inventory-switch-row--compact {
           min-height: 0;
@@ -1058,34 +1097,30 @@ export default function InventarioStockSection() {
           min-width: 0;
         }
         .hostly-inventory-switch-label strong {
-          font-size: 12px;
-          font-weight: 800;
+          font-size: 11px;
+          font-weight: 780;
         }
         .hostly-inventory-switch-label small {
           display: block;
-          margin-top: 2px;
-          color: rgba(71, 85, 105, 0.88);
-          font-size: 10px;
-          font-weight: 650;
-          line-height: 1.25;
+          margin-top: 1px;
+          color: color-mix(in srgb, var(--hostly-ink-muted) 88%, transparent);
+          font-size: 9px;
+          font-weight: 600;
+          line-height: 1.28;
         }
         .hostly-inventory-media-card {
           display: flex;
           align-items: stretch;
-          gap: 12px;
-          padding: 10px 11px;
-          border-radius: 12px;
-          background: linear-gradient(
-            135deg,
-            rgba(255, 255, 255, 0.92) 0%,
-            rgba(238, 248, 253, 0.55) 100%
-          );
-          border: 1px solid rgba(100, 116, 139, 0.12);
+          gap: 10px;
+          padding: 7px 8px;
+          border-radius: 10px;
+          background: color-mix(in srgb, var(--hostly-surface-page-soft) 45%, transparent);
+          border: 1px solid var(--hostly-table-divider-faint);
         }
         .hostly-inventory-media-icon-wrap {
-          width: 56px;
-          height: 56px;
-          border-radius: 14px;
+          width: 44px;
+          height: 44px;
+          border-radius: 10px;
           flex-shrink: 0;
           display: flex;
           align-items: center;
@@ -1108,26 +1143,27 @@ export default function InventarioStockSection() {
         }
         .hostly-inventory-media-cta {
           margin: 0;
-          font-size: 13px;
-          font-weight: 800;
-          color: var(--hostly-ink-strong);
+          font-size: 12px;
+          font-weight: 750;
+          color: color-mix(in srgb, var(--hostly-ink-strong) 90%, var(--hostly-ink-muted));
           letter-spacing: -0.01em;
+          line-height: 1.2;
         }
         .hostly-inventory-media-hint {
           margin: 0;
-          font-size: 11px;
-          font-weight: 650;
-          color: #64748b;
-          line-height: 1.35;
+          font-size: 10px;
+          font-weight: 620;
+          color: var(--hostly-ink-muted);
+          line-height: 1.32;
         }
         .hostly-inventory-media-chip {
           display: inline-flex;
           align-self: flex-start;
-          margin-top: 4px;
-          padding: 3px 8px;
+          margin-top: 3px;
+          padding: 2px 7px;
           border-radius: 999px;
-          font-size: 9px;
-          font-weight: 800;
+          font-size: 8.5px;
+          font-weight: 750;
           letter-spacing: 0.06em;
           text-transform: uppercase;
           color: rgba(14, 116, 144, 0.85);
@@ -1150,10 +1186,6 @@ export default function InventarioStockSection() {
           background: rgba(255, 255, 255, 0.55);
           border: 1px solid var(--hostly-table-divider-soft);
         }
-        .hostly-inventory-fiche-section--movements {
-          padding: 9px 10px 10px;
-          background: rgba(248, 250, 252, 0.55);
-        }
         .hostly-inventory-movements-empty {
           margin: 0;
           font-size: 11px;
@@ -1171,12 +1203,12 @@ export default function InventarioStockSection() {
         .hostly-inventory-movements-row {
           display: grid;
           grid-template-columns: minmax(0, 1.1fr) auto auto auto;
-          gap: 8px 10px;
+          gap: 6px 8px;
           align-items: center;
-          padding: 6px 8px;
-          border-radius: 8px;
-          background: rgba(255, 255, 255, 0.72);
-          border: 1px solid var(--hostly-table-divider-soft);
+          padding: 5px 7px;
+          border-radius: 7px;
+          background: color-mix(in srgb, var(--hostly-surface-card-solid) 88%, transparent);
+          border: 1px solid var(--hostly-table-divider-faint);
           font-size: 11px;
         }
         .hostly-inventory-movements-date {
@@ -1224,13 +1256,20 @@ export default function InventarioStockSection() {
         .hostly-inventory-panel-footer .hostly-inventory-primary-btn {
           min-width: 112px;
         }
+        .hostly-inventory-panel-footer .hostly-inventory-primary-btn,
+        .hostly-inventory-panel-footer .hostly-inventory-secondary-btn {
+          padding: 7px 12px;
+          min-height: 36px;
+          box-sizing: border-box;
+          font-size: 12px;
+        }
         .hostly-inventory-primary-btn,
         .hostly-inventory-secondary-btn,
         .hostly-inventory-mobile-close {
-          border-radius: 12px;
-          border: 1px solid rgba(77, 107, 128, 0.16);
+          border-radius: 10px;
+          border: 1px solid rgba(77, 107, 128, 0.14);
           padding: 9px 12px;
-          font-weight: 900;
+          font-weight: 850;
           cursor: pointer;
         }
         .hostly-inventory-primary-btn {

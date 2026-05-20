@@ -125,13 +125,13 @@ export default function ModulePageShell({
             effectiveDenseInventory && !laptopFit
               ? 5
               : denseWorkbench
-                ? 8
+                ? 6
                 : 10,
           paddingBottom:
             effectiveDenseInventory && !laptopFit
               ? 5
               : denseWorkbench
-                ? 8
+                ? 6
                 : 10,
           borderBottom: "1px solid var(--hostly-line)",
           background: "rgba(247, 252, 255, 0.92)",
@@ -319,8 +319,8 @@ export default function ModulePageShell({
                 ? denseWorkbench
                   ? effectiveDenseInventory
                     ? 4
-                    : 6
-                  : 8
+                    : 5
+                  : 7
                 : denseWorkbench
                   ? 12
                   : 14
