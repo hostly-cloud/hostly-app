@@ -108,8 +108,44 @@ const K = {
   },
 } as const;
 
-function CartaUploadHeroIconLarge({ compact }: { compact?: boolean }) {
+function CartaUploadHeroIconLarge({ compact, ice }: { compact?: boolean; ice?: boolean }) {
   const s = compact ? 72 : 88;
+  if (ice) {
+    return (
+      <svg width={s} height={s} viewBox="0 0 88 88" fill="none" aria-hidden>
+        <rect
+          x="10"
+          y="14"
+          width="56"
+          height="60"
+          rx="8"
+          stroke="var(--hostly-table-divider-soft)"
+          strokeWidth="1.75"
+          fill="color-mix(in srgb, var(--hostly-info-soft) 88%, white)"
+        />
+        <circle cx="38" cy="38" r="10" stroke="color-mix(in srgb, var(--hostly-accent) 35%, var(--hostly-table-divider-soft))" strokeWidth="1.65" />
+        <path
+          d="M52 32l14 10v24H22V36l12-8 8 10 10-6z"
+          fill="var(--hostly-table-head-surface)"
+          stroke="color-mix(in srgb, var(--hostly-accent) 55%, transparent)"
+          strokeWidth="1.35"
+          strokeLinejoin="round"
+        />
+        <path d="M22 58h44" stroke="var(--hostly-table-divider-faint)" strokeWidth="1.15" strokeLinecap="round" />
+        <rect
+          x="62"
+          y="22"
+          width="18"
+          height="14"
+          rx="3"
+          fill="color-mix(in srgb, var(--hostly-accent-soft) 92%, transparent)"
+          stroke="color-mix(in srgb, var(--hostly-accent) 28%, var(--hostly-table-divider-soft))"
+          strokeWidth="1.1"
+        />
+        <circle cx="71" cy="29" r="3" fill="var(--hostly-accent)" opacity={0.88} />
+      </svg>
+    );
+  }
   return (
     <svg width={s} height={s} viewBox="0 0 88 88" fill="none" aria-hidden>
       <defs>
@@ -128,11 +164,13 @@ function CartaUploadHeroIconLarge({ compact }: { compact?: boolean }) {
   );
 }
 
-function CartaIaSpinner() {
+function CartaIaSpinner({ ice }: { ice?: boolean }) {
+  const track = ice ? "color-mix(in srgb, var(--hostly-table-divider-soft) 35%, transparent)" : "rgba(251,191,36,0.18)";
+  const arc = ice ? "var(--hostly-accent)" : "#fbbf24";
   return (
     <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
-      <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(251,191,36,0.18)" strokeWidth="3" />
-      <circle cx="18" cy="18" r="14" fill="none" stroke="#fbbf24" strokeWidth="3" strokeLinecap="round" strokeDasharray="66 88">
+      <circle cx="18" cy="18" r="14" fill="none" stroke={track} strokeWidth="3" />
+      <circle cx="18" cy="18" r="14" fill="none" stroke={arc} strokeWidth="3" strokeLinecap="round" strokeDasharray="66 88">
         <animateTransform attributeName="transform" type="rotate" from="0 18 18" to="360 18 18" dur="0.72s" repeatCount="indefinite" />
       </circle>
     </svg>
@@ -156,20 +194,35 @@ export function CartaImportWizardRail({ variant, activeStep, completedThrough, s
   const keys = K[variant];
   const labels = [keys.wizard1, keys.wizard2, keys.wizard3, keys.wizard4].map((k) => t(k));
   const c = Boolean(compact);
+  const ice = variant === "onboarding";
 
   return (
     <nav
       aria-label={t(keys.wizardNav)}
       style={{
-        padding: c ? "6px 10px" : "11px 14px",
-        borderRadius: c ? 11 : 14,
-        border: "1px solid rgba(71, 85, 105, 0.55)",
-        background: "linear-gradient(180deg, rgba(30, 41, 59, 0.72) 0%, rgba(15, 23, 42, 0.94) 100%)",
-        boxShadow: c ? "0 6px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.03)" : "0 12px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.04)",
+        padding: ice ? (c ? "4px 5px" : "5px 7px") : c ? "6px 10px" : "11px 14px",
+        borderRadius: ice ? (c ? 10 : 12) : c ? 11 : 14,
+        border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(71, 85, 105, 0.55)",
+        background: ice
+          ? "color-mix(in srgb, var(--hostly-table-head-surface) 92%, transparent)"
+          : "linear-gradient(180deg, rgba(30, 41, 59, 0.72) 0%, rgba(15, 23, 42, 0.94) 100%)",
+        boxShadow: ice ? "var(--hostly-shadow-hairline)" : c ? "0 6px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.03)" : "0 12px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.04)",
         flexShrink: 0,
       }}
     >
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", width: "100%", gap: c ? "2px 0" : "6px 0" }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "stretch",
+          width: "100%",
+          gap: ice ? "0px" : c ? "2px 0" : "6px 0",
+          borderRadius: ice ? (c ? 8 : 9) : undefined,
+          overflow: ice ? "hidden" : undefined,
+          background: ice ? "var(--hostly-surface-card-solid)" : undefined,
+          border: ice ? "1px solid var(--hostly-table-divider-faint)" : undefined,
+        }}
+      >
         {WIZARD_STEP_INDEXES.map((step, idx) => {
           const isDone = step <= completedThrough;
           const isCurrent = step === activeStep && !isDone;
@@ -193,26 +246,56 @@ export function CartaImportWizardRail({ variant, activeStep, completedThrough, s
                   flexShrink: 0,
                   width: dot,
                   height: dot,
-                  borderRadius: c ? 7 : 9,
+                  borderRadius: ice ? (c ? 7 : 8) : c ? 7 : 9,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: fs,
-                  fontWeight: 800,
-                  border: isDone
-                    ? "1px solid rgba(52, 211, 153, 0.45)"
-                    : isCurrent
-                      ? c
-                        ? "1.5px solid rgba(251, 191, 36, 0.8)"
-                        : "2px solid rgba(251, 191, 36, 0.75)"
-                      : "1px solid rgba(71, 85, 105, 0.65)",
-                  background: isDone
-                    ? "rgba(6, 78, 59, 0.35)"
-                    : isCurrent
-                      ? "rgba(69, 26, 3, 0.45)"
-                      : "rgba(15, 23, 42, 0.75)",
-                  color: isDone ? "#6ee7b7" : isCurrent ? "#fde68a" : "#64748b",
-                  boxShadow: showPulse ? "0 0 0 2px rgba(251,191,36,0.2)" : isCurrent ? "0 0 10px rgba(251,191,36,0.12)" : "none",
+                  fontWeight: ice ? 750 : 800,
+                  border: ice
+                    ? isDone
+                      ? "1px solid color-mix(in srgb, var(--hostly-accent) 22%, transparent)"
+                      : isCurrent
+                        ? "1px solid color-mix(in srgb, var(--hostly-accent) 42%, var(--hostly-table-divider-soft))"
+                        : "1px solid var(--hostly-table-divider-soft)"
+                    : isDone
+                      ? "1px solid rgba(52, 211, 153, 0.45)"
+                      : isCurrent
+                        ? c
+                          ? "1.5px solid rgba(251, 191, 36, 0.8)"
+                          : "2px solid rgba(251, 191, 36, 0.75)"
+                        : "1px solid rgba(71, 85, 105, 0.65)",
+                  background: ice
+                    ? isDone
+                      ? "var(--hostly-success-soft)"
+                      : isCurrent
+                        ? "var(--hostly-info-soft)"
+                        : "var(--hostly-table-head-surface)"
+                    : isDone
+                      ? "rgba(6, 78, 59, 0.35)"
+                      : isCurrent
+                        ? "rgba(69, 26, 3, 0.45)"
+                        : "rgba(15, 23, 42, 0.75)",
+                  color: ice
+                    ? isDone
+                      ? "color-mix(in srgb, var(--hostly-accent) 88%, var(--hostly-navy-deep))"
+                      : isCurrent
+                        ? "var(--hostly-navy-deep)"
+                        : "var(--hostly-ink-muted)"
+                    : isDone
+                      ? "#6ee7b7"
+                      : isCurrent
+                        ? "#fde68a"
+                        : "#64748b",
+                  boxShadow: ice
+                    ? showPulse
+                      ? "0 0 0 2px color-mix(in srgb, var(--hostly-accent-soft) 90%, transparent)"
+                      : "none"
+                    : showPulse
+                      ? "0 0 0 2px rgba(251,191,36,0.2)"
+                      : isCurrent
+                        ? "0 0 10px rgba(251,191,36,0.12)"
+                        : "none",
                 }}
               >
                 {isDone ? "✓" : step}
@@ -220,8 +303,18 @@ export function CartaImportWizardRail({ variant, activeStep, completedThrough, s
               <span
                 style={{
                   fontSize: c ? 10 : 11,
-                  fontWeight: isCurrent ? 800 : 700,
-                  color: isDone ? "#94a3b8" : isCurrent ? "#f1f5f9" : "#64748b",
+                  fontWeight: ice ? (isCurrent ? 700 : 620) : isCurrent ? 800 : 700,
+                  color: ice
+                    ? isDone
+                      ? "var(--hostly-ink-muted)"
+                      : isCurrent
+                        ? "var(--hostly-ink-strong)"
+                        : "var(--hostly-ink-soft)"
+                    : isDone
+                      ? "#94a3b8"
+                      : isCurrent
+                        ? "#f1f5f9"
+                        : "#64748b",
                   lineHeight: 1.2,
                   whiteSpace: "nowrap",
                   overflow: "hidden",
@@ -238,13 +331,17 @@ export function CartaImportWizardRail({ variant, activeStep, completedThrough, s
             <div
               style={{
                 flex: "1 1 16px",
-                height: 2,
-                minWidth: c ? 6 : 10,
-                margin: c ? "0 4px" : "0 6px",
+                height: ice ? 1 : 2,
+                minWidth: ice ? 4 : c ? 6 : 10,
+                margin: ice ? "0 2px" : c ? "0 4px" : "0 6px",
                 borderRadius: 1,
                 background: connectorLeftDone
-                  ? "linear-gradient(90deg, rgba(52,211,153,0.55), rgba(251,191,36,0.25))"
-                  : "rgba(51, 65, 85, 0.55)",
+                  ? ice
+                    ? "linear-gradient(90deg, color-mix(in srgb, var(--hostly-accent) 38%, transparent), color-mix(in srgb, var(--hostly-accent) 12%, transparent))"
+                    : "linear-gradient(90deg, rgba(52,211,153,0.55), rgba(251,191,36,0.25))"
+                  : ice
+                    ? "var(--hostly-table-divider-faint)"
+                    : "rgba(51, 65, 85, 0.55)",
               }}
               aria-hidden
             />
@@ -253,10 +350,17 @@ export function CartaImportWizardRail({ variant, activeStep, completedThrough, s
           return (
             <div
               key={step}
-              style={{ display: "flex", alignItems: "center", flex: idx < 3 ? (c ? "1 1 108px" : "1 1 140px") : "0 1 auto", minWidth: 0 }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flex: idx < 3 ? (ice ? "1 1 0%" : c ? "1 1 108px" : "1 1 140px") : "0 1 auto",
+                minWidth: 0,
+                padding: ice ? (c ? "5px 3px 5px 5px" : "7px 4px 7px 8px") : undefined,
+                borderRight: ice && idx < 3 ? "1px solid var(--hostly-table-divider-faint)" : undefined,
+              }}
             >
               {chip}
-              {idx < 3 ? connector : null}
+              {!ice && idx < 3 ? connector : null}
             </div>
           );
         })}
@@ -264,6 +368,14 @@ export function CartaImportWizardRail({ variant, activeStep, completedThrough, s
     </nav>
   );
 }
+
+/** Superficie tipo “ice” alineada Hostly (solo layout visual). */
+const cardShellLight: CSSProperties = {
+  borderRadius: 14,
+  border: "1px solid var(--hostly-table-divider-soft)",
+  background: "var(--hostly-surface-card-solid)",
+  boxShadow: "var(--hostly-shadow-hairline)",
+};
 
 const cardShell: CSSProperties = {
   borderRadius: 16,
@@ -329,6 +441,8 @@ export default function CartaImportPremiumLayout({
   const keys = K[variant];
   const showHeroBlock = showHero ?? variant === "onboarding";
   const cv = Boolean(compactViewport);
+  const ice = variant === "onboarding";
+  const shell = ice ? cardShellLight : cardShell;
 
   const iaKeys = useMemo(() => [keys.ia0, keys.ia1, keys.ia2, keys.ia3] as const, [keys]);
   const iaLabel = t(iaKeys[iaPhaseIndex % 4]);
@@ -347,7 +461,7 @@ export default function CartaImportPremiumLayout({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: cv ? 8 : 22,
+        gap: cv ? 8 : ice ? 13 : 22,
         minHeight: cv ? 0 : undefined,
         flex: cv ? 1 : undefined,
         overflow: cv ? "hidden" : undefined,
@@ -360,36 +474,65 @@ export default function CartaImportPremiumLayout({
             flexWrap: "wrap",
             alignItems: "flex-start",
             justifyContent: "space-between",
-            gap: 16,
-            paddingBottom: 4,
-            borderBottom: "1px solid rgba(51, 65, 85, 0.45)",
+            gap: ice ? 12 : 16,
+            paddingBottom: ice ? 6 : 4,
+            borderBottom: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(51, 65, 85, 0.45)",
           }}
         >
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flex: "1 1 320px", minWidth: 0 }}>
+          <div style={{ display: "flex", gap: ice ? 14 : 16, alignItems: "flex-start", flex: ice ? "1 1 360px" : "1 1 320px", minWidth: 0 }}>
             <div
-              style={{
-                flexShrink: 0,
-                padding: "10px 14px",
-                borderRadius: 12,
-                background: "linear-gradient(145deg, rgba(251,191,36,0.2) 0%, rgba(56,189,248,0.12) 100%)",
-                border: "1px solid rgba(251,191,36,0.42)",
-                boxShadow: "0 0 24px rgba(251,191,36,0.12)",
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "#fef3c7",
-                lineHeight: 1.35,
-                maxWidth: 200,
-              }}
+              style={
+                ice
+                  ? {
+                      flexShrink: 0,
+                      padding: "8px 12px",
+                      borderRadius: 10,
+                      background: "var(--hostly-info-soft)",
+                      border: "1px solid color-mix(in srgb, var(--hostly-accent) 18%, var(--hostly-table-divider-soft))",
+                      boxShadow: "var(--hostly-shadow-hairline)",
+                      fontSize: 10,
+                      fontWeight: 750,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "var(--hostly-navy-deep)",
+                      lineHeight: 1.35,
+                      maxWidth: 220,
+                    }
+                  : {
+                      flexShrink: 0,
+                      padding: "10px 14px",
+                      borderRadius: 12,
+                      background: "linear-gradient(145deg, rgba(251,191,36,0.2) 0%, rgba(56,189,248,0.12) 100%)",
+                      border: "1px solid rgba(251,191,36,0.42)",
+                      boxShadow: "0 0 24px rgba(251,191,36,0.12)",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "#fef3c7",
+                      lineHeight: 1.35,
+                      maxWidth: 200,
+                    }
+              }
             >
               {t(keys.badge)}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <h2 style={{ margin: "0 0 10px 0", fontSize: 26, fontWeight: 800, color: "#f8fafc", lineHeight: 1.15, letterSpacing: "-0.02em" }}>
+              <h2
+                style={{
+                  margin: ice ? "0 0 6px 0" : "0 0 10px 0",
+                  fontSize: ice ? 21 : 26,
+                  fontWeight: ice ? 750 : 800,
+                  color: ice ? "var(--hostly-ink-strong)" : "#f8fafc",
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.02em",
+                }}
+              >
                 {t(keys.heroTitle)}
               </h2>
-              <p style={{ margin: 0, fontSize: 14, color: "#94a3b8", lineHeight: 1.5, maxWidth: 560 }}>{t(keys.heroSub)}</p>
+              <p style={{ margin: 0, fontSize: ice ? 13 : 14, color: ice ? "var(--hostly-ink-muted)" : "#94a3b8", lineHeight: 1.5, maxWidth: ice ? 720 : 560 }}>
+                {t(keys.heroSub)}
+              </p>
             </div>
           </div>
           {headerActions ? <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>{headerActions}</div> : null}
@@ -404,19 +547,36 @@ export default function CartaImportPremiumLayout({
         compact={cv}
       />
 
+      {ice && !busy ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: 10,
+            lineHeight: 1.42,
+            color: "var(--hostly-ink-muted)",
+            fontWeight: 605,
+            textAlign: "center",
+            letterSpacing: "0.02em",
+          }}
+        >
+          {t("onboarding.cartaAssistIdleMicro")}
+        </p>
+      ) : null}
+
       <div
         style={{
-          padding: cv ? "5px 10px" : "9px 14px",
-          borderRadius: cv ? 10 : 12,
-          border: "1px solid rgba(51, 65, 85, 0.5)",
-          background: "rgba(15, 23, 42, 0.55)",
+          padding: cv ? "5px 10px" : ice ? "7px 12px" : "9px 14px",
+          borderRadius: cv ? 10 : ice ? 11 : 12,
+          border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(51, 65, 85, 0.5)",
+          background: ice ? "color-mix(in srgb, var(--hostly-success-soft) 28%, transparent)" : "rgba(15, 23, 42, 0.55)",
           fontSize: cv ? 10 : 11,
           fontWeight: 600,
-          color: "#94a3b8",
+          color: ice ? "var(--hostly-ink-muted)" : "#94a3b8",
           textAlign: "center",
-          lineHeight: cv ? 1.4 : 1.5,
+          lineHeight: cv ? 1.4 : 1.45,
           letterSpacing: "0.01em",
           flexShrink: 0,
+          boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
         }}
       >
         {t(keys.trustStrip)}
@@ -426,7 +586,7 @@ export default function CartaImportPremiumLayout({
         style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: cv ? 12 : 22,
+          gap: cv ? 12 : ice ? 14 : 22,
           alignItems: cv ? "flex-start" : "stretch",
           minHeight: cv ? 0 : undefined,
           flex: cv ? 1 : undefined,
@@ -434,17 +594,28 @@ export default function CartaImportPremiumLayout({
         }}
       >
         {/* Columna principal: subida */}
-        <div style={{ flex: "1.5 1 340px", minWidth: 260, display: "flex", flexDirection: "column", gap: cv ? 8 : 12, minHeight: cv ? 0 : undefined }}>
+        <div
+          style={{
+            flex: ice ? "2.1 1 400px" : "1.5 1 340px",
+            minWidth: ice ? 240 : 260,
+            display: "flex",
+            flexDirection: "column",
+            gap: cv ? 8 : ice ? 10 : 12,
+            minHeight: cv ? 0 : undefined,
+          }}
+        >
           <div
             style={{
-              ...cardShell,
+              ...shell,
               padding: 0,
               overflow: "hidden",
-              border: "1px solid rgba(100, 116, 139, 0.38)",
-              boxShadow: cv
-                ? "0 0 0 1px rgba(0,0,0,0.12), 0 14px 36px rgba(0,0,0,0.32), 0 0 28px rgba(251,191,36,0.03)"
-                : "0 0 0 1px rgba(0,0,0,0.15), 0 24px 56px rgba(0,0,0,0.4), 0 0 40px rgba(251,191,36,0.04)",
-              minHeight: cv ? 0 : 460,
+              border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(100, 116, 139, 0.38)",
+              boxShadow: ice
+                ? "var(--hostly-shadow-hairline)"
+                : cv
+                  ? "0 0 0 1px rgba(0,0,0,0.12), 0 14px 36px rgba(0,0,0,0.32), 0 0 28px rgba(251,191,36,0.03)"
+                  : "0 0 0 1px rgba(0,0,0,0.15), 0 24px 56px rgba(0,0,0,0.4), 0 0 40px rgba(251,191,36,0.04)",
+              minHeight: cv ? 0 : ice ? 380 : 460,
               flex: cv ? 1 : undefined,
               display: cv ? "flex" : undefined,
               flexDirection: cv ? "column" : undefined,
@@ -456,27 +627,27 @@ export default function CartaImportPremiumLayout({
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: cv ? 8 : 12,
-                padding: cv ? "7px 12px" : "12px 18px",
-                borderBottom: "1px solid rgba(51, 65, 85, 0.55)",
-                background: "linear-gradient(90deg, rgba(251,191,36,0.08) 0%, transparent 55%)",
+                padding: cv ? "7px 12px" : ice ? "9px 14px" : "12px 18px",
+                borderBottom: ice ? "1px solid var(--hostly-table-divider-faint)" : "1px solid rgba(51, 65, 85, 0.55)",
+                background: ice ? "color-mix(in srgb, var(--hostly-table-head-surface) 86%, transparent)" : "linear-gradient(90deg, rgba(251,191,36,0.08) 0%, transparent 55%)",
                 flexShrink: 0,
               }}
             >
               <span
                 style={{
                   fontSize: cv ? 10 : 11,
-                  fontWeight: 800,
+                  fontWeight: ice ? 750 : 800,
                   letterSpacing: "0.07em",
                   textTransform: "uppercase",
-                  color: "#cbd5e1",
+                  color: ice ? "var(--hostly-ink-muted)" : "#cbd5e1",
                 }}
               >
                 {t(keys.uploadKicker)}
               </span>
               {showPdfHint ? (
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748b", letterSpacing: "0.04em" }}>PDF</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: ice ? "var(--hostly-ink-faint)" : "#64748b", letterSpacing: "0.04em" }}>PDF</span>
               ) : (
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748b", letterSpacing: "0.04em" }}>IMG</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: ice ? "var(--hostly-ink-faint)" : "#64748b", letterSpacing: "0.04em" }}>IMG</span>
               )}
             </div>
 
@@ -493,20 +664,32 @@ export default function CartaImportPremiumLayout({
               }}
               style={{
                 position: "relative",
-                margin: cv ? 10 : 16,
+                margin: cv ? 10 : ice ? 12 : 16,
                 flex: cv ? 1 : undefined,
-                borderRadius: cv ? 12 : 14,
-                border: dragOver ? "2px dashed rgba(251, 191, 36, 0.65)" : "2px dashed rgba(82, 96, 120, 0.55)",
-                background: dragOver ? "rgba(251,191,36,0.06)" : "rgba(15, 23, 42, 0.55)",
+                borderRadius: cv ? 12 : 13,
+                border: dragOver
+                  ? ice
+                    ? "2px dashed color-mix(in srgb, var(--hostly-accent) 52%, transparent)"
+                    : "2px dashed rgba(251, 191, 36, 0.65)"
+                  : ice
+                    ? "1px dashed var(--hostly-table-divider-soft)"
+                    : "2px dashed rgba(82, 96, 120, 0.55)",
+                background: dragOver
+                  ? ice
+                    ? "color-mix(in srgb, var(--hostly-accent-soft) 72%, transparent)"
+                    : "rgba(251,191,36,0.06)"
+                  : ice
+                    ? "color-mix(in srgb, var(--hostly-info-soft) 55%, transparent)"
+                    : "rgba(15, 23, 42, 0.55)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                justifyContent: cv ? "flex-start" : "center",
-                gap: cv ? 10 : 16,
-                padding: cv ? "14px 14px 12px" : "26px 20px 22px",
+                justifyContent: cv ? "flex-start" : ice ? "flex-start" : "center",
+                gap: cv ? 10 : ice ? 12 : 16,
+                padding: cv ? "14px 14px 12px" : ice ? "22px 18px 18px" : "26px 20px 22px",
                 boxSizing: "border-box",
                 overflow: cv ? "auto" : undefined,
-                minHeight: cv ? 200 : 368,
+                minHeight: cv ? 200 : ice ? 300 : 368,
                 cursor: busy ? "wait" : "pointer",
               }}
             >
@@ -516,40 +699,56 @@ export default function CartaImportPremiumLayout({
                 style={{
                   width: cv ? 88 : 104,
                   height: cv ? 88 : 104,
-                  borderRadius: cv ? 18 : 22,
+                  borderRadius: cv ? 18 : 20,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "linear-gradient(160deg, rgba(251,191,36,0.14) 0%, rgba(15,23,42,0.9) 55%, rgba(56,189,248,0.08) 100%)",
-                  border: "1px solid rgba(251,191,36,0.32)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.25)",
+                  background: ice
+                    ? "var(--hostly-info-soft)"
+                    : "linear-gradient(160deg, rgba(251,191,36,0.14) 0%, rgba(15,23,42,0.9) 55%, rgba(56,189,248,0.08) 100%)",
+                  border: ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 16%, var(--hostly-table-divider-soft))" : "1px solid rgba(251,191,36,0.32)",
+                  boxShadow: ice ? "var(--hostly-shadow-hairline)" : "inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.25)",
                   flexShrink: 0,
                 }}
               >
-                <CartaUploadHeroIconLarge compact={cv} />
+                <CartaUploadHeroIconLarge compact={cv} ice={ice} />
               </div>
 
-              <div style={{ textAlign: "center", maxWidth: 360 }}>
+              <div style={{ textAlign: "center", maxWidth: ice ? 560 : 360 }}>
                 <p
                   style={{
-                    margin: cv ? "0 0 4px 0" : "0 0 8px 0",
-                    fontSize: cv ? 16 : 18,
-                    fontWeight: 800,
-                    color: "#f1f5f9",
+                    margin: cv ? "0 0 4px 0" : ice ? "0 0 5px 0" : "0 0 8px 0",
+                    fontSize: cv ? 16 : ice ? 17 : 18,
+                    fontWeight: ice ? 750 : 800,
+                    color: ice ? "var(--hostly-ink-strong)" : "#f1f5f9",
                     lineHeight: 1.25,
                   }}
                 >
                   {t(keys.dropLead)}
                 </p>
-                <p style={{ margin: 0, fontSize: cv ? 12 : 13, color: "#94a3b8", lineHeight: 1.4 }}>{t(keys.dropSecondary)}</p>
+                <p style={{ margin: 0, fontSize: cv ? 12 : 13, color: ice ? "var(--hostly-ink-muted)" : "#94a3b8", lineHeight: 1.4 }}>
+                  {t(keys.dropSecondary)}
+                </p>
               </div>
 
               <div style={{ textAlign: "center" }}>
-                <p style={{ margin: 0, fontSize: cv ? 12 : 13, fontWeight: 800, color: "#fde68a", letterSpacing: "0.1em" }}>{t(keys.formatsShort)}</p>
-                <p style={{ margin: cv ? "3px 0 0 0" : "6px 0 0 0", fontSize: cv ? 10 : 11, color: "#64748b", fontWeight: 600 }}>{t(keys.formatsHint)}</p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: cv ? 12 : 13,
+                    fontWeight: 750,
+                    color: ice ? "var(--hostly-accent)" : "#fde68a",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {t(keys.formatsShort)}
+                </p>
+                <p style={{ margin: cv ? "3px 0 0 0" : "6px 0 0 0", fontSize: cv ? 10 : 11, color: ice ? "var(--hostly-ink-faint)" : "#64748b", fontWeight: 600 }}>
+                  {t(keys.formatsHint)}
+                </p>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: cv ? 5 : 8, width: "100%", maxWidth: 380 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: cv ? 5 : 8, width: "100%", maxWidth: ice ? 480 : 380 }}>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -567,17 +766,23 @@ export default function CartaImportPremiumLayout({
                   }}
                   disabled={busy}
                   style={{
-                    border: "none",
-                    background: busy ? "rgba(71,85,105,0.45)" : "linear-gradient(180deg, rgba(251,191,36,1) 0%, rgba(217,119,6,0.95) 100%)",
-                    color: busy ? "#64748b" : "#1c1917",
-                    padding: cv ? "11px 22px" : "16px 32px",
-                    borderRadius: cv ? 12 : 14,
-                    fontWeight: 800,
+                    border: busy ? undefined : ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 22%, transparent)" : "none",
+                    background: busy
+                      ? ice
+                        ? "var(--hostly-table-head-surface)"
+                        : "rgba(71,85,105,0.45)"
+                      : ice
+                        ? "var(--hostly-accent)"
+                        : "linear-gradient(180deg, rgba(251,191,36,1) 0%, rgba(217,119,6,0.95) 100%)",
+                    color: busy ? (ice ? "var(--hostly-ink-muted)" : "#64748b") : ice ? "var(--hostly-navy-deep)" : "#1c1917",
+                    padding: cv ? "11px 22px" : ice ? "13px 26px" : "16px 32px",
+                    borderRadius: cv ? 11 : ice ? 12 : 14,
+                    fontWeight: ice ? 750 : 800,
                     fontSize: cv ? 14 : 15,
                     cursor: busy ? "not-allowed" : "pointer",
-                    boxShadow: busy ? "none" : "0 14px 36px rgba(217,119,6,0.32)",
+                    boxShadow: busy ? "none" : ice ? "var(--hostly-shadow-hairline)" : "0 14px 36px rgba(217,119,6,0.32)",
                     width: "100%",
-                    maxWidth: 340,
+                    maxWidth: ice ? "min(440px, 100%)" : 340,
                   }}
                 >
                   {t(keys.ctaPrimaryPick)}
@@ -587,11 +792,11 @@ export default function CartaImportPremiumLayout({
                     style={{
                       margin: 0,
                       fontSize: cv ? 10 : 11,
-                      color: "#64748b",
+                      color: ice ? "var(--hostly-ink-muted)" : "#64748b",
                       fontWeight: 600,
                       textAlign: "center",
                       lineHeight: 1.4,
-                      maxWidth: 320,
+                      maxWidth: ice ? 400 : 320,
                     }}
                   >
                     {t(keys.ctaPrimaryHint)}
@@ -605,14 +810,15 @@ export default function CartaImportPremiumLayout({
                   onClick={onExample}
                   disabled={busy}
                   style={{
-                    border: "1px solid rgba(56,189,248,0.35)",
-                    background: busy ? "transparent" : "rgba(8,47,73,0.35)",
-                    color: busy ? "#64748b" : "#7dd3fc",
+                    border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(56,189,248,0.35)",
+                    background: busy ? "transparent" : ice ? "var(--hostly-table-head-surface)" : "rgba(8,47,73,0.35)",
+                    color: busy ? (ice ? "var(--hostly-ink-muted)" : "#64748b") : ice ? "var(--hostly-accent)" : "#7dd3fc",
                     padding: cv ? "7px 14px" : "10px 20px",
-                    borderRadius: 10,
+                    borderRadius: ice ? 10 : 10,
                     fontWeight: 700,
                     fontSize: cv ? 12 : 13,
                     cursor: busy ? "not-allowed" : "pointer",
+                    boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
                   }}
                 >
                   {t(keys.ctaExample)}
@@ -620,19 +826,19 @@ export default function CartaImportPremiumLayout({
               ) : null}
 
               {file ? (
-                <div style={{ width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: cv ? 8 : 12, marginTop: cv ? 2 : 4 }}>
+                <div style={{ width: "100%", maxWidth: ice ? "min(100%,520px)" : 400, display: "flex", flexDirection: "column", gap: cv ? 8 : 12, marginTop: cv ? 2 : 4 }}>
                   <div
                     style={{
                       alignSelf: "center",
                       fontSize: 11,
-                      fontWeight: 900,
+                      fontWeight: ice ? 750 : 900,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       padding: "6px 10px",
                       borderRadius: 999,
-                      border: "1px solid rgba(52, 211, 153, 0.25)",
-                      background: "rgba(6, 78, 59, 0.16)",
-                      color: "#a7f3d0",
+                      border: ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 18%, transparent)" : "1px solid rgba(52, 211, 153, 0.25)",
+                      background: ice ? "var(--hostly-success-soft)" : "rgba(6, 78, 59, 0.16)",
+                      color: ice ? "color-mix(in srgb, var(--hostly-accent) 75%, var(--hostly-navy-deep))" : "#a7f3d0",
                     }}
                   >
                     {t("cartaImport.fileReadyBadge")}
@@ -644,19 +850,37 @@ export default function CartaImportPremiumLayout({
                       alignItems: "center",
                       gap: cv ? 8 : 10,
                       padding: cv ? "8px 10px" : "12px 14px",
-                      borderRadius: cv ? 10 : 12,
-                      border: "1px solid rgba(251,191,36,0.35)",
-                      background: "linear-gradient(90deg, rgba(69,26,3,0.45) 0%, rgba(15,23,42,0.75) 100%)",
+                      borderRadius: cv ? 10 : ice ? 11 : 12,
+                      border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(251,191,36,0.35)",
+                      background: ice ? "var(--hostly-info-soft)" : "linear-gradient(90deg, rgba(69,26,3,0.45) 0%, rgba(15,23,42,0.75) 100%)",
+                      boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
                     }}
                   >
                     <div style={{ flex: "1 1 160px", minWidth: 0 }}>
-                      <div style={{ fontSize: 10, fontWeight: 800, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          color: ice ? "var(--hostly-ink-faint)" : "#64748b",
+                          letterSpacing: "0.06em",
+                          textTransform: "uppercase",
+                        }}
+                      >
                         {t(keys.fileStrip)}
                       </div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: ice ? "var(--hostly-ink-strong)" : "#f1f5f9",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
                         {file.name}
                       </div>
-                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{fmtSize(file.size)}</div>
+                      <div style={{ fontSize: 11, color: ice ? "var(--hostly-ink-muted)" : "#94a3b8", marginTop: 2 }}>{fmtSize(file.size)}</div>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                       <button
@@ -667,14 +891,15 @@ export default function CartaImportPremiumLayout({
                         }}
                         disabled={busy}
                         style={{
-                          border: "1px solid rgba(71,85,105,0.6)",
-                          background: "rgba(15,23,42,0.6)",
-                          color: "#e2e8f0",
+                          border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(71,85,105,0.6)",
+                          background: ice ? "var(--hostly-table-head-surface)" : "rgba(15,23,42,0.6)",
+                          color: ice ? "var(--hostly-accent)" : "#e2e8f0",
                           padding: "8px 14px",
-                          borderRadius: 9,
+                          borderRadius: ice ? 9 : 9,
                           fontWeight: 700,
                           fontSize: 12,
                           cursor: busy ? "not-allowed" : "pointer",
+                          boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
                         }}
                       >
                         {t(keys.changeFile)}
@@ -685,14 +910,15 @@ export default function CartaImportPremiumLayout({
                           onClick={onClearFile}
                           disabled={busy}
                           style={{
-                            border: "1px solid rgba(248,113,113,0.35)",
-                            background: "rgba(127,29,29,0.2)",
-                            color: "#fecaca",
+                            border: "1px solid color-mix(in srgb, #b42318 25%, transparent)",
+                            background: "color-mix(in srgb, #fef2f2 94%, transparent)",
+                            color: "#b42318",
                             padding: "8px 14px",
                             borderRadius: 9,
                             fontWeight: 700,
                             fontSize: 12,
                             cursor: busy ? "not-allowed" : "pointer",
+                            boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
                           }}
                         >
                           {t(keys.clearFile)}
@@ -708,7 +934,7 @@ export default function CartaImportPremiumLayout({
                       style={{
                         maxHeight: cv ? 72 : 120,
                         borderRadius: 10,
-                        border: "1px solid rgba(51,65,85,0.6)",
+                        border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(51,65,85,0.6)",
                         alignSelf: "center",
                       }}
                     />
@@ -718,11 +944,11 @@ export default function CartaImportPremiumLayout({
                         alignSelf: "center",
                         fontSize: 12,
                         fontWeight: 700,
-                        color: "#94a3b8",
+                        color: ice ? "var(--hostly-ink-muted)" : "#94a3b8",
                         padding: "10px 16px",
                         borderRadius: 10,
-                        background: "rgba(15,23,42,0.65)",
-                        border: "1px solid rgba(51,65,85,0.55)",
+                        background: ice ? "var(--hostly-info-soft)" : "rgba(15,23,42,0.65)",
+                        border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(51,65,85,0.55)",
                       }}
                     >
                       PDF · {file.name}
@@ -740,23 +966,30 @@ export default function CartaImportPremiumLayout({
                       onAnalyze();
                     }}
                     style={{
-                      border: "none",
+                      border: ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 28%, var(--hostly-table-divider-soft))" : "none",
                       width: "100%",
-                      background: busy ? "rgba(71,85,105,0.5)" : "linear-gradient(180deg, rgba(56,189,248,0.28) 0%, rgba(8,47,73,0.6) 100%)",
-                      color: "#e0f2fe",
-                      borderWidth: 1,
-                      borderStyle: "solid",
-                      borderColor: "rgba(56,189,248,0.45)",
-                      padding: cv ? "10px 16px" : "14px 20px",
-                      borderRadius: cv ? 10 : 12,
-                      fontWeight: 800,
+                      background: busy
+                        ? ice
+                          ? "var(--hostly-table-head-surface)"
+                          : "rgba(71,85,105,0.5)"
+                        : ice
+                          ? "color-mix(in srgb, var(--hostly-accent-soft) 78%, transparent)"
+                          : "linear-gradient(180deg, rgba(56,189,248,0.28) 0%, rgba(8,47,73,0.6) 100%)",
+                      color: busy ? (ice ? "var(--hostly-ink-muted)" : "#e0f2fe") : ice ? "var(--hostly-accent)" : "#e0f2fe",
+                      borderWidth: ice ? undefined : 1,
+                      borderStyle: ice ? undefined : "solid",
+                      borderColor: ice ? undefined : "rgba(56,189,248,0.45)",
+                      padding: cv ? "10px 16px" : ice ? "12px 18px" : "14px 20px",
+                      borderRadius: cv ? 10 : ice ? 11 : 12,
+                      fontWeight: ice ? 750 : 800,
                       fontSize: cv ? 14 : 15,
                       cursor: busy ? "wait" : "pointer",
+                      boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
                     }}
                   >
                     {busy ? t(keys.analyzing) : t(keys.ctaAnalyze)}
                   </button>
-                  <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", lineHeight: 1.45 }}>
+                  <div style={{ fontSize: 11, color: ice ? "var(--hostly-ink-muted)" : "#94a3b8", textAlign: "center", lineHeight: 1.45 }}>
                     {t("cartaImport.fileReadyHint")}
                   </div>
                 </div>
@@ -768,9 +1001,12 @@ export default function CartaImportPremiumLayout({
                     position: "absolute",
                     inset: 0,
                     borderRadius: 12,
-                    background: "rgba(15, 23, 42, 0.9)",
-                    backdropFilter: "blur(10px)",
-                    WebkitBackdropFilter: "blur(10px)",
+                    background: ice
+                      ? "color-mix(in srgb, var(--hostly-surface-card-solid) 94%, transparent)"
+                      : "rgba(15, 23, 42, 0.9)",
+                    backdropFilter: ice ? "none" : "blur(10px)",
+                    WebkitBackdropFilter: ice ? "none" : "blur(10px)",
+                    border: ice ? "1px solid var(--hostly-table-divider-faint)" : undefined,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
@@ -780,30 +1016,32 @@ export default function CartaImportPremiumLayout({
                     zIndex: 4,
                   }}
                 >
-                  <CartaIaSpinner />
-                  <div style={{ width: "100%", maxWidth: 440 }}>
+                  <CartaIaSpinner ice={ice} />
+                  <div style={{ width: "100%", maxWidth: 460 }}>
                     <p
                       style={{
                         margin: 0,
                         fontSize: cv ? 13 : 15,
-                        fontWeight: 900,
-                        color: "#f1f5f9",
+                        fontWeight: ice ? 760 : 900,
+                        color: ice ? "var(--hostly-ink-strong)" : "#f1f5f9",
                         textAlign: "center",
                         letterSpacing: "-0.01em",
                       }}
                     >
                       {iaLabel}
                     </p>
-                    <p style={{ margin: "6px 0 0", fontSize: cv ? 11 : 12, color: "#64748b", textAlign: "center" }}>{t(keys.loadingSub)}</p>
+                    <p style={{ margin: "6px 0 0", fontSize: cv ? 11 : 12, color: ice ? "var(--hostly-ink-muted)" : "#64748b", textAlign: "center" }}>
+                      {t(keys.loadingSub)}
+                    </p>
                     <div
                       style={{
                         marginTop: cv ? 10 : 12,
-                        height: 10,
+                        height: 9,
                         borderRadius: 999,
-                        background: "rgba(51, 65, 85, 0.55)",
-                        border: "1px solid rgba(71, 85, 105, 0.55)",
+                        background: ice ? "var(--hostly-table-head-surface)" : "rgba(51, 65, 85, 0.55)",
+                        border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(71, 85, 105, 0.55)",
                         overflow: "hidden",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                        boxShadow: ice ? "var(--hostly-shadow-hairline)" : "inset 0 1px 0 rgba(255,255,255,0.04)",
                       }}
                       aria-hidden
                     >
@@ -811,18 +1049,27 @@ export default function CartaImportPremiumLayout({
                         style={{
                           width: `${Math.round(Math.max(0.02, p) * 100)}%`,
                           height: "100%",
-                          background:
-                            "linear-gradient(90deg, rgba(251,191,36,0.95) 0%, rgba(56,189,248,0.65) 55%, rgba(52,211,153,0.55) 100%)",
-                          boxShadow: "0 0 24px rgba(251,191,36,0.15)",
+                          background: ice
+                            ? "linear-gradient(90deg, color-mix(in srgb, var(--hostly-accent) 65%, transparent), color-mix(in srgb, var(--hostly-accent) 22%, transparent))"
+                            : "linear-gradient(90deg, rgba(251,191,36,0.95) 0%, rgba(56,189,248,0.65) 55%, rgba(52,211,153,0.55) 100%)",
+                          boxShadow: ice ? "none" : "0 0 24px rgba(251,191,36,0.15)",
                           transition: "width 220ms ease",
                         }}
                       />
                     </div>
                     <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 750,
+                          color: ice ? "var(--hostly-ink-muted)" : "#64748b",
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                        }}
+                      >
                         {t(keys.wizard2)}
                       </span>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: "#94a3b8", fontVariantNumeric: "tabular-nums" }}>
+                      <span style={{ fontSize: 11, fontWeight: 750, color: ice ? "var(--hostly-ink-soft)" : "#94a3b8", fontVariantNumeric: "tabular-nums" }}>
                         {Math.round(Math.max(0.02, p) * 100)}%
                       </span>
                     </div>
@@ -832,11 +1079,12 @@ export default function CartaImportPremiumLayout({
                       <span
                         key={i}
                         style={{
-                          width: 9,
-                          height: 9,
+                          width: ice ? 7 : 9,
+                          height: ice ? 7 : 9,
                           borderRadius: 999,
-                          background: i === iaPhaseIndex % 4 ? "#fbbf24" : "rgba(71,85,105,0.75)",
-                          boxShadow: i === iaPhaseIndex % 4 ? "0 0 12px rgba(251,191,36,0.5)" : "none",
+                          border: ice ? `1px solid ${i === iaPhaseIndex % 4 ? "color-mix(in srgb, var(--hostly-accent) 45%, transparent)" : "var(--hostly-table-divider-faint)"}` : undefined,
+                          background: i === iaPhaseIndex % 4 ? (ice ? "var(--hostly-accent)" : "#fbbf24") : ice ? "var(--hostly-table-head-surface)" : "rgba(71,85,105,0.75)",
+                          boxShadow: !ice && i === iaPhaseIndex % 4 ? "0 0 12px rgba(251,191,36,0.5)" : "none",
                         }}
                       />
                     ))}
@@ -850,25 +1098,25 @@ export default function CartaImportPremiumLayout({
         {/* Columna valor / confianza */}
         <div
           style={{
-            flex: "0.95 1 300px",
-            minWidth: 260,
-            maxWidth: cv ? 400 : 440,
+            flex: ice ? "0.95 1 232px" : "0.95 1 300px",
+            minWidth: ice ? 200 : 260,
+            maxWidth: ice ? (cv ? 300 : 320) : cv ? 400 : 440,
             display: "flex",
             flexDirection: "column",
-            gap: cv ? 9 : 14,
+            gap: cv ? (ice ? 8 : 9) : ice ? 10 : 14,
             minHeight: cv ? 0 : undefined,
             maxHeight: cv ? "min(100%, calc(100dvh - 200px))" : undefined,
             overflow: cv ? "auto" : undefined,
           }}
         >
-          <div style={{ ...cardShell, padding: cv ? "10px 12px 9px" : "16px 16px 14px", flexShrink: 0 }}>
+          <div style={{ ...shell, padding: cv ? "10px 12px 9px" : ice ? "12px 12px 10px" : "16px 16px 14px", flexShrink: 0 }}>
             <p
               style={{
                 margin: cv ? "0 0 7px 0" : "0 0 12px 0",
                 fontSize: cv ? 11 : 12,
-                fontWeight: 800,
-                color: "#fde68a",
-                letterSpacing: "0.04em",
+                fontWeight: ice ? 720 : 800,
+                color: ice ? "var(--hostly-accent)" : "#fde68a",
+                letterSpacing: "0.035em",
               }}
             >
               {t(keys.benefitsIntro)}
@@ -882,22 +1130,23 @@ export default function CartaImportPremiumLayout({
                     gap: cv ? 8 : 12,
                     alignItems: "flex-start",
                     padding: cv ? "6px 9px" : "11px 12px",
-                    borderRadius: cv ? 10 : 12,
-                    background: "rgba(15, 23, 42, 0.65)",
-                    border: "1px solid rgba(51, 65, 85, 0.55)",
+                    borderRadius: cv ? 10 : 11,
+                    background: ice ? "color-mix(in srgb, var(--hostly-ice-100) 92%, transparent)" : "rgba(15, 23, 42, 0.65)",
+                    border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(51, 65, 85, 0.55)",
+                    boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
                   }}
                 >
                   <span
                     style={{
                       flexShrink: 0,
-                      width: cv ? 24 : 28,
-                      height: cv ? 24 : 28,
-                      borderRadius: cv ? 7 : 9,
-                      background: "rgba(251,191,36,0.12)",
-                      border: "1px solid rgba(251,191,36,0.35)",
-                      color: "#fde68a",
-                      fontSize: cv ? 11 : 13,
-                      fontWeight: 800,
+                      width: cv ? 24 : 26,
+                      height: cv ? 24 : 26,
+                      borderRadius: cv ? 7 : 8,
+                      background: ice ? "var(--hostly-accent-soft)" : "rgba(251,191,36,0.12)",
+                      border: ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 18%, var(--hostly-table-divider-soft))" : "1px solid rgba(251,191,36,0.35)",
+                      color: ice ? "var(--hostly-accent)" : "#fde68a",
+                      fontSize: cv ? 11 : 12,
+                      fontWeight: 750,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -906,7 +1155,7 @@ export default function CartaImportPremiumLayout({
                   >
                     ✓
                   </span>
-                  <span style={{ fontSize: cv ? 12 : 13, fontWeight: 600, color: "#e2e8f0", lineHeight: 1.35, paddingTop: 1 }}>{t(bk)}</span>
+                  <span style={{ fontSize: cv ? 12 : 13, fontWeight: ice ? 580 : 600, color: ice ? "var(--hostly-ink)" : "#e2e8f0", lineHeight: 1.35, paddingTop: 1 }}>{t(bk)}</span>
                 </div>
               ))}
             </div>
@@ -914,11 +1163,11 @@ export default function CartaImportPremiumLayout({
 
           <div
             style={{
-              borderRadius: cv ? 11 : 14,
-              padding: cv ? "9px 11px" : "14px 16px",
-              border: "1px solid rgba(56, 189, 248, 0.28)",
-              background: "linear-gradient(125deg, rgba(8, 47, 73, 0.4) 0%, rgba(15, 23, 42, 0.85) 100%)",
-              boxShadow: "0 0 0 1px rgba(56,189,248,0.06)",
+              borderRadius: cv ? 11 : 12,
+              padding: cv ? "9px 11px" : ice ? "12px 13px" : "14px 16px",
+              border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(56, 189, 248, 0.28)",
+              background: ice ? "color-mix(in srgb, var(--hostly-info-soft) 94%, transparent)" : "linear-gradient(125deg, rgba(8, 47, 73, 0.4) 0%, rgba(15, 23, 42, 0.85) 100%)",
+              boxShadow: ice ? "var(--hostly-shadow-hairline)" : "0 0 0 1px rgba(56,189,248,0.06)",
               flexShrink: 0,
             }}
           >
@@ -928,23 +1177,36 @@ export default function CartaImportPremiumLayout({
                   flexShrink: 0,
                   fontSize: cv ? 17 : 20,
                   lineHeight: 1,
-                  filter: "grayscale(0.2)",
+                  filter: ice ? "grayscale(0.35)" : "grayscale(0.2)",
                 }}
                 aria-hidden
               >
                 🛡️
               </span>
               <div>
-                <p style={{ margin: cv ? "0 0 3px 0" : "0 0 6px 0", fontSize: cv ? 13 : 14, fontWeight: 800, color: "#f0f9ff" }}>{t(keys.controlTitle)}</p>
-                <p style={{ margin: 0, fontSize: cv ? 11 : 12, color: "#bae6fd", lineHeight: 1.4, fontWeight: 600 }}>{t(keys.controlBody)}</p>
+                <p
+                  style={{
+                    margin: cv ? "0 0 3px 0" : "0 0 6px 0",
+                    fontSize: cv ? 13 : 14,
+                    fontWeight: ice ? 720 : 800,
+                    color: ice ? "var(--hostly-navy-deep)" : "#f0f9ff",
+                  }}
+                >
+                  {t(keys.controlTitle)}
+                </p>
+                <p style={{ margin: 0, fontSize: cv ? 11 : 12, color: ice ? "var(--hostly-ink-muted)" : "#bae6fd", lineHeight: 1.4, fontWeight: 600 }}>
+                  {t(keys.controlBody)}
+                </p>
               </div>
             </div>
           </div>
 
-          <div style={{ ...cardShell, padding: cv ? "10px 12px 11px" : "14px 16px 16px", flex: cv ? undefined : 1, flexShrink: 0 }}>
+          <div style={{ ...shell, padding: cv ? "10px 12px 11px" : ice ? "12px 12px 14px" : "14px 16px 16px", flex: cv ? undefined : 1, flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: cv ? 8 : 12 }}>
-              <span style={{ fontSize: cv ? 12 : 13, fontWeight: 800, color: "#f1f5f9" }}>{t(keys.mockTitle)}</span>
-              <span style={{ fontSize: cv ? 8 : 9, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em" }}>{t(keys.mockDemo)}</span>
+              <span style={{ fontSize: cv ? 12 : 13, fontWeight: 750, color: ice ? "var(--hostly-ink-strong)" : "#f1f5f9" }}>{t(keys.mockTitle)}</span>
+              <span style={{ fontSize: cv ? 8 : 9, fontWeight: 800, color: ice ? "var(--hostly-ink-faint)" : "#64748b", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                {t(keys.mockDemo)}
+              </span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: cv ? 5 : 8 }}>
               {CARTA_MOCK_PREVIEW.map((row) => (
@@ -957,15 +1219,16 @@ export default function CartaImportPremiumLayout({
                     gap: "4px 8px",
                     padding: cv ? "6px 9px" : "10px 12px",
                     borderRadius: cv ? 9 : 11,
-                    background: "rgba(15, 23, 42, 0.72)",
-                    border: "1px solid rgba(51, 65, 85, 0.5)",
+                    background: ice ? "var(--hostly-info-soft)" : "rgba(15, 23, 42, 0.72)",
+                    border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(51, 65, 85, 0.5)",
+                    boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
                   }}
                 >
                   <span
                     style={{
                       fontSize: cv ? 12 : 14,
                       fontWeight: 700,
-                      color: "#f8fafc",
+                      color: ice ? "var(--hostly-ink-strong)" : "#f8fafc",
                       flex: "1 1 120px",
                       minWidth: 0,
                       whiteSpace: "nowrap",
@@ -975,8 +1238,8 @@ export default function CartaImportPremiumLayout({
                   >
                     {t(row.nameKey)}
                   </span>
-                  <span style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>—</span>
-                  <span style={{ fontSize: cv ? 12 : 14, fontWeight: 800, color: "#fde68a", fontVariantNumeric: "tabular-nums" }}>{t(row.priceKey)}</span>
+                  <span style={{ fontSize: 11, color: ice ? "var(--hostly-ink-faint)" : "#64748b", fontWeight: 700 }}>—</span>
+                  <span style={{ fontSize: cv ? 12 : 14, fontWeight: 760, color: ice ? "var(--hostly-accent)" : "#fde68a", fontVariantNumeric: "tabular-nums" }}>{t(row.priceKey)}</span>
                   <span
                     style={{
                       marginLeft: "auto",
@@ -986,9 +1249,9 @@ export default function CartaImportPremiumLayout({
                       letterSpacing: "0.05em",
                       padding: cv ? "2px 6px" : "3px 8px",
                       borderRadius: 999,
-                      background: "rgba(251,191,36,0.14)",
-                      border: "1px solid rgba(251,191,36,0.32)",
-                      color: "#fde68a",
+                      background: ice ? "color-mix(in srgb, var(--hostly-accent-soft) 96%, transparent)" : "rgba(251,191,36,0.14)",
+                      border: ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 16%, var(--hostly-table-divider-soft))" : "1px solid rgba(251,191,36,0.32)",
+                      color: ice ? "var(--hostly-accent)" : "#fde68a",
                     }}
                   >
                     {t(TIPO_KEYS[row.tipo])}
@@ -996,16 +1259,17 @@ export default function CartaImportPremiumLayout({
                 </div>
               ))}
             </div>
-            <p style={{ margin: cv ? "8px 0 0 0" : "12px 0 0 0", fontSize: cv ? 10 : 11, color: "#64748b", lineHeight: 1.35 }}>{t(keys.mockCaption)}</p>
+            <p style={{ margin: cv ? "8px 0 0 0" : "12px 0 0 0", fontSize: cv ? 10 : 11, color: ice ? "var(--hostly-ink-muted)" : "#64748b", lineHeight: 1.35 }}>{t(keys.mockCaption)}</p>
           </div>
 
           <div
             style={{
-              borderRadius: cv ? 11 : 14,
-              padding: cv ? "9px 11px" : "14px 16px",
-              border: "1px solid rgba(71, 85, 105, 0.5)",
-              background: "rgba(15, 23, 42, 0.5)",
+              borderRadius: cv ? 11 : 12,
+              padding: cv ? "9px 11px" : ice ? "11px 12px" : "14px 16px",
+              border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(71, 85, 105, 0.5)",
+              background: ice ? "color-mix(in srgb, var(--hostly-success-soft) 22%, transparent)" : "rgba(15, 23, 42, 0.5)",
               flexShrink: 0,
+              boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
             }}
           >
             <p
@@ -1013,14 +1277,14 @@ export default function CartaImportPremiumLayout({
                 margin: cv ? "0 0 6px 0" : "0 0 10px 0",
                 fontSize: cv ? 10 : 11,
                 fontWeight: 800,
-                color: "#94a3b8",
+                color: ice ? "var(--hostly-ink-faint)" : "#94a3b8",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
               }}
             >
               {t(keys.flowTitle)}
             </p>
-            <ol style={{ margin: 0, paddingLeft: 16, color: "#cbd5e1", fontSize: cv ? 11 : 12, fontWeight: 600, lineHeight: 1.45 }}>
+            <ol style={{ margin: 0, paddingLeft: 16, color: ice ? "var(--hostly-ink-muted)" : "#cbd5e1", fontSize: cv ? 11 : 12, fontWeight: 620, lineHeight: 1.45 }}>
               <li style={{ marginBottom: cv ? 3 : 6 }}>{t(keys.flow1)}</li>
               <li style={{ marginBottom: cv ? 3 : 6 }}>{t(keys.flow2)}</li>
               <li>{t(keys.flow3)}</li>

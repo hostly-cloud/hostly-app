@@ -2,17 +2,31 @@ import { FieldValue, type DocumentData } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { getHostlyFirestore } from "@/lib/firebase/admin";
 import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
+import { readCategoryProductFamilyType } from "@/lib/carta/category-product-family";
 import type { CartaCategoria, CartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import { isProductFamilyType } from "@/lib/carta/product-family-types";
 import { slugifyCartaCategoria } from "@/lib/carta-categorias/slug";
+import { normalizeModifierGroupIds } from "@/lib/modifiers/modifier-group-ids";
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
 }
 
+function readModifierGroupIds(d: DocumentData): string[] | undefined {
+  const ids = normalizeModifierGroupIds(d.modifierGroupIds);
+  return ids.length > 0 ? ids : undefined;
+}
+
 function docToCategory(restauranteId: string, id: string, d: DocumentData): CartaCategoria {
   const type = isCartaCategoriaTipo(d.type) ? d.type : "general";
   const fid = typeof d.cartaFamiliaId === "string" ? d.cartaFamiliaId.trim() : "";
+  const pfId =
+    typeof d.productFamilyId === "string" ? d.productFamilyId.trim() : "";
+  const pfName =
+    typeof d.productFamilyName === "string" ? d.productFamilyName.trim() : "";
+  const pfType = readCategoryProductFamilyType(d.productFamilyType);
+  const modifierGroupIds = readModifierGroupIds(d);
   return {
     id,
     restauranteId,
@@ -20,6 +34,10 @@ function docToCategory(restauranteId: string, id: string, d: DocumentData): Cart
     slug: typeof d.slug === "string" ? d.slug : "",
     type,
     ...(fid ? { cartaFamiliaId: fid } : {}),
+    ...(pfId ? { productFamilyId: pfId } : {}),
+    ...(pfName ? { productFamilyName: pfName } : {}),
+    ...(pfType ? { productFamilyType: pfType } : {}),
+    ...(modifierGroupIds ? { modifierGroupIds } : {}),
     sortOrder: typeof d.sortOrder === "number" && Number.isFinite(d.sortOrder) ? d.sortOrder : 0,
     isActive: d.isActive !== false,
     createdAt: typeof d.createdAt === "string" ? d.createdAt : "",
@@ -50,7 +68,17 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const snap = await ref.get();
   if (!snap.exists) return badRequest("NOT_FOUND", 404);
 
-  const patch = body.patch ?? {};
+  const patch: Partial<{
+    name: string;
+    type: string;
+    cartaFamiliaId: string | null;
+    productFamilyId: string | null;
+    productFamilyName: string | null;
+    productFamilyType: string | null;
+    modifierGroupIds: string[] | null;
+    sortOrder: number;
+    isActive: boolean;
+  }> = body.patch ?? {};
   const now = new Date().toISOString();
   const update: Record<string, unknown> = { updatedAt: now };
 
@@ -72,11 +100,57 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       update.cartaFamiliaId = f ? f : FieldValue.delete();
     }
   }
+  if ("productFamilyId" in patch) {
+    if (patch.productFamilyId == null || patch.productFamilyId === "") {
+      update.productFamilyId = FieldValue.delete();
+      update.productFamilyName = FieldValue.delete();
+      update.productFamilyType = FieldValue.delete();
+    } else if (typeof patch.productFamilyId === "string") {
+      const id = patch.productFamilyId.trim();
+      if (id) {
+        update.productFamilyId = id;
+        if (typeof patch.productFamilyName === "string" && patch.productFamilyName.trim()) {
+          update.productFamilyName = patch.productFamilyName.trim();
+        }
+        if (
+          typeof patch.productFamilyType === "string" &&
+          isProductFamilyType(patch.productFamilyType)
+        ) {
+          update.productFamilyType = patch.productFamilyType;
+        }
+      } else {
+        update.productFamilyId = FieldValue.delete();
+        update.productFamilyName = FieldValue.delete();
+        update.productFamilyType = FieldValue.delete();
+      }
+    }
+  } else if (
+    "productFamilyName" in patch ||
+    "productFamilyType" in patch
+  ) {
+    if (typeof patch.productFamilyName === "string" && patch.productFamilyName.trim()) {
+      update.productFamilyName = patch.productFamilyName.trim();
+    }
+    if (
+      typeof patch.productFamilyType === "string" &&
+      isProductFamilyType(patch.productFamilyType)
+    ) {
+      update.productFamilyType = patch.productFamilyType;
+    }
+  }
   if ("sortOrder" in patch && typeof patch.sortOrder === "number" && Number.isFinite(patch.sortOrder)) {
     update.sortOrder = patch.sortOrder;
   }
   if ("isActive" in patch) {
     update.isActive = Boolean(patch.isActive);
+  }
+  if ("modifierGroupIds" in patch) {
+    if (!Array.isArray(patch.modifierGroupIds) || patch.modifierGroupIds.length === 0) {
+      update.modifierGroupIds = FieldValue.delete();
+    } else {
+      const ids = normalizeModifierGroupIds(patch.modifierGroupIds);
+      update.modifierGroupIds = ids.length > 0 ? ids : FieldValue.delete();
+    }
   }
 
   await ref.update(update);

@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { onSnapshot, setDoc } from "firebase/firestore";
+import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import {
   normalizeTableGroups,
   persistTableGroups,
+  type PersistTableGroupsActivity,
   tableGroupsDocRef,
 } from "@/lib/firestore/table-groups";
 
@@ -97,13 +99,35 @@ function isTableJoinedSecondary(
   return false;
 }
 
+function collectGroupTableIds(
+  rec: Record<string, string[]>,
+  tableId: string,
+): string[] {
+  const main = resolveMainTableIdFromMap(rec, tableId);
+  const joined = rec[main] ?? [];
+  const ids = new Set<string>();
+  if (main) ids.add(main);
+  for (const j of joined) {
+    const t = String(j).trim();
+    if (t) ids.add(t);
+  }
+  return [...ids];
+}
+
 export type UseTableGroupsOptions = {
   /** `restaurants/{id}/config/tableGroups` — sin lectura/escritura si falta. */
   restaurantId: string | null;
 };
 
 export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
+  const { user, role } = useAuth();
   const restaurantIdTrimmed = restaurantId?.trim() ?? null;
+  const actorUserId = user?.uid?.trim() || undefined;
+  const actorUserName =
+    user?.displayName?.trim() ||
+    user?.email?.trim() ||
+    undefined;
+  const actorRole = role ?? undefined;
 
   const [groupedTables, setGroupedTables] = useState<Record<string, string[]>>(
     {},
@@ -201,14 +225,24 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
   );
 
   const queuePersist = useCallback(
-    (next: Record<string, string[]>) => {
+    (
+      next: Record<string, string[]>,
+      activity?: Omit<PersistTableGroupsActivity, "actorUserId" | "actorUserName" | "actorRole">,
+    ) => {
       if (!restaurantIdTrimmed || !isFirebaseConfigured || !isAuthReady())
         return;
       queueMicrotask(() => {
-        void persistTableGroups(restaurantIdTrimmed, next);
+        void persistTableGroups(restaurantIdTrimmed, next, activity
+          ? {
+              ...activity,
+              actorUserId,
+              actorUserName,
+              actorRole,
+            }
+          : undefined);
       });
     },
-    [restaurantIdTrimmed],
+    [restaurantIdTrimmed, actorUserId, actorUserName, actorRole],
   );
 
   const joinTables = useCallback(
@@ -225,6 +259,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
 
         if (secNorm === targetMain) {
           next = afterRemoval;
+          queuePersist(next);
         } else {
           const prevList = [...(afterRemoval[targetMain] ?? [])];
           const merged = [...prevList, secNorm];
@@ -233,9 +268,12 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
             ...afterRemoval,
             [targetMain]: unique,
           });
+          queuePersist(next, {
+            type: "table_joined",
+            mainTableId: targetMain,
+            secondaryTableId: secNorm,
+          });
         }
-
-        queuePersist(next);
         return next;
       });
     },
@@ -279,16 +317,27 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
           next = updated;
         }
 
-        queuePersist(next);
+        queuePersist(next, {
+          type: "table_separated",
+          mainTableId: id,
+        });
         return next;
       });
     },
     [queuePersist],
   );
 
+  const getGroupTableIds = useCallback(
+    (tableId: string): string[] => {
+      return collectGroupTableIds(groupedTables, tableId);
+    },
+    [groupedTables],
+  );
+
   const groupedTablesMapHandlers = useMemo(
     () => ({
       resolveMainTableId: getMainTableId,
+      getGroupTableIds,
       isGroupedTable,
       isJoinedSecondaryTable,
       isGroupedPrimaryTable,
@@ -298,6 +347,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
     }),
     [
       getMainTableId,
+      getGroupTableIds,
       isGroupedTable,
       isJoinedSecondaryTable,
       isGroupedPrimaryTable,
@@ -310,6 +360,7 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
   return {
     groupedTables,
     getMainTableId,
+    getGroupTableIds,
     isGroupedTable,
     isJoinedSecondaryTable,
     isGroupedPrimaryTable,

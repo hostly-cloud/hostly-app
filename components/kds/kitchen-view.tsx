@@ -1,15 +1,23 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import OrderItemsBoard, {
-  type BoardItem,
-} from "@/components/kds/order-items-board";
+import OrderItemsBoard from "@/components/kds/order-items-board";
+import OperationStationKdsFilter from "@/components/kds/operation-station-kds-filter";
 import ServiceMetricsBar from "@/components/kds/service-metrics-bar";
-import { isBarItem } from "@/lib/kds/bar-classification";
+import { KdsConnectivityPill } from "@/components/system/connectivity-status-pill";
+import { useConnectivityStatus } from "@/hooks/useConnectivityStatus";
+import { useOperationStationKdsFilter } from "@/hooks/use-operation-station-kds-filter";
 
 export default function KitchenView() {
-  const filter = useCallback((item: BoardItem) => !isBarItem(item), []);
+  const { status: connectivityStatus } = useConnectivityStatus();
+  const {
+    activeStationsForScope,
+    selectedOperationStationId,
+    setSelectedOperationStationId,
+    itemFilter,
+    allLabel,
+  } = useOperationStationKdsFilter("kitchen");
   const [servedArchiveOpen, setServedArchiveOpen] = useState(false);
   const [servedLineCount, setServedLineCount] = useState(0);
 
@@ -38,8 +46,16 @@ export default function KitchenView() {
           Cocina · tiempos y prioridad de pases
         </p>
 
+        <OperationStationKdsFilter
+          allLabel={allLabel}
+          stations={activeStationsForScope}
+          selectedOperationStationId={selectedOperationStationId}
+          onSelect={setSelectedOperationStationId}
+        />
+        <KdsConnectivityPill status={connectivityStatus} />
         <ServiceMetricsBar
           scope="kitchen"
+          selectedOperationStationId={selectedOperationStationId}
           servidosArchiveToggle={{
             count: servedLineCount,
             open: servedArchiveOpen,
@@ -48,12 +64,13 @@ export default function KitchenView() {
         />
         <div className="min-h-0" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8 }}>
           <OrderItemsBoard
-            itemFilter={filter}
+            itemFilter={itemFilter}
             ticketRailLayout
             kitchenHideServedColumn
             servedArchiveOpen={servedArchiveOpen}
             onServedLineCountChange={setServedLineCount}
             groupSentPasses
+            kdsStationKind="kitchen"
             emptyMessage="No hay comandas pendientes"
             sentAction={{
               label: "Marcar como preparado",

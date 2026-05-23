@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
@@ -297,22 +298,61 @@ export async function createFloorPlan(
   }
 }
 
+function sortFloorPlans(list: FloorPlan[]): FloorPlan[] {
+  return [...list].sort((a, b) => {
+    const sa = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    const sb = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    if (sa !== sb) return sa - sb;
+    return a.name.localeCompare(b.name, "es");
+  });
+}
+
 export async function getFloorPlans(restaurantId: string): Promise<FloorPlan[]> {
   const rid = restaurantId.trim();
   if (!rid) return [];
   try {
     const col = collection(db, COLLECTION);
     const snap = await getDocs(query(col, where("restaurantId", "==", rid)));
-    const list = snap.docs.map(mapDocToFloorPlan);
-    list.sort((a, b) => {
-      const sa = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      const sb = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      if (sa !== sb) return sa - sb;
-      return a.name.localeCompare(b.name, "es");
-    });
-    return list;
+    return sortFloorPlans(snap.docs.map(mapDocToFloorPlan));
   } catch (e) {
     rethrowWithMessage(e);
+  }
+}
+
+/**
+ * Escucha la colección `floorPlans` del restaurante (un listener por tenant).
+ * El TPV filtra planos operativos y resuelve canvas con helpers existentes.
+ */
+export function listenFloorPlansByRestaurantId(
+  restaurantId: string,
+  callback: (floorPlans: FloorPlan[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const rid = restaurantId.trim();
+  if (!rid) {
+    onError?.(new Error("listenFloorPlans: restaurantId obligatorio"));
+    callback([]);
+    return () => {};
+  }
+
+  try {
+    const q = query(collection(db, COLLECTION), where("restaurantId", "==", rid));
+    return onSnapshot(
+      q,
+      (snap) => {
+        try {
+          callback(sortFloorPlans(snap.docs.map(mapDocToFloorPlan)));
+        } catch (e) {
+          onError?.(e instanceof Error ? e : new Error(String(e)));
+        }
+      },
+      (error) => {
+        onError?.(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  } catch (e) {
+    onError?.(e instanceof Error ? e : new Error(String(e)));
+    return () => {};
   }
 }
 

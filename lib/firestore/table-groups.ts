@@ -1,6 +1,11 @@
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
+import {
+  buildActivityMetadata,
+  createActivityLog,
+  type ActivityLogType,
+} from "@/lib/firestore/activity-log";
 export const TABLE_GROUPS_DOC_SEGMENTS = ["config", "tableGroups"] as const;
 
 /** `restaurants/{restaurantId}/config/tableGroups` */
@@ -43,6 +48,15 @@ export function normalizeTableGroups(rawGroups: unknown): Record<string, string[
   return out;
 }
 
+export type PersistTableGroupsActivity = {
+  type: Extract<ActivityLogType, "table_joined" | "table_separated">;
+  mainTableId: string;
+  secondaryTableId?: string;
+  actorUserId?: string;
+  actorUserName?: string;
+  actorRole?: string;
+};
+
 /**
  * Persiste grupos tras actualización optimista en cliente.
  * IMPORTANTE: `groups` debe sustituirse entero en Firestore. Con `setDoc(..., { merge: true })`
@@ -53,6 +67,7 @@ export function normalizeTableGroups(rawGroups: unknown): Record<string, string[
 export async function persistTableGroups(
   restaurantId: string,
   groups: Record<string, string[]>,
+  activity?: PersistTableGroupsActivity,
 ): Promise<void> {
   const rid = restaurantId.trim();
   if (!rid) return;
@@ -68,6 +83,25 @@ export async function persistTableGroups(
       },
       { merge: false },
     );
+
+    if (activity?.mainTableId.trim()) {
+      const mainTableId = activity.mainTableId.trim();
+      const secondaryTableId = activity.secondaryTableId?.trim() || undefined;
+      void createActivityLog({
+        restaurantId: rid,
+        type: activity.type,
+        entityType: "table",
+        entityId: mainTableId,
+        actorUserId: activity.actorUserId,
+        actorUserName: activity.actorUserName,
+        actorRole: activity.actorRole,
+        metadata: buildActivityMetadata({
+          mainTableId,
+          ...(secondaryTableId ? { secondaryTableId } : {}),
+          route: "tpv",
+        }),
+      });
+    }
   } catch (e) {
     console.error("persistTableGroups", e);
   }

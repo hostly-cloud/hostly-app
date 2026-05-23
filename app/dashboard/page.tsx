@@ -5,6 +5,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "reac
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { useAuth } from "@/components/auth/auth-context";
+import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
+import type { HostlyCapability } from "@/lib/auth/hostly-capabilities";
 import ModulePageShell from "@/components/module-page-shell";
 import { HostlyKpiCard, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -185,6 +187,25 @@ const MODULE_ENTRIES = [
   { path: "/dashboard/analisis/ventas", label: "Ventas", Icon: IconChart },
 ] as const;
 
+function isDashboardModuleVisible(
+  path: string,
+  can: (capability: HostlyCapability) => boolean,
+): boolean {
+  switch (path) {
+    case "/dashboard/operacion":
+      return can("tpv.sell") || can("kds.manage");
+    case "/dashboard/configuracion":
+      return can("settings.manage");
+    case "/dashboard/inventario":
+      return can("inventory.view");
+    case "/dashboard/analisis":
+    case "/dashboard/analisis/ventas":
+      return can("analytics.view");
+    default:
+      return true;
+  }
+}
+
 type AlertTone = "amber" | "rose" | "sky" | "orange";
 
 function compraEstadoLabel(estado: CompraEstado, t: (k: string) => string): string {
@@ -213,6 +234,7 @@ export default function DashboardPage() {
   const { t, locale } = useI18n();
   const router = useRouter();
   const { restaurantId, restaurantName, role, refreshProfile } = useAuth();
+  const { can } = useHostlyCapabilities();
   const [restaurantNameInput, setRestaurantNameInput] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [stock, setStock] = useState<StockProducto[]>([]);
@@ -444,8 +466,13 @@ export default function DashboardPage() {
       </HostlySurface>
     ) : null;
 
-  const moduleEntriesOperacion = MODULE_ENTRIES.slice(0, 1);
-  const moduleEntriesRest = MODULE_ENTRIES.slice(1);
+  const visibleModuleEntries = useMemo(
+    () => MODULE_ENTRIES.filter((mod) => isDashboardModuleVisible(mod.path, can)),
+    [can],
+  );
+
+  const moduleEntriesOperacion = visibleModuleEntries.slice(0, 1);
+  const moduleEntriesRest = visibleModuleEntries.slice(1);
 
   const renderModuleGrid = (modules: readonly (typeof MODULE_ENTRIES)[number][]) => (
     <div style={{ flexShrink: 0 }}>
@@ -527,26 +554,34 @@ export default function DashboardPage() {
         {!mobileScroll && ownerBlock}
         {mobileScroll ? renderModuleGrid(moduleEntriesOperacion) : null}
 
-        <HostlySurface variant="ice" className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-3.5 py-3 box-border">
-          <div style={{ minWidth: 0, flex: "1 1 220px" }}>
-            <div
-              className="hostly-section-label mb-1"
-              style={{ fontWeight: 800, color: "var(--hostly-accent)" }}
-            >
-              {t("dashboard.onboardingPromoTitle")}
+        <HostlySurface
+          variant="elevated"
+          className="box-border flex shrink-0 flex-col gap-5 overflow-hidden rounded-[16px] border border-[color-mix(in_srgb,var(--hostly-table-divider-soft)_75%,transparent)] p-4 shadow-[var(--hostly-shadow-card)] sm:flex-row sm:items-stretch sm:justify-between sm:gap-6 sm:p-5"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
+            <div className="min-w-0">
+              <h2 className="hostly-heading mb-1.5 leading-tight">{t("dashboard.onboardingPromoTitle")}</h2>
+              <p className="m-0 text-[15px] font-medium leading-snug text-[color:var(--hostly-ink-muted)]">{t("dashboard.onboardingPromoBody")}</p>
             </div>
-            <div className="hostly-muted font-semibold" style={{ color: "var(--hostly-ink-muted)" }}>
-              {t("dashboard.onboardingPromoBody")}
-            </div>
+            <ul className="m-0 flex list-none flex-col gap-2 p-0 sm:grid sm:max-w-xl sm:grid-cols-2 sm:gap-x-8 sm:gap-y-2">
+              {[t("onboarding.chkNegocio"), t("onboarding.chkCarta"), t("onboarding.chkInventario"), t("onboarding.chkEscandallo")].map((label) => (
+                <li key={label} className="flex items-start gap-2.5 text-xs font-semibold leading-snug text-[color:var(--hostly-ink-soft)]">
+                  <span className="mt-[0.3em] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--hostly-accent)]" aria-hidden />
+                  {label}
+                </li>
+              ))}
+            </ul>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard/onboarding")}
-            className="hostly-button-secondary shrink-0 font-extrabold"
-            style={{ padding: "11px 20px", minHeight: 48 }}
-          >
-            {t("dashboard.onboardingPromoCta")}
-          </button>
+          <div className="flex shrink-0 flex-col justify-center gap-2 border-t border-[var(--hostly-table-divider-faint)] pt-4 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard/onboarding")}
+              className="hostly-button-primary w-full whitespace-nowrap sm:w-auto sm:min-w-[200px]"
+            >
+              {t("dashboard.onboardingPromoCta")}
+            </button>
+            <p className="m-0 text-center text-[11px] font-medium leading-snug text-[color:var(--hostly-ink-faint)] sm:text-left">{t("onboarding.sideHint")}</p>
+          </div>
         </HostlySurface>
 
         <div
@@ -684,7 +719,7 @@ export default function DashboardPage() {
           </HostlySurface>
         </div>
 
-        {renderModuleGrid(mobileScroll ? moduleEntriesRest : MODULE_ENTRIES)}
+        {renderModuleGrid(mobileScroll ? moduleEntriesRest : visibleModuleEntries)}
       </div>
     </ModulePageShell>
   );

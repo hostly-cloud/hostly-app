@@ -7,6 +7,7 @@ import {
   deleteField,
   doc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
@@ -81,17 +82,56 @@ function mapDocToZone(d: QueryDocumentSnapshot): Zone {
   };
 }
 
+function sortZonesByName(list: Zone[]): Zone[] {
+  return [...list].sort((a, b) => a.name.localeCompare(b.name, "es"));
+}
+
 export async function getZones(restaurantId: string): Promise<Zone[]> {
   const rid = restaurantId.trim();
   if (!rid) return [];
   try {
     const col = collection(db, COLLECTION);
     const snap = await getDocs(query(col, where("restaurantId", "==", rid)));
-    const list = snap.docs.map(mapDocToZone);
-    list.sort((a, b) => a.name.localeCompare(b.name, "es"));
-    return list;
+    return sortZonesByName(snap.docs.map(mapDocToZone));
   } catch (e) {
     rethrowWithMessage(e);
+  }
+}
+
+/**
+ * Escucha la colección `zones` del restaurante (un listener por tenant).
+ * El TPV filtra por plano con `entityBelongsToFloorPlan`.
+ */
+export function listenZonesByRestaurantId(
+  restaurantId: string,
+  callback: (zones: Zone[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const rid = restaurantId.trim();
+  if (!rid) {
+    onError?.(new Error("listenZones: restaurantId obligatorio"));
+    callback([]);
+    return () => {};
+  }
+
+  try {
+    const q = query(collection(db, COLLECTION), where("restaurantId", "==", rid));
+    return onSnapshot(
+      q,
+      (snap) => {
+        try {
+          callback(sortZonesByName(snap.docs.map(mapDocToZone)));
+        } catch (e) {
+          onError?.(e instanceof Error ? e : new Error(String(e)));
+        }
+      },
+      (error) => {
+        onError?.(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  } catch (e) {
+    onError?.(e instanceof Error ? e : new Error(String(e)));
+    return () => {};
   }
 }
 

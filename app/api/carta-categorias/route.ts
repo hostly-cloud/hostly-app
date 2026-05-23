@@ -2,9 +2,12 @@ import type { DocumentData } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { getHostlyFirestore } from "@/lib/firebase/admin";
 import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
+import { readCategoryProductFamilyType } from "@/lib/carta/category-product-family";
 import type { CartaCategoria, CartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import { slugifyCartaCategoria } from "@/lib/carta-categorias/slug";
+import { normalizeModifierGroupIds } from "@/lib/modifiers/modifier-group-ids";
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
@@ -15,15 +18,41 @@ type FirestoreCatDoc = {
   slug: string;
   type: CartaCategoriaTipo;
   cartaFamiliaId?: string;
+  productFamilyId?: string;
+  productFamilyName?: string;
+  productFamilyType?: ProductFamilyType;
+  modifierGroupIds?: string[];
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
+function readProductFamilyFields(d: DocumentData): Pick<
+  CartaCategoria,
+  "productFamilyId" | "productFamilyName" | "productFamilyType"
+> {
+  const pfId =
+    typeof d.productFamilyId === "string" ? d.productFamilyId.trim() : "";
+  const pfName =
+    typeof d.productFamilyName === "string" ? d.productFamilyName.trim() : "";
+  const pfType = readCategoryProductFamilyType(d.productFamilyType);
+  return {
+    ...(pfId ? { productFamilyId: pfId } : {}),
+    ...(pfName ? { productFamilyName: pfName } : {}),
+    ...(pfType ? { productFamilyType: pfType } : {}),
+  };
+}
+
+function readModifierGroupIds(d: DocumentData): string[] | undefined {
+  const ids = normalizeModifierGroupIds(d.modifierGroupIds);
+  return ids.length > 0 ? ids : undefined;
+}
+
 function docToCategory(restauranteId: string, id: string, d: DocumentData): CartaCategoria {
   const type = isCartaCategoriaTipo(d.type) ? d.type : "general";
   const fid = typeof d.cartaFamiliaId === "string" ? d.cartaFamiliaId.trim() : "";
+  const modifierGroupIds = readModifierGroupIds(d);
   return {
     id,
     restauranteId,
@@ -31,6 +60,8 @@ function docToCategory(restauranteId: string, id: string, d: DocumentData): Cart
     slug: typeof d.slug === "string" ? d.slug : "",
     type,
     ...(fid ? { cartaFamiliaId: fid } : {}),
+    ...readProductFamilyFields(d),
+    ...(modifierGroupIds ? { modifierGroupIds } : {}),
     sortOrder: typeof d.sortOrder === "number" && Number.isFinite(d.sortOrder) ? d.sortOrder : 0,
     isActive: d.isActive !== false,
     createdAt: typeof d.createdAt === "string" ? d.createdAt : "",
@@ -65,6 +96,10 @@ export async function POST(req: Request) {
         name?: string;
         type?: string;
         cartaFamiliaId?: string | null;
+        productFamilyId?: string | null;
+        productFamilyName?: string | null;
+        productFamilyType?: string | null;
+        modifierGroupIds?: string[] | null;
         isActive?: boolean;
         sortOrder?: number;
       }
@@ -81,6 +116,12 @@ export async function POST(req: Request) {
 
   const type: CartaCategoriaTipo = isCartaCategoriaTipo(body.type) ? body.type : "general";
   const famRaw = typeof body.cartaFamiliaId === "string" ? body.cartaFamiliaId.trim() : "";
+  const pfId =
+    typeof body.productFamilyId === "string" ? body.productFamilyId.trim() : "";
+  const pfName =
+    typeof body.productFamilyName === "string" ? body.productFamilyName.trim() : "";
+  const pfType = readCategoryProductFamilyType(body.productFamilyType);
+  const modifierGroupIds = normalizeModifierGroupIds(body.modifierGroupIds);
   const now = new Date().toISOString();
   const coll = db.collection("restaurantes").doc(restauranteId).collection("cartaCategorias");
 
@@ -99,6 +140,10 @@ export async function POST(req: Request) {
     slug,
     type,
     ...(famRaw ? { cartaFamiliaId: famRaw } : {}),
+    ...(pfId ? { productFamilyId: pfId } : {}),
+    ...(pfName ? { productFamilyName: pfName } : {}),
+    ...(pfType ? { productFamilyType: pfType } : {}),
+    ...(modifierGroupIds.length > 0 ? { modifierGroupIds } : {}),
     sortOrder,
     isActive: body.isActive !== false,
     createdAt: now,

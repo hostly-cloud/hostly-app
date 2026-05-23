@@ -6,22 +6,36 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ModulePageShell from "@/components/module-page-shell";
 
-type OperacionModuleSlug = "tpv" | "cocina" | "barra" | "sala" | "reservas";
+type OperacionModuleSlug =
+  | "tpv"
+  | "cocina"
+  | "barra"
+  | "cocteleria"
+  | "sala"
+  | "reservas"
+  | "activity"
+  | "sesiones";
 
 const MODULES: { slug: OperacionModuleSlug; label: string }[] = [
   { slug: "tpv", label: "TPV" },
   { slug: "cocina", label: "Cocina" },
   { slug: "barra", label: "Barra" },
+  { slug: "cocteleria", label: "Coctelería" },
   { slug: "sala", label: "Sala" },
   { slug: "reservas", label: "Reservas" },
+  { slug: "activity", label: "Actividad" },
+  { slug: "sesiones", label: "Sesiones" },
 ];
 
 const KNOWN_SLUGS: OperacionModuleSlug[] = [
   "tpv",
   "cocina",
   "barra",
+  "cocteleria",
   "sala",
   "reservas",
+  "activity",
+  "sesiones",
 ];
 
 const menuGridStyle: CSSProperties = {
@@ -82,7 +96,7 @@ const menuResponsiveCss = `
 
 @media (min-width: 768px) {
   .op-menu-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .op-menu-link {
     min-height: 140px;

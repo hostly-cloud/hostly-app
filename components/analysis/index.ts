@@ -65,6 +65,9 @@ export type { HorasAnalyticsSectionProps } from "./HorasAnalyticsSection"
 export { ProductosAnalyticsSection } from "./ProductosAnalyticsSection"
 export type { ProductosAnalyticsSectionProps } from "./ProductosAnalyticsSection"
 
+export { RentabilidadAnalyticsSection } from "./RentabilidadAnalyticsSection"
+export type { RentabilidadAnalyticsSectionProps } from "./RentabilidadAnalyticsSection"
+
 export { useZonasData } from "./hooks/useZonasData"
 
 export { useZonasAnalytics } from "./hooks/useZonasAnalytics"

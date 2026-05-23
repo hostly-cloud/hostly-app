@@ -1,3 +1,5 @@
+import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+
 export type CartaCategoriaTipo = "food" | "drink" | "general";
 
 /** Valor de filtro UI: categorías sin `cartaFamiliaId` (datos legados o sin agrupar). */
@@ -22,6 +24,12 @@ export type CartaCategoria = {
   type: CartaCategoriaTipo;
   /** Familia de carta a la que pertenece esta categoría (una sola). */
   cartaFamiliaId?: string;
+  /** Familia de producto (`productFamilies`): bebidas / comida / otros. */
+  productFamilyId?: string;
+  productFamilyName?: string;
+  productFamilyType?: ProductFamilyType;
+  /** Grupos de modificadores asignados a la categoría (formato, mixer, etc.). */
+  modifierGroupIds?: string[];
   sortOrder: number;
   isActive: boolean;
   createdAt: string;

@@ -1,0 +1,81 @@
+@keyframes hostly-ocr-row-validated {
+  0% {
+    background-color: rgba(186, 230, 253, 0.5);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes hostly-ocr-row-cascade {
+  0% {
+    background-color: rgba(191, 219, 254, 0.45);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes hostly-ocr-register-success {
+  0% {
+    border-color: rgba(16, 185, 129, 0.25);
+    background: rgba(16, 185, 129, 0.04);
+  }
+  45% {
+    border-color: rgba(16, 185, 129, 0.55);
+    background: rgba(16, 185, 129, 0.14);
+  }
+  100% {
+    border-color: rgba(16, 185, 129, 0.32);
+    background: rgba(16, 185, 129, 0.06);
+  }
+}
+
+@keyframes hostly-ocr-doc-skeleton {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+.hostly-ocr-row-flash-validated {
+  animation: hostly-ocr-row-validated 500ms ease-out;
+}
+
+.hostly-ocr-row-cascade {
+  animation: hostly-ocr-row-cascade 320ms ease-out;
+  animation-delay: calc(var(--hostly-cascade-index, 0) * 45ms);
+  animation-fill-mode: both;
+}
+
+.hostly-ocr-row-pending {
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.38);
+}
+
+.hostly-ocr-row-active {
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.32);
+}
+
+.hostly-ocr-register-success {
+  animation: hostly-ocr-register-success 650ms ease-out;
+}
+
+.hostly-ocr-doc-skeleton {
+  animation: hostly-ocr-doc-skeleton 1.15s ease-in-out infinite;
+  background: linear-gradient(
+    180deg,
+    rgba(148, 163, 184, 0.14) 0%,
+    rgba(148, 163, 184, 0.08) 100%
+  );
+}
+
+.hostly-ocr-bulk-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--hostly-surface-card-solid) 92%, transparent);
+}

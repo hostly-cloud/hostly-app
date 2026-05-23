@@ -2,6 +2,7 @@
 
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -28,6 +29,10 @@ import {
 import { useAuth } from "@/components/auth/auth-context";
 import { HostlyBackButton } from "@/components/hostly/back-button";
 import { HostlyMiniIconButton } from "@/components/hostly/mini-icon-button";
+import {
+  formatTpvActiveLayoutLabel,
+  useFloorPlanLayoutsConfig,
+} from "@/hooks/useFloorPlanLayoutsConfig";
 import { HostlyPageContainer } from "@/components/hostly/page-container";
 import { HostlyPageHeader } from "@/components/hostly/page-header";
 import { useI18n } from "@/components/i18n-provider";
@@ -40,8 +45,33 @@ import {
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { paymentSaleAmount } from "@/lib/payments/paymentSaleAmount";
 import { MONEY_EPS, roundMoney } from "@/lib/payments/roundMoney";
-import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
-import { loadPlatos, PLATOS_CHANGED_EVENT, type PlatoCarta } from "@/lib/platos-local";
+import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
+import {
+  buildTpvInventoryProductsById,
+  getStockWarningLabel,
+  resolveProductStockWarning,
+  stockWarningBadgeClassName,
+  type StockWarningLevel,
+} from "@/lib/inventory/tpv-stock-warnings";
+import { hostlyHighlightOrderLineElementId } from "@/lib/inventory/product-timeline";
+import { scheduleScrollAndHighlightById } from "@/lib/ui/scroll-and-highlight";
+import { DeepLinkContextNotice } from "@/components/inventario/deep-link-out-of-window-notice";
+import {
+  buildTpvLineInventoryCostSnapshot,
+  calculateTpvLineInventoryCost,
+  formatInventoryCost,
+  formatInventoryCostSnapshot,
+  inventoryCostSnapshotToFirestore,
+  parseFirestoreLineInventoryCost,
+  type CartOrderLineInventoryCost,
+} from "@/lib/inventory/tpv-line-cost";
+import {
+  isTpvDrinkProduct,
+  resolveTpvMenuGroup,
+  resolveTpvMenuGroupFromCategoryName,
+  type TpvMenuGroup,
+} from "@/lib/carta/tpv-menu-group";
 import {
   computeBillableTotalFromOrderDocLike,
   isOrderStatusActiveForTableOccupancy,
@@ -57,9 +87,14 @@ import {
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
 import { handlePayTableOrder } from "@/lib/firestore/pay-table-order";
 import {
+  buildActivityMetadata,
+  createActivityLog,
+} from "@/lib/firestore/activity-log";
+import {
   filterTablesForTpvMap,
-  getTables,
+  listenTablesByRestaurantId,
   isDecorativePlanElementType,
+  readTableDinersCount,
   sortTablesForTpvMap,
   TABLE_MAP_STATUS_OCCUPIED,
   type Table,
@@ -67,11 +102,11 @@ import {
 import {
   effectiveTableFloorPlanId,
   entityBelongsToFloorPlan,
-  getFloorPlans,
+  listenFloorPlansByRestaurantId,
   resolveFloorPlanCanvasSize,
   type FloorPlan,
 } from "@/lib/firestore/floorPlans";
-import { getZones, type Zone } from "@/lib/firestore/zones";
+import { listenZonesByRestaurantId, type Zone } from "@/lib/firestore/zones";
 import { getUsersByRestaurant } from "@/lib/firestore/users";
 import {
   EditableFloorMap,
@@ -84,9 +119,82 @@ import {
   type Reservation,
 } from "@/lib/firestore/reservations";
 import { isBarItem } from "@/lib/kds/bar-classification";
+import {
+  readOperationStationFieldsFromFirestoreRecord,
+  readStationFieldsFromFirestoreRecord,
+  operationStationFieldsToFirestorePayload,
+  resolveOperationStationFieldsForCartLine,
+  resolveOperationStationFieldsFromProduct,
+  resolveStationFieldsForCartLine,
+  resolveStationFieldsFromProduct,
+  stationFieldsToFirestorePayload,
+  warnDevIfSentLineMissingStation,
+  type OrderLinePreparationArea,
+  type OrderLineStation,
+} from "@/lib/kds/order-line-station";
 import type { Product } from "@/types/product";
+import { getPrinterConfig } from "@/lib/firestore/printer-config";
+import {
+  cancelPrintJobsForOrderLine,
+  createPrintJobsForComandaLines,
+} from "@/lib/firestore/print-jobs";
+import {
+  applyCreatedStockMovements,
+  createStockMovementsForModifierConsumption,
+  createStockMovementsForRecipeConsumption,
+  createStockReversalMovementsForModifierConsumption,
+  createStockReversalMovementsForRecipeConsumption,
+} from "@/lib/firestore/stock-movements";
+import { fetchCartaCategorias } from "@/lib/carta-categorias/api-client";
+import type { CartaCategoria } from "@/lib/carta-categorias/types";
+import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
+import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
+import {
+  buildCartLineDisplayName,
+  buildCartLineModifierSubtitle,
+  cartLineModifiersMergeKey,
+  parseFirestoreSelectedModifiers,
+  resolveActiveEffectiveModifierGroups,
+  resolveCategoryForProduct,
+  resolveLineModifierTotal,
+  resolveOrderLineModifierPresentation,
+  selectedModifiersToFirestorePayload,
+  type CartOrderLineSelectedModifier,
+} from "@/lib/modifiers/cart-order-modifiers";
+import { TpvProductModifiersModal } from "./_components/tpv-product-modifiers-modal";
+import { TpvLineGestureRow } from "./_components/tpv/tpv-line-gesture-row";
+import {
+  TpvQuickActionsMenu,
+  type TpvQuickActionItem,
+} from "./_components/tpv/tpv-quick-actions-menu";
+import { TpvRecentProductsStrip } from "./_components/tpv/tpv-recent-products-strip";
+import { TpvTablePresenceIndicators } from "./_components/tpv/tpv-table-presence-indicators";
+import { useTablePresenceHeartbeat } from "@/hooks/useTablePresenceHeartbeat";
+import { useConnectivityStatus } from "@/hooks/useConnectivityStatus";
+import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
+import { capabilityDeniedTitle } from "@/components/auth/capability-guard";
+import { confirmCriticalActionIfUnstable } from "@/lib/client/connectivity-critical-action";
+import { ConnectivityStatusPill } from "@/components/system/connectivity-status-pill";
+import {
+  readTpvRecentProducts,
+  recordTpvRecentProducts,
+  type TpvRecentProductEntry,
+} from "./_components/tpv/tpv-recent-products";
+import { computeTpvRushMode } from "./_components/tpv/tpv-rush-mode";
+import {
+  TpvInlineMixerChips,
+  buildMixerSelectionForLine,
+  resolveSimpleMixerGroup,
+} from "./_components/tpv/tpv-inline-mixer-chips";
 
 const AUTO_PRINT_TICKET_STORAGE_KEY = "hostly:autoPrintTicket";
+
+function parseStoredGuestCount(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Math.max(0, Math.floor(raw));
+  }
+  return null;
+}
 
 function tpvDecorativeElementStyle(
   element: Table,
@@ -337,6 +445,7 @@ type CartOrderLine = {
   preparedAt?: number;
   servedAt?: number;
   cancelledAt?: number;
+  cancelledBy?: string | null;
   isComped?: boolean;
   compedAt?: number;
   compedReason?: string;
@@ -350,6 +459,21 @@ type CartOrderLine = {
   extras?: CartOrderLineExtra[];
   /** Pase 1–4; omitir o 0 = sin pase. */
   course?: number;
+  /** Estación canónica (catálogo central); opcional en líneas legacy. */
+  station?: OrderLineStation;
+  /** Área operativa TPV/KDS; opcional en líneas legacy. */
+  preparationArea?: OrderLinePreparationArea;
+  /** Estación operativa configurable; metadata para KDS/impresión futura. */
+  operationStationId?: string;
+  operationStationName?: string;
+  /** Modificadores elegidos en TPV (formato, mixer, etc.). */
+  selectedModifiers?: CartOrderLineSelectedModifier[];
+  /** Suma de priceDelta de selectedModifiers. */
+  modifierTotal?: number;
+  /** Nombre visible en comanda/KDS (p. ej. "Law · Tónica"). */
+  displayName?: string;
+  /** Coste de inventario estimado (snapshot al enviar comanda). */
+  inventoryCost?: CartOrderLineInventoryCost;
 };
 
 const CARTA_PRESET_EXTRAS: readonly CartOrderLineExtra[] = [];
@@ -360,11 +484,22 @@ function normalizeComandaCourseForStorage(raw: unknown): number | undefined {
   return Math.min(4, Math.max(1, Math.floor(n)));
 }
 
-function getProductDefaultCourse(product: Product): number {
+function getProductDefaultCourse(product: Product): number | undefined {
   const explicitCourse = normalizeComandaCourseForStorage(
     (product as unknown as { course?: unknown }).course,
   );
   if (explicitCourse) return explicitCourse;
+
+  if (
+    isTpvDrinkProduct({
+      productFamilyType: product.productFamilyType,
+      categoryName: product.categoria,
+      categoria: product.categoria,
+      tipoVenta: product.tipoVenta,
+    })
+  ) {
+    return undefined;
+  }
 
   const raw =
     `${product.nombre ?? ""} ${product.categoria ?? ""} ${(product as unknown as { categoryName?: unknown }).categoryName ?? ""} ${(product as unknown as { category?: unknown }).category ?? ""} ${(product as unknown as { familia?: unknown }).familia ?? ""} ${(product as unknown as { family?: unknown }).family ?? ""}`
@@ -593,11 +728,11 @@ function sumLineExtrasPrices(line: CartOrderLine): number {
   }, 0);
 }
 
-/** Precio unitario efectivo: base + extras. */
+/** Precio unitario efectivo: base + extras + modificadores. */
 function comandaLineUnitPriceWithExtras(line: CartOrderLine): number {
   const base = Number(line.product.precio);
   const b = Number.isFinite(base) ? base : 0;
-  return b + sumLineExtrasPrices(line);
+  return b + sumLineExtrasPrices(line) + resolveLineModifierTotal(line);
 }
 
 /** Total línea: (base + suma extras) × cantidad. */
@@ -613,6 +748,17 @@ function sumCartOrderLinesTotal(lines: CartOrderLine[]): number {
     if (line.isComped) return acc;
     return acc + comandaLineTotalWithExtras(line);
   }, 0);
+}
+
+function countActiveComandaLines(lines: CartOrderLine[]): number {
+  return lines.filter(
+    (line) => normalizeOrderLineStatus(line.status) !== "cancelled",
+  ).length;
+}
+
+function isOrderLineCancellable(line: CartOrderLine): boolean {
+  const st = normalizeOrderLineStatus(line.status);
+  return st !== "pending" && st !== "cancelled" && st !== "served";
 }
 
 function parseFirestoreLineExtras(raw: unknown): CartOrderLineExtra[] {
@@ -765,6 +911,8 @@ function formatComandaLineEuroEs(value: number): string {
 }
 
 function comandaLineDisplayName(line: CartOrderLine): string {
+  const display = line.displayName?.trim();
+  if (display) return display;
   const v = line.variantLabel?.trim();
   return v ? `${line.product.nombre} (${v})` : line.product.nombre;
 }
@@ -788,8 +936,30 @@ function comandaLineSortKey(line: CartOrderLine): number {
   return 0;
 }
 
+function enrichProductWithStationFields(
+  product: Product,
+  fields: ReturnType<typeof resolveStationFieldsFromProduct>,
+  opFields?: ReturnType<typeof resolveOperationStationFieldsFromProduct>,
+): Product {
+  return {
+    ...product,
+    ...(fields.preparationArea
+      ? { preparationArea: fields.preparationArea }
+      : {}),
+    ...(fields.station ? { station: fields.station } : {}),
+    ...(opFields?.operationStationId
+      ? { operationStationId: opFields.operationStationId }
+      : {}),
+    ...(opFields?.operationStationName
+      ? { operationStationName: opFields.operationStationName }
+      : {}),
+  };
+}
+
 function orderLinesToFirestoreItems(lines: CartOrderLine[]) {
   return lines.map((line) => {
+    const stationFields = resolveStationFieldsForCartLine(line);
+    const opFields = resolveOperationStationFieldsForCartLine(line);
     const baseUnit = Number(line.product.precio) || 0;
     const quantity = Number(line.quantity) || 0;
     const extras = Array.isArray(line.extras)
@@ -802,8 +972,17 @@ function orderLinesToFirestoreItems(lines: CartOrderLine[]) {
           .filter((ex) => ex.name !== "")
       : [];
     const extrasSum = extras.reduce((s, ex) => s + ex.price, 0);
-    const unitWithExtras = baseUnit + extrasSum;
+    const modifierTotal = resolveLineModifierTotal(line);
+    const unitWithExtras = baseUnit + extrasSum + modifierTotal;
     const lineTotal = unitWithExtras * quantity;
+    const selectedModifiers = selectedModifiersToFirestorePayload(
+      line.selectedModifiers,
+    );
+    const displayName =
+      line.displayName?.trim() ||
+      (selectedModifiers.length > 0
+        ? buildCartLineDisplayName(String(line.product.nombre ?? ""), selectedModifiers)
+        : undefined);
     const courseStored = normalizeComandaCourseForStorage(line.course);
     return {
       id: line.id,
@@ -819,22 +998,36 @@ function orderLinesToFirestoreItems(lines: CartOrderLine[]) {
       preparedAt: line.preparedAt ?? null,
       servedAt: line.servedAt ?? null,
       cancelledAt: line.cancelledAt ?? null,
+      ...(line.cancelledBy ? { cancelledBy: line.cancelledBy } : {}),
       isComped: Boolean(line.isComped),
       compedAt: line.compedAt ?? null,
       compedReason: line.compedReason ?? null,
       price: baseUnit,
       precio: baseUnit,
       extras,
+      ...(selectedModifiers.length > 0 ? { selectedModifiers } : {}),
+      ...(selectedModifiers.length > 0 ? { modifierTotal } : {}),
+      ...(displayName ? { displayName } : {}),
       total: Number.isFinite(lineTotal) ? lineTotal : 0,
       categoria: String(line.product.categoria ?? ""),
+      ...(String(line.product.categoria ?? "").trim()
+        ? { categoryName: String(line.product.categoria).trim() }
+        : {}),
+      productName: String(line.product.nombre ?? ""),
+      ...stationFieldsToFirestorePayload(stationFields),
+      ...operationStationFieldsToFirestorePayload(opFields),
       ...(line.lineNote?.trim() ? { note: line.lineNote.trim() } : {}),
       ...(courseStored != null ? { course: courseStored } : {}),
+      ...(line.inventoryCost
+        ? { inventoryCost: inventoryCostSnapshotToFirestore(line.inventoryCost) }
+        : {}),
     };
   });
 }
 
 type FirestoreOrderDocForCart = {
   restaurantId?: string;
+  cancelledLineIds?: string[];
   items?: {
     id?: string;
     productId?: string;
@@ -988,6 +1181,23 @@ function mapFirestoreOrderDocToCartLines(
       const extras = parseFirestoreLineExtras(
         (it as { extras?: unknown }).extras,
       );
+      const selectedModifiers = parseFirestoreSelectedModifiers(
+        (it as { selectedModifiers?: unknown }).selectedModifiers,
+      );
+      const modifierTotalRaw = (it as { modifierTotal?: unknown }).modifierTotal;
+      const modifierTotal =
+        typeof modifierTotalRaw === "number" && Number.isFinite(modifierTotalRaw)
+          ? modifierTotalRaw
+          : selectedModifiers.length > 0
+            ? resolveLineModifierTotal({ selectedModifiers })
+            : undefined;
+      const displayNameRaw = (it as { displayName?: unknown }).displayName;
+      const displayName =
+        typeof displayNameRaw === "string" && displayNameRaw.trim()
+          ? displayNameRaw.trim()
+          : selectedModifiers.length > 0
+            ? buildCartLineDisplayName(name, selectedModifiers)
+            : undefined;
       const rawIt = it as { note?: unknown; lineNote?: unknown };
       const lineNoteFromDoc =
         typeof rawIt.note === "string" && rawIt.note.trim()
@@ -1002,18 +1212,55 @@ function mapFirestoreOrderDocToCartLines(
       const courseStored = normalizeComandaCourseForStorage(
         (it as { course?: unknown }).course,
       );
+      const inventoryCost = parseFirestoreLineInventoryCost(
+        (it as { inventoryCost?: unknown }).inventoryCost,
+      );
+      const stationFields = readStationFieldsFromFirestoreRecord(
+        it as Record<string, unknown>,
+      );
+      const opFields = readOperationStationFieldsFromFirestoreRecord(
+        it as Record<string, unknown>,
+      );
+      const categoryLabel = String(
+        it.categoryName ?? it.categoria ?? "",
+      ).trim();
+      const baseProduct: Product = {
+        id: productIdResolved,
+        nombre: name,
+        precio: basePrecio,
+        categoria: categoryLabel || "Sin categoría",
+        ...(stationFields.preparationArea
+          ? { preparationArea: stationFields.preparationArea }
+          : {}),
+        ...(stationFields.station ? { station: stationFields.station } : {}),
+        ...(opFields.operationStationId
+          ? { operationStationId: opFields.operationStationId }
+          : {}),
+        ...(opFields.operationStationName
+          ? { operationStationName: opFields.operationStationName }
+          : {}),
+      };
       return {
         id:
           typeof it.id === "string" && it.id.trim() !== ""
             ? it.id
             : `legacy-${productIdResolved}-${idx}`,
         quantity: qty,
-        product: {
-          id: productIdResolved,
-          nombre: name,
-          precio: basePrecio,
-          categoria: String(it.categoria ?? ""),
-        } as Product,
+        product: enrichProductWithStationFields(
+          baseProduct,
+          stationFields,
+          opFields,
+        ),
+        ...(stationFields.station ? { station: stationFields.station } : {}),
+        ...(stationFields.preparationArea
+          ? { preparationArea: stationFields.preparationArea }
+          : {}),
+        ...(opFields.operationStationId
+          ? { operationStationId: opFields.operationStationId }
+          : {}),
+        ...(opFields.operationStationName
+          ? { operationStationName: opFields.operationStationName }
+          : {}),
         status: st,
         ...(addedMs != null ? { addedAt: addedMs } : {}),
         createdAt: createdMs ?? undefined,
@@ -1025,170 +1272,42 @@ function mapFirestoreOrderDocToCartLines(
         ...(compedAt != null ? { compedAt } : {}),
         ...(compedReason ? { compedReason } : {}),
         ...(extras.length > 0 ? { extras } : {}),
+        ...(selectedModifiers.length > 0 ? { selectedModifiers } : {}),
+        ...(modifierTotal != null ? { modifierTotal } : {}),
+        ...(displayName ? { displayName } : {}),
         ...(lineNoteFromDoc ? { lineNote: lineNoteFromDoc } : {}),
         ...(courseStored != null ? { course: courseStored } : {}),
+        ...(inventoryCost ? { inventoryCost } : {}),
       };
     })
     .filter((row) => row.quantity > 0);
   return mapped;
 }
 
-/** Misma regla que en gestión de productos: visible en carta si está en catálogo y “en carta”. */
-function publicationOnMenu(p: PlatoCarta): boolean {
-  const raw = p as PlatoCarta & { enCarta?: boolean; isActive?: boolean };
-  const isActive = typeof raw.isActive === "boolean" ? raw.isActive : true;
-  if (!isActive) return false;
-  const enCarta =
-    typeof raw.enCarta === "boolean" ? raw.enCarta : raw.activo;
-  return enCarta === true;
+type CartaMenuGroup = TpvMenuGroup;
+
+function tpvMenuGroupForProduct(product: Product): CartaMenuGroup {
+  return resolveTpvMenuGroup({
+    productFamilyType: product.productFamilyType,
+    categoryName: product.categoria,
+    categoria: product.categoria,
+    tipoVenta: product.tipoVenta,
+  });
 }
 
-function platoCartaToProduct(p: PlatoCarta): Product {
-  const precio =
-    typeof p.precioVenta === "number" && Number.isFinite(p.precioVenta)
-      ? p.precioVenta
-      : 0;
-  const cat = typeof p.categoria === "string" ? p.categoria.trim() : "";
-  const courseFromCatalog = normalizeComandaCourseForStorage(
-    (p as PlatoCarta & { course?: unknown }).course,
-  );
-  return {
-    id: p.id,
-    nombre: p.nombre?.trim() ? p.nombre.trim() : "Sin nombre",
-    categoria: cat || "Sin categoría",
-    categoryId: p.categoriaCartaId,
-    precio,
-    ...(courseFromCatalog != null ? { course: courseFromCatalog } : {}),
-    imageUrl:
-      typeof p.fotoUrl === "string" && p.fotoUrl.trim() !== ""
-        ? p.fotoUrl.trim()
-        : undefined,
-    restaurantId: p.restauranteId,
-  };
-}
-
-/** Primer nivel TPV: bebida vs comida (segundo nivel = categorías del catálogo). */
-type CartaMenuGroup = "bebida" | "comida";
-
-function normalizeCategoryLabelForGroup(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}+/gu, "");
-}
-
-function categoryLabelTokens(name: string): string[] {
-  const n = normalizeCategoryLabelForGroup(name);
-  if (!n) return [];
-  return n.split(/[^a-z0-9]+/).filter(Boolean);
-}
-
-const DRINK_CATEGORY_WORDS = new Set([
-  "agua",
-  "aguas",
-  "refresco",
-  "refrescos",
-  "soda",
-  "sodas",
-  "gaseosa",
-  "gaseosas",
-  "cerveza",
-  "cervezas",
-  "vino",
-  "vinos",
-  "cava",
-  "cavas",
-  "champagne",
-  "champan",
-  "copa",
-  "copas",
-  "coctel",
-  "cocteles",
-  "cocktail",
-  "cocktails",
-  "licor",
-  "licores",
-  "vermu",
-  "vermouth",
-  "ron",
-  "vodka",
-  "whisky",
-  "whiskey",
-  "brandy",
-  "gintonics",
-  "gintonic",
-  "combinado",
-  "combinados",
-  "digestivo",
-  "digestivos",
-  "cafe",
-  "cafes",
-  "te",
-  "tes",
-  "infusion",
-  "infusiones",
-  "tisana",
-  "tisanas",
-  "zumo",
-  "zumos",
-  "jugo",
-  "jugos",
-  "batido",
-  "batidos",
-  "smoothie",
-  "smoothies",
-  "bebida",
-  "bebidas",
-  "sidra",
-  "sangria",
-  "mocktail",
-  "mocktails",
-  "tonica",
-  "tonicas",
-  "cola",
-  "energetica",
-  "energeticas",
-  "isotonica",
-  "isotonicas",
-]);
-
-function categoryWordLooksDrink(word: string): boolean {
-  if (DRINK_CATEGORY_WORDS.has(word)) return true;
-  if (word.startsWith("cervez")) return true;
-  if (word.startsWith("coctel") || word.startsWith("cocktail")) return true;
-  if (word.startsWith("refresc")) return true;
-  if (word.startsWith("cafe")) return true;
-  if (word.startsWith("champ")) return true;
-  return false;
-}
-
-/**
- * Asocia el nombre de categoría del catálogo real a bebida o comida:
- * palabras clave (ES/EN) y prefijos habituales; si no encaja → comida
- * (incl. "Sin categoría" y nombres ambiguos).
- */
-function categoryMenuGroup(categoryName: string): CartaMenuGroup {
-  const raw = (categoryName || "").trim();
-  if (!raw) return "comida";
-  const flat = normalizeCategoryLabelForGroup(raw);
-  if (flat === "sin categoria") return "comida";
-
-  for (const w of categoryLabelTokens(raw)) {
-    if (categoryWordLooksDrink(w)) return "bebida";
+function comandaCoursesMatch(
+  lineCourse: number | undefined,
+  productCourse: number | undefined,
+  opts?: { treatMissingLineCourseAsEntrante?: boolean },
+): boolean {
+  const a = normalizeComandaCourseForStorage(lineCourse);
+  const b = normalizeComandaCourseForStorage(productCourse);
+  if (a == null && b == null) return true;
+  if (a == null && b != null) {
+    return opts?.treatMissingLineCourseAsEntrante === true && b === 1;
   }
-
-  if (
-    flat.includes("soft drink") ||
-    flat.includes("softdrink") ||
-    flat.includes("hot drink") ||
-    flat.includes("long drink") ||
-    flat.includes("sin alcohol")
-  ) {
-    return "bebida";
-  }
-
-  return "comida";
+  if (a != null && b == null) return false;
+  return a === b;
 }
 
 /** Texto corto para el indicador de mesa activa (TPV); recibe el nombre para mostrar, no el id. */
@@ -1298,6 +1417,7 @@ export type CartaPageContentProps = {
    */
   groupedTablesMapHandlers?: {
     resolveMainTableId: (tableId: string) => string;
+    getGroupTableIds?: (tableId: string) => string[];
     isGroupedTable: (tableId: string) => boolean;
     /** Mesa unida a otra: no se pinta en mapa como ficha propia. */
     isJoinedSecondaryTable?: (tableId: string) => boolean;
@@ -1308,6 +1428,49 @@ export type CartaPageContentProps = {
     separateTable?: (tableId: string) => void;
   };
 };
+
+type JoinedTableGroupMapState = {
+  mainTableId: string;
+  memberIds: string[];
+  serviceTableId: string;
+  busy: boolean;
+};
+
+function resolveJoinedTableGroupMapState(
+  tableId: string,
+  groupedTablesMapHandlers: CartaPageContentProps["groupedTablesMapHandlers"],
+  firestoreOccupiedTableIds: ReadonlySet<string>,
+  ordersByTable: Record<string, CartOrderLine[]>,
+): JoinedTableGroupMapState {
+  const id = String(tableId ?? "").trim();
+  const mainTableId = groupedTablesMapHandlers?.resolveMainTableId?.(id) ?? id;
+  const memberIds =
+    groupedTablesMapHandlers?.getGroupTableIds?.(id) ?? (id ? [id] : []);
+
+  let serviceTableId = mainTableId || id;
+  for (const memberId of memberIds) {
+    if (firestoreOccupiedTableIds.has(memberId)) {
+      serviceTableId = memberId;
+      break;
+    }
+  }
+  if (!firestoreOccupiedTableIds.has(serviceTableId)) {
+    for (const memberId of memberIds) {
+      if (countActiveComandaLines(ordersByTable[memberId] ?? []) > 0) {
+        serviceTableId = memberId;
+        break;
+      }
+    }
+  }
+
+  const busy = memberIds.some(
+    (memberId) =>
+      firestoreOccupiedTableIds.has(memberId) ||
+      countActiveComandaLines(ordersByTable[memberId] ?? []) > 0,
+  );
+
+  return { mainTableId: mainTableId || id, memberIds, serviceTableId, busy };
+}
 
 export function CartaPageContent({
   embeddedInOperacion = false,
@@ -1321,10 +1484,12 @@ export function CartaPageContent({
   const {
     user,
     restaurantId: profileRestaurantId,
+    role,
     ready: authReady,
   } = useAuth();
   const searchParams = useSearchParams();
   const orderIdFromUrl = searchParams.get("orderId");
+  const lineIdFromUrl = searchParams.get("lineId")?.trim() ?? "";
   const tableIdFromUrl = searchParams.get("tableId");
   const tpvViewFromUrl = searchParams.get("tpvView");
   const appliedOrderFromUrlRef = useRef(false);
@@ -1347,6 +1512,13 @@ export function CartaPageContent({
   const prevSelectedTableForOrderSyncRef = useRef<string | null>(null);
   const openingTableRef = useRef<string | null>(null);
   const restaurantId = profileRestaurantId ?? null;
+  const operationalRestaurantId = useMemo(
+    () => resolveOperationalRestaurantId(restaurantId),
+    [restaurantId],
+  );
+  const operationalCatalog = useCentralProductsForCarta(operationalRestaurantId, {
+    scope: "tpv_menu",
+  });
 
   const [cartaHeaderMobile, setCartaHeaderMobile] = useState(false);
   useLayoutEffect(() => {
@@ -1363,6 +1535,17 @@ export function CartaPageContent({
     null;
   const waiterEmail =
     (user as { email?: string } | null | undefined)?.email || null;
+  const activityActorName =
+    (user as { displayName?: string } | null | undefined)?.displayName?.trim() ||
+    waiterEmail ||
+    undefined;
+  const activityActorRole = role ?? undefined;
+
+  const { status: connectivityStatus } = useConnectivityStatus();
+  const { can } = useHostlyCapabilities();
+  const canCharge = can("tpv.charge");
+  const canCancelLine = can("tpv.cancel_line");
+  const canJoinTables = can("tpv.join_tables");
 
   const tableMapLibreLabel = useMemo(() => t("cartaTpv.mapLibre"), [t]);
 
@@ -1386,6 +1569,39 @@ export function CartaPageContent({
     });
     return () => unsub();
   }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
+
+  useEffect(() => {
+    const rid = operationalRestaurantId?.trim();
+    if (!rid || !authReady) {
+      setCartaCategories([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchCartaCategorias(rid).then((cats) => {
+      if (cancelled) return;
+      setCartaCategories(cats.filter((c) => c.isActive !== false));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [operationalRestaurantId, authReady]);
+
+  useEffect(() => {
+    const rid = operationalRestaurantId?.trim();
+    if (!rid || !authReady || !isFirebaseConfigured) {
+      setModifierGroups([]);
+      return;
+    }
+    const unsub = listenModifierGroups(
+      rid,
+      setModifierGroups,
+      (err) => {
+        console.warn("[Hostly TPV] modifierGroups listener", err);
+        setModifierGroups([]);
+      },
+    );
+    return () => unsub();
+  }, [operationalRestaurantId, authReady, isFirebaseConfigured]);
 
   const reservedByTableId = useMemo(() => {
     const by: Record<string, Reservation> = {};
@@ -1526,9 +1742,30 @@ export function CartaPageContent({
     return { upcoming, late };
   }, [todayReservations]);
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [productsLoading, setProductsLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const products = operationalCatalog.products;
+  const productsLoading = operationalCatalog.loading;
+  const catalogLoadError = operationalCatalog.source === "legacy_fallback";
+
+  const inventoryProductsById = useMemo(
+    () => buildTpvInventoryProductsById(operationalCatalog.productDocumentsById),
+    [operationalCatalog.productDocumentsById],
+  );
+
+  const productStockWarningById = useMemo(() => {
+    const map = new Map<string, StockWarningLevel>();
+    if (operationalCatalog.source !== "central") return map;
+    for (const product of products) {
+      const doc = operationalCatalog.productDocumentsById.get(product.id);
+      const level = resolveProductStockWarning(doc, inventoryProductsById);
+      if (level !== "none") map.set(product.id, level);
+    }
+    return map;
+  }, [
+    inventoryProductsById,
+    operationalCatalog.productDocumentsById,
+    operationalCatalog.source,
+    products,
+  ]);
 
   const [tablesList, setTablesList] = useState<Table[]>([]);
   const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
@@ -1538,6 +1775,12 @@ export function CartaPageContent({
   const operationalFloorPlansForTpv = useMemo(
     () => floorPlans.filter((p) => p.active !== false),
     [floorPlans],
+  );
+  const { getActiveLayoutForPlan } = useFloorPlanLayoutsConfig(restaurantId);
+  const tpvActiveLayoutLabel = useMemo(
+    () =>
+      formatTpvActiveLayoutLabel(getActiveLayoutForPlan(selectedTpvFloorPlanId)),
+    [getActiveLayoutForPlan, selectedTpvFloorPlanId],
   );
   /** Nombre de categoría de carta resaltada; null si aún no hay categorías en el grupo (comida/bebida). */
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -1714,6 +1957,34 @@ export function CartaPageContent({
   /** Mesa seleccionada: siempre `tables[].id` (clave de `ordersByTable`). */
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [order, setOrder] = useState<CartOrderLine[]>([]);
+  const tpvLineInventoryCostLabelByLineId = useMemo(() => {
+    const map = new Map<string, string>();
+    if (operationalCatalog.source !== "central") return map;
+    for (const line of order) {
+      if (line.status === "cancelled") continue;
+      if (line.status !== "pending" && line.inventoryCost) {
+        const label = formatInventoryCostSnapshot(line.inventoryCost);
+        if (label) map.set(line.id, label);
+        continue;
+      }
+      if (line.status !== "pending") continue;
+      const doc = operationalCatalog.productDocumentsById.get(line.product.id);
+      const result = calculateTpvLineInventoryCost({
+        line,
+        inventoryProductsById,
+        recipe: doc?.recipe ?? null,
+        saleProductId: line.product.id,
+      });
+      const label = formatInventoryCost(result);
+      if (label) map.set(line.id, label);
+    }
+    return map;
+  }, [
+    inventoryProductsById,
+    operationalCatalog.productDocumentsById,
+    operationalCatalog.source,
+    order,
+  ]);
   /** Comandas locales por mesa; clave = `table.id` de Firestore. */
   const [ordersByTable, setOrdersByTable] = useState<
     Record<string, CartOrderLine[]>
@@ -1797,6 +2068,13 @@ export function CartaPageContent({
   const [comandaLineActionsTargetId, setComandaLineActionsTargetId] = useState<string | null>(
     null,
   );
+  const [tpvQuickActionsAnchor, setTpvQuickActionsAnchor] = useState<{
+    lineId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [qtyBumpLineId, setQtyBumpLineId] = useState<string | null>(null);
+  const [recentProductsRevision, setRecentProductsRevision] = useState(0);
   /** Ancla visual del menú de acciones de línea (popover contextual, no modal centrado). */
   const [comandaLineActionsAnchorRect, setComandaLineActionsAnchorRect] = useState<{
     top: number;
@@ -1823,6 +2101,9 @@ export function CartaPageContent({
     SessionPaymentHistoryRow[]
   >([]);
   const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
+  const [cancellingLineIds, setCancellingLineIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const simplePaymentAmountInputRef = useRef<HTMLInputElement | null>(null);
   const [splitCount, setSplitCount] = useState(2);
   const [currentSplitIndex, setCurrentSplitIndex] = useState(1);
@@ -1841,6 +2122,12 @@ export function CartaPageContent({
   const [orderUrlDocStatus, setOrderUrlDocStatus] = useState<string | null>(
     null,
   );
+  const [orderDeepLinkNotice, setOrderDeepLinkNotice] = useState<string | null>(
+    null,
+  );
+  const [orderDeepLinkLineNotice, setOrderDeepLinkLineNotice] = useState<
+    string | null
+  >(null);
   const [orderUrlPaymentRequestedAt, setOrderUrlPaymentRequestedAt] =
     useState(false);
   const [orderUrlOpenedAtMs, setOrderUrlOpenedAtMs] = useState<number | null>(
@@ -1862,6 +2149,16 @@ export function CartaPageContent({
   const [comandaLineEditorId, setComandaLineEditorId] = useState<string | null>(
     null,
   );
+  const [cartaCategories, setCartaCategories] = useState<CartaCategoria[]>([]);
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroupDocument[]>(
+    [],
+  );
+  const [modifierModalProduct, setModifierModalProduct] = useState<Product | null>(
+    null,
+  );
+  const [modifierModalGroups, setModifierModalGroups] = useState<
+    ModifierGroupDocument[]
+  >([]);
   const [lineEditDraft, setLineEditDraft] = useState<ComandaLineEditorDraft>({
     pase: 0,
     lineNote: "",
@@ -1882,6 +2179,12 @@ export function CartaPageContent({
   const draftPersistChainByTableRef = useRef<Record<string, Promise<void>>>(
     {},
   );
+  /** Evita que el listener realtime pise comensales durante persistGuestCount. */
+  const guestCountPersistRef = useRef<{
+    tableId: string;
+    value: number;
+    at: number;
+  } | null>(null);
   const orderSessionId = useMemo(() => {
     const fromUrl = typeof orderIdFromUrl === "string" ? orderIdFromUrl.trim() : "";
     if (fromUrl) return fromUrl;
@@ -2275,6 +2578,8 @@ export function CartaPageContent({
           (l.course ?? undefined) === (editedLine.course ?? undefined) &&
           (l.lineNote ?? "") === (editedLine.lineNote ?? "") &&
           sameExtras(l.extras, editedLine.extras) &&
+          cartLineModifiersMergeKey(l.selectedModifiers) ===
+            cartLineModifiersMergeKey(editedLine.selectedModifiers) &&
           l.status === editedLine.status;
 
         const qty =
@@ -2349,22 +2654,6 @@ export function CartaPageContent({
     clickAudio.currentTime = 0;
     clickAudio.play().catch(() => {});
   }, [clickAudio]);
-
-  const refreshCatalogFromPlatos = useCallback(() => {
-    try {
-      // Mismo alcance que /dashboard/productos (`getBrowserRestauranteId` + `loadPlatos`).
-      const rid = getBrowserRestauranteId();
-      const list = loadPlatos(rid)
-        .filter(publicationOnMenu)
-        .map(platoCartaToProduct);
-      setProducts(list);
-      setError(false);
-    } catch (e) {
-      console.error(e);
-      setError(true);
-      setProducts([]);
-    }
-  }, []);
 
   const parseMoney = useCallback(
     (value: string) => Number(String(value || "").replace(",", ".")) || 0,
@@ -2446,7 +2735,7 @@ export function CartaPageContent({
 
       if (paymentMethod === "cash") {
         const c = roundMoney(parseMoney(cashReceived));
-        return c > 0 && c <= r + MONEY_EPS;
+        return c > MONEY_EPS;
       }
 
       if (paymentMethod === "card") {
@@ -2468,6 +2757,34 @@ export function CartaPageContent({
     },
     [paymentMethod, cashReceived, cardReceived, voucherAmount, voucherNumber, parseMoney],
   );
+
+  /** Cierra el panel de cobro sin registrar pago ni tocar comanda/mesa. */
+  const handleCancelPaymentFlow = useCallback(() => {
+    if (isConfirmingPayment) return;
+    setIsPaymentOpen(false);
+    setPaymentMethod(null);
+    setCashReceived("");
+    setCardReceived("");
+    setCardReceivedTouched(false);
+    setVoucherAmount("");
+    setVoucherNumber("");
+    setVoucherLookupBalance(null);
+    setIsInvoice(false);
+    setInvoiceName("");
+    setInvoiceTaxId("");
+    setInvoiceEmail("");
+    setDiscountAmount("");
+    setDiscountPercent("");
+    setIsSplitMode(false);
+    setIsSplitEqualMode(false);
+    setIsSplitItemsMode(false);
+    setIsSplitItemsPayMode(false);
+    setSelectedItemIds([]);
+    setPaidSplitItemIds([]);
+    setPartialPayments([]);
+    setSplitCount(2);
+    setCurrentSplitIndex(1);
+  }, [isConfirmingPayment]);
 
   const finishPaymentAndReturnToMap = useCallback((clearedTableId: string | null) => {
     if (clearedTableId) {
@@ -2528,13 +2845,6 @@ export function CartaPageContent({
         return next;
       });
     }
-    window.setTimeout(() => {
-      if (restaurantId) {
-        void getTables(restaurantId).then((list) => {
-          setTablesList(list);
-        });
-      }
-    }, 0);
     if (clearedTableId) {
       setTableClosedFeedback(true);
       window.setTimeout(() => setTableClosedFeedback(false), 1500);
@@ -2556,7 +2866,7 @@ export function CartaPageContent({
     setSplitCount(2);
     setCurrentSplitIndex(1);
     setPaidSplitItemIds([]);
-  }, [groupedTablesMapHandlers, restaurantId, tablesList]);
+  }, [groupedTablesMapHandlers, tablesList]);
 
   const reloadSessionTableAmountPaidSum = useCallback(async () => {
     if (!restaurantId?.trim() || !selectedTableId?.trim()) {
@@ -2694,11 +3004,13 @@ export function CartaPageContent({
     skipCloseTable?: boolean;
     minimalPaymentDoc?: boolean;
   }) => {
+    if (!canCharge) return;
     if (!restaurantId) {
       window.alert("No se pudo registrar el cobro");
       return;
     }
     if (!paymentMethod) return;
+    if (!confirmCriticalActionIfUnstable(connectivityStatus)) return;
 
     const safeOpts = opts ?? {};
 
@@ -2739,12 +3051,14 @@ export function CartaPageContent({
       if (!isPaymentValid(remainingBeforePay)) return;
 
       if (pm === "cash") {
-        chargeAmount = roundMoney(cashParsed);
+        chargeAmount = roundMoney(
+          Math.min(roundMoney(cashParsed), remainingBeforePay),
+        );
       } else if (pm === "card") {
         chargeAmount =
           cardReceived.trim() === ""
             ? remainingBeforePay
-            : roundMoney(cardParsed);
+            : roundMoney(Math.min(cardParsed, remainingBeforePay));
       } else {
         chargeAmount = roundMoney(Math.min(voucherValue, remainingBeforePay));
       }
@@ -2753,7 +3067,10 @@ export function CartaPageContent({
         window.alert("El importe a cobrar debe ser mayor que 0.");
         return;
       }
-      if (chargeAmount > remainingBeforePay + MONEY_EPS) {
+      if (
+        pm !== "cash" &&
+        chargeAmount > remainingBeforePay + MONEY_EPS
+      ) {
         window.alert(
           `El importe (${chargeAmount.toFixed(2)} €) no puede ser mayor que el pendiente (${remainingBeforePay.toFixed(2)} €).`,
         );
@@ -2912,7 +3229,7 @@ export function CartaPageContent({
         ...invoiceData,
       };
 
-      await dbgAddDoc(
+      const paymentRef = await dbgAddDoc(
         collection(db, "payments"),
         safeOpts.minimalPaymentDoc ? minimalPayload : fullTableAmountPayload,
         {
@@ -2923,6 +3240,30 @@ export function CartaPageContent({
           orderId: primaryOrderId,
         },
       );
+
+      void createActivityLog({
+        restaurantId,
+        type: "payment_created",
+        entityType: "payment",
+        entityId: paymentRef.id,
+        actorUserId: waiterId ?? undefined,
+        actorUserName: activityActorName,
+        actorRole: activityActorRole,
+        metadata: buildActivityMetadata({
+          tableId: selectedTableId || selectedTable?.id || null,
+          tableName:
+            selectedTable?.name ||
+            (selectedTable as { label?: string } | null)?.label ||
+            "",
+          orderId: primaryOrderId,
+          amount: chargeAmount,
+          paymentMethod: pm,
+          ticketNumber,
+          paymentKind: isAccountFinalPayment ? "final" : "partial",
+          isPartial: !isAccountFinalPayment,
+          route: "tpv",
+        }),
+      });
 
       if (!isSplitEqualInstallment) {
         void reloadSessionTableAmountPaidSum();
@@ -2994,10 +3335,24 @@ export function CartaPageContent({
     }
 
     if (keepModalOpen) {
-      setCashReceived("");
-      setCardReceived("");
-      setCardReceivedTouched(false);
-      setVoucherAmount("");
+      const prefillRemaining = remainingAfterPay.toFixed(2).replace(".", ",");
+      if (paymentMethod === "cash") {
+        setCashReceived(prefillRemaining);
+      } else {
+        setCashReceived("");
+      }
+      if (paymentMethod === "card") {
+        setCardReceivedTouched(false);
+        setCardReceived(prefillRemaining);
+      } else {
+        setCardReceived("");
+        setCardReceivedTouched(false);
+      }
+      if (paymentMethod === "voucher") {
+        setVoucherAmount(prefillRemaining);
+      } else {
+        setVoucherAmount("");
+      }
       setVoucherNumber("");
       setInvoiceName("");
       setInvoiceTaxId("");
@@ -3047,23 +3402,11 @@ export function CartaPageContent({
     voucherNumber,
     waiterEmail,
     waiterId,
+    activityActorName,
+    activityActorRole,
+    connectivityStatus,
+    canCharge,
   ]);
-
-  useEffect(() => {
-    if (!authReady) return;
-    setProductsLoading(true);
-    refreshCatalogFromPlatos();
-    setProductsLoading(false);
-  }, [authReady, refreshCatalogFromPlatos]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const onPlatosChanged = () => {
-      refreshCatalogFromPlatos();
-    };
-    window.addEventListener(PLATOS_CHANGED_EVENT, onPlatosChanged);
-    return () => window.removeEventListener(PLATOS_CHANGED_EVENT, onPlatosChanged);
-  }, [refreshCatalogFromPlatos]);
 
   useEffect(() => {
     const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
@@ -3076,13 +3419,42 @@ export function CartaPageContent({
       setTablesList([]);
       return;
     }
-    let cancelled = false;
-    void getTables(rid).then((list) => {
-      if (cancelled) return;
-      setTablesList(list);
-    });
+    const unsub = listenTablesByRestaurantId(
+      rid,
+      (list) => {
+        setTablesList(list);
+      },
+      (err) => {
+        console.error("[TPV] listenTables", err);
+      },
+    );
     return () => {
-      cancelled = true;
+      unsub();
+    };
+  }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
+
+  useEffect(() => {
+    const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+    if (
+      !authReady ||
+      !user?.uid ||
+      !rid ||
+      !isFirebaseConfigured
+    ) {
+      setZonesList([]);
+      return;
+    }
+    const unsub = listenZonesByRestaurantId(
+      rid,
+      (list) => {
+        setZonesList(list);
+      },
+      (err) => {
+        console.error("[TPV] listenZones", err);
+      },
+    );
+    return () => {
+      unsub();
     };
   }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
 
@@ -3090,20 +3462,13 @@ export function CartaPageContent({
     const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
     if (!authReady || !user?.uid || !rid || !isFirebaseConfigured) {
       setFloorPlans([]);
-      setZonesList([]);
       setSelectedTpvFloorPlanId(null);
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [plans, zones] = await Promise.all([
-          getFloorPlans(rid),
-          getZones(rid),
-        ]);
-        if (cancelled) return;
+    const unsub = listenFloorPlansByRestaurantId(
+      rid,
+      (plans) => {
         setFloorPlans(plans);
-        setZonesList(zones);
         setSelectedTpvFloorPlanId((current) => {
           const op = plans.filter((p) => p.active !== false);
           const pool = op.length > 0 ? op : plans;
@@ -3116,15 +3481,13 @@ export function CartaPageContent({
           const def = pool.find((p) => p.isDefault === true);
           return def?.id ?? pool[0]?.id ?? null;
         });
-      } catch {
-        if (cancelled) return;
-        setFloorPlans([]);
-        setZonesList([]);
-        setSelectedTpvFloorPlanId(null);
-      }
-    })();
+      },
+      (err) => {
+        console.error("[TPV] listenFloorPlans", err);
+      },
+    );
     return () => {
-      cancelled = true;
+      unsub();
     };
   }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
 
@@ -3345,12 +3708,16 @@ export function CartaPageContent({
         const ref = doc(db, "orders", orderIdFromUrl);
         const snap = await getDoc(ref);
         if (cancelled) return;
-        if (!snap.exists()) return;
+        if (!snap.exists()) {
+          setOrderDeepLinkNotice("Comanda no encontrada");
+          return;
+        }
         const data = snap.data() as FirestoreOrderDocForCart;
         const st = String((data as { status?: string } | null)?.status ?? "")
           .trim()
           .toLowerCase();
         if (st === "paid" || st === "closed") {
+          setOrderDeepLinkNotice("Comanda no está activa");
           setOrder([]);
           const tid =
             typeof (data as { tableId?: unknown } | null)?.tableId === "string"
@@ -3364,6 +3731,7 @@ export function CartaPageContent({
         const mapped = mapFirestoreOrderDocToCartLines(data, restaurantId);
         if (mapped == null) return;
         if (cancelled) return;
+        setOrderDeepLinkNotice(null);
         setOrder(mapped);
       } catch (e) {
         console.error(e);
@@ -3386,6 +3754,8 @@ export function CartaPageContent({
       setOrderUrlOpenedAtMs(null);
       setOrderUrlNote("");
       setOrderUrlTableId(null);
+      setOrderDeepLinkNotice(null);
+      setOrderDeepLinkLineNotice(null);
       return;
     }
     if (!isAuthReady()) {
@@ -3394,6 +3764,8 @@ export function CartaPageContent({
       setOrderUrlOpenedAtMs(null);
       setOrderUrlNote("");
       setOrderUrlTableId(null);
+      setOrderDeepLinkNotice(null);
+      setOrderDeepLinkLineNotice(null);
       return;
     }
     const ref = doc(db, "orders", orderIdFromUrl);
@@ -3404,6 +3776,7 @@ export function CartaPageContent({
         setOrderUrlOpenedAtMs(null);
         setOrderUrlNote("");
         setOrderUrlTableId(null);
+        setOrderDeepLinkNotice("Comanda no encontrada");
         return;
       }
       const data = snap.data() as {
@@ -3421,10 +3794,18 @@ export function CartaPageContent({
         setOrderUrlOpenedAtMs(null);
         setOrderUrlNote("");
         setOrderUrlTableId(null);
+        setOrderDeepLinkNotice("Comanda no encontrada");
         return;
       }
       const st = data.status;
+      const statusNorm =
+        typeof st === "string" ? st.trim().toLowerCase() : "";
       setOrderUrlDocStatus(typeof st === "string" ? st : null);
+      if (statusNorm === "paid" || statusNorm === "closed") {
+        setOrderDeepLinkNotice("Comanda no está activa");
+      } else {
+        setOrderDeepLinkNotice(null);
+      }
       setOrderUrlPaymentRequestedAt(
         isPaymentRequestedAtSet(data.paymentRequestedAt),
       );
@@ -3441,6 +3822,25 @@ export function CartaPageContent({
     });
     return () => unsub();
   }, [orderIdFromUrl, isFirebaseConfigured, restaurantId]);
+
+  useEffect(() => {
+    if (!orderIdFromUrl || !lineIdFromUrl) {
+      setOrderDeepLinkLineNotice(null);
+      return;
+    }
+    if (orderDeepLinkNotice) {
+      setOrderDeepLinkLineNotice(null);
+      return;
+    }
+    if (order.length === 0) return;
+    const hasLine = order.some((line) => line.id === lineIdFromUrl);
+    if (!hasLine) {
+      setOrderDeepLinkLineNotice("Línea enlazada no encontrada en esta comanda");
+      return;
+    }
+    setOrderDeepLinkLineNotice(null);
+    return scheduleScrollAndHighlightById(hostlyHighlightOrderLineElementId(lineIdFromUrl));
+  }, [lineIdFromUrl, order, orderDeepLinkNotice, orderIdFromUrl]);
 
   const mergeTableIdForOpenOrders = useMemo(() => {
     if (orderIdFromUrl) return orderUrlTableId?.trim() || null;
@@ -3614,13 +4014,21 @@ export function CartaPageContent({
       return;
     }
     const t = tablesList.find((x) => x.id === selectedTableId) ?? null;
-    const raw =
-      (t as { dinersCount?: unknown; guestCount?: unknown } | null)?.dinersCount ??
-      (t as { guestCount?: unknown } | null)?.guestCount;
-    const next =
-      typeof raw === "number" && Number.isFinite(raw)
-        ? Math.max(0, Math.floor(raw))
-        : 0;
+    if (t == null || t.dinersCount === undefined) return;
+
+    const next = readTableDinersCount(t);
+    const pending = guestCountPersistRef.current;
+    if (pending && pending.tableId === selectedTableId) {
+      if (next === pending.value) {
+        guestCountPersistRef.current = null;
+        setGuestCount(next);
+        return;
+      }
+      if (Date.now() - pending.at < 8000) {
+        return;
+      }
+      guestCountPersistRef.current = null;
+    }
     setGuestCount(next);
   }, [orderIdFromUrl, selectedTableId, tablesList]);
 
@@ -3637,11 +4045,10 @@ export function CartaPageContent({
         if (cancelled) return;
         if (!snap.exists()) return;
         const data = snap.data() as { dinersCount?: unknown; guestCount?: unknown };
-        const raw = data?.dinersCount ?? data?.guestCount;
         const next =
-          typeof raw === "number" && Number.isFinite(raw)
-            ? Math.max(0, Math.floor(raw))
-            : 0;
+          parseStoredGuestCount(data?.dinersCount) ??
+          parseStoredGuestCount(data?.guestCount);
+        if (next == null) return;
         setGuestCount(next);
       } catch (e) {
         console.error("ERROR CARGANDO COMENSALES", e);
@@ -3651,7 +4058,19 @@ export function CartaPageContent({
     return () => {
       cancelled = true;
     };
-  }, [orderIdFromUrl, selectedTableId, restaurantId]);
+  }, [orderIdFromUrl, selectedTableId, restaurantId, isFirebaseConfigured]);
+
+  useEffect(() => {
+    if (!modifierModalProduct) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setModifierModalProduct(null);
+        setModifierModalGroups([]);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [modifierModalProduct]);
 
   useEffect(() => {
     if (!orderIdFromUrl || !firstPendingRef.current) return;
@@ -3661,69 +4080,150 @@ export function CartaPageContent({
     });
   }, [orderIdFromUrl, order]);
 
-  const handleQuickAdd = (product: Product) => {
-    // Feedback instantáneo (antes de cualquier otra lógica).
-    setIsAddingByProductId((prev) => ({
-      ...prev,
-      [product.id]: (prev[product.id] ?? 0) + 1,
-    }));
-    const prevTimeout = addingTimeoutsRef.current[product.id];
-    if (prevTimeout) window.clearTimeout(prevTimeout);
-    addingTimeoutsRef.current[product.id] = window.setTimeout(() => {
-      setIsAddingByProductId((prev) => {
-        if (!(product.id in prev)) return prev;
-        const next = { ...prev };
-        delete next[product.id];
-        return next;
-      });
-    }, 420);
+  const appendProductToOrder = useCallback(
+    (
+      product: Product,
+      modifierPayload?: {
+        selectedModifiers: CartOrderLineSelectedModifier[];
+        modifierTotal: number;
+        displayName: string;
+      },
+    ) => {
+      setIsAddingByProductId((prev) => ({
+        ...prev,
+        [product.id]: (prev[product.id] ?? 0) + 1,
+      }));
+      const prevTimeout = addingTimeoutsRef.current[product.id];
+      if (prevTimeout) window.clearTimeout(prevTimeout);
+      addingTimeoutsRef.current[product.id] = window.setTimeout(() => {
+        setIsAddingByProductId((prev) => {
+          if (!(product.id in prev)) return prev;
+          const next = { ...prev };
+          delete next[product.id];
+          return next;
+        });
+      }, 180);
 
-    const productCourse = getProductDefaultCourse(product);
-
-    updateCurrentTableOrder((prev) => {
-      const audio = new Audio("/sounds/click.mp3");
-      audio.volume = 0.3;
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
-      const existingIndex = prev.findIndex(
-        (i) =>
-          i.product.id === product.id &&
-          i.status === "pending" &&
-          !i.lineNote &&
-          !i.extras &&
-          !i.variantLabel &&
-          !i.lineExtra &&
-          /* Solo merge si comparten pase (definido en catálogo en línea nueva).
-             Sin course en línea existente → equivalente a pase 1. */
-          (normalizeComandaCourseForStorage(i.course) ?? 1) === productCourse,
+      const productCourse = getProductDefaultCourse(product);
+      const modifierKey = cartLineModifiersMergeKey(
+        modifierPayload?.selectedModifiers,
       );
 
-      if (existingIndex !== -1) {
-        const updated = [...prev];
-        const cur = updated[existingIndex]!;
-        const bumped: CartOrderLine = {
-          ...cur,
-          quantity: cur.quantity + 1,
+      updateCurrentTableOrder((prev) => {
+        const audio = new Audio("/sounds/click.mp3");
+        audio.volume = 0.3;
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        const existingIndex = prev.findIndex(
+          (i) =>
+            i.product.id === product.id &&
+            i.status === "pending" &&
+            !i.lineNote &&
+            !i.extras &&
+            !i.variantLabel &&
+            !i.lineExtra &&
+            cartLineModifiersMergeKey(i.selectedModifiers) === modifierKey &&
+            comandaCoursesMatch(i.course, productCourse, {
+              treatMissingLineCourseAsEntrante: productCourse != null,
+            }),
+        );
+
+        if (existingIndex !== -1) {
+          const updated = [...prev];
+          const cur = updated[existingIndex]!;
+          const bumped: CartOrderLine = {
+            ...cur,
+            quantity: cur.quantity + 1,
+          };
+          updated[existingIndex] = bumped;
+          setQtyBumpLineId(bumped.id);
+          window.setTimeout(() => {
+            setQtyBumpLineId((current) =>
+              current === bumped.id ? null : current,
+            );
+          }, 180);
+          return updated;
+        }
+
+        const pendingStatus: OrderLineStatus = "pending";
+        const stationFields = resolveStationFieldsFromProduct(product);
+        const opFields = resolveOperationStationFieldsFromProduct(product);
+        const selectedModifiers = modifierPayload?.selectedModifiers;
+        const modifierTotal = modifierPayload?.modifierTotal;
+        const displayName = modifierPayload?.displayName?.trim();
+        const newLine: CartOrderLine = {
+          id: generateOrderLineId(),
+          product: enrichProductWithStationFields(
+            product,
+            stationFields,
+            opFields,
+          ),
+          quantity: 1,
+          status: pendingStatus,
+          addedAt: Date.now(),
+          createdAt: Date.now(),
+          ...(productCourse != null ? { course: productCourse } : {}),
+          ...stationFields,
+          ...opFields,
+          ...(selectedModifiers && selectedModifiers.length > 0
+            ? { selectedModifiers }
+            : {}),
+          ...(modifierTotal != null && Number.isFinite(modifierTotal)
+            ? { modifierTotal }
+            : {}),
+          ...(displayName ? { displayName } : {}),
         };
-        updated[existingIndex] = bumped;
-        return updated;
-      }
 
-      const pendingStatus: OrderLineStatus = "pending";
-      const newLine: CartOrderLine = {
-        id: generateOrderLineId(),
+        return [...prev, newLine];
+      });
+    },
+    [updateCurrentTableOrder],
+  );
+
+  const handleProductAddRequest = useCallback(
+    (product: Product) => {
+      const category = resolveCategoryForProduct(product, cartaCategories);
+      const groups = resolveActiveEffectiveModifierGroups(
         product,
-        quantity: 1,
-        status: pendingStatus,
-        addedAt: Date.now(),
-        createdAt: Date.now(),
-        course: productCourse,
-      };
+        category,
+        modifierGroups,
+      );
+      if (groups.length === 0) {
+        appendProductToOrder(product);
+        return;
+      }
+      setModifierModalProduct(product);
+      setModifierModalGroups(groups);
+    },
+    [appendProductToOrder, cartaCategories, modifierGroups],
+  );
 
-      const merged = [...prev, newLine];
-      return merged;
-    });
-  };
+  const handleQuickAdd = handleProductAddRequest;
+
+  const handleRecentProductTap = useCallback(
+    (productId: string) => {
+      const product = products.find((entry) => entry.id === productId);
+      if (product) handleProductAddRequest(product);
+    },
+    [handleProductAddRequest, products],
+  );
+
+  const handleRecentProductLongPress = useCallback(
+    (productId: string) => {
+      const product = products.find((entry) => entry.id === productId);
+      if (!product) return;
+      const category = resolveCategoryForProduct(product, cartaCategories);
+      const groups = resolveActiveEffectiveModifierGroups(
+        product,
+        category,
+        modifierGroups,
+      );
+      if (groups.length === 0) return;
+      setModifierModalProduct(product);
+      setModifierModalGroups(groups);
+    },
+    [cartaCategories, modifierGroups, products],
+  );
 
   const handleIncrementLine = (lineId: string) => {
     updateCurrentTableOrder((prev) =>
@@ -3888,50 +4388,312 @@ export function CartaPageContent({
     ],
   );
 
-  const handleCancelPersistedLine = useCallback(
-    async (itemId: string) => {
-      if (!orderIdFromUrl || !isFirebaseConfigured) return;
-      const ok = window.confirm("¿Cancelar este producto de la comanda?");
+  const handleCancelSentOrderLine = useCallback(
+    async (line: CartOrderLine) => {
+      if (!canCancelLine) return;
+      if (!isFirebaseConfigured) return;
+      if (cancellingLineIds.has(line.id)) return;
+
+      const st = normalizeOrderLineStatus(line.status);
+      if (st === "pending") return;
+      if (st === "cancelled") return;
+      if (st === "served") {
+        window.alert("No se puede cancelar una línea ya servida.");
+        return;
+      }
+
+      const statusBeforeCancel = st;
+
+      const ok = window.confirm("¿Cancelar este producto ya enviado?");
       if (!ok) return;
+      if (!confirmCriticalActionIfUnstable(connectivityStatus)) return;
 
-      let next: CartOrderLine[] = [];
-      updateCurrentTableOrder((prev) => {
-        next = prev.map((l) =>
-          l.id === itemId && l.status !== "pending" && l.status !== "cancelled"
-            ? { ...l, status: "cancelled" as const, cancelledAt: Date.now() }
-            : l,
-        );
-        return next;
-      });
+      const lineAny = line as unknown as {
+        orderItemDocId?: unknown;
+        orderId?: unknown;
+      };
+      const orderItemDocId =
+        typeof lineAny.orderItemDocId === "string" &&
+        lineAny.orderItemDocId.trim()
+          ? lineAny.orderItemDocId.trim()
+          : null;
+      const orderDocId =
+        (typeof lineAny.orderId === "string" && lineAny.orderId.trim()
+          ? lineAny.orderId.trim()
+          : null) ??
+        (orderIdFromUrl && orderIdFromUrl.trim() ? orderIdFromUrl.trim() : null) ??
+        (openOrderIdsForTable.length > 0 ? openOrderIdsForTable[0]! : null);
 
+      if (!orderDocId) {
+        window.alert("No se encontró la comanda activa de esta mesa.");
+        return;
+      }
+
+      const nowMs = Date.now();
+      const cancelledBy =
+        (user as { uid?: string } | null | undefined)?.uid?.trim() ?? null;
+
+      setCancellingLineIds((prev) => new Set(prev).add(line.id));
       try {
+        let next: CartOrderLine[] = [];
+        updateCurrentTableOrder((prev) => {
+          next = prev.map((l) => {
+            if (l.id !== line.id) return l;
+            return {
+              ...l,
+              status: "cancelled" as const,
+              cancelledAt: nowMs,
+              cancelledBy,
+            };
+          });
+          return next;
+        });
+
+        const billableTotal = sumCartOrderLinesTotal(next);
         await dbgUpdateDoc(
-          doc(db, "orders", orderIdFromUrl),
+          doc(db, "orders", orderDocId),
           {
-          items: orderLinesToFirestoreItems(next),
-          updatedAt: serverTimestamp(),
-        },
+            items: orderLinesToFirestoreItems(next),
+            total: billableTotal,
+            cancelledLineIds: arrayUnion(line.id),
+            updatedAt: serverTimestamp(),
+          },
           {
-            label: "carta:handleCancelPersistedLine",
+            label: "carta:handleCancelSentOrderLine:orders",
             collection: "orders",
             restaurantId,
             tableId: selectedTableId,
-            orderId: orderIdFromUrl,
+            orderId: orderDocId,
           },
         );
-      } catch (e) {
-        console.error("handleCancelPersistedLine", e);
+
+        const orderItemPayload = {
+          status: "cancelled",
+          cancelledAt: nowMs,
+          ...(cancelledBy ? { cancelledBy } : {}),
+          updatedAt: nowMs,
+        };
+
+        if (orderItemDocId) {
+          await dbgUpdateDoc(
+            doc(db, "orderItems", orderItemDocId),
+            orderItemPayload,
+            {
+              label: "carta:handleCancelSentOrderLine:orderItems",
+              collection: "orderItems",
+              restaurantId,
+              tableId: selectedTableId,
+              orderId: orderDocId,
+            },
+          );
+        } else {
+          const itemsSnap = await getDocs(
+            query(
+              collection(db, "orderItems"),
+              where("orderId", "==", orderDocId),
+            ),
+          );
+          const lineName = String(line.product.nombre ?? "").trim();
+          const lineQty = Number(line.quantity) || 0;
+          for (const itemDoc of itemsSnap.docs) {
+            const data = itemDoc.data() as Record<string, unknown>;
+            const itemSt = String(data.status ?? "")
+              .trim()
+              .toLowerCase();
+            if (
+              itemSt === "cancelled" ||
+              itemSt === "canceled" ||
+              itemSt === "cancelado"
+            ) {
+              continue;
+            }
+            const linkedLineId =
+              typeof data.lineId === "string" ? data.lineId.trim() : "";
+            const matchesByLineId = linkedLineId === line.id;
+            const matchesLegacy =
+              !linkedLineId &&
+              String(data.name ?? "").trim() === lineName &&
+              (Number(data.quantity) || 0) === lineQty;
+            if (!matchesByLineId && !matchesLegacy) continue;
+            await dbgUpdateDoc(
+              doc(db, "orderItems", itemDoc.id),
+              orderItemPayload,
+              {
+                label: "carta:handleCancelSentOrderLine:orderItemsQuery",
+                collection: "orderItems",
+                restaurantId,
+                tableId: selectedTableId,
+                orderId: orderDocId,
+              },
+            );
+            break;
+          }
+        }
+
+        if (restaurantId) {
+          try {
+            const printCancel = await cancelPrintJobsForOrderLine(
+              restaurantId,
+              orderDocId,
+              line.id,
+            );
+            if (printCancel.errors > 0) {
+              console.warn(
+                "[Hostly Print] algunos jobs no se cancelaron al anular línea",
+                printCancel,
+              );
+            }
+          } catch (printCancelErr) {
+            console.warn(
+              "[Hostly Print] cola no disponible al cancelar línea; producto cancelado.",
+              printCancelErr,
+            );
+          }
+        }
+
+        try {
+          const inventoryRestaurantId = operationalRestaurantId ?? restaurantId;
+          if (inventoryRestaurantId) {
+            const reversalResult =
+              await createStockReversalMovementsForModifierConsumption({
+                restaurantId: inventoryRestaurantId,
+                orderId: orderDocId,
+                line: {
+                  id: line.id,
+                  quantity: line.quantity,
+                  status: statusBeforeCancel,
+                  product: {
+                    id: line.product.id,
+                    nombre: line.product.nombre,
+                  },
+                  selectedModifiers: line.selectedModifiers,
+                },
+                userId: cancelledBy,
+              });
+            if (
+              reversalResult.eligible &&
+              reversalResult.failed > 0
+            ) {
+              console.warn(
+                "[Hostly Inventory] reversión de modificadores incompleta; línea cancelada.",
+                reversalResult,
+              );
+            }
+
+            const recipeReversalResult =
+              await createStockReversalMovementsForRecipeConsumption({
+                restaurantId: inventoryRestaurantId,
+                orderId: orderDocId,
+                line: {
+                  id: line.id,
+                  quantity: line.quantity,
+                  status: statusBeforeCancel,
+                  product: {
+                    id: line.product.id,
+                    nombre: line.product.nombre,
+                  },
+                  selectedModifiers: line.selectedModifiers,
+                },
+                userId: cancelledBy,
+              });
+            if (
+              recipeReversalResult.eligible &&
+              recipeReversalResult.failed > 0
+            ) {
+              console.warn(
+                "[Hostly Inventory] reversión de escandallo incompleta; línea cancelada.",
+                recipeReversalResult,
+              );
+            }
+          }
+        } catch (inventoryReversalErr) {
+          console.warn(
+            "[Hostly Inventory] reversión de inventario no disponible; línea cancelada.",
+            inventoryReversalErr,
+          );
+        }
+
+        if (restaurantId) {
+          void createActivityLog({
+            restaurantId,
+            type: "order_updated",
+            entityType: "order",
+            entityId: orderDocId,
+            actorUserId: cancelledBy ?? undefined,
+            actorUserName: activityActorName,
+            actorRole: activityActorRole,
+            metadata: buildActivityMetadata({
+              action: "line_cancelled",
+              lineId: line.id,
+              cancelledLineIds: [line.id],
+              productId: String(line.product.id ?? ""),
+              productName: String(line.product.nombre ?? "").trim(),
+              statusBeforeCancel,
+              tableId: selectedTableId,
+              route: "tpv",
+            }),
+          });
+        }
+      } catch (error) {
+        console.error("handleCancelSentOrderLine", error);
         window.alert("No se pudo cancelar el producto. Inténtalo otra vez.");
+      } finally {
+        setCancellingLineIds((prev) => {
+          const n = new Set(prev);
+          n.delete(line.id);
+          return n;
+        });
       }
+
+      setEditSplitEnabled(false);
+      setEditSplitQty(1);
+      setComandaLineEditorId(null);
+      setComandaLineActionsOpen(false);
+      setComandaLineActionsTargetId(null);
+      setComandaLineActionsAnchorRect(null);
     },
-    [orderIdFromUrl, isFirebaseConfigured, updateCurrentTableOrder],
+    [
+      cancellingLineIds,
+      isFirebaseConfigured,
+      orderIdFromUrl,
+      openOrderIdsForTable,
+      updateCurrentTableOrder,
+      restaurantId,
+      operationalRestaurantId,
+      selectedTableId,
+      user,
+      activityActorName,
+      activityActorRole,
+      connectivityStatus,
+      canCancelLine,
+    ],
   );
+
+  const handleCancelPersistedLine = useCallback(
+    async (itemId: string) => {
+      const target = order.find((l) => l.id === itemId) ?? null;
+      if (!target) return;
+      await handleCancelSentOrderLine(target);
+    },
+    [order, handleCancelSentOrderLine],
+  );
+
+  const handleCancelProductFromLine = handleCancelSentOrderLine;
 
   const handleRemoveOnePersistedUnit = useCallback(
     async (itemId: string) => {
       if (!orderIdFromUrl || !isFirebaseConfigured) return;
+      const target = order.find((l) => l.id === itemId);
+      if (!target) return;
+      const lineStatus = normalizeOrderLineStatus(target.status);
+      if (lineStatus === "cancelled") return;
+
       const ok = window.confirm("¿Quitar 1 unidad de este producto?");
       if (!ok) return;
+
+      const qtyBefore = Number(target.quantity) || 0;
+      const shouldCancelPersisted =
+        lineStatus !== "pending" && qtyBefore <= 1;
 
       let next: CartOrderLine[] = [];
       updateCurrentTableOrder((prev) => {
@@ -3949,9 +4711,12 @@ export function CartaPageContent({
         await dbgUpdateDoc(
           doc(db, "orders", orderIdFromUrl),
           {
-          items: orderLinesToFirestoreItems(next),
-          updatedAt: serverTimestamp(),
-        },
+            items: orderLinesToFirestoreItems(next),
+            updatedAt: serverTimestamp(),
+            ...(shouldCancelPersisted
+              ? { cancelledLineIds: arrayUnion(itemId) }
+              : {}),
+          },
           {
             label: "carta:handleRemoveOnePersistedUnit",
             collection: "orders",
@@ -3965,7 +4730,14 @@ export function CartaPageContent({
         window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
       }
     },
-    [orderIdFromUrl, isFirebaseConfigured, updateCurrentTableOrder],
+    [
+      order,
+      orderIdFromUrl,
+      isFirebaseConfigured,
+      updateCurrentTableOrder,
+      restaurantId,
+      selectedTableId,
+    ],
   );
 
   const handleRemoveOneUnitFromLine = useCallback(
@@ -4006,6 +4778,9 @@ export function CartaPageContent({
       const qty = qtyRaw;
       const nextQty = Math.max(qty - 1, 0);
       const shouldCancel = qty <= 1;
+      const lineStatus = normalizeOrderLineStatus(selectedLine.status);
+      const shouldCancelPersisted =
+        shouldCancel && lineStatus !== "pending" && lineStatus !== "cancelled";
 
       // Siempre actualiza UI local (comanda) para feedback inmediato.
       updateCurrentTableOrder((prev) =>
@@ -4084,9 +4859,12 @@ export function CartaPageContent({
           await dbgUpdateDoc(
             doc(db, "orders", orderDocId),
             {
-            items: orderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-          },
+              items: orderLinesToFirestoreItems(next),
+              updatedAt: serverTimestamp(),
+              ...(shouldCancelPersisted
+                ? { cancelledLineIds: arrayUnion(selectedLine.id) }
+                : {}),
+            },
             {
               label: "carta:handleRemoveOneUnitFromLine:orders",
               collection: "orders",
@@ -4109,64 +4887,8 @@ export function CartaPageContent({
       openOrderIdsForTable,
       isFirebaseConfigured,
       updateCurrentTableOrder,
-    ],
-  );
-
-  const handleCancelProductFromLine = useCallback(
-    async (line: CartOrderLine) => {
-      if (!isFirebaseConfigured) return;
-      const ok = window.confirm("¿Cancelar este producto de la comanda?");
-      if (!ok) return;
-
-      const selectedLine = line;
-      const lineAny = line as unknown as { orderId?: unknown };
-      const orderDocId =
-        (typeof lineAny.orderId === "string" && lineAny.orderId.trim()
-          ? lineAny.orderId.trim()
-          : null) ??
-        (orderIdFromUrl && orderIdFromUrl.trim() ? orderIdFromUrl.trim() : null) ??
-        (openOrderIdsForTable.length > 0 ? openOrderIdsForTable[0]! : null);
-
-      if (!orderDocId) return;
-
-      let next: CartOrderLine[] = [];
-      updateCurrentTableOrder((prev) => {
-        next = prev.map((l) => {
-          if (l.id !== selectedLine.id) return l;
-          if (l.status === "pending") return l;
-          return { ...l, status: "cancelled" as const, cancelledAt: Date.now() };
-        });
-        return next;
-      });
-
-      try {
-        await dbgUpdateDoc(
-          doc(db, "orders", orderDocId),
-          {
-          items: orderLinesToFirestoreItems(next),
-          updatedAt: Date.now(),
-        },
-          {
-            label: "carta:handleCancelProductFromLine",
-            collection: "orders",
-            restaurantId,
-            tableId: selectedTableId,
-            orderId: orderDocId,
-          },
-        );
-      } catch (error) {
-        console.error("CANCEL PRODUCT ERROR", error);
-      }
-
-      setEditSplitEnabled(false);
-      setEditSplitQty(1);
-      setComandaLineEditorId(null);
-    },
-    [
-      orderIdFromUrl,
-      openOrderIdsForTable,
-      isFirebaseConfigured,
-      updateCurrentTableOrder,
+      restaurantId,
+      selectedTableId,
     ],
   );
 
@@ -4301,6 +5023,76 @@ export function CartaPageContent({
     [orderIdFromUrl, isFirebaseConfigured, updateCurrentTableOrder],
   );
 
+  const handleRepeatLastRound = useCallback(() => {
+    const sentLines = order.filter(
+      (line) =>
+        line.status !== "pending" &&
+        line.status !== "cancelled" &&
+        line.status !== "served",
+    );
+    if (sentLines.length === 0) return;
+
+    const latestSentAt = Math.max(...sentLines.map((line) => line.sentAt ?? 0));
+    if (!Number.isFinite(latestSentAt) || latestSentAt <= 0) return;
+
+    const lastRoundLines = sentLines.filter(
+      (line) => (line.sentAt ?? 0) === latestSentAt,
+    );
+    if (lastRoundLines.length === 0) return;
+
+    updateCurrentTableOrder((prev) => [
+      ...prev,
+      ...lastRoundLines.map((item) => ({
+        ...item,
+        id: generateOrderLineId(),
+        status: "pending" as const,
+        addedAt: Date.now(),
+        createdAt: Date.now(),
+        sentAt: undefined,
+        preparedAt: undefined,
+        servedAt: undefined,
+        inventoryCost: undefined,
+        isComped: undefined,
+        compedReason: undefined,
+      })),
+    ]);
+  }, [order, updateCurrentTableOrder]);
+
+  const handleApplyInlineMixer = useCallback(
+    (
+      lineId: string,
+      option: ModifierGroupDocument["options"][number],
+      mixerGroup: ModifierGroupDocument,
+    ) => {
+      updateCurrentTableOrder((prev) =>
+        prev.map((line) => {
+          if (line.id !== lineId || line.status !== "pending") return line;
+          const mixer = resolveSimpleMixerGroup([mixerGroup]);
+          if (!mixer) return line;
+          const selectedModifiers = buildMixerSelectionForLine(
+            line.selectedModifiers,
+            mixer,
+            option,
+          );
+          const modifierTotal = selectedModifiers.reduce(
+            (sum, mod) => sum + (Number.isFinite(mod.priceDelta) ? mod.priceDelta : 0),
+            0,
+          );
+          return {
+            ...line,
+            selectedModifiers,
+            modifierTotal,
+            displayName: buildCartLineDisplayName(
+              line.product.nombre,
+              selectedModifiers,
+            ),
+          };
+        }),
+      );
+    },
+    [updateCurrentTableOrder],
+  );
+
   const advanceLineStatusKitchen = useCallback(
     (lineId: string) => {
       void handleServeItem(lineId);
@@ -4390,7 +5182,7 @@ export function CartaPageContent({
     const set = new Set<string>();
     for (const p of products) {
       const cat = p.categoria || "Sin categoría";
-      if (categoryMenuGroup(cat) === menuGroup) set.add(cat);
+      if (resolveTpvMenuGroupFromCategoryName(cat) === menuGroup) set.add(cat);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
   }, [products, menuGroup]);
@@ -4418,7 +5210,7 @@ export function CartaPageContent({
   const filteredProducts = useMemo(() => {
     const inGroup = products.filter(
       (p) =>
-        categoryMenuGroup(p.categoria || "Sin categoría") === menuGroup,
+        tpvMenuGroupForProduct(p) === menuGroup,
     );
     if (!effectiveSelectedCategory) return inGroup;
     return inGroup.filter(
@@ -4444,7 +5236,7 @@ export function CartaPageContent({
   );
 
   const showAuthSpinner = !authReady;
-  const showProductsSpinner = authReady && productsLoading && !error;
+  const showProductsSpinner = authReady && productsLoading && !catalogLoadError;
 
   /** Mesas de Firestore + ids con comanda solo en memoria (`ordersByTable` por `table.id`). */
   const displayMesas = useMemo(() => {
@@ -4544,15 +5336,26 @@ export function CartaPageContent({
     const list = tablesFilteredByWaiter.filter((tbl) => String(tbl.id ?? "").trim() !== "");
     return list.map((tbl) => {
       const tableId = String(tbl.id ?? "").trim();
+      const group = resolveJoinedTableGroupMapState(
+        tableId,
+        groupedTablesMapHandlers,
+        firestoreOccupiedTableIds,
+        ordersByTable,
+      );
       return {
         ...tbl,
-        activeLineCount: ordersByTable[tableId]?.length ?? 0,
-        busy:
-          firestoreOccupiedTableIds.has(tableId) ||
-          (ordersByTable[tableId]?.length ?? 0) > 0,
+        activeLineCount: countActiveComandaLines(
+          ordersByTable[group.serviceTableId] ?? [],
+        ),
+        busy: group.busy,
       };
     });
-  }, [tablesFilteredByWaiter, firestoreOccupiedTableIds, ordersByTable]);
+  }, [
+    tablesFilteredByWaiter,
+    firestoreOccupiedTableIds,
+    groupedTablesMapHandlers,
+    ordersByTable,
+  ]);
 
   const tablesById = useMemo(() => {
     const map: Record<string, Table> = {};
@@ -4574,6 +5377,17 @@ export function CartaPageContent({
 
   /** Por mesa: instante de la comanda activa más antigua (ms), alineado con ocupación. */
   const orderOpenedAtByTable = firestoreOccupancyStartMsByTable;
+
+  const isTableOccupiedOnMap = useCallback(
+    (tableId: string) =>
+      resolveJoinedTableGroupMapState(
+        tableId,
+        groupedTablesMapHandlers,
+        firestoreOccupiedTableIds,
+        ordersByTable,
+      ).busy,
+    [firestoreOccupiedTableIds, groupedTablesMapHandlers, ordersByTable],
+  );
 
   /** Resumen numérico de mesas visibles (respeta `tablesFilteredByWaiter`). Libres / ocupadas / reservadas
    *  alinean con colores del mapa: ocupada = comanda Firestore o líneas en memoria; reservada = libre de comanda y
@@ -4597,8 +5411,7 @@ export function CartaPageContent({
       const orderTotal = orderTotalsByTable[id];
       const pl = computeMapVisualPriorityLevel(openedAt, now, orderTotal);
 
-      const mapOccupied =
-        firestoreOccupiedTableIds.has(id) || (ordersByTable[id]?.length ?? 0) > 0;
+      const mapOccupied = isTableOccupiedOnMap(id);
       if (mapOccupied) {
         busy += 1;
       } else if (reservedByTableId[id]) {
@@ -4613,8 +5426,7 @@ export function CartaPageContent({
     return { total, free, reserved, busy, warning, critical };
   }, [
     tablesFilteredByWaiter,
-    firestoreOccupiedTableIds,
-    ordersByTable,
+    isTableOccupiedOnMap,
     reservedByTableId,
     orderOpenedAtByTable,
     orderTotalsByTable,
@@ -4630,15 +5442,22 @@ export function CartaPageContent({
   const mapTablePriorityScore = useCallback(
     (tbl: Table) => {
       const tableId = String(tbl.id ?? "").trim();
-      const busy =
-        firestoreOccupiedTableIds.has(tableId) ||
-        (ordersByTable[tableId]?.length ?? 0) > 0;
-      const occupancyStartMs = firestoreOccupancyStartMsByTable[tableId] ?? null;
+      const group = resolveJoinedTableGroupMapState(
+        tableId,
+        groupedTablesMapHandlers,
+        firestoreOccupiedTableIds,
+        ordersByTable,
+      );
+      const busy = group.busy;
+      const occupancyStartMs =
+        firestoreOccupancyStartMsByTable[group.serviceTableId] ?? null;
       const minutesOccupied =
         occupancyStartMs != null
           ? Math.max(0, (now - occupancyStartMs) / 60000)
           : 0;
-      const activeLineCount = ordersByTable[tableId]?.length ?? 0;
+      const activeLineCount = countActiveComandaLines(
+        ordersByTable[group.serviceTableId] ?? [],
+      );
       const isCritical =
         busy &&
         occupancyStartMs != null &&
@@ -4651,7 +5470,13 @@ export function CartaPageContent({
         activeLineCount * 2
       );
     },
-    [firestoreOccupiedTableIds, firestoreOccupancyStartMsByTable, ordersByTable, now],
+    [
+      firestoreOccupiedTableIds,
+      firestoreOccupancyStartMsByTable,
+      groupedTablesMapHandlers,
+      ordersByTable,
+      now,
+    ],
   );
 
   const sortedTables = useMemo(() => {
@@ -4948,16 +5773,6 @@ export function CartaPageContent({
     };
   }, [sortedTables, showTableMap, prefersReducedMotion, isUltraFastMode]);
 
-  const isTableOccupiedOnMap = useCallback(
-    (tableId: string) => {
-      const id = tableId.trim();
-      if (!id) return false;
-      if (firestoreOccupiedTableIds.has(id)) return true;
-      return (ordersByTable[id]?.length ?? 0) > 0;
-    },
-    [firestoreOccupiedTableIds, ordersByTable],
-  );
-
   /** Mesas mostradas en el plano según chip activo (encima de camarero/zona). */
   const mapTablesForChipFilter = useMemo(() => {
     if (activeMapFilter === "all") return mapTablesOrderedByVisualPriority;
@@ -4978,9 +5793,18 @@ export function CartaPageContent({
         return !mapOccupied && hasReservation;
       }
 
-      const activeLineCount = ordersByTable[tableId]?.length ?? 0;
+      const group = resolveJoinedTableGroupMapState(
+        tableId,
+        groupedTablesMapHandlers,
+        firestoreOccupiedTableIds,
+        ordersByTable,
+      );
+      const serviceTableId = group.serviceTableId;
+      const activeLineCount = countActiveComandaLines(
+        ordersByTable[serviceTableId] ?? [],
+      );
       const busy = mapOccupied;
-      const occupancyStartMs = firestoreOccupancyStartMsByTable[tableId];
+      const occupancyStartMs = firestoreOccupancyStartMsByTable[serviceTableId];
       const minutesOccupied =
         occupancyStartMs != null
           ? Math.max(0, (now - occupancyStartMs) / 60000)
@@ -4990,12 +5814,12 @@ export function CartaPageContent({
         occupancyStartMs != null &&
         minutesOccupied >= 45 &&
         activeLineCount >= 8;
-      const openedAtMsRaw = orderOpenedAtByTable[tableId];
+      const openedAtMsRaw = orderOpenedAtByTable[serviceTableId];
       const openedAtMs =
         typeof openedAtMsRaw === "number" && Number.isFinite(openedAtMsRaw)
           ? openedAtMsRaw
           : undefined;
-      const ot = orderTotalsByTable[tableId];
+      const ot = orderTotalsByTable[serviceTableId];
       const orderTotal =
         typeof ot === "number" && Number.isFinite(ot) ? ot : undefined;
       const priorityLevel = computeMapVisualPriorityLevel(
@@ -5003,7 +5827,9 @@ export function CartaPageContent({
         now,
         orderTotal,
       );
-      const readyToClose = salaReadyToCloseTableIds.has(tableId);
+      const readyToClose = group.memberIds.some((memberId) =>
+        salaReadyToCloseTableIds.has(memberId),
+      );
       const rp = reservationPressureByTableId[tableId];
 
       if (activeMapFilter === "delayed") {
@@ -5031,6 +5857,8 @@ export function CartaPageContent({
     isTableOccupiedOnMap,
     reservedByTableId,
     ordersByTable,
+    firestoreOccupiedTableIds,
+    groupedTablesMapHandlers,
     firestoreOccupancyStartMsByTable,
     now,
     orderOpenedAtByTable,
@@ -5195,19 +6023,29 @@ export function CartaPageContent({
           : 0;
       if (value === guestCount) return;
 
+      const tableId = selectedTableId;
+      guestCountPersistRef.current = {
+        tableId,
+        value,
+        at: Date.now(),
+      };
       setGuestCount(value);
       try {
-        await updateDoc(doc(db, "tables", selectedTableId), {
+        await updateDoc(doc(db, "tables", tableId), {
           dinersCount: value,
           // backwards compatibility (otros sitios aún leen guestCount)
           guestCount: value,
           updatedAt: Date.now(),
         });
       } catch (error) {
+        guestCountPersistRef.current = null;
         console.error("ERROR GUARDANDO COMENSALES", error);
+        const t = tablesList.find((x) => x.id === tableId) ?? null;
+        setGuestCount(readTableDinersCount(t));
+        window.alert("No se pudo guardar el número de comensales");
       }
     },
-    [guestCount, restaurantId, selectedTableId],
+    [guestCount, isFirebaseConfigured, restaurantId, selectedTableId, tablesList],
   );
 
   const handlePayOrder = useCallback(async () => {
@@ -5527,67 +6365,80 @@ export function CartaPageContent({
     (tableId: string) => {
       const tid = String(tableId).trim();
       if (!tid) return;
-      const mainTableId =
-        groupedTablesMapHandlers?.resolveMainTableId(tid) ?? tid;
+      const group = resolveJoinedTableGroupMapState(
+        tid,
+        groupedTablesMapHandlers,
+        firestoreOccupiedTableIds,
+        ordersByTable,
+      );
+      const { mainTableId, memberIds, serviceTableId, busy } = group;
 
-      const isSecondaryInClientGroup =
-        Boolean(groupedTablesMapHandlers) &&
-        mainTableId !== tid &&
-        (groupedTablesMapHandlers?.isGroupedTable(tid) ?? false);
-
-      if (salaReadyToCloseTableIds.has(tid)) {
-        const fromLines = sumCartOrderLinesTotal(ordersByTable[tid] ?? []);
+      const readyMemberId = memberIds.find((memberId) =>
+        salaReadyToCloseTableIds.has(memberId),
+      );
+      if (readyMemberId) {
+        const fromLines = sumCartOrderLinesTotal(ordersByTable[readyMemberId] ?? []);
         const fromAggregate =
-          typeof orderTotalsByTable[tid] === "number" &&
-          Number.isFinite(orderTotalsByTable[tid])
-            ? orderTotalsByTable[tid]
+          typeof orderTotalsByTable[readyMemberId] === "number" &&
+          Number.isFinite(orderTotalsByTable[readyMemberId])
+            ? orderTotalsByTable[readyMemberId]
             : 0;
         const tablePendingTotal = Math.max(fromLines, fromAggregate);
-        handleOpenTableOrder(mainTableId, { entry: "summary" });
+        handleOpenTableOrder(serviceTableId, { entry: "summary" });
         if (tablePendingTotal <= 0) {
           return;
         }
-        window.setTimeout(() => {
-          setIsPaymentOpen(true);
-        }, 0);
+        if (canCharge) {
+          window.setTimeout(() => {
+            setIsPaymentOpen(true);
+          }, 0);
+        }
         return;
       }
 
-      const busy =
-        firestoreOccupiedTableIds.has(tid) ||
-        (isSecondaryInClientGroup &&
-          firestoreOccupiedTableIds.has(mainTableId));
       if (!busy) {
-        // Mesa libre en el mapa: siempre comanda nueva (no reutilizar estado local antiguo).
-        delete openDraftOrderIdByTableRef.current[tid];
+        for (const memberId of memberIds) {
+          delete openDraftOrderIdByTableRef.current[memberId];
+        }
         setOrder([]);
-        setOrdersByTable((prev) => ({
-          ...prev,
-          [tid]: [],
-        }));
+        setOrdersByTable((prev) => {
+          const next = { ...prev };
+          for (const memberId of memberIds) {
+            next[memberId] = [];
+          }
+          return next;
+        });
         setFirestoreOccupancyStartMsByTable((prev) => {
           const next = { ...prev };
-          delete next[tid];
+          for (const memberId of memberIds) {
+            delete next[memberId];
+          }
           return next;
         });
         setOrderTotalsByTable((prev) => {
           const next = { ...prev };
-          delete next[tid];
+          for (const memberId of memberIds) {
+            delete next[memberId];
+          }
           return next;
         });
         setLastActivityAtByTable((prev) => {
           const next = { ...prev };
-          delete next[tid];
+          for (const memberId of memberIds) {
+            delete next[memberId];
+          }
           return next;
         });
         setFirestoreOccupiedTableIds((prev) => {
           const next = new Set(prev);
-          next.delete(tid);
+          for (const memberId of memberIds) {
+            next.delete(memberId);
+          }
           return next;
         });
       }
 
-      handleOpenTableOrder(mainTableId);
+      handleOpenTableOrder(busy ? serviceTableId : mainTableId);
     },
     [
       handleOpenTableOrder,
@@ -5608,6 +6459,7 @@ export function CartaPageContent({
 
   const handleMapTableJoinDrop = useCallback(
     (draggedTableId: string, targetTableId: string) => {
+      if (!canJoinTables) return;
       const join = groupedTablesMapHandlers?.joinTables;
       if (!join) return;
       const d = String(draggedTableId).trim();
@@ -5629,7 +6481,13 @@ export function CartaPageContent({
       if (fpA !== fpB) return;
       join(t, d);
     },
-    [groupedTablesMapHandlers, tablesById, selectedTpvFloorPlanId, floorPlans],
+    [
+      canJoinTables,
+      groupedTablesMapHandlers,
+      tablesById,
+      selectedTpvFloorPlanId,
+      floorPlans,
+    ],
   );
 
   const handleBackToMap = useCallback(() => {
@@ -5733,6 +6591,19 @@ export function CartaPageContent({
     [visibleOrderLines],
   );
 
+  const linesCancelled = useMemo(
+    () =>
+      order
+        .filter((l) => normalizeOrderLineStatus(l.status) === "cancelled")
+        .slice()
+        .sort((a, b) => {
+          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
+          if (d !== 0) return d;
+          return a.id.localeCompare(b.id);
+        }),
+    [order],
+  );
+
   const groupedLines = useMemo(() => {
     const buckets: Record<1 | 2 | 3 | 4, CartOrderLine[]> = {
       1: [],
@@ -5751,8 +6622,9 @@ export function CartaPageContent({
     if (viewMode === "normal") {
       linesServed.forEach(pushByCourse);
     }
+    linesCancelled.forEach(pushByCourse);
     return buckets;
-  }, [linesPending, linesSent, linesPrepared, linesServed, viewMode]);
+  }, [linesPending, linesSent, linesPrepared, linesServed, linesCancelled, viewMode]);
 
   const sendLinesToComanda = useCallback(
     async (linesToSend: CartOrderLine[]): Promise<boolean> => {
@@ -5769,20 +6641,35 @@ export function CartaPageContent({
       try {
         const now = Date.now();
         const sendIds = new Set(linesToSend.map((l) => l.id));
+        const inventoryCostByLineId = new Map<string, CartOrderLineInventoryCost>();
 
-        const nextOrder = order.map((l) =>
-          l.status === "pending" && sendIds.has(l.id)
-            ? { ...l, status: "sent" as const, sentAt: l.sentAt ?? now }
-            : l,
-        );
+        const nextOrder = order.map((l) => {
+          if (l.status !== "pending" || !sendIds.has(l.id)) return l;
+          const inventoryCost =
+            operationalCatalog.source === "central"
+              ? buildTpvLineInventoryCostSnapshot({
+                  line: l,
+                  inventoryProductsById,
+                  recipe:
+                    operationalCatalog.productDocumentsById.get(l.product.id)
+                      ?.recipe ?? null,
+                  saleProductId: l.product.id,
+                  calculatedAt: now,
+                })
+              : undefined;
+          if (inventoryCost) inventoryCostByLineId.set(l.id, inventoryCost);
+          return {
+            ...l,
+            status: "sent" as const,
+            sentAt: l.sentAt ?? now,
+            ...(inventoryCost ? { inventoryCost } : {}),
+          };
+        });
 
         updateCurrentTableOrder(() => nextOrder);
 
         const items = orderLinesToFirestoreItems(nextOrder);
-        const grandTotal = items.reduce(
-          (acc, it) => acc + (Number(it.total) || 0),
-          0,
-        );
+        const grandTotal = sumCartOrderLinesTotal(nextOrder);
 
         const draftOrderId =
           openDraftOrderIdByTableRef.current[selectedTableId]?.trim() || "";
@@ -5847,6 +6734,14 @@ export function CartaPageContent({
           orderId: persistedOrderRef.id,
         });
         linesToSend.forEach((l) => {
+          const stationFields = resolveStationFieldsForCartLine(l);
+          const opFields = resolveOperationStationFieldsForCartLine(l);
+          warnDevIfSentLineMissingStation({
+            lineId: l.id,
+            productId: String(l.product.id),
+            productName: String(l.product.nombre ?? ""),
+            fields: stationFields,
+          });
           const ref = doc(collection(db, "orderItems"));
           const lCourse = normalizeComandaCourseForStorage(l.course);
           const extrasPayload = Array.isArray(l.extras)
@@ -5860,12 +6755,23 @@ export function CartaPageContent({
                 }))
                 .filter((ex) => ex.name !== "")
             : [];
+          const selectedModifiersPayload = selectedModifiersToFirestorePayload(
+            l.selectedModifiers,
+          );
+          const linePresentation = resolveOrderLineModifierPresentation({
+            baseProductName: String(l.product.nombre ?? ""),
+            displayName: l.displayName,
+            selectedModifiers: l.selectedModifiers,
+            lineNote: l.lineNote,
+          });
           batch.set(ref, {
             restaurantId,
             orderId: persistedOrderRef.id,
             tableId: selectedTableId,
             tableName: tableLabel,
-            name: l.product.nombre,
+            lineId: l.id,
+            productId: String(l.product.id),
+            name: linePresentation.displayName,
             quantity: l.quantity,
             status: "pending",
             sentAt: now,
@@ -5874,10 +6780,110 @@ export function CartaPageContent({
             categoryName: l.product.categoria ?? undefined,
             course: lCourse ?? 1,
             extras: extrasPayload,
-            note: l.lineNote?.trim() ?? "",
+            ...(selectedModifiersPayload.length > 0
+              ? {
+                  selectedModifiers: selectedModifiersPayload,
+                  modifierTotal: resolveLineModifierTotal(l),
+                  modifiersLabel: linePresentation.modifiersLabel,
+                }
+              : {}),
+            ...(linePresentation.displayName
+              ? { displayName: linePresentation.displayName }
+              : {}),
+            note: linePresentation.note,
+            ...stationFieldsToFirestorePayload(stationFields),
+            ...operationStationFieldsToFirestorePayload(opFields),
+            ...(inventoryCostByLineId.has(l.id)
+              ? {
+                  inventoryCost: inventoryCostSnapshotToFirestore(
+                    inventoryCostByLineId.get(l.id)!,
+                  ),
+                }
+              : {}),
           });
         });
         await batch.commit();
+
+        try {
+          const inventoryRestaurantId = operationalRestaurantId ?? restaurantId;
+          const inventoryResult = await createStockMovementsForModifierConsumption({
+            restaurantId: inventoryRestaurantId,
+            orderId: persistedOrderRef.id,
+            lines: linesToSend,
+            userId: waiterId,
+          });
+          if (inventoryResult.failed > 0) {
+            console.warn(
+              "[Hostly Inventory] algunos movimientos de modificador no se crearon; comanda enviada.",
+              inventoryResult,
+            );
+          }
+          if (inventoryResult.movementIds.length > 0) {
+            const applyResult = await applyCreatedStockMovements({
+              restaurantId: inventoryRestaurantId,
+              movementIds: inventoryResult.movementIds,
+            });
+            if (applyResult.failed > 0) {
+              console.warn(
+                "[Hostly Inventory] algunos movimientos no se aplicaron al stock; comanda enviada.",
+                applyResult,
+              );
+            }
+          }
+
+          const recipeResult = await createStockMovementsForRecipeConsumption({
+            restaurantId: inventoryRestaurantId,
+            orderId: persistedOrderRef.id,
+            lines: linesToSend,
+            userId: waiterId,
+          });
+          if (recipeResult.failed > 0) {
+            console.warn(
+              "[Hostly Inventory] algunos movimientos de escandallo no se crearon; comanda enviada.",
+              recipeResult,
+            );
+          }
+          if (recipeResult.movementIds.length > 0) {
+            const recipeApplyResult = await applyCreatedStockMovements({
+              restaurantId: inventoryRestaurantId,
+              movementIds: recipeResult.movementIds,
+            });
+            if (recipeApplyResult.failed > 0) {
+              console.warn(
+                "[Hostly Inventory] escandallo no aplicado al stock; comanda enviada.",
+                recipeApplyResult,
+              );
+            }
+          }
+        } catch (inventoryErr) {
+          console.warn(
+            "[Hostly Inventory] ledger de inventario no disponible; comanda enviada.",
+            inventoryErr,
+          );
+        }
+
+        try {
+          const printerConfig = await getPrinterConfig(restaurantId);
+          const printResult = await createPrintJobsForComandaLines({
+            restaurantId,
+            orderId: persistedOrderRef.id,
+            tableId: selectedTableId,
+            tableName: tableLabel,
+            lines: linesToSend,
+            printerConfig,
+          });
+          if (printResult.failed > 0) {
+            console.warn(
+              "[Hostly Print] algunos jobs no se crearon; comanda enviada.",
+              printResult,
+            );
+          }
+        } catch (printErr) {
+          console.warn(
+            "[Hostly Print] cola no disponible; comanda enviada.",
+            printErr,
+          );
+        }
 
         setComandaSentFlash(true);
         if (comandaFlashTimeoutRef.current != null) {
@@ -5887,6 +6893,44 @@ export function CartaPageContent({
           setComandaSentFlash(false);
           comandaFlashTimeoutRef.current = null;
         }, 1000);
+
+        if (restaurantId) {
+          const seenProductIds = new Set<string>();
+          const recentEntries: Array<{ productId: string; productName: string }> = [];
+          for (const line of linesToSend) {
+            const productId = line.product.id?.trim();
+            if (!productId || seenProductIds.has(productId)) continue;
+            seenProductIds.add(productId);
+            recentEntries.push({
+              productId,
+              productName: String(line.product.nombre ?? "").trim() || "Producto",
+            });
+          }
+          if (recentEntries.length > 0) {
+            recordTpvRecentProducts(restaurantId, recentEntries);
+            setRecentProductsRevision((value) => value + 1);
+          }
+        }
+
+        void createActivityLog({
+          restaurantId,
+          type: existingOrderId ? "order_updated" : "order_created",
+          entityType: "order",
+          entityId: persistedOrderRef.id,
+          actorUserId: waiterId ?? undefined,
+          actorUserName: activityActorName,
+          actorRole: activityActorRole,
+          metadata: buildActivityMetadata({
+            tableId: selectedTableId,
+            tableName: tableLabel,
+            lineCount: linesToSend.length,
+            lineIds: linesToSend.map((line) => line.id),
+            total: Number.isFinite(grandTotal) ? grandTotal : 0,
+            action: "send_to_comanda",
+            route: "tpv",
+          }),
+        });
+
         return true;
       } catch (e) {
         console.error(e);
@@ -5905,6 +6949,13 @@ export function CartaPageContent({
       updateCurrentTableOrder,
       orderIdFromUrl,
       openOrderIdsForTable,
+      operationalRestaurantId,
+      waiterId,
+      inventoryProductsById,
+      operationalCatalog.productDocumentsById,
+      operationalCatalog.source,
+      activityActorName,
+      activityActorRole,
     ],
   );
 
@@ -5916,6 +6967,7 @@ export function CartaPageContent({
     if (!restaurantId || !isFirebaseConfigured) return false;
     if (order.length === 0) return false;
     if (!order.some((l) => l.status === "pending")) return false;
+    if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
 
     const linesToSend = order.filter((l) => l.status === "pending");
     const ok = await sendLinesToComanda(linesToSend);
@@ -5930,6 +6982,7 @@ export function CartaPageContent({
     order,
     isComandaSending,
     sendLinesToComanda,
+    connectivityStatus,
   ]);
 
   const showSentFeedback = (message: string) => {
@@ -6173,8 +7226,136 @@ export function CartaPageContent({
     [order],
   );
 
+  const tpvRushMode = useMemo(
+    () =>
+      computeTpvRushMode({
+        pendingLineCount: linesPending.length,
+        occupiedTableCount: firestoreOccupiedTableIds.size,
+      }),
+    [firestoreOccupiedTableIds.size, linesPending.length],
+  );
+
+  const tpvRecentProducts = useMemo((): TpvRecentProductEntry[] => {
+    if (!restaurantId) return [];
+    return readTpvRecentProducts(restaurantId);
+  }, [restaurantId, recentProductsRevision]);
+
+  const tpvRecentProductNameLookup = useMemo(() => {
+    const map = new Map<string, { id: string; nombre: string }>();
+    for (const product of products) {
+      map.set(product.id, { id: product.id, nombre: product.nombre });
+    }
+    return map;
+  }, [products]);
+
+  const tpvQuickActionsLine = useMemo(() => {
+    if (!tpvQuickActionsAnchor) return null;
+    return order.find((line) => line.id === tpvQuickActionsAnchor.lineId) ?? null;
+  }, [order, tpvQuickActionsAnchor]);
+
+  const tpvQuickActionsItems = useMemo((): TpvQuickActionItem[] => {
+    if (!tpvQuickActionsLine) return [];
+    const line = tpvQuickActionsLine;
+    const isPending = line.status === "pending";
+    const canCancel = isOrderLineCancellable(line);
+    const isCancelling = cancellingLineIds.has(line.id);
+    return [
+      {
+        id: "duplicate",
+        label: "Duplicar",
+        onSelect: () => {
+          void handleRepeatItem(line);
+        },
+      },
+      {
+        id: "edit-note",
+        label: "Editar nota",
+        disabled: !isPending,
+        onSelect: () => openComandaLineEditor(line),
+      },
+      {
+        id: "change-course",
+        label: "Cambiar pase",
+        disabled: !isPending,
+        onSelect: () => openComandaLineEditor(line),
+      },
+      {
+        id: "cancel-line",
+        label: isPending ? "Eliminar línea" : "Cancelar línea",
+        tone: "danger",
+        disabled: isPending ? false : !canCancel || isCancelling || !canCancelLine,
+        onSelect: () => {
+          if (isPending) {
+            handleRemoveLine(line.id);
+            return;
+          }
+          if (canCancel && !isCancelling && canCancelLine) {
+            void handleCancelSentOrderLine(line);
+          }
+        },
+      },
+      {
+        id: "repeat-round",
+        label: "Repetir ronda",
+        onSelect: () => handleRepeatLastRound(),
+      },
+    ];
+  }, [
+    cancellingLineIds,
+    handleCancelSentOrderLine,
+    handleRemoveLine,
+    handleRepeatItem,
+    handleRepeatLastRound,
+    openComandaLineEditor,
+    tpvQuickActionsLine,
+    canCancelLine,
+  ]);
+
+  const hasRepeatableRound = useMemo(
+    () =>
+      order.some(
+        (line) =>
+          line.status !== "pending" &&
+          line.status !== "cancelled" &&
+          line.status !== "served" &&
+          (line.sentAt ?? 0) > 0,
+      ),
+    [order],
+  );
+
   const showComandaAside =
     viewMode !== "normal" || Boolean(selectedTableId || orderIdFromUrl);
+
+  const activeEditingOrderId = useMemo(() => {
+    if (orderIdFromUrl?.trim()) return orderIdFromUrl.trim();
+    if (openOrderIdsForTable[0]?.trim()) return openOrderIdsForTable[0]!.trim();
+    return null;
+  }, [orderIdFromUrl, openOrderIdsForTable]);
+
+  const selectedTableNameForPresence = useMemo(() => {
+    if (!selectedTableId) return null;
+    return (
+      tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
+      selectedTableId
+    );
+  }, [selectedTableId, tablesList]);
+
+  const tablePresence = useTablePresenceHeartbeat({
+    enabled: Boolean(
+      embeddedInOperacion &&
+        restaurantId &&
+        selectedTableId &&
+        showComandaAside,
+    ),
+    restaurantId,
+    tableId: selectedTableId,
+    tableName: selectedTableNameForPresence,
+    editingOrderId: activeEditingOrderId,
+    userId: waiterId,
+    userName: activityActorName,
+    userRole: activityActorRole,
+    route: "/dashboard/operacion/tpv",
+  });
 
   const lineEditorTarget =
     comandaLineEditorId == null
@@ -6233,14 +7414,15 @@ export function CartaPageContent({
 
   const renderComandaLine = (
     item: CartOrderLine,
-    statusLabel: "Pendiente" | "Enviado" | "Preparado" | "Servido",
+    statusLabel: "Pendiente" | "Enviado" | "Preparado" | "Servido" | "Cancelado",
     opts: { strike?: boolean; attachFirstPendingRef?: boolean },
   ) => {
     const i = order.indexOf(item);
     const base = Number(item.product.precio);
     const extrasSum = sumLineExtrasPrices(item);
+    const modifierSum = resolveLineModifierTotal(item);
     const hasUnit =
-      (Number.isFinite(base) && base >= 0) || extrasSum > 0;
+      (Number.isFinite(base) && base >= 0) || extrasSum > 0 || modifierSum > 0;
     const unit = hasUnit ? comandaLineUnitPriceWithExtras(item) : null;
     const lineTotal =
       unit !== null && Number.isFinite(item.quantity)
@@ -6248,17 +7430,24 @@ export function CartaPageContent({
         : null;
     const firstPendingId = linesPending[0]?.id;
     const nm = item.product.nombre;
+    const modifierSubtitle = buildCartLineModifierSubtitle(item.selectedModifiers);
+    const lineInventoryCostLabel = tpvLineInventoryCostLabelByLineId.get(item.id);
     const courseForBadge = normalizeComandaCourseForStorage(item.course);
-    /* Etiqueta breve del pase (`course` 1–4 en línea). Coherente con el editor:
-       1 Entrante, 2 Primero, 3 Segundo, 4 Postre. */
+    const isDrinkLine = isTpvDrinkProduct({
+      productFamilyType: item.product.productFamilyType,
+      categoryName: item.product.categoria,
+      categoria: item.product.categoria,
+      tipoVenta: item.product.tipoVenta,
+    });
+    /* Etiqueta breve del pase (`course` 1–4 en línea). No mostrar pase de comida en bebidas. */
     const lineCourseLabel =
-      courseForBadge === 1
+      !isDrinkLine && courseForBadge === 1
         ? "Entrante"
-        : courseForBadge === 2
+        : !isDrinkLine && courseForBadge === 2
           ? "Primero"
-          : courseForBadge === 3
+          : !isDrinkLine && courseForBadge === 3
             ? "Segundo"
-            : courseForBadge === 4
+            : !isDrinkLine && courseForBadge === 4
               ? "Postre"
               : null;
     const lineSt = normalizeOrderLineStatus(item.status);
@@ -6272,12 +7461,51 @@ export function CartaPageContent({
     const lineCourseNumForActiveHighlight = courseForBadge ?? 1;
     const isActiveCourseLine =
       lineCourseNumForActiveHighlight === activeCourseNum;
+    const inlineMixerGroup =
+      item.status === "pending" && isDrinkLine
+        ? resolveSimpleMixerGroup(
+            resolveActiveEffectiveModifierGroups(
+              item.product,
+              resolveCategoryForProduct(item.product, cartaCategories),
+              modifierGroups,
+            ),
+          )
+        : null;
+    const selectedMixerOptionId =
+      inlineMixerGroup != null
+        ? item.selectedModifiers?.find(
+            (mod) => mod.groupId === inlineMixerGroup.group.id,
+          )?.optionId ?? null
+        : null;
+    const lineNoteTrimmed = item.lineNote?.trim() ?? "";
     return (
+      <TpvLineGestureRow
+        key={`line-gesture-${item.id}`}
+        lineId={item.id}
+        enabled={item.status !== "cancelled" && viewMode === "normal"}
+        onSwipeLeft={() => {
+          if (item.status === "pending") {
+            handleRemoveLine(item.id);
+          }
+        }}
+        onSwipeRight={() => {
+          void handleRepeatItem(item);
+        }}
+        onLongPress={(anchor) => {
+          setTpvQuickActionsAnchor({
+            lineId: item.id,
+            x: anchor.x,
+            y: anchor.y,
+          });
+        }}
+      >
       <li
-        key={`line-${item.id}`}
+        id={hostlyHighlightOrderLineElementId(item.id)}
         className={`carta-comanda-line${
           isActiveCourseLine ? " is-active-course-line" : ""
-        }${item.status === "pending" ? " is-pending" : ""}`}
+        }${item.status === "pending" ? " is-pending" : ""}${
+          item.status === "cancelled" ? " is-cancelled" : ""
+        }${qtyBumpLineId === item.id ? " hostly-tpv-line-add-flash" : ""}`}
         ref={
           opts.attachFirstPendingRef &&
           orderIdFromUrl &&
@@ -6285,14 +7513,30 @@ export function CartaPageContent({
             ? firstPendingRef
             : null
         }
-        onClick={item.status !== "cancelled" ? () => openComandaLineEditor(item) : undefined}
-        onMouseEnter={() => setHoveredComandaLineIndex(i)}
-        onMouseLeave={() => setHoveredComandaLineIndex(null)}
+        onClick={
+          item.status !== "cancelled"
+            ? () => openComandaLineEditor(item)
+            : undefined
+        }
+        onMouseEnter={() =>
+          item.status !== "cancelled" ? setHoveredComandaLineIndex(i) : undefined
+        }
+        onMouseLeave={() =>
+          item.status !== "cancelled" ? setHoveredComandaLineIndex(null) : undefined
+        }
         style={{
           cursor: item.status !== "cancelled" ? "pointer" : "default",
           textDecoration: "none",
           opacity:
-            item.status === "pending" ? (opts.strike ? 0.92 : 1) : opts.strike ? 0.78 : 0.75,
+            item.status === "cancelled"
+              ? 0.62
+              : item.status === "pending"
+                ? opts.strike
+                  ? 0.92
+                  : 1
+                : opts.strike
+                  ? 0.78
+                  : 0.75,
           backgroundColor: comandaLineRowBg(item.status, {
             hover: hoveredComandaLineIndex === i,
             selected: false,
@@ -6313,12 +7557,35 @@ export function CartaPageContent({
                   className="carta-comanda-name"
                   style={{
                     color: opts.strike ? "#64748b" : "#0f172a",
-                    textDecoration: opts.strike ? "line-through" : "none",
+                    textDecoration:
+                      opts.strike || item.status === "cancelled"
+                        ? "line-through"
+                        : "none",
                   }}
                   title={nm}
                 >
                   {nm}
                 </span>
+                {modifierSubtitle ? (
+                  <div
+                    className="carta-comanda-extras carta-comanda-modifiers"
+                    title={modifierSubtitle}
+                  >
+                    <div className="carta-comanda-extras-row">{modifierSubtitle}</div>
+                  </div>
+                ) : null}
+                {inlineMixerGroup ? (
+                  <TpvInlineMixerChips
+                    mixer={inlineMixerGroup}
+                    selectedOptionId={selectedMixerOptionId}
+                    onSelect={(option) =>
+                      handleApplyInlineMixer(item.id, option, inlineMixerGroup.group)
+                    }
+                  />
+                ) : null}
+                {lineNoteTrimmed ? (
+                  <div className="carta-comanda-line-meta-note">{lineNoteTrimmed}</div>
+                ) : null}
                 {lineCourseLabel ? (
                   <span
                     className="carta-line-course-badge"
@@ -6434,8 +7701,14 @@ export function CartaPageContent({
                   <span className="carta-comanda-pu">
                     <span
                       style={{
-                        textDecoration: item.isComped ? "line-through" : "none",
-                        color: item.isComped ? "#64748b" : undefined,
+                        textDecoration:
+                          item.isComped || item.status === "cancelled"
+                            ? "line-through"
+                            : "none",
+                        color:
+                          item.isComped || item.status === "cancelled"
+                            ? "#64748b"
+                            : undefined,
                       }}
                     >
                       {formatComandaLineEuroEs(unit)}
@@ -6448,8 +7721,12 @@ export function CartaPageContent({
                     className="carta-comanda-line-total-value"
                     style={{
                       color: opts.strike ? "#64748b" : "#0f172a",
-                      textDecoration: item.isComped ? "line-through" : "none",
-                      opacity: item.isComped ? 0.75 : 1,
+                      textDecoration:
+                        item.isComped || item.status === "cancelled"
+                          ? "line-through"
+                          : "none",
+                      opacity:
+                        item.isComped || item.status === "cancelled" ? 0.75 : 1,
                     }}
                   >
                     {formatComandaLineEuroEs(lineTotal)}
@@ -6459,6 +7736,9 @@ export function CartaPageContent({
                 <span>— · Total —</span>
               )}
             </div>
+            {lineInventoryCostLabel ? (
+              <div className="carta-comanda-line-cost-hint">{lineInventoryCostLabel}</div>
+            ) : null}
           </div>
           {item.status === "pending" ? (
             <div className="carta-comanda-qty-controls ml-auto">
@@ -6474,7 +7754,13 @@ export function CartaPageContent({
                 -
               </button>
 
-              <span className="text-sm w-4 text-center">{item.quantity}</span>
+              <span
+                className={`text-sm w-4 text-center${
+                  qtyBumpLineId === item.id ? " hostly-tpv-qty-bump" : ""
+                }`}
+              >
+                {item.quantity}
+              </span>
 
               <button
                 type="button"
@@ -6533,14 +7819,20 @@ export function CartaPageContent({
           ) : null}
         </div>
       </li>
+      </TpvLineGestureRow>
     );
   };
 
   return (
     <div
       className="carta-root"
+      data-catalog-source={operationalCatalog.source ?? undefined}
+      data-catalog-legacy-fallback={
+        operationalCatalog.usingLegacyFallback ? "true" : undefined
+      }
       data-carta-mobile={cartaHeaderMobile ? "true" : undefined}
       data-carta-embedded={embeddedInOperacion ? "true" : undefined}
+      data-tpv-rush={tpvRushMode ? "true" : undefined}
       style={{
         background: embeddedInOperacion
           ? "linear-gradient(180deg, #f5f8fc 0%, #eef3f9 42%, #e8f0f8 100%)"
@@ -6767,6 +8059,11 @@ export function CartaPageContent({
               const status = comandaLineActionsTarget.status;
               const allowInvite = status === "sent" || status === "prepared";
               const allowRemoveOne = status === "sent";
+              const allowCancel =
+                isOrderLineCancellable(comandaLineActionsTarget) && canCancelLine;
+              const isCancelling = cancellingLineIds.has(
+                comandaLineActionsTarget.id,
+              );
               const close = () => {
                 setComandaLineActionsOpen(false);
                 setComandaLineActionsTargetId(null);
@@ -6839,6 +8136,28 @@ export function CartaPageContent({
                     >
                       Invitar producto
                     </button>
+
+                    <button
+                      type="button"
+                      disabled={!allowCancel || isCancelling}
+                      className={`w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold leading-tight ${
+                        allowCancel && !isCancelling
+                          ? "bg-red-950/40 text-red-100 hover:bg-red-900/50 active:bg-red-950/50"
+                          : "cursor-not-allowed opacity-45 text-slate-500"
+                      }`}
+                      style={
+                        allowCancel && !isCancelling
+                          ? { boxShadow: "inset 0 0 0 1px rgba(248,113,113,0.22)" }
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!allowCancel || isCancelling) return;
+                        void handleCancelSentOrderLine(comandaLineActionsTarget);
+                        close();
+                      }}
+                    >
+                      {isCancelling ? "Cancelando…" : "Cancelar producto"}
+                    </button>
                   </div>
                 </>
               );
@@ -6846,6 +8165,24 @@ export function CartaPageContent({
           </div>
         </>
       ) : null}
+      <TpvQuickActionsMenu
+        open={tpvQuickActionsAnchor != null && tpvQuickActionsLine != null}
+        anchor={
+          tpvQuickActionsAnchor
+            ? { x: tpvQuickActionsAnchor.x, y: tpvQuickActionsAnchor.y }
+            : null
+        }
+        title={
+          tpvQuickActionsLine
+            ? comandaLineDisplayName(tpvQuickActionsLine)
+            : undefined
+        }
+        subtitle={
+          tpvQuickActionsLine ? `×${tpvQuickActionsLine.quantity}` : undefined
+        }
+        actions={tpvQuickActionsItems}
+        onClose={() => setTpvQuickActionsAnchor(null)}
+      />
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -7619,6 +8956,39 @@ export function CartaPageContent({
   flex: 0 0 auto;
   align-self: center;
   z-index: 4;
+}
+
+.carta-tpv-layout-active-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  align-self: center;
+  min-height: 26px;
+  max-width: min(180px, 34vw);
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--hostly-line) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  cursor: default;
+  box-sizing: border-box;
+  z-index: 4;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"]
+  .carta-map-top-strip-main
+  .carta-tpv-layout-active-badge {
+  min-height: 24px;
+  max-width: min(160px, 42vw);
+  padding: 2px 8px !important;
+  font-size: 9px !important;
 }
 
 /* Desktop/tablet (≥768px): pills segmentadas; móvil sigue con chip + popover. */
@@ -9007,6 +10377,16 @@ export function CartaPageContent({
   text-overflow: ellipsis;
 }
 
+.carta-comanda-line-cost-hint {
+  font-size: 9px;
+  line-height: 1.15;
+  color: #94a3b8;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .carta-comanda-line-meta {
   font-size: 9px;
   line-height: 1.15;
@@ -9239,6 +10619,138 @@ export function CartaPageContent({
   box-shadow: 0 22px 50px rgba(2, 6, 23, 0.38);
   border: 1px solid rgba(15, 23, 42, 0.1);
   box-sizing: border-box;
+}
+
+.carta-modifiers-modal-panel {
+  max-width: 460px;
+  max-height: min(88vh, 760px);
+  overflow: auto;
+}
+
+.carta-modifiers-modal-groups {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.carta-modifiers-modal-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.carta-modifiers-modal-group-meta {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.carta-modifiers-modal-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.carta-modifiers-option {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  color: #0f172a;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.carta-modifiers-option--active {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+}
+
+.carta-modifiers-option-name {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.carta-modifiers-option-delta {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.carta-modifiers-option-stock {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.carta-modifiers-option-stock.is-low {
+  background: rgba(251, 230, 198, 0.92);
+  color: #9a5d11;
+}
+
+.carta-modifiers-option-stock.is-out {
+  background: rgba(254, 226, 226, 0.92);
+  color: #b91c1c;
+}
+
+.carta-modifiers-stock-hint {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(254, 243, 199, 0.55);
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.carta-modifiers-modal-summary {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  display: grid;
+  gap: 8px;
+}
+
+.carta-modifiers-modal-summary-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.carta-modifiers-modal-summary-value {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.carta-comanda-modifiers {
+  margin-top: 1px;
 }
 
 .carta-line-editor-title {
@@ -9543,6 +11055,38 @@ export function CartaPageContent({
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
   line-height: 1;
   z-index: 2;
+}
+
+.carta-product-stock-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  max-width: calc(100% - 12px);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  padding: 2px 6px;
+  text-align: center;
+  pointer-events: none;
+  line-height: 1.15;
+  z-index: 2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carta-product-stock-badge.is-low {
+  background: rgba(251, 230, 198, 0.96);
+  color: #9a5d11;
+  border: 1px solid rgba(217, 119, 6, 0.28);
+}
+
+.carta-product-stock-badge.is-out {
+  background: rgba(254, 226, 226, 0.96);
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.28);
+}
 }
 
 /* Producto con unidades pendientes Y enviadas a la vez: ámbar para
@@ -10601,6 +12145,15 @@ export function CartaPageContent({
                       </div>
                     )
                   ) : null}
+                  {restaurantId && isFirebaseConfigured ? (
+                    <span
+                      className="carta-tpv-layout-active-badge hostly-pill hostly-muted"
+                      title={tpvActiveLayoutLabel}
+                      aria-live="polite"
+                    >
+                      {tpvActiveLayoutLabel}
+                    </span>
+                  ) : null}
                   {operationalFloorPlansForTpv.length > 1 &&
                   cartaHeaderMobile &&
                   tpvFloorPlanMenuOpen &&
@@ -10825,14 +12378,23 @@ export function CartaPageContent({
                         mapTablesForChipFilter.find(
                           (t) => String(t.id).trim() === tableId,
                         ) ?? ctx.element;
-                      const busy = isTableOccupiedOnMap(tableId);
-                      const isBusy = Boolean(openOrdersByTable[tableId]);
-                      const tileVisual = mapTileOccupancyVisual(tableId, busy);
+                      const group = resolveJoinedTableGroupMapState(
+                        tableId,
+                        groupedTablesMapHandlers,
+                        firestoreOccupiedTableIds,
+                        ordersByTable,
+                      );
+                      const serviceTableId = group.serviceTableId;
+                      const busy = group.busy;
+                      const isBusy = Boolean(openOrdersByTable[serviceTableId]);
+                      const tileVisual = mapTileOccupancyVisual(serviceTableId, busy);
                       const durationLabel =
-                        busy && firestoreOccupiedTableIds.has(tableId)
-                          ? formatMapOccupiedDuration(tableId)
+                        busy && firestoreOccupiedTableIds.has(serviceTableId)
+                          ? formatMapOccupiedDuration(serviceTableId)
                           : null;
-                      const activeLineCount = ordersByTable[tableId]?.length ?? 0;
+                      const activeLineCount = countActiveComandaLines(
+                        ordersByTable[serviceTableId] ?? [],
+                      );
                       const showProductCount = busy && activeLineCount > 0;
                       const badgeTier =
                         activeLineCount >= 8
@@ -10840,7 +12402,8 @@ export function CartaPageContent({
                           : activeLineCount >= 4
                             ? "medium"
                             : "low";
-                      const occupancyStartMs = firestoreOccupancyStartMsByTable[tableId];
+                      const occupancyStartMs =
+                        firestoreOccupancyStartMsByTable[serviceTableId];
                       const minutesOccupied =
                         occupancyStartMs != null
                           ? Math.max(0, (now - occupancyStartMs) / 60000)
@@ -10856,8 +12419,8 @@ export function CartaPageContent({
                           : `${String(stableTable.name ?? "").trim()}${durationLabel ? `, ${durationLabel}` : ""}${showProductCount ? ` (${activeLineCount})` : ""}, ${t("cartaTpv.mapOcupada")}`
                         : "";
 
-                      const total = orderTotalsByTable[tableId];
-                      const openedAt = orderOpenedAtByTable[tableId];
+                      const total = orderTotalsByTable[serviceTableId];
+                      const openedAt = orderOpenedAtByTable[serviceTableId];
                       const openedAtMs =
                         typeof openedAt === "number" && Number.isFinite(openedAt)
                           ? openedAt
@@ -10869,7 +12432,7 @@ export function CartaPageContent({
                           ? total
                           : undefined,
                       );
-                      const lastActivityAt = lastActivityAtByTable[tableId];
+                      const lastActivityAt = lastActivityAtByTable[serviceTableId];
                       const inactiveMinutes =
                         isBusy &&
                         lastActivityAt != null &&
@@ -10880,14 +12443,7 @@ export function CartaPageContent({
                             )
                           : 0;
 
-                      const dinersRaw =
-                        (stableTable as unknown as { dinersCount?: unknown; guestCount?: unknown })
-                          ?.dinersCount ??
-                        (stableTable as unknown as { guestCount?: unknown })?.guestCount;
-                      const dinersCount =
-                        typeof dinersRaw === "number" && Number.isFinite(dinersRaw)
-                          ? Math.max(0, Math.floor(dinersRaw))
-                          : 0;
+                      const dinersCount = readTableDinersCount(stableTable);
                       const paxLabel = dinersCount > 0 ? `${dinersCount} pax` : "";
                       const groupedBadgeText =
                         groupedTablesMapHandlers?.getGroupedBadgeText(tableId) ??
@@ -10909,7 +12465,7 @@ export function CartaPageContent({
                           mapLibreLabel={paxLabel || tableMapLibreLabel}
                           onTableClick={handleTableMapTileClick}
                           occupancyStart={
-                            firestoreOccupancyStartMsByTable[tableId] || 0
+                            firestoreOccupancyStartMsByTable[serviceTableId] || 0
                           }
                           priority={mapTablePriorityScore(priorityTable)}
                           setNodeRef={getTableFlipRefCallback(tableId)}
@@ -10936,7 +12492,7 @@ export function CartaPageContent({
                             stableTable.waiterName,
                           )}
                           billRequested={firestoreBillRequestedTableIds.has(
-                            tableId,
+                            serviceTableId,
                           )}
                           reservationBadge={
                             reservedByTableId[tableId]
@@ -10958,10 +12514,12 @@ export function CartaPageContent({
                                 }
                               : null
                           }
-                          readyToClose={salaReadyToCloseTableIds.has(tableId)}
+                          readyToClose={group.memberIds.some((memberId) =>
+                            salaReadyToCloseTableIds.has(memberId),
+                          )}
                           groupedBadgeText={groupedBadgeText}
                           mapJoinDragEnabled={Boolean(
-                            groupedTablesMapHandlers?.joinTables,
+                            groupedTablesMapHandlers?.joinTables && canJoinTables,
                           )}
                           onMapTableJoinDrop={handleMapTableJoinDrop}
                           mapJoinClusterMainId={String(
@@ -10984,7 +12542,8 @@ export function CartaPageContent({
                             ) && selectedTableId === tableId,
                           )}
                           onRequestSeparateGroupedTables={
-                            groupedTablesMapHandlers?.separateTable
+                            groupedTablesMapHandlers?.separateTable &&
+                            canJoinTables
                               ? (tid: string) => {
                                   const mainId =
                                     groupedTablesMapHandlers?.resolveMainTableId?.(
@@ -11180,13 +12739,47 @@ export function CartaPageContent({
                     ) : null}
                   </div>
                 ) : null}
+                {embeddedInOperacion &&
+                selectedTableId &&
+                (tablePresence.displayLabel || tablePresence.showConcurrentBadge) ? (
+                  <TpvTablePresenceIndicators
+                    displayLabel={tablePresence.displayLabel}
+                    showConcurrentBadge={tablePresence.showConcurrentBadge}
+                  />
+                ) : null}
+                {embeddedInOperacion && selectedTableId ? (
+                  <div
+                    className="carta-comanda-connectivity-row"
+                    style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}
+                  >
+                    <ConnectivityStatusPill status={connectivityStatus} />
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
           {viewMode === "normal" && (
             <div className="carta-header-compact carta-comanda-header-compact">
-              <div className="carta-estados carta-comanda-status-row">
-                {tpvComandaEstadosChipsEl}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div className="carta-estados carta-comanda-status-row">
+                  {tpvComandaEstadosChipsEl}
+                </div>
+                {hasRepeatableRound ? (
+                  <button
+                    type="button"
+                    className="hostly-tpv-repeat-round-btn"
+                    onClick={handleRepeatLastRound}
+                  >
+                    Repetir ronda
+                  </button>
+                ) : null}
               </div>
             </div>
           )}
@@ -11291,7 +12884,17 @@ export function CartaPageContent({
             </div>
           ) : (
             <>
-              {visibleOrderLines.length === 0 ? (
+              {orderDeepLinkNotice ? (
+                <div style={{ padding: "0 8px 8px" }}>
+                  <DeepLinkContextNotice message={orderDeepLinkNotice} />
+                </div>
+              ) : null}
+              {orderDeepLinkLineNotice ? (
+                <div style={{ padding: "0 8px 8px" }}>
+                  <DeepLinkContextNotice message={orderDeepLinkLineNotice} />
+                </div>
+              ) : null}
+              {order.length === 0 ? (
                 <div
                   style={{
                     padding: "28px 12px",
@@ -11345,6 +12948,11 @@ export function CartaPageContent({
                               }
                               if (st === "served") {
                                 return renderComandaLine(line, "Servido", {
+                                  strike: true,
+                                });
+                              }
+                              if (st === "cancelled") {
+                                return renderComandaLine(line, "Cancelado", {
                                   strike: true,
                                 });
                               }
@@ -11486,18 +13094,23 @@ export function CartaPageContent({
                     <button
                       type="button"
                       className="carta-tpv-dock-cobrar"
-                      onClick={() => setIsPaymentOpen(true)}
+                      onClick={() => {
+                        if (!canCharge) return;
+                        setIsPaymentOpen(true);
+                      }}
                       disabled={
                         isPayTableOrderSending ||
                         order.length === 0 ||
                         !restaurantId ||
-                        !isFirebaseConfigured
+                        !isFirebaseConfigured ||
+                        !canCharge
                       }
-                      title={
+                      title={capabilityDeniedTitle(
+                        canCharge,
                         order.length === 0
                           ? "No hay productos en la comanda"
-                          : "Cobrar esta mesa"
-                      }
+                          : "Cobrar esta mesa",
+                      )}
                       style={{
                         width: "100%",
                         padding: "12px 14px",
@@ -11507,7 +13120,8 @@ export function CartaPageContent({
                           isPayTableOrderSending ||
                           order.length === 0 ||
                           !restaurantId ||
-                          !isFirebaseConfigured
+                          !isFirebaseConfigured ||
+                          !canCharge
                             ? "not-allowed"
                             : "pointer",
                         borderRadius: 14,
@@ -11520,7 +13134,8 @@ export function CartaPageContent({
                           isPayTableOrderSending ||
                           order.length === 0 ||
                           !restaurantId ||
-                          !isFirebaseConfigured
+                          !isFirebaseConfigured ||
+                          !canCharge
                             ? 0.55
                             : 1,
                         minHeight: 44,
@@ -11707,15 +13322,26 @@ export function CartaPageContent({
               <div
                 className={
                   isSimplePaymentMode
-                    ? "flex-1 px-3 sm:px-4 pt-3 pb-3 flex flex-col justify-between"
+                    ? "flex-1 min-h-0 flex flex-col px-3 sm:px-4 pt-3 pb-3"
                     : "flex-1 min-h-0 overflow-y-auto overscroll-contain px-2.5 sm:px-3 pt-2 pb-0"
                 }
               >
                 {isSimplePaymentMode ? (
-                  <div className="flex flex-col justify-between min-h-0 flex-1">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold text-gray-900 leading-tight">
-                        <span className="min-w-0">Cobrar mesa</span>
+                  <div className="flex flex-col min-h-0 flex-1">
+                      <div className="shrink-0 flex flex-wrap items-center justify-between gap-x-2 gap-y-2 mb-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={handleCancelPaymentFlow}
+                            disabled={isConfirmingPayment}
+                            className="shrink-0 min-h-[44px] px-3 rounded-xl text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 active:bg-slate-200 touch-manipulation disabled:opacity-50"
+                          >
+                            ← Volver
+                          </button>
+                          <span className="min-w-0 text-sm font-semibold text-gray-900 leading-tight truncate">
+                            Cobrar mesa
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <label className="inline-flex items-center gap-1.5 cursor-pointer text-[10px] font-medium text-gray-500 normal-case select-none">
                             <input
@@ -11768,10 +13394,6 @@ export function CartaPageContent({
                         let changeDisplay = 0;
                         if (paymentMethod === "cash") {
                           receivedDisplay = cashParsedNum;
-                          changeDisplay = Math.max(
-                            receivedDisplay - remainingDue,
-                            0,
-                          );
                         } else if (paymentMethod === "card") {
                           receivedDisplay =
                             cardRawTrim === "" ? remainingDue : cardParsedNum;
@@ -11786,7 +13408,9 @@ export function CartaPageContent({
 
                         let chargePreview = 0;
                         if (paymentMethod === "cash") {
-                          chargePreview = cashParsedNum;
+                          chargePreview = roundMoney(
+                            Math.min(cashParsedNum, remainingDue),
+                          );
                         } else if (paymentMethod === "card") {
                           chargePreview =
                             cardRawTrim === ""
@@ -11801,6 +13425,13 @@ export function CartaPageContent({
                           );
                         }
 
+                        if (paymentMethod === "cash") {
+                          changeDisplay = Math.max(
+                            cashParsedNum - chargePreview,
+                            0,
+                          );
+                        }
+
                         const willPayRemaining =
                           remainingDue > MONEY_EPS &&
                           chargePreview >= remainingDue - MONEY_EPS;
@@ -11810,6 +13441,12 @@ export function CartaPageContent({
                           .replace(".", ",")} €`;
                         let confirmLabel = `Cobrar ${amtShort}`;
                         if (
+                          !willPayRemaining &&
+                          chargePreview > MONEY_EPS &&
+                          remainingDue > MONEY_EPS
+                        ) {
+                          confirmLabel = `Cobrar parcial ${amtShort}`;
+                        } else if (
                           willPayRemaining &&
                           sessionTableAmountPaidSum > MONEY_EPS
                         ) {
@@ -11862,9 +13499,12 @@ export function CartaPageContent({
                                 ? cardReceived
                                 : voucherAmount;
                           const cur = roundMoney(parseMoney(raw));
-                          const next = roundMoney(
-                            Math.min(remainingDue, cur + delta),
-                          );
+                          const next =
+                            paymentMethod === "cash"
+                              ? roundMoney(cur + delta)
+                              : roundMoney(
+                                  Math.min(remainingDue, cur + delta),
+                                );
                           const s = next.toFixed(2).replace(".", ",");
                           if (paymentMethod === "cash") {
                             setCashReceived(s);
@@ -11883,8 +13523,15 @@ export function CartaPageContent({
                         const inputMoneyClass =
                           "w-full min-h-[52px] border-2 rounded-2xl px-4 text-center text-2xl font-bold tracking-tight text-slate-900 border-slate-200 bg-white touch-manipulation outline-none focus:border-blue-500 focus:ring-0";
 
+                        const cashPaymentHint =
+                          paymentMethod === "cash" &&
+                          cashParsedNum <= MONEY_EPS
+                            ? "Introduce el importe recibido en efectivo."
+                            : null;
+
                         return (
                           <>
+                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pb-2">
                             {sessionPaymentHistory.length > 0 ? (
                               <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 space-y-2">
                                 <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -12209,44 +13856,6 @@ export function CartaPageContent({
                               </div>
                             ) : null}
 
-                            <button
-                              type="button"
-                              disabled={
-                                paymentMethod === null ||
-                                !isPaymentValid(remainingDue) ||
-                                isConfirmingPayment
-                              }
-                              className="w-full min-h-[56px] rounded-2xl text-lg font-bold shadow-md touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
-                              style={{
-                                background:
-                                  paymentMethod === null ||
-                                  !isPaymentValid(remainingDue) ||
-                                  isConfirmingPayment
-                                    ? "rgba(148,163,184,0.55)"
-                                    : "#2563eb",
-                                color: "#fff",
-                              }}
-                              onClick={() => {
-                                if (
-                                  paymentMethod === null ||
-                                  isConfirmingPayment
-                                )
-                                  return;
-                                void (async () => {
-                                  setIsConfirmingPayment(true);
-                                  try {
-                                    await handleConfirmPayment();
-                                  } finally {
-                                    setIsConfirmingPayment(false);
-                                  }
-                                })();
-                              }}
-                            >
-                              {isConfirmingPayment
-                                ? "Registrando…"
-                                : confirmLabel}
-                            </button>
-
                             <div className="mt-2 rounded-2xl border-2 border-gray-200 bg-gray-50 p-3 space-y-2.5">
                               <div className="text-xs font-bold text-gray-600 uppercase tracking-wide">
                                 Ajustes
@@ -12338,49 +13947,74 @@ export function CartaPageContent({
                                 </button>
                               </div>
 
+                            </div>
+                            </div>
+
+                            <div className="shrink-0 border-t border-slate-200/90 bg-white pt-2 pb-0.5 space-y-1.5">
+                              {cashPaymentHint ? (
+                                <p className="text-sm font-medium text-amber-700 text-center px-1">
+                                  {cashPaymentHint}
+                                </p>
+                              ) : null}
                               <button
                                 type="button"
-                                className="w-full min-h-[52px] rounded-2xl font-bold bg-white text-gray-800 text-base border-2 border-gray-200 active:bg-gray-100 touch-manipulation"
+                                disabled={
+                                  paymentMethod === null ||
+                                  !isPaymentValid(remainingDue) ||
+                                  isConfirmingPayment ||
+                                  !canCharge
+                                }
+                                className="w-full min-h-[56px] rounded-2xl text-lg font-bold shadow-md touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                style={{
+                                  background:
+                                    paymentMethod === null ||
+                                    !isPaymentValid(remainingDue) ||
+                                    isConfirmingPayment
+                                      ? "rgba(148,163,184,0.55)"
+                                      : "#2563eb",
+                                  color: "#fff",
+                                }}
                                 onClick={() => {
-                                  setIsPaymentOpen(false);
-                                  setPaymentMethod(null);
-                                  setIsInvoice(false);
-                                  setInvoiceName("");
-                                  setInvoiceTaxId("");
-                                  setInvoiceEmail("");
-                                  setCashReceived("");
-                                  setCardReceived("");
-                                  setVoucherAmount("");
-                                  setVoucherNumber("");
-                                  setDiscountAmount("");
-                                  setDiscountPercent("");
-                                  setIsSplitMode(false);
-                                  setIsSplitEqualMode(false);
-                                  setIsSplitItemsMode(false);
-                                  setIsSplitItemsPayMode(false);
-                                  setSelectedItemIds([]);
-                                  setPaidSplitItemIds([]);
-                                  setPartialPayments([]);
-                                  setSessionTableAmountPaidSum(0);
-                                  setSessionPaymentHistory([]);
-                                  setSplitCount(2);
-                                  setCurrentSplitIndex(1);
+                                  if (
+                                    paymentMethod === null ||
+                                    isConfirmingPayment
+                                  )
+                                    return;
+                                  void (async () => {
+                                    setIsConfirmingPayment(true);
+                                    try {
+                                      await handleConfirmPayment();
+                                    } finally {
+                                      setIsConfirmingPayment(false);
+                                    }
+                                  })();
                                 }}
                               >
-                                Cancelar
+                                {isConfirmingPayment
+                                  ? "Registrando…"
+                                  : confirmLabel}
                               </button>
                             </div>
                           </>
                         );
                       })()}
-                    </div>
                   </div>
                 ) : (
                   <>
-                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold mb-0.5 text-gray-900 leading-tight">
-                      <span className="min-w-0">
-                        {isSplitMode ? "Dividir cuenta" : "Cobrar mesa"}
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 text-sm font-semibold mb-0.5 text-gray-900 leading-tight">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={handleCancelPaymentFlow}
+                          disabled={isConfirmingPayment}
+                          className="shrink-0 min-h-[40px] px-2.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 active:bg-slate-200 touch-manipulation disabled:opacity-50"
+                        >
+                          ← Volver
+                        </button>
+                        <span className="min-w-0 truncate">
+                          {isSplitMode ? "Dividir cuenta" : "Cobrar mesa"}
+                        </span>
+                      </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <label className="inline-flex items-center gap-1.5 cursor-pointer text-[10px] font-medium text-gray-500 normal-case select-none">
                           <input
@@ -13283,14 +14917,19 @@ export function CartaPageContent({
                             <div className="sticky bottom-0 z-[2] mt-1 border-t border-slate-200/90 bg-white pt-1.5 pb-0.5">
                             <button
                             type="button"
-                            disabled={!isPaymentValid(payTotal)}
+                            disabled={!isPaymentValid(payTotal) || !canCharge}
+                            title={capabilityDeniedTitle(canCharge)}
                             className="w-full py-2 rounded-md text-xs font-semibold shadow"
                             style={{
-                              background: !isPaymentValid(payTotal)
+                              background:
+                                !isPaymentValid(payTotal) || !canCharge
                                 ? "rgba(148,163,184,0.55)"
                                   : "#2563eb",
                               color: "#fff",
-                              cursor: !isPaymentValid(payTotal) ? "not-allowed" : "pointer",
+                              cursor:
+                                !isPaymentValid(payTotal) || !canCharge
+                                  ? "not-allowed"
+                                  : "pointer",
                             }}
                             onClick={async () => {
                               const nextIndex = currentSplitIndex + 1;
@@ -13613,17 +15252,27 @@ export function CartaPageContent({
                           <div className="sticky bottom-0 z-[2] mt-1 border-t border-slate-200/90 bg-white pt-1.5 pb-0.5">
                           <button
                             type="button"
-                            disabled={!isPaymentValid(remainingDue) || hasPartialPayments}
+                            disabled={
+                              !isPaymentValid(remainingDue) ||
+                              hasPartialPayments ||
+                              !canCharge
+                            }
+                            title={capabilityDeniedTitle(canCharge)}
                             className={`w-full py-2 rounded-md text-xs font-semibold shadow ${
                               hasPartialPayments ? "opacity-50 cursor-not-allowed" : ""
                             }`}
                             style={{
-                              background: !isPaymentValid(remainingDue) || hasPartialPayments
+                              background:
+                                !isPaymentValid(remainingDue) ||
+                                hasPartialPayments ||
+                                !canCharge
                                 ? "rgba(148,163,184,0.55)"
                                 : "#2563eb",
                               color: "#fff",
                               cursor:
-                                !isPaymentValid(remainingDue) || hasPartialPayments
+                                !isPaymentValid(remainingDue) ||
+                                hasPartialPayments ||
+                                !canCharge
                                   ? "not-allowed"
                                   : "pointer",
                             }}
@@ -13661,34 +15310,11 @@ export function CartaPageContent({
                 <div className="shrink-0 border-t border-gray-100 bg-white px-2.5 sm:px-3 pt-1.5 pb-2">
                   <button
                     type="button"
-                    className="w-full py-2 rounded-lg font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs"
-                    onClick={() => {
-                      setIsPaymentOpen(false);
-                      setPaymentMethod(null);
-                      setIsInvoice(false);
-                      setInvoiceName("");
-                      setInvoiceTaxId("");
-                      setInvoiceEmail("");
-                      setCashReceived("");
-                      setCardReceived("");
-                      setVoucherAmount("");
-                      setVoucherNumber("");
-                      setDiscountAmount("");
-                      setDiscountPercent("");
-                      setIsSplitMode(false);
-                      setIsSplitEqualMode(false);
-                      setIsSplitItemsMode(false);
-                      setIsSplitItemsPayMode(false);
-                      setSelectedItemIds([]);
-                      setPaidSplitItemIds([]);
-                      setPartialPayments([]);
-                      setSessionTableAmountPaidSum(0);
-                      setSessionPaymentHistory([]);
-                      setSplitCount(2);
-                      setCurrentSplitIndex(1);
-                    }}
+                    className="w-full min-h-[44px] py-2 rounded-lg font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm touch-manipulation"
+                    disabled={isConfirmingPayment}
+                    onClick={handleCancelPaymentFlow}
                   >
-                    Cancelar
+                    Volver a comanda
                   </button>
                 </div>
               )}
@@ -13829,7 +15455,7 @@ export function CartaPageContent({
             data-products-empty={
               !showAuthSpinner &&
               !showProductsSpinner &&
-              !error &&
+              !catalogLoadError &&
               !hasVisibleProductsForCurrentMenu
                 ? "true"
                 : undefined
@@ -13850,7 +15476,7 @@ export function CartaPageContent({
               <div className="carta-main-fixed">
               {!showAuthSpinner &&
                 !showProductsSpinner &&
-                !error &&
+                !catalogLoadError &&
                 products.length > 0 && (
                   <>
                     <div className="mb-1.5 flex w-full flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-2">
@@ -13921,6 +15547,14 @@ export function CartaPageContent({
                         ) : null}
                       </div>
                     </div>
+                  {(selectedTableId || orderIdFromUrl) && tpvRecentProducts.length > 0 ? (
+                    <TpvRecentProductsStrip
+                      items={tpvRecentProducts}
+                      productById={tpvRecentProductNameLookup}
+                      onTap={handleRecentProductTap}
+                      onLongPress={handleRecentProductLongPress}
+                    />
+                  ) : null}
                   <div
                     className="carta-cats-wrap"
                     style={{
@@ -13985,10 +15619,10 @@ export function CartaPageContent({
               {!showAuthSpinner &&
                 !showProductsSpinner &&
                 isFirebaseConfigured &&
-                error && <p>Error cargando productos</p>}
+                catalogLoadError && <p>Error cargando productos</p>}
               {!showAuthSpinner &&
                 !showProductsSpinner &&
-                !error &&
+                !catalogLoadError &&
                 products.length === 0 &&
                 visibleOrderLines.length > 0 && (
                   <div className="carta-products-empty-state">
@@ -13997,7 +15631,7 @@ export function CartaPageContent({
                 )}
               {!showAuthSpinner &&
                 !showProductsSpinner &&
-                !error &&
+                !catalogLoadError &&
                 products.length > 0 &&
                 !hasVisibleProductsForCurrentMenu &&
                 visibleOrderLines.length > 0 && (
@@ -14007,7 +15641,7 @@ export function CartaPageContent({
                 )}
               {!showAuthSpinner &&
                 !showProductsSpinner &&
-                !error &&
+                !catalogLoadError &&
                 hasVisibleProductsForCurrentMenu && (
                   <div>
                     {Object.keys(groupedProducts)
@@ -14079,6 +15713,10 @@ export function CartaPageContent({
                                 }
                                 const course = courseLatest;
                                 const isMixedQty = pendingQty > 0 && sentQty > 0;
+                                const stockWarning =
+                                  productStockWarningById.get(product.id) ?? "none";
+                                const stockWarningLabel =
+                                  getStockWarningLabel(stockWarning);
                                 return (
                                   <button
                                     key={product.id}
@@ -14114,7 +15752,7 @@ export function CartaPageContent({
                                       const now = Date.now();
                                       const last =
                                         lastClickAtByProductIdRef.current[product.id] ?? 0;
-                                      if (now - last < 120) return;
+                                      if (now - last < 80) return;
                                       lastClickAtByProductIdRef.current[product.id] = now;
                                       setActiveProductId(product.id);
                                       if (activeProductTimeoutRef.current != null) {
@@ -14223,7 +15861,7 @@ export function CartaPageContent({
                                         const now = Date.now();
                                         const last =
                                           lastClickAtByProductIdRef.current[product.id] ?? 0;
-                                        if (now - last < 120) return;
+                                        if (now - last < 80) return;
                                         lastClickAtByProductIdRef.current[product.id] = now;
                                         handleQuickAdd(product);
                                       }
@@ -14235,7 +15873,7 @@ export function CartaPageContent({
                                     {isAdding ? (
                                       <span
                                         key={`bump-${product.id}-${isAddingByProductId[product.id]}`}
-                                        className="carta-add-bump"
+                                        className="hostly-tpv-inline-plus-one"
                                         aria-hidden="true"
                                       >
                                         +1
@@ -14255,6 +15893,14 @@ export function CartaPageContent({
                                         {isMixedQty
                                           ? `${pendingQty}+${sentQty}`
                                           : qty}
+                                      </div>
+                                    ) : null}
+                                    {stockWarningLabel ? (
+                                      <div
+                                        className={`carta-product-stock-badge ${stockWarningBadgeClassName(stockWarning)}`}
+                                        aria-label={stockWarningLabel}
+                                      >
+                                        {stockWarningLabel}
                                       </div>
                                     ) : null}
                                     {course ? (
@@ -14356,6 +16002,22 @@ export function CartaPageContent({
         </HostlyPageContainer>
       )}
       </div>
+      {modifierModalProduct && modifierModalGroups.length > 0 ? (
+        <TpvProductModifiersModal
+          product={modifierModalProduct}
+          groups={modifierModalGroups}
+          inventoryProductsById={inventoryProductsById}
+          onCancel={() => {
+            setModifierModalProduct(null);
+            setModifierModalGroups([]);
+          }}
+          onConfirm={(payload) => {
+            appendProductToOrder(modifierModalProduct, payload);
+            setModifierModalProduct(null);
+            setModifierModalGroups([]);
+          }}
+        />
+      ) : null}
       {lineEditorTarget ? (
         <div
           className="carta-line-editor-backdrop"

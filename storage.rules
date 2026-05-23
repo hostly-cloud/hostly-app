@@ -1,0 +1,58 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function userRestaurantId() {
+      return firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.restaurantId
+        : (
+          firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid))
+            ? firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.restaurantId
+            : null
+        );
+    }
+
+    function profileHasRestaurant(profile, restaurantId) {
+      return profile.restaurantId == restaurantId
+        || (profile.restaurantIds is list && restaurantId in profile.restaurantIds)
+        || (
+          profile.restaurantIds is map
+          && profile.restaurantIds.keys().hasAny([restaurantId])
+        );
+    }
+
+    function sameRestaurant(restaurantId) {
+      return isAuth()
+        && (
+          (
+            firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+            && profileHasRestaurant(
+              firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data,
+              restaurantId
+            )
+          )
+          || (
+            firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid))
+            && profileHasRestaurant(
+              firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data,
+              restaurantId
+            )
+          )
+        );
+    }
+
+    // Imágenes de producto (legacy por uid).
+    match /productos/{userId}/{allPaths=**} {
+      allow read, write: if isAuth() && request.auth.uid == userId;
+    }
+
+    // Importación de carta — tenant por restaurantId en path.
+    match /restaurants/{restaurantId}/menu-imports/{draftId}/{fileName} {
+      allow read, write: if sameRestaurant(restaurantId);
+    }
+  }
+}

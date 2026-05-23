@@ -6,6 +6,8 @@ import type { HorasAnalyticsSectionProps } from "@/components/analysis/HorasAnal
 import { HorasAnalyticsSection } from "@/components/analysis/HorasAnalyticsSection";
 import type { ProductosAnalyticsSectionProps } from "@/components/analysis/ProductosAnalyticsSection";
 import { ProductosAnalyticsSection } from "@/components/analysis/ProductosAnalyticsSection";
+import type { RentabilidadAnalyticsSectionProps } from "@/components/analysis/RentabilidadAnalyticsSection";
+import { RentabilidadAnalyticsSection } from "@/components/analysis/RentabilidadAnalyticsSection";
 import type { VentasAnalyticsSectionProps } from "@/components/analysis/VentasAnalyticsSection";
 import { VentasAnalyticsSection } from "@/components/analysis/VentasAnalyticsSection";
 
@@ -15,6 +17,7 @@ export type AnalysisTabContentProps = {
   ventasSectionProps: VentasAnalyticsSectionProps;
   horasSectionProps: HorasAnalyticsSectionProps;
   productosSectionProps: ProductosAnalyticsSectionProps;
+  rentabilidadSectionProps: RentabilidadAnalyticsSectionProps;
 };
 
 export function AnalysisTabContent({
@@ -23,6 +26,7 @@ export function AnalysisTabContent({
   ventasSectionProps,
   horasSectionProps,
   productosSectionProps,
+  rentabilidadSectionProps,
 }: AnalysisTabContentProps) {
   if (tab === "comensales") {
     return <ComensalesAnalyticsSection {...comensalesSectionProps} />;
@@ -30,6 +34,10 @@ export function AnalysisTabContent({
 
   if (tab === "ventas") {
     return <VentasAnalyticsSection {...ventasSectionProps} />;
+  }
+
+  if (tab === "rentabilidad") {
+    return <RentabilidadAnalyticsSection {...rentabilidadSectionProps} />;
   }
 
   if (tab === "horas") {

@@ -16,14 +16,41 @@ import {
   defaultCartaCategoriaTipoForTipoProducto,
   isCartaCategoriaCompatibleWithTipoProducto,
 } from "@/lib/carta-categorias/filter-for-tipo-producto";
+import {
+  buildProductFamilyPatchFromCategoryId,
+  getProductFamilyLabel,
+} from "@/lib/carta/product-category-family-resolver";
+import {
+  PRODUCT_FAMILY_LIST_FILTER_OPTIONS,
+  matchesProductFamilyListFilter,
+  type ProductFamilyListFilter,
+} from "@/lib/carta/product-family-list-filter";
 import type { CartaCategoria, CartaCategoriaTipo, CartaFamilia } from "@/lib/carta-categorias/types";
 import { CARTA_MENU_FAMILIA_FILTER_UNASSIGNED, isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import { selectValueToPreparationArea } from "@/lib/carta/operational-station-options";
+import { OperationStationProductSelect } from "@/components/operacion/operation-station-product-select";
+import {
+  ensureDefaultOperationStations,
+  listenOperationStations,
+} from "@/lib/firestore/operation-stations";
+import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
+import { resolveEffectiveModifierGroupLabels } from "@/lib/modifiers/effective-product-modifiers";
+import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
+import {
+  buildProductStationPatchFromSelectValue,
+  isLegacyOperationStationSelectValue,
+  isNoneOperationStationSelectValue,
+  operationStationSelectValueFromProduct,
+  resolveOperationStationFromSelectValue,
+} from "@/lib/operacion/product-operation-station";
+import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import {
   applyDefaultModifierFamilyIfEligible,
   fetchModifierFamiliesForRestaurante,
   type ModifierFamilyRow,
 } from "@/lib/modificadores/default-modifier-family";
-import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { useAuth } from "@/components/auth/auth-context";
 import { fireAndForgetSyncCatalogoCategoria } from "@/lib/hostly/sync-catalogo-venta-categoria";
 import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
 import {
@@ -33,6 +60,35 @@ import {
   mirrorPlatoToEscandalloRow,
   type EscandalloMetaMap,
 } from "@/lib/platos-escandallo-bridge";
+import { CatalogMigrationPreviewPanel } from "@/components/productos/catalog-migration-preview-panel";
+import { LegacyPlatosArchivePanel } from "@/components/productos/legacy-platos-archive-panel";
+import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
+import {
+  activateCentralProduct,
+  createCentralProduct,
+  disableCentralProduct,
+  formatCentralCatalogWriteError,
+  listenCentralProducts,
+  listenProductsForInventory,
+  setCentralProductPublication,
+  updateCentralProduct,
+  updateCentralProductRecipe,
+  type CentralOperationalProductInput,
+} from "@/lib/firestore/products";
+import {
+  buildInventoryProductLookupMap,
+  buildRecipeSourceFromDraftRows,
+  isRecipeInventoryUnit,
+  normalizeProductRecipe,
+  normalizedProductRecipeToWriteInput,
+  productDocumentsToInventoryLookup,
+} from "@/lib/recipes/product-recipe-helpers";
+import type { InventoryProductLookup } from "@/lib/recipes/product-recipe-types";
+import {
+  ProductRecipeEditorSection,
+  type RecipeIngredientDraftRow,
+} from "@/components/productos/product-recipe-editor-section";
+import type { ProductDocument } from "@/lib/firestore/products";
 import {
   PLATOS_CHANGED_EVENT,
   TIPOS_PRODUCTO_VENTA,
@@ -49,6 +105,7 @@ type CartaFilter = "todos" | "activos" | "inactivos" | "conEscandallo" | "sinEsc
 const PRODUCTOS_ROW_HOVER_CLASS = "hostly-productos-data-row";
 const PRODUCTOS_ROW_TEXT_BTN_CLASS = "hostly-productos-row-text-btn";
 const PRODUCTOS_ROW_ICON_BTN_CLASS = "hostly-productos-row-icon-btn";
+const LEGACY_CATALOG_EDIT_BLOCKED = "Migra el catálogo para editar productos.";
 
 /** Data-grid: hover suave en fila + botones de acción compactos (config TPV). */
 const productosTableInteractionStyles = `
@@ -397,6 +454,72 @@ function getPublicationFlags(p: PlatoCarta): {
   return { isActive, enCarta, status: "offMenu" };
 }
 
+function buildCentralInputFromDraft(args: {
+  nombre: string;
+  operationStationSelect: string;
+  operationStations: readonly OperationStationDocument[];
+  cartaCategorias: readonly CartaCategoria[];
+  draftTipo: TipoProductoVenta;
+  categoria: string;
+  categoriaCartaIdPatch?: string;
+  precioVenta: number;
+  draftActivo: boolean;
+  draftDesc: string;
+  existingIsActive?: boolean;
+}): CentralOperationalProductInput {
+  const categoryId = args.categoriaCartaIdPatch ?? null;
+  const familyPatch = buildProductFamilyPatchFromCategoryId(
+    categoryId,
+    args.cartaCategorias,
+  );
+  const familyFirestore =
+    familyPatch.clearProductFamily
+      ? {
+          productFamilyId: null as string | null,
+          productFamilyName: null as string | null,
+          productFamilyType: null,
+        }
+      : familyPatch.productFamilyId
+        ? {
+            productFamilyId: familyPatch.productFamilyId,
+            productFamilyName: familyPatch.productFamilyName ?? null,
+            productFamilyType: familyPatch.productFamilyType ?? null,
+          }
+        : {};
+
+  const base = {
+    name: args.nombre,
+    categoryName: args.categoria.trim() || "General",
+    categoryId,
+    price: args.precioVenta,
+    tipoVenta: args.draftTipo,
+    visibleOnMenu: args.draftActivo,
+    active: args.existingIsActive !== false,
+    ...(args.draftDesc.trim() ? { description: args.draftDesc.trim() } : {}),
+    ...familyFirestore,
+  };
+
+  const resolved = resolveOperationStationFromSelectValue(
+    args.operationStationSelect,
+    args.operationStations,
+  );
+  if (resolved) {
+    return {
+      ...base,
+      operationStationId: resolved.id,
+      operationStationName: resolved.name,
+      operationStationType: resolved.type,
+    };
+  }
+  if (isNoneOperationStationSelectValue(args.operationStationSelect)) {
+    return { ...base, operationStationId: null };
+  }
+  return {
+    ...base,
+    preparationArea: selectValueToPreparationArea(args.operationStationSelect),
+  };
+}
+
 function ProductRowPublicationCell({
   p,
   t,
@@ -704,6 +827,7 @@ function ProductRowActions({
   t,
   embedLight = false,
   inventoryIconToolbar = false,
+  legacyReadOnly = false,
   onEdit,
   onToggleCarta,
   onActivateProduct,
@@ -715,6 +839,7 @@ function ProductRowActions({
   t: (key: string) => string;
   embedLight?: boolean;
   inventoryIconToolbar?: boolean;
+  legacyReadOnly?: boolean;
   onEdit: () => void;
   onToggleCarta: () => void;
   onActivateProduct: () => void;
@@ -813,6 +938,10 @@ function ProductRowActions({
   const escTitle =
     busyEsc ? t("carta.escPending") : !enCarta ? t("productos.escNeedCartaHint") : t("carta.actionEscandallo");
 
+  const editBlockedTitle = legacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : t("carta.actionEdit");
+  const deleteBlockedTitle = legacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : t("common.delete");
+  const cartaBlockedTitle = legacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : primaryCartaTitle;
+
   if (inventoryIconToolbar && embedLight) {
     return (
       <div
@@ -833,10 +962,14 @@ function ProductRowActions({
         <button
           type="button"
           className={PRODUCTOS_ROW_ICON_BTN_CLASS}
-          onClick={onPrimaryCarta}
-          style={primaryCartaIconStyle}
-          title={primaryCartaTitle}
-          aria-label={primaryCartaTitle}
+          disabled={legacyReadOnly}
+          onClick={legacyReadOnly ? undefined : onPrimaryCarta}
+          style={{
+            ...primaryCartaIconStyle,
+            ...(legacyReadOnly ? { opacity: 0.45, cursor: "not-allowed" } : {}),
+          }}
+          title={cartaBlockedTitle}
+          aria-label={cartaBlockedTitle}
         >
           <IconGlCartaPrimary status={status} />
         </button>
@@ -844,10 +977,14 @@ function ProductRowActions({
         <button
           type="button"
           className={PRODUCTOS_ROW_ICON_BTN_CLASS}
-          onClick={onEdit}
-          style={productRowIconBtnShellLight}
-          title={t("carta.actionEdit")}
-          aria-label={t("carta.actionEdit")}
+          disabled={legacyReadOnly}
+          onClick={legacyReadOnly ? undefined : onEdit}
+          style={{
+            ...productRowIconBtnShellLight,
+            ...(legacyReadOnly ? { opacity: 0.45, cursor: "not-allowed" } : {}),
+          }}
+          title={editBlockedTitle}
+          aria-label={editBlockedTitle}
         >
           <IconGlPencil />
         </button>
@@ -870,15 +1007,17 @@ function ProductRowActions({
         <button
           type="button"
           className={PRODUCTOS_ROW_ICON_BTN_CLASS}
-          onClick={onDelete}
+          disabled={legacyReadOnly}
+          onClick={legacyReadOnly ? undefined : onDelete}
           style={{
             ...productRowIconBtnShellLight,
             border: "1px solid rgba(248, 113, 113, 0.22)",
             background: "rgba(254, 242, 242, 0.45)",
             color: "#b91c1c",
+            ...(legacyReadOnly ? { opacity: 0.45, cursor: "not-allowed" } : {}),
           }}
-          title={t("common.delete")}
-          aria-label={t("common.delete")}
+          title={deleteBlockedTitle}
+          aria-label={deleteBlockedTitle}
         >
           <IconGlTrash />
         </button>
@@ -905,10 +1044,14 @@ function ProductRowActions({
       <button
         type="button"
         className={PRODUCTOS_ROW_TEXT_BTN_CLASS}
-        onClick={onPrimaryCarta}
-        style={primaryCartaStyle}
-        title={primaryCartaTitle}
-        aria-label={primaryCartaTitle}
+        disabled={legacyReadOnly}
+        onClick={legacyReadOnly ? undefined : onPrimaryCarta}
+        style={{
+          ...primaryCartaStyle,
+          ...(legacyReadOnly ? { opacity: 0.45, cursor: "not-allowed" } : {}),
+        }}
+        title={cartaBlockedTitle}
+        aria-label={cartaBlockedTitle}
       >
         {primaryCartaLabel}
       </button>
@@ -916,10 +1059,14 @@ function ProductRowActions({
       <button
         type="button"
         className={PRODUCTOS_ROW_TEXT_BTN_CLASS}
-        onClick={onEdit}
-        style={shell}
-        title={t("carta.actionEdit")}
-        aria-label={t("carta.actionEdit")}
+        disabled={legacyReadOnly}
+        onClick={legacyReadOnly ? undefined : onEdit}
+        style={{
+          ...shell,
+          ...(legacyReadOnly ? { opacity: 0.45, cursor: "not-allowed" } : {}),
+        }}
+        title={editBlockedTitle}
+        aria-label={editBlockedTitle}
       >
         {t("carta.actionEdit")}
       </button>
@@ -942,15 +1089,17 @@ function ProductRowActions({
       <button
         type="button"
         className={PRODUCTOS_ROW_TEXT_BTN_CLASS}
-        onClick={onDelete}
+        disabled={legacyReadOnly}
+        onClick={legacyReadOnly ? undefined : onDelete}
         style={{
           ...shell,
           border: embedLight ? "1px solid rgba(148, 163, 184, 0.22)" : "1px solid rgba(248, 113, 113, 0.28)",
           background: embedLight ? "transparent" : "rgba(127, 29, 29, 0.12)",
           color: embedLight ? "#94a3b8" : "#fca5a5",
+          ...(legacyReadOnly ? { opacity: 0.45, cursor: "not-allowed" } : {}),
         }}
-        title={t("common.delete")}
-        aria-label={t("common.delete")}
+        title={deleteBlockedTitle}
+        aria-label={deleteBlockedTitle}
       >
         {t("common.delete")}
       </button>
@@ -975,6 +1124,7 @@ export default function ProductosManagementPage({
   dashboardListIceVisual = false,
 }: ProductosManagementPageProps = {}) {
   const { t, locale } = useI18n();
+  const { restaurantId: profileRestaurantId } = useAuth();
   const router = useRouter();
   const emb = Boolean(embedConfigVisual);
   const iceVisual = emb || Boolean(dashboardListIceVisual);
@@ -988,10 +1138,27 @@ export default function ProductosManagementPage({
     : rowGridGroupBar;
   const productosTableMinInnerWidthPx =
     iceVisual && configCartaProductosChrome ? PRODUCTOS_TABLE_MIN_WIDTH_EMBED_ICONS_PX : PRODUCTOS_TABLE_MIN_WIDTH_PX;
+  const operationalRestaurantId = useMemo(
+    () => resolveOperationalRestaurantId(profileRestaurantId),
+    [profileRestaurantId],
+  );
+  const operationalCatalog = useCentralProductsForCarta(operationalRestaurantId, {
+    scope: "management",
+  });
+  const isCentralCatalog = operationalCatalog.source === "central";
+  const isLegacyCatalog =
+    operationalCatalog.source === "legacy_local" ||
+    operationalCatalog.source === "legacy_fallback";
+  const isLegacyReadOnly =
+    isLegacyCatalog &&
+    operationalCatalog.source !== null &&
+    !operationalCatalog.loading;
   const [hydrated, setHydrated] = useState(false);
   const [items, setItems] = useState<PlatoCarta[]>([]);
   const [meta, setMeta] = useState<EscandalloMetaMap>(new Map());
   const [listFilter, setListFilter] = useState<CartaFilter>("todos");
+  const [productFamilyFilter, setProductFamilyFilter] =
+    useState<ProductFamilyListFilter>("all");
   const [listSearch, setListSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped");
   const [categoryTab, setCategoryTab] = useState<string>("__all__");
@@ -1001,6 +1168,7 @@ export default function ProductosManagementPage({
   const [draftTipo, setDraftTipo] = useState<TipoProductoVenta>("plato");
   const [cartaCategorias, setCartaCategorias] = useState<CartaCategoria[]>([]);
   const [cartaFamilias, setCartaFamilias] = useState<CartaFamilia[]>([]);
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroupDocument[]>([]);
   const [modifierFamilies, setModifierFamilies] = useState<ModifierFamilyRow[]>([]);
   const [draftCategoriaCartaId, setDraftCategoriaCartaId] = useState<string | null>(null);
   const [draftCartaMenuFamiliaId, setDraftCartaMenuFamiliaId] = useState<string | null>(null);
@@ -1013,7 +1181,11 @@ export default function ProductosManagementPage({
   const [draftActivo, setDraftActivo] = useState(true);
   const [draftFoto, setDraftFoto] = useState("");
   const [draftDesc, setDraftDesc] = useState("");
-  const [draftPreparationArea, setDraftPreparationArea] = useState("cocina");
+  const [draftOperationStationSelect, setDraftOperationStationSelect] =
+    useState("default-kitchen");
+  const [operationStations, setOperationStations] = useState<
+    OperationStationDocument[]
+  >([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [escNavId, setEscNavId] = useState<string | null>(null);
@@ -1021,37 +1193,94 @@ export default function ProductosManagementPage({
   const selectAllRef = useRef<HTMLInputElement | null>(null);
   const nombreInputRef = useRef<HTMLInputElement | null>(null);
   const [drawerSyncing, setDrawerSyncing] = useState(false);
+  const [draftRecipeEnabled, setDraftRecipeEnabled] = useState(false);
+  const [draftRecipeRows, setDraftRecipeRows] = useState<RecipeIngredientDraftRow[]>([]);
+  const [inventoryLookup, setInventoryLookup] = useState<InventoryProductLookup[]>([]);
+  const [centralDocsById, setCentralDocsById] = useState(
+    () => new Map<string, ProductDocument>(),
+  );
 
-  const persist = useCallback((next: PlatoCarta[]) => {
-    setItems(next);
-    savePlatos(getBrowserRestauranteId(), next);
-  }, []);
+  const persist = useCallback(
+    (_next: PlatoCarta[]) => {
+      if (isCentralCatalog) return;
+      // Fase 10C: catálogo legacy solo lectura — no escribir localStorage.
+    },
+    [isCentralCatalog],
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const restauranteId = getBrowserRestauranteId();
-      await bootstrapPlatosFromEscandallosIfEmpty(restauranteId);
-      if (cancelled) return;
-      /** Evita setState en el mismo turno que aún no tiene alternate (React 19 DEV). */
-      queueMicrotask(() => {
-        if (cancelled) return;
-        setItems(loadPlatos(restauranteId));
-        setHydrated(true);
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void bootstrapPlatosFromEscandallosIfEmpty(operationalRestaurantId);
+  }, [operationalRestaurantId]);
+
+  useEffect(() => {
+    const rid = operationalRestaurantId.trim();
+    if (!rid || !isCentralCatalog) {
+      setOperationStations([]);
+      return;
+    }
+    let defaultsEnsured = false;
+    const unsub = listenOperationStations(
+      rid,
+      (list) => {
+        setOperationStations(list);
+        if (!defaultsEnsured && list.length === 0) {
+          defaultsEnsured = true;
+          void ensureDefaultOperationStations(rid).catch((e) =>
+            console.error("ensureDefaultOperationStations", e),
+          );
+        }
+      },
+      (e) => console.error("listenOperationStations", e),
+    );
+    return () => unsub();
+  }, [operationalRestaurantId, isCentralCatalog]);
+
+  useEffect(() => {
+    const rid = operationalRestaurantId.trim();
+    if (!rid || !isCentralCatalog) {
+      setCentralDocsById(new Map());
+      return;
+    }
+    return listenCentralProducts(
+      rid,
+      (docs) => {
+        setCentralDocsById(new Map(docs.map((doc) => [doc.id, doc])));
+      },
+      (e) => console.error("listenCentralProducts(recipe)", e),
+    );
+  }, [operationalRestaurantId, isCentralCatalog]);
+
+  useEffect(() => {
+    const rid = operationalRestaurantId.trim();
+    if (!rid || !isCentralCatalog || !formOpen) {
+      setInventoryLookup([]);
+      return;
+    }
+    return listenProductsForInventory(
+      rid,
+      (docs) => {
+        setInventoryLookup(productDocumentsToInventoryLookup(docs));
+      },
+      (e) => console.error("listenProductsForInventory(recipe)", e),
+    );
+  }, [operationalRestaurantId, isCentralCatalog, formOpen]);
+
+  useEffect(() => {
+    if (operationalCatalog.loading) return;
+    queueMicrotask(() => {
+      setItems(operationalCatalog.platos);
+      setHydrated(true);
+    });
+  }, [operationalCatalog.loading, operationalCatalog.platos]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (operationalCatalog.source === "central") return;
     let alive = true;
     const onChange = () => {
       queueMicrotask(() => {
         if (!alive) return;
-        setItems(loadPlatos(getBrowserRestauranteId()));
+        setItems(loadPlatos(operationalRestaurantId));
       });
     };
     window.addEventListener(PLATOS_CHANGED_EVENT, onChange);
@@ -1059,11 +1288,23 @@ export default function ProductosManagementPage({
       alive = false;
       window.removeEventListener(PLATOS_CHANGED_EVENT, onChange);
     };
-  }, []);
+  }, [operationalCatalog.source, operationalRestaurantId]);
+
+  useEffect(() => {
+    if (!operationalRestaurantId) {
+      setModifierGroups([]);
+      return;
+    }
+    return listenModifierGroups(
+      operationalRestaurantId,
+      setModifierGroups,
+      console.error,
+    );
+  }, [operationalRestaurantId]);
 
   useEffect(() => {
     let cancelled = false;
-    const rid = getBrowserRestauranteId();
+    const rid = operationalRestaurantId;
     void Promise.all([
       fetchCartaCategorias(rid),
       fetchCartaFamilias(rid),
@@ -1080,12 +1321,12 @@ export default function ProductosManagementPage({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [operationalRestaurantId]);
 
   useEffect(() => {
     let alive = true;
     const onCat = () => {
-      const rid = getBrowserRestauranteId();
+      const rid = operationalRestaurantId;
       void Promise.all([
         fetchCartaCategorias(rid),
         fetchCartaFamilias(rid),
@@ -1105,7 +1346,7 @@ export default function ProductosManagementPage({
       alive = false;
       window.removeEventListener(CARTA_CATEGORIAS_CHANGED_EVENT, onCat);
     };
-  }, []);
+  }, [operationalRestaurantId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1149,9 +1390,21 @@ export default function ProductosManagementPage({
     else if (listFilter === "inactivos") rows = rows.filter((p) => !p.activo);
     else if (listFilter === "conEscandallo") rows = rows.filter((p) => tieneEscandalloForPlato(p, meta));
     else if (listFilter === "sinEscandallo") rows = rows.filter((p) => !tieneEscandalloForPlato(p, meta));
+    if (productFamilyFilter !== "all") {
+      rows = rows.filter((p) =>
+        matchesProductFamilyListFilter(
+          {
+            productFamilyId: p.productFamilyId ?? null,
+            productFamilyName: p.productFamilyName ?? null,
+            productFamilyType: p.productFamilyType ?? null,
+          },
+          productFamilyFilter,
+        ),
+      );
+    }
 
     return [...rows].sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { sensitivity: "base" }));
-  }, [items, listFilter, meta]);
+  }, [items, listFilter, meta, productFamilyFilter]);
 
   const tabOptions = useMemo(() => {
     const sorted = [...cartaCategorias].sort(
@@ -1260,8 +1513,32 @@ export default function ProductosManagementPage({
   }, [displayed]);
 
   const bulkApplyToIds = useCallback(
-    (ids: Set<string>, patch: Partial<{ activo: boolean; isActive: boolean }>) => {
+    async (ids: Set<string>, patch: Partial<{ activo: boolean; isActive: boolean }>) => {
       if (ids.size === 0) return;
+      const restauranteId = operationalRestaurantId;
+      if (isCentralCatalog) {
+        try {
+          await Promise.all(
+            [...ids].map(async (id) => {
+              if ("activo" in patch) {
+                await setCentralProductPublication(restauranteId, id, {
+                  visibleOnMenu: patch.activo,
+                });
+              } else if ("isActive" in patch) {
+                await setCentralProductPublication(restauranteId, id, {
+                  active: patch.isActive,
+                });
+              }
+            }),
+          );
+          setNotice("Guardado en catálogo central");
+        } catch (e) {
+          setFormError(formatCentralCatalogWriteError(e));
+        }
+        window.setTimeout(() => setNotice(null), 2200);
+        return;
+      }
+      if (isLegacyReadOnly) return;
       const now = new Date().toISOString();
       const next = items.map((p) =>
         ids.has(p.id) ? ({ ...p, ...patch, updatedAt: now } as PlatoCarta & { isActive?: boolean }) : p,
@@ -1276,7 +1553,7 @@ export default function ProductosManagementPage({
       setNotice(t("carta.noticeSaved"));
       window.setTimeout(() => setNotice(null), 2200);
     },
-    [items, persist, t],
+    [isCentralCatalog, isLegacyReadOnly, items, operationalRestaurantId, persist, t],
   );
 
   const bulkSelectionBreakdown = useMemo(() => {
@@ -1400,6 +1677,73 @@ export default function ProductosManagementPage({
     [cartaCategorias, draftTipo, draftCartaMenuFamiliaId],
   );
 
+  const draftProductFamilyLabel = useMemo(() => {
+    const patch = buildProductFamilyPatchFromCategoryId(
+      draftCategoriaCartaId,
+      cartaCategorias,
+    );
+    if (patch.clearProductFamily || !patch.productFamilyId) return "Sin familia";
+    return getProductFamilyLabel({
+      productFamilyId: patch.productFamilyId,
+      productFamilyName: patch.productFamilyName,
+      productFamilyType: patch.productFamilyType,
+    });
+  }, [draftCategoriaCartaId, cartaCategorias]);
+
+  const draftEffectiveModifierLabel = useMemo(() => {
+    const cat = draftCategoriaCartaId
+      ? cartaCategorias.find((c) => c.id === draftCategoriaCartaId)
+      : undefined;
+    const labels = resolveEffectiveModifierGroupLabels(
+      editingPlato,
+      cat,
+      modifierGroups,
+    );
+    return labels.length > 0 ? labels.join(", ") : "Ninguno";
+  }, [draftCategoriaCartaId, cartaCategorias, editingPlato, modifierGroups]);
+
+  const inventoryLookupMap = useMemo(
+    () => buildInventoryProductLookupMap(inventoryLookup),
+    [inventoryLookup],
+  );
+
+  const draftRecipeWarnings = useMemo(() => {
+    if (!formOpen || !isCentralCatalog) return [];
+    const saleProductId = editingId?.trim() ?? "";
+    const validation = normalizeProductRecipe(
+      buildRecipeSourceFromDraftRows(draftRecipeEnabled, draftRecipeRows),
+      { saleProductId, inventoryProductsById: inventoryLookupMap },
+    );
+    return validation.warnings;
+  }, [
+    draftRecipeEnabled,
+    draftRecipeRows,
+    editingId,
+    formOpen,
+    inventoryLookupMap,
+    isCentralCatalog,
+  ]);
+
+  function applyRecipeDraftFromDocument(
+    recipe: ProductDocument["recipe"] | undefined,
+  ): void {
+    setDraftRecipeEnabled(recipe?.enabled === true);
+    const ingredients = Array.isArray(recipe?.ingredients) ? recipe!.ingredients : [];
+    setDraftRecipeRows(
+      ingredients.length > 0
+        ? ingredients.map((ing, index) => ({
+            clientRowId: `loaded_${index}_${String(ing.productId ?? "")}`,
+            productId: typeof ing.productId === "string" ? ing.productId.trim() : "",
+            quantity:
+              typeof ing.quantity === "number" && Number.isFinite(ing.quantity)
+                ? String(ing.quantity)
+                : "",
+            unit: isRecipeInventoryUnit(ing.unit) ? ing.unit : "unit",
+          }))
+        : [],
+    );
+  }
+
   const closeForm = useCallback(() => {
     setFormOpen(false);
     setEditingId(null);
@@ -1432,6 +1776,7 @@ export default function ProductosManagementPage({
   };
 
   function openCreate() {
+    if (isLegacyReadOnly) return;
     setEditingId(null);
     setDraftNombre("");
     setDraftTipo("plato");
@@ -1441,12 +1786,15 @@ export default function ProductosManagementPage({
     setDraftActivo(true);
     setDraftFoto("");
     setDraftDesc("");
-    setDraftPreparationArea("cocina");
+    setDraftOperationStationSelect("default-kitchen");
+    setDraftRecipeEnabled(false);
+    setDraftRecipeRows([]);
     setFormError(null);
     setFormOpen(true);
   }
 
   function openEdit(p: PlatoCarta) {
+    if (isLegacyReadOnly) return;
     setEditingId(p.id);
     setDraftNombre(p.nombre);
     setDraftTipo(p.tipoVenta);
@@ -1469,7 +1817,20 @@ export default function ProductosManagementPage({
     setDraftActivo(p.activo);
     setDraftFoto(p.fotoUrl ?? "");
     setDraftDesc(p.descripcion ?? "");
-    setDraftPreparationArea((p.preparationArea ?? "cocina").trim() || "cocina");
+    setDraftOperationStationSelect(
+      operationStationSelectValueFromProduct({
+        operationStationId: p.operationStationId,
+        operationStationName: p.operationStationName,
+        preparationArea: p.preparationArea,
+        station: p.preparationArea ?? null,
+      }),
+    );
+    if (isCentralCatalog) {
+      applyRecipeDraftFromDocument(centralDocsById.get(p.id)?.recipe);
+    } else {
+      setDraftRecipeEnabled(false);
+      setDraftRecipeRows([]);
+    }
     setFormError(null);
     setFormOpen(true);
   }
@@ -1488,18 +1849,18 @@ export default function ProductosManagementPage({
       setFormError(t("carta.errorNombre"));
       return;
     }
-    const preparationArea = draftPreparationArea.trim();
-    if (!preparationArea) {
-      setFormError("Selecciona un área de preparación.");
-      return;
-    }
+    const stationPatch = buildProductStationPatchFromSelectValue(
+      draftOperationStationSelect,
+      operationStations,
+    );
+    const preparationArea = stationPatch.preparationArea;
     const precioVenta = parsePrecio(draftPrecio);
     if (precioVenta == null) {
       setFormError(t("carta.errorPrecio"));
       return;
     }
 
-    const restauranteId = getBrowserRestauranteId();
+    const restauranteId = operationalRestaurantId;
     const now = new Date().toISOString();
     const selectedCat = draftCategoriaCartaId ? cartaCategorias.find((c) => c.id === draftCategoriaCartaId) : undefined;
     if (selectedCat && !isCartaCategoriaCompatibleWithTipoProducto(selectedCat, draftTipo)) {
@@ -1515,6 +1876,59 @@ export default function ProductosManagementPage({
         ? cartaFamilias.find((x) => x.id === selMenuFamId)?.name
         : undefined;
 
+    if (isCentralCatalog) {
+      const saleProductIdForRecipe = editingId?.trim() ?? "";
+      const recipeValidation = normalizeProductRecipe(
+        buildRecipeSourceFromDraftRows(draftRecipeEnabled, draftRecipeRows),
+        { saleProductId: saleProductIdForRecipe, inventoryProductsById: inventoryLookupMap },
+      );
+      if (recipeValidation.errors.length > 0) {
+        setFormError(recipeValidation.errors[0] ?? "Revisa el escandallo.");
+        return;
+      }
+
+      setDrawerSyncing(true);
+      try {
+        const existingFlags = editingId
+          ? getPublicationFlags(items.find((p) => p.id === editingId)!)
+          : null;
+        const centralInput = buildCentralInputFromDraft({
+          nombre,
+          operationStationSelect: draftOperationStationSelect,
+          operationStations,
+          cartaCategorias,
+          draftTipo,
+          categoria,
+          categoriaCartaIdPatch,
+          precioVenta,
+          draftActivo,
+          draftDesc,
+          existingIsActive: existingFlags?.isActive,
+        });
+        let savedProductId = editingId?.trim() ?? "";
+        if (editingId) {
+          await updateCentralProduct(restauranteId, editingId, centralInput);
+        } else {
+          savedProductId = await createCentralProduct(restauranteId, centralInput);
+        }
+        await updateCentralProductRecipe(
+          restauranteId,
+          savedProductId,
+          normalizedProductRecipeToWriteInput(recipeValidation.recipe),
+        );
+        setNotice("Guardado en catálogo central");
+        closeForm();
+        window.setTimeout(() => setNotice(null), 3200);
+      } catch (e) {
+        setFormError(formatCentralCatalogWriteError(e));
+      } finally {
+        setDrawerSyncing(false);
+      }
+      return;
+    }
+
+    if (isLegacyReadOnly) return;
+
     if (editingId) {
       const next = items.map((p) => {
         if (p.id !== editingId) return p;
@@ -1522,6 +1936,17 @@ export default function ProductosManagementPage({
           ...p,
           nombre,
           preparationArea,
+          ...(stationPatch.operationStationId
+            ? {
+                operationStationId: stationPatch.operationStationId,
+                operationStationName: stationPatch.operationStationName,
+              }
+            : stationPatch.clearOperationStation
+              ? {
+                  operationStationId: undefined,
+                  operationStationName: undefined,
+                }
+              : {}),
           tipoVenta: draftTipo,
           categoria,
           categoriaCartaId: categoriaCartaIdPatch,
@@ -1563,6 +1988,10 @@ export default function ProductosManagementPage({
         fotoUrl: draftFoto.trim() || undefined,
         descripcion: draftDesc.trim() || undefined,
       });
+      if (stationPatch.operationStationId) {
+        nuevo.operationStationId = stationPatch.operationStationId;
+        nuevo.operationStationName = stationPatch.operationStationName;
+      }
       nuevo = applyDefaultModifierFamilyIfEligible(nuevo, {
         selectedCartaCategoria: selectedCat,
         cartaMenuFamiliaName: menuFamName,
@@ -1593,7 +2022,7 @@ export default function ProductosManagementPage({
     const name = addCatName.trim();
     if (!name) return;
     setAddCatSaving(true);
-    const res = await createCartaCategoriaApi(getBrowserRestauranteId(), {
+    const res = await createCartaCategoriaApi(operationalRestaurantId, {
       name,
       type: addCatType,
       cartaFamiliaId: addCatCartaFamiliaId,
@@ -1601,7 +2030,7 @@ export default function ProductosManagementPage({
     });
     setAddCatSaving(false);
     if (res.ok) {
-      const rid = getBrowserRestauranteId();
+      const rid = operationalRestaurantId;
       const [list, fams, mods] = await Promise.all([
         fetchCartaCategorias(rid),
         fetchCartaFamilias(rid),
@@ -1621,7 +2050,23 @@ export default function ProductosManagementPage({
     }
   }
 
-  function toggleActivo(p: PlatoCarta) {
+  async function toggleActivo(p: PlatoCarta) {
+    const restauranteId = operationalRestaurantId;
+    if (isCentralCatalog) {
+      const flags = getPublicationFlags(p);
+      try {
+        await setCentralProductPublication(restauranteId, p.id, {
+          visibleOnMenu: !flags.enCarta,
+          active: flags.isActive,
+        });
+        setNotice("Guardado en catálogo central");
+      } catch (e) {
+        setFormError(formatCentralCatalogWriteError(e));
+      }
+      window.setTimeout(() => setNotice(null), 2200);
+      return;
+    }
+    if (isLegacyReadOnly) return;
     const now = new Date().toISOString();
     const next = items.map((x) => (x.id === p.id ? { ...x, activo: !x.activo, updatedAt: now } : x));
     persist(next);
@@ -1634,7 +2079,19 @@ export default function ProductosManagementPage({
   }
 
   /** Reactiva venta (`isActive`); no cambia visibilidad en carta. Campo opcional en persistencia JSON. */
-  function activateProducto(p: PlatoCarta) {
+  async function activateProducto(p: PlatoCarta) {
+    const restauranteId = operationalRestaurantId;
+    if (isCentralCatalog) {
+      try {
+        await activateCentralProduct(restauranteId, p.id);
+        setNotice("Guardado en catálogo central");
+      } catch (e) {
+        setFormError(formatCentralCatalogWriteError(e));
+      }
+      window.setTimeout(() => setNotice(null), 2200);
+      return;
+    }
+    if (isLegacyReadOnly) return;
     const now = new Date().toISOString();
     const next = items.map((x) =>
       x.id === p.id ? ({ ...x, isActive: true, updatedAt: now } as PlatoCarta & { isActive?: boolean }) : x,
@@ -1653,14 +2110,14 @@ export default function ProductosManagementPage({
     setFormError(null);
     setEscNavId(p.id);
     try {
-      const restauranteId = getBrowserRestauranteId();
+      const restauranteId = operationalRestaurantId;
       let platos = loadPlatos(restauranteId);
       const { next, error } = await ensureEscandalloRowsForPlatos(platos);
       if (error) {
         setFormError(t("carta.errorSyncEsc"));
         return;
       }
-      if (next !== platos) {
+      if (next !== platos && !isCentralCatalog) {
         savePlatos(restauranteId, next);
         setItems(next);
         platos = next;
@@ -1677,9 +2134,30 @@ export default function ProductosManagementPage({
     }
   }
 
-  function deleteProducto(p: PlatoCarta) {
-    const ok = window.confirm(`¿Borrar "${p.nombre}" del catálogo? Esta acción no se puede deshacer.`);
+  async function deleteProducto(p: PlatoCarta) {
+    if (isLegacyReadOnly) return;
+    const ok = window.confirm(
+      isCentralCatalog
+        ? `¿Desactivar "${p.nombre}" en el catálogo central? No se borrará el documento.`
+        : `¿Borrar "${p.nombre}" del catálogo? Esta acción no se puede deshacer.`,
+    );
     if (!ok) return;
+    const restauranteId = operationalRestaurantId;
+    if (isCentralCatalog) {
+      try {
+        await disableCentralProduct(restauranteId, p.id);
+        if (editingId === p.id) {
+          setFormOpen(false);
+          setEditingId(null);
+          setFormError(null);
+        }
+        setNotice("Producto desactivado en catálogo central");
+      } catch (e) {
+        setFormError(formatCentralCatalogWriteError(e));
+      }
+      window.setTimeout(() => setNotice(null), 2200);
+      return;
+    }
     const next = items.filter((x) => x.id !== p.id);
     persist(next);
     if (editingId === p.id) {
@@ -1698,6 +2176,59 @@ export default function ProductosManagementPage({
     { id: "conEscandallo" as const, label: t("carta.filterConEsc") },
     { id: "sinEscandallo" as const, label: t("carta.filterSinEsc") },
   ] as const;
+
+  /** Pills de familia de producto (Bebidas/Comida/Otros); distinto de filtros escandallo/activo. */
+  function iceToolbarProductFamilyFilterButtons(cfgMergedStripe: boolean): ReactNode {
+    const dense = cfgMergedStripe;
+    return PRODUCT_FAMILY_LIST_FILTER_OPTIONS.map((f) => {
+      const active = productFamilyFilter === f.id;
+      const passiveBorder =
+        dense
+          ? "1px solid rgba(148, 163, 184, 0.16)"
+          : configCartaProductosChrome
+            ? "1px solid rgba(148, 163, 184, 0.18)"
+            : iceVisual
+              ? "1px solid var(--hostly-line)"
+              : "1px solid #334155";
+      const inactiveBg =
+        dense
+          ? "rgba(255, 255, 255, 0.42)"
+          : configCartaProductosChrome && iceVisual
+            ? "rgba(255, 255, 255, 0.5)"
+            : iceVisual
+              ? "#fff"
+              : "#0f172a";
+      const inactiveInk =
+        dense ? "var(--hostly-ink-muted)" : configCartaProductosChrome ? "var(--hostly-ink-muted)" : "#94a3b8";
+      return (
+        <button
+          key={f.id}
+          type="button"
+          onClick={() => setProductFamilyFilter(f.id)}
+          aria-pressed={active}
+          style={{
+            border: active ? "1px solid rgba(56, 189, 248, 0.55)" : passiveBorder,
+            background: active
+              ? iceVisual
+                ? "rgba(224, 242, 254, 0.95)"
+                : "rgba(56, 189, 248, 0.18)"
+              : inactiveBg,
+            color: active ? (iceVisual ? "#0c4a6e" : "#e0f2fe") : inactiveInk,
+            padding: dense ? "3px 7px" : configCartaProductosChrome ? "4px 9px" : "5px 11px",
+            borderRadius: 999,
+            fontWeight: active ? 700 : dense ? 640 : configCartaProductosChrome ? 650 : 700,
+            cursor: "pointer",
+            fontSize: dense ? 10 : configCartaProductosChrome ? 11 : 12,
+            lineHeight: dense ? 1.1 : 1.2,
+            minHeight: dense ? 22 : configCartaProductosChrome ? 26 : 30,
+            flexShrink: 0,
+          }}
+        >
+          {f.label}
+        </button>
+      );
+    });
+  }
 
   /** UI only: filtros rápidos hielo; `cfgMergedStripe` = barra ultra compacta (config carta embed). */
   function iceToolbarFilterButtons(cfgMergedStripe: boolean): ReactNode {
@@ -2048,6 +2579,8 @@ export default function ProductosManagementPage({
             </button>
             <button
               type="button"
+              disabled={isLegacyReadOnly}
+              title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
               onClick={openCreate}
               style={
                 configCartaProductosChrome
@@ -2058,13 +2591,14 @@ export default function ProductosManagementPage({
                       padding: "5px 12px",
                       borderRadius: 8,
                       fontWeight: 760,
-                      cursor: "pointer",
+                      cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                       fontSize: 11,
                       lineHeight: 1.15,
                       minHeight: 28,
                       whiteSpace: "nowrap",
                       letterSpacing: "-0.02em",
                       boxShadow: "0 1px 2px rgba(15, 23, 42, 0.05)",
+                      opacity: isLegacyReadOnly ? 0.48 : 1,
                     }
                   : {
                       border: iceVisual ? "1px solid rgba(34, 197, 94, 0.35)" : "1px solid rgba(34, 197, 94, 0.42)",
@@ -2073,12 +2607,13 @@ export default function ProductosManagementPage({
                       padding: "6px 12px",
                       borderRadius: 8,
                       fontWeight: 700,
-                      cursor: "pointer",
+                      cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                       fontSize: 12,
                       lineHeight: 1.2,
                       minHeight: 30,
                       whiteSpace: "nowrap",
                       letterSpacing: "-0.01em",
+                      opacity: isLegacyReadOnly ? 0.48 : 1,
                     }
               }
             >
@@ -2118,6 +2653,22 @@ export default function ProductosManagementPage({
             {notice}
           </div>
         ) : null}
+
+        <CatalogMigrationPreviewPanel
+          restaurantId={operationalRestaurantId}
+          catalogSource={operationalCatalog.source}
+          iceVisual={iceVisual}
+        />
+
+        <LegacyPlatosArchivePanel
+          restaurantId={operationalRestaurantId}
+          catalogSource={operationalCatalog.source}
+          iceVisual={iceVisual}
+          onArchived={() => {
+            setNotice("Copia local archivada");
+            window.setTimeout(() => setNotice(null), 3200);
+          }}
+        />
 
         {formError && !formOpen ? (
           <div
@@ -2290,6 +2841,33 @@ export default function ProductosManagementPage({
                     {t("stock.filterHint")}
                   </span>
                   {iceToolbarFilterButtons(true)}
+                  <span
+                    aria-hidden
+                    style={{
+                      opacity: 0.16,
+                      color: "#475569",
+                      fontWeight: 900,
+                      userSelect: "none",
+                      fontSize: 10,
+                      lineHeight: 1,
+                      flexShrink: 0,
+                    }}
+                  >
+                    ·
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 800,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      color: "#94a3b8",
+                      flexShrink: 0,
+                    }}
+                  >
+                    Familia
+                  </span>
+                  {iceToolbarProductFamilyFilterButtons(true)}
                 </div>
                 <input
                   type="search"
@@ -2419,6 +2997,35 @@ export default function ProductosManagementPage({
           <div
             style={{
               flexShrink: 0,
+              display: configCartaProductosChrome ? "none" : "flex",
+              flexWrap: "wrap",
+              gap: 5,
+              padding: "2px 5px 4px",
+              alignItems: "center",
+              borderBottom: iceVisual ? "1px solid var(--hostly-line)" : "1px solid #334155",
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+            }}
+            role="group"
+            aria-label="Filtrar por familia de producto"
+          >
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                marginRight: 2,
+                flexShrink: 0,
+              }}
+            >
+              Familia
+            </span>
+            {iceToolbarProductFamilyFilterButtons(false)}
+          </div>
+
+          <div
+            style={{
+              flexShrink: 0,
               padding: configCartaProductosChrome ? "1px 3px" : "1px 5px 2px",
               borderBottom: iceVisual
                 ? configCartaProductosChrome
@@ -2500,6 +3107,8 @@ export default function ProductosManagementPage({
                 <p style={{ margin: "12px 0 0", maxWidth: 400, fontSize: 14, lineHeight: 1.5 }}>{t("carta.emptyBody")}</p>
                 <button
                   type="button"
+                  disabled={isLegacyReadOnly}
+                  title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
                   onClick={openCreate}
                   style={{
                     marginTop: 20,
@@ -2509,9 +3118,10 @@ export default function ProductosManagementPage({
                     padding: "12px 22px",
                     borderRadius: 10,
                     fontWeight: 700,
-                    cursor: "pointer",
+                    cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                     fontSize: 15,
                     minHeight: 48,
+                    opacity: isLegacyReadOnly ? 0.48 : 1,
                     boxShadow: iceVisual ? "0 10px 28px -14px rgba(22, 163, 74, 0.55)" : undefined,
                   }}
                 >
@@ -2556,6 +3166,8 @@ export default function ProductosManagementPage({
                       {bulkSelectionBreakdown.countFueraCarta > 0 ? (
                         <button
                           type="button"
+                          disabled={isLegacyReadOnly}
+                          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
                           onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsFuera, { activo: true })}
                           style={{
                             ...rowActionBtn,
@@ -2563,6 +3175,8 @@ export default function ProductosManagementPage({
                             background: "rgba(34, 197, 94, 0.14)",
                             color: "#dcfce7",
                             fontWeight: 800,
+                            opacity: isLegacyReadOnly ? 0.48 : 1,
+                            cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                           }}
                         >
                           {t("productos.bulkVolverCartaCount", { count: String(bulkSelectionBreakdown.countFueraCarta) })}
@@ -2571,6 +3185,8 @@ export default function ProductosManagementPage({
                       {bulkSelectionBreakdown.countEnCarta > 0 ? (
                         <button
                           type="button"
+                          disabled={isLegacyReadOnly}
+                          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
                           onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsEnCarta, { activo: false })}
                           style={{
                             ...rowActionBtn,
@@ -2578,6 +3194,8 @@ export default function ProductosManagementPage({
                             background: "rgba(245, 158, 11, 0.12)",
                             color: "#fef3c7",
                             fontWeight: 800,
+                            opacity: isLegacyReadOnly ? 0.48 : 1,
+                            cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                           }}
                         >
                           {t("productos.bulkQuitarCartaCount", { count: String(bulkSelectionBreakdown.countEnCarta) })}
@@ -2586,6 +3204,8 @@ export default function ProductosManagementPage({
                       {bulkSelectionBreakdown.countInactivos > 0 ? (
                         <button
                           type="button"
+                          disabled={isLegacyReadOnly}
+                          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
                           onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsInactivos, { isActive: true })}
                           style={{
                             ...rowActionBtn,
@@ -2593,6 +3213,8 @@ export default function ProductosManagementPage({
                             background: "rgba(16, 185, 129, 0.1)",
                             color: "#a7f3d0",
                             fontWeight: 700,
+                            opacity: isLegacyReadOnly ? 0.48 : 1,
+                            cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                           }}
                         >
                           {t("productos.bulkActivarCount", { count: String(bulkSelectionBreakdown.countInactivos) })}
@@ -2601,6 +3223,8 @@ export default function ProductosManagementPage({
                       {bulkSelectionBreakdown.countActivosVenta > 0 ? (
                         <button
                           type="button"
+                          disabled={isLegacyReadOnly}
+                          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
                           onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsActivosVenta, { isActive: false })}
                           style={{
                             ...rowActionBtn,
@@ -2608,6 +3232,8 @@ export default function ProductosManagementPage({
                             background: "rgba(51, 65, 85, 0.35)",
                             color: "#e2e8f0",
                             fontWeight: 700,
+                            opacity: isLegacyReadOnly ? 0.48 : 1,
+                            cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                           }}
                         >
                           {t("productos.bulkDesactivarCount", { count: String(bulkSelectionBreakdown.countActivosVenta) })}
@@ -2641,18 +3267,26 @@ export default function ProductosManagementPage({
                           justifyContent: "center",
                           alignItems: "center",
                           margin: 0,
-                          cursor: displayed.length === 0 ? "default" : "pointer",
+                          cursor:
+                            displayed.length === 0 || isLegacyReadOnly ? "default" : "pointer",
                           minWidth: 0,
                         }}
+                        title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
                       >
                         <input
                           ref={selectAllRef}
                           type="checkbox"
-                          disabled={displayed.length === 0}
+                          disabled={displayed.length === 0 || isLegacyReadOnly}
                           checked={displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id))}
                           onChange={toggleSelectAllDisplayed}
                           aria-label={t("productos.selectAllVisible")}
-                          style={{ width: iceVisual ? 14 : 16, height: iceVisual ? 14 : 16, cursor: displayed.length === 0 ? "not-allowed" : "pointer", accentColor: "#38bdf8" }}
+                          style={{
+                            width: iceVisual ? 14 : 16,
+                            height: iceVisual ? 14 : 16,
+                            cursor:
+                              displayed.length === 0 || isLegacyReadOnly ? "not-allowed" : "pointer",
+                            accentColor: "#38bdf8",
+                          }}
                         />
                       </label>
                       <span style={{ ...colHeadStyleResolved, textAlign: "left" }}>{t("carta.colNombre")}</span>
@@ -2752,12 +3386,14 @@ export default function ProductosManagementPage({
                                         justifyContent: "center",
                                         alignItems: "center",
                                         margin: 0,
-                                        cursor: "pointer",
+                                        cursor: isLegacyReadOnly ? "default" : "pointer",
                                         justifySelf: "center",
                                       }}
+                                      title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
                                     >
                                       <input
                                         type="checkbox"
+                                        disabled={isLegacyReadOnly}
                                         checked={selectedIds.has(p.id)}
                                         onChange={() => toggleRowSelected(p.id)}
                                         aria-label={t("productos.selectRowAria", { name: p.nombre })}
@@ -2765,7 +3401,7 @@ export default function ProductosManagementPage({
                                           width: iceVisual ? 14 : 16,
                                           height: iceVisual ? 14 : 16,
                                           accentColor: "#38bdf8",
-                                          cursor: "pointer",
+                                          cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                                         }}
                                       />
                                     </label>
@@ -2822,6 +3458,7 @@ export default function ProductosManagementPage({
                                       t={t}
                                       embedLight={iceVisual}
                                       inventoryIconToolbar={configCartaProductosChrome}
+                                      legacyReadOnly={isLegacyReadOnly}
                                       onEdit={() => openEdit(p)}
                                       onToggleCarta={() => toggleActivo(p)}
                                       onActivateProduct={() => activateProducto(p)}
@@ -2855,12 +3492,14 @@ export default function ProductosManagementPage({
                                     justifyContent: "center",
                                     alignItems: "center",
                                     margin: 0,
-                                    cursor: "pointer",
+                                    cursor: isLegacyReadOnly ? "default" : "pointer",
                                     justifySelf: "center",
                                   }}
+                                  title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
                                 >
                                   <input
                                     type="checkbox"
+                                    disabled={isLegacyReadOnly}
                                     checked={selectedIds.has(p.id)}
                                     onChange={() => toggleRowSelected(p.id)}
                                     aria-label={t("productos.selectRowAria", { name: p.nombre })}
@@ -2868,7 +3507,7 @@ export default function ProductosManagementPage({
                                       width: iceVisual ? 14 : 16,
                                       height: iceVisual ? 14 : 16,
                                       accentColor: "#38bdf8",
-                                      cursor: "pointer",
+                                      cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
                                     }}
                                   />
                                 </label>
@@ -2925,6 +3564,7 @@ export default function ProductosManagementPage({
                                   t={t}
                                   embedLight={iceVisual}
                                   inventoryIconToolbar={configCartaProductosChrome}
+                                  legacyReadOnly={isLegacyReadOnly}
                                   onEdit={() => openEdit(p)}
                                   onToggleCarta={() => toggleActivo(p)}
                                   onActivateProduct={() => activateProducto(p)}
@@ -3017,22 +3657,26 @@ export default function ProductosManagementPage({
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Área de preparación</label>
-                  <select
-                    value={draftPreparationArea}
-                    onChange={(e) => setDraftPreparationArea(e.target.value)}
+                  <label style={labelStyle}>Estación operativa</label>
+                  <OperationStationProductSelect
+                    restaurantId={operationalRestaurantId}
+                    value={draftOperationStationSelect}
+                    onChange={setDraftOperationStationSelect}
+                    disabled={drawerSyncing}
                     style={{
                       ...inputStyle,
                       fontSize: 16,
                       padding: "14px 14px",
                       minHeight: 52,
-                      cursor: "pointer",
+                      cursor: drawerSyncing ? "not-allowed" : "pointer",
                     }}
-                  >
-                    <option value="cocina">cocina</option>
-                    <option value="barra">barra</option>
-                    <option value="cocteleria">cocteleria</option>
-                  </select>
+                  />
+                  {isLegacyOperationStationSelectValue(draftOperationStationSelect) ? (
+                    <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
+                      Valor legacy: se conserva hasta que elijas una estación y
+                      guardes.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>
@@ -3089,6 +3733,18 @@ export default function ProductosManagementPage({
                     setAddCategoryOpen(true);
                   }}
                 />
+                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#94a3b8" }}>
+                  Familia de producto (desde categoría):{" "}
+                  <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
+                    {draftProductFamilyLabel}
+                  </span>
+                </p>
+                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#94a3b8" }}>
+                  Modificadores heredados:{" "}
+                  <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
+                    {draftEffectiveModifierLabel}
+                  </span>
+                </p>
 
                 <div>
                   <label style={labelStyle}>{t("carta.fieldPrecio")}</label>
@@ -3111,6 +3767,21 @@ export default function ProductosManagementPage({
                   <label style={labelStyle}>{t("carta.fieldFoto")}</label>
                   <input value={draftFoto} onChange={(e) => setDraftFoto(e.target.value)} style={{ ...inputStyle, padding: "14px 14px" }} />
                 </div>
+
+                {isCentralCatalog ? (
+                  <ProductRecipeEditorSection
+                    saleProductId={editingId}
+                    enabled={draftRecipeEnabled}
+                    onEnabledChange={setDraftRecipeEnabled}
+                    rows={draftRecipeRows}
+                    onRowsChange={setDraftRecipeRows}
+                    inventoryProducts={inventoryLookup}
+                    warnings={draftRecipeWarnings}
+                    disabled={drawerSyncing}
+                    labelStyle={labelStyle}
+                    inputStyle={inputStyle}
+                  />
+                ) : null}
 
                 {formError ? (
                   <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(248, 113, 113, 0.12)", border: "1px solid rgba(248, 113, 113, 0.35)", color: "#fecaca", fontSize: 13, lineHeight: 1.35 }}>

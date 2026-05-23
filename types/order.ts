@@ -17,4 +17,11 @@ export type OrderItem = {
   status: OrderItemStatus;
   createdAt: number;
   updatedAt: number;
+  /** Trazabilidad KDS (fase 1); routing sigue por heurística si falta. */
+  station?: "kitchen" | "bar" | "cocktail" | "none";
+  preparationArea?: "cocina" | "barra" | "cocteleria" | "none";
+  /** Estación operativa configurable (metadata; filtro KDS legacy sigue por `station`). */
+  operationStationId?: string;
+  operationStationName?: string;
+  categoryName?: string;
 };

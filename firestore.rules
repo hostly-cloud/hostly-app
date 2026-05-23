@@ -6,14 +6,211 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userRestaurantId() {
+    function userProfileData() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.restaurantId
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
         : (
           exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
-            ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.restaurantId
+            ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data
             : null
         );
+    }
+
+    function userRestaurantId() {
+      let profile = userProfileData();
+      return profile != null && profile.restaurantId is string
+        ? profile.restaurantId
+        : null;
+    }
+
+    // Rol crudo del perfil (`users/{uid}` o `usuarios/{uid}`).
+    function userRole() {
+      let profile = userProfileData();
+      return profile != null && profile.role is string
+        ? profile.role.lower()
+        : '';
+    }
+
+    // Matriz alineada con lib/auth/hostly-capabilities.ts (Fase 5 / 5B).
+    // Sin role en perfil → owner (legacy, igual que loadUserRestaurantContext).
+    // staff Firebase → manager (legacy operacional).
+    function normalizedRole() {
+      let role = userRole();
+      return role == 'owner' || role == 'propietario' ? 'owner'
+        : role == 'admin' || role == 'administrator' ? 'admin'
+        : role == 'manager' || role == 'gerente' ? 'manager'
+        : role == 'waiter' || role == 'camarero' || role == 'camarera' || role == 'staff_tpv' ? 'waiter'
+        : role == 'kitchen' || role == 'cocina' || role == 'cook' ? 'kitchen'
+        : role == 'viewer' || role == 'readonly' || role == 'read_only' ? 'viewer'
+        : role == 'staff' ? 'manager'
+        : role == '' ? 'owner'
+        : 'viewer';
+    }
+
+    function isOwnerOrAdmin() {
+      let role = normalizedRole();
+      return role == 'owner' || role == 'admin';
+    }
+
+    function isManagerOrAbove() {
+      let role = normalizedRole();
+      return role == 'owner' || role == 'admin' || role == 'manager';
+    }
+
+    function hasOperationalRole(roleName) {
+      return normalizedRole() == roleName;
+    }
+
+    function canManageInventory() {
+      return isManagerOrAbove();
+    }
+
+    function canManagePurchases() {
+      return isManagerOrAbove();
+    }
+
+    function canManageSupplierInvoices() {
+      return isManagerOrAbove();
+    }
+
+    // Fase 5C: activo en payments create.
+    function canChargeTpv() {
+      let role = normalizedRole();
+      return isOwnerOrAdmin() || role == 'manager' || role == 'waiter';
+    }
+
+    // Fase 5C: activo en orderItems update cuando isCancellingOrderLine().
+    function canCancelTpvLine() {
+      let role = normalizedRole();
+      return isOwnerOrAdmin() || role == 'manager' || role == 'waiter';
+    }
+
+    // Fase 5D: activo en payments update cuando isRefundWrite() (tpv.refund → manager+).
+    function canRefundTpv() {
+      return isManagerOrAbove();
+    }
+
+    function isCancelledLineStatus(status) {
+      return status is string
+        && (
+          status.lower() == 'cancelled'
+          || status.lower() == 'canceled'
+          || status.lower() == 'cancelado'
+        );
+    }
+
+    function orderItemLineQuantity(data) {
+      return data.quantity is number
+        ? data.quantity
+        : (data.qty is number ? data.qty : null);
+    }
+
+    // Detecta cancelaciones explícitas en orderItems (no updates KDS sent→preparing→prepared/ready→served).
+    function isCancellingOrderLine() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let diff = after.diff(before);
+      let affected = diff.affectedKeys();
+
+      let statusToCancelled = affected.hasAny(['status'])
+        && isCancelledLineStatus(after.status)
+        && !isCancelledLineStatus(before.status);
+
+      let cancelledAtSet = affected.hasAny(['cancelledAt'])
+        && after.cancelledAt is int
+        && (!(before.cancelledAt is int) || before.cancelledAt == null);
+
+      let beforeQty = orderItemLineQuantity(before);
+      let afterQty = orderItemLineQuantity(after);
+      let quantityToZero = (affected.hasAny(['quantity']) || affected.hasAny(['qty']))
+        && afterQty is number
+        && afterQty <= 0
+        && (beforeQty == null || beforeQty > 0);
+
+      return statusToCancelled || cancelledAtSet || quantityToZero;
+    }
+
+    function paymentUpdateTouchesRefundStatus() {
+      let after = request.resource.data;
+      let before = resource.data;
+      let diff = after.diff(before);
+      return diff.affectedKeys().hasAny(['status'])
+        && after.status is string
+        && (
+          after.status.lower() == 'refunded'
+          || after.status.lower() == 'refund'
+          || after.status.lower() == 'devolucion'
+          || after.status.lower() == 'cancelled'
+          || after.status.lower() == 'canceled'
+        )
+        && (
+          !(before.status is string)
+          || before.status.lower() != after.status.lower()
+        );
+    }
+
+    function paymentUpdateTouchesRefundFields() {
+      let after = request.resource.data;
+      let before = resource.data;
+      let affected = after.diff(before).affectedKeys();
+      return (affected.hasAny(['refundedAt'])
+          && after.refundedAt is int
+          && (!(before.refundedAt is int) || before.refundedAt == null))
+        || (affected.hasAny(['refundAmount'])
+          && after.refundAmount is number
+          && after.refundAmount > 0)
+        || (affected.hasAny(['finalTotal'])
+          && after.finalTotal is number
+          && before.finalTotal is number
+          && after.finalTotal < before.finalTotal)
+        || (affected.hasAny(['amount'])
+          && after.amount is number
+          && after.amount < 0)
+        || (affected.hasAny(['type'])
+          && after.type is string
+          && after.type.lower() == 'refund')
+        || (affected.hasAny(['paymentKind'])
+          && after.paymentKind is string
+          && after.paymentKind.lower() == 'refund')
+        || (affected.hasAny(['refund'])
+          && after.refund is bool
+          && after.refund == true);
+    }
+
+    // Fase 5D: activo en payments update. Detecta refunds/anulaciones sin bloquear updates normales.
+    function isRefundWrite() {
+      return paymentUpdateTouchesRefundStatus() || paymentUpdateTouchesRefundFields();
+    }
+
+    // Fase 5D: wired en orders update; hoy siempre false (schema sin cancelledLineIds).
+    // Cuando el TPV escriba cancelledLineIds al cancelar, exigirá canCancelTpvLine().
+    // orders.items[] cancellation remains soft-protected by UI + orderItems rules until schema adds cancelledLineIds.
+    function isCancellingOrderItemsArray() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let diff = after.diff(before);
+      return diff.affectedKeys().hasAny(['items'])
+        && after.keys().hasAny(['cancelledLineIds'])
+        && (
+          !(before.keys().hasAny(['cancelledLineIds']))
+          || after.cancelledLineIds != before.cancelledLineIds
+        );
+    }
+
+    function canManageSettings() {
+      return isOwnerOrAdmin();
+    }
+
+    function canManageUsers() {
+      return isOwnerOrAdmin();
+    }
+
+    function productCreateTouchesInventory() {
+      return request.resource.data.keys().hasAny(['inventory']);
+    }
+
+    function productUpdateTouchesInventory() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['inventory']);
     }
 
     function profileHasRestaurant(profile, restaurantId) {
@@ -76,12 +273,18 @@ service cloud.firestore {
 
     // Catálogo central por restaurante (ruta explícita; no inferir desde el doc padre).
     match /restaurants/{restaurantId}/products/{productId} {
-      allow read, write: if sameRestaurant(restaurantId);
+      allow read: if sameRestaurant(restaurantId);
 
-      // Movimientos de stock: solo lectura y alta (append-only). Update/delete no declarados → denegados.
+      allow create: if sameRestaurant(restaurantId)
+        && (!productCreateTouchesInventory() || canManageInventory());
+
+      allow update: if sameRestaurant(restaurantId)
+        && (!productUpdateTouchesInventory() || canManageInventory());
+
+      // Movimientos de stock por producto: append-only + capability inventario.
       match /stockMovements/{movementId} {
         allow read: if sameRestaurant(restaurantId);
-        allow create: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId) && canManageInventory();
       }
     }
 
@@ -94,16 +297,191 @@ service cloud.firestore {
     match /restaurants/{restaurantId} {
       allow read, write: if sameRestaurant(restaurantId);
 
-      // `restaurants/{rid}/config/tableGroups` — doc solo tiene `groups`/`updatedAt` (tenant viene del path).
+      // Config operacional / sensible por docId.
+      // tableGroups: join/separar mesas (manager+). floorPlanLayouts/printers: settings (owner/admin).
       match /config/{groupDocId} {
-        allow read, create, update: if groupDocId == "tableGroups"
+        allow read: if (groupDocId == "tableGroups" || groupDocId == "floorPlanLayouts" || groupDocId == "printers")
           && sameRestaurant(restaurantId);
+        allow create, update: if groupDocId == "tableGroups"
+          && sameRestaurant(restaurantId)
+          && isManagerOrAbove();
+        allow create, update: if (groupDocId == "floorPlanLayouts" || groupDocId == "printers")
+          && sameRestaurant(restaurantId)
+          && canManageSettings();
         allow delete: if false;
       }
 
       match /inventoryProducts/{inventoryProductId} {
         allow read: if sameRestaurant(restaurantId);
         allow create, update, delete: if false;
+      }
+
+      match /floorPlanSnapshots/{snapshotId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if false;
+      }
+
+      // Borradores de importación de carta (IA / OCR — sin publicar productos).
+      match /menuImportDrafts/{draftId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if false;
+      }
+
+      // Estaciones operativas configurables (preparación / impresión por punto).
+      match /operationStations/{stationId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if false;
+      }
+
+      // Familias de producto (bebidas / comida / otros — agrupación de categorías).
+      match /productFamilies/{familyId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if false;
+      }
+
+      // Grupos de modificadores (formato bebida, mixer, extras — configuración TPV futura).
+      match /modifierGroups/{groupId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if false;
+      }
+
+      // Cola de tickets de impresión (simulador / worker futuro).
+      match /printJobs/{jobId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if false;
+      }
+
+      // Ledger central de movimientos (recepciones futuras, venta por modificador, etc.).
+      match /stockMovements/{movementId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+      }
+
+      // Borradores de pedido sugerido (compras inteligentes — sin envío a proveedor).
+      match /purchaseDrafts/{draftId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if false;
+      }
+
+      // Pedidos de compra internos (desde borrador — sin envío a proveedor).
+      match /purchaseOrders/{purchaseOrderId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId
+          && canManagePurchases();
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && canManagePurchases();
+        allow delete: if false;
+      }
+
+      // Recepciones operativas de pedidos de compra (ledger central).
+      match /purchaseReceipts/{receiptId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId
+          && canManagePurchases();
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && canManagePurchases();
+        allow delete: if false;
+      }
+
+      // Facturas de proveedor (coste real recibido — sin contabilidad ni pagos).
+      match /supplierInvoices/{invoiceId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId
+          && canManageSupplierInvoices();
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && canManageSupplierInvoices();
+        allow delete: if false;
+      }
+
+      // Aliases aprendidos OCR facturas proveedor → producto inventario.
+      match /supplierProductAliases/{aliasId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == resource.data.restaurantId;
+        allow delete: if false;
+      }
+
+      // Registro operacional append-only (trazabilidad multi-tablet).
+      match /activityLogs/{logId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update, delete: if false;
+      }
+
+      // Presencia operacional soft-lock (multi-tablet awareness).
+      match /tablePresence/{presenceId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == resource.data.restaurantId;
+        allow delete: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId;
+      }
+
+      // Sesiones activas por dispositivo/pestaña (trazabilidad operacional).
+      match /activeSessions/{sessionId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == resource.data.restaurantId;
+        allow delete: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId;
       }
     }
 
@@ -134,21 +512,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ORDERS
+    // ORDERS — create/update general sin capability gate (Fase 5C/5D).
+    // Protegido: orderItems cancel (canCancelTpvLine). Pendiente: orders.items[] (sin cancelledLineIds).
+    // isCancellingOrderItemsArray() wired; inactivo hasta schema cancelledLineIds (no bloquea KDS hoy).
     match /orders/{orderId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
       allow create: if sameRestaurant(request.resource.data.restaurantId);
       allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId;
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && (!isCancellingOrderItemsArray() || canCancelTpvLine());
       allow delete: if false;
     }
 
-    // ORDER ITEMS (líneas enviadas a cocina / KDS)
+    // ORDER ITEMS (líneas enviadas a cocina / KDS / cancel TPV)
     match /orderItems/{orderItemId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
       allow create: if sameRestaurant(request.resource.data.restaurantId);
       allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId;
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && (!isCancellingOrderLine() || canCancelTpvLine());
       allow delete: if false;
     }
 
@@ -162,11 +544,14 @@ service cloud.firestore {
     }
 
     // PAYMENTS (cobros, tickets, pagos parciales split_by_items)
+    // Fase 5C: create → canChargeTpv(). Fase 5D: update refund/anulación → canRefundTpv().
     match /payments/{paymentId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canChargeTpv();
       allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId;
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && (!isRefundWrite() || canRefundTpv());
       allow delete: if false;
     }
   }

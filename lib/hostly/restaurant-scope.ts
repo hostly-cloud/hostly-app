@@ -5,6 +5,18 @@
 
 const STORAGE_KEY = "hostly.restauranteId";
 
+/**
+ * ID operativo del tenant: perfil autenticado primero, luego navegador.
+ * TPV, productos y CRUD central deben usar el mismo valor.
+ */
+export function resolveOperationalRestaurantId(
+  profileRestaurantId?: string | null,
+): string {
+  const fromProfile =
+    typeof profileRestaurantId === "string" ? profileRestaurantId.trim() : "";
+  return fromProfile || getBrowserRestauranteId();
+}
+
 /** ID de restaurante en el navegador (localStorage → env público → default). */
 export function getBrowserRestauranteId(): string {
   if (typeof window === "undefined") {

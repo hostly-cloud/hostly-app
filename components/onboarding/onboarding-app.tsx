@@ -48,19 +48,38 @@ const TIPO_KEYS: Record<TipoProductoVenta, string> = {
   bebida: "carta.tipoBebida",
 };
 
+/** Inputs onboarding alineados con Hostly configLight / ice (compactos). */
 const inp: CSSProperties = {
-  padding: "11px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(71, 85, 105, 0.55)",
-  background: "rgba(15, 23, 42, 0.88)",
-  color: "#f1f5f9",
-  fontSize: 15,
+  padding: "7px 10px",
+  borderRadius: 9,
+  border: "1px solid var(--hostly-table-divider-soft)",
+  background: "var(--hostly-surface-card-solid)",
+  color: "var(--hostly-ink)",
+  fontSize: 14,
   width: "100%",
   boxSizing: "border-box",
-  minHeight: 48,
+  minHeight: 38,
 };
 
-const lbl: CSSProperties = { display: "block", fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 6, letterSpacing: "0.04em" };
+const lbl: CSSProperties = {
+  display: "block",
+  fontSize: 9.5,
+  fontWeight: 600,
+  color: "var(--hostly-ink-faint)",
+  marginBottom: 4,
+  letterSpacing: "0.085em",
+  textTransform: "uppercase",
+};
+
+const onboardingLead: CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  lineHeight: 1.45,
+  color: "var(--hostly-ink-muted)",
+  fontWeight: 500,
+};
+
+const onboardingSectionTitle = "hostly-heading m-0 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-[color:var(--hostly-ink-strong)]";
 
 function normalizeName(s: string): string {
   return s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -94,6 +113,44 @@ const STOCK_SUGGESTIONS: { nombre: string; unidad: UnidadStock; stock_actual: nu
 ];
 
 type IngLine = { id: string; stockId: string; cantidad: string; costeLinea: string };
+
+const ONBOARDING_CP_ORDER: readonly OnboardingCheckpointKey[] = [
+  "negocio",
+  "carta",
+  "catalogo",
+  "inventario",
+  "usuarios",
+  "escandallo",
+];
+
+function lastCompletedCheckpointLabel(cp: Pick<Record<OnboardingCheckpointKey, boolean>, OnboardingCheckpointKey>, t: (k: string) => string): string | null {
+  const map: Record<OnboardingCheckpointKey, string> = {
+    negocio: t("onboarding.chkNegocio"),
+    carta: t("onboarding.chkCarta"),
+    catalogo: t("onboarding.chkCatalogo"),
+    inventario: t("onboarding.chkInventario"),
+    usuarios: t("onboarding.chkUsuarios"),
+    escandallo: t("onboarding.chkEscandallo"),
+  };
+  for (let i = ONBOARDING_CP_ORDER.length - 1; i >= 0; i--) {
+    const k = ONBOARDING_CP_ORDER[i];
+    if (cp[k]) return map[k];
+  }
+  return null;
+}
+
+function groupCatalogRowsBySuggestedCategory(rows: ExtractedMenuRow[]): { catKey: string; items: ExtractedMenuRow[] }[] {
+  const m = new Map<string, ExtractedMenuRow[]>();
+  for (const r of rows) {
+    const c = (r.categoria ?? "").trim() || "—";
+    const arr = m.get(c);
+    if (arr) arr.push(r);
+    else m.set(c, [r]);
+  }
+  return [...m.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .map(([catKey, items]) => ({ catKey, items }));
+}
 
 export default function OnboardingApp() {
   const { t, locale } = useI18n();
@@ -190,6 +247,31 @@ export default function OnboardingApp() {
     if (catFilter === "all") return catalogDraft;
     return catalogDraft.filter((r) => r.tipoVenta === catFilter);
   }, [catalogDraft, catFilter]);
+
+  const catalogAssistStats = useMemo(() => {
+    if (catalogDraft.length === 0) return null;
+    const cats = new Set(catalogDraft.map((r) => (r.categoria ?? "").trim() || "—"));
+    return {
+      n: catalogDraft.length,
+      catCount: cats.size,
+      selected: catalogDraft.filter((r) => r.selected).length,
+      loosePrice: catalogDraft.filter((r) => !Number.isFinite(r.precio) || r.precio <= 0).length,
+    };
+  }, [catalogDraft]);
+
+  const sideStoryLines = useMemo(
+    () =>
+      [
+        t("onboarding.sideStory0"),
+        t("onboarding.sideStory1"),
+        t("onboarding.sideStory2"),
+        t("onboarding.sideStory3"),
+        t("onboarding.sideStory4"),
+        t("onboarding.sideStory5"),
+        t("onboarding.sideStory6"),
+      ] as const,
+    [t],
+  );
 
   const pickFile = useCallback((f: File | null) => {
     if (!f) return;
@@ -363,6 +445,9 @@ export default function OnboardingApp() {
   };
 
   const activationPct = onboardingActivationPercent(checkpoints);
+  const journeyPct = Math.min(100, Math.round((step / 6) * 100));
+  const sideStoryLine = sideStoryLines[Math.min(step, 6)];
+  const lastMarkedLabel = lastCompletedCheckpointLabel(checkpoints, t);
 
   const sideChecklist: { key: OnboardingCheckpointKey; label: string }[] = [
     { key: "negocio", label: t("onboarding.chkNegocio") },
@@ -373,61 +458,167 @@ export default function OnboardingApp() {
     { key: "escandallo", label: t("onboarding.chkEscandallo") },
   ];
 
-  const renderStepper = () => (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 10 }}>
-      {stepLabels.map((label, i) => {
-        const active = i === step;
-        const cpKey = STEP_CHECKPOINT[i];
-        const stepDone = cpKey != null && checkpoints[cpKey];
-        const isPast = i < step;
-        return (
-          <button
-            key={label}
-            type="button"
-            onClick={() => {
-              if (i <= step) setStep(i);
-            }}
+  const renderStepper = () => {
+    const n = stepLabels.length;
+    const progressPct = n <= 1 ? (step >= n - 1 ? 100 : 0) : Math.min(100, Math.round((step / Math.max(n - 1, 1)) * 100));
+    return (
+      <div
+        style={{
+          flexShrink: 0,
+          marginBottom: 6,
+          borderRadius: 12,
+          border: "1px solid var(--hostly-table-divider-soft)",
+          background: "var(--hostly-surface-card-solid)",
+          padding: "4px 4px 3px",
+          boxShadow: "var(--hostly-shadow-hairline)",
+          transition: "border-color 0.22s ease, box-shadow 0.26s ease",
+        }}
+      >
+        <div style={{ padding: "0 2px 6px", borderBottom: "1px solid var(--hostly-table-divider-faint)" }}>
+          <div
             style={{
-              border: active
-                ? "1px solid rgba(251, 191, 36, 0.55)"
-                : stepDone || isPast
-                  ? "1px solid rgba(52, 211, 153, 0.35)"
-                  : "1px solid rgba(51, 65, 85, 0.6)",
-              background: active
-                ? "linear-gradient(180deg, rgba(69, 26, 3, 0.5) 0%, rgba(30, 41, 59, 0.9) 100%)"
-                : stepDone || isPast
-                  ? "rgba(6, 78, 59, 0.2)"
-                  : "rgba(15, 23, 42, 0.65)",
-              color: active ? "#fef3c7" : stepDone || isPast ? "#a7f3d0" : "#94a3b8",
-              padding: "7px 12px",
+              height: 3,
               borderRadius: 999,
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: i <= step ? "pointer" : "default",
-              opacity: i <= step ? 1 : 0.55,
-              letterSpacing: "0.02em",
+              background: "color-mix(in srgb, var(--hostly-table-divider-soft) 55%, transparent)",
+              overflow: "hidden",
             }}
           >
-            <span style={{ opacity: 0.85, marginRight: 6 }}>{i + 1}</span>
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
+            <div
+              style={{
+                width: `${progressPct}%`,
+                height: "100%",
+                borderRadius: 999,
+                background:
+                  "linear-gradient(90deg, color-mix(in srgb, var(--hostly-accent) 52%, transparent), var(--hostly-accent))",
+                transition: "width 0.22s ease",
+              }}
+            />
+          </div>
+        </div>
+        <div
+          role="navigation"
+          aria-label="Onboarding"
+          style={{
+            display: "flex",
+            alignItems: "stretch",
+            gap: 0,
+            overflowX: "auto",
+            paddingTop: 2,
+            WebkitOverflowScrolling: "touch",
+            scrollbarWidth: "thin",
+          }}
+        >
+          {stepLabels.flatMap((label, i) => {
+            const active = i === step;
+            const cpKey = STEP_CHECKPOINT[i];
+            const stepDone = cpKey != null && checkpoints[cpKey];
+            const isPast = i < step;
+            const clickable = i <= step;
+            const stepEl = (
+              <button
+                key={label}
+                type="button"
+                aria-current={active ? "step" : undefined}
+                onClick={() => {
+                  if (i <= step) setStep(i);
+                }}
+                style={{
+                  flex: "1 1 0%",
+                  minWidth: "min(128px, 22vw)",
+                  border: "none",
+                  margin: 0,
+                  background: active
+                    ? "var(--hostly-info-soft)"
+                    : stepDone || isPast
+                      ? "color-mix(in srgb, var(--hostly-accent-soft) 38%, transparent)"
+                      : "transparent",
+                  color: active
+                    ? "var(--hostly-navy-deep)"
+                    : stepDone || isPast
+                      ? "var(--hostly-accent)"
+                      : "var(--hostly-ink-soft)",
+                  padding: "6px 9px",
+                  borderRadius: 9,
+                  fontSize: 10,
+                  fontWeight: 660,
+                  letterSpacing: "-0.01em",
+                  cursor: clickable ? "pointer" : "default",
+                  opacity: clickable ? 1 : 0.45,
+                  lineHeight: 1.22,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  gap: 6,
+                  textAlign: "left",
+                  boxShadow: active ? "inset 0 0 0 1px color-mix(in srgb, var(--hostly-accent) 14%, transparent)" : "none",
+                  transition: "background 0.2s ease, box-shadow 0.22s ease, opacity 0.2s ease",
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    flexShrink: 0,
+                    display: "inline-flex",
+                    width: 16,
+                    height: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 6,
+                    fontSize: 9,
+                    fontWeight: 800,
+                    background: stepDone || isPast ? "color-mix(in srgb, var(--hostly-success-soft) 94%, transparent)" : "var(--hostly-table-head-surface)",
+                    color: active ? "var(--hostly-navy-deep)" : stepDone ? "var(--hostly-accent)" : "var(--hostly-ink-muted)",
+                  }}
+                >
+                  {stepDone && !active ? "✓" : i + 1}
+                </span>
+                <span
+                  style={{
+                    overflow: "hidden",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical" as const,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {label}
+                </span>
+              </button>
+            );
+
+            const sep =
+              i > 0 ? (
+                <div
+                  key={`sep-${label}`}
+                  style={{
+                    width: 1,
+                    alignSelf: "stretch",
+                    margin: "5px 0",
+                    flexShrink: 0,
+                    background: "var(--hostly-table-divider-faint)",
+                  }}
+                  aria-hidden
+                />
+              ) : null;
+            return sep ? [sep, stepEl] : [stepEl];
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const panelMain = () => {
     switch (step) {
       case 0:
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#e2e8f0" }}>{t("onboarding.negocioTitle")}</h2>
-            <p style={{ margin: 0, fontSize: 12, color: "#64748b", lineHeight: 1.45 }}>{t("onboarding.negocioSub")}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 className={onboardingSectionTitle}>{t("onboarding.negocioTitle")}</h2>
+            <p style={onboardingLead}>{t("onboarding.negocioSub")}</p>
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: 12,
+                gap: 10,
               }}
             >
               <div style={{ gridColumn: "1 / -1" }}>
@@ -483,18 +674,7 @@ export default function OnboardingApp() {
               type="button"
               onClick={saveNegocio}
               disabled={!profile.nombre.trim()}
-              style={{
-                alignSelf: "flex-start",
-                border: "none",
-                background: profile.nombre.trim() ? "linear-gradient(180deg, rgba(251,191,36,0.95) 0%, rgba(217,119,6,0.9) 100%)" : "rgba(71,85,105,0.4)",
-                color: profile.nombre.trim() ? "#1c1917" : "#64748b",
-                padding: "12px 22px",
-                borderRadius: 10,
-                fontWeight: 800,
-                fontSize: 14,
-                cursor: profile.nombre.trim() ? "pointer" : "not-allowed",
-                marginTop: 4,
-              }}
+              className="hostly-button-primary mt-0.5 self-start px-4 py-2 text-[13px] font-semibold"
             >
               {t("onboarding.ctaSaveContinue")}
             </button>
@@ -532,7 +712,7 @@ export default function OnboardingApp() {
             showHero
             headerActions={
               <>
-                <button type="button" onClick={() => router.push("/dashboard/carta")} style={{ ...inp, width: "auto", cursor: "pointer", minHeight: 42, fontSize: 13 }}>
+                <button type="button" onClick={() => router.push("/dashboard/carta")} className="hostly-button-secondary min-h-[36px] whitespace-nowrap px-3 py-1.5 text-[12px] font-semibold">
                   {t("onboarding.cartaManual")}
                 </button>
                 <button
@@ -543,17 +723,7 @@ export default function OnboardingApp() {
                     setStep(2);
                     flashSaved(t("onboarding.flashSaved"));
                   }}
-                  style={{
-                    border: "1px solid rgba(71,85,105,0.55)",
-                    background: "transparent",
-                    color: "#94a3b8",
-                    padding: "10px 16px",
-                    borderRadius: 10,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    minHeight: 42,
-                    fontSize: 13,
-                  }}
+                  className="hostly-button-secondary border-[var(--hostly-table-divider-soft)] px-3 py-1.5 text-[12px] font-semibold !bg-transparent !text-[color:var(--hostly-ink-muted)] hover:!bg-[var(--hostly-table-row-hover)]"
                 >
                   {t("onboarding.cartaSkip")}
                 </button>
@@ -561,126 +731,233 @@ export default function OnboardingApp() {
             }
           />
         );
-      case 2:
+      case 2: {
+        const nPlatos = catalogDraft.filter((x) => x.tipoVenta === "plato").length;
+        const nBeb = catalogDraft.filter((x) => x.tipoVenta === "bebida").length;
+        const groups = groupCatalogRowsBySuggestedCategory(filteredCatalog);
+        const iaRowColumns = "38px minmax(140px,2.4fr) minmax(100px,1fr) minmax(108px,1fr) minmax(84px,0.75fr)" as const;
+
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#e2e8f0" }}>{t("onboarding.catalogTitle")}</h2>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <h2 className={onboardingSectionTitle}>{t("onboarding.catalogTitle")}</h2>
+              <span className="text-[11px] font-semibold text-[color:var(--hostly-ink-muted)]">
                 {t("onboarding.catalogCount", { n: String(catalogDraft.length) })}
               </span>
             </div>
+            <p style={{ ...onboardingLead, marginBottom: -2 }}>{t("onboarding.catalogAssistLead")}</p>
+            {catalogAssistStats ? (
+              <div
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: "1px solid color-mix(in srgb, var(--hostly-accent-soft) 100%, transparent)",
+                  background: "color-mix(in srgb, var(--hostly-info-soft) 70%, transparent)",
+                  boxShadow: "var(--hostly-shadow-hairline)",
+                }}
+              >
+                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "color-mix(in srgb, var(--hostly-accent) 78%, transparent)" }}>
+                  {t("onboarding.catalogAssistEyebrow")}
+                </div>
+                <p style={{ margin: "5px 0 0", fontSize: 11, lineHeight: 1.45, color: "var(--hostly-navy-deep)", fontWeight: 590 }}>{t("onboarding.catalogAssistSub")}</p>
+                <div style={{ marginTop: 6, fontSize: 10.5, lineHeight: 1.42, fontWeight: 600, color: "var(--hostly-navy-deep)" }}>
+                  {t("onboarding.catalogAssistMeta", {
+                    n: String(catalogAssistStats.n),
+                    cats: String(catalogAssistStats.catCount),
+                    sel: String(catalogAssistStats.selected),
+                  })}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 10, lineHeight: 1.42, fontWeight: 605, color: "var(--hostly-ink-muted)" }}>
+                  {catalogAssistStats.loosePrice > 0 ? t("onboarding.catalogAssistPrices", { n: String(catalogAssistStats.loosePrice) }) : t("onboarding.catalogAssistNoPricesOk")}
+                </div>
+              </div>
+            ) : null}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {(["all", "plato", "bebida"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setCatFilter(f)}
-                  style={{
-                    border: catFilter === f ? "1px solid rgba(251,191,36,0.5)" : "1px solid rgba(51,65,85,0.6)",
-                    background: catFilter === f ? "rgba(69,26,3,0.35)" : "transparent",
-                    color: catFilter === f ? "#fde68a" : "#94a3b8",
-                    padding: "5px 10px",
-                    borderRadius: 999,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  {f === "all" ? t("onboarding.filterAll") : t(TIPO_KEYS[f])}
-                </button>
-              ))}
+              {(["all", "plato", "bebida"] as const).map((f) => {
+                const nf = f === "all" ? catalogDraft.length : f === "plato" ? nPlatos : nBeb;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setCatFilter(f)}
+                    style={{
+                      border:
+                        catFilter === f ? "1px solid color-mix(in srgb, var(--hostly-accent) 28%, transparent)" : "1px solid var(--hostly-table-divider-soft)",
+                      background: catFilter === f ? "var(--hostly-accent-soft)" : "transparent",
+                      color: catFilter === f ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
+                      padding: "4px 9px",
+                      borderRadius: 999,
+                      fontSize: 10,
+                      fontWeight: 650,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "baseline",
+                      gap: 7,
+                      transition: "border-color 0.18s ease, background 0.18s ease",
+                    }}
+                  >
+                    <span>{f === "all" ? t("onboarding.filterAll") : t(TIPO_KEYS[f])}</span>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        opacity: nf ? 1 : 0.45,
+                        color: catFilter === f ? "var(--hostly-navy-deep)" : "var(--hostly-ink-faint)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {nf}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            <div style={{ flex: 1, minHeight: 180, overflow: "auto", borderRadius: 10, border: "1px solid rgba(51,65,85,0.55)" }}>
+            <div
+              style={{
+                borderRadius: 10,
+                border: "1px solid var(--hostly-table-divider-soft)",
+                overflow: "hidden",
+                boxShadow: "var(--hostly-shadow-hairline)",
+              }}
+            >
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "36px minmax(100px,1.2fr) minmax(80px,0.7fr) minmax(72px,0.55fr) minmax(56px,0.4fr)",
-                  gap: 6,
-                  padding: "8px 10px",
-                  borderBottom: "1px solid rgba(51,65,85,0.45)",
+                  gridTemplateColumns: iaRowColumns,
+                  gap: 8,
+                  padding: "7px 11px",
+                  borderBottom: "1px solid var(--hostly-table-divider-soft)",
                   position: "sticky",
                   top: 0,
-                  background: "rgba(30,41,59,0.95)",
+                  zIndex: 1,
+                  background: "var(--hostly-table-head-surface)",
                   fontSize: 9,
-                  fontWeight: 800,
-                  color: "#64748b",
+                  fontWeight: 650,
+                  color: "var(--hostly-ink-faint)",
                   textTransform: "uppercase",
+                  letterSpacing: "0.06em",
                 }}
               >
                 <span />
                 <span>{t("carta.colNombre")}</span>
                 <span>{t("carta.colTipo")}</span>
                 <span>{t("carta.colCategoria")}</span>
-                <span style={{ textAlign: "right" }}>{t("carta.colPrecio")}</span>
-              </div>
-              {filteredCatalog.map((r) => (
-                <div
-                  key={r.tempId}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "36px minmax(100px,1.2fr) minmax(80px,0.7fr) minmax(72px,0.55fr) minmax(56px,0.4fr)",
-                    gap: 6,
-                    padding: "6px 10px",
-                    alignItems: "center",
-                    borderBottom: "1px solid rgba(51,65,85,0.25)",
-                  }}
-                >
-                  <input type="checkbox" checked={r.selected} onChange={() => setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, selected: !x.selected } : x)))} style={{ width: 18, height: 18 }} />
-                  <input style={{ ...inp, minHeight: 40, padding: "8px 10px", fontSize: 13 }} value={r.nombre} onChange={(e) => setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, nombre: e.target.value } : x)))} />
-                  <select style={{ ...inp, minHeight: 40, padding: "8px", fontSize: 12, cursor: "pointer" }} value={r.tipoVenta} onChange={(e) => setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, tipoVenta: e.target.value as TipoProductoVenta } : x)))}>
-                    {TIPOS_PRODUCTO_VENTA.map((tv) => (
-                      <option key={tv} value={tv}>
-                        {t(TIPO_KEYS[tv])}
-                      </option>
-                    ))}
-                  </select>
-                  <input style={{ ...inp, minHeight: 40, padding: "8px", fontSize: 12 }} value={r.categoria} onChange={(e) => setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, categoria: e.target.value } : x)))} />
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    style={{ ...inp, minHeight: 40, padding: "8px", fontSize: 13, textAlign: "right" }}
-                    value={r.precio}
-                    onChange={(e) => {
-                      const n = Number(e.target.value);
-                      if (!Number.isFinite(n) || n < 0) return;
-                      setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, precio: Math.round(n * 100) / 100 } : x)));
+                <span style={{ textAlign: "right", display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 5 }}>
+                  {t("carta.colPrecio")}
+                  <span
+                    aria-hidden
+                    style={{
+                      fontSize: 7.5,
+                      padding: "1px 4px",
+                      borderRadius: 4,
+                      fontWeight: 750,
+                      letterSpacing: "0.05em",
+                      color: "var(--hostly-navy-deep)",
+                      background: "color-mix(in srgb, var(--hostly-accent-soft) 100%, transparent)",
+                      border: "1px solid color-mix(in srgb, var(--hostly-accent) 16%, transparent)",
                     }}
-                  />
+                  >
+                    IA
+                  </span>
+                </span>
+              </div>
+              {groups.map(({ catKey, items }) => (
+                <div key={catKey}>
+                  <div
+                    style={{
+                      padding: "5px 11px",
+                      borderBottom: "1px solid var(--hostly-table-divider-faint)",
+                      background: "color-mix(in srgb, var(--hostly-table-head-surface) 94%, transparent)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 9.5, fontWeight: 720, letterSpacing: "0.04em", color: "var(--hostly-navy-deep)" }}>
+                      {t("onboarding.catalogAssistGroupLabel", { cat: catKey })}
+                    </span>
+                    <span style={{ fontSize: 9, fontWeight: 630, fontVariantNumeric: "tabular-nums", color: "var(--hostly-ink-muted)" }}>{items.length}</span>
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: 8,
+                        fontWeight: 740,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "color-mix(in srgb, var(--hostly-accent) 65%, transparent)",
+                      }}
+                    >
+                      {t("onboarding.catalogAssistGroupHint")}
+                    </span>
+                  </div>
+                  {items.map((r) => (
+                    <div
+                      key={r.tempId}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: iaRowColumns,
+                        gap: 8,
+                        padding: "7px 11px",
+                        alignItems: "center",
+                        borderBottom: "1px solid var(--hostly-table-divider-faint)",
+                        background: "var(--hostly-surface-card-solid)",
+                        borderLeft: "2px solid color-mix(in srgb, var(--hostly-accent-soft) 100%, transparent)",
+                        transition: "background 0.15s ease",
+                      }}
+                    >
+                      <input type="checkbox" checked={r.selected} onChange={() => setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, selected: !x.selected } : x)))} style={{ width: 16, height: 16 }} />
+                      <input style={{ ...inp, minHeight: 36, padding: "6px 8px", fontSize: 13 }} value={r.nombre} onChange={(e) => setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, nombre: e.target.value } : x)))} />
+                      <select style={{ ...inp, minHeight: 36, padding: "6px", fontSize: 12, cursor: "pointer" }} value={r.tipoVenta} onChange={(e) => setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, tipoVenta: e.target.value as TipoProductoVenta } : x)))}>
+                        {TIPOS_PRODUCTO_VENTA.map((tv) => (
+                          <option key={tv} value={tv}>
+                            {t(TIPO_KEYS[tv])}
+                          </option>
+                        ))}
+                      </select>
+                      <input style={{ ...inp, minHeight: 36, padding: "6px", fontSize: 12 }} value={r.categoria} onChange={(e) => setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, categoria: e.target.value } : x)))} />
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        style={{
+                          ...inp,
+                          minHeight: 36,
+                          padding: "6px",
+                          fontSize: 13,
+                          textAlign: "right",
+                          borderColor:
+                            Number.isFinite(r.precio) && r.precio > 0 ? "var(--hostly-table-divider-soft)" : "color-mix(in srgb, var(--hostly-accent) 22%, var(--hostly-table-divider-soft))",
+                          background:
+                            Number.isFinite(r.precio) && r.precio > 0 ? "var(--hostly-surface-card-solid)" : "color-mix(in srgb, var(--hostly-accent-soft) 55%, transparent)",
+                        }}
+                        value={r.precio}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          if (!Number.isFinite(n) || n < 0) return;
+                          setCatalogDraft((d) => d.map((x) => (x.tempId === r.tempId ? { ...x, precio: Math.round(n * 100) / 100 } : x)));
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => void createCatalog()}
-                style={{
-                  border: "none",
-                  background: "linear-gradient(180deg, rgba(34,197,94,0.35) 0%, rgba(21,128,61,0.25) 100%)",
-                  color: "#dcfce7",
-                  borderWidth: 1,
-                  borderStyle: "solid",
-                  borderColor: "rgba(34,197,94,0.5)",
-                  padding: "12px 20px",
-                  borderRadius: 10,
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <button type="button" onClick={() => void createCatalog()} className="hostly-button-primary px-4 py-2 text-[13px] font-semibold">
                 {t("onboarding.ctaCreateCatalog")}
               </button>
-              <button type="button" onClick={() => setStep(1)} style={{ border: "1px solid rgba(71,85,105,0.55)", background: "transparent", color: "#94a3b8", padding: "10px 16px", borderRadius: 10, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={() => setStep(1)} className="hostly-button-secondary px-3 py-2 text-[12px] font-semibold">
                 {t("onboarding.ctaReanalyze")}
               </button>
             </div>
           </div>
         );
+      }
       case 3:
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#e2e8f0" }}>{t("onboarding.stockTitle")}</h2>
-            <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>{t("onboarding.stockSub")}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 className={onboardingSectionTitle}>{t("onboarding.stockTitle")}</h2>
+            <p style={onboardingLead}>{t("onboarding.stockSub")}</p>
             <input style={inp} placeholder={t("onboarding.stockSearch")} value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {STOCK_SUGGESTIONS.map((s) => (
@@ -692,13 +969,13 @@ export default function OnboardingApp() {
                     setStockRows((prev) => [...prev, { id: newStockProductoId(), ...s }]);
                   }}
                   style={{
-                    border: "1px solid rgba(51,65,85,0.55)",
-                    background: "rgba(15,23,42,0.5)",
-                    color: "#cbd5e1",
-                    padding: "5px 10px",
+                    border: "1px solid var(--hostly-table-divider-soft)",
+                    background: "var(--hostly-table-row-hover)",
+                    color: "var(--hostly-ink)",
+                    padding: "4px 10px",
                     borderRadius: 999,
-                    fontSize: 11,
-                    fontWeight: 600,
+                    fontSize: 10,
+                    fontWeight: 650,
                     cursor: "pointer",
                   }}
                 >
@@ -707,42 +984,53 @@ export default function OnboardingApp() {
               ))}
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" onClick={addSuggested} style={{ border: "1px solid rgba(56,189,248,0.35)", background: "rgba(8,47,73,0.3)", color: "#bae6fd", padding: "8px 14px", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>
+              <button type="button" onClick={addSuggested} className="hostly-button-secondary text-[12px] font-semibold px-3 py-1.5 min-h-[36px] border-[color-mix(in_srgb,var(--hostly-accent)_22%,transparent)] !bg-[var(--hostly-info-soft)]">
                 {t("onboarding.stockAddSuggested")}
               </button>
-              <button type="button" onClick={addManualStock} style={{ border: "1px solid rgba(71,85,105,0.55)", background: "transparent", color: "#94a3b8", padding: "8px 14px", borderRadius: 10, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" onClick={addManualStock} className="hostly-button-secondary text-[12px] font-semibold px-3 py-1.5 min-h-[36px] !bg-transparent !text-[color:var(--hostly-ink-muted)]">
                 {t("onboarding.stockAddManual")}
               </button>
             </div>
-            <div style={{ overflow: "auto", maxHeight: 280, border: "1px solid rgba(51,65,85,0.55)", borderRadius: 10 }}>
+            <div style={{ border: "1px solid var(--hostly-table-divider-soft)", borderRadius: 10, overflow: "hidden", boxShadow: "var(--hostly-shadow-hairline)" }}>
               {stockRows
                 .filter((r) => normalizeName(r.nombre).includes(normalizeName(stockSearch)) || !stockSearch.trim())
                 .map((r) => (
-                  <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 88px 100px 100px", gap: 8, padding: "8px 10px", borderBottom: "1px solid rgba(51,65,85,0.3)", alignItems: "center" }}>
-                    <input style={{ ...inp, minHeight: 40 }} value={r.nombre} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, nombre: e.target.value } : x)))} />
-                    <select style={{ ...inp, minHeight: 40, cursor: "pointer" }} value={r.unidad} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, unidad: e.target.value as UnidadStock } : x)))}>
+                  <div
+                    key={r.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(140px,3fr) minmax(88px,1fr) minmax(96px,1fr) minmax(96px,1fr)",
+                      gap: 10,
+                      padding: "8px 11px",
+                      borderBottom: "1px solid var(--hostly-table-divider-faint)",
+                      alignItems: "center",
+                      background: "var(--hostly-surface-card-solid)",
+                    }}
+                  >
+                    <input style={{ ...inp, minHeight: 36 }} value={r.nombre} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, nombre: e.target.value } : x)))} />
+                    <select style={{ ...inp, minHeight: 36, cursor: "pointer" }} value={r.unidad} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, unidad: e.target.value as UnidadStock } : x)))}>
                       {UNIDADES_STOCK.map((u) => (
                         <option key={u} value={u}>
                           {u}
                         </option>
                       ))}
                     </select>
-                    <input type="number" style={{ ...inp, minHeight: 40 }} value={r.stock_actual} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, stock_actual: Number(e.target.value) || 0 } : x)))} />
-                    <input type="number" style={{ ...inp, minHeight: 40 }} value={r.stock_minimo} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, stock_minimo: Number(e.target.value) || 0 } : x)))} />
+                    <input type="number" style={{ ...inp, minHeight: 36 }} value={r.stock_actual} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, stock_actual: Number(e.target.value) || 0 } : x)))} />
+                    <input type="number" style={{ ...inp, minHeight: 36 }} value={r.stock_minimo} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, stock_minimo: Number(e.target.value) || 0 } : x)))} />
                   </div>
                 ))}
             </div>
-            <button type="button" onClick={saveInventario} style={{ alignSelf: "flex-start", border: "none", background: "linear-gradient(180deg, rgba(251,191,36,0.95) 0%, rgba(217,119,6,0.9) 100%)", color: "#1c1917", padding: "12px 22px", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>
+            <button type="button" onClick={saveInventario} className="hostly-button-primary self-start px-4 py-2 text-[13px] font-semibold">
               {t("onboarding.ctaSaveStock")}
             </button>
           </div>
         );
       case 4:
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#e2e8f0" }}>{t("onboarding.usersTitle")}</h2>
-            <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>{t("onboarding.usersSub")}</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 className={onboardingSectionTitle}>{t("onboarding.usersTitle")}</h2>
+            <p style={onboardingLead}>{t("onboarding.usersSub")}</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(168px, 1fr))", gap: 10 }}>
               <div>
                 <label style={lbl}>{t("onboarding.userNombre")}</label>
                 <input style={inp} value={uNombre} onChange={(e) => setUNombre(e.target.value)} />
@@ -763,20 +1051,32 @@ export default function OnboardingApp() {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" onClick={addUser} style={{ border: "1px solid rgba(167,139,250,0.45)", background: "rgba(88,28,135,0.25)", color: "#e9d5ff", padding: "10px 16px", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>
+              <button type="button" onClick={addUser} className="hostly-button-secondary min-h-[36px] px-3 py-1.5 text-[12px] font-semibold border-[color-mix(in_srgb,var(--hostly-accent)_25%,transparent)] !bg-[var(--hostly-accent-soft)] !text-[color:var(--hostly-navy-deep)]">
                 {t("onboarding.ctaAddUser")}
               </button>
-              <button type="button" onClick={continueUsers} style={{ border: "none", background: "linear-gradient(180deg, rgba(34,197,94,0.32) 0%, rgba(21,128,61,0.2) 100%)", color: "#bbf7d0", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(34,197,94,0.45)", padding: "10px 18px", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>
+              <button type="button" onClick={continueUsers} className="hostly-button-primary min-h-[36px] px-4 py-1.5 text-[12px] font-semibold">
                 {t("onboarding.ctaUsersContinue")}
               </button>
             </div>
-            <p style={{ margin: 0, fontSize: 11, color: "#64748b", lineHeight: 1.45 }}>{t("onboarding.usersRolesHint")}</p>
-            <div style={{ overflow: "auto", maxHeight: 220, border: "1px solid rgba(51,65,85,0.55)", borderRadius: 10 }}>
+            <p className="hostly-muted mt-0 text-[11px] leading-snug">{t("onboarding.usersRolesHint")}</p>
+            <div style={{ border: "1px solid var(--hostly-table-divider-soft)", borderRadius: 10, overflow: "hidden", boxShadow: "var(--hostly-shadow-hairline)" }}>
               {usersList.map((u) => (
-                <div key={u.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 100px", gap: 8, padding: "8px 10px", borderBottom: "1px solid rgba(51,65,85,0.3)", fontSize: 12, color: "#e2e8f0" }}>
+                <div
+                  key={u.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 100px",
+                    gap: 8,
+                    padding: "7px 9px",
+                    borderBottom: "1px solid var(--hostly-table-divider-faint)",
+                    fontSize: 12,
+                    background: "var(--hostly-surface-card-solid)",
+                    color: "var(--hostly-ink-strong)",
+                  }}
+                >
                   <span>{u.nombre}</span>
-                  <span style={{ color: "#94a3b8" }}>{u.email}</span>
-                  <span style={{ fontWeight: 700 }}>{t(`onboarding.rol.${u.rol}`)}</span>
+                  <span className="text-[color:var(--hostly-ink-muted)]">{u.email}</span>
+                  <span className="font-semibold">{t(`onboarding.rol.${u.rol}`)}</span>
                 </div>
               ))}
             </div>
@@ -785,19 +1085,19 @@ export default function OnboardingApp() {
       case 5:
         if (platos.length === 0) {
           return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#e2e8f0" }}>{t("onboarding.escTitle")}</h2>
-              <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>{t("onboarding.escNoPlatos")}</p>
-              <button type="button" onClick={() => setStep(2)} style={{ alignSelf: "flex-start", border: "1px solid rgba(251,191,36,0.45)", color: "#fde68a", background: "rgba(69,26,3,0.35)", padding: "10px 16px", borderRadius: 10, fontWeight: 700, cursor: "pointer" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <h2 className={onboardingSectionTitle}>{t("onboarding.escTitle")}</h2>
+              <p style={onboardingLead}>{t("onboarding.escNoPlatos")}</p>
+              <button type="button" onClick={() => setStep(2)} className="hostly-button-secondary self-start px-3 py-2 text-[12px] font-semibold">
                 {t("onboarding.ctaReanalyze")}
               </button>
             </div>
           );
         }
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#e2e8f0" }}>{t("onboarding.escTitle")}</h2>
-            <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>{t("onboarding.escSub")}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 className={onboardingSectionTitle}>{t("onboarding.escTitle")}</h2>
+            <p style={onboardingLead}>{t("onboarding.escSub")}</p>
             <div>
               <label style={lbl}>{t("onboarding.escSelectPlato")}</label>
               <select style={{ ...inp, cursor: "pointer" }} value={escPlatoId} onChange={(e) => setEscPlatoId(e.target.value)}>
@@ -808,42 +1108,44 @@ export default function OnboardingApp() {
                 ))}
               </select>
             </div>
-            <button type="button" onClick={addEscLine} style={{ alignSelf: "flex-start", border: "1px solid rgba(71,85,105,0.55)", background: "transparent", color: "#94a3b8", padding: "8px 12px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>
+            <button type="button" onClick={addEscLine} className="hostly-button-secondary self-start px-2.5 py-1.5 text-[12px] font-semibold">
               + {t("onboarding.escAddLine")}
             </button>
-            <div style={{ overflow: "auto", maxHeight: 200, border: "1px solid rgba(51,65,85,0.55)", borderRadius: 10 }}>
+            <div style={{ border: "1px solid var(--hostly-table-divider-soft)", borderRadius: 10, overflow: "hidden", boxShadow: "var(--hostly-shadow-hairline)" }}>
               {escLines.map((ln) => {
                 const st = loadStock();
                 return (
-                  <div key={ln.id} style={{ display: "grid", gridTemplateColumns: "1fr 72px 88px", gap: 8, padding: "8px 10px", borderBottom: "1px solid rgba(51,65,85,0.3)", alignItems: "center" }}>
-                    <select style={{ ...inp, minHeight: 40, cursor: "pointer" }} value={ln.stockId} onChange={(e) => setEscLines((prev) => prev.map((x) => (x.id === ln.id ? { ...x, stockId: e.target.value } : x)))}>
+                  <div
+                    key={ln.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(180px,2.75fr) minmax(76px,0.95fr) minmax(100px,1fr)",
+                      gap: 10,
+                      padding: "8px 11px",
+                      borderBottom: "1px solid var(--hostly-table-divider-faint)",
+                      alignItems: "center",
+                      background: "var(--hostly-surface-card-solid)",
+                    }}
+                  >
+                    <select style={{ ...inp, minHeight: 36, cursor: "pointer" }} value={ln.stockId} onChange={(e) => setEscLines((prev) => prev.map((x) => (x.id === ln.id ? { ...x, stockId: e.target.value } : x)))}>
                       {st.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.nombre}
                         </option>
                       ))}
                     </select>
-                    <input style={{ ...inp, minHeight: 40 }} value={ln.cantidad} onChange={(e) => setEscLines((prev) => prev.map((x) => (x.id === ln.id ? { ...x, cantidad: e.target.value } : x)))} />
-                    <input style={{ ...inp, minHeight: 40 }} value={ln.costeLinea} onChange={(e) => setEscLines((prev) => prev.map((x) => (x.id === ln.id ? { ...x, costeLinea: e.target.value } : x)))} placeholder="€" />
+                    <input style={{ ...inp, minHeight: 36 }} value={ln.cantidad} onChange={(e) => setEscLines((prev) => prev.map((x) => (x.id === ln.id ? { ...x, cantidad: e.target.value } : x)))} />
+                    <input style={{ ...inp, minHeight: 36 }} value={ln.costeLinea} onChange={(e) => setEscLines((prev) => prev.map((x) => (x.id === ln.id ? { ...x, costeLinea: e.target.value } : x)))} placeholder="€" />
                   </div>
                 );
               })}
             </div>
-            {escErr ? <div style={{ color: "#fecaca", fontSize: 12 }}>{escErr}</div> : null}
+            {escErr ? <div style={{ color: "#b42318", fontSize: 12 }}>{escErr}</div> : null}
             <button
               type="button"
               disabled={escSaving || !escPlatoId || platos.length === 0}
               onClick={saveEscandallo}
-              style={{
-                alignSelf: "flex-start",
-                border: "none",
-                background: escSaving ? "rgba(71,85,105,0.5)" : "linear-gradient(180deg, rgba(251,191,36,0.95) 0%, rgba(217,119,6,0.9) 100%)",
-                color: "#1c1917",
-                padding: "12px 22px",
-                borderRadius: 10,
-                fontWeight: 800,
-                cursor: escSaving ? "wait" : "pointer",
-              }}
+              className={`hostly-button-primary mt-1 self-start px-4 py-2 text-[13px] font-semibold disabled:opacity-50 ${escSaving ? "cursor-wait" : ""}`}
             >
               {escSaving ? "…" : t("onboarding.ctaSaveEsc")}
             </button>
@@ -851,38 +1153,56 @@ export default function OnboardingApp() {
         );
       case 6:
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "stretch" }}>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#a7f3d0" }}>{t("onboarding.doneTitle")}</h2>
-            <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>{t("onboarding.doneSub")}</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch" }}>
+            <h2 className="hostly-heading m-0 text-[18px] font-semibold text-[color:var(--hostly-accent)]">{t("onboarding.doneTitle")}</h2>
+            <p style={onboardingLead}>{t("onboarding.doneSub")}</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", gap: 8 }}>
               {[
                 { label: t("onboarding.statCatalog"), value: String(loadPlatos(rid).length) },
                 { label: t("onboarding.statStock"), value: String(loadStock().length) },
                 { label: t("onboarding.statUsers"), value: String(loadUsuarios().length) },
                 { label: t("onboarding.statEsc"), value: checkpoints.escandallo ? "✓" : "—" },
               ].map((x) => (
-                <div key={x.label} style={{ padding: 12, borderRadius: 10, border: "1px solid rgba(52,211,153,0.25)", background: "rgba(6,78,59,0.15)" }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>{x.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#e2e8f0", marginTop: 4 }}>{x.value}</div>
+                <div
+                  key={x.label}
+                  style={{
+                    padding: "10px 10px",
+                    borderRadius: 10,
+                    border: "1px solid var(--hostly-table-divider-soft)",
+                    background: "var(--hostly-surface-card-solid)",
+                    boxShadow: "var(--hostly-shadow-hairline)",
+                  }}
+                >
+                  <div style={{ fontSize: 9, fontWeight: 650, color: "var(--hostly-ink-faint)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{x.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 720, color: "var(--hostly-ink-strong)", marginTop: 4 }}>{x.value}</div>
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {sideChecklist.map((c) => (
-                <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: checkpoints[c.key] ? "#a7f3d0" : "#64748b" }}>
-                  <span>{checkpoints[c.key] ? "✓" : "○"}</span>
+                <div
+                  key={c.key}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 12,
+                    color: checkpoints[c.key] ? "var(--hostly-accent)" : "var(--hostly-ink-muted)",
+                  }}
+                >
+                  <span style={{ opacity: checkpoints[c.key] ? 1 : 0.45 }}>{checkpoints[c.key] ? "✓" : "○"}</span>
                   {c.label}
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              <button type="button" onClick={() => router.push("/dashboard")} style={{ border: "none", background: "linear-gradient(180deg, rgba(34,197,94,0.4) 0%, rgba(21,128,61,0.3) 100%)", color: "#dcfce7", padding: "14px 26px", borderRadius: 11, fontWeight: 800, fontSize: 15, cursor: "pointer", borderWidth: 1, borderStyle: "solid", borderColor: "rgba(34,197,94,0.5)" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <button type="button" onClick={() => router.push("/dashboard")} className="hostly-button-primary px-5 py-2.5 text-[14px] font-semibold">
                 {t("onboarding.ctaEnterDashboard")}
               </button>
-              <Link href="/dashboard/carta" style={{ display: "inline-flex", alignItems: "center", border: "1px solid rgba(71,85,105,0.55)", color: "#94a3b8", padding: "12px 18px", borderRadius: 10, fontWeight: 600, textDecoration: "none" }}>
+              <Link href="/dashboard/carta" className="hostly-button-secondary inline-flex items-center px-4 py-2 text-[13px] font-semibold no-underline">
                 {t("onboarding.ctaReviewCarta")}
               </Link>
-              <Link href="/dashboard/stock" style={{ display: "inline-flex", alignItems: "center", border: "1px solid rgba(71,85,105,0.55)", color: "#94a3b8", padding: "12px 18px", borderRadius: 10, fontWeight: 600, textDecoration: "none" }}>
+              <Link href="/dashboard/stock" className="hostly-button-secondary inline-flex items-center px-4 py-2 text-[13px] font-semibold no-underline">
                 {t("onboarding.ctaGoStock")}
               </Link>
             </div>
@@ -894,44 +1214,267 @@ export default function OnboardingApp() {
   };
 
   const sidePanel = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("onboarding.sideProgress")}</div>
-      <div style={{ height: 8, borderRadius: 999, background: "rgba(51,65,85,0.5)", overflow: "hidden" }}>
-        <div style={{ width: `${activationPct}%`, height: "100%", background: "linear-gradient(90deg, rgba(52,211,153,0.9), rgba(34,197,94,0.7))", transition: "width 0.35s ease" }} />
-      </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: "#e2e8f0" }}>{activationPct}%</div>
-      <div style={{ fontSize: 10, fontWeight: 800, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 8 }}>{t("onboarding.sideBase")}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {sideChecklist.map((c) => (
-          <div key={c.key} style={{ fontSize: 12, color: checkpoints[c.key] ? "#86efac" : "#525c6c" }}>
-            {checkpoints[c.key] ? "✓ " : "· "}
-            {c.label}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div
+            style={{
+              fontSize: 9,
+              fontWeight: 650,
+              color: "var(--hostly-ink-faint)",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {t("onboarding.sideLiveOps")}
           </div>
-        ))}
+          {procBusy && step === 1 ? (
+            <span title="" className="hostly-onboarding-op-dot inline-block shrink-0 rounded-full" style={{ width: 6, height: 6, background: "var(--hostly-accent)" }} aria-hidden />
+          ) : escSaving && step === 5 ? (
+            <span className="hostly-onboarding-op-dot inline-block shrink-0 rounded-full" style={{ width: 6, height: 6, background: "var(--hostly-accent)" }} aria-hidden />
+          ) : (
+            <span
+              className="inline-block shrink-0 rounded-full"
+              style={{
+                width: 6,
+                height: 6,
+                background: "color-mix(in srgb, var(--hostly-accent) 32%, var(--hostly-table-divider-soft))",
+              }}
+              aria-hidden
+            />
+          )}
+        </div>
+        <p style={{ margin: "6px 0 0", fontSize: 10.5, lineHeight: 1.45, color: "var(--hostly-ink-muted)", fontWeight: 560 }}>{t("onboarding.sideLiveOpsSub")}</p>
       </div>
-      {profile.nombre ? (
-        <div style={{ marginTop: 8, padding: 10, borderRadius: 10, border: "1px solid rgba(51,65,85,0.5)", background: "rgba(15,23,42,0.5)", fontSize: 12, color: "#94a3b8" }}>
-          <strong style={{ color: "#e2e8f0" }}>{profile.nombre}</strong>
-          <div style={{ marginTop: 4 }}>{t(`onboarding.tipo.${profile.tipoNegocio}`)}</div>
+
+      <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: "var(--hostly-navy-deep)", fontWeight: 600 }}>{sideStoryLine}</p>
+
+      {procBusy && step === 1 ? (
+        <div
+          style={{
+            fontSize: 10,
+            lineHeight: 1.42,
+            fontWeight: 600,
+            padding: "6px 8px",
+            borderRadius: 9,
+            border: "1px solid var(--hostly-table-divider-soft)",
+            background: "var(--hostly-info-soft)",
+            color: "var(--hostly-navy-deep)",
+          }}
+        >
+          {t("onboarding.sideActivityReadingCarta")}
         </div>
       ) : null}
-      <p style={{ margin: 0, fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>{t("onboarding.sideHint")}</p>
+      {escSaving && step === 5 ? (
+        <div
+          style={{
+            fontSize: 10,
+            lineHeight: 1.42,
+            fontWeight: 600,
+            padding: "6px 8px",
+            borderRadius: 9,
+            border: "1px solid var(--hostly-table-divider-soft)",
+            background: "var(--hostly-success-soft)",
+            color: "var(--hostly-navy-deep)",
+          }}
+        >
+          {t("onboarding.sideActivitySavingMargins")}
+        </div>
+      ) : null}
+
+      <div
+        style={{
+          fontSize: 9,
+          fontWeight: 650,
+          color: "var(--hostly-ink-faint)",
+          letterSpacing: "0.085em",
+          textTransform: "uppercase",
+        }}
+      >
+        {t("onboarding.sideJourneyLegend")}
+      </div>
+      <div style={{ marginTop: -4 }}>
+        <div
+          style={{
+            height: 3,
+            borderRadius: 999,
+            background: "color-mix(in srgb, var(--hostly-table-divider-soft) 90%, transparent)",
+            overflow: "hidden",
+            border: "1px solid var(--hostly-table-divider-faint)",
+          }}
+        >
+          <div style={{ width: `${journeyPct}%`, height: "100%", borderRadius: 999, background: "var(--hostly-accent)", transition: "width 0.45s cubic-bezier(0.22, 1, 0.36, 1)" }} />
+        </div>
+      </div>
+
+      <div
+        style={{
+          fontSize: 9,
+          fontWeight: 650,
+          marginTop: 2,
+          color: "var(--hostly-ink-faint)",
+          letterSpacing: "0.085em",
+          textTransform: "uppercase",
+          paddingTop: 6,
+          borderTop: "1px solid var(--hostly-table-divider-faint)",
+        }}
+      >
+        {t("onboarding.sideSyncedLegend")}
+      </div>
+      <div>
+        <div
+          style={{
+            height: 4,
+            borderRadius: 999,
+            background: "var(--hostly-table-divider-faint)",
+            overflow: "hidden",
+            border: "1px solid var(--hostly-table-divider-soft)",
+          }}
+        >
+          <div
+            style={{
+              width: `${activationPct}%`,
+              height: "100%",
+              borderRadius: 999,
+              background: "color-mix(in srgb, var(--hostly-accent-soft) 100%, var(--hostly-accent))",
+              transition: "width 0.45s cubic-bezier(0.22, 1, 0.36, 1)",
+            }}
+          />
+        </div>
+        <div style={{ marginTop: 7, fontSize: 13.5, fontWeight: 720, color: "var(--hostly-navy-deep)", letterSpacing: "-0.03em", lineHeight: 1.22 }}>
+          {t("onboarding.sidePctComposite", { journey: String(journeyPct), sync: String(activationPct) })}
+        </div>
+        <div style={{ fontSize: 9.5, fontWeight: 620, marginTop: 4, color: "var(--hostly-navy-deep)" }}>
+          {t("onboarding.sideStepCue", { n: String(Math.min(step + 1, stepLabels.length)), stepName: stepLabels[step] ?? "" })}
+        </div>
+        <div style={{ fontSize: 9, fontWeight: 560, marginTop: 2, color: "var(--hostly-ink-muted)", lineHeight: 1.35 }}>
+          {t("onboarding.sideTrailHint", {
+            current: String(Math.min(step + 1, stepLabels.length)),
+            total: String(stepLabels.length),
+            stepName: stepLabels[step] ?? "",
+          })}
+        </div>
+      </div>
+
+      <div
+        style={{
+          paddingTop: 8,
+          borderTop: "1px solid var(--hostly-table-divider-faint)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 650, letterSpacing: "0.085em", textTransform: "uppercase", color: "var(--hostly-ink-faint)", marginBottom: 4 }}>
+            {t("onboarding.sideLastMarked")}
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 620, lineHeight: 1.38, color: lastMarkedLabel ? "var(--hostly-accent)" : "var(--hostly-ink-muted)" }}>
+            {lastMarkedLabel ?? t("onboarding.sideLastMarkedNone")}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 650, letterSpacing: "0.085em", textTransform: "uppercase", color: "var(--hostly-ink-faint)", marginBottom: 6 }}>
+            {t("onboarding.sideTrailEyebrow")}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {stepLabels.map((lab, ti) => {
+              const cpAtStep = STEP_CHECKPOINT[ti];
+              const doneCp = cpAtStep != null && checkpoints[cpAtStep];
+              const active = ti === step;
+              return (
+                <div key={lab} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <div
+                    aria-hidden
+                    style={{
+                      width: 18,
+                      display: "flex",
+                      justifyContent: "center",
+                      marginTop: 3,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 999,
+                        flexShrink: 0,
+                        background: doneCp ? "var(--hostly-accent)" : active ? "color-mix(in srgb, var(--hostly-accent) 55%, transparent)" : "var(--hostly-table-divider-faint)",
+                        boxShadow: active ? "0 0 0 1px color-mix(in srgb, var(--hostly-accent) 22%, transparent)" : "none",
+                      }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: active ? 680 : doneCp ? 640 : 580,
+                      lineHeight: 1.34,
+                      color: active ? "var(--hostly-navy-deep)" : doneCp ? "var(--hostly-accent)" : "color-mix(in srgb, var(--hostly-ink-soft) 88%, transparent)",
+                      minWidth: 0,
+                    }}
+                  >
+                    {lab}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 650, letterSpacing: "0.085em", textTransform: "uppercase", color: "var(--hostly-ink-faint)", marginBottom: 6 }}>
+            {t("onboarding.sideBase")}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {sideChecklist.map((c) => (
+              <div
+                key={c.key}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 560,
+                  lineHeight: 1.35,
+                  color: checkpoints[c.key] ? "var(--hostly-accent)" : "color-mix(in srgb, var(--hostly-ink-soft) 75%, transparent)",
+                }}
+              >
+                <span style={{ marginRight: 6, opacity: checkpoints[c.key] ? 1 : 0.35 }}>{checkpoints[c.key] ? "✓" : "·"}</span>
+                {c.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {profile.nombre ? (
+        <div
+          style={{
+            marginTop: 2,
+            padding: "9px 10px",
+            borderRadius: 10,
+            border: "1px solid var(--hostly-table-divider-soft)",
+            background: "var(--hostly-table-head-surface)",
+            fontSize: 11,
+            color: "var(--hostly-ink-muted)",
+          }}
+        >
+          <strong style={{ color: "var(--hostly-ink-strong)", fontWeight: 650 }}>{profile.nombre}</strong>
+          <div style={{ marginTop: 3, fontSize: 10 }}>{t(`onboarding.tipo.${profile.tipoNegocio}`)}</div>
+        </div>
+      ) : null}
+      <p className="hostly-muted mb-0 text-[11px] leading-snug">{t("onboarding.sideHint")}</p>
     </div>
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0 }}>
+    <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:gap-2.5" style={{ flex: 1 }}>
       {savedHint ? (
         <div
+          className="flex shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-semibold"
           style={{
-            flexShrink: 0,
-            padding: "8px 12px",
-            borderRadius: 9,
-            background: "rgba(34,197,94,0.12)",
-            border: "1px solid rgba(34,197,94,0.28)",
-            color: "#bbf7d0",
-            fontSize: 12,
-            fontWeight: 600,
+            border: "1px solid color-mix(in srgb, var(--hostly-accent) 24%, transparent)",
+            background: "var(--hostly-success-soft)",
+            color: "var(--hostly-navy-deep)",
           }}
         >
           {savedHint}
@@ -939,57 +1482,61 @@ export default function OnboardingApp() {
       ) : null}
       {renderStepper()}
       <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-          gap: 14,
-          alignItems: "stretch",
-        }}
+        className="grid min-h-0 min-w-0 flex-1 gap-3 max-lg:grid-cols-1 lg:auto-rows-fr lg:grid-cols-[minmax(0,1fr)_minmax(168px,218px)] lg:gap-3 lg:items-start"
       >
         <div
-          style={{
-            minHeight: 0,
-            overflowY: "auto",
-            padding: 14,
-            borderRadius: 12,
-            border: "1px solid rgba(51, 65, 85, 0.55)",
-            background: "linear-gradient(165deg, rgba(30, 41, 59, 0.45) 0%, rgba(15, 23, 42, 0.75) 100%)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
+          className="hostly-surface-ice box-border max-lg:max-h-none min-h-0 w-full overflow-y-auto overscroll-contain rounded-[14px] border px-3 py-3 sm:px-5 sm:py-4"
+          style={{ borderColor: "var(--hostly-table-divider-soft)", boxShadow: "var(--hostly-shadow-hairline)" }}
         >
-          {panelMain()}
+          <div key={step} className="hostly-onboarding-pane min-h-0 w-full">
+            {panelMain()}
+          </div>
         </div>
-        <div
-          style={{
-            minHeight: 0,
-            overflowY: "auto",
-            padding: 14,
-            borderRadius: 12,
-            border: "1px solid rgba(51, 65, 85, 0.45)",
-            background: "rgba(15, 23, 42, 0.55)",
-          }}
-        >
-          {step === 5 ? (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{t("onboarding.escSummary")}</div>
-              <div style={{ fontSize: 13, color: "#cbd5e1", lineHeight: 1.5 }}>
-                <div>
-                  {t("onboarding.escCoste")}: <strong>{costeSum.toFixed(2)} €</strong>
+        <aside className="box-border max-lg:border-t max-lg:border-[var(--hostly-table-divider-soft)] max-lg:pt-3 lg:sticky lg:top-1 lg:self-start lg:rounded-[13px]" data-onboarding-context>
+          <div
+            className="box-border lg:rounded-[13px]"
+            style={{
+              border: "1px solid var(--hostly-table-divider-soft)",
+              background:
+                "color-mix(in srgb, var(--hostly-success-soft) 28%, color-mix(in srgb, var(--hostly-ice-100) 92%, transparent))",
+              padding: "8px 10px",
+              boxShadow: "var(--hostly-shadow-hairline)",
+            }}
+          >
+            {step === 5 ? (
+              <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--hostly-table-divider-faint)" }}>
+                <div
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 650,
+                    color: "var(--hostly-ink-faint)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.085em",
+                    marginBottom: 6,
+                  }}
+                >
+                  {t("onboarding.escSummary")}
                 </div>
-                <div>
-                  {t("onboarding.escPvp")}: <strong>{pvp.toFixed(2)} €</strong>
+                <div style={{ fontSize: 12.5, color: "var(--hostly-ink)", lineHeight: 1.5 }}>
+                  <div>
+                    {t("onboarding.escCoste")}:{" "}
+                    <strong style={{ fontWeight: 650, color: "var(--hostly-navy-deep)" }}>{costeSum.toFixed(2)} €</strong>
+                  </div>
+                  <div>
+                    {t("onboarding.escPvp")}:{" "}
+                    <strong style={{ fontWeight: 650, color: "var(--hostly-navy-deep)" }}>{pvp.toFixed(2)} €</strong>
+                  </div>
+                  <div>
+                    {t("onboarding.escMargin")}:{" "}
+                    <strong style={{ fontWeight: 650, color: "var(--hostly-navy-deep)" }}>{mPct != null ? `${mPct.toFixed(1)}%` : "—"}</strong>
+                  </div>
+                  <div style={{ marginTop: 6, fontWeight: 650, fontSize: 12, color: marginTierColor(mTier) }}>{t(`onboarding.margin.${mTier}`)}</div>
                 </div>
-                <div>
-                  {t("onboarding.escMargin")}: <strong>{mPct != null ? `${mPct.toFixed(1)}%` : "—"}</strong>
-                </div>
-                <div style={{ marginTop: 8, fontWeight: 800, color: marginTierColor(mTier) }}>{t(`onboarding.margin.${mTier}`)}</div>
               </div>
-            </div>
-          ) : null}
-          {sidePanel}
-        </div>
+            ) : null}
+            {sidePanel}
+          </div>
+        </aside>
       </div>
     </div>
   );
@@ -998,14 +1545,14 @@ export default function OnboardingApp() {
 function marginTierColor(tier: string): string {
   switch (tier) {
     case "excelente":
-      return "#4ade80";
+      return "var(--hostly-accent)";
     case "bueno":
-      return "#6ee7b7";
+      return "color-mix(in srgb, var(--hostly-accent) 65%, var(--hostly-navy-deep))";
     case "ajustado":
-      return "#fbbf24";
+      return "#b45309";
     case "peligro":
-      return "#f87171";
+      return "#b42318";
     default:
-      return "#94a3b8";
+      return "var(--hostly-ink-muted)";
   }
 }

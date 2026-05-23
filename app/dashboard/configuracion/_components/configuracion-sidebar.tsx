@@ -17,10 +17,6 @@ const NAV: NavItem[] = [
       { href: "/dashboard/configuracion/carta/productos", label: "Productos" },
       { href: "/dashboard/configuracion/carta/categorias", label: "Categorías" },
       { href: "/dashboard/configuracion/carta/familias", label: "Familias" },
-      {
-        href: "/dashboard/configuracion/carta/modificadores",
-        label: "Modificadores",
-      },
       { href: "/dashboard/configuracion/carta/escandallos", label: "Escandallos" },
       {
         href: "/dashboard/configuracion/carta/importacion",
@@ -37,6 +33,13 @@ const NAV: NavItem[] = [
     ],
   },
   { href: "/dashboard/configuracion/empleados", label: "Empleados" },
+  { href: "/dashboard/configuracion/impresoras", label: "Impresoras" },
+  { href: "/dashboard/configuracion/estaciones", label: "Estaciones" },
+  { href: "/dashboard/configuracion/modificadores", label: "Modificadores" },
+  {
+    href: "/dashboard/configuracion/familias-producto",
+    label: "Familias de producto",
+  },
   { href: "/dashboard/operacion", label: "Operación" },
   { href: "/dashboard/configuracion/empresa", label: "Empresa" },
   {

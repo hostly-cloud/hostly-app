@@ -22,12 +22,35 @@ import {
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
+import { normalizeOperationalStationSelection } from "@/lib/carta/operational-station-options";
+import { isProductKind, type ProductKind } from "@/lib/carta/product-kind-options";
+import {
+  buildProductStationPatchFromOperationStationType,
+  buildProductStationPatchFromSelectValue,
+} from "@/lib/operacion/product-operation-station";
+import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import {
+  productFamilyFieldsToFirestorePatch,
+  type ProductFamilyDenormFields,
+} from "@/lib/carta/product-category-family-resolver";
+import {
+  isOperationStationType,
+  type OperationStationType,
+} from "@/lib/operacion/operation-station-types";
 import { auth, db } from "@/lib/firebase/client";
 import {
   deleteProductImageAtPath,
   uploadProductImage,
 } from "@/lib/firebase/product-image-storage";
 import type { UserRestaurantRole } from "@/lib/firestore/user-restaurant-profile";
+import type {
+  PurchaseUnit,
+  UnitCostBaseUnit,
+} from "@/lib/inventory/inventory-cost";
+import {
+  normalizePurchaseUnit,
+  readStoredUnitCostUnit,
+} from "@/lib/inventory/inventory-cost";
 import type { Product } from "@/types/product";
 
 export const ONLY_OWNER_CAN_DELETE = "ONLY_OWNER_CAN_DELETE";
@@ -43,8 +66,17 @@ export type ProductInventoryDocument = {
   enabled: boolean;
   unit: "kg" | "g" | "l" | "ml" | "ud";
   currentStock: number;
-  minStock: number;
+  /** Umbral crítico operativo; omitir o 0 = sin umbral configurado. */
+  minStock?: number;
   costPerUnit: number;
+  /** Coste total de la compra (p. ej. botella 18 €). */
+  purchaseCost?: number;
+  /** Cantidad en unidad de compra (p. ej. 700 ml). */
+  purchaseQuantity?: number;
+  purchaseUnit?: PurchaseUnit;
+  /** Coste por unidad base calculado (€/ml, €/g o €/ud). */
+  unitCost?: number;
+  unitCostUnit?: UnitCostBaseUnit;
   supplierName?: string;
   /**
    * Future-ready inventory image URL/path. Upload/AI photo ingestion is not
@@ -70,10 +102,29 @@ export type ProductDocument = {
   id: string;
   name: string;
   categoryId: string | null;
+  /** Denormalizado desde categoría de carta (import / catálogo central). */
+  categoryName?: string | null;
   price: number | null;
   active: boolean;
   station: string | null;
+  /** Área operativa explícita en documento central (p. ej. cocina, barra). */
+  preparationArea?: string | null;
+  /** Estación operativa configurable (`operationStations`). */
+  operationStationId?: string | null;
+  operationStationName?: string | null;
+  operationStationType?: OperationStationType | null;
   type: string | null;
+  /** `plato` | `bebida` en catálogo central. */
+  tipoVenta?: string | null;
+  /** Clasificación inventario: bebida / comida / otro (distinto de tipoVenta y estación). */
+  productKind?: ProductKind | null;
+  /** Denormalizado desde categoría de carta (`productFamilies`). */
+  productFamilyId?: string | null;
+  productFamilyName?: string | null;
+  productFamilyType?: ProductFamilyType | null;
+  visibleOnMenu?: boolean;
+  /** Grupos de modificadores asignados directamente al producto (opcional). */
+  modifierGroupIds?: string[] | null;
   inventory: ProductInventoryDocument;
   recipe: ProductRecipeDocument;
   createdAt?: number;
@@ -83,7 +134,15 @@ export type ProductDocument = {
 export type ProductInventoryWrite = {
   name: string | null;
   categoryId?: string | null;
+  categoryName?: string | null;
   station?: string | null;
+  operationStationId?: string | null;
+  operationStationName?: string | null;
+  operationStationType?: OperationStationType | null;
+  productKind?: ProductKind | null;
+  productFamilyId?: string | null;
+  productFamilyName?: string | null;
+  productFamilyType?: ProductFamilyType | null;
   active?: boolean;
   /** Precio de venta (catálogo central); omitir en merge para no pisar el valor existente. */
   price?: number | null;
@@ -91,8 +150,13 @@ export type ProductInventoryWrite = {
   type?: string | null;
   unit: "kg" | "g" | "l" | "ml" | "ud" | string;
   currentStock: number;
-  minStock: number;
+  minStock?: number;
   costPerUnit: number;
+  purchaseCost?: number;
+  purchaseQuantity?: number;
+  purchaseUnit?: PurchaseUnit;
+  unitCost?: number;
+  unitCostUnit?: UnitCostBaseUnit;
   supplierName?: string;
   image?: string;
 };
@@ -638,7 +702,6 @@ function defaultInventory(): ProductInventoryDocument {
     enabled: false,
     unit: "ud",
     currentStock: 0,
-    minStock: 0,
     costPerUnit: 0,
   };
 }
@@ -661,13 +724,26 @@ function normalizeProductInventory(
     typeof raw.image === "string" && raw.image.trim() !== ""
       ? raw.image.trim()
       : undefined;
+  const minStock = readFiniteNumber(raw.minStock ?? raw.minimumStock);
+  const purchaseCost = readFiniteNumber(raw.purchaseCost);
+  const purchaseQuantity = readFiniteNumber(raw.purchaseQuantity);
+  const purchaseUnit = normalizePurchaseUnit(raw.purchaseUnit);
+  const unitCost = readFiniteNumber(raw.unitCost);
+  const unitCostUnit = readStoredUnitCostUnit(raw.unitCostUnit);
 
   return {
     enabled: raw.enabled === true,
     unit: normalizeInventoryUnit(raw.unit),
     currentStock: readFiniteNumberWithDefault(raw.currentStock),
-    minStock: readFiniteNumberWithDefault(raw.minStock ?? raw.minimumStock),
+    ...(minStock != null ? { minStock } : {}),
     costPerUnit: readFiniteNumberWithDefault(raw.costPerUnit ?? raw.averageCost),
+    ...(purchaseCost != null && purchaseCost > 0 ? { purchaseCost } : {}),
+    ...(purchaseQuantity != null && purchaseQuantity > 0
+      ? { purchaseQuantity }
+      : {}),
+    ...(purchaseUnit ? { purchaseUnit } : {}),
+    ...(unitCost != null && unitCost > 0 ? { unitCost } : {}),
+    ...(unitCostUnit ? { unitCostUnit } : {}),
     ...(supplierName ? { supplierName } : {}),
     ...(image ? { image } : {}),
   };
@@ -702,6 +778,55 @@ function mapCentralDocToProductDocument(
     typeof data.categoryId === "string" && data.categoryId.trim() !== ""
       ? data.categoryId.trim()
       : null;
+  const categoryName =
+    typeof data.categoryName === "string" && data.categoryName.trim() !== ""
+      ? data.categoryName.trim()
+      : typeof data.categoria === "string" && data.categoria.trim() !== ""
+        ? data.categoria.trim()
+        : null;
+  const preparationArea =
+    typeof data.preparationArea === "string" && data.preparationArea.trim() !== ""
+      ? data.preparationArea.trim()
+      : null;
+  const operationStationId =
+    typeof data.operationStationId === "string" && data.operationStationId.trim() !== ""
+      ? data.operationStationId.trim()
+      : null;
+  const operationStationName =
+    typeof data.operationStationName === "string" &&
+    data.operationStationName.trim() !== ""
+      ? data.operationStationName.trim()
+      : null;
+  const tipoVenta =
+    typeof data.tipoVenta === "string" && data.tipoVenta.trim() !== ""
+      ? data.tipoVenta.trim()
+      : null;
+  const productKindRaw = data.productKind;
+  const productKind = isProductKind(productKindRaw) ? productKindRaw : null;
+  const productFamilyId =
+    typeof data.productFamilyId === "string" && data.productFamilyId.trim() !== ""
+      ? data.productFamilyId.trim()
+      : null;
+  const productFamilyName =
+    typeof data.productFamilyName === "string" &&
+    data.productFamilyName.trim() !== ""
+      ? data.productFamilyName.trim()
+      : null;
+  const productFamilyTypeRaw = data.productFamilyType;
+  const productFamilyType =
+    productFamilyTypeRaw === "food" ||
+    productFamilyTypeRaw === "drink" ||
+    productFamilyTypeRaw === "other"
+      ? productFamilyTypeRaw
+      : null;
+  const visibleOnMenu =
+    typeof data.visibleOnMenu === "boolean" ? data.visibleOnMenu : undefined;
+  const modifierGroupIdsRaw = data.modifierGroupIds;
+  const modifierGroupIds = Array.isArray(modifierGroupIdsRaw)
+    ? modifierGroupIdsRaw
+        .filter((id): id is string => typeof id === "string" && id.trim() !== "")
+        .map((id) => id.trim())
+    : [];
   const type =
     typeof data.type === "string" && data.type.trim() !== ""
       ? data.type.trim()
@@ -720,10 +845,24 @@ function mapCentralDocToProductDocument(
     id: snap.id,
     name,
     categoryId,
+    categoryName,
     price,
     active,
     station,
+    preparationArea,
+    ...(operationStationId ? { operationStationId } : {}),
+    ...(operationStationName ? { operationStationName } : {}),
+    ...(isOperationStationType(data.operationStationType)
+      ? { operationStationType: data.operationStationType }
+      : {}),
     type,
+    tipoVenta,
+    ...(productKind ? { productKind } : {}),
+    ...(productFamilyId ? { productFamilyId } : {}),
+    ...(productFamilyName ? { productFamilyName } : {}),
+    ...(productFamilyType ? { productFamilyType } : {}),
+    ...(modifierGroupIds.length > 0 ? { modifierGroupIds } : {}),
+    ...(visibleOnMenu !== undefined ? { visibleOnMenu } : {}),
     inventory: normalizeProductInventory(inventoryRaw),
     recipe: {
       enabled: recipeRaw.enabled === true,
@@ -756,7 +895,6 @@ export function listenCentralProducts(
     },
     (error) => {
       onListenError?.(error);
-      onData([]);
     },
   );
 }
@@ -786,7 +924,9 @@ function mapLegacyInventoryDocToProductDocument(
       enabled: true,
       unit: normalizeInventoryUnit(unit),
       currentStock: readFiniteNumberWithDefault(data.stock_actual),
-      minStock: readFiniteNumberWithDefault(data.stock_minimo),
+      ...(readFiniteNumber(data.stock_minimo) != null
+        ? { minStock: readFiniteNumber(data.stock_minimo) as number }
+        : {}),
       costPerUnit: readFiniteNumberWithDefault(data.coste_unitario),
     },
     recipe: defaultRecipe(),
@@ -957,25 +1097,134 @@ export function listenLatestStockMovements(
   );
 }
 
+function buildCentralInventoryStationFields(
+  payload: ProductInventoryWrite,
+): Record<string, unknown> {
+  const oid = payload.operationStationId?.trim();
+  const oName = payload.operationStationName?.trim();
+  const oType = payload.operationStationType;
+
+  if (oid && oName && oType) {
+    const patch = buildProductStationPatchFromOperationStationType(
+      oid,
+      oName,
+      oType,
+    );
+    const fields: Record<string, unknown> = {
+      station: patch.station,
+      preparationArea: patch.preparationArea,
+      operationStationId: patch.operationStationId,
+      operationStationName: patch.operationStationName,
+    };
+    return fields;
+  }
+
+  const stationRaw = payload.station?.trim() || null;
+  if (!stationRaw) return {};
+
+  const patch = buildProductStationPatchFromSelectValue(stationRaw, []);
+  if (patch.clearOperationStation && patch.station === "none") {
+    return {
+      station: "none",
+      preparationArea: "none",
+      operationStationId: null,
+      operationStationName: null,
+    };
+  }
+  if (patch.operationStationId) {
+    return {
+      station: patch.station,
+      preparationArea: patch.preparationArea,
+      operationStationId: patch.operationStationId,
+      operationStationName: patch.operationStationName,
+    };
+  }
+  const stationNorm = normalizeOperationalStationSelection(stationRaw);
+  if (stationNorm.isLegacy && stationNorm.legacyRaw) {
+    return {
+      station: stationNorm.legacyRaw,
+      preparationArea: stationNorm.legacyRaw,
+    };
+  }
+  return {
+    station: stationNorm.station,
+    preparationArea: stationNorm.preparationArea,
+    operationStationId: null,
+    operationStationName: null,
+  };
+}
+
+function buildCentralInventoryProductFamilyFields(
+  payload: ProductInventoryWrite,
+): Record<string, unknown> {
+  if (
+    payload.productFamilyId !== undefined ||
+    payload.productFamilyName !== undefined ||
+    payload.productFamilyType !== undefined
+  ) {
+    const denorm: ProductFamilyDenormFields =
+      payload.productFamilyId === null
+        ? { clearProductFamily: true }
+        : payload.productFamilyId &&
+            payload.productFamilyName &&
+            payload.productFamilyType
+          ? {
+              productFamilyId: payload.productFamilyId.trim(),
+              productFamilyName: payload.productFamilyName.trim(),
+              productFamilyType: payload.productFamilyType,
+            }
+          : { clearProductFamily: true };
+    return productFamilyFieldsToFirestorePatch(denorm);
+  }
+  return {};
+}
+
 function centralInventoryPayload(
   restaurantId: string,
   payload: ProductInventoryWrite,
 ): DocumentData {
   const name = payload.name?.trim() || "Sin nombre";
   const categoryId = payload.categoryId?.trim() || null;
-  const station = payload.station?.trim() || null;
+  const categoryName =
+    payload.categoryName !== undefined
+      ? payload.categoryName?.trim() || null
+      : undefined;
   const doc: Record<string, unknown> = {
     restaurantId,
     name,
     categoryId,
-    station,
+    ...(categoryName !== undefined ? { categoryName } : {}),
+    ...buildCentralInventoryStationFields(payload),
+    ...buildCentralInventoryProductFamilyFields(payload),
+    ...(payload.productKind && isProductKind(payload.productKind)
+      ? { productKind: payload.productKind }
+      : {}),
     active: payload.active ?? true,
     inventory: {
       enabled: true,
       unit: normalizeInventoryUnit(payload.unit),
       currentStock: payload.currentStock,
-      minStock: payload.minStock,
+      ...(payload.minStock != null && Number.isFinite(payload.minStock)
+        ? { minStock: payload.minStock }
+        : {}),
       costPerUnit: payload.costPerUnit,
+      ...(payload.purchaseCost != null &&
+      Number.isFinite(payload.purchaseCost) &&
+      payload.purchaseCost > 0
+        ? { purchaseCost: payload.purchaseCost }
+        : {}),
+      ...(payload.purchaseQuantity != null &&
+      Number.isFinite(payload.purchaseQuantity) &&
+      payload.purchaseQuantity > 0
+        ? { purchaseQuantity: payload.purchaseQuantity }
+        : {}),
+      ...(payload.purchaseUnit ? { purchaseUnit: payload.purchaseUnit } : {}),
+      ...(payload.unitCost != null &&
+      Number.isFinite(payload.unitCost) &&
+      payload.unitCost > 0
+        ? { unitCost: payload.unitCost }
+        : {}),
+      ...(payload.unitCostUnit ? { unitCostUnit: payload.unitCostUnit } : {}),
       ...(payload.supplierName?.trim()
         ? { supplierName: payload.supplierName.trim() }
         : {}),
@@ -1109,3 +1358,16 @@ export async function disableProductInventory(
     rethrowWithMessage(e);
   }
 }
+
+export {
+  activateCentralProduct,
+  createCentralProduct,
+  disableCentralProduct,
+  formatCentralCatalogWriteError,
+  setCentralProductPublication,
+  updateCentralProduct,
+  updateCentralProductRecipe,
+  type CentralOperationalProductInput,
+  type CentralProductPublicationPatch,
+  type CentralProductRecipeInput,
+} from "@/lib/firestore/central-catalog-write";

@@ -3,6 +3,9 @@
  * Persistencia local multi-tenant hasta sustituir por tabla remota (`productos_venta` + auth).
  */
 
+import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import type { OperationStationType } from "@/lib/operacion/operation-station-types";
+
 export const PLATOS_LOCAL_STORAGE_KEY = "hostly.platos.v1";
 export const PLATOS_CHANGED_EVENT = "hostly-platos-changed";
 
@@ -64,12 +67,22 @@ export type PlatoCarta = {
   nombre: string;
   /** Área operativa donde se prepara el producto (p. ej. cocina, barra, cocteleria). */
   preparationArea?: string;
+  /** Estación operativa configurable (`operationStations`). */
+  operationStationId?: string;
+  operationStationName?: string;
+  operationStationType?: OperationStationType;
   /** Tipo de artículo vendible (no confundir con categoría de carta). */
   tipoVenta: TipoProductoVenta;
   /** Texto de categoría en carta (denormalizado desde la categoría gestionada). */
   categoria: string;
   /** Id de categoría gestionada (`cartaCategorias`); opcional para datos legados solo con texto. */
   categoriaCartaId?: string;
+  /** Familia de producto (`productFamilies`); denormalizado desde categoría al guardar. Distinto de `cartaFamiliaId` (menú). */
+  productFamilyId?: string;
+  productFamilyName?: string;
+  productFamilyType?: ProductFamilyType;
+  /** Grupos de modificadores asignados al producto (opcional). */
+  modifierGroupIds?: string[];
   /** Familia de menú (`cartaFamilias`); denormalizado desde la categoría. Distinto de `familyId` (modificadores). */
   cartaFamiliaId?: string;
   /** Orden dentro de la categoría en listados (menor = primero). */

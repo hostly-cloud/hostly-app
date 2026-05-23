@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
+import { ConfiguracionCapabilityShell } from "@/components/auth/configuracion-capability-shell";
 import {
   ConfiguracionMobileHeader,
   ConfiguracionSidebar,
@@ -75,7 +76,7 @@ export default function ConfiguracionLayout({
               </div>
             </div>
           ) : (
-            children
+            <ConfiguracionCapabilityShell>{children}</ConfiguracionCapabilityShell>
           )}
         </div>
       </div>

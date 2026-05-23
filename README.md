@@ -20,6 +20,17 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Map layouts / Layout presets
+
+Hostly includes **versioned floor plan layouts**: named snapshots of table geometry and zones that can be saved, activated, and archived from the map editor without creating a new floor plan.
+
+- **Use case:** seasonal setups (summer terrace, winter dining room), private events, partial terrace configurations.
+- **Restore in place:** activating a layout updates live Firestore geometry; **table IDs are preserved** (orders, joins, and TPV stay consistent).
+- **TPV:** floor plans, tables, and zones refresh in **realtime** after activation; active layout is shown in the TPV badge.
+- **Guard:** layout activation is blocked while tables have active service on that plan.
+
+Operational guide and Firestore index notes: [docs/hostly-floor-plan-layouts.md](docs/hostly-floor-plan-layouts.md).
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

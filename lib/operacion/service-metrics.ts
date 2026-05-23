@@ -1,13 +1,26 @@
-import { isBarItem, type BarClassifiable } from "@/lib/kds/bar-classification";
+import type { BarClassifiable } from "@/lib/kds/bar-classification";
+import {
+  KDS_OPERATION_STATION_FILTER_ALL,
+  matchesKdsOperationStationSelection,
+} from "@/lib/kds/operation-station-kds-filter";
+import {
+  isKdsBarBoardDestination,
+  isKdsCocktailBoardDestination,
+  isKdsKitchenDestination,
+  resolveKdsDestination,
+  type KdsRoutableItem,
+} from "@/lib/kds/kds-destination";
 
-export type ServiceScope = "kitchen" | "bar" | "all";
+export type ServiceScope = "kitchen" | "bar" | "cocktail" | "all";
 
-export type ServiceMetricsItem = BarClassifiable & {
-  status?: unknown;
-  sentAt?: unknown;
-  preparedAt?: unknown;
-  servedAt?: unknown;
-};
+export type ServiceMetricsItem = BarClassifiable &
+  KdsRoutableItem & {
+    operationStationId?: unknown;
+    status?: unknown;
+    sentAt?: unknown;
+    preparedAt?: unknown;
+    servedAt?: unknown;
+  };
 
 export type ServiceMetrics = {
   sent: number;
@@ -52,13 +65,16 @@ function matchesScope(
   scope: ServiceScope,
 ): boolean {
   if (scope === "all") return true;
-  const bar = isBarItem(item);
-  return scope === "bar" ? bar : !bar;
+  const dest = resolveKdsDestination(item);
+  if (scope === "kitchen") return isKdsKitchenDestination(dest);
+  if (scope === "cocktail") return isKdsCocktailBoardDestination(dest);
+  return isKdsBarBoardDestination(dest);
 }
 
 export function computeServiceMetrics(
   items: ServiceMetricsItem[],
   scope: ServiceScope,
+  selectedOperationStationId: string = KDS_OPERATION_STATION_FILTER_ALL,
 ): ServiceMetrics {
   let sent = 0;
   let prepared = 0;
@@ -70,6 +86,19 @@ export function computeServiceMetrics(
 
   for (const it of items) {
     if (!matchesScope(it, scope)) continue;
+    if (
+      !matchesKdsOperationStationSelection(
+        {
+          operationStationId:
+            typeof it.operationStationId === "string"
+              ? it.operationStationId
+              : undefined,
+        },
+        selectedOperationStationId,
+      )
+    ) {
+      continue;
+    }
     const st = normalizedStatus(it.status);
     if (st === "sent") sent += 1;
     else if (st === "prepared" || st === "ready") prepared += 1;

@@ -44,7 +44,9 @@ import {
 import MapFloatingQuickActions, {
   type ScreenRect,
 } from "@/components/map/MapFloatingQuickActions";
+import FloorPlanLayoutToolbar from "@/components/map/floor-plan-layout-toolbar";
 import ModulePageShell from "@/components/module-page-shell";
+import { useFloorPlanLayouts } from "@/hooks/useFloorPlanLayouts";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   getDefaultSizeForPlanElementType,
@@ -78,6 +80,7 @@ import {
   getAreaTemplateFurniture,
   type AreaTemplateKey,
 } from "@/lib/map/area-template-furniture";
+import type { FloorPlanSnapshotFloorPlan } from "@/lib/firestore/floor-plan-snapshots";
 
 const fieldLabelStyle: CSSProperties = {
   display: "block",
@@ -1531,6 +1534,39 @@ export default function ConfigMesasPage({
       entityBelongsToFloorPlan(z, selectedFloorPlanId, floorPlans),
     );
   }, [zones, selectedFloorPlanId, floorPlans]);
+
+  const buildCurrentFloorPlanSnapshot =
+    useCallback((): FloorPlanSnapshotFloorPlan | null => {
+      if (!selectedFloorPlan || !selectedFloorPlanId) return null;
+      return {
+        plan: { ...selectedFloorPlan },
+        elements: visibleElements.map((el) => ({ ...el })),
+        zones: visibleZones.map((z) => ({ ...z })),
+      };
+    }, [selectedFloorPlan, selectedFloorPlanId, visibleElements, visibleZones]);
+
+  const refreshPlanFromServer = useCallback(async () => {
+    if (!restaurantId || !isFirebaseConfigured) return;
+    await refreshElements();
+    try {
+      const list = await getZones(restaurantId);
+      setLoadedZones(list);
+      setZones(list);
+      setHasUnsavedChanges(false);
+      setSelectedIds([]);
+      setSelectedZoneId(null);
+    } catch {
+      // refreshElements ya sincronizó mesas
+    }
+  }, [restaurantId, refreshElements]);
+
+  const floorPlanLayouts = useFloorPlanLayouts({
+    restaurantId,
+    selectedFloorPlanId,
+    buildCurrentFloorPlanSnapshot,
+    createdBy: user?.uid,
+    onAfterActivate: refreshPlanFromServer,
+  });
 
   const canReorderSelectionFront = useMemo(() => {
     if (selectedIds.length < 1) return false;
@@ -4463,6 +4499,25 @@ export default function ConfigMesasPage({
                 Restablecer
               </button>
             </div>
+
+            <FloorPlanLayoutToolbar
+              presets={floorPlanLayouts.presets}
+              activeLayout={floorPlanLayouts.activeLayout}
+              loading={floorPlanLayouts.loading}
+              error={floorPlanLayouts.error}
+              busyAction={floorPlanLayouts.busyAction}
+              feedback={floorPlanLayouts.feedback}
+              activatePrecheck={floorPlanLayouts.activatePrecheck}
+              activatePrecheckHint={floorPlanLayouts.activatePrecheckHint}
+              onPresetSelectionChange={floorPlanLayouts.runActivatePrecheck}
+              onRefreshActivatePrecheck={floorPlanLayouts.refreshActivatePrecheck}
+              hasUnsavedChanges={hasUnsavedChanges}
+              disabled={!selectedFloorPlanId || editingZones}
+              onSavePreset={floorPlanLayouts.savePreset}
+              onActivatePreset={floorPlanLayouts.activatePreset}
+              onDuplicatePreset={floorPlanLayouts.duplicatePreset}
+              onArchivePreset={floorPlanLayouts.archivePreset}
+            />
 
             {renderRailSection("floor", "Suelo", (
             <div style={mapFloorSwatchGrid} aria-label="Suelo del restaurante">

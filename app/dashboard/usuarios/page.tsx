@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
+import { UsuariosCapabilityShell } from "@/components/auth/configuracion-capability-shell";
 import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import {
   type UsuarioLocal,
@@ -335,13 +336,16 @@ export default function UsuariosPage() {
 
   if (!hydrated) {
     return (
-      <ModulePageShell title={t("users.title")} subtitle={t("users.subtitle")} maxWidth={1180} compactLayout lockViewport shellSurface="configLight">
-        <p className="hostly-muted mb-0 !text-[13px]">{t("common.preparing")}</p>
-      </ModulePageShell>
+      <UsuariosCapabilityShell>
+        <ModulePageShell title={t("users.title")} subtitle={t("users.subtitle")} maxWidth={1180} compactLayout lockViewport shellSurface="configLight">
+          <p className="hostly-muted mb-0 !text-[13px]">{t("common.preparing")}</p>
+        </ModulePageShell>
+      </UsuariosCapabilityShell>
     );
   }
 
   return (
+    <UsuariosCapabilityShell>
     <ModulePageShell
       title={t("users.title")}
       subtitle={t("users.subtitle")}
@@ -847,5 +851,6 @@ export default function UsuariosPage() {
         </div>
       ) : null}
     </ModulePageShell>
+    </UsuariosCapabilityShell>
   );
 }

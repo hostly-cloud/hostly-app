@@ -472,6 +472,25 @@ export default function EscandallosPage() {
           </div>
         ) : null}
 
+        <div
+          style={{
+            flexShrink: 0,
+            border: "1px solid rgba(56, 189, 248, 0.28)",
+            background: "rgba(8, 47, 73, 0.35)",
+            color: "#bae6fd",
+            padding: "10px 12px",
+            borderRadius: 10,
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}
+        >
+          El escandallo operativo para consumo de inventario vive en{" "}
+          <Link href="/dashboard/productos" style={{ color: "#7dd3fc", fontWeight: 700 }}>
+            Catálogo de venta → producto → Escandallo / receta
+          </Link>
+          . Esta pantalla legacy sigue mostrando coste y margen estimado.
+        </div>
+
         {!error && items.length > 0 ? (
           <div
             style={{

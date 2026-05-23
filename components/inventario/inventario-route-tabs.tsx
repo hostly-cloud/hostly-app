@@ -4,11 +4,39 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /** Tabs del hub Inventario → rutas reales (`/dashboard/...`). */
-export type InventarioHubTabId = "stock" | "compras" | "recepciones" | "mermas";
+export type InventarioHubTabId =
+  | "stock"
+  | "compras-inteligentes"
+  | "pedidos-compra"
+  | "facturas-proveedor"
+  | "aliases-proveedor"
+  | "compras"
+  | "recepciones"
+  | "mermas";
 
 const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] = [
   /** Stock inventario Firestore central (lista + inspector). */
   { id: "stock", label: "Stock", href: "/dashboard/inventario" },
+  {
+    id: "compras-inteligentes",
+    label: "Compras sugeridas",
+    href: "/dashboard/inventario/compras-inteligentes",
+  },
+  {
+    id: "pedidos-compra",
+    label: "Pedidos compra",
+    href: "/dashboard/inventario/pedidos-compra",
+  },
+  {
+    id: "facturas-proveedor",
+    label: "Facturas",
+    href: "/dashboard/inventario/facturas-proveedor",
+  },
+  {
+    id: "aliases-proveedor",
+    label: "Aliases OCR",
+    href: "/dashboard/inventario/aliases-proveedor",
+  },
   { id: "compras", label: "Compras", href: "/dashboard/compras" },
   { id: "recepciones", label: "Recepciones", href: "/dashboard/recepciones" },
   { id: "mermas", label: "Mermas", href: "/dashboard/mermas" },
@@ -17,6 +45,30 @@ const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] =
 function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null {
   if (!pathname.startsWith("/dashboard")) return null;
   if (pathname === "/dashboard/inventario" || pathname === "/dashboard/stock") return "stock";
+  if (
+    pathname === "/dashboard/inventario/compras-inteligentes" ||
+    pathname.startsWith("/dashboard/inventario/compras-inteligentes/")
+  ) {
+    return "compras-inteligentes";
+  }
+  if (
+    pathname === "/dashboard/inventario/pedidos-compra" ||
+    pathname.startsWith("/dashboard/inventario/pedidos-compra/")
+  ) {
+    return "pedidos-compra";
+  }
+  if (
+    pathname === "/dashboard/inventario/facturas-proveedor" ||
+    pathname.startsWith("/dashboard/inventario/facturas-proveedor/")
+  ) {
+    return "facturas-proveedor";
+  }
+  if (
+    pathname === "/dashboard/inventario/aliases-proveedor" ||
+    pathname.startsWith("/dashboard/inventario/aliases-proveedor/")
+  ) {
+    return "aliases-proveedor";
+  }
   if (pathname === "/dashboard/compras" || pathname.startsWith("/dashboard/compras/")) return "compras";
   if (pathname === "/dashboard/recepciones" || pathname.startsWith("/dashboard/recepciones/")) {
     return "recepciones";

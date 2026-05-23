@@ -25,10 +25,11 @@ import { computeReservationRangeMetrics } from "@/lib/reservas/reservation-metri
 import { Timestamp, collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 
-type AnalisisTab = "ventas" | "horas" | "productos" | "comensales";
+type AnalisisTab = "ventas" | "rentabilidad" | "horas" | "productos" | "comensales";
 
 const TABS: { id: AnalisisTab; label: string; placeholder: string }[] = [
   { id: "ventas", label: "Ventas", placeholder: "Próximamente: análisis de ventas" },
+  { id: "rentabilidad", label: "Rentabilidad", placeholder: "Margen histórico por snapshot de coste" },
   { id: "horas", label: "Horas", placeholder: "Próximamente: análisis por franjas horarias" },
   { id: "productos", label: "Productos", placeholder: "Próximamente: análisis por producto" },
   { id: "comensales", label: "Comensales", placeholder: "Próximamente: análisis de comensales" },
@@ -1059,6 +1060,8 @@ export default function AnalisisPage() {
   }, [ordersDocs, dateFrom, dateTo]);
   const ventasOrders: VentasOrderInput[] = buildVentasOrdersAdapter(ventasOrdersSource);
 
+  const marginOrdersSource: Array<Record<string, unknown>> | null = ventasOrdersSource;
+
   const ventasSectionProps = {
     ...buildVentasSectionProps({
       placeholder: TABS[0].placeholder,
@@ -1076,12 +1079,22 @@ export default function AnalisisPage() {
     placeholder: TABS.find((t) => t.id === "productos")?.placeholder ?? "",
   };
 
+  const rentabilidadSectionProps = {
+    orders: marginOrdersSource,
+    dateFrom,
+    dateTo,
+    setDateFrom,
+    setDateTo,
+    formatDateEs,
+  };
+
   const analysisTabContentProps = buildAnalysisTabContentProps({
     tab,
     comensalesSectionProps,
     ventasSectionProps,
     horasSectionProps,
     productosSectionProps,
+    rentabilidadSectionProps,
   });
 
   return (

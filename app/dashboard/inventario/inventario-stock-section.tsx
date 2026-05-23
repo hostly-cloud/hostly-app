@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import { capabilityDeniedTitle } from "@/components/auth/capability-guard";
+import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
@@ -14,7 +17,62 @@ import {
   type ProductDocument,
   type StockMovementListItem,
 } from "@/lib/firestore/products";
+import {
+  centralStockMovementSourceLabel,
+  listenCentralStockMovementsForProduct,
+  type CentralStockMovementListItem,
+} from "@/lib/firestore/stock-movements";
 import { mockInventarioProductos } from "@/lib/inventario-productos";
+import { productTimelineHref } from "@/lib/inventory/product-timeline";
+import { OperationStationProductSelect } from "@/components/operacion/operation-station-product-select";
+import {
+  ensureDefaultOperationStations,
+  listenOperationStations,
+} from "@/lib/firestore/operation-stations";
+import {
+  isNoneOperationStationSelectValue,
+  operationStationSelectValueFromProduct,
+  resolveOperationStationFromSelectValue,
+  resolveProductOperationStationLabel,
+} from "@/lib/operacion/product-operation-station";
+import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
+import { fetchCartaCategorias } from "@/lib/carta-categorias/api-client";
+import type { CartaCategoria } from "@/lib/carta-categorias/types";
+import {
+  buildProductFamilyPatchFromCategoryId,
+  getProductFamilyLabel,
+} from "@/lib/carta/product-category-family-resolver";
+import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import {
+  PRODUCT_FAMILY_LIST_FILTER_OPTIONS,
+  matchesProductFamilyListFilter,
+  type ProductFamilyListFilter,
+} from "@/lib/carta/product-family-list-filter";
+import {
+  PRODUCT_KIND_LIST_FILTER_OPTIONS,
+  PRODUCT_KIND_OPTIONS,
+  getProductKindDisplayLabel,
+  matchesProductKindListFilter,
+  productKindToSelectValue,
+  type ProductKind,
+  type ProductKindListFilter,
+} from "@/lib/carta/product-kind-options";
+import {
+  formatStockStatusLabel,
+  matchesStockLevelListFilter,
+  resolveStockStatus,
+  STOCK_LEVEL_LIST_FILTER_OPTIONS,
+  stockStatusBadgeClassName,
+  type StockLevelListFilter,
+} from "@/lib/inventory/stock-status";
+import {
+  calculateInventoryUnitCost,
+  formatPurchaseCostEquation,
+  getInventoryUnitCostLabel,
+  normalizePurchaseCostInput,
+  PURCHASE_UNIT_OPTIONS,
+  type PurchaseUnit,
+} from "@/lib/inventory/inventory-cost";
 
 type Unidad = "kg" | "g" | "l" | "ml" | "ud";
 
@@ -22,11 +80,23 @@ type ProductoRow = {
   id: string | number;
   nombre: string | null;
   categoryId: string | null;
+  categoryName: string | null;
   station: string | null;
+  operationStationId: string | null;
+  operationStationName: string | null;
+  productKind: ProductKind | null;
+  productFamilyId: string | null;
+  productFamilyName: string | null;
+  productFamilyType: ProductFamilyType | null;
   active: boolean;
   unidad: Unidad | string | null;
   stock_actual: number | null;
   coste_unitario: number | null;
+  purchase_cost: number | null;
+  purchase_quantity: number | null;
+  purchase_unit: PurchaseUnit | null;
+  unit_cost: number | null;
+  unit_cost_unit: string | null;
   stock_minimo: number | null;
   supplierName: string | null;
   image: string | null;
@@ -38,10 +108,14 @@ type DraftById = Record<
     nombre: string;
     categoryId: string;
     station: string;
+    productKind: ProductKind;
     active: boolean;
     unidad: string;
     stock_actual: string;
     coste_unitario: string;
+    purchase_cost: string;
+    purchase_quantity: string;
+    purchase_unit: PurchaseUnit | "";
     stock_minimo: string;
     supplierName: string;
   }
@@ -66,6 +140,31 @@ function stockMovementKindLabel(m: StockMovementListItem): string {
   return "Ajuste manual";
 }
 
+function centralMovementContextLabel(m: CentralStockMovementListItem): string | null {
+  const parts: string[] = [];
+  if (m.saleProductName) parts.push(`por ${m.saleProductName}`);
+  if (m.modifierOptionName) parts.push(m.modifierOptionName);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+function centralMovementStockRange(m: CentralStockMovementListItem): string | null {
+  if (m.stockBefore == null && m.stockAfter == null) return null;
+  const before =
+    m.stockBefore != null ? `${roundTo(m.stockBefore, 3)} ${m.unit}` : "—";
+  const after =
+    m.stockAfter != null ? `${roundTo(m.stockAfter, 3)} ${m.unit}` : "—";
+  return `${before} → ${after}`;
+}
+
+function stockStatusInputFromRow(
+  row: Pick<ProductoRow, "stock_actual" | "stock_minimo">,
+) {
+  return {
+    currentStock: row.stock_actual,
+    minStock: row.stock_minimo,
+  };
+}
+
 function formatMoney2(value: number | null | undefined): string {
   if (value == null) return "-";
   if (!Number.isFinite(value)) return "-";
@@ -80,22 +179,109 @@ function parseNumber(value: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+type InventoryDraftFields = DraftById[string];
+
+const INVENTORY_UNSAVED_CONFIRM_MESSAGE =
+  "Tienes cambios sin guardar en este producto. Si continúas, se perderán.";
+
+function defaultPurchaseUnitForInventoryUnit(
+  unidad: string | null | undefined,
+): PurchaseUnit | "" {
+  const u = String(unidad ?? "")
+    .trim()
+    .toLowerCase();
+  if (u === "ud") return "unit";
+  if (u === "ml" || u === "cl" || u === "l") return u;
+  if (u === "g" || u === "kg") return u;
+  return "";
+}
+
+function draftFromRow(row: ProductoRow): InventoryDraftFields {
+  return {
+    nombre: row.nombre ?? "",
+    categoryId: row.categoryId ?? "",
+    station: operationStationSelectValueFromProduct({
+      operationStationId: row.operationStationId,
+      operationStationName: row.operationStationName,
+      station: row.station,
+      preparationArea: row.station,
+    }),
+    productKind: productKindToSelectValue(row.productKind),
+    active: row.active,
+    unidad: row.unidad ?? "kg",
+    stock_actual:
+      row.stock_actual == null ? "" : String(roundTo(row.stock_actual, 3)),
+    coste_unitario:
+      row.coste_unitario == null ? "" : String(roundTo(row.coste_unitario, 2)),
+    purchase_cost:
+      row.purchase_cost == null ? "" : String(roundTo(row.purchase_cost, 2)),
+    purchase_quantity:
+      row.purchase_quantity == null
+        ? ""
+        : String(roundTo(row.purchase_quantity, 3)),
+    purchase_unit: row.purchase_unit ?? defaultPurchaseUnitForInventoryUnit(row.unidad),
+    stock_minimo:
+      row.stock_minimo == null ? "" : String(roundTo(row.stock_minimo, 3)),
+    supplierName: row.supplierName ?? "",
+  };
+}
+
+function draftsEqual(a: InventoryDraftFields, b: InventoryDraftFields): boolean {
+  return (
+    a.nombre === b.nombre &&
+    a.categoryId === b.categoryId &&
+    a.station === b.station &&
+    a.productKind === b.productKind &&
+    a.active === b.active &&
+    a.unidad === b.unidad &&
+    a.stock_actual === b.stock_actual &&
+    a.coste_unitario === b.coste_unitario &&
+    a.purchase_cost === b.purchase_cost &&
+    a.purchase_quantity === b.purchase_quantity &&
+    a.purchase_unit === b.purchase_unit &&
+    a.stock_minimo === b.stock_minimo &&
+    a.supplierName === b.supplierName
+  );
+}
+
+function isInventoryDraftDirty(
+  row: ProductoRow,
+  draft: InventoryDraftFields,
+): boolean {
+  return !draftsEqual(draft, draftFromRow(row));
+}
+
 function draftFromRows(rows: ProductoRow[]): DraftById {
   const next: DraftById = {};
   for (const r of rows) {
-    next[String(r.id)] = {
-      nombre: r.nombre ?? "",
-      categoryId: r.categoryId ?? "",
-      station: r.station ?? "",
-      active: r.active,
-      unidad: r.unidad ?? "kg",
-      stock_actual: r.stock_actual == null ? "" : String(roundTo(r.stock_actual, 3)),
-      coste_unitario: r.coste_unitario == null ? "" : String(roundTo(r.coste_unitario, 2)),
-      stock_minimo: r.stock_minimo == null ? "" : String(roundTo(r.stock_minimo, 3)),
-      supplierName: r.supplierName ?? "",
-    };
+    next[String(r.id)] = draftFromRow(r);
   }
   return next;
+}
+
+function mergeDraftsPreservingDirty(
+  prev: DraftById,
+  rows: ProductoRow[],
+): DraftById {
+  const next = draftFromRows(rows);
+  for (const r of rows) {
+    const key = String(r.id);
+    const prior = prev[key];
+    if (prior && isInventoryDraftDirty(r, prior)) {
+      next[key] = prior;
+    }
+  }
+  return next;
+}
+
+function inventoryLegacyCategoryLabel(
+  row: Pick<ProductoRow, "categoryId" | "categoryName">,
+  categories: readonly CartaCategoria[],
+): string | null {
+  const id = row.categoryId?.trim() ?? "";
+  if (id && categories.some((c) => c.id === id)) return null;
+  const name = row.categoryName?.trim();
+  return name || null;
 }
 
 function mapProductDocumentToRow(item: ProductDocument): ProductoRow {
@@ -103,12 +289,24 @@ function mapProductDocumentToRow(item: ProductDocument): ProductoRow {
     id: item.id,
     nombre: item.name,
     categoryId: item.categoryId,
-    station: item.station,
+    categoryName: item.categoryName ?? null,
+    station: item.station ?? item.preparationArea ?? null,
+    operationStationId: item.operationStationId ?? null,
+    operationStationName: item.operationStationName ?? null,
+    productKind: item.productKind ?? null,
+    productFamilyId: item.productFamilyId ?? null,
+    productFamilyName: item.productFamilyName ?? null,
+    productFamilyType: item.productFamilyType ?? null,
     active: item.active,
     unidad: item.inventory.unit,
     stock_actual: item.inventory.currentStock,
     coste_unitario: item.inventory.costPerUnit,
-    stock_minimo: item.inventory.minStock,
+    purchase_cost: item.inventory.purchaseCost ?? null,
+    purchase_quantity: item.inventory.purchaseQuantity ?? null,
+    purchase_unit: item.inventory.purchaseUnit ?? null,
+    unit_cost: item.inventory.unitCost ?? null,
+    unit_cost_unit: item.inventory.unitCostUnit ?? null,
+    stock_minimo: item.inventory.minStock ?? null,
     supplierName: item.inventory.supplierName ?? null,
     image: item.inventory.image ?? null,
   };
@@ -117,6 +315,8 @@ function mapProductDocumentToRow(item: ProductDocument): ProductoRow {
 export default function InventarioStockSection() {
   const { t } = useI18n();
   const { restaurantId, ready, profileReady } = useAuth();
+  const { can } = useHostlyCapabilities();
+  const canEditInventory = can("inventory.edit");
   const [items, setItems] = useState<ProductoRow[]>([]);
   const [drafts, setDrafts] = useState<DraftById>({});
   const [loading, setLoading] = useState(true);
@@ -126,11 +326,29 @@ export default function InventarioStockSection() {
   const [deletingById, setDeletingById] = useState<Record<string, boolean>>({});
   const [reloadNonce, setReloadNonce] = useState(0);
   const [search, setSearch] = useState("");
+  const [productKindFilter, setProductKindFilter] =
+    useState<ProductKindListFilter>("all");
+  const [productFamilyFilter, setProductFamilyFilter] =
+    useState<ProductFamilyListFilter>("all");
+  const [stockLevelFilter, setStockLevelFilter] =
+    useState<StockLevelListFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [operationStations, setOperationStations] = useState<
+    OperationStationDocument[]
+  >([]);
+  const [cartaCategorias, setCartaCategorias] = useState<CartaCategoria[]>([]);
+  const [saveFeedbackById, setSaveFeedbackById] = useState<
+    Record<string, "saved" | "error">
+  >({});
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   /** Tras crear producto, priorizar su selección cuando llegue el snapshot. */
   const preferSelectIdRef = useRef<string | null>(null);
-  const [stockMovements, setStockMovements] = useState<StockMovementListItem[]>([]);
+  const [centralStockMovements, setCentralStockMovements] = useState<
+    CentralStockMovementListItem[]
+  >([]);
+  const [legacyStockMovements, setLegacyStockMovements] = useState<
+    StockMovementListItem[]
+  >([]);
 
   const movementDateFmt = useMemo(
     () => new Intl.DateTimeFormat("es", { dateStyle: "short", timeStyle: "short" }),
@@ -161,7 +379,7 @@ export default function InventarioStockSection() {
       (rows) => {
         const mapped = rows.map(mapProductDocumentToRow);
         setItems(mapped);
-        setDrafts(draftFromRows(mapped));
+        setDrafts((prev) => mergeDraftsPreservingDirty(prev, mapped));
         setLoading(false);
       },
       (e) => {
@@ -176,17 +394,67 @@ export default function InventarioStockSection() {
   }, [profileReady, ready, reloadNonce, restaurantId]);
 
   useEffect(() => {
+    const rid = restaurantId?.trim() ?? "";
+    if (!rid || !ready || !profileReady || usingMock) {
+      setOperationStations([]);
+      return;
+    }
+    let defaultsEnsured = false;
+    const unsub = listenOperationStations(
+      rid,
+      (list) => {
+        setOperationStations(list);
+        if (!defaultsEnsured && list.length === 0) {
+          defaultsEnsured = true;
+          void ensureDefaultOperationStations(rid).catch((e) =>
+            console.error("ensureDefaultOperationStations", e),
+          );
+        }
+      },
+      (e) => console.error("listenOperationStations", e),
+    );
+    return () => unsub();
+  }, [profileReady, ready, usingMock, restaurantId]);
+
+  useEffect(() => {
+    const rid = restaurantId?.trim() ?? "";
+    if (!rid || !ready || !profileReady || usingMock) {
+      setCartaCategorias([]);
+      return;
+    }
+    void fetchCartaCategorias(rid)
+      .then(setCartaCategorias)
+      .catch(() => setCartaCategorias([]));
+  }, [profileReady, ready, usingMock, restaurantId]);
+
+  useEffect(() => {
     if (!ready || !profileReady || usingMock) {
-      setStockMovements([]);
+      setLegacyStockMovements([]);
       return;
     }
     const rid = restaurantId?.trim() ?? "";
     const pid = selectedId?.trim() ?? "";
     if (!rid || !pid) {
-      setStockMovements([]);
+      setLegacyStockMovements([]);
       return;
     }
-    return listenLatestStockMovements(rid, pid, setStockMovements, { limit: 5 });
+    return listenLatestStockMovements(rid, pid, setLegacyStockMovements, { limit: 10 });
+  }, [profileReady, ready, usingMock, restaurantId, selectedId]);
+
+  useEffect(() => {
+    if (!ready || !profileReady || usingMock) {
+      setCentralStockMovements([]);
+      return;
+    }
+    const rid = restaurantId?.trim() ?? "";
+    const pid = selectedId?.trim() ?? "";
+    if (!rid || !pid) {
+      setCentralStockMovements([]);
+      return;
+    }
+    return listenCentralStockMovementsForProduct(rid, pid, setCentralStockMovements, {
+      limit: 50,
+    });
   }, [profileReady, ready, usingMock, restaurantId, selectedId]);
 
   useEffect(() => {
@@ -208,18 +476,96 @@ export default function InventarioStockSection() {
     setReloadNonce((n) => n + 1);
   }
 
+  const isDraftDirtyForKey = useCallback(
+    (key: string) => {
+      const row = items.find((item) => String(item.id) === key);
+      const draft = drafts[key];
+      if (!row || !draft) return false;
+      return isInventoryDraftDirty(row, draft);
+    },
+    [drafts, items],
+  );
+
+  const confirmDiscardUnsaved = useCallback(
+    (key: string) => {
+      if (!isDraftDirtyForKey(key)) return true;
+      return window.confirm(INVENTORY_UNSAVED_CONFIRM_MESSAGE);
+    },
+    [isDraftDirtyForKey],
+  );
+
+  const trySelectProduct = useCallback(
+    (key: string) => {
+      if (selectedId && selectedId !== key && !confirmDiscardUnsaved(selectedId)) {
+        return;
+      }
+      setSelectedId(key);
+      setMobilePanelOpen(true);
+    },
+    [confirmDiscardUnsaved, selectedId],
+  );
+
+  const tryCloseInspector = useCallback(() => {
+    if (selectedId && !confirmDiscardUnsaved(selectedId)) return;
+    setMobilePanelOpen(false);
+  }, [confirmDiscardUnsaved, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const key = selectedId;
+    if (saveFeedbackById[key] !== "saved") return;
+    if (isDraftDirtyForKey(key)) {
+      setSaveFeedbackById((prev) => {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  }, [drafts, isDraftDirtyForKey, saveFeedbackById, selectedId]);
+
+  useEffect(() => {
+    const timers: number[] = [];
+    for (const [key, state] of Object.entries(saveFeedbackById)) {
+      if (state !== "saved") continue;
+      timers.push(
+        window.setTimeout(() => {
+          setSaveFeedbackById((prev) => {
+            if (prev[key] !== "saved") return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+        }, 2800),
+      );
+    }
+    return () => {
+      for (const id of timers) window.clearTimeout(id);
+    };
+  }, [saveFeedbackById]);
+
   function updateDraft(id: string | number, patch: Partial<DraftById[string]>) {
     const key = String(id);
+    setSaveFeedbackById((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     setDrafts((prev) => ({
       ...prev,
       [key]: {
         nombre: prev[key]?.nombre ?? "",
         categoryId: prev[key]?.categoryId ?? "",
         station: prev[key]?.station ?? "",
+        productKind: prev[key]?.productKind ?? "other",
         active: prev[key]?.active ?? true,
         unidad: prev[key]?.unidad ?? "kg",
         stock_actual: prev[key]?.stock_actual ?? "",
         coste_unitario: prev[key]?.coste_unitario ?? "",
+        purchase_cost: prev[key]?.purchase_cost ?? "",
+        purchase_quantity: prev[key]?.purchase_quantity ?? "",
+        purchase_unit: prev[key]?.purchase_unit ?? "",
         stock_minimo: prev[key]?.stock_minimo ?? "",
         supplierName: prev[key]?.supplierName ?? "",
         ...patch,
@@ -242,6 +588,7 @@ export default function InventarioStockSection() {
         name: "Nuevo producto",
         categoryId: null,
         station: null,
+        productKind: "other",
         active: true,
         price: 0,
         type: "inventory",
@@ -262,6 +609,11 @@ export default function InventarioStockSection() {
     const key = String(id);
     const rid = restaurantId?.trim() ?? "";
     setError(null);
+    setSaveFeedbackById((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     setSavingById((prev) => ({ ...prev, [key]: true }));
 
     try {
@@ -275,17 +627,29 @@ export default function InventarioStockSection() {
         nombre: "",
         categoryId: "",
         station: "",
+        productKind: "other",
         active: true,
         unidad: "kg",
         stock_actual: "",
         coste_unitario: "",
+        purchase_cost: "",
+        purchase_quantity: "",
+        purchase_unit: "",
         stock_minimo: "",
         supplierName: "",
       };
+      const purchaseNormalized = normalizePurchaseCostInput({
+        purchaseCost: draft.purchase_cost,
+        purchaseQuantity: draft.purchase_quantity,
+        purchaseUnit: draft.purchase_unit || undefined,
+      });
+      const calculatedUnitCost = purchaseNormalized
+        ? calculateInventoryUnitCost(purchaseNormalized)
+        : null;
       const payload = {
         nombre: draft.nombre.trim() || null,
         categoryId: draft.categoryId.trim() || null,
-        station: draft.station.trim() || null,
+        station: draft.station.trim() || "none",
         active: draft.active,
         unidad: (draft.unidad || "kg").trim(),
         stock_actual: parseNumber(draft.stock_actual, 0),
@@ -294,19 +658,74 @@ export default function InventarioStockSection() {
         supplierName: draft.supplierName.trim() || undefined,
       };
 
+      const resolvedStation = resolveOperationStationFromSelectValue(
+        draft.station,
+        operationStations,
+      );
+      const selectedCat = payload.categoryId
+        ? cartaCategorias.find((c) => c.id === payload.categoryId)
+        : undefined;
+      const familyPatch = selectedCat
+        ? buildProductFamilyPatchFromCategoryId(selectedCat.id, cartaCategorias)
+        : null;
+      const familyWrite =
+        familyPatch?.clearProductFamily
+          ? {
+              productFamilyId: null as string | null,
+              productFamilyName: null as string | null,
+              productFamilyType: null,
+            }
+          : familyPatch?.productFamilyId
+            ? {
+                productFamilyId: familyPatch.productFamilyId,
+                productFamilyName: familyPatch.productFamilyName ?? null,
+                productFamilyType: familyPatch.productFamilyType ?? null,
+              }
+            : {};
       await upsertProductInventory(rid, key, {
         name: payload.nombre,
-        categoryId: payload.categoryId,
-        station: payload.station,
+        categoryId: selectedCat ? selectedCat.id : payload.categoryId,
+        ...(selectedCat ? { categoryName: selectedCat.name } : {}),
+        ...(selectedCat ? familyWrite : {}),
+        ...(resolvedStation
+          ? {
+              operationStationId: resolvedStation.id,
+              operationStationName: resolvedStation.name,
+              operationStationType: resolvedStation.type,
+            }
+          : isNoneOperationStationSelectValue(draft.station)
+            ? {
+                operationStationId: null,
+                operationStationName: null,
+                operationStationType: null,
+                station: "none",
+              }
+            : { station: payload.station }),
+        productKind: draft.productKind,
         active: payload.active,
         unit: payload.unidad,
         currentStock: payload.stock_actual,
         minStock: payload.stock_minimo,
         costPerUnit: payload.coste_unitario,
+        ...(purchaseNormalized
+          ? {
+              purchaseCost: purchaseNormalized.purchaseCost,
+              purchaseQuantity: purchaseNormalized.purchaseQuantity,
+              purchaseUnit: purchaseNormalized.purchaseUnit,
+            }
+          : {}),
+        ...(calculatedUnitCost
+          ? {
+              unitCost: calculatedUnitCost.unitCost,
+              unitCostUnit: calculatedUnitCost.unitCostUnit,
+            }
+          : {}),
         supplierName: payload.supplierName,
       });
+      setSaveFeedbackById((prev) => ({ ...prev, [key]: "saved" }));
     } catch (e) {
       setError(e instanceof Error ? e.message : t("inventory.errorSave"));
+      setSaveFeedbackById((prev) => ({ ...prev, [key]: "error" }));
     } finally {
       setSavingById((prev) => ({ ...prev, [key]: false }));
     }
@@ -341,44 +760,76 @@ export default function InventarioStockSection() {
 
   const rowsForRender = useMemo(() => items, [items]);
   const filteredRows = useMemo(() => {
+    let rows = rowsForRender;
+    if (productKindFilter !== "all") {
+      rows = rows.filter((item) =>
+        matchesProductKindListFilter(item.productKind, productKindFilter),
+      );
+    }
+    if (productFamilyFilter !== "all") {
+      rows = rows.filter((item) =>
+        matchesProductFamilyListFilter(item, productFamilyFilter),
+      );
+    }
+    if (stockLevelFilter !== "all") {
+      rows = rows.filter((item) =>
+        matchesStockLevelListFilter(stockStatusInputFromRow(item), stockLevelFilter),
+      );
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return rowsForRender;
-    return rowsForRender.filter((item) =>
+    if (!q) return rows;
+    return rows.filter((item) =>
       [item.nombre, item.unidad, item.station, item.supplierName]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
         .includes(q),
     );
-  }, [rowsForRender, search]);
+  }, [rowsForRender, search, productKindFilter, productFamilyFilter, stockLevelFilter]);
+
+  const listCountLabel = useMemo(() => {
+    const total = rowsForRender.length;
+    const shown = filteredRows.length;
+    const filtered =
+      productKindFilter !== "all" ||
+      productFamilyFilter !== "all" ||
+      stockLevelFilter !== "all" ||
+      search.trim().length > 0;
+    if (!filtered) return `${total} productos configurables`;
+    return `${shown} de ${total} productos`;
+  }, [
+    rowsForRender.length,
+    filteredRows.length,
+    productKindFilter,
+    productFamilyFilter,
+    stockLevelFilter,
+    search,
+  ]);
   const selectedRow = useMemo(
     () => rowsForRender.find((item) => String(item.id) === selectedId) ?? null,
     [rowsForRender, selectedId],
   );
 
+  const activeCartaCategorias = useMemo(
+    () =>
+      [...cartaCategorias]
+        .filter((c) => c.isActive)
+        .sort(
+          (a, b) =>
+            a.sortOrder - b.sortOrder ||
+            a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
+        ),
+    [cartaCategorias],
+  );
+
   const selectedKey = selectedRow ? String(selectedRow.id) : "";
   const selectedDraft = selectedRow
-    ? drafts[selectedKey] ?? {
-        nombre: selectedRow.nombre ?? "",
-        categoryId: selectedRow.categoryId ?? "",
-        station: selectedRow.station ?? "",
-        active: selectedRow.active,
-        unidad: selectedRow.unidad ?? "kg",
-        stock_actual:
-          selectedRow.stock_actual == null
-            ? ""
-            : String(roundTo(selectedRow.stock_actual, 3)),
-        coste_unitario:
-          selectedRow.coste_unitario == null
-            ? ""
-            : String(roundTo(selectedRow.coste_unitario, 2)),
-        stock_minimo:
-          selectedRow.stock_minimo == null
-            ? ""
-            : String(roundTo(selectedRow.stock_minimo, 3)),
-        supplierName: selectedRow.supplierName ?? "",
-      }
+    ? (drafts[selectedKey] ?? draftFromRow(selectedRow))
     : null;
+
+  const selectedIsDirty = selectedRow
+    ? isInventoryDraftDirty(selectedRow, selectedDraft!)
+    : false;
 
   const renderConfigPanel = () => {
     if (!selectedRow || !selectedDraft) {
@@ -391,9 +842,60 @@ export default function InventarioStockSection() {
 
     const isSaving = Boolean(savingById[selectedKey]);
     const isDeleting = Boolean(deletingById[selectedKey]);
-    const stationTrim = selectedDraft.station.trim();
+    const saveFeedback = saveFeedbackById[selectedKey];
+    const saveButtonDisabled =
+      usingMock || isSaving || isDeleting || !selectedIsDirty || !canEditInventory;
+    const saveButtonLabel = isSaving
+      ? "Guardando…"
+      : saveFeedback === "saved"
+        ? "Guardado"
+        : saveFeedback === "error"
+          ? "Error al guardar"
+          : "Guardar cambios";
+    const stationTrim = resolveProductOperationStationLabel(
+      {
+        operationStationId: selectedRow.operationStationId,
+        operationStationName: selectedRow.operationStationName,
+        station: selectedRow.station,
+        preparationArea: selectedRow.station,
+      },
+      operationStations,
+    );
+    const productKindLabel = getProductKindDisplayLabel(selectedRow.productKind);
+    const productFamilyLabel = getProductFamilyLabel(selectedRow);
+    const legacyCategoryLabel = inventoryLegacyCategoryLabel(
+      selectedRow,
+      cartaCategorias,
+    );
     const displayName = selectedDraft.nombre.trim() || "Producto sin nombre";
     const headInitial = displayName.charAt(0).toUpperCase() || "P";
+    const inspectorStockStatus = resolveStockStatus({
+      currentStock:
+        selectedDraft.stock_actual.trim() === ""
+          ? null
+          : parseNumber(selectedDraft.stock_actual, 0),
+      minStock:
+        selectedDraft.stock_minimo.trim() === ""
+          ? null
+          : parseNumber(selectedDraft.stock_minimo, 0),
+    });
+    const inspectorUnitLabel = selectedDraft.unidad.trim() || "ud";
+    const draftPurchaseNormalized = normalizePurchaseCostInput({
+      purchaseCost: selectedDraft.purchase_cost,
+      purchaseQuantity: selectedDraft.purchase_quantity,
+      purchaseUnit: selectedDraft.purchase_unit || undefined,
+    });
+    const draftCalculatedUnitCost = draftPurchaseNormalized
+      ? calculateInventoryUnitCost(draftPurchaseNormalized)
+      : null;
+    const draftPurchaseEquation = formatPurchaseCostEquation(
+      draftPurchaseNormalized,
+      draftCalculatedUnitCost,
+    );
+    const storedUnitCostLabel =
+      selectedRow.unit_cost != null && selectedRow.unit_cost_unit
+        ? getInventoryUnitCostLabel(selectedRow.unit_cost, selectedRow.unit_cost_unit as "unit" | "ml" | "g")
+        : null;
 
     return (
       <div className="hostly-inventory-config-panel">
@@ -418,7 +920,18 @@ export default function InventarioStockSection() {
                 <span className="hostly-inventory-head-badge is-neutral">
                   {selectedDraft.unidad || "ud"}
                 </span>
-                {stationTrim ? (
+                <span className="hostly-inventory-head-badge is-neutral">
+                  {productKindLabel}
+                </span>
+                <span
+                  className={`hostly-inventory-head-badge hostly-inventory-stock-status ${stockStatusBadgeClassName(inspectorStockStatus)}`}
+                >
+                  {formatStockStatusLabel(inspectorStockStatus)}
+                </span>
+                <span className="hostly-inventory-head-badge is-neutral">
+                  Familia: {productFamilyLabel}
+                </span>
+                {stationTrim && stationTrim !== "Sin estación" ? (
                   <span className="hostly-inventory-head-badge is-neutral">{stationTrim}</span>
                 ) : null}
               </div>
@@ -427,9 +940,45 @@ export default function InventarioStockSection() {
           <button
             type="button"
             className="hostly-inventory-mobile-close"
-            onClick={() => setMobilePanelOpen(false)}
+            onClick={tryCloseInspector}
           >
             Cerrar
+          </button>
+        </div>
+
+        <div
+          className="hostly-inventory-save-strip"
+          data-dirty={selectedIsDirty ? "true" : "false"}
+          data-feedback={saveFeedback ?? "idle"}
+        >
+          <div className="hostly-inventory-save-strip-meta">
+            {selectedIsDirty ? (
+              <span className="hostly-inventory-unsaved-hint" role="status">
+                Cambios sin guardar
+              </span>
+            ) : saveFeedback === "saved" ? (
+              <span className="hostly-inventory-save-ok" role="status">
+                Cambios guardados en Firestore
+              </span>
+            ) : (
+              <span className="hostly-inventory-save-idle hostly-muted">
+                Sin cambios pendientes
+              </span>
+            )}
+            {saveFeedback === "error" && error ? (
+              <span className="hostly-inventory-save-error" role="alert">
+                {error}
+              </span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="hostly-inventory-primary-btn hostly-inventory-save-strip-btn"
+            disabled={saveButtonDisabled}
+            title={capabilityDeniedTitle(canEditInventory)}
+            onClick={() => void guardarFila(selectedRow.id)}
+          >
+            {saveButtonLabel}
           </button>
         </div>
 
@@ -448,21 +997,62 @@ export default function InventarioStockSection() {
               </label>
               <label className="hostly-inventory-field">
                 <span className="hostly-inventory-field-label">Categoría</span>
-                <input
+                <select
                   value={selectedDraft.categoryId}
-                  onChange={(e) => updateDraft(selectedRow.id, { categoryId: e.target.value })}
-                  placeholder="Sin categoría"
+                  onChange={(e) =>
+                    updateDraft(selectedRow.id, { categoryId: e.target.value })
+                  }
+                  className="hostly-inventory-field-input"
+                  style={{ cursor: "pointer" }}
+                >
+                  <option value="">Sin categoría de carta</option>
+                  {activeCartaCategorias.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {legacyCategoryLabel ? (
+                  <p className="mt-1 text-xs text-amber-800">
+                    Legacy: {legacyCategoryLabel}
+                  </p>
+                ) : null}
+                <p className="mt-1 text-xs text-slate-500">
+                  Al elegir una categoría, el producto hereda su familia (Bebidas,
+                  Comida, etc.) en el catálogo central.
+                </p>
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">
+                  Estación operativa
+                </span>
+                <OperationStationProductSelect
+                  restaurantId={restaurantId}
+                  value={selectedDraft.station}
+                  onChange={(value) =>
+                    updateDraft(selectedRow.id, { station: value })
+                  }
                   className="hostly-inventory-field-input"
                 />
               </label>
               <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">Estación</span>
-                <input
-                  value={selectedDraft.station}
-                  onChange={(e) => updateDraft(selectedRow.id, { station: e.target.value })}
-                  placeholder="Barra, cocina, sala…"
+                <span className="hostly-inventory-field-label">Tipo de producto</span>
+                <select
+                  value={selectedDraft.productKind}
+                  onChange={(e) =>
+                    updateDraft(selectedRow.id, {
+                      productKind: e.target.value as ProductKind,
+                    })
+                  }
                   className="hostly-inventory-field-input"
-                />
+                  style={{ cursor: "pointer" }}
+                >
+                  {PRODUCT_KIND_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="hostly-inventory-switch-row hostly-inventory-switch-row--compact">
                 <span className="hostly-inventory-switch-label">
@@ -514,7 +1104,9 @@ export default function InventarioStockSection() {
                 />
               </label>
               <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">{t("common.minStock")}</span>
+                <span className="hostly-inventory-field-label">
+                  {t("common.minStock")} ({inspectorUnitLabel})
+                </span>
                 <input
                   type="number"
                   step="any"
@@ -522,10 +1114,14 @@ export default function InventarioStockSection() {
                   value={selectedDraft.stock_minimo}
                   onChange={(e) => updateDraft(selectedRow.id, { stock_minimo: e.target.value })}
                   className="hostly-inventory-field-input"
+                  placeholder="Sin umbral"
                 />
+                <p className="hostly-inventory-field-hint">
+                  Misma unidad que el stock actual. Aviso operativo; no bloquea TPV.
+                </p>
               </label>
               <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">Coste por unidad</span>
+                <span className="hostly-inventory-field-label">Coste legacy (€/ud stock)</span>
                 <input
                   type="number"
                   step="0.01"
@@ -536,6 +1132,9 @@ export default function InventarioStockSection() {
                   }
                   className="hostly-inventory-field-input"
                 />
+                <p className="hostly-inventory-field-hint">
+                  Campo histórico; el coste operativo se calcula en la sección de compra.
+                </p>
               </label>
               <label className="hostly-inventory-field hostly-inventory-field--full">
                 <span className="hostly-inventory-field-label">Proveedor</span>
@@ -549,40 +1148,184 @@ export default function InventarioStockSection() {
             </div>
           </section>
 
+          <section className="hostly-inventory-inspector-block">
+            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">
+              Coste de compra
+            </h3>
+            <div className="hostly-inventory-fiche-grid">
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">Coste compra (€)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  inputMode="decimal"
+                  value={selectedDraft.purchase_cost}
+                  onChange={(e) =>
+                    updateDraft(selectedRow.id, { purchase_cost: e.target.value })
+                  }
+                  className="hostly-inventory-field-input"
+                  placeholder="Ej. 18"
+                />
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">Cantidad compra</span>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  inputMode="decimal"
+                  value={selectedDraft.purchase_quantity}
+                  onChange={(e) =>
+                    updateDraft(selectedRow.id, { purchase_quantity: e.target.value })
+                  }
+                  className="hostly-inventory-field-input"
+                  placeholder="Ej. 700"
+                />
+              </label>
+              <label className="hostly-inventory-field">
+                <span className="hostly-inventory-field-label">Unidad compra</span>
+                <select
+                  value={selectedDraft.purchase_unit}
+                  onChange={(e) =>
+                    updateDraft(selectedRow.id, {
+                      purchase_unit: e.target.value as PurchaseUnit | "",
+                    })
+                  }
+                  className="hostly-inventory-field-input"
+                  style={{ cursor: "pointer" }}
+                >
+                  <option value="">Seleccionar…</option>
+                  {PURCHASE_UNIT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="hostly-inventory-field hostly-inventory-field--full">
+                <span className="hostly-inventory-field-label">Coste unitario calculado</span>
+                <div className="hostly-inventory-cost-summary">
+                  {draftPurchaseEquation ? (
+                    <p className="hostly-inventory-cost-equation">{draftPurchaseEquation}</p>
+                  ) : storedUnitCostLabel ? (
+                    <p className="hostly-inventory-cost-equation">{storedUnitCostLabel}</p>
+                  ) : (
+                    <p className="hostly-inventory-field-hint">
+                      Indica coste, cantidad y unidad de compra para calcular €/ml, €/g o €/ud.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section className="hostly-inventory-inspector-block hostly-inventory-inspector-block--movements">
-            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">Últimos movimientos</h3>
-            {stockMovements.length === 0 ? (
-              <p className="hostly-inventory-movements-empty">
-                Sin movimientos. Al cambiar el stock y guardar, aparecerán aquí.
-              </p>
+            <div className="hostly-inventory-inspector-section-head">
+              <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">
+                Movimientos de stock
+              </h3>
+              <Link
+                href={productTimelineHref(selectedKey)}
+                className="hostly-inventory-timeline-link"
+                prefetch
+              >
+                Ver timeline
+              </Link>
+            </div>
+            {centralStockMovements.length === 0 && legacyStockMovements.length === 0 ? (
+              <p className="hostly-inventory-movements-empty">Sin movimientos recientes</p>
             ) : (
-              <ul className="hostly-inventory-movements-list">
-                {stockMovements.map((m) => {
-                  const when =
-                    m.createdAtMs != null
-                      ? movementDateFmt.format(m.createdAtMs)
-                      : "—";
-                  const deltaStr = formatMovementDelta(m.delta);
-                  const finalStr = `${roundTo(m.newStock, 3)} ${m.unit}`;
-                  const deltaTone =
-                    m.delta > 0 ? "plus" : m.delta < 0 ? "minus" : "zero";
-                  return (
-                    <li key={m.id} className="hostly-inventory-movements-row">
-                      <span className="hostly-inventory-movements-date">{when}</span>
-                      <span
-                        className="hostly-inventory-movements-delta"
-                        data-sign={deltaTone}
-                      >
-                        {deltaStr}
-                      </span>
-                      <span className="hostly-inventory-movements-final" title="Stock tras el movimiento">
-                        → {finalStr}
-                      </span>
-                      <span className="hostly-inventory-movements-kind">{stockMovementKindLabel(m)}</span>
-                    </li>
-                  );
-                })}
-              </ul>
+              <>
+                {centralStockMovements.length > 0 ? (
+                  <ul className="hostly-inventory-movements-list">
+                    {centralStockMovements.map((m) => {
+                      const when =
+                        m.createdAtMs != null
+                          ? movementDateFmt.format(m.createdAtMs)
+                          : "—";
+                      const deltaStr = `${formatMovementDelta(m.quantityDelta)} ${m.unit}`;
+                      const deltaTone =
+                        m.quantityDelta > 0
+                          ? "plus"
+                          : m.quantityDelta < 0
+                            ? "minus"
+                            : "zero";
+                      const context = centralMovementContextLabel(m);
+                      const stockRange = centralMovementStockRange(m);
+                      return (
+                        <li
+                          key={`central-${m.id}`}
+                          className="hostly-inventory-movements-row hostly-inventory-movements-row--central"
+                        >
+                          <div className="hostly-inventory-movements-main">
+                            <div className="hostly-inventory-movements-head">
+                              <span className="hostly-inventory-movements-date">{when}</span>
+                              <span
+                                className="hostly-inventory-movements-delta"
+                                data-sign={deltaTone}
+                              >
+                                {deltaStr}
+                              </span>
+                              <span className="hostly-inventory-movements-kind">
+                                {centralStockMovementSourceLabel(m.source, m.type)}
+                              </span>
+                            </div>
+                            {context ? (
+                              <p className="hostly-inventory-movements-context">{context}</p>
+                            ) : null}
+                            {stockRange ? (
+                              <p className="hostly-inventory-movements-stock-range">{stockRange}</p>
+                            ) : null}
+                            {m.applyError ? (
+                              <p className="hostly-inventory-movements-apply-error" role="alert">
+                                {m.applyError}
+                              </p>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+                {legacyStockMovements.length > 0 ? (
+                  <div className="hostly-inventory-movements-legacy">
+                    <p className="hostly-inventory-movements-legacy-title">Movimientos antiguos</p>
+                    <ul className="hostly-inventory-movements-list">
+                      {legacyStockMovements.map((m) => {
+                        const when =
+                          m.createdAtMs != null
+                            ? movementDateFmt.format(m.createdAtMs)
+                            : "—";
+                        const deltaStr = formatMovementDelta(m.delta);
+                        const finalStr = `${roundTo(m.newStock, 3)} ${m.unit}`;
+                        const deltaTone =
+                          m.delta > 0 ? "plus" : m.delta < 0 ? "minus" : "zero";
+                        return (
+                          <li key={`legacy-${m.id}`} className="hostly-inventory-movements-row">
+                            <span className="hostly-inventory-movements-date">{when}</span>
+                            <span
+                              className="hostly-inventory-movements-delta"
+                              data-sign={deltaTone}
+                            >
+                              {deltaStr}
+                            </span>
+                            <span
+                              className="hostly-inventory-movements-final"
+                              title="Stock tras el movimiento"
+                            >
+                              → {finalStr}
+                            </span>
+                            <span className="hostly-inventory-movements-kind">
+                              {stockMovementKindLabel(m)}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
             )}
           </section>
 
@@ -615,11 +1358,11 @@ export default function InventarioStockSection() {
         <div className="hostly-inventory-panel-footer">
           <button
             type="button"
-            onClick={() => guardarFila(selectedRow.id)}
-            disabled={isSaving}
+            onClick={() => void guardarFila(selectedRow.id)}
+            disabled={saveButtonDisabled}
             className="hostly-inventory-primary-btn"
           >
-            {isSaving ? t("common.saving") : t("common.save")}
+            {saveButtonLabel}
           </button>
           <button
             type="button"
@@ -645,7 +1388,7 @@ export default function InventarioStockSection() {
         <div className="hostly-inventory-toolbar">
           <div>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#526b7d" }}>
-              {rowsForRender.length} productos configurables
+              {listCountLabel}
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -675,6 +1418,66 @@ export default function InventarioStockSection() {
                 className="hostly-inventory-search"
               />
             </div>
+            <div
+              className="hostly-inventory-kind-filters"
+              role="group"
+              aria-label="Filtrar por tipo de inventario"
+            >
+              <span className="hostly-inventory-filter-label">Tipo</span>
+              {PRODUCT_KIND_LIST_FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`hostly-inventory-kind-filter${
+                    productKindFilter === opt.id ? " is-active" : ""
+                  }`}
+                  aria-pressed={productKindFilter === opt.id}
+                  onClick={() => setProductKindFilter(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div
+              className="hostly-inventory-family-filters"
+              role="group"
+              aria-label="Filtrar por familia de producto"
+            >
+              <span className="hostly-inventory-filter-label">Familia</span>
+              {PRODUCT_FAMILY_LIST_FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`hostly-inventory-family-filter${
+                    productFamilyFilter === opt.id ? " is-active" : ""
+                  }`}
+                  aria-pressed={productFamilyFilter === opt.id}
+                  onClick={() => setProductFamilyFilter(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div
+              className="hostly-inventory-stock-filters"
+              role="group"
+              aria-label="Filtrar por nivel de stock"
+            >
+              <span className="hostly-inventory-filter-label">Stock</span>
+              {STOCK_LEVEL_LIST_FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`hostly-inventory-stock-filter${
+                    stockLevelFilter === opt.id ? " is-active" : ""
+                  }`}
+                  aria-pressed={stockLevelFilter === opt.id}
+                  onClick={() => setStockLevelFilter(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <div className="hostly-inventory-list">
               {filteredRows.length === 0 ? (
                 <div className="hostly-inventory-empty">
@@ -683,19 +1486,17 @@ export default function InventarioStockSection() {
               ) : (
                 filteredRows.map((item) => {
                   const key = String(item.id);
-                  const stock = item.stock_actual ?? 0;
-                  const min = item.stock_minimo ?? 0;
-                  const lowStock = min > 0 && stock <= min;
+                  const stock = item.stock_actual;
+                  const stockStatus = resolveStockStatus(stockStatusInputFromRow(item));
+                  const stockBadgeLabel = formatStockStatusLabel(stockStatus);
+                  const stockBadgeClass = stockStatusBadgeClassName(stockStatus);
                   const selected = key === selectedId;
                   return (
                     <button
                       key={key}
                       type="button"
                       className={`hostly-inventory-product-row${selected ? " is-selected" : ""}`}
-                      onClick={() => {
-                        setSelectedId(key);
-                        setMobilePanelOpen(true);
-                      }}
+                      onClick={() => trySelectProduct(key)}
                     >
                       <span className="hostly-inventory-row-image">P</span>
                       <span className="hostly-inventory-row-main">
@@ -708,10 +1509,14 @@ export default function InventarioStockSection() {
                       </span>
                       <span className="hostly-inventory-row-side">
                         <span className="hostly-inventory-row-stock">
-                          {roundTo(stock, 3)} {item.unidad ?? "ud"}
+                          {stock == null
+                            ? "—"
+                            : `${roundTo(stock, 3)} ${item.unidad ?? "ud"}`}
                         </span>
-                        <span className={`hostly-inventory-badge${lowStock ? " is-low" : ""}`}>
-                          {lowStock ? "Stock bajo" : item.active ? "Activo" : "Inactivo"}
+                        <span
+                          className={`hostly-inventory-badge hostly-inventory-stock-badge ${stockBadgeClass}`}
+                        >
+                          {stockBadgeLabel}
                         </span>
                       </span>
                     </button>
@@ -791,6 +1596,79 @@ export default function InventarioStockSection() {
           color: #102033;
           font-weight: 700;
         }
+        .hostly-inventory-kind-filters {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          padding: 8px 10px;
+          border-bottom: 1px solid rgba(77, 107, 128, 0.1);
+          background: rgba(248, 251, 254, 0.88);
+        }
+        .hostly-inventory-kind-filter {
+          flex: 0 1 auto;
+          border: 1px solid rgba(77, 107, 128, 0.18);
+          border-radius: 999px;
+          padding: 6px 11px;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+          background: #fff;
+          color: #526b7d;
+          cursor: pointer;
+          min-height: 32px;
+          touch-action: manipulation;
+          transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+        }
+        .hostly-inventory-kind-filter:hover,
+        .hostly-inventory-family-filter:hover {
+          border-color: rgba(79, 159, 200, 0.45);
+          color: #2d5f7c;
+        }
+        .hostly-inventory-kind-filter.is-active {
+          background: #4f9fc8;
+          border-color: #4f9fc8;
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(79, 159, 200, 0.28);
+        }
+        .hostly-inventory-family-filter.is-active {
+          background: #3d7a9a;
+          border-color: #3d7a9a;
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(61, 122, 154, 0.26);
+        }
+        .hostly-inventory-stock-filters {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          padding: 8px 10px;
+          border-bottom: 1px solid rgba(77, 107, 128, 0.1);
+          background: rgba(251, 252, 254, 0.9);
+        }
+        .hostly-inventory-stock-filter {
+          flex: 0 1 auto;
+          border: 1px solid rgba(77, 107, 128, 0.18);
+          border-radius: 999px;
+          padding: 6px 11px;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+          background: #fff;
+          color: #526b7d;
+          cursor: pointer;
+          min-height: 32px;
+          touch-action: manipulation;
+          transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+        }
+        .hostly-inventory-stock-filter:hover {
+          border-color: rgba(79, 159, 200, 0.45);
+          color: #2d5f7c;
+        }
+        .hostly-inventory-stock-filter.is-active {
+          background: #64748b;
+          border-color: #64748b;
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(100, 116, 139, 0.24);
+        }
         .hostly-inventory-list {
           display: grid;
           max-height: 650px;
@@ -868,6 +1746,47 @@ export default function InventarioStockSection() {
           background: rgba(251, 230, 198, 0.9);
           color: #9a5d11;
         }
+        .hostly-inventory-stock-badge.is-ok,
+        .hostly-inventory-stock-status.is-ok {
+          background: rgba(216, 239, 226, 0.78);
+          color: #2f6a45;
+        }
+        .hostly-inventory-stock-badge.is-low,
+        .hostly-inventory-stock-status.is-low {
+          background: rgba(251, 230, 198, 0.92);
+          color: #9a5d11;
+        }
+        .hostly-inventory-stock-badge.is-out,
+        .hostly-inventory-stock-status.is-out {
+          background: rgba(254, 226, 226, 0.92);
+          color: #b91c1c;
+        }
+        .hostly-inventory-stock-badge.is-unknown,
+        .hostly-inventory-stock-status.is-unknown {
+          background: rgba(241, 245, 249, 0.92);
+          color: #64748b;
+        }
+        .hostly-inventory-field-hint {
+          margin: 0;
+          font-size: 10px;
+          font-weight: 600;
+          color: rgba(100, 116, 139, 0.88);
+          line-height: 1.3;
+        }
+        .hostly-inventory-cost-summary {
+          padding: 7px 8px;
+          border-radius: 8px;
+          border: 1px solid var(--hostly-table-divider-faint);
+          background: color-mix(in srgb, var(--hostly-surface-page-soft) 55%, transparent);
+        }
+        .hostly-inventory-cost-equation {
+          margin: 0;
+          font-size: 12px;
+          font-weight: 750;
+          color: #0f766e;
+          font-variant-numeric: tabular-nums;
+          line-height: 1.35;
+        }
         .hostly-inventory-config-panel {
           display: flex;
           flex-direction: column;
@@ -910,6 +1829,73 @@ export default function InventarioStockSection() {
           padding: 7px 10px;
           border-bottom: 1px solid var(--hostly-table-divider-faint);
           background: color-mix(in srgb, var(--hostly-surface-page-soft) 55%, transparent);
+        }
+        .hostly-inventory-save-strip {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          padding: 10px 12px;
+          border-bottom: 1px solid var(--hostly-table-divider-faint);
+          background: color-mix(in srgb, #f0f9ff 72%, white);
+          position: sticky;
+          top: 0;
+          z-index: 2;
+        }
+        .hostly-inventory-save-strip[data-dirty="true"] {
+          background: color-mix(in srgb, #fffbeb 78%, white);
+          border-bottom-color: rgba(217, 119, 6, 0.22);
+        }
+        .hostly-inventory-save-strip-meta {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          min-width: 0;
+          flex: 1;
+        }
+        .hostly-inventory-unsaved-hint {
+          font-size: 12px;
+          font-weight: 700;
+          color: #b45309;
+          letter-spacing: 0.01em;
+        }
+        .hostly-inventory-save-ok {
+          font-size: 12px;
+          font-weight: 700;
+          color: #047857;
+        }
+        .hostly-inventory-save-idle {
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .hostly-inventory-save-error {
+          font-size: 11px;
+          font-weight: 600;
+          color: #b91c1c;
+          line-height: 1.35;
+        }
+        .hostly-inventory-save-strip-btn {
+          flex-shrink: 0;
+          min-width: 148px;
+          min-height: 40px;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .hostly-inventory-save-strip-btn:disabled {
+          opacity: 0.52;
+          cursor: not-allowed;
+        }
+        .hostly-inventory-save-strip[data-feedback="saved"]
+          .hostly-inventory-save-strip-btn:not(:disabled) {
+          background: #047857;
+          border-color: #047857;
+        }
+        .hostly-inventory-save-strip[data-feedback="error"]
+          .hostly-inventory-save-strip-btn:not(:disabled) {
+          background: #b91c1c;
+          border-color: #b91c1c;
         }
         .hostly-inventory-head-main {
           display: flex;
@@ -1036,6 +2022,30 @@ export default function InventarioStockSection() {
           letter-spacing: 0.1em;
           line-height: 1.2;
           color: color-mix(in srgb, var(--hostly-ink-muted) 88%, transparent);
+        }
+        .hostly-inventory-inspector-section-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 5px;
+        }
+        .hostly-inventory-inspector-section-head .hostly-inventory-inspector-section-title {
+          margin: 0;
+        }
+        .hostly-inventory-timeline-link {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--hostly-ink-strong);
+          text-decoration: none;
+          padding: 4px 8px;
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.28);
+          background: var(--hostly-surface-card-solid);
+          white-space: nowrap;
+        }
+        .hostly-inventory-timeline-link:hover {
+          background: color-mix(in srgb, var(--hostly-surface-card-solid) 88%, #3b82f6 12%);
         }
         .hostly-inventory-fiche-grid {
           display: grid;
@@ -1211,6 +2221,54 @@ export default function InventarioStockSection() {
           border: 1px solid var(--hostly-table-divider-faint);
           font-size: 11px;
         }
+        .hostly-inventory-movements-row--central {
+          grid-template-columns: 1fr;
+          align-items: stretch;
+          padding: 6px 8px;
+        }
+        .hostly-inventory-movements-main {
+          display: grid;
+          gap: 3px;
+          min-width: 0;
+        }
+        .hostly-inventory-movements-head {
+          display: grid;
+          grid-template-columns: minmax(0, 1.1fr) auto auto;
+          gap: 6px 8px;
+          align-items: center;
+        }
+        .hostly-inventory-movements-context,
+        .hostly-inventory-movements-stock-range {
+          margin: 0;
+          font-size: 10px;
+          font-weight: 650;
+          color: #64748b;
+          line-height: 1.3;
+        }
+        .hostly-inventory-movements-stock-range {
+          font-variant-numeric: tabular-nums;
+          color: #475569;
+        }
+        .hostly-inventory-movements-apply-error {
+          margin: 0;
+          font-size: 10px;
+          font-weight: 700;
+          color: #b91c1c;
+          line-height: 1.3;
+        }
+        .hostly-inventory-movements-legacy {
+          margin-top: 10px;
+          padding-top: 8px;
+          border-top: 1px dashed var(--hostly-table-divider-faint);
+        }
+        .hostly-inventory-movements-legacy-title {
+          margin: 0 0 6px;
+          font-size: 9px;
+          font-weight: 750;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(100, 116, 139, 0.85);
+        }
         .hostly-inventory-movements-date {
           color: #64748b;
           font-weight: 650;
@@ -1360,6 +2418,10 @@ export default function InventarioStockSection() {
             flex-direction: column;
           }
           .hostly-inventory-movements-row {
+            grid-template-columns: 1fr;
+            justify-items: start;
+          }
+          .hostly-inventory-movements-head {
             grid-template-columns: 1fr;
             justify-items: start;
           }

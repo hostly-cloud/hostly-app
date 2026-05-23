@@ -6,7 +6,10 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getStorage, type Storage } from "firebase-admin/storage";
 import fs from "node:fs";
+
+type AdminStorageBucket = ReturnType<Storage["bucket"]>;
 
 let cached: Firestore | null | undefined;
 
@@ -132,4 +135,45 @@ export function getHostlyFirestore(): Firestore | null {
 
 export function isFirestoreConfigured(): boolean {
   return getFirestoreAdminStatus().ok;
+}
+
+let cachedStorage: Storage | null | undefined;
+let cachedBucket: AdminStorageBucket | null | undefined;
+
+export function getHostlyStorageBucketName(): string | null {
+  const fromEnv = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim();
+  if (fromEnv) return fromEnv;
+  const status = getFirestoreAdminStatus();
+  if (status.ok && status.projectId) {
+    return `${status.projectId}.firebasestorage.app`;
+  }
+  return null;
+}
+
+/** Storage Admin (descarga OCR). Requiere la misma app Admin que Firestore. */
+export function getHostlyStorageBucket(): AdminStorageBucket | null {
+  if (cachedBucket !== undefined) return cachedBucket;
+  if (!getHostlyFirestore()) {
+    cachedBucket = null;
+    return null;
+  }
+  const bucketName = getHostlyStorageBucketName();
+  if (!bucketName) {
+    cachedBucket = null;
+    return null;
+  }
+  try {
+    if (cachedStorage === undefined) {
+      cachedStorage = getStorage();
+    }
+    if (!cachedStorage) {
+      cachedBucket = null;
+      return null;
+    }
+    cachedBucket = cachedStorage.bucket(bucketName);
+    return cachedBucket;
+  } catch {
+    cachedBucket = null;
+    return null;
+  }
 }

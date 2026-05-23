@@ -58,9 +58,12 @@ export type ServidosArchiveToggleProps = {
 
 export default function ServiceMetricsBar({
   scope,
+  selectedOperationStationId,
   servidosArchiveToggle,
 }: {
   scope: ServiceScope;
+  /** Mismo valor que el selector KDS; por defecto todas las estaciones del scope. */
+  selectedOperationStationId?: string;
   servidosArchiveToggle?: ServidosArchiveToggleProps;
 }) {
   const { restaurantId, ready: authReady, user } = useAuth();
@@ -118,8 +121,12 @@ export default function ServiceMetricsBar({
       if (!matchesOrder(o)) continue;
       for (const it of o.items) items.push(it);
     }
-    return computeServiceMetrics(items, scope);
-  }, [orders, scope, matchesOrder]);
+    return computeServiceMetrics(
+      items,
+      scope,
+      selectedOperationStationId,
+    );
+  }, [orders, scope, matchesOrder, selectedOperationStationId]);
 
   return (
     <section

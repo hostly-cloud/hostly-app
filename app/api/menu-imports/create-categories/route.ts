@@ -1,0 +1,86 @@
+import { NextResponse } from "next/server";
+import type { CartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import {
+  isAuthErrorResponse,
+  requireAuthenticatedRestaurant,
+} from "@/lib/server/auth/require-authenticated-restaurant";
+import {
+  CreateMenuImportCategoriesError,
+  createMenuImportCategories,
+  type CreateMenuImportCategoryInput,
+} from "@/lib/server/menu-imports/create-menu-import-categories";
+
+function jsonError(status: number, error: string, details?: string) {
+  return NextResponse.json({ ok: false, error, details: details ?? null }, { status });
+}
+
+function readCategoryInput(raw: unknown): CreateMenuImportCategoryInput | null {
+  if (!raw || typeof raw !== "object") return null;
+  const rec = raw as Record<string, unknown>;
+  const name = typeof rec.name === "string" ? rec.name.trim() : "";
+  if (!name) return null;
+
+  const suggestedType =
+    rec.suggestedType === "food" || rec.suggestedType === "drink" || rec.suggestedType === "general"
+      ? (rec.suggestedType as CartaCategoriaTipo)
+      : undefined;
+
+  const suggestedStation =
+    rec.suggestedStation === "kitchen" ||
+    rec.suggestedStation === "bar" ||
+    rec.suggestedStation === "cocktail" ||
+    rec.suggestedStation === "none"
+      ? rec.suggestedStation
+      : undefined;
+
+  return { name, suggestedType, suggestedStation };
+}
+
+export async function POST(req: Request) {
+  try {
+    const authCtx = await requireAuthenticatedRestaurant(req);
+    if (isAuthErrorResponse(authCtx)) {
+      return authCtx;
+    }
+
+    const body = (await req.json().catch(() => null)) as {
+      draftId?: string;
+      categories?: unknown;
+    } | null;
+
+    if (!body || typeof body !== "object") {
+      return jsonError(400, "INVALID_JSON");
+    }
+
+    const draftId = typeof body.draftId === "string" ? body.draftId.trim() : "";
+    if (!draftId) {
+      return jsonError(400, "MISSING_DRAFT_ID", "Envía { draftId, categories[] }");
+    }
+
+    const categoriesRaw = Array.isArray(body.categories) ? body.categories : [];
+    const categories = categoriesRaw
+      .map(readCategoryInput)
+      .filter((c): c is CreateMenuImportCategoryInput => c != null);
+
+    if (categories.length === 0) {
+      return jsonError(400, "MISSING_CATEGORIES", "Ninguna categoría válida en la solicitud");
+    }
+
+    const result = await createMenuImportCategories({
+      db: authCtx.db,
+      restaurantId: authCtx.restaurantId,
+      draftId,
+      userId: authCtx.uid,
+      categories,
+    });
+
+    return NextResponse.json({ ok: true, result });
+  } catch (e) {
+    if (e instanceof CreateMenuImportCategoriesError) {
+      return jsonError(e.httpStatus, e.code, e.message);
+    }
+    const message = e instanceof Error ? e.message : "CREATE_CATEGORIES_FAILED";
+    console.error("[api/menu-imports/create-categories]", message, e);
+    return jsonError(500, "CREATE_CATEGORIES_FAILED", message);
+  }
+}

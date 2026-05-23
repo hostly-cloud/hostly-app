@@ -1,15 +1,23 @@
 "use client";
 
-import { useCallback } from "react";
 import Link from "next/link";
-import OrderItemsBoard, {
-  type BoardItem,
-} from "@/components/kds/order-items-board";
+import OrderItemsBoard from "@/components/kds/order-items-board";
+import OperationStationKdsFilter from "@/components/kds/operation-station-kds-filter";
 import ServiceMetricsBar from "@/components/kds/service-metrics-bar";
-import { isBarItem } from "@/lib/kds/bar-classification";
+import { KdsConnectivityPill } from "@/components/system/connectivity-status-pill";
+import { useConnectivityStatus } from "@/hooks/useConnectivityStatus";
+import { useOperationStationKdsFilter } from "@/hooks/use-operation-station-kds-filter";
 
 export default function BarView() {
-  const filter = useCallback((item: BoardItem) => isBarItem(item), []);
+  const { status: connectivityStatus } = useConnectivityStatus();
+  const {
+    activeStationsForScope,
+    selectedOperationStationId,
+    setSelectedOperationStationId,
+    itemFilter,
+    allLabel,
+  } = useOperationStationKdsFilter("bar");
+
   return (
     <div
       className="hostly-mobile-content min-h-0"
@@ -33,12 +41,23 @@ export default function BarView() {
           Barra · mismos tickets que cocina, filtrado bebidas
         </p>
 
-        <ServiceMetricsBar scope="bar" />
+        <OperationStationKdsFilter
+          allLabel={allLabel}
+          stations={activeStationsForScope}
+          selectedOperationStationId={selectedOperationStationId}
+          onSelect={setSelectedOperationStationId}
+        />
+        <KdsConnectivityPill status={connectivityStatus} />
+        <ServiceMetricsBar
+          scope="bar"
+          selectedOperationStationId={selectedOperationStationId}
+        />
         <div className="min-h-0" style={{ flex: 1, minHeight: 0 }}>
           <OrderItemsBoard
-            itemFilter={filter}
+            itemFilter={itemFilter}
             groupSentPasses
             passTypeLabelOverride="Bebidas"
+            kdsStationKind="bar"
             emptyMessage="No hay comandas en barra"
             sentAction={{
               label: "Preparado",

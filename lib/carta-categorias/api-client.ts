@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import type { CartaCategoria, CartaCategoriaTipo, CartaFamilia } from "./types";
 import { isCartaCategoriaTipo } from "./types";
 import {
@@ -12,6 +13,7 @@ import {
   saveCartaCategoriasLocal,
 } from "./local-store";
 import { slugifyCartaCategoria } from "./slug";
+import { normalizeModifierGroupIds } from "@/lib/modifiers/modifier-group-ids";
 
 function newLocalId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -178,12 +180,19 @@ export async function createCartaCategoriaApi(
     name: string;
     type?: CartaCategoriaTipo;
     cartaFamiliaId?: string | null;
+    productFamilyId?: string | null;
+    productFamilyName?: string | null;
+    productFamilyType?: ProductFamilyType | null;
+    modifierGroupIds?: string[] | null;
     isActive?: boolean;
     sortOrder?: number;
   },
 ): Promise<{ ok: true; item: CartaCategoria } | { ok: false; error: string }> {
   const fam =
     typeof input.cartaFamiliaId === "string" && input.cartaFamiliaId.trim() ? input.cartaFamiliaId.trim() : undefined;
+  const pfId =
+    typeof input.productFamilyId === "string" ? input.productFamilyId.trim() : "";
+  const modifierGroupIds = normalizeModifierGroupIds(input.modifierGroupIds);
   const res = await fetch("/api/carta-categorias", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -192,6 +201,10 @@ export async function createCartaCategoriaApi(
       name: input.name,
       type: input.type ?? "general",
       cartaFamiliaId: fam ?? null,
+      productFamilyId: pfId || null,
+      productFamilyName: input.productFamilyName?.trim() || null,
+      productFamilyType: input.productFamilyType ?? null,
+      modifierGroupIds: normalizeModifierGroupIds(input.modifierGroupIds),
       isActive: input.isActive !== false,
       sortOrder: input.sortOrder,
     }),
@@ -213,6 +226,14 @@ export async function createCartaCategoriaApi(
       slug: `${slugifyCartaCategoria(input.name)}-${id.slice(0, 8)}`,
       type,
       ...(fam ? { cartaFamiliaId: fam } : {}),
+      ...(pfId && input.productFamilyName && input.productFamilyType
+        ? {
+            productFamilyId: pfId,
+            productFamilyName: input.productFamilyName.trim(),
+            productFamilyType: input.productFamilyType,
+          }
+        : {}),
+      ...(modifierGroupIds.length > 0 ? { modifierGroupIds } : {}),
       sortOrder,
       isActive: input.isActive !== false,
       createdAt: now,
@@ -236,6 +257,10 @@ export async function patchCartaCategoriaApi(
     name: string;
     type: CartaCategoriaTipo;
     cartaFamiliaId: string | null;
+    productFamilyId: string | null;
+    productFamilyName: string | null;
+    productFamilyType: ProductFamilyType | null;
+    modifierGroupIds?: string[] | null;
     sortOrder: number;
     isActive: boolean;
   }>,
@@ -273,6 +298,26 @@ export async function patchCartaCategoriaApi(
     };
     if (nextFamiliaId) item.cartaFamiliaId = nextFamiliaId;
     else delete item.cartaFamiliaId;
+    if ("productFamilyId" in patch) {
+      if (patch.productFamilyId == null || patch.productFamilyId === "") {
+        delete item.productFamilyId;
+        delete item.productFamilyName;
+        delete item.productFamilyType;
+      } else {
+        item.productFamilyId = patch.productFamilyId.trim();
+        if (patch.productFamilyName?.trim()) {
+          item.productFamilyName = patch.productFamilyName.trim();
+        }
+        if (patch.productFamilyType) {
+          item.productFamilyType = patch.productFamilyType;
+        }
+      }
+    }
+    if ("modifierGroupIds" in patch) {
+      const ids = normalizeModifierGroupIds(patch.modifierGroupIds);
+      if (ids.length > 0) item.modifierGroupIds = ids;
+      else delete item.modifierGroupIds;
+    }
     const next = [...list];
     next[idx] = item;
     saveCartaCategoriasLocal(restauranteId, next.sort((a, b) => a.sortOrder - b.sortOrder));

@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Timestamp,
   GeoPoint,
@@ -20,20 +20,62 @@ import { useOperationFilter } from "@/components/kds/operation-filter-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
+import {
+  resolveKdsDestination,
+  type KdsDestination,
+} from "@/lib/kds/kds-destination";
+import {
+  readOperationStationFieldsFromFirestoreRecord,
+  readStationFieldsFromFirestoreRecord,
+} from "@/lib/kds/order-line-station";
+import {
+  parseFirestoreSelectedModifiers,
+  resolveOrderLineModifierPresentation,
+} from "@/lib/modifiers/cart-order-modifiers";
+import {
+  buildKdsVisualBatchLines,
+  isKdsBatchFullyPrepared,
+} from "@/lib/kds/kds-batch-group";
+import { pickKdsFocusTableKeys } from "@/lib/kds/kds-focus-ticket";
+import { computeKdsHeatSnapshot } from "@/lib/kds/kds-heat-state";
+import {
+  readKdsBatchCollapsed,
+  writeKdsBatchCollapsed,
+} from "@/lib/kds/kds-smart-collapse";
+import {
+  kdsSlaLevelLabel,
+  kdsSlaProgressRatio,
+  kdsSlaScoreFromElapsedMs,
+  resolveKdsSlaLevel,
+  type KdsSlaLevel,
+  type KdsStationKind,
+} from "@/lib/kds/kds-sla";
+import { KdsHeatHeader } from "@/components/kds/kds-heat-header";
+import { KdsVisualBatchSummary } from "@/components/kds/kds-batch-lines";
+import { KdsLineGestureRow } from "@/components/kds/kds-line-gesture-row";
 
 export type BoardItem = {
   id: string;
   name: string;
   qty: number;
   status?: string;
+  productId?: string;
   categoria?: string;
   category?: string;
   categoryName?: string;
+  station?: string;
+  preparationArea?: string;
+  operationStationId?: string;
+  operationStationName?: string;
   sentAt?: unknown;
   preparedAt?: unknown;
   servedAt?: unknown;
   extras?: { name: string }[];
   note?: string;
+  displayName?: string;
+  modifiersLabel?: string;
+  modifiersSubtitle?: string;
+  baseProductName?: string;
   removedIngredients?: string[];
   /** Pase / curso: 0 = sin pase, 1–4 = entrante…postre. */
   course: number;
@@ -98,8 +140,13 @@ type BoardLine = {
   servedAtMs?: number;
   extras?: { name: string }[];
   note?: string;
+  modifiersSubtitle?: string;
   removedIngredients?: string[];
   course: number;
+  /** Destino KDS resuelto (station o fallback categoría). */
+  kdsDestination?: KdsDestination;
+  /** Nombre estación operativa (Barra 2, etc.) para badge informativo. */
+  operationStationName?: string;
   /** Texto para fila "Mesa …" (ítem o pedido). */
   mesaRowText: string;
   /** Clave de agrupación por mesa/pedido; solo UI (no se envía a Firestore). */
@@ -138,6 +185,8 @@ export type OrderItemsBoardProps = {
   servedArchiveOpen?: boolean;
   /** Notifica total de líneas en estado servido (para chip en barra de métricas). */
   onServedLineCountChange?: (count: number) => void;
+  /** SLA y heat map por estación (cocina vs barra/cóctel). */
+  kdsStationKind?: KdsStationKind;
 };
 
 function readItemNoteFromRecord(rec: Record<string, unknown>): string | undefined {
@@ -296,7 +345,15 @@ function readItemsArray(raw: unknown): BoardItem[] {
     const qty = typeof qtyRaw === "number" && Number.isFinite(qtyRaw) ? qtyRaw : 1;
     const status = typeof rec.status === "string" ? rec.status : undefined;
     const extras = readItemExtrasFromRecord(rec);
-    const note = readItemNoteFromRecord(rec);
+    const selectedModifiers = parseFirestoreSelectedModifiers(rec.selectedModifiers);
+    const presentation = resolveOrderLineModifierPresentation({
+      baseProductName: String(name || "Producto"),
+      displayName:
+        typeof rec.displayName === "string" ? rec.displayName : undefined,
+      selectedModifiers,
+      lineNote: readItemNoteFromRecord(rec),
+    });
+    const note = presentation.note || undefined;
     const course = readItemCourseFromRecord(rec);
     const removedIngredients = readItemRemovedIngredientsFromRecord(rec);
     const itemTableNameRaw =
@@ -307,11 +364,28 @@ function readItemsArray(raw: unknown): BoardItem[] {
       typeof rec.tableId === "string" && rec.tableId.trim()
         ? rec.tableId.trim()
         : "";
+    const productIdRaw =
+      typeof rec.productId === "string" && rec.productId.trim()
+        ? rec.productId.trim()
+        : undefined;
+    const stationFields = readStationFieldsFromFirestoreRecord(rec);
+    const opFields = readOperationStationFieldsFromFirestoreRecord(rec);
     out.push({
       id,
-      name: String(name || "Producto"),
+      name: presentation.displayName,
       qty,
       status,
+      ...(productIdRaw ? { productId: productIdRaw } : {}),
+      ...(presentation.baseProductName
+        ? { baseProductName: presentation.baseProductName }
+        : {}),
+      ...(presentation.displayName ? { displayName: presentation.displayName } : {}),
+      ...(presentation.modifiersLabel
+        ? { modifiersLabel: presentation.modifiersLabel }
+        : {}),
+      ...(presentation.modifiersSubtitle
+        ? { modifiersSubtitle: presentation.modifiersSubtitle }
+        : {}),
       categoria:
         typeof rec.categoria === "string" ? (rec.categoria as string) : undefined,
       category:
@@ -320,6 +394,16 @@ function readItemsArray(raw: unknown): BoardItem[] {
         typeof rec.categoryName === "string"
           ? (rec.categoryName as string)
           : undefined,
+      ...(stationFields.station ? { station: stationFields.station } : {}),
+      ...(stationFields.preparationArea
+        ? { preparationArea: stationFields.preparationArea }
+        : {}),
+      ...(opFields.operationStationId
+        ? { operationStationId: opFields.operationStationId }
+        : {}),
+      ...(opFields.operationStationName
+        ? { operationStationName: opFields.operationStationName }
+        : {}),
       sentAt: rec.sentAt,
       preparedAt: rec.preparedAt,
       servedAt: rec.servedAt,
@@ -787,6 +871,15 @@ const lineExtrasJoinedStyle: CSSProperties = {
   wordBreak: "break-word",
 };
 
+const lineModifiersStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#475569",
+  lineHeight: 1.25,
+  marginTop: 4,
+  wordBreak: "break-word",
+};
+
 const lineRemovedStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 500,
@@ -894,17 +987,26 @@ function oldestSentAtMsInChunk(chunk: BoardLine[]): number | undefined {
   return min;
 }
 
-/** Orden visual de mesas: 2 = ≥10 min, 1 = ≥5 min, 0 = resto (según sent/prep). */
-function getGroupUrgencyScore(lines: BoardLine[], nowMs: number): number {
+/** Orden visual de mesas: 2 = crítico, 1 = atención, 0 = resto. */
+function getGroupUrgencyScore(
+  lines: BoardLine[],
+  nowMs: number,
+  station?: KdsStationKind,
+): number {
   let maxScore = 0;
   for (const line of lines) {
     const t = line.sentAtMs ?? line.preparedAtMs;
     if (typeof t === "number" && Number.isFinite(t)) {
-      const min = (nowMs - t) / 60000;
-      if (min >= 10) {
-        maxScore = Math.max(maxScore, 2);
-      } else if (min >= 5) {
-        maxScore = Math.max(maxScore, 1);
+      const elapsed = nowMs - t;
+      if (station) {
+        maxScore = Math.max(maxScore, kdsSlaScoreFromElapsedMs(elapsed, station));
+      } else {
+        const min = elapsed / 60000;
+        if (min >= 10) {
+          maxScore = Math.max(maxScore, 2);
+        } else if (min >= 5) {
+          maxScore = Math.max(maxScore, 1);
+        }
       }
     }
   }
@@ -1017,9 +1119,11 @@ export default function OrderItemsBoard({
   kitchenHideServedColumn = false,
   servedArchiveOpen = false,
   onServedLineCountChange,
+  kdsStationKind = "kitchen",
 }: OrderItemsBoardProps) {
   const { restaurantId, ready: authReady, user } = useAuth();
   const { matchesOrder } = useOperationFilter();
+  const kdsScopeKey = `${restaurantId ?? "none"}:${kdsStationKind}`;
   const [orders, setOrders] = useState<BoardOrder[]>([]);
   const ordersRef = useRef<BoardOrder[]>([]);
   ordersRef.current = orders;
@@ -1037,6 +1141,22 @@ export default function OrderItemsBoard({
   const [busyPassKey, setBusyPassKey] = useState<string | null>(null);
   const [resetFeedback, setResetFeedback] = useState(false);
   const [recentClearedFeedback, setRecentClearedFeedback] = useState(false);
+  const [collapsedBatchKeys, setCollapsedBatchKeys] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [manualPriorityKeys, setManualPriorityKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [lineQuickNotes, setLineQuickNotes] = useState<Record<string, string>>({});
+  const [kdsQuickMenu, setKdsQuickMenu] = useState<{
+    orderId: string;
+    itemId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const boardScrollNearTopRef = useRef(true);
+  const userInteractingRef = useRef(false);
+  const focusScrollGuardUntilRef = useRef(0);
 
   const showBoardFeedback = (message: string) => {
     setBoardFeedbackMessage(message);
@@ -1137,13 +1257,20 @@ export default function OrderItemsBoard({
           preparedAtMs,
           servedAtMs,
           course: item.course,
+          kdsDestination: resolveKdsDestination(item),
           mesaRowText,
           ...(item.extras && item.extras.length > 0
             ? { extras: item.extras }
             : {}),
           ...(item.note ? { note: item.note } : {}),
+          ...(item.modifiersSubtitle
+            ? { modifiersSubtitle: item.modifiersSubtitle }
+            : {}),
           ...(item.removedIngredients && item.removedIngredients.length > 0
             ? { removedIngredients: item.removedIngredients }
+            : {}),
+          ...(item.operationStationName
+            ? { operationStationName: item.operationStationName }
             : {}),
         };
         if (bs === "sent") sent.push(line);
@@ -1166,6 +1293,105 @@ export default function OrderItemsBoard({
   useEffect(() => {
     onServedLineCountChange?.(servedLineCount);
   }, [servedLineCount, onServedLineCountChange]);
+
+  const kdsHeatSnapshot = useMemo(() => {
+    let pendingCount = 0;
+    let criticalCount = 0;
+    let attentionCount = 0;
+    let totalWait = 0;
+    let waitSamples = 0;
+    let openBatchCount = 0;
+
+    for (const group of columns.sent) {
+      const passChunks = groupSentPasses
+        ? groupKitchenSentLinesByPase(group.lines)
+        : null;
+      if (passChunks && passChunks.length > 0) {
+        openBatchCount += passChunks.filter(
+          (chunk) => !isKdsBatchFullyPrepared(chunk),
+        ).length;
+      } else if (group.lines.some((line) => line.status === "sent")) {
+        openBatchCount += 1;
+      }
+
+      for (const line of group.lines) {
+        if (line.status !== "sent" || line.sentAtMs == null) continue;
+        pendingCount += 1;
+        const elapsed = nowMs - line.sentAtMs;
+        totalWait += elapsed;
+        waitSamples += 1;
+        const level = resolveKdsSlaLevel(elapsed, kdsStationKind);
+        if (level === "critical") criticalCount += 1;
+        else if (level === "attention") attentionCount += 1;
+      }
+    }
+
+    return computeKdsHeatSnapshot({
+      station: kdsStationKind,
+      pendingCount,
+      preparedCount: columns.prepared.reduce(
+        (acc, group) => acc + group.lines.length,
+        0,
+      ),
+      criticalCount,
+      attentionCount,
+      avgWaitMs: waitSamples > 0 ? totalWait / waitSamples : null,
+      openBatchCount,
+    });
+  }, [columns.prepared, columns.sent, groupSentPasses, kdsStationKind, nowMs]);
+
+  const focusTableKeys = useMemo(
+    () =>
+      pickKdsFocusTableKeys(
+        columns.sent,
+        kdsStationKind,
+        manualPriorityKeys,
+      ),
+    [columns.sent, kdsStationKind, manualPriorityKeys],
+  );
+
+  const toggleBatchCollapsed = useCallback(
+    (batchKey: string, defaultCollapsed: boolean) => {
+      setCollapsedBatchKeys((prev) => {
+        const current =
+          prev[batchKey] ??
+          readKdsBatchCollapsed(kdsScopeKey, batchKey, defaultCollapsed);
+        const next = !current;
+        writeKdsBatchCollapsed(kdsScopeKey, batchKey, next);
+        return { ...prev, [batchKey]: next };
+      });
+    },
+    [kdsScopeKey],
+  );
+
+  const isBatchCollapsed = useCallback(
+    (batchKey: string, defaultCollapsed: boolean) =>
+      collapsedBatchKeys[batchKey] ??
+      readKdsBatchCollapsed(kdsScopeKey, batchKey, defaultCollapsed),
+    [collapsedBatchKeys, kdsScopeKey],
+  );
+
+  const toggleManualPriority = useCallback((tableKey: string) => {
+    setManualPriorityKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(tableKey)) next.delete(tableKey);
+      else next.add(tableKey);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (focusTableKeys.length === 0) return;
+    if (userInteractingRef.current) return;
+    if (!boardScrollNearTopRef.current) return;
+    if (Date.now() < focusScrollGuardUntilRef.current) return;
+    const target = document.querySelector(
+      `[data-kds-focus-table="${focusTableKeys[0]}"]`,
+    );
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [focusTableKeys.join("|")]);
 
   async function handleMarkNext(
     orderId: string,
@@ -1428,6 +1654,23 @@ export default function OrderItemsBoard({
           {actionSuccess}
         </div>
       )}
+      <KdsHeatHeader
+        snapshot={kdsHeatSnapshot}
+        stationLabel={
+          kdsStationKind === "bar"
+            ? "Barra · operación"
+            : kdsStationKind === "cocktail"
+              ? "Coctelería · operación"
+              : "Cocina · operación"
+        }
+        saturationMessage={
+          kdsStationKind === "bar"
+            ? "Barra entrando en saturación"
+            : kdsStationKind === "cocktail"
+              ? "Coctelería entrando en saturación"
+              : "Cocina entrando en saturación"
+        }
+      />
       {kitchenHideServedColumn && servedArchiveOpen ? (
         <figure
           className="hostly-mobile-operational-card !gap-0 !p-0 !shadow-none ring-1 ring-emerald-500/10"
@@ -1464,13 +1707,26 @@ export default function OrderItemsBoard({
         </figure>
       ) : null}
       <div
-        className={
+        className={`hostly-kds-board${
           ticketRailLayout && kitchenHideServedColumn
-            ? "flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+            ? " flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
             : ticketRailLayout
-              ? "flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-3"
-              : undefined
-        }
+              ? " flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-3"
+              : ""
+        }`}
+        data-kds-rush={kdsHeatSnapshot.mode === "rush" ? "true" : undefined}
+        onScroll={(event) => {
+          boardScrollNearTopRef.current = event.currentTarget.scrollTop < 120;
+        }}
+        onPointerDown={() => {
+          userInteractingRef.current = true;
+          focusScrollGuardUntilRef.current = Date.now() + 4000;
+        }}
+        onPointerUp={() => {
+          window.setTimeout(() => {
+            userInteractingRef.current = false;
+          }, 800);
+        }}
         style={
           ticketRailLayout
             ? { flex: 1, minHeight: 0, minWidth: 0 }
@@ -1516,6 +1772,22 @@ export default function OrderItemsBoard({
             setTimeout(() => setRecentClearedFeedback(false), 1500);
           }}
           recentPreparedClearedFeedback={recentClearedFeedback}
+          kdsStationKind={kdsStationKind}
+          kdsRushMode={kdsHeatSnapshot.mode === "rush"}
+          focusTableKeys={focusTableKeys}
+          manualPriorityKeys={manualPriorityKeys}
+          onToggleManualPriority={toggleManualPriority}
+          isBatchCollapsed={isBatchCollapsed}
+          onToggleBatchCollapsed={toggleBatchCollapsed}
+          lineQuickNotes={lineQuickNotes}
+          onLineLongPress={(line, anchor) =>
+            setKdsQuickMenu({
+              orderId: line.orderId,
+              itemId: line.itemId,
+              x: anchor.x,
+              y: anchor.y,
+            })
+          }
         />
         <BoardColumn
           title="Listo"
@@ -1556,6 +1828,73 @@ export default function OrderItemsBoard({
           </div>
         </div>
       )}
+      {kdsQuickMenu ? (
+        <>
+          <button
+            type="button"
+            className="hostly-kds-quick-menu-backdrop"
+            aria-label="Cerrar menú"
+            onClick={() => setKdsQuickMenu(null)}
+          />
+          <div
+            className="hostly-kds-quick-menu"
+            style={{
+              top: Math.max(8, kdsQuickMenu.y - 8),
+              left: Math.max(8, Math.min(kdsQuickMenu.x - 90, window.innerWidth - 200)),
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                void handleMarkNext(
+                  kdsQuickMenu.orderId,
+                  kdsQuickMenu.itemId,
+                  sentAction.nextStatus,
+                );
+                setKdsQuickMenu(null);
+              }}
+            >
+              Marcar preparado
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const line = columns.sent
+                  .flatMap((group) => group.lines)
+                  .find(
+                    (entry) =>
+                      entry.orderId === kdsQuickMenu.orderId &&
+                      entry.itemId === kdsQuickMenu.itemId,
+                  );
+                if (line?.tableKey) toggleManualPriority(line.tableKey);
+                setKdsQuickMenu(null);
+              }}
+            >
+              Prioridad manual
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const note = window.prompt("Nota rápida (solo sesión KDS)");
+                if (note == null) return;
+                const trimmed = note.trim();
+                const key = `${kdsQuickMenu.orderId}:${kdsQuickMenu.itemId}`;
+                setLineQuickNotes((prev) => {
+                  if (!trimmed) {
+                    const next = { ...prev };
+                    delete next[key];
+                    return next;
+                  }
+                  return { ...prev, [key]: trimmed };
+                });
+                setKdsQuickMenu(null);
+              }}
+            >
+              Nota rápida
+            </button>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }
@@ -1568,6 +1907,9 @@ function BoardLineRow({
   busyItemIds,
   onMark,
   servedArchiveLayout = false,
+  kdsStationKind,
+  lineQuickNote,
+  onLongPress,
 }: {
   line: BoardLine;
   nowMs: number;
@@ -1581,6 +1923,9 @@ function BoardLineRow({
   ) => void;
   /** Histórico servidos en panel: mesa → producto → curso → tiempo servido. */
   servedArchiveLayout?: boolean;
+  kdsStationKind?: KdsStationKind;
+  lineQuickNote?: string;
+  onLongPress?: (anchor: { x: number; y: number }) => void;
 }) {
   const minutes =
     line.sentAtMs != null ? Math.floor((nowMs - line.sentAtMs) / 60000) : 0;
@@ -1641,6 +1986,11 @@ function BoardLineRow({
               {line.extras.map((e) => `+ ${e.name}`).join(" · ")}
             </div>
           ) : null}
+          {line.modifiersSubtitle ? (
+            <div style={{ ...lineModifiersStyle, marginTop: 4, fontSize: 11 }}>
+              {line.modifiersSubtitle}
+            </div>
+          ) : null}
           {line.removedIngredients && line.removedIngredients.length > 0 ? (
             <div style={{ ...lineRemovedStyle, marginTop: 4, fontSize: 11 }}>
               Sin: {line.removedIngredients.join(" · ")}
@@ -1671,14 +2021,27 @@ function BoardLineRow({
 
   let itemBorder = "1px solid #e5e7eb"; // gray-200
   let itemBg = "#ffffff";
-  if (minutes >= 10) {
+  const elapsedMs =
+    line.sentAtMs != null ? Math.max(0, nowMs - line.sentAtMs) : null;
+  const slaLevel: KdsSlaLevel =
+    elapsedMs != null && kdsStationKind
+      ? resolveKdsSlaLevel(elapsedMs, kdsStationKind)
+      : "normal";
+  if (kdsStationKind && slaLevel === "critical") {
+    itemBorder = "1px solid #fca5a5";
+    itemBg = "#fef2f2";
+  } else if (kdsStationKind && slaLevel === "attention") {
+    itemBorder = "1px solid #fdba74";
+    itemBg = "#fff7ed";
+  } else if (!kdsStationKind && minutes >= 10) {
     itemBorder = "1px solid #ef4444";
     itemBg = "#fef2f2";
-  } else if (minutes >= 5) {
+  } else if (!kdsStationKind && minutes >= 5) {
     itemBorder = "1px solid #fb923c";
     itemBg = "#fff7ed";
   }
-  return (
+
+  const rowBody = (
     <div
       style={{
         ...lineRowStyle,
@@ -1720,6 +2083,46 @@ function BoardLineRow({
             <span style={lineNameStyle}>
               x{line.qty} {line.name}
             </span>
+            {line.kdsDestination === "cocktail" ? (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  color: "#5b21b6",
+                  background: "rgba(139, 92, 246, 0.12)",
+                  border: "1px solid rgba(139, 92, 246, 0.28)",
+                  borderRadius: 4,
+                  padding: "1px 5px",
+                  lineHeight: 1.3,
+                }}
+              >
+                Cóctel
+              </span>
+            ) : null}
+            {line.operationStationName ? (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.02em",
+                  color: "#334155",
+                  background: "rgba(148, 163, 184, 0.16)",
+                  border: "1px solid rgba(100, 116, 139, 0.28)",
+                  borderRadius: 4,
+                  padding: "1px 5px",
+                  lineHeight: 1.3,
+                  maxWidth: "min(140px, 42vw)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={line.operationStationName}
+              >
+                {line.operationStationName}
+              </span>
+            ) : null}
           </div>
         </div>
         {line.extras && line.extras.length > 0 ? (
@@ -1727,12 +2130,20 @@ function BoardLineRow({
             {line.extras.map((e) => `+ ${e.name}`).join(" · ")}
           </div>
         ) : null}
+        {line.modifiersSubtitle ? (
+          <div style={lineModifiersStyle}>{line.modifiersSubtitle}</div>
+        ) : null}
         {line.removedIngredients && line.removedIngredients.length > 0 ? (
           <div style={lineRemovedStyle}>
             Sin: {line.removedIngredients.join(" · ")}
           </div>
         ) : null}
         {line.note ? <div style={lineNoteStyle}>Nota: {line.note}</div> : null}
+        {lineQuickNote ? (
+          <div style={{ ...lineNoteStyle, color: "#0369a1" }}>
+            Quick: {lineQuickNote}
+          </div>
+        ) : null}
         <div style={lineMetaStyle}>
           <div
             style={{
@@ -1743,6 +2154,15 @@ function BoardLineRow({
           >
             {minutes} min
           </div>
+          {kdsStationKind && slaLevel !== "normal" ? (
+            <span
+              className={`hostly-kds-sla-pill${
+                slaLevel === "critical" ? " is-critical" : " is-attention"
+              }`}
+            >
+              {kdsSlaLevelLabel(slaLevel)}
+            </span>
+          ) : null}
           <span>
             {showUrgency && line.sentAtMs != null
               ? `Avisado hace ${formatMinutes(minutes)}`
@@ -1755,6 +2175,15 @@ function BoardLineRow({
                   : "Avisado"}
           </span>
         </div>
+        {kdsStationKind && elapsedMs != null ? (
+          <div className="hostly-kds-sla-progress" aria-hidden>
+            <span
+              style={{
+                width: `${Math.round(kdsSlaProgressRatio(elapsedMs, kdsStationKind) * 100)}%`,
+              }}
+            />
+          </div>
+        ) : null}
       </div>
       {action ? (
         <button
@@ -1770,6 +2199,21 @@ function BoardLineRow({
         </button>
       ) : null}
     </div>
+  );
+
+  if (!action || servedArchiveLayout) {
+    return rowBody;
+  }
+
+  return (
+    <KdsLineGestureRow
+      enabled={Boolean(onLongPress) || Boolean(action)}
+      onSwipePrepare={() => onMark(line.orderId, line.itemId, action.nextStatus)}
+      onDoubleTapPrepare={() => onMark(line.orderId, line.itemId, action.nextStatus)}
+      onLongPress={onLongPress}
+    >
+      {rowBody}
+    </KdsLineGestureRow>
   );
 }
 
@@ -1800,6 +2244,15 @@ function BoardColumn({
   compactArchiveColumn = false,
   servedHistoryPresentation = false,
   railVerticalBand,
+  kdsStationKind,
+  kdsRushMode = false,
+  focusTableKeys = [],
+  manualPriorityKeys,
+  onToggleManualPriority,
+  isBatchCollapsed,
+  onToggleBatchCollapsed,
+  lineQuickNotes,
+  onLineLongPress,
 }: {
   title: string;
   count: number;
@@ -1850,6 +2303,18 @@ function BoardColumn({
   ) => void | Promise<void>;
   busyPassKey?: string | null;
   passTypeLabelOverride?: string;
+  kdsStationKind?: KdsStationKind;
+  kdsRushMode?: boolean;
+  focusTableKeys?: string[];
+  manualPriorityKeys?: Set<string>;
+  onToggleManualPriority?: (tableKey: string) => void;
+  isBatchCollapsed?: (batchKey: string, defaultCollapsed: boolean) => boolean;
+  onToggleBatchCollapsed?: (batchKey: string, defaultCollapsed: boolean) => void;
+  lineQuickNotes?: Record<string, string>;
+  onLineLongPress?: (
+    line: BoardLine,
+    anchor: { x: number; y: number },
+  ) => void;
 }) {
   const prepareLabel =
     passTypeLabelOverride === "Bebidas"
@@ -1897,7 +2362,11 @@ function BoardColumn({
               maxTime = elapsed;
             }
             const min = elapsed / 60000;
-            if (min >= 10) {
+            if (kdsStationKind) {
+              const level = resolveKdsSlaLevel(elapsed, kdsStationKind);
+              if (level === "critical") urgentCount++;
+              else if (level === "attention") attentionCount++;
+            } else if (min >= 10) {
               urgentCount++;
             } else if (min >= 5) {
               attentionCount++;
@@ -1922,11 +2391,22 @@ function BoardColumn({
           : stationStatus === "Atención"
             ? "Barra atención"
             : "Barra lenta"
-        : stationStatus;
+        : passTypeLabelOverride === "Cócteles"
+          ? stationStatus === "En ritmo"
+            ? "Coctelería en ritmo"
+            : stationStatus === "Atención"
+              ? "Coctelería atención"
+              : "Coctelería lenta"
+          : stationStatus;
 
   useEffect(() => {
     if (!showPendingColumnMetrics) return;
-    const station = passTypeLabelOverride === "Bebidas" ? "barra" : "cocina";
+    const station =
+      passTypeLabelOverride === "Bebidas"
+        ? "barra"
+        : passTypeLabelOverride === "Cócteles"
+          ? "cocteleria"
+          : "cocina";
     window.dispatchEvent(
       new CustomEvent("kds:station-status", {
         detail: {
@@ -1945,8 +2425,18 @@ function BoardColumn({
   }, [stationStatus, showPendingColumnMetrics, passTypeLabelOverride]);
 
   const sortedGroups = [...groups].sort((a, b) => {
-    const aScore = getGroupUrgencyScore(a.lines, nowMs);
-    const bScore = getGroupUrgencyScore(b.lines, nowMs);
+    const aFocusBoost = focusTableKeys.includes(a.tableKey) ? 4 : 0;
+    const bFocusBoost = focusTableKeys.includes(b.tableKey) ? 4 : 0;
+    const aManual = manualPriorityKeys?.has(a.tableKey) ? 2 : 0;
+    const bManual = manualPriorityKeys?.has(b.tableKey) ? 2 : 0;
+    const aScore =
+      getGroupUrgencyScore(a.lines, nowMs, kdsStationKind) +
+      aFocusBoost +
+      aManual;
+    const bScore =
+      getGroupUrgencyScore(b.lines, nowMs, kdsStationKind) +
+      bFocusBoost +
+      bManual;
     return bScore - aScore;
   });
 
@@ -2185,9 +2675,10 @@ function BoardColumn({
                   return -1;
                 })
               : null;
-            const score = getGroupUrgencyScore(g.lines, nowMs);
+            const score = getGroupUrgencyScore(g.lines, nowMs, kdsStationKind);
             const urgencyLabel = getUrgencyLabel(score);
             const cardUrgencyClass = getGroupCardUrgencyClassName(score);
+            const isFocusTicket = focusTableKeys.includes(g.tableKey);
             const tableCardStyle: CSSProperties = {
               ...cardBaseStyle,
               ...(cardUrgencyClass ? {} : { border: tone.border }),
@@ -2198,9 +2689,10 @@ function BoardColumn({
             return (
               <div
                 key={g.tableKey}
-                className={`transition-all duration-300${
+                data-kds-focus-table={g.tableKey}
+                className={`transition-all duration-300 hostly-kds-line-enter${
                   cardUrgencyClass ? ` border ${cardUrgencyClass}` : ""
-                }`.trim()}
+                }${isFocusTicket ? " hostly-kds-focus-ticket" : ""}`.trim()}
                 style={{
                   ...tableCardStyle,
                   ...(ticketRailLayout
@@ -2314,12 +2806,17 @@ function BoardColumn({
                       const passKey = `${g.tableKey}-pase-${originalIndex}`;
                       const passPrepareBusy = busyPassKey === passKey;
                       const passMesaHeadline = passChunkMesaSummary(chunk);
+                      const batchVisual = buildKdsVisualBatchLines(chunk);
+                      const defaultCollapsed = isPassFullyPrepared;
+                      const collapsed =
+                        isBatchCollapsed?.(passKey, defaultCollapsed) ??
+                        defaultCollapsed;
                       return (
                       <div
                         key={`${g.tableKey}-pase-${originalIndex}`}
                         className={`${getPassChunkClassName(passTypeLabel)}${
                           isPassFullyPrepared ? " opacity-50" : ""
-                        }`}
+                        }${kdsRushMode ? " !p-1" : ""}`}
                       >
                         <div className="mb-1 flex items-start justify-between gap-2">
                           <div
@@ -2389,8 +2886,18 @@ function BoardColumn({
                           ) : null}
                         </div>
                         <div className="my-1 h-px w-full bg-black/5" />
-                        <div style={{ display: "grid", gap: 6 }}>
-                          {chunk.map((line) => (
+                        {batchVisual.length >= 2 ? (
+                          <KdsVisualBatchSummary
+                            batches={batchVisual}
+                            collapsed={collapsed}
+                            onToggle={() =>
+                              onToggleBatchCollapsed?.(passKey, defaultCollapsed)
+                            }
+                          />
+                        ) : null}
+                        <div style={{ display: "grid", gap: kdsRushMode ? 4 : 6 }}>
+                          {!collapsed
+                            ? chunk.map((line) => (
                             <BoardLineRow
                               key={`${line.orderId}:${line.itemId}`}
                               line={line}
@@ -2400,8 +2907,18 @@ function BoardColumn({
                               busyItemIds={busyItemIds}
                               onMark={onMark}
                               servedArchiveLayout={servedHistoryPresentation}
+                              kdsStationKind={kdsStationKind}
+                              lineQuickNote={
+                                lineQuickNotes?.[`${line.orderId}:${line.itemId}`]
+                              }
+                              onLongPress={
+                                onLineLongPress
+                                  ? (anchor) => onLineLongPress(line, anchor)
+                                  : undefined
+                              }
                             />
-                          ))}
+                          ))
+                            : null}
                         </div>
                       </div>
                       );
@@ -2433,6 +2950,15 @@ function BoardColumn({
                             busyItemIds={busyItemIds}
                             onMark={onMark}
                             servedArchiveLayout={servedHistoryPresentation}
+                            kdsStationKind={kdsStationKind}
+                            lineQuickNote={
+                              lineQuickNotes?.[`${line.orderId}:${line.itemId}`]
+                            }
+                            onLongPress={
+                              onLineLongPress
+                                ? (anchor) => onLineLongPress(line, anchor)
+                                : undefined
+                            }
                           />
                         ))}
                       </div>

@@ -160,6 +160,8 @@ export function OperacionModuleShell({
             .hostly-operation-topbar,
           .hostly-operation-shell[data-operation-module="barra"]
             .hostly-operation-topbar,
+          .hostly-operation-shell[data-operation-module="cocteleria"]
+            .hostly-operation-topbar,
           .hostly-operation-shell[data-operation-module="sala"]
             .hostly-operation-topbar {
             display: none !important;

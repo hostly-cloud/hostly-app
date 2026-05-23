@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   setDoc,
@@ -130,6 +131,8 @@ export type Table = {
   tableShape: TableVisualShape;
   /** Comensales / asientos; en Firestore puede faltar → lectura usa 4. */
   seats: number;
+  /** Comensales actuales en servicio (TPV); Firestore `dinersCount` / legacy `guestCount`. */
+  dinersCount?: number;
   /** Posición en el mapa TPV (px). Firestore puede omitir; lectura usa 0. */
   x: number;
   y: number;
@@ -297,6 +300,28 @@ function assertTableTenant(
   throw new Error(UNAUTHORIZED_TABLE_ACCESS);
 }
 
+function parseDinersCount(data: Record<string, unknown>): number | undefined {
+  const raw = data.dinersCount ?? data.guestCount;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Math.max(0, Math.floor(raw));
+  }
+  return undefined;
+}
+
+/** Comensales en mesa abierta; 0 si el doc no trae el campo. */
+export function readTableDinersCount(
+  table: Pick<Table, "dinersCount"> | null | undefined,
+): number {
+  if (
+    table != null &&
+    typeof table.dinersCount === "number" &&
+    Number.isFinite(table.dinersCount)
+  ) {
+    return Math.max(0, Math.floor(table.dinersCount));
+  }
+  return 0;
+}
+
 function mapDocToTable(d: QueryDocumentSnapshot): Table {
   const data = d.data() as Record<string, unknown>;
   const nameRaw = data.name;
@@ -342,6 +367,7 @@ function mapDocToTable(d: QueryDocumentSnapshot): Table {
     typeof floorPlanIdRaw === "string" && floorPlanIdRaw.trim() !== ""
       ? floorPlanIdRaw.trim()
       : undefined;
+  const dinersCount = parseDinersCount(data);
   return {
     id: idField,
     name,
@@ -355,6 +381,7 @@ function mapDocToTable(d: QueryDocumentSnapshot): Table {
     ...(shape !== undefined ? { shape } : {}),
     tableShape,
     seats,
+    ...(dinersCount !== undefined ? { dinersCount } : {}),
     ...(waiterId !== undefined ? { waiterId } : {}),
     ...(waiterName !== undefined ? { waiterName } : {}),
     x: parseFiniteNumber(data.x) ?? 0,
@@ -387,6 +414,15 @@ export function sortTablesForTpvMap(a: Table, b: Table): number {
   return a.name.localeCompare(b.name, "es", { numeric: true });
 }
 
+function sortTablesByCreatedAndName(list: Table[]): Table[] {
+  return [...list].sort((a, b) => {
+    const ca = a.createdAt ?? 0;
+    const cb = b.createdAt ?? 0;
+    if (ca !== cb) return ca - cb;
+    return a.name.localeCompare(b.name, "es");
+  });
+}
+
 export async function getTables(restaurantId: string): Promise<Table[]> {
   const rid = restaurantId.trim();
   if (!rid) return [];
@@ -394,16 +430,50 @@ export async function getTables(restaurantId: string): Promise<Table[]> {
   try {
     const col = collection(db, "tables");
     const snap = await getDocs(query(col, where("restaurantId", "==", rid)));
-    const list = snap.docs.map(mapDocToTable);
-    list.sort((a, b) => {
-      const ca = a.createdAt ?? 0;
-      const cb = b.createdAt ?? 0;
-      if (ca !== cb) return ca - cb;
-      return a.name.localeCompare(b.name, "es");
-    });
-    return list;
+    return sortTablesByCreatedAndName(snap.docs.map(mapDocToTable));
   } catch (e) {
     rethrowWithMessage(e);
+  }
+}
+
+/**
+ * Escucha la colección `tables` del restaurante (un listener por tenant).
+ * Incluye mesas inactivas; el TPV filtra con `filterTablesForTpvMap` / `isActive`.
+ */
+export function listenTablesByRestaurantId(
+  restaurantId: string,
+  callback: (tables: Table[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const rid = restaurantId.trim();
+  if (!rid) {
+    onError?.(new Error("listenTables: restaurantId obligatorio"));
+    callback([]);
+    return () => {};
+  }
+  if (!isAuthReady()) {
+    callback([]);
+    return () => {};
+  }
+
+  try {
+    const q = query(collection(db, "tables"), where("restaurantId", "==", rid));
+    return onSnapshot(
+      q,
+      (snap) => {
+        try {
+          callback(sortTablesByCreatedAndName(snap.docs.map(mapDocToTable)));
+        } catch (e) {
+          onError?.(e instanceof Error ? e : new Error(String(e)));
+        }
+      },
+      (error) => {
+        onError?.(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  } catch (e) {
+    onError?.(e instanceof Error ? e : new Error(String(e)));
+    return () => {};
   }
 }
 
