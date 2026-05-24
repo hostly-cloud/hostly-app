@@ -67,26 +67,53 @@ export function shouldShowConnectivityBanner(
   return status !== "online" || showSuccessFlash;
 }
 
+export type ConnectivityBannerContext = "default" | "onboarding" | "tpv";
+
+export function resolveConnectivityBannerContext(pathname: string | null | undefined): ConnectivityBannerContext {
+  const path = pathname ?? "";
+  if (path.startsWith("/dashboard/onboarding")) return "onboarding";
+  if (path.startsWith("/dashboard/carta")) return "tpv";
+  return "default";
+}
+
 export function isConnectivityOperationallyRisky(
   status: ConnectivityStatus,
 ): boolean {
   return status === "offline" || status === "degraded";
 }
 
+export function isConnectivityBlockingCriticalAction(
+  status: ConnectivityStatus,
+  context: ConnectivityBannerContext = "default",
+): boolean {
+  if (context === "onboarding") return false;
+  return isConnectivityOperationallyRisky(status);
+}
+
 export function connectivityBannerMessage(
   status: ConnectivityStatus,
   showSuccessFlash: boolean,
+  context: ConnectivityBannerContext = "default",
 ): string | null {
   if (showSuccessFlash && status === "online") {
     return "Conexión restablecida";
   }
   switch (status) {
     case "offline":
+      if (context === "onboarding") {
+        return "Sin conexión. Puedes seguir editando el catálogo; si falla al guardar, inténtalo de nuevo.";
+      }
       return "Sin conexión. Puedes revisar datos cargados, pero algunas acciones pueden no guardarse.";
     case "reconnecting":
       return "Reconectando…";
     case "degraded":
-      return "Conexión inestable. Revisa antes de cobrar o enviar comanda.";
+      if (context === "onboarding") {
+        return "Conexión inestable. Puedes crear el catálogo; si falla al guardar, inténtalo de nuevo.";
+      }
+      if (context === "tpv") {
+        return "Conexión inestable. Revisa antes de cobrar o enviar comanda.";
+      }
+      return "Conexión inestable. Algunas acciones pueden tardar más de lo habitual.";
     default:
       return null;
   }

@@ -1523,6 +1523,163 @@ body {
   animation: hostly-onboarding-op-dot 1.55s ease-in-out infinite;
 }
 
+/* Onboarding scroll — desktop: un scroll en panel principal · mobile: scroll del documento */
+.onboarding-scroll-host {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 1023px) {
+  .onboarding-scroll-host {
+    flex: none;
+    overflow: visible;
+  }
+}
+
+@media (min-width: 1024px) {
+  .onboarding-scroll-host {
+    overflow: hidden;
+  }
+}
+
+.onboarding-scroll-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 1023px) {
+  .onboarding-scroll-shell {
+    flex: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .onboarding-scroll-shell {
+    min-height: 0;
+    flex: 1 1 auto;
+    gap: 0.625rem;
+  }
+}
+
+.onboarding-scroll-grid {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 1023px) {
+  .onboarding-scroll-grid {
+    flex: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .onboarding-scroll-grid {
+    min-height: 0;
+    flex: 1 1 auto;
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr) minmax(168px, 218px);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .onboarding-scroll-grid > * {
+    min-height: 0;
+  }
+}
+
+.onboarding-scroll-panel {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (max-width: 1023px) {
+  .onboarding-scroll-panel {
+    min-height: 0;
+    overflow: visible;
+    overscroll-behavior: auto;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .onboarding-scroll-panel {
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(1.75rem, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.onboarding-scroll-content {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  height: auto;
+  min-height: min-content;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+.onboarding-scroll-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  flex-shrink: 0;
+  min-height: min-content;
+}
+
+.onboarding-scroll-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid var(--hostly-table-divider-soft);
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
+.onboarding-scroll-table-wrap:not(:has(.onboarding-scroll-table-x)) {
+  overflow-x: auto;
+  overflow-y: clip;
+  -webkit-overflow-scrolling: touch;
+}
+
+.onboarding-scroll-table-x {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: clip;
+  -webkit-overflow-scrolling: touch;
+  border-radius: inherit;
+}
+
+.onboarding-scroll-step-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  padding-top: 0.625rem;
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+}
+
 /* Contextual deep-link highlight (timeline, facturas, pedidos, TPV) */
 .hostly-context-highlight {
   animation: hostly-context-highlight-flash 2s ease-out;

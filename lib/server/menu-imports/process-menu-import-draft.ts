@@ -4,6 +4,10 @@ import type { MenuImportDraftDocument } from "@/lib/firestore/menu-import-drafts
 import { truncateRawTextForStorage } from "./download-storage-file";
 import { enrichMenuItemsWithAI } from "./enrich-menu-items-with-ai";
 import { extractMenuText } from "./extract-menu-text";
+import {
+  filterItemsByOcrSource,
+  logOcrValidationDiagnostics,
+} from "./validate-items-against-ocr";
 import { loadHostlyCategoryNames } from "./load-hostly-categories";
 import {
   getMenuImportDraftAdmin,
@@ -125,7 +129,30 @@ export async function processMenuImportDraft(params: {
       parserWarnings,
     });
 
-    const finalItems = enriched.items;
+    const wrapped = enriched.items.map((item) => ({ name: item.name, item }));
+    const ocrValidated = filterItemsByOcrSource(wrapped, extracted.rawText);
+    const finalItems = ocrValidated.accepted.map((row) => row.item);
+
+    logOcrValidationDiagnostics(
+      {
+        ocrTextLength: ocrValidated.ocrTextLength,
+        aiReturnedCount: enriched.items.length,
+        acceptedCount: finalItems.length,
+        rejectedCount: ocrValidated.rejected.length,
+        acceptedNames: finalItems.map((i) => i.name),
+        rejectedNames: ocrValidated.rejected.map((i) => i.name),
+      },
+      "process-menu-import-draft",
+    );
+
+    if (finalItems.length === 0) {
+      throw new ProcessMenuImportDraftError(
+        "NO_PRODUCTS_DETECTED",
+        "No hemos podido detectar productos claros en esta carta. Sube una imagen más nítida o crea productos manualmente.",
+        422,
+      );
+    }
+
     const sections = groupParsedItemsIntoSections(finalItems);
     const { text: rawTextStored, truncated } = truncateRawTextForStorage(extracted.rawText);
 

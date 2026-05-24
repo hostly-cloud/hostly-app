@@ -73,9 +73,13 @@ export async function ensureBaseModifierFamilies<T extends ModifierFamilyRow = M
   return list;
 }
 
-export async function fetchModifierFamiliesForRestaurante(restauranteId: string): Promise<ModifierFamilyRow[]> {
+export async function fetchModifierFamiliesForRestaurante(
+  restauranteId: string,
+  options?: { ensureBase?: boolean },
+): Promise<ModifierFamilyRow[]> {
   const loaded = await loadModifierFamiliesFromApi(restauranteId);
   if (!loaded.ok) return [];
+  if (options?.ensureBase === false) return loaded.items;
   return ensureBaseModifierFamilies(restauranteId, loaded.items);
 }
 

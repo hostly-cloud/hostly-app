@@ -52,7 +52,7 @@ export default function OnboardingPage() {
         </button>
       }
     >
-      <HostlySection stack="sm" className="flex min-h-0 flex-1 flex-col overflow-hidden pt-1">
+      <HostlySection stack="sm" className="onboarding-scroll-host pt-1">
         <OnboardingApp />
       </HostlySection>
     </ModulePageShell>

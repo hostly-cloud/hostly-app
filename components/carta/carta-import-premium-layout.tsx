@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent, CSSProperties, DragEvent, ReactNode, RefObject } from "react";
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import type { TipoProductoVenta } from "@/lib/platos-local";
 
@@ -406,6 +406,16 @@ export type CartaImportPremiumLayoutProps = {
   onAnalyze: () => void;
   onExample?: () => void;
   onClearFile?: () => void;
+  /** Tras análisis OK: productos detectados (onboarding). */
+  analyzeResultCount?: number;
+  /** Ir a pantalla de revisión del catálogo. */
+  onGoReviewCatalog?: () => void;
+  /** Error de análisis visible + reintento. */
+  analyzeError?: string | null;
+  onRetryAnalyze?: () => void;
+  /** Sin productos tras validación OCR/IA. */
+  noProductsDetected?: boolean;
+  onUploadAnother?: () => void;
   showHero?: boolean;
   headerActions?: ReactNode;
   /** Menos altura vertical + sin minHeights agresivos (importar carta en portátil). */
@@ -431,6 +441,12 @@ export default function CartaImportPremiumLayout({
   onAnalyze,
   onExample,
   onClearFile,
+  analyzeResultCount,
+  onGoReviewCatalog,
+  analyzeError,
+  onRetryAnalyze,
+  noProductsDetected,
+  onUploadAnother,
   showHero,
   headerActions,
   wizardActiveStep,
@@ -443,9 +459,22 @@ export default function CartaImportPremiumLayout({
   const cv = Boolean(compactViewport);
   const ice = variant === "onboarding";
   const shell = ice ? cardShellLight : cardShell;
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const sync = () => setIsMobileLayout(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  /** Onboarding en móvil: apilado + scroll de página. En desktop onboarding: sin overflow interno que recorte. */
+  const mIce = ice && isMobileLayout;
+  const iceScroll = ice;
 
   const iaKeys = useMemo(() => [keys.ia0, keys.ia1, keys.ia2, keys.ia3] as const, [keys]);
   const iaLabel = t(iaKeys[iaPhaseIndex % 4]);
+  const hasAnalyzeResult = Boolean(analyzeResultCount != null && analyzeResultCount > 0);
+  const showAnalyzeCta = Boolean(file && !busy && !hasAnalyzeResult);
 
   const benefits = useMemo(() => [keys.b1, keys.b2, keys.b3, keys.b4], [keys]);
   const p = Math.max(0, Math.min(1, busyProgress ?? 0));
@@ -458,13 +487,14 @@ export default function CartaImportPremiumLayout({
 
   return (
     <div
+      className={iceScroll ? "onboarding-scroll-content max-w-full pb-[max(1.25rem,env(safe-area-inset-bottom,0px))]" : undefined}
       style={{
         display: "flex",
         flexDirection: "column",
         gap: cv ? 8 : ice ? 13 : 22,
-        minHeight: cv ? 0 : undefined,
-        flex: cv ? 1 : undefined,
-        overflow: cv ? "hidden" : undefined,
+        minHeight: cv ? 0 : iceScroll ? undefined : undefined,
+        flex: cv ? 1 : iceScroll ? undefined : undefined,
+        overflow: cv ? "hidden" : iceScroll ? "visible" : undefined,
       }}
     >
       {showHeroBlock ? (
@@ -585,40 +615,45 @@ export default function CartaImportPremiumLayout({
       <div
         style={{
           display: "flex",
+          flexDirection: mIce ? "column" : undefined,
           flexWrap: "wrap",
           gap: cv ? 12 : ice ? 14 : 22,
-          alignItems: cv ? "flex-start" : "stretch",
-          minHeight: cv ? 0 : undefined,
-          flex: cv ? 1 : undefined,
-          overflow: cv ? "hidden" : undefined,
+          alignItems: cv ? "flex-start" : mIce ? "stretch" : "stretch",
+          minHeight: cv ? 0 : iceScroll ? undefined : undefined,
+          flex: cv ? 1 : iceScroll ? undefined : undefined,
+          overflow: cv ? "hidden" : iceScroll ? "visible" : undefined,
+          width: mIce ? "100%" : undefined,
+          maxWidth: mIce ? "100%" : undefined,
         }}
       >
         {/* Columna principal: subida */}
         <div
           style={{
-            flex: ice ? "2.1 1 400px" : "1.5 1 340px",
-            minWidth: ice ? 240 : 260,
+            flex: mIce ? "1 1 auto" : ice ? "2.1 1 400px" : "1.5 1 340px",
+            minWidth: mIce ? 0 : ice ? 240 : 260,
+            width: mIce ? "100%" : undefined,
+            maxWidth: mIce ? "100%" : undefined,
             display: "flex",
             flexDirection: "column",
             gap: cv ? 8 : ice ? 10 : 12,
-            minHeight: cv ? 0 : undefined,
+            minHeight: cv ? 0 : mIce ? undefined : undefined,
           }}
         >
           <div
             style={{
               ...shell,
               padding: 0,
-              overflow: "hidden",
+              overflow: iceScroll ? "visible" : "hidden",
               border: ice ? "1px solid var(--hostly-table-divider-soft)" : "1px solid rgba(100, 116, 139, 0.38)",
               boxShadow: ice
                 ? "var(--hostly-shadow-hairline)"
                 : cv
                   ? "0 0 0 1px rgba(0,0,0,0.12), 0 14px 36px rgba(0,0,0,0.32), 0 0 28px rgba(251,191,36,0.03)"
                   : "0 0 0 1px rgba(0,0,0,0.15), 0 24px 56px rgba(0,0,0,0.4), 0 0 40px rgba(251,191,36,0.04)",
-              minHeight: cv ? 0 : ice ? 380 : 460,
-              flex: cv ? 1 : undefined,
-              display: cv ? "flex" : undefined,
-              flexDirection: cv ? "column" : undefined,
+              minHeight: iceScroll ? undefined : cv ? 0 : 460,
+              flex: cv ? 1 : iceScroll ? undefined : undefined,
+              display: cv ? "flex" : iceScroll ? undefined : undefined,
+              flexDirection: cv ? "column" : iceScroll ? undefined : undefined,
             }}
           >
             <div
@@ -688,8 +723,8 @@ export default function CartaImportPremiumLayout({
                 gap: cv ? 10 : ice ? 12 : 16,
                 padding: cv ? "14px 14px 12px" : ice ? "22px 18px 18px" : "26px 20px 22px",
                 boxSizing: "border-box",
-                overflow: cv ? "auto" : undefined,
-                minHeight: cv ? 200 : ice ? 300 : 368,
+                overflow: cv ? "auto" : iceScroll ? "visible" : undefined,
+                minHeight: iceScroll ? undefined : cv ? 200 : 368,
                 cursor: busy ? "wait" : "pointer",
               }}
             >
@@ -749,22 +784,64 @@ export default function CartaImportPremiumLayout({
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: cv ? 5 : 8, width: "100%", maxWidth: ice ? 480 : 380 }}>
+                {hasAnalyzeResult && onGoReviewCatalog ? (
+                  <div
+                    style={{
+                      width: "100%",
+                      maxWidth: ice ? "min(520px, 100%)" : 440,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: cv ? 8 : 10,
+                      padding: cv ? "10px 12px" : "12px 14px",
+                      borderRadius: ice ? 12 : 13,
+                      border: ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 22%, var(--hostly-table-divider-soft))" : "1px solid rgba(52, 211, 153, 0.35)",
+                      background: ice ? "var(--hostly-success-soft)" : "rgba(6, 78, 59, 0.22)",
+                      boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: cv ? 14 : 15, fontWeight: ice ? 760 : 800, color: ice ? "var(--hostly-navy-deep)" : "#ecfdf5", lineHeight: 1.35 }}>
+                      {t("onboarding.catalogCount", { n: String(analyzeResultCount) })}
+                    </p>
+                    <p style={{ margin: 0, fontSize: cv ? 11 : 12, color: ice ? "var(--hostly-ink-muted)" : "#94a3b8", lineHeight: 1.45 }}>
+                      {t(keys.mockCaption)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onGoReviewCatalog();
+                      }}
+                      style={{
+                        border: ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 22%, transparent)" : "none",
+                        background: ice ? "var(--hostly-accent)" : "linear-gradient(180deg, rgba(251,191,36,1) 0%, rgba(217,119,6,0.95) 100%)",
+                        color: ice ? "var(--hostly-navy-deep)" : "#1c1917",
+                        padding: cv ? "11px 18px" : "13px 22px",
+                        borderRadius: ice ? 12 : 14,
+                        fontWeight: ice ? 750 : 800,
+                        fontSize: cv ? 14 : 15,
+                        cursor: "pointer",
+                        width: "100%",
+                        boxShadow: ice ? "var(--hostly-shadow-hairline)" : "0 14px 36px rgba(217,119,6,0.32)",
+                      }}
+                    >
+                      {t("onboarding.catalogTitle")}
+                    </button>
+                  </div>
+                ) : (
+                  <>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log("[UI] YELLOW BUTTON CLICK");
                     if (!file) {
-                      console.log("[UI] OPEN FILE PICKER");
                       onOpenFileDialog();
                       return;
                     }
-                    console.log("[UI] START AI ANALYSIS");
-                    console.log("[UI] selected file:", file?.name || null);
                     onAnalyze();
                   }}
-                  disabled={busy}
+                  disabled={busy || (Boolean(file) && !showAnalyzeCta)}
                   style={{
                     border: busy ? undefined : ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 22%, transparent)" : "none",
                     background: busy
@@ -785,7 +862,7 @@ export default function CartaImportPremiumLayout({
                     maxWidth: ice ? "min(440px, 100%)" : 340,
                   }}
                 >
-                  {t(keys.ctaPrimaryPick)}
+                  {busy ? t(keys.analyzing) : file ? t(keys.ctaAnalyze) : t(keys.ctaPrimaryPick)}
                 </button>
                 {!file && !busy ? (
                   <p
@@ -802,6 +879,8 @@ export default function CartaImportPremiumLayout({
                     {t(keys.ctaPrimaryHint)}
                   </p>
                 ) : null}
+                  </>
+                )}
               </div>
 
               {onExample ? (
@@ -954,44 +1033,118 @@ export default function CartaImportPremiumLayout({
                       PDF · {file.name}
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // DEBUG temporal: asegurar que este es el botón real pulsado.
-                      console.log("[UI] START AI ANALYSIS");
-                      console.log("[UI] selected file before analysis:", file?.name || null);
-                      onAnalyze();
-                    }}
-                    style={{
-                      border: ice ? "1px solid color-mix(in srgb, var(--hostly-accent) 28%, var(--hostly-table-divider-soft))" : "none",
-                      width: "100%",
-                      background: busy
-                        ? ice
-                          ? "var(--hostly-table-head-surface)"
-                          : "rgba(71,85,105,0.5)"
-                        : ice
-                          ? "color-mix(in srgb, var(--hostly-accent-soft) 78%, transparent)"
-                          : "linear-gradient(180deg, rgba(56,189,248,0.28) 0%, rgba(8,47,73,0.6) 100%)",
-                      color: busy ? (ice ? "var(--hostly-ink-muted)" : "#e0f2fe") : ice ? "var(--hostly-accent)" : "#e0f2fe",
-                      borderWidth: ice ? undefined : 1,
-                      borderStyle: ice ? undefined : "solid",
-                      borderColor: ice ? undefined : "rgba(56,189,248,0.45)",
-                      padding: cv ? "10px 16px" : ice ? "12px 18px" : "14px 20px",
-                      borderRadius: cv ? 10 : ice ? 11 : 12,
-                      fontWeight: ice ? 750 : 800,
-                      fontSize: cv ? 14 : 15,
-                      cursor: busy ? "wait" : "pointer",
-                      boxShadow: ice ? "var(--hostly-shadow-hairline)" : undefined,
-                    }}
-                  >
-                    {busy ? t(keys.analyzing) : t(keys.ctaAnalyze)}
-                  </button>
-                  <div style={{ fontSize: 11, color: ice ? "var(--hostly-ink-muted)" : "#94a3b8", textAlign: "center", lineHeight: 1.45 }}>
-                    {t("cartaImport.fileReadyHint")}
-                  </div>
+                  {analyzeError && onRetryAnalyze && !noProductsDetected ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        padding: cv ? "10px 12px" : "12px 14px",
+                        borderRadius: 10,
+                        border: "1px solid color-mix(in srgb, #b42318 28%, transparent)",
+                        background: "color-mix(in srgb, #fef2f2 92%, transparent)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 650, color: "#b42318", lineHeight: 1.45 }}>{analyzeError}</p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onRetryAnalyze();
+                        }}
+                        style={{
+                          alignSelf: "flex-start",
+                          border: "1px solid color-mix(in srgb, #b42318 22%, transparent)",
+                          background: "var(--hostly-surface-card-solid)",
+                          color: "#b42318",
+                          padding: "8px 14px",
+                          borderRadius: 9,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          cursor: busy ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {t(keys.ctaAnalyze)}
+                      </button>
+                    </div>
+                  ) : null}
+                  {noProductsDetected ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        padding: cv ? "12px 14px" : "14px 16px",
+                        borderRadius: 11,
+                        border: "1px solid color-mix(in srgb, #b45309 24%, transparent)",
+                        background: "color-mix(in srgb, #fffbeb 92%, transparent)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 10,
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 720, color: "#92400e", lineHeight: 1.4 }}>
+                        {t("cartaImport.noProductsDetectedTitle")}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 560, color: "#a16207", lineHeight: 1.45 }}>
+                        {t("cartaImport.noProductsDetectedSub")}
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {onUploadAnother ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onUploadAnother();
+                            }}
+                            style={{
+                              border: "1px solid color-mix(in srgb, var(--hostly-accent) 22%, transparent)",
+                              background: ice ? "var(--hostly-accent)" : "rgba(251,191,36,0.95)",
+                              color: ice ? "var(--hostly-navy-deep)" : "#1c1917",
+                              padding: "9px 16px",
+                              borderRadius: 10,
+                              fontWeight: 750,
+                              fontSize: 12,
+                              cursor: busy ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {t("cartaImport.uploadAnotherFile")}
+                          </button>
+                        ) : null}
+                        {onRetryAnalyze ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onRetryAnalyze();
+                            }}
+                            style={{
+                              border: "1px solid var(--hostly-table-divider-soft)",
+                              background: "var(--hostly-surface-card-solid)",
+                              color: "var(--hostly-ink-muted)",
+                              padding: "9px 14px",
+                              borderRadius: 10,
+                              fontWeight: 700,
+                              fontSize: 12,
+                              cursor: busy ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {t(keys.ctaAnalyze)}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                  {showAnalyzeCta ? (
+                    <div style={{ fontSize: 11, color: ice ? "var(--hostly-ink-muted)" : "#94a3b8", textAlign: "center", lineHeight: 1.45, width: "100%" }}>
+                      {t("cartaImport.fileReadyHint")}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1098,15 +1251,16 @@ export default function CartaImportPremiumLayout({
         {/* Columna valor / confianza */}
         <div
           style={{
-            flex: ice ? "0.95 1 232px" : "0.95 1 300px",
-            minWidth: ice ? 200 : 260,
-            maxWidth: ice ? (cv ? 300 : 320) : cv ? 400 : 440,
+            flex: mIce ? "1 1 auto" : ice ? "0.95 1 232px" : "0.95 1 300px",
+            minWidth: mIce ? 0 : ice ? 200 : 260,
+            maxWidth: mIce ? "100%" : ice ? (cv ? 300 : 320) : cv ? 400 : 440,
+            width: mIce ? "100%" : undefined,
             display: "flex",
             flexDirection: "column",
             gap: cv ? (ice ? 8 : 9) : ice ? 10 : 14,
-            minHeight: cv ? 0 : undefined,
-            maxHeight: cv ? "min(100%, calc(100dvh - 200px))" : undefined,
-            overflow: cv ? "auto" : undefined,
+            minHeight: cv ? 0 : mIce ? undefined : undefined,
+            maxHeight: iceScroll ? undefined : cv ? "min(100%, calc(100dvh - 200px))" : undefined,
+            overflow: iceScroll ? "visible" : cv ? "auto" : undefined,
           }}
         >
           <div style={{ ...shell, padding: cv ? "10px 12px 9px" : ice ? "12px 12px 10px" : "16px 16px 14px", flexShrink: 0 }}>

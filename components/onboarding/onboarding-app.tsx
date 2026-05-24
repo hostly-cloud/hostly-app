@@ -5,10 +5,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
+import { useAuth } from "@/components/auth/auth-context";
 import CartaImportPremiumLayout from "@/components/carta/carta-import-premium-layout";
 import { fetchCartaCategorias, fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
-import { mockExtractMenuFromPhoto, type ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
+import { loadCartaCategoriasLocal } from "@/lib/carta-categorias/local-store";
+import { loadCartaFamiliasLocal } from "@/lib/carta-categorias/familias-local-store";
+import type { ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
+import {
+  extractMenuFromUpload,
+  MenuImportExtractError,
+  MenuImportNoProductsError,
+} from "@/lib/carta/extract-menu-from-upload";
 import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { requestCreateStaffInvite } from "@/lib/staff-invites/request-create-staff-invite";
+import { isValidStaffInviteEmail } from "@/lib/staff-invites/validate-email";
 import {
   applyDefaultModifierFamilyIfEligible,
   fetchModifierFamiliesForRestaurante,
@@ -21,6 +31,15 @@ import {
   type OnboardingCheckpoints,
   saveOnboardingCheckpoints,
 } from "@/lib/hostly/onboarding-checkpoints";
+import {
+  clearOnboardingCartaFileBlob,
+  fileMetaFromFile,
+  loadOnboardingSession,
+  persistOnboardingCartaFile,
+  restoreOnboardingCartaFile,
+  saveOnboardingSession,
+  type OnboardingCartaPhase,
+} from "@/lib/hostly/onboarding-session";
 import { loadRestaurantProfile, saveRestaurantProfile, type RestaurantProfile, TIPOS_NEGOCIO, MODELOS_VENTA } from "@/lib/hostly/restaurant-profile";
 import { saveEscandalloCosteForPlato } from "@/lib/hostly/save-escandallo-coste-onboarding";
 import {
@@ -31,6 +50,13 @@ import {
   type TipoProductoVenta,
 } from "@/lib/platos-local";
 import { loadStock, saveStock, UNIDADES_STOCK, newStockProductoId, type StockProducto, type UnidadStock } from "@/lib/stock-local";
+import {
+  hasMenuInventorySources,
+  suggestInventoryFromMenu,
+  suggestOnboardingBaseInventory,
+  type InventoryMenuSuggestion,
+  type MenuInventorySourceItem,
+} from "@/lib/inventory/suggest-inventory-from-menu";
 import {
   defaultModulosForRol,
   loadUsuarios,
@@ -85,6 +111,22 @@ function normalizeName(s: string): string {
   return s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+const ONBOARDING_FETCH_TIMEOUT_MS = 8_000;
+
+async function withOnboardingFetchTimeout<T>(promise: Promise<T>, fallback: () => T): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timeoutId = setTimeout(() => resolve(fallback()), ONBOARDING_FETCH_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 function marginPct(coste: number, pvp: number): number | null {
   if (pvp <= 0 || !Number.isFinite(pvp)) return null;
   if (!Number.isFinite(coste)) return null;
@@ -99,20 +141,9 @@ function marginTier(pct: number | null): "none" | "excelente" | "bueno" | "ajust
   return "peligro";
 }
 
-const STOCK_SUGGESTIONS: { nombre: string; unidad: UnidadStock; stock_actual: number; stock_minimo: number }[] = [
-  { nombre: "Arroz", unidad: "kg", stock_actual: 8, stock_minimo: 3 },
-  { nombre: "Aceite de oliva", unidad: "l", stock_actual: 5, stock_minimo: 2 },
-  { nombre: "Sal", unidad: "kg", stock_actual: 2, stock_minimo: 0.5 },
-  { nombre: "Tomate", unidad: "kg", stock_actual: 6, stock_minimo: 4 },
-  { nombre: "Cerveza", unidad: "uds", stock_actual: 120, stock_minimo: 48 },
-  { nombre: "Vino tinto", unidad: "uds", stock_actual: 36, stock_minimo: 12 },
-  { nombre: "Refresco", unidad: "uds", stock_actual: 72, stock_minimo: 24 },
-  { nombre: "Leche", unidad: "l", stock_actual: 10, stock_minimo: 4 },
-  { nombre: "Café", unidad: "kg", stock_actual: 2, stock_minimo: 0.5 },
-  { nombre: "Pasta", unidad: "kg", stock_actual: 5, stock_minimo: 2 },
-];
-
 type IngLine = { id: string; stockId: string; cantidad: string; costeLinea: string };
+
+type MenuInventoryDraft = InventoryMenuSuggestion & { selected: boolean };
 
 const ONBOARDING_CP_ORDER: readonly OnboardingCheckpointKey[] = [
   "negocio",
@@ -155,11 +186,16 @@ function groupCatalogRowsBySuggestedCategory(rows: ExtractedMenuRow[]): { catKey
 export default function OnboardingApp() {
   const { t, locale } = useI18n();
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const { user, restaurantId: authRestaurantId, restaurantName: authRestaurantName } = useAuth();
+  const initialSession = useMemo(() => loadOnboardingSession(), []);
+  const [step, setStep] = useState(initialSession.step);
   const [checkpoints, setCheckpoints] = useState<OnboardingCheckpoints>(loadOnboardingCheckpoints);
   const [profile, setProfile] = useState<RestaurantProfile>(loadRestaurantProfile);
   const [savedHint, setSavedHint] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const analyzeLock = useRef(false);
+  const sessionReady = useRef(false);
+  const [sessionHydrated, setSessionHydrated] = useState(false);
 
   const flashSaved = useCallback((msg: string) => {
     setSavedHint(msg);
@@ -172,7 +208,57 @@ export default function OnboardingApp() {
   const [dragOver, setDragOver] = useState(false);
   const [procBusy, setProcBusy] = useState(false);
   const [cartaIaPhase, setCartaIaPhase] = useState(0);
+  const [cartaPhase, setCartaPhase] = useState<OnboardingCartaPhase>(initialSession.cartaPhase);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(initialSession.analyzeError);
+  const [noProductsDetected, setNoProductsDetected] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [catalogDraft, setCatalogDraft] = useState<ExtractedMenuRow[]>(initialSession.catalogDraft);
+  const [catFilter, setCatFilter] = useState<"all" | TipoProductoVenta>("all");
+  const [catalogCreating, setCatalogCreating] = useState(false);
+  const [catalogCreateError, setCatalogCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const restored = await restoreOnboardingCartaFile();
+      if (cancelled) return;
+      if (restored) {
+        setFile(restored.file);
+        setPreviewUrl((prev) => {
+          if (prev && prev !== restored.previewUrl) URL.revokeObjectURL(prev);
+          return restored.previewUrl;
+        });
+        if (initialSession.catalogDraft.length > 0) {
+          setCartaPhase("analyzed");
+        } else if (initialSession.cartaPhase === "file_ready" || initialSession.fileMeta) {
+          setCartaPhase("file_ready");
+        }
+      } else if (initialSession.fileMeta && initialSession.catalogDraft.length === 0) {
+        setCartaPhase("file_ready");
+      }
+      if (initialSession.catalogDraft.length > 0 && initialSession.step === 1) {
+        setCartaPhase("analyzed");
+      }
+      sessionReady.current = true;
+      setSessionHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialSession.catalogDraft.length, initialSession.cartaPhase, initialSession.fileMeta, initialSession.step]);
+
+  useEffect(() => {
+    if (!sessionHydrated) return;
+    saveOnboardingSession({
+      v: 1,
+      step,
+      catalogDraft,
+      cartaPhase,
+      fileMeta: file ? fileMetaFromFile(file) : null,
+      analyzeError,
+    });
+  }, [sessionHydrated, step, catalogDraft, cartaPhase, analyzeError, file]);
 
   useEffect(() => {
     if (!procBusy) {
@@ -183,16 +269,25 @@ export default function OnboardingApp() {
     return () => clearInterval(id);
   }, [procBusy]);
 
-  const [catalogDraft, setCatalogDraft] = useState<ExtractedMenuRow[]>([]);
-  const [catFilter, setCatFilter] = useState<"all" | TipoProductoVenta>("all");
+  const goReviewCatalog = useCallback(() => {
+    if (catalogDraft.length === 0) return;
+    setStep(2);
+  }, [catalogDraft.length]);
 
   const [stockRows, setStockRows] = useState<StockProducto[]>([]);
   const [stockSearch, setStockSearch] = useState("");
+  const [stockSuggestionsVisible, setStockSuggestionsVisible] = useState(false);
+  const [menuInventoryDrafts, setMenuInventoryDrafts] = useState<MenuInventoryDraft[] | null>(null);
 
   const [uNombre, setUNombre] = useState("");
   const [uEmail, setUEmail] = useState("");
   const [uRol, setURol] = useState<UsuarioRol>("operativo");
+  const [userFormVisible, setUserFormVisible] = useState(false);
   const [usersList, setUsersList] = useState<UsuarioLocal[]>([]);
+  const [userSaving, setUserSaving] = useState(false);
+  const [usersStepBusy, setUsersStepBusy] = useState(false);
+  const [usersInviteError, setUsersInviteError] = useState<string | null>(null);
+  const [userFormError, setUserFormError] = useState<string | null>(null);
 
   const [escPlatoId, setEscPlatoId] = useState<string>("");
   const [escLines, setEscLines] = useState<IngLine[]>([]);
@@ -202,9 +297,26 @@ export default function OnboardingApp() {
   const rid = getBrowserRestauranteId();
 
   useEffect(() => {
-    setStockRows(loadStock());
     setUsersList(loadUsuarios());
-  }, [step]);
+    if (step === 3) {
+      const hasMenuCatalog =
+        catalogDraft.some((r) => r.selected && r.nombre.trim()) ||
+        loadPlatos(rid).some((p) => p.nombre.trim());
+      setStockRows(hasMenuCatalog ? [] : loadStock());
+      setStockSuggestionsVisible(false);
+      setMenuInventoryDrafts(null);
+    } else {
+      setStockRows(loadStock());
+    }
+    if (step === 4) {
+      setUserFormVisible(false);
+      setUNombre("");
+      setUEmail("");
+      setURol("operativo");
+      setUsersInviteError(null);
+      setUserFormError(null);
+    }
+  }, [step, catalogDraft, rid]);
 
   const markCheckpoint = useCallback((key: OnboardingCheckpointKey) => {
     setCheckpoints((prev) => {
@@ -228,6 +340,104 @@ export default function OnboardingApp() {
   );
 
   const platos = useMemo(() => loadPlatos(rid), [rid, step, checkpoints]);
+
+  const menuItemsForInventory = useMemo((): MenuInventorySourceItem[] => {
+    const fromDraft = catalogDraft
+      .filter((r) => r.selected && r.nombre.trim())
+      .map((r) => ({
+        name: r.nombre.trim(),
+        categoryName: (r.categoria ?? "").trim() || undefined,
+        type: r.tipoVenta,
+      }));
+    if (fromDraft.length > 0) return fromDraft;
+    return platos
+      .filter((p) => p.nombre.trim())
+      .map((p) => ({
+        name: p.nombre.trim(),
+        categoryName: (p.categoria ?? "").trim() || undefined,
+        type: p.tipoVenta,
+      }));
+  }, [catalogDraft, platos]);
+
+  const hasMenuCatalogForInventory = useMemo(
+    () => hasMenuInventorySources(menuItemsForInventory),
+    [menuItemsForInventory],
+  );
+
+  const restaurantNameForInvite = useMemo(() => {
+    const fromAuth = authRestaurantName?.trim();
+    if (fromAuth) return fromAuth;
+    const fromProfile = profile.nombre.trim();
+    if (fromProfile) return fromProfile;
+    return "Mi restaurante";
+  }, [authRestaurantName, profile.nombre]);
+
+  const persistUsersList = useCallback((next: UsuarioLocal[]) => {
+    saveUsuarios(next);
+    setUsersList(next);
+  }, []);
+
+  const createInviteForUsuario = useCallback(
+    async (usuario: UsuarioLocal): Promise<UsuarioLocal> => {
+      if (!isValidStaffInviteEmail(usuario.email)) {
+        return {
+          ...usuario,
+          inviteStatus: "error",
+          inviteError: t("onboarding.usersInviteInvalidEmail"),
+        };
+      }
+      if (!authRestaurantId) {
+        return {
+          ...usuario,
+          inviteStatus: "error",
+          inviteError: t("onboarding.usersInviteNoRestaurant"),
+        };
+      }
+      if (!user) {
+        return {
+          ...usuario,
+          inviteStatus: "error",
+          inviteError: t("onboarding.usersInviteNeedLogin"),
+        };
+      }
+
+      const result = await requestCreateStaffInvite({
+        email: usuario.email,
+        displayName: usuario.nombre,
+        role: usuario.rol,
+        restaurantName: restaurantNameForInvite,
+      });
+
+      if (!result.ok) {
+        return {
+          ...usuario,
+          inviteStatus: "error",
+          inviteError: result.details ?? result.error,
+        };
+      }
+
+      return {
+        ...usuario,
+        inviteStatus: "pending",
+        inviteUrl: result.invite.inviteUrl,
+        inviteId: result.invite.inviteId,
+        inviteError: undefined,
+      };
+    },
+    [authRestaurantId, restaurantNameForInvite, t, user],
+  );
+
+  const copyInviteLink = useCallback(
+    async (url: string) => {
+      try {
+        await navigator.clipboard.writeText(url);
+        flashSaved(t("onboarding.usersInviteCopied"));
+      } catch {
+        flashSaved(t("onboarding.usersInviteCopyFailed"));
+      }
+    },
+    [flashSaved, t],
+  );
 
   const costeSum = useMemo(() => {
     let s = 0;
@@ -278,18 +488,28 @@ export default function OnboardingApp() {
     const ok = f.type.startsWith("image/") || f.type === "application/pdf";
     if (!ok) return;
     setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev && !prev.startsWith("data:")) URL.revokeObjectURL(prev);
       return f.type.startsWith("image/") ? URL.createObjectURL(f) : null;
     });
     setFile(f);
+    setCatalogDraft([]);
+    setAnalyzeError(null);
+    setNoProductsDetected(false);
+    setCartaPhase("file_ready");
+    void persistOnboardingCartaFile(f);
   }, []);
 
   const clearCartaFile = useCallback(() => {
     setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev && !prev.startsWith("data:")) URL.revokeObjectURL(prev);
       return null;
     });
     setFile(null);
+    setCatalogDraft([]);
+    setAnalyzeError(null);
+    setNoProductsDetected(false);
+    setCartaPhase("idle");
+    clearOnboardingCartaFileBlob();
   }, []);
 
   const loadExampleMenu = useCallback(async () => {
@@ -298,19 +518,34 @@ export default function OnboardingApp() {
     pickFile(img);
   }, [locale, pickFile]);
 
-  const runAnalyze = async () => {
-    if (!file) return;
+  const runAnalyze = useCallback(async () => {
+    if (!file || procBusy || analyzeLock.current) return;
+    analyzeLock.current = true;
     setProcBusy(true);
+    setAnalyzeError(null);
+    setNoProductsDetected(false);
     try {
-      const rows = await mockExtractMenuFromPhoto(file);
+      const { rows } = await extractMenuFromUpload(file);
       setCatalogDraft(rows);
+      setCartaPhase("analyzed");
       markCheckpoint("carta");
-      setStep(2);
       flashSaved(t("onboarding.flashAnalyzed"));
+    } catch (e) {
+      if (e instanceof MenuImportNoProductsError) {
+        setNoProductsDetected(true);
+        setAnalyzeError(t("cartaImport.noProductsDetectedTitle"));
+        setCartaPhase("file_ready");
+      } else {
+        setAnalyzeError(
+          e instanceof MenuImportExtractError ? e.message : t("cartaImport.errorExtract"),
+        );
+        setCartaPhase("file_ready");
+      }
     } finally {
       setProcBusy(false);
+      analyzeLock.current = false;
     }
-  };
+  }, [file, procBusy, markCheckpoint, flashSaved, t]);
 
   const saveNegocio = () => {
     if (!profile.nombre.trim()) return;
@@ -322,74 +557,135 @@ export default function OnboardingApp() {
 
   const createCatalog = async () => {
     const sel = catalogDraft.filter((r) => r.selected && r.nombre.trim());
-    const [cartaCats, cartaFams, modifierFamilies] = await Promise.all([
-      fetchCartaCategorias(rid),
-      fetchCartaFamilias(rid),
-      fetchModifierFamiliesForRestaurante(rid),
-    ]);
-    const famByMenuId = new Map(cartaFams.map((f) => [f.id, f] as const));
-    let next = [...loadPlatos(rid)];
-    for (const r of sel) {
-      const cat = findCartaCategoriaByNameLoose(cartaCats, (r.categoria ?? "").trim() || "General");
-      const menuName = cat?.cartaFamiliaId != null ? famByMenuId.get(cat.cartaFamiliaId)?.name : undefined;
-      let plato = createPlatoDraft(rid, {
-        nombre: r.nombre.trim(),
-        categoria: cat?.name ?? ((r.categoria ?? "").trim() || "General"),
-        categoriaCartaId: cat?.id,
-        cartaFamiliaId: cat?.cartaFamiliaId?.trim() || undefined,
-        precioVenta: Number.isFinite(r.precio) ? r.precio : 0,
-        tipoVenta: r.tipoVenta,
-        activo: true,
-      });
-      plato = applyDefaultModifierFamilyIfEligible(plato, {
-        selectedCartaCategoria: cat,
-        cartaMenuFamiliaName: menuName,
-        modifierFamilies,
-      });
-      next.push(plato);
+    if (sel.length === 0 || catalogCreating) return;
+    setCatalogCreating(true);
+    setCatalogCreateError(null);
+    try {
+      const [cartaCats, cartaFams, modifierFamilies] = await Promise.all([
+        withOnboardingFetchTimeout(fetchCartaCategorias(rid), () => loadCartaCategoriasLocal(rid)),
+        withOnboardingFetchTimeout(fetchCartaFamilias(rid), () => loadCartaFamiliasLocal(rid)),
+        withOnboardingFetchTimeout(fetchModifierFamiliesForRestaurante(rid, { ensureBase: false }), () => []),
+      ]);
+      const famByMenuId = new Map(cartaFams.map((f) => [f.id, f] as const));
+      let next = [...loadPlatos(rid)];
+      for (const r of sel) {
+        const cat = findCartaCategoriaByNameLoose(cartaCats, (r.categoria ?? "").trim() || "General");
+        const menuName = cat?.cartaFamiliaId != null ? famByMenuId.get(cat.cartaFamiliaId)?.name : undefined;
+        let plato = createPlatoDraft(rid, {
+          nombre: r.nombre.trim(),
+          categoria: cat?.name ?? ((r.categoria ?? "").trim() || "General"),
+          categoriaCartaId: cat?.id,
+          cartaFamiliaId: cat?.cartaFamiliaId?.trim() || undefined,
+          precioVenta: Number.isFinite(r.precio) ? r.precio : 0,
+          tipoVenta: r.tipoVenta,
+          activo: true,
+        });
+        plato = applyDefaultModifierFamilyIfEligible(plato, {
+          selectedCartaCategoria: cat,
+          cartaMenuFamiliaName: menuName,
+          modifierFamilies,
+        });
+        next.push(plato);
+      }
+      savePlatos(rid, next);
+      markCheckpoint("catalogo");
+      setStep(3);
+      flashSaved(t("onboarding.flashCatalog"));
+    } catch (error) {
+      console.error("[onboarding] createCatalog failed", error);
+      setCatalogCreateError(t("onboarding.catalogCreateError"));
+    } finally {
+      setCatalogCreating(false);
     }
-    savePlatos(rid, next);
-    markCheckpoint("catalogo");
-    setStep(3);
-    flashSaved(t("onboarding.flashCatalog"));
   };
 
   const saveInventario = () => {
-    saveStock(stockRows);
+    const rows = stockRows.filter((r) => r.nombre.trim());
+    saveStock(rows);
     markCheckpoint("inventario");
     setStep(4);
     flashSaved(t("onboarding.flashStock"));
   };
 
   const addSuggested = () => {
-    let cur = [...stockRows];
-    const have = new Set(cur.map((x) => normalizeName(x.nombre)));
-    for (const s of STOCK_SUGGESTIONS) {
-      if (have.has(normalizeName(s.nombre))) continue;
-      cur.push({
+    setStockSuggestionsVisible(true);
+    setMenuInventoryDrafts((prev) => {
+      if (prev !== null) return prev;
+      const existingProductNames = stockRows.map((r) => r.nombre);
+      const suggestions = hasMenuCatalogForInventory
+        ? suggestInventoryFromMenu(menuItemsForInventory, { existingProductNames })
+        : suggestOnboardingBaseInventory(existingProductNames);
+      return suggestions.map((s) => ({ ...s, selected: true }));
+    });
+  };
+
+  const applySelectedMenuSuggestions = () => {
+    if (!menuInventoryDrafts?.length) return;
+    const selected = menuInventoryDrafts.filter((d) => d.selected && d.nombre.trim());
+    if (selected.length === 0) return;
+
+    const have = new Set(stockRows.map((x) => normalizeName(x.nombre)));
+    const toAdd: StockProducto[] = [];
+    const appliedKeys = new Set<string>();
+
+    for (const d of selected) {
+      const key = normalizeName(d.nombre);
+      if (!key || have.has(key)) {
+        appliedKeys.add(key);
+        continue;
+      }
+      toAdd.push({
         id: newStockProductoId(),
-        nombre: s.nombre,
-        unidad: s.unidad,
-        stock_actual: s.stock_actual,
-        stock_minimo: s.stock_minimo,
+        nombre: d.nombre.trim(),
+        unidad: d.unidad,
+        stock_actual: d.stock_actual,
+        stock_minimo: d.stock_minimo,
       });
-      have.add(normalizeName(s.nombre));
+      have.add(key);
+      appliedKeys.add(key);
     }
-    setStockRows(cur);
-    flashSaved(t("onboarding.flashSuggested"));
+
+    if (toAdd.length > 0) setStockRows((prev) => [...prev, ...toAdd]);
+
+    setMenuInventoryDrafts((prev) => {
+      if (!prev) return null;
+      const remaining = prev.filter((d) => !d.selected || !appliedKeys.has(normalizeName(d.nombre)));
+      return remaining.length > 0 ? remaining : null;
+    });
+
+    if (toAdd.length > 0) flashSaved(t("onboarding.flashSuggestedApplied", { n: String(toAdd.length) }));
   };
 
   const addManualStock = () => {
-    setStockRows((prev) => [
-      ...prev,
-      { id: newStockProductoId(), nombre: "", unidad: "uds", stock_actual: 0, stock_minimo: 0 },
-    ]);
+    setStockSuggestionsVisible(false);
+    setStockRows((prev) => {
+      if (prev.some((r) => !r.nombre.trim())) return prev;
+      return [...prev, { id: newStockProductoId(), nombre: "", unidad: "uds", stock_actual: 0, stock_minimo: 0 }];
+    });
   };
 
-  const addUser = () => {
+  const openAddUserForm = () => {
+    setUserFormVisible(true);
+    setUserFormError(null);
+    setUNombre("");
+    setUEmail("");
+    setURol("operativo");
+  };
+
+  const addUser = async () => {
     const nom = uNombre.trim();
     const em = uEmail.trim();
-    if (nom.length < 2 || !em.includes("@")) return;
+    setUserFormError(null);
+    if (nom.length < 2) {
+      setUserFormError(t("onboarding.usersFormNameRequired"));
+      return;
+    }
+    if (!isValidStaffInviteEmail(em)) {
+      setUserFormError(t("onboarding.usersInviteInvalidEmail"));
+      return;
+    }
+    if (userSaving) return;
+
     const nu: UsuarioLocal = {
       id: newUsuarioId(),
       nombre: nom,
@@ -399,16 +695,52 @@ export default function OnboardingApp() {
       modulos: defaultModulosForRol(uRol),
     };
     const next = [...loadUsuarios(), nu];
-    saveUsuarios(next);
-    setUsersList(next);
-    setUNombre("");
-    setUEmail("");
-    flashSaved(t("onboarding.flashUser"));
+    persistUsersList(next);
+    setUserSaving(true);
+    try {
+      const withInvite = await createInviteForUsuario(nu);
+      const updated = next.map((item) => (item.id === nu.id ? withInvite : item));
+      persistUsersList(updated);
+      if (withInvite.inviteStatus === "error") {
+        setUsersInviteError(withInvite.inviteError ?? t("onboarding.usersInviteGenericError"));
+      } else {
+        setUsersInviteError(null);
+        flashSaved(t("onboarding.flashUserInviteCreated"));
+      }
+      setUserFormVisible(false);
+      setUNombre("");
+      setUEmail("");
+      setURol("operativo");
+    } finally {
+      setUserSaving(false);
+    }
   };
 
-  const continueUsers = () => {
-    markCheckpoint("usuarios");
-    setStep(5);
+  const continueUsers = async () => {
+    if (usersStepBusy) return;
+    setUsersStepBusy(true);
+    setUsersInviteError(null);
+    try {
+      if (usersList.length > 0) {
+        const updated: UsuarioLocal[] = [];
+        for (const usuario of usersList) {
+          if (usuario.inviteStatus === "pending" && usuario.inviteUrl) {
+            updated.push(usuario);
+            continue;
+          }
+          updated.push(await createInviteForUsuario(usuario));
+        }
+        persistUsersList(updated);
+        const firstError = updated.find((item) => item.inviteStatus === "error");
+        if (firstError?.inviteError) {
+          setUsersInviteError(firstError.inviteError);
+        }
+      }
+      markCheckpoint("usuarios");
+      setStep(5);
+    } finally {
+      setUsersStepBusy(false);
+    }
   };
 
   const addEscLine = () => {
@@ -611,7 +943,7 @@ export default function OnboardingApp() {
     switch (step) {
       case 0:
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="onboarding-scroll-step" style={{ gap: 10 }}>
             <h2 className={onboardingSectionTitle}>{t("onboarding.negocioTitle")}</h2>
             <p style={onboardingLead}>{t("onboarding.negocioSub")}</p>
             <div
@@ -691,8 +1023,17 @@ export default function OnboardingApp() {
             dragOver={dragOver}
             busy={procBusy}
             iaPhaseIndex={cartaIaPhase}
-            wizardActiveStep={file || procBusy ? 2 : 1}
-            wizardCompletedThrough={file ? 1 : 0}
+            wizardActiveStep={procBusy ? 2 : cartaPhase === "analyzed" ? 3 : file ? 2 : 1}
+            wizardCompletedThrough={cartaPhase === "analyzed" ? 2 : file ? 1 : 0}
+            analyzeResultCount={cartaPhase === "analyzed" ? catalogDraft.length : 0}
+            onGoReviewCatalog={goReviewCatalog}
+            analyzeError={analyzeError}
+            onRetryAnalyze={() => void runAnalyze()}
+            noProductsDetected={noProductsDetected}
+            onUploadAnother={() => {
+              clearCartaFile();
+              fileRef.current?.click();
+            }}
             fileRef={fileRef}
             onFileInputChange={(e) => pickFile(e.target.files?.[0] ?? null)}
             onDragOver={(e) => {
@@ -732,13 +1073,25 @@ export default function OnboardingApp() {
           />
         );
       case 2: {
+        if (catalogDraft.length === 0) {
+          return (
+            <div className="onboarding-scroll-step" style={{ gap: 10 }}>
+              <h2 className={onboardingSectionTitle}>{t("onboarding.catalogTitle")}</h2>
+              <p style={onboardingLead}>{t("onboarding.catalogAssistLead")}</p>
+              <button type="button" onClick={() => setStep(1)} className="hostly-button-primary self-start px-4 py-2 text-[13px] font-semibold">
+                {t("onboarding.cartaAnalyze")}
+              </button>
+            </div>
+          );
+        }
         const nPlatos = catalogDraft.filter((x) => x.tipoVenta === "plato").length;
         const nBeb = catalogDraft.filter((x) => x.tipoVenta === "bebida").length;
+        const selectedCatalogCount = catalogDraft.filter((r) => r.selected && r.nombre.trim()).length;
         const groups = groupCatalogRowsBySuggestedCategory(filteredCatalog);
         const iaRowColumns = "38px minmax(140px,2.4fr) minmax(100px,1fr) minmax(108px,1fr) minmax(84px,0.75fr)" as const;
 
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+          <div className="onboarding-scroll-step" style={{ gap: 8 }}>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <h2 className={onboardingSectionTitle}>{t("onboarding.catalogTitle")}</h2>
               <span className="text-[11px] font-semibold text-[color:var(--hostly-ink-muted)]">
@@ -812,14 +1165,8 @@ export default function OnboardingApp() {
                 );
               })}
             </div>
-            <div
-              style={{
-                borderRadius: 10,
-                border: "1px solid var(--hostly-table-divider-soft)",
-                overflow: "hidden",
-                boxShadow: "var(--hostly-shadow-hairline)",
-              }}
-            >
+            <div className="onboarding-scroll-table-wrap">
+              <div className="onboarding-scroll-table-x">
               <div
                 style={{
                   display: "grid",
@@ -827,9 +1174,7 @@ export default function OnboardingApp() {
                   gap: 8,
                   padding: "7px 11px",
                   borderBottom: "1px solid var(--hostly-table-divider-soft)",
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 1,
+                  minWidth: "min(100%, 560px)",
                   background: "var(--hostly-table-head-surface)",
                   fontSize: 9,
                   fontWeight: 650,
@@ -899,6 +1244,7 @@ export default function OnboardingApp() {
                         gap: 8,
                         padding: "7px 11px",
                         alignItems: "center",
+                        minWidth: "min(100%, 560px)",
                         borderBottom: "1px solid var(--hostly-table-divider-faint)",
                         background: "var(--hostly-surface-card-solid)",
                         borderLeft: "2px solid color-mix(in srgb, var(--hostly-accent-soft) 100%, transparent)",
@@ -941,48 +1287,44 @@ export default function OnboardingApp() {
                   ))}
                 </div>
               ))}
+              </div>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <button type="button" onClick={() => void createCatalog()} className="hostly-button-primary px-4 py-2 text-[13px] font-semibold">
-                {t("onboarding.ctaCreateCatalog")}
+            <div className="onboarding-scroll-step-footer">
+              {catalogCreateError ? (
+                <p style={{ width: "100%", margin: 0, fontSize: 12, lineHeight: 1.45, color: "#b42318", fontWeight: 600 }}>
+                  {catalogCreateError}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void createCatalog()}
+                disabled={selectedCatalogCount === 0 || catalogCreating}
+                className={`hostly-button-primary px-4 py-2 text-[13px] font-semibold disabled:opacity-50 ${catalogCreating ? "cursor-wait" : ""}`}
+              >
+                {catalogCreating ? "…" : t("onboarding.ctaCreateCatalog")}
               </button>
-              <button type="button" onClick={() => setStep(1)} className="hostly-button-secondary px-3 py-2 text-[12px] font-semibold">
+              <button type="button" onClick={() => setStep(1)} disabled={catalogCreating} className="hostly-button-secondary px-3 py-2 text-[12px] font-semibold disabled:opacity-50">
                 {t("onboarding.ctaReanalyze")}
               </button>
             </div>
           </div>
         );
       }
-      case 3:
+      case 3: {
+        const stockRowColumns = "minmax(140px,3fr) minmax(88px,1fr) minmax(96px,1fr) minmax(96px,1fr)" as const;
+        const suggestRowColumns = "38px minmax(140px,2.2fr) minmax(88px,1fr) minmax(96px,1fr) minmax(96px,1fr) minmax(72px,0.8fr)" as const;
+        const filteredStockRows = stockRows.filter(
+          (r) => normalizeName(r.nombre).includes(normalizeName(stockSearch)) || !stockSearch.trim(),
+        );
+        const selectedSuggestCount = menuInventoryDrafts?.filter((d) => d.selected && d.nombre.trim()).length ?? 0;
+        const suggestPanelTitle = hasMenuCatalogForInventory ? t("onboarding.stockSuggestTitle") : t("onboarding.stockSuggestBaseTitle");
+        const suggestPanelHint = hasMenuCatalogForInventory ? t("onboarding.stockSuggestHint") : t("onboarding.stockSuggestBaseHint");
+
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="onboarding-scroll-step" style={{ gap: 10 }}>
             <h2 className={onboardingSectionTitle}>{t("onboarding.stockTitle")}</h2>
             <p style={onboardingLead}>{t("onboarding.stockSub")}</p>
             <input style={inp} placeholder={t("onboarding.stockSearch")} value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {STOCK_SUGGESTIONS.map((s) => (
-                <button
-                  key={s.nombre}
-                  type="button"
-                  onClick={() => {
-                    if (stockRows.some((x) => normalizeName(x.nombre) === normalizeName(s.nombre))) return;
-                    setStockRows((prev) => [...prev, { id: newStockProductoId(), ...s }]);
-                  }}
-                  style={{
-                    border: "1px solid var(--hostly-table-divider-soft)",
-                    background: "var(--hostly-table-row-hover)",
-                    color: "var(--hostly-ink)",
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    fontSize: 10,
-                    fontWeight: 650,
-                    cursor: "pointer",
-                  }}
-                >
-                  + {s.nombre}
-                </button>
-              ))}
-            </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button type="button" onClick={addSuggested} className="hostly-button-secondary text-[12px] font-semibold px-3 py-1.5 min-h-[36px] border-[color-mix(in_srgb,var(--hostly-accent)_22%,transparent)] !bg-[var(--hostly-info-soft)]">
                 {t("onboarding.stockAddSuggested")}
@@ -991,15 +1333,161 @@ export default function OnboardingApp() {
                 {t("onboarding.stockAddManual")}
               </button>
             </div>
-            <div style={{ border: "1px solid var(--hostly-table-divider-soft)", borderRadius: 10, overflow: "hidden", boxShadow: "var(--hostly-shadow-hairline)" }}>
-              {stockRows
-                .filter((r) => normalizeName(r.nombre).includes(normalizeName(stockSearch)) || !stockSearch.trim())
-                .map((r) => (
+            {stockSuggestionsVisible ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  padding: "10px 11px",
+                  borderRadius: 10,
+                  border: "1px solid color-mix(in srgb, var(--hostly-accent-soft) 100%, transparent)",
+                  background: "color-mix(in srgb, var(--hostly-info-soft) 55%, transparent)",
+                  boxShadow: "var(--hostly-shadow-hairline)",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "color-mix(in srgb, var(--hostly-accent) 72%, transparent)" }}>
+                    {suggestPanelTitle}
+                  </div>
+                  <p style={{ margin: "5px 0 0", fontSize: 11, lineHeight: 1.45, color: "var(--hostly-navy-deep)", fontWeight: 580 }}>
+                    {suggestPanelHint}
+                  </p>
+                </div>
+                {!menuInventoryDrafts || menuInventoryDrafts.length === 0 ? (
+                  hasMenuCatalogForInventory ? (
+                    <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: "var(--hostly-ink-muted)", fontWeight: 600 }}>
+                      {t("onboarding.stockSuggestEmpty")}
+                    </p>
+                  ) : null
+                ) : (
+                  <>
+                    <div className="onboarding-scroll-table-wrap">
+                      <div className="onboarding-scroll-table-x">
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: suggestRowColumns,
+                            gap: 8,
+                            padding: "7px 11px",
+                            borderBottom: "1px solid var(--hostly-table-divider-soft)",
+                            minWidth: "min(100%, 560px)",
+                            background: "var(--hostly-table-head-surface)",
+                            fontSize: 9,
+                            fontWeight: 650,
+                            color: "var(--hostly-ink-faint)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                          }}
+                        >
+                          <span aria-hidden />
+                          <span>{t("carta.colNombre")}</span>
+                          <span>{t("onboarding.stockColUnit")}</span>
+                          <span>{t("onboarding.stockColActual")}</span>
+                          <span>{t("onboarding.stockColMin")}</span>
+                          <span>{t("onboarding.stockColCategory")}</span>
+                        </div>
+                        {menuInventoryDrafts.map((d) => (
+                          <div
+                            key={d.id}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: suggestRowColumns,
+                              gap: 8,
+                              padding: "7px 11px",
+                              alignItems: "center",
+                              minWidth: "min(100%, 560px)",
+                              borderBottom: "1px solid var(--hostly-table-divider-faint)",
+                              background: d.selected ? "var(--hostly-surface-card-solid)" : "color-mix(in srgb, var(--hostly-table-head-surface) 88%, transparent)",
+                              opacity: d.selected ? 1 : 0.72,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={d.selected}
+                              onChange={() =>
+                                setMenuInventoryDrafts((prev) =>
+                                  prev ? prev.map((x) => (x.id === d.id ? { ...x, selected: !x.selected } : x)) : prev,
+                                )
+                              }
+                              style={{ width: 16, height: 16 }}
+                            />
+                            <input
+                              style={{ ...inp, minHeight: 36, padding: "6px 8px", fontSize: 13 }}
+                              value={d.nombre}
+                              onChange={(e) =>
+                                setMenuInventoryDrafts((prev) =>
+                                  prev ? prev.map((x) => (x.id === d.id ? { ...x, nombre: e.target.value } : x)) : prev,
+                                )
+                              }
+                            />
+                            <select
+                              style={{ ...inp, minHeight: 36, padding: "6px", fontSize: 12, cursor: "pointer" }}
+                              value={d.unidad}
+                              onChange={(e) =>
+                                setMenuInventoryDrafts((prev) =>
+                                  prev ? prev.map((x) => (x.id === d.id ? { ...x, unidad: e.target.value as UnidadStock } : x)) : prev,
+                                )
+                              }
+                            >
+                              {UNIDADES_STOCK.map((u) => (
+                                <option key={u} value={u}>
+                                  {u}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="number"
+                              style={{ ...inp, minHeight: 36, padding: "6px", fontSize: 13 }}
+                              value={d.stock_actual}
+                              onChange={(e) =>
+                                setMenuInventoryDrafts((prev) =>
+                                  prev
+                                    ? prev.map((x) => (x.id === d.id ? { ...x, stock_actual: Number(e.target.value) || 0 } : x))
+                                    : prev,
+                                )
+                              }
+                            />
+                            <input
+                              type="number"
+                              style={{ ...inp, minHeight: 36, padding: "6px", fontSize: 13 }}
+                              value={d.stock_minimo}
+                              onChange={(e) =>
+                                setMenuInventoryDrafts((prev) =>
+                                  prev
+                                    ? prev.map((x) => (x.id === d.id ? { ...x, stock_minimo: Number(e.target.value) || 0 } : x))
+                                    : prev,
+                                )
+                              }
+                            />
+                            <span style={{ fontSize: 10, fontWeight: 620, color: "var(--hostly-ink-muted)", textTransform: "capitalize" }}>
+                              {d.categoria ?? "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applySelectedMenuSuggestions}
+                      disabled={selectedSuggestCount === 0}
+                      className="hostly-button-secondary self-start px-3 py-2 text-[12px] font-semibold disabled:opacity-50"
+                    >
+                      {t("onboarding.stockApplySelected", { n: String(selectedSuggestCount) })}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : null}
+            {filteredStockRows.length > 0 ? (
+              <div className="onboarding-scroll-table-wrap">
+                {filteredStockRows.map((r) => (
                   <div
                     key={r.id}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "minmax(140px,3fr) minmax(88px,1fr) minmax(96px,1fr) minmax(96px,1fr)",
+                      gridTemplateColumns: stockRowColumns,
+                      minWidth: "min(100%, 480px)",
                       gap: 10,
                       padding: "8px 11px",
                       borderBottom: "1px solid var(--hostly-table-divider-faint)",
@@ -1019,73 +1507,186 @@ export default function OnboardingApp() {
                     <input type="number" style={{ ...inp, minHeight: 36 }} value={r.stock_minimo} onChange={(e) => setStockRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, stock_minimo: Number(e.target.value) || 0 } : x)))} />
                   </div>
                 ))}
-            </div>
+              </div>
+            ) : null}
             <button type="button" onClick={saveInventario} className="hostly-button-primary self-start px-4 py-2 text-[13px] font-semibold">
               {t("onboarding.ctaSaveStock")}
             </button>
           </div>
         );
+      }
       case 4:
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="onboarding-scroll-step" style={{ gap: 10 }}>
             <h2 className={onboardingSectionTitle}>{t("onboarding.usersTitle")}</h2>
             <p style={onboardingLead}>{t("onboarding.usersSub")}</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(168px, 1fr))", gap: 10 }}>
-              <div>
-                <label style={lbl}>{t("onboarding.userNombre")}</label>
-                <input style={inp} value={uNombre} onChange={(e) => setUNombre(e.target.value)} />
+            <p className="hostly-muted mt-0 text-[11px] leading-snug">{t("onboarding.usersInvitePhaseHint")}</p>
+            {usersInviteError ? (
+              <p className="m-0 rounded-lg border border-[color-mix(in_srgb,#dc2626_28%,transparent)] bg-[color-mix(in_srgb,#fee2e2_72%,transparent)] px-3 py-2 text-[11.5px] font-semibold text-[#991b1b]" role="alert">
+                {usersInviteError}
+              </p>
+            ) : null}
+            {!authRestaurantId ? (
+              <p className="m-0 rounded-lg border border-[color-mix(in_srgb,#dc2626_28%,transparent)] bg-[color-mix(in_srgb,#fee2e2_72%,transparent)] px-3 py-2 text-[11.5px] font-semibold text-[#991b1b]" role="alert">
+                {t("onboarding.usersInviteNoRestaurant")}
+              </p>
+            ) : null}
+            {usersList.length === 0 && !userFormVisible ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: 10,
+                  padding: "14px 13px",
+                  borderRadius: 10,
+                  border: "1px solid var(--hostly-table-divider-soft)",
+                  background: "var(--hostly-surface-card-solid)",
+                  boxShadow: "var(--hostly-shadow-hairline)",
+                }}
+              >
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 650, color: "var(--hostly-ink-strong)" }}>
+                    {t("onboarding.usersEmptyTitle")}
+                  </p>
+                  <p style={{ margin: "6px 0 0", fontSize: 11.5, lineHeight: 1.45, color: "var(--hostly-ink-muted)", fontWeight: 580 }}>
+                    {t("onboarding.usersEmptySub")}
+                  </p>
+                </div>
+                <button type="button" onClick={openAddUserForm} className="hostly-button-primary min-h-[36px] px-4 py-1.5 text-[12px] font-semibold">
+                  {t("onboarding.ctaAddUser")}
+                </button>
               </div>
-              <div>
-                <label style={lbl}>{t("onboarding.userEmail")}</label>
-                <input style={inp} type="email" value={uEmail} onChange={(e) => setUEmail(e.target.value)} />
+            ) : null}
+            {userFormVisible ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  padding: "10px 11px",
+                  borderRadius: 10,
+                  border: "1px solid color-mix(in srgb, var(--hostly-accent-soft) 100%, transparent)",
+                  background: "color-mix(in srgb, var(--hostly-info-soft) 55%, transparent)",
+                  boxShadow: "var(--hostly-shadow-hairline)",
+                }}
+              >
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(168px, 1fr))", gap: 10 }}>
+                  <div>
+                    <label style={lbl}>{t("onboarding.userNombre")}</label>
+                    <input style={inp} value={uNombre} onChange={(e) => setUNombre(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={lbl}>{t("onboarding.userEmail")}</label>
+                    <input style={inp} type="email" value={uEmail} onChange={(e) => setUEmail(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={lbl}>{t("onboarding.userRol")}</label>
+                    <select style={{ ...inp, cursor: "pointer" }} value={uRol} onChange={(e) => setURol(e.target.value as UsuarioRol)}>
+                      {USUARIO_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {t(`onboarding.rol.${r}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => void addUser()}
+                    disabled={userSaving}
+                    className="hostly-button-secondary min-h-[36px] px-3 py-1.5 text-[12px] font-semibold border-[color-mix(in_srgb,var(--hostly-accent)_25%,transparent)] !bg-[var(--hostly-accent-soft)] !text-[color:var(--hostly-navy-deep)] disabled:opacity-60"
+                  >
+                    {userSaving ? t("onboarding.usersSaving") : t("onboarding.ctaSaveUser")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserFormVisible(false);
+                      setUNombre("");
+                      setUEmail("");
+                      setURol("operativo");
+                    }}
+                    className="hostly-button-secondary min-h-[36px] px-3 py-1.5 text-[12px] font-semibold !bg-transparent !text-[color:var(--hostly-ink-muted)]"
+                  >
+                    {t("onboarding.ctaCancelUser")}
+                  </button>
+                </div>
+                {userFormError ? (
+                  <p className="m-0 text-[11.5px] font-semibold text-[#991b1b]" role="alert">
+                    {userFormError}
+                  </p>
+                ) : null}
               </div>
-              <div>
-                <label style={lbl}>{t("onboarding.userRol")}</label>
-                <select style={{ ...inp, cursor: "pointer" }} value={uRol} onChange={(e) => setURol(e.target.value as UsuarioRol)}>
-                  {USUARIO_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {t(`onboarding.rol.${r}`)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            ) : null}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" onClick={addUser} className="hostly-button-secondary min-h-[36px] px-3 py-1.5 text-[12px] font-semibold border-[color-mix(in_srgb,var(--hostly-accent)_25%,transparent)] !bg-[var(--hostly-accent-soft)] !text-[color:var(--hostly-navy-deep)]">
-                {t("onboarding.ctaAddUser")}
-              </button>
-              <button type="button" onClick={continueUsers} className="hostly-button-primary min-h-[36px] px-4 py-1.5 text-[12px] font-semibold">
-                {t("onboarding.ctaUsersContinue")}
+              {usersList.length > 0 && !userFormVisible ? (
+                <button type="button" onClick={openAddUserForm} className="hostly-button-secondary min-h-[36px] px-3 py-1.5 text-[12px] font-semibold border-[color-mix(in_srgb,var(--hostly-accent)_25%,transparent)] !bg-[var(--hostly-accent-soft)] !text-[color:var(--hostly-navy-deep)]">
+                  {t("onboarding.ctaAddUser")}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void continueUsers()}
+                disabled={usersStepBusy}
+                className="hostly-button-primary min-h-[36px] px-4 py-1.5 text-[12px] font-semibold disabled:opacity-60"
+              >
+                {usersStepBusy ? t("onboarding.usersContinuing") : t("onboarding.ctaUsersContinue")}
               </button>
             </div>
             <p className="hostly-muted mt-0 text-[11px] leading-snug">{t("onboarding.usersRolesHint")}</p>
-            <div style={{ border: "1px solid var(--hostly-table-divider-soft)", borderRadius: 10, overflow: "hidden", boxShadow: "var(--hostly-shadow-hairline)" }}>
-              {usersList.map((u) => (
-                <div
-                  key={u.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 100px",
-                    gap: 8,
-                    padding: "7px 9px",
-                    borderBottom: "1px solid var(--hostly-table-divider-faint)",
-                    fontSize: 12,
-                    background: "var(--hostly-surface-card-solid)",
-                    color: "var(--hostly-ink-strong)",
-                  }}
-                >
-                  <span>{u.nombre}</span>
-                  <span className="text-[color:var(--hostly-ink-muted)]">{u.email}</span>
-                  <span className="font-semibold">{t(`onboarding.rol.${u.rol}`)}</span>
-                </div>
-              ))}
-            </div>
+            {usersList.length > 0 ? (
+              <div className="onboarding-scroll-table-wrap">
+                {usersList.map((u) => (
+                  <div
+                    key={u.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(92px,1fr) minmax(92px,1.1fr) minmax(72px,88px) minmax(120px,1.2fr) auto",
+                      minWidth: "min(100%, 560px)",
+                      gap: 8,
+                      padding: "7px 9px",
+                      borderBottom: "1px solid var(--hostly-table-divider-faint)",
+                      fontSize: 12,
+                      background: "var(--hostly-surface-card-solid)",
+                      color: "var(--hostly-ink-strong)",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span>{u.nombre}</span>
+                    <span className="text-[color:var(--hostly-ink-muted)]">{u.email}</span>
+                    <span className="font-semibold">{t(`onboarding.rol.${u.rol}`)}</span>
+                    <span style={{ fontSize: 11, lineHeight: 1.35 }}>
+                      {u.inviteStatus === "pending" ? (
+                        <span className="font-semibold text-[color:var(--hostly-navy-deep)]">{t("onboarding.usersInvitePending")}</span>
+                      ) : u.inviteStatus === "error" ? (
+                        <span className="font-semibold text-[#991b1b]">{u.inviteError ?? t("onboarding.usersInviteGenericError")}</span>
+                      ) : (
+                        <span className="text-[color:var(--hostly-ink-muted)]">{t("onboarding.usersInviteNotCreated")}</span>
+                      )}
+                    </span>
+                    {u.inviteUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => void copyInviteLink(u.inviteUrl!)}
+                        className="hostly-button-secondary px-2.5 py-1 text-[11px] font-semibold min-h-[30px] !bg-transparent"
+                      >
+                        {t("onboarding.usersInviteCopyLink")}
+                      </button>
+                    ) : (
+                      <span aria-hidden />
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         );
       case 5:
         if (platos.length === 0) {
           return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div className="onboarding-scroll-step" style={{ gap: 10 }}>
               <h2 className={onboardingSectionTitle}>{t("onboarding.escTitle")}</h2>
               <p style={onboardingLead}>{t("onboarding.escNoPlatos")}</p>
               <button type="button" onClick={() => setStep(2)} className="hostly-button-secondary self-start px-3 py-2 text-[12px] font-semibold">
@@ -1095,7 +1696,7 @@ export default function OnboardingApp() {
           );
         }
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="onboarding-scroll-step" style={{ gap: 10 }}>
             <h2 className={onboardingSectionTitle}>{t("onboarding.escTitle")}</h2>
             <p style={onboardingLead}>{t("onboarding.escSub")}</p>
             <div>
@@ -1111,7 +1712,7 @@ export default function OnboardingApp() {
             <button type="button" onClick={addEscLine} className="hostly-button-secondary self-start px-2.5 py-1.5 text-[12px] font-semibold">
               + {t("onboarding.escAddLine")}
             </button>
-            <div style={{ border: "1px solid var(--hostly-table-divider-soft)", borderRadius: 10, overflow: "hidden", boxShadow: "var(--hostly-shadow-hairline)" }}>
+            <div className="onboarding-scroll-table-wrap">
               {escLines.map((ln) => {
                 const st = loadStock();
                 return (
@@ -1120,6 +1721,7 @@ export default function OnboardingApp() {
                     style={{
                       display: "grid",
                       gridTemplateColumns: "minmax(180px,2.75fr) minmax(76px,0.95fr) minmax(100px,1fr)",
+                      minWidth: "min(100%, 420px)",
                       gap: 10,
                       padding: "8px 11px",
                       borderBottom: "1px solid var(--hostly-table-divider-faint)",
@@ -1153,7 +1755,7 @@ export default function OnboardingApp() {
         );
       case 6:
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch" }}>
+          <div className="onboarding-scroll-step" style={{ gap: 12, alignItems: "stretch" }}>
             <h2 className="hostly-heading m-0 text-[18px] font-semibold text-[color:var(--hostly-accent)]">{t("onboarding.doneTitle")}</h2>
             <p style={onboardingLead}>{t("onboarding.doneSub")}</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", gap: 8 }}>
@@ -1467,7 +2069,7 @@ export default function OnboardingApp() {
   );
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:gap-2.5" style={{ flex: 1 }}>
+    <div className="onboarding-scroll-shell">
       {savedHint ? (
         <div
           className="flex shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-semibold"
@@ -1481,14 +2083,12 @@ export default function OnboardingApp() {
         </div>
       ) : null}
       {renderStepper()}
-      <div
-        className="grid min-h-0 min-w-0 flex-1 gap-3 max-lg:grid-cols-1 lg:auto-rows-fr lg:grid-cols-[minmax(0,1fr)_minmax(168px,218px)] lg:gap-3 lg:items-start"
-      >
+      <div className="onboarding-scroll-grid">
         <div
-          className="hostly-surface-ice box-border max-lg:max-h-none min-h-0 w-full overflow-y-auto overscroll-contain rounded-[14px] border px-3 py-3 sm:px-5 sm:py-4"
+          className="hostly-surface-ice onboarding-scroll-panel rounded-[14px] border px-3 py-3 sm:px-5 sm:py-4"
           style={{ borderColor: "var(--hostly-table-divider-soft)", boxShadow: "var(--hostly-shadow-hairline)" }}
         >
-          <div key={step} className="hostly-onboarding-pane min-h-0 w-full">
+          <div key={step} className="hostly-onboarding-pane onboarding-scroll-content">
             {panelMain()}
           </div>
         </div>

@@ -1,9 +1,11 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { usePathname } from "next/navigation";
 import {
   connectivityBannerMessage,
   connectivityBannerTone,
+  resolveConnectivityBannerContext,
   shouldShowConnectivityBanner,
 } from "@/lib/client/connectivity-state";
 import { useConnectivity } from "@/components/system/connectivity-context";
@@ -46,13 +48,15 @@ function toneStyles(tone: "ice" | "amber" | "success"): CSSProperties {
 }
 
 export function ConnectivityBanner() {
+  const pathname = usePathname();
+  const bannerContext = resolveConnectivityBannerContext(pathname);
   const { status, showSuccessFlash } = useConnectivity();
 
   if (!shouldShowConnectivityBanner(status, showSuccessFlash)) {
     return null;
   }
 
-  const message = connectivityBannerMessage(status, showSuccessFlash);
+  const message = connectivityBannerMessage(status, showSuccessFlash, bannerContext);
   if (!message) return null;
 
   const tone = connectivityBannerTone(status, showSuccessFlash);

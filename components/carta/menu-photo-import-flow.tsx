@@ -13,6 +13,7 @@ import {
   findCartaCategoriaByNameLoose,
 } from "@/lib/modificadores/default-modifier-family";
 import type { ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
+import { extractMenuFromUpload, MenuImportExtractError, MenuImportNoProductsError } from "@/lib/carta/extract-menu-from-upload";
 import { findPotentialDuplicates } from "@/lib/carta/duplicate-detection";
 import {
   TIPOS_PRODUCTO_VENTA,
@@ -307,61 +308,7 @@ export default function MenuPhotoImportFlow() {
       }
 
       console.log("[UI] sending POST /api/ai/import-menu");
-      console.info("[cartaImport] POST /api/ai/import-menu", {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-      });
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/ai/import-menu", { method: "POST", body: formData });
-      const text = await res.text();
-      console.log("[UI] response status:", res.status);
-      let json: any = null;
-      try {
-        json = text ? JSON.parse(text) : null;
-      } catch {
-        json = null;
-      }
-      console.log("[UI] response json:", json);
-      if (!res.ok || !json?.ok) {
-        const msg =
-          (typeof json?.details === "string" && json.details) ||
-          (typeof json?.error === "string" && json.error) ||
-          t("cartaImport.errorExtract");
-        throw new Error(msg);
-      }
-      const items = (Array.isArray(json.items) ? json.items : []) as MenuDetectedItem[];
-      const rid = getBrowserRestauranteId();
-      const catalog = loadPlatos(rid);
-      const out: ExtractedMenuRow[] = items.map((it, idx) => {
-        const precio = it.precio == null ? NaN : Number(it.precio);
-        const candidatePrecio = Number.isFinite(precio) ? Math.round(precio * 100) / 100 : NaN;
-        const dup = findPotentialDuplicates({
-          restauranteId: rid,
-          catalog,
-          candidate: { nombre: String(it.nombre ?? ""), categoria: String(it.categoria ?? ""), precio: candidatePrecio },
-        });
-        const needsReview = dup.length > 0 || it.precio == null;
-        return normalizeImportedRow({
-          tempId: `ai-${Date.now()}-${idx}`,
-          selected: true,
-          action: needsReview ? "pending_review" : "create_new",
-          targetPlatoId: dup[0]?.platoId ?? null,
-          potentialDuplicates: dup.map((d) => ({ platoId: d.platoId, score: d.score, reasons: d.reasons })),
-          nombre: (it.nombre ?? "").trim() || "Producto",
-          categoria: (it.categoria ?? "").trim() || "General",
-          precio: Number.isFinite(precio) ? Math.round(precio * 100) / 100 : NaN,
-          tipoVenta:
-            parseTipoVentaLoose((it as { tipoVenta?: unknown }).tipoVenta) ??
-            inferTipoVentaFromCartaText((it.categoria ?? "").trim() || "General", (it.nombre ?? "").trim()),
-          issues: dup.length ? ["duplicate"] : [],
-          categoryLowConfidence: typeof it.confianza === "number" ? it.confianza < 0.55 : false,
-          familia: "",
-          iaNotes: (it.descripcion ?? "").trim(),
-          disponible: true,
-        }) as ExtractedMenuRow;
-      });
+      const { rows: out } = await extractMenuFromUpload(file);
 
       const minTotal = 2800;
       const maxTotal = 3800;
@@ -375,7 +322,13 @@ export default function MenuPhotoImportFlow() {
       setRows(out.map(normalizeImportedRow));
       setStep("review");
     } catch (e) {
-      setError(String((e as Error)?.message ?? t("cartaImport.errorExtract")));
+      if (e instanceof MenuImportNoProductsError) {
+        setError(t("cartaImport.noProductsDetectedTitle"));
+      } else {
+        setError(
+          e instanceof MenuImportExtractError ? e.message : String((e as Error)?.message ?? t("cartaImport.errorExtract")),
+        );
+      }
       setStep("upload");
     } finally {
       setBusyProgress(1);
