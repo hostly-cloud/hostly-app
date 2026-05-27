@@ -58,22 +58,24 @@ export function VentasContentBlock({
 }: VentasContentBlockProps) {
   if (!hasOrders) {
     return (
-      <>
+      <div className="hostly-analytics-stack">
         <VentasViewState hasOrders={false} ordersCount={ordersCount} />
         <VentasEmptyState placeholder={placeholder} />
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <VentasActions
-        data={actionsData}
-        onCopySummary={onCopySummary}
-        onCopyKpis={onCopyKpis}
-        onExportJson={onExportJson}
-      />
-      <VentasViewState hasOrders={true} ordersCount={ordersCount} />
+    <div className="hostly-analytics-stack">
+      <div className="hostly-analytics-toolbar">
+        <VentasViewState hasOrders={true} ordersCount={ordersCount} />
+        <VentasActions
+          data={actionsData}
+          onCopySummary={onCopySummary}
+          onCopyKpis={onCopyKpis}
+          onExportJson={onExportJson}
+        />
+      </div>
       <VentasKpiBlock data={{ ...kpis, zonaMasVentas }} />
       <VentasChartsBlock data={charts} />
       <VentasTableBlock data={table} />
@@ -84,6 +86,6 @@ export function VentasContentBlock({
         zonasVentasAlertas={zonasVentasAlertas}
         zonasVentasRecomendaciones={zonasVentasRecomendaciones}
       />
-    </>
+    </div>
   );
 }

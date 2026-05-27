@@ -15,6 +15,8 @@ export type HostlyPageHeaderProps = {
   isMobileLayout?: boolean;
   /** En móvil: volver arriba y título debajo (columna izquierda). */
   mobileStackLeftColumn?: boolean;
+  /** Cabecera unificada de módulos dashboard (`ModulePageShell` + `compactLayout`). */
+  dashboardModule?: boolean;
   containerStyle?: React.CSSProperties;
   /** Menos aire entre bloques (p. ej. cabecera TPV /carta). */
   compactSpacing?: boolean;
@@ -42,6 +44,7 @@ export function HostlyPageHeader({
   mobileStackLeftColumn,
   containerStyle,
   compactSpacing,
+  dashboardModule,
   titleClassName,
   subtitleClassName,
   titleStyle,
@@ -83,19 +86,15 @@ export function HostlyPageHeader({
 
   return (
     <header
-      className="hostly-page-header"
-      style={
-        isMobileLayout
-          ? {
-              position: "static",
-              top: "auto",
-              zIndex: "auto",
-              backdropFilter: "none",
-              borderBottom: undefined,
-              ...surfaceStyle,
-            }
-          : surfaceStyle
-      }
+      className={[
+        "hostly-page-header",
+        isMobileLayout ? "hostly-page-header--mobile" : "",
+        compactSpacing ? "hostly-page-header--compact" : "",
+        dashboardModule ? "hostly-page-header--dashboard-module" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={isMobileLayout ? surfaceStyle : surfaceStyle}
     >
       <HostlyPageContainer wide={wide} style={containerStyle}>
         <div
@@ -164,18 +163,25 @@ export function HostlyPageHeader({
           </div>
           {below ? (
             <div
-              style={{
-                width: "100%",
-                minWidth: 0,
-                boxSizing: "border-box",
-                marginTop: belowMarginTop,
-                paddingTop: belowPaddingTop,
-                borderTop: compactSpacing
+              className={[
+                "hostly-module-header-below",
+                compactSpacing
                   ? belowStripe === "ultraCompact"
-                    ? "1px solid rgba(148, 163, 184, 0.08)"
-                    : "1px solid rgba(148, 163, 184, 0.1)"
-                  : "1px solid rgba(148, 163, 184, 0.16)",
-              }}
+                    ? "hostly-module-header-below--ultra-compact"
+                    : "hostly-module-header-below--compact"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              style={
+                compactSpacing
+                  ? undefined
+                  : {
+                      marginTop: belowMarginTop,
+                      paddingTop: belowPaddingTop,
+                      borderTop: "1px solid rgba(148, 163, 184, 0.16)",
+                    }
+              }
             >
               {below}
             </div>

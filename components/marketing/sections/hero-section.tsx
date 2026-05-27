@@ -1,0 +1,46 @@
+import { ArrowRight } from "lucide-react";
+import { marketingHero } from "@/data/marketing/landing-content";
+import { HeroProductMockup } from "@/components/marketing/mockups/product-mockups";
+import { MarketingButton, MarketingContainer } from "@/components/marketing/ui/marketing-primitives";
+
+export function HeroSection() {
+  return (
+    <section className="marketing-section relative overflow-hidden pt-10 md:pt-14">
+      <div className="marketing-gradient-spot left-[-10%] top-[-10%] h-72 w-72 bg-[color:var(--hostly-ice-200)]" />
+      <div className="marketing-gradient-spot right-[-5%] top-[20%] h-64 w-64 bg-[color:var(--hostly-accent-soft)]" />
+
+      <MarketingContainer className="relative">
+        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+          <div className="max-w-2xl">
+            <div className="marketing-rise inline-flex items-center gap-2 rounded-full border border-[color:var(--hostly-table-divider-soft)] bg-white/80 px-3 py-1.5">
+              <span className="size-1.5 rounded-full bg-[color:var(--hostly-accent)]" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--hostly-accent)]">
+                {marketingHero.eyebrow}
+              </span>
+            </div>
+
+            <h1 className="marketing-headline marketing-rise marketing-rise-delay-1 mt-5 text-balance">
+              {marketingHero.headline}
+            </h1>
+
+            <p className="marketing-subhead marketing-rise marketing-rise-delay-2 mt-5">{marketingHero.subcopy}</p>
+
+            <div className="marketing-rise marketing-rise-delay-3 mt-8 flex flex-wrap gap-3">
+              <MarketingButton href={marketingHero.primaryCta.href}>
+                {marketingHero.primaryCta.label}
+                <ArrowRight className="size-4" />
+              </MarketingButton>
+              <MarketingButton href={marketingHero.secondaryCta.href} variant="secondary">
+                {marketingHero.secondaryCta.label}
+              </MarketingButton>
+            </div>
+
+            <p className="mt-6 text-[12px] font-medium text-[color:var(--hostly-ink-faint)]">{marketingHero.trustLine}</p>
+          </div>
+
+          <HeroProductMockup />
+        </div>
+      </MarketingContainer>
+    </section>
+  );
+}

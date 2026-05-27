@@ -3,6 +3,13 @@
 import { Timestamp, collection, onSnapshot, query, where } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import ModulePageShell from "@/components/module-page-shell";
+import {
+  HostlyKpiCard,
+  HostlySegmentedControl,
+  HostlySurface,
+  hostlySegmentTabClassName,
+} from "@/components/ui/hostly";
+import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
 import { useAuth } from "@/components/auth/auth-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { paymentSaleAmount } from "@/lib/payments/paymentSaleAmount";
@@ -26,10 +33,6 @@ type PaymentDoc = {
   tip?: unknown;
   received?: unknown;
 };
-
-function filterPillClass(active: boolean): string {
-  return `hostly-pill px-3 py-2 text-sm ${active ? "" : ""}`;
-}
 
 function readTsMs(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -367,252 +370,225 @@ export default function AnalisisVentasPage() {
   };
 
   return (
-    <ModulePageShell title="Ventas">
-      <div style={{ display: "grid", gap: 16 }}>
-        <div className="hostly-segmented flex gap-1 mb-4 w-fit">
-          <button
-            type="button"
-            onClick={() => setDateFilter("today")}
-            aria-pressed={dateFilter === "today"}
-            className={filterPillClass(dateFilter === "today")}
-          >
-            Hoy
-          </button>
-          <button
-            type="button"
-            onClick={() => setDateFilter("yesterday")}
-            aria-pressed={dateFilter === "yesterday"}
-            className={filterPillClass(dateFilter === "yesterday")}
-          >
-            Ayer
-          </button>
-          <button
-            type="button"
-            onClick={() => setDateFilter("range")}
-            aria-pressed={dateFilter === "range"}
-            className={filterPillClass(dateFilter === "range")}
-          >
-            Rango
-          </button>
-        </div>
+    <ModulePageShell title="Ventas" compactLayout operationalFocus maxWidth={1400}>
+      <div className="hostly-analytics-stack">
+        <div className="hostly-analytics-toolbar">
+          <div className="hostly-analytics-toolbar__filters">
+            <HostlySegmentedControl aria-label="Filtro de fecha" scrollable={false}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={dateFilter === "today"}
+                onClick={() => setDateFilter("today")}
+                className={hostlySegmentTabClassName()}
+              >
+                Hoy
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={dateFilter === "yesterday"}
+                onClick={() => setDateFilter("yesterday")}
+                className={hostlySegmentTabClassName()}
+              >
+                Ayer
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={dateFilter === "range"}
+                onClick={() => setDateFilter("range")}
+                className={hostlySegmentTabClassName()}
+              >
+                Rango
+              </button>
+            </HostlySegmentedControl>
 
-        <div className="hostly-segmented flex gap-1 mb-4 w-fit">
-          <button
-            type="button"
-            onClick={() => setShiftFilter("all")}
-            aria-pressed={shiftFilter === "all"}
-            className={filterPillClass(shiftFilter === "all")}
-          >
-            Todo
-          </button>
-          <button
-            type="button"
-            onClick={() => setShiftFilter("morning")}
-            aria-pressed={shiftFilter === "morning"}
-            className={filterPillClass(shiftFilter === "morning")}
-          >
-            Mañana
-          </button>
-          <button
-            type="button"
-            onClick={() => setShiftFilter("afternoon")}
-            aria-pressed={shiftFilter === "afternoon"}
-            className={filterPillClass(shiftFilter === "afternoon")}
-          >
-            Tarde
-          </button>
-          <button
-            type="button"
-            onClick={() => setShiftFilter("night")}
-            aria-pressed={shiftFilter === "night"}
-            className={filterPillClass(shiftFilter === "night")}
-          >
-            Noche
-          </button>
-        </div>
+            <HostlySegmentedControl aria-label="Filtro de turno" scrollable={false}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={shiftFilter === "all"}
+                onClick={() => setShiftFilter("all")}
+                className={hostlySegmentTabClassName()}
+              >
+                Todo
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={shiftFilter === "morning"}
+                onClick={() => setShiftFilter("morning")}
+                className={hostlySegmentTabClassName()}
+              >
+                Mañana
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={shiftFilter === "afternoon"}
+                onClick={() => setShiftFilter("afternoon")}
+                className={hostlySegmentTabClassName()}
+              >
+                Tarde
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={shiftFilter === "night"}
+                onClick={() => setShiftFilter("night")}
+                className={hostlySegmentTabClassName()}
+              >
+                Noche
+              </button>
+            </HostlySegmentedControl>
 
-        <div className="hostly-segmented flex gap-1 mb-4 w-fit">
-          <button
-            type="button"
-            onClick={() => setPaymentFilter("all")}
-            aria-pressed={paymentFilter === "all"}
-            className={filterPillClass(paymentFilter === "all")}
-          >
-            Todos
-          </button>
-          <button
-            type="button"
-            onClick={() => setPaymentFilter("cash")}
-            aria-pressed={paymentFilter === "cash"}
-            className={filterPillClass(paymentFilter === "cash")}
-          >
-            Efectivo
-          </button>
-          <button
-            type="button"
-            onClick={() => setPaymentFilter("card")}
-            aria-pressed={paymentFilter === "card"}
-            className={filterPillClass(paymentFilter === "card")}
-          >
-            Tarjeta
-          </button>
-          <button
-            type="button"
-            onClick={() => setPaymentFilter("voucher")}
-            aria-pressed={paymentFilter === "voucher"}
-            className={filterPillClass(paymentFilter === "voucher")}
-          >
-            Voucher
-          </button>
-        </div>
+            <HostlySegmentedControl aria-label="Filtro de pago" scrollable={false}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={paymentFilter === "all"}
+                onClick={() => setPaymentFilter("all")}
+                className={hostlySegmentTabClassName()}
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={paymentFilter === "cash"}
+                onClick={() => setPaymentFilter("cash")}
+                className={hostlySegmentTabClassName()}
+              >
+                Efectivo
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={paymentFilter === "card"}
+                onClick={() => setPaymentFilter("card")}
+                className={hostlySegmentTabClassName()}
+              >
+                Tarjeta
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={paymentFilter === "voucher"}
+                onClick={() => setPaymentFilter("voucher")}
+                className={hostlySegmentTabClassName()}
+              >
+                Voucher
+              </button>
+            </HostlySegmentedControl>
 
-        {dateFilter === "range" && (
-          <div className="flex gap-2 mb-2">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm bg-white/80 border-[var(--hostly-line)]"
-            />
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm bg-white/80 border-[var(--hostly-line)]"
-            />
-          </div>
-        )}
-
-        <div className="grid gap-3 sm:grid-cols-5">
-          <div className="hostly-surface-ice p-4">
-            <div className="hostly-kpi-label">Ventas del día</div>
-            <div className="hostly-kpi-value mt-1">{formatEur(totals.totalVentas)}</div>
-          </div>
-          <div className="hostly-surface-ice p-4">
-            <div className="hostly-kpi-label">Propinas</div>
-            <div className="hostly-kpi-value mt-1">{formatEur(totals.totalPropinas)}</div>
-          </div>
-          <div className="hostly-surface-ice p-4">
-            <div className="hostly-kpi-label">Total cobrado</div>
-            <div className="hostly-kpi-value mt-1">{formatEur(totals.totalCobrado)}</div>
-          </div>
-          <div className="hostly-surface-ice p-4">
-            <div className="hostly-kpi-label">Ticket medio</div>
-            <div className="hostly-kpi-value mt-1">{avgTicket.toFixed(2)} €</div>
-          </div>
-          <div className="hostly-surface-ice p-4">
-            <div className="hostly-kpi-label">Tickets</div>
-            <div className="hostly-kpi-value mt-1">{paymentsCount}</div>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <div className="hostly-surface-soft p-3">
-            <div className="hostly-muted text-sm">Efectivo</div>
-            <div className="text-lg font-semibold">{byMethod.cash.toFixed(2)} €</div>
+            {dateFilter === "range" ? (
+              <AnalyticsDateRangeFields
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+              />
+            ) : null}
           </div>
 
-          <div className="hostly-surface-soft p-3">
-            <div className="hostly-muted text-sm">Tarjeta</div>
-            <div className="text-lg font-semibold">{byMethod.card.toFixed(2)} €</div>
-          </div>
-
-          <div className="hostly-surface-soft p-3">
-            <div className="hostly-muted text-sm">Voucher</div>
-            <div className="text-lg font-semibold">{totalVoucher.toFixed(2)} €</div>
-          </div>
-
-          <div className="hostly-surface-soft p-3">
-            <div className="hostly-muted text-sm">Propinas</div>
-            <div className="text-lg font-semibold text-green-600">
-              {byMethod.tips.toFixed(2)} €
-            </div>
-          </div>
-
-          <div className="hostly-surface-soft p-3">
-            <div className="hostly-muted text-sm">Descuentos</div>
-            <div className="text-lg font-semibold text-red-600">
-              -{formatNumberEU(totals.totalDiscounts)} €
-            </div>
+          <div className="hostly-analytics-toolbar__actions">
+            <button
+              type="button"
+              onClick={() => {
+                setIsPrintReady(true);
+                window.requestAnimationFrame(() => window.print());
+              }}
+              className="hostly-button-secondary hostly-button-compact"
+            >
+              Imprimir cierre
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="hostly-button-secondary hostly-button-compact"
+            >
+              Exportar CSV
+            </button>
           </div>
         </div>
 
-        <div className="mt-6">
-          <div className="text-sm font-medium mb-2">Ventas por hora</div>
+        <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics hostly-kpi-grid-unified--5">
+          <HostlyKpiCard title="Ventas del día" value={formatEur(totals.totalVentas)} />
+          <HostlyKpiCard title="Propinas" value={formatEur(totals.totalPropinas)} />
+          <HostlyKpiCard title="Total cobrado" value={formatEur(totals.totalCobrado)} />
+          <HostlyKpiCard title="Ticket medio" value={`${avgTicket.toFixed(2)} €`} />
+          <HostlyKpiCard title="Tickets" value={paymentsCount} />
+        </div>
 
-          <div className="space-y-1">
+        <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics hostly-kpi-grid-unified--5">
+          <HostlyKpiCard title="Efectivo" value={`${byMethod.cash.toFixed(2)} €`} variant="soft" />
+          <HostlyKpiCard title="Tarjeta" value={`${byMethod.card.toFixed(2)} €`} variant="soft" />
+          <HostlyKpiCard title="Voucher" value={`${totalVoucher.toFixed(2)} €`} variant="soft" />
+          <HostlyKpiCard
+            title="Propinas"
+            value={`${byMethod.tips.toFixed(2)} €`}
+            variant="soft"
+            accentColor="#16a34a"
+          />
+          <HostlyKpiCard
+            title="Descuentos"
+            value={`-${formatNumberEU(totals.totalDiscounts)} €`}
+            variant="soft"
+            accentColor="#dc2626"
+          />
+        </div>
+
+        <HostlySurface variant="soft" className="p-[var(--hostly-op-gap-md)]">
+          <p className="hostly-section-label mb-[var(--hostly-op-gap-xs)]">Ventas por hora</p>
+          <div className="flex flex-col gap-1">
             {salesByHour.rows.map((h) => (
               <div key={h.hour} className="flex items-center gap-2">
-                <div className="hostly-muted w-10 text-xs">{h.hour}:00</div>
-
-                <div className="flex-1 bg-[var(--hostly-surface-muted)] rounded h-3">
+                <div className="hostly-muted w-10 shrink-0 text-xs">{h.hour}:00</div>
+                <div className="h-3 flex-1 rounded-[var(--hostly-radius-sm)] bg-[var(--hostly-surface-muted)]">
                   <div
-                    className="bg-[var(--hostly-accent)] h-3 rounded"
+                    className="h-3 rounded-[var(--hostly-radius-sm)] bg-[var(--hostly-accent)]"
                     style={{
                       width: `${(h.total / salesByHour.max) * 100}%`,
                     }}
                   />
                 </div>
-
-                <div className="w-14 text-right text-xs">{h.total.toFixed(0)}€</div>
+                <div className="w-14 shrink-0 text-right text-xs tabular-nums">{h.total.toFixed(0)}€</div>
               </div>
             ))}
           </div>
-        </div>
+        </HostlySurface>
 
-        <div className="mt-6">
-          <div className="text-sm font-medium mb-2">Ventas por camarero</div>
-
-          <div className="space-y-2">
+        <HostlySurface variant="soft" className="p-[var(--hostly-op-gap-md)]">
+          <p className="hostly-section-label mb-[var(--hostly-op-gap-xs)]">Ventas por camarero</p>
+          <div className="flex flex-col gap-[var(--hostly-op-gap-xs)]">
             {waiterEntries.map(([id, w]) => (
               <div
                 key={id}
-                className="hostly-panel-soft flex justify-between items-center p-3"
+                className="flex items-center justify-between gap-3 border-b border-[var(--hostly-table-divider-faint)] py-2 last:border-b-0"
               >
-                <div>
-                  <div className="font-medium">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-[color:var(--hostly-ink-strong)]">
                     {w.email ? w.email.split("@")[0] : id}
                   </div>
                   <div className="hostly-muted text-xs">
                     {w.email || "Sin email"} · {w.count} tickets
                   </div>
                 </div>
-
-                <div className="text-right">
-                  <div className="font-semibold">{w.total.toFixed(2)} €</div>
-                  <div className="text-xs text-green-600">
-                    {w.tips.toFixed(2)} € propinas
-                  </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-sm font-semibold tabular-nums">{w.total.toFixed(2)} €</div>
+                  <div className="text-xs text-[color:#16a34a] tabular-nums">{w.tips.toFixed(2)} € propinas</div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </HostlySurface>
 
-        <div className="hostly-panel p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-[color:var(--hostly-ink-strong)]">Últimos pagos</div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsPrintReady(true);
-                  window.requestAnimationFrame(() => window.print());
-                }}
-                className="hostly-button-secondary !min-h-0 px-3 py-2 text-sm"
-              >
-                Imprimir cierre
-              </button>
-              <button
-                type="button"
-                onClick={handleExportCSV}
-                className="hostly-button-secondary !min-h-0 px-3 py-2 text-sm"
-              >
-                Exportar CSV
-              </button>
-            </div>
+        <HostlySurface variant="soft" className="p-[var(--hostly-op-gap-md)]">
+          <div className="mb-[var(--hostly-op-gap-sm)] flex flex-wrap items-center justify-between gap-2">
+            <p className="hostly-section-label mb-0">Últimos pagos</p>
           </div>
-          <div className="mt-3 grid gap-2">
+          <div className="grid gap-[var(--hostly-op-gap-xs)]">
             {filteredPayments.slice(0, 30).map((p) => {
               const ms = readTsMs(p.createdAt);
               const method = (p.paymentMethod ?? "").toLowerCase();
@@ -627,35 +603,36 @@ export default function AnalisisVentasPage() {
               return (
                 <div
                   key={p.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2"
+                  className="flex items-center justify-between gap-3 border-b border-[var(--hostly-table-divider-faint)] py-2 last:border-b-0"
                 >
-                  <div style={{ minWidth: 0 }}>
-                    <div className="text-sm font-semibold text-[color:var(--hostly-ink-strong)] truncate">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-[color:var(--hostly-ink-strong)]">
                       {p.ticketNumber ?? "—"}
                     </div>
                     <div className="text-xs text-[color:var(--hostly-ink-muted)]">
                       {formatTime(ms)} · {methodLabel}
                     </div>
-                    {method === "voucher" && p.voucherNumber && (
+                    {method === "voucher" && p.voucherNumber ? (
                       <div className="hostly-muted text-xs">Voucher: {p.voucherNumber}</div>
-                    )}
+                    ) : null}
                   </div>
-
-                  <div className="flex items-baseline gap-3">
-                    <div className="text-sm font-semibold text-[color:var(--hostly-ink-strong)]">
+                  <div className="flex shrink-0 items-baseline gap-3">
+                    <div className="text-sm font-semibold tabular-nums text-[color:var(--hostly-ink-strong)]">
                       {formatEur(paymentSaleAmount(p))}
                     </div>
-                    <div className="text-xs text-[color:var(--hostly-ink-muted)]">Tip {formatEur(n(p.tip))}</div>
+                    <div className="text-xs tabular-nums text-[color:var(--hostly-ink-muted)]">
+                      Tip {formatEur(n(p.tip))}
+                    </div>
                   </div>
                 </div>
               );
             })}
 
-            {filteredPayments.length === 0 && (
-              <div className="text-sm text-[color:var(--hostly-ink-muted)]">Sin pagos.</div>
-            )}
+            {filteredPayments.length === 0 ? (
+              <div className="hostly-muted text-sm">Sin pagos.</div>
+            ) : null}
           </div>
-        </div>
+        </HostlySurface>
       </div>
 
       <style jsx global>{`

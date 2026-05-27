@@ -8,7 +8,14 @@ import { useI18n } from "@/components/i18n-provider";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
+import {
+  HostlyKpiCard,
+  HostlySection,
+  HostlySectionHeader,
+  HostlySegmentedControl,
+  HostlySurface,
+  hostlySegmentTabClassName,
+} from "@/components/ui/hostly";
 import {
   type CompraEstado,
   type CompraLineItemLocal,
@@ -1547,7 +1554,7 @@ export default function RecepcionesPage() {
         <button
           type="button"
           onClick={() => router.push("/dashboard/compras")}
-          className="hostly-button-secondary shrink-0 !min-h-0 whitespace-nowrap px-3.5 py-2 text-sm !border-emerald-400/35 !bg-emerald-50 !font-semibold !text-[color:var(--hostly-navy-deep)] hover:!border-emerald-400/50 hover:!bg-emerald-100/90"
+          className="hostly-button-secondary hostly-button-compact shrink-0 whitespace-nowrap !border-emerald-400/35 !bg-emerald-50 !font-semibold !text-[color:var(--hostly-navy-deep)] hover:!border-emerald-400/50 hover:!bg-emerald-100/90"
         >
           {t("recepciones.ctaRegister")}
         </button>
@@ -1730,19 +1737,9 @@ export default function RecepcionesPage() {
               {t("recepciones.operSubtitle")}
             </span>
           </div>
-          <div
-            className="hostly-segmented"
-            style={{
-              flexGrow: 1,
-              flexShrink: 1,
-              flexBasis: 0,
-              minWidth: 0,
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              alignContent: "center",
-              gap: 3,
-            }}
+          <HostlySegmentedControl
+            aria-label={t("recepciones.operTitle")}
+            className="min-w-0 flex-1"
           >
             {(
               [
@@ -1762,19 +1759,10 @@ export default function RecepcionesPage() {
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  className="hostly-tab"
+                  className={hostlySegmentTabClassName("inline-flex items-center gap-1 !text-[11px]")}
                   onClick={() => setOperFocus((p) => (p === chip.id ? null : chip.id))}
                   style={{
-                    flexShrink: 0,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "4px 9px",
-                    minHeight: 30,
-                    fontSize: 11,
-                    fontWeight: 600,
                     cursor: "pointer",
-                    whiteSpace: "nowrap",
                     opacity: open ? 1 : 0.58,
                   }}
                 >
@@ -1783,7 +1771,7 @@ export default function RecepcionesPage() {
                 </button>
               );
             })}
-          </div>
+          </HostlySegmentedControl>
         </HostlySurface>
 
         <HostlySurface

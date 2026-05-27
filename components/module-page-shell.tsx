@@ -109,12 +109,15 @@ export default function ModulePageShell({
 
   const isWide = maxWidth > DEFAULT_MAX || Boolean(stretchContentWidth);
   const configLight = shellSurface === "configLight";
+  const dashboardModuleChrome = Boolean(compactLayout);
   const effectiveDenseInventory = Boolean(
     denseInventoryHeader && compactLayout && operationalFocus && denseWorkbench && headerBelow && shellSurface === "configLight",
   );
 
   const headerSurface =
-    mapEditorDenseChrome && laptopFit
+    dashboardModuleChrome && !mapEditorDenseChrome
+      ? undefined
+      : mapEditorDenseChrome && laptopFit
       ? {
           paddingTop: 2,
           paddingBottom: 2,
@@ -191,8 +194,23 @@ export default function ModulePageShell({
     maxWidth: compactLayout ? (operationalFocus ? (effectiveDenseInventory ? 460 : 480) : denseWorkbench ? 520 : 560) : 640,
   };
 
+  const moduleTitleClassName = [
+    isMobile ? "hostly-page-title--module-mobile" : null,
+    !isMobile && dashboardModuleChrome ? "hostly-page-title--dashboard-module" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const moduleSubtitleClassName = [
+    isMobile ? "hostly-page-subtitle--module-mobile" : null,
+    !isMobile && dashboardModuleChrome ? "hostly-page-subtitle--dashboard-module" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <main
+      className={["hostly-module-shell", isMobile ? "hostly-module-shell--mobile" : ""].filter(Boolean).join(" ")}
       style={{
         boxSizing: "border-box",
         background:
@@ -203,12 +221,7 @@ export default function ModulePageShell({
         paddingRight: 0,
         fontFamily: "Arial, sans-serif",
         ...(isMobile
-          ? {
-              minHeight: "100dvh",
-              overflowY: "auto",
-              WebkitOverflowScrolling: "touch",
-              paddingBottom: "6rem",
-            }
+          ? {}
           : {
               paddingBottom: pad,
               minHeight: effectiveLockViewport ? (lockFill ? 0 : "100dvh") : "100vh",
@@ -239,7 +252,8 @@ export default function ModulePageShell({
       <HostlyPageHeader
         wide={isWide}
         isMobileLayout={isMobile}
-        compactSpacing={Boolean(compactLayout && operationalFocus)}
+        compactSpacing={dashboardModuleChrome}
+        dashboardModule={dashboardModuleChrome}
         containerStyle={
           stretchContentWidth
             ? {
@@ -254,6 +268,8 @@ export default function ModulePageShell({
               : undefined
         }
         surfaceStyle={headerSurface}
+        titleClassName={moduleTitleClassName || undefined}
+        subtitleClassName={moduleSubtitleClassName || undefined}
         left={
           hideBackLink ? null : (
             <HostlyBackButton
@@ -261,6 +277,7 @@ export default function ModulePageShell({
               label={resolvedBack}
               ariaLabel={String(resolvedBack)}
               tone="light"
+              moduleChrome={dashboardModuleChrome}
             />
           )
         }
@@ -268,14 +285,7 @@ export default function ModulePageShell({
         subtitle={subtitle}
         below={headerBelow}
         right={
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: laptopFit ? 6 : 12,
-              flexWrap: "wrap",
-            }}
-          >
+          <div className="hostly-module-header-actions">
             {headerRight}
             {!hideLogoutButton && hideBackLink && backHref === "/dashboard" ? (
               <LogoutButton
@@ -283,19 +293,25 @@ export default function ModulePageShell({
                 surface="light"
               />
             ) : null}
-            <LanguageSwitcher
-              compact={Boolean(compactLayout && operationalFocus)}
-              surface="light"
-            />
+            <LanguageSwitcher />
           </div>
         }
-        titleStyle={titleStyleResolved}
-        subtitleStyle={subtitleStyleResolved}
+        titleStyle={dashboardModuleChrome || isMobile ? undefined : titleStyleResolved}
+        subtitleStyle={dashboardModuleChrome || isMobile ? undefined : subtitleStyleResolved}
         belowStripe={effectiveDenseInventory ? "ultraCompact" : "default"}
       />
 
       <HostlyPageContainer
         wide={isWide}
+        className={
+          dashboardModuleChrome
+            ? isMobile
+              ? "hostly-module-content--mobile"
+              : "hostly-module-content--dashboard"
+            : isMobile
+              ? "hostly-module-content--mobile"
+              : undefined
+        }
         style={{
           ...(stretchContentWidth
             ? {
@@ -308,7 +324,9 @@ export default function ModulePageShell({
             : maxWidth !== DEFAULT_MAX
               ? { maxWidth }
               : null),
-          marginTop: stretchContentWidth
+          marginTop: dashboardModuleChrome
+            ? 0
+            : stretchContentWidth
             ? mapEditorDenseChrome
               ? 0
               : 4

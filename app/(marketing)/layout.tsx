@@ -1,0 +1,18 @@
+import type { Metadata } from "next";
+import "@/components/marketing/marketing.css";
+
+export const metadata: Metadata = {
+  title: "Hostly — Plataforma operativa para restaurantes",
+  description:
+    "Gestiona TPV, cocina, stock, reservas, compras, analytics e IA desde una sola plataforma premium para hostelería.",
+  openGraph: {
+    title: "Hostly — Plataforma operativa para restaurantes",
+    description:
+      "TPV, cocina, stock, reservas, compras, análisis e inteligencia artificial en una sola plataforma.",
+    type: "website",
+  },
+};
+
+export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+  return children;
+}

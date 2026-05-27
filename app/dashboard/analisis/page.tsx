@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import ModulePageShell from "@/components/module-page-shell";
+import { HostlySegmentedControl, hostlySegmentTabClassName } from "@/components/ui/hostly";
 import {
   AnalysisTabContent,
   type AnalysisTabContentProps,
@@ -1107,19 +1108,8 @@ export default function AnalisisPage() {
       lockViewport
       shellSurface="configLight"
     >
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <AnalisisTabsBar active={tab} onChange={setTab} />
-        </div>
-
+      <div className="hostly-analytics-stack">
+        <AnalisisTabsBar active={tab} onChange={setTab} />
         <AnalysisTabContent {...analysisTabContentProps} />
       </div>
     </ModulePageShell>
@@ -1134,7 +1124,7 @@ function AnalisisTabsBar({
   onChange: (t: AnalisisTab) => void;
 }) {
   return (
-    <div role="tablist" aria-label="Secciones de análisis" className="hostly-segmented">
+    <HostlySegmentedControl aria-label="Secciones de análisis">
       {TABS.map((t) => (
         <button
           key={t.id}
@@ -1142,12 +1132,11 @@ function AnalisisTabsBar({
           role="tab"
           aria-selected={active === t.id}
           onClick={() => onChange(t.id)}
-          className="hostly-tab"
-          style={{ minWidth: 96, padding: "8px 16px", cursor: "pointer" }}
+          className={hostlySegmentTabClassName()}
         >
           {t.label}
         </button>
       ))}
-    </div>
+    </HostlySegmentedControl>
   );
 }

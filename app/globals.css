@@ -12,6 +12,8 @@
    * [D] Sombras · [E] Superficies (gradient/sólidos) · [F] Spacing stacks
    * [G] Radios canónicos · [H] Tablas/listados premium · [I] Controles táctiles
    * [J] Mobile shell (aliases → canónicos) · [K] Tokens config dedicados
+   * [L] Ritmo operacional unificado + launcher (`--hostly-op-*`)
+   * Hostly Visual System v2 — ver docs/HOSTLY_VISUAL_SYSTEM_V2.md
    * ------------------------------------------------------------------------
    */
 
@@ -140,6 +142,46 @@
   --hostly-config-card-border: var(--hostly-line);
   --hostly-config-card-shadow: var(--hostly-shadow-card);
   --hostly-config-content-max: 80rem; /* 1280px — alinea workbench + tablas */
+
+  /*
+   * [L] Ritmo operacional unificado (dashboard móvil/tablet).
+   * Hostly Visual System v2 — no añadir valores arbitrarios fuera de tokens/clases centralizadas.
+   * Fuente de verdad: docs/HOSTLY_VISUAL_SYSTEM_V2.md
+   * Una sola escala para headers, tabs, KPI, botones y densidad.
+   */
+  --hostly-op-gap-xs: 6px;
+  --hostly-op-gap-sm: 8px;
+  --hostly-op-gap-md: 12px;
+  --hostly-op-gap-lg: 16px;
+  --hostly-op-gap-xl: 20px;
+  --hostly-op-header-pad-y: 8px;
+  --hostly-op-header-pad-y-compact: 5px;
+  --hostly-op-tab-min-h: 36px;
+  --hostly-op-tab-min-h-touch: 42px;
+  --hostly-op-tab-pad-x: 12px;
+  --hostly-op-tab-pad-y: 6px;
+  --hostly-op-tab-font-size: 12px;
+  --hostly-op-tab-font-weight: 650;
+  --hostly-op-button-compact-min-h: 40px;
+  --hostly-op-button-compact-pad-x: 14px;
+  --hostly-op-kpi-pad-y: 9px;
+  --hostly-op-kpi-pad-x: 12px;
+  --hostly-op-module-title-size: clamp(17px, 4.1vw, 20px);
+  --hostly-op-module-subtitle-size: 11px;
+  --hostly-op-section-gap: 10px;
+  --hostly-op-shell-pad-bottom-mobile: 4.5rem;
+  --hostly-op-launcher-height-mobile: 84px;
+  --hostly-op-launcher-height-desktop: 92px;
+  --hostly-op-launcher-padding: 12px 14px;
+  --hostly-op-launcher-gap: 10px;
+  --hostly-op-launcher-radius: var(--hostly-radius-sm);
+  --hostly-op-launcher-title-size: clamp(14px, 3.6vw, 16px);
+  --hostly-op-launcher-subtitle-size: 11px;
+  --hostly-op-launcher-icon-size: 20px;
+  --hostly-op-analytics-section-gap: var(--hostly-op-section-gap);
+  --hostly-op-analytics-panel-pad: var(--hostly-op-gap-md);
+  --hostly-op-dashboard-header-pad-y: var(--hostly-op-header-pad-y);
+  --hostly-op-dashboard-content-gap: var(--hostly-op-gap-md);
 }
 
 @theme inline {
@@ -1192,6 +1234,601 @@ body {
   transform: none;
 }
 
+/* ——— Jerarquía operacional compacta (dashboard / listados) ——— */
+.hostly-button-compact {
+  min-height: var(--hostly-op-button-compact-min-h) !important;
+  padding: 0 var(--hostly-op-button-compact-pad-x) !important;
+  font-size: 13px !important;
+  border-radius: var(--hostly-radius-sm) !important;
+}
+
+.hostly-button-danger {
+  background: #991b1b;
+  color: #ffffff;
+  border-color: rgba(153, 27, 27, 0.22);
+}
+
+.hostly-button-danger:hover:not(:disabled) {
+  background: #7f1d1d;
+}
+
+.hostly-button-success {
+  background: #166534;
+  color: #ffffff;
+  border-color: rgba(22, 101, 52, 0.22);
+}
+
+.hostly-button-success:hover:not(:disabled) {
+  background: #14532d;
+}
+
+.hostly-button-danger:focus-visible,
+.hostly-button-success:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly Visual System v2 — SISTEMA OPERACIONAL UNIFICADO                     */
+/* No añadir valores arbitrarios fuera de tokens/clases centralizadas.       */
+/* Constitución: docs/HOSTLY_VISUAL_SYSTEM_V2.md                               */
+/* Aplicado vía shells compartidos; no requiere tocar lógica de módulos.      */
+/* -------------------------------------------------------------------------- */
+
+.hostly-module-shell {
+  box-sizing: border-box;
+}
+
+.hostly-module-shell--mobile {
+  min-height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--hostly-op-shell-pad-bottom-mobile);
+}
+
+.hostly-page-header--mobile {
+  position: static !important;
+  top: auto !important;
+  z-index: auto !important;
+  padding-top: var(--hostly-op-header-pad-y) !important;
+  padding-bottom: var(--hostly-op-header-pad-y) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.hostly-page-header--compact {
+  padding-top: var(--hostly-op-header-pad-y-compact) !important;
+  padding-bottom: var(--hostly-op-header-pad-y-compact) !important;
+}
+
+.hostly-page-title--module-mobile {
+  font-size: var(--hostly-op-module-title-size) !important;
+  font-weight: 650 !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.022em !important;
+}
+
+.hostly-page-subtitle--module-mobile {
+  margin-top: 2px !important;
+  font-size: var(--hostly-op-module-subtitle-size) !important;
+  line-height: 1.32 !important;
+  max-width: 36rem !important;
+}
+
+.hostly-module-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--hostly-op-gap-sm);
+}
+
+.hostly-module-header-below {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.hostly-module-header-below--compact {
+  margin-top: var(--hostly-op-gap-xs);
+  padding-top: var(--hostly-op-gap-sm);
+  border-top: 1px solid var(--hostly-table-divider-faint);
+}
+
+.hostly-module-header-below--ultra-compact {
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.hostly-module-content--mobile {
+  margin-top: var(--hostly-op-gap-md) !important;
+}
+
+/* Dashboard module shell — header + contenido unificados (Visual System v2.2) */
+.hostly-page-header--dashboard-module {
+  padding-top: var(--hostly-op-dashboard-header-pad-y) !important;
+  padding-bottom: var(--hostly-op-dashboard-header-pad-y) !important;
+  border-bottom: 1px solid var(--hostly-table-divider-soft) !important;
+  background: color-mix(in srgb, var(--hostly-surface-page-soft) 94%, white) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.hostly-page-title--dashboard-module {
+  font-size: var(--hostly-op-module-title-size) !important;
+  font-weight: 650 !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.022em !important;
+  color: var(--hostly-ink-strong) !important;
+}
+
+.hostly-page-subtitle--dashboard-module {
+  margin-top: 2px !important;
+  font-size: var(--hostly-op-module-subtitle-size) !important;
+  line-height: 1.32 !important;
+  color: var(--hostly-ink-soft) !important;
+  max-width: 36rem !important;
+}
+
+.hostly-module-content--dashboard {
+  margin-top: var(--hostly-op-dashboard-content-gap) !important;
+}
+
+.hostly-language-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
+  flex-shrink: 0;
+}
+
+.hostly-language-switch__button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: var(--hostly-op-tab-min-h);
+  padding: var(--hostly-op-tab-pad-y) var(--hostly-op-tab-pad-x);
+  border-radius: var(--hostly-radius-sm);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-language-switch__button:hover {
+  border-color: color-mix(in srgb, var(--hostly-accent) 20%, var(--hostly-table-divider-soft));
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-language-switch__button:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-language-switch__button--active {
+  border-color: color-mix(in srgb, var(--hostly-accent) 28%, var(--hostly-table-divider-soft));
+  background: var(--hostly-accent-soft);
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-back-button--module.hostly-touch-nav-link.hostly-nav-aux {
+  min-height: var(--hostly-op-tab-min-h) !important;
+  padding: var(--hostly-op-tab-pad-y) 10px !important;
+  margin: 0 !important;
+  border-radius: var(--hostly-radius-sm) !important;
+  border-color: var(--hostly-table-divider-soft) !important;
+  background: var(--hostly-surface-card-solid) !important;
+  color: var(--hostly-ink-muted) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
+.hostly-back-button--module.hostly-touch-nav-link.hostly-nav-aux:hover {
+  border-color: color-mix(in srgb, var(--hostly-accent) 18%, var(--hostly-table-divider-soft)) !important;
+  color: var(--hostly-ink-strong) !important;
+}
+
+.hostly-back-button--module .hostly-back-button__arrow {
+  width: 16px;
+  height: 16px;
+  border-radius: calc(var(--hostly-radius-sm) - 4px);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: color-mix(in srgb, var(--hostly-ice-50) 80%, white);
+  color: var(--hostly-ink-muted);
+  font-size: 11px;
+}
+
+.hostly-back-button--module .hostly-back-button__label {
+  color: var(--hostly-ink-muted);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Segmented controls — geometría única */
+.hostly-segmented-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.hostly-segmented-scroll::-webkit-scrollbar {
+  display: none;
+  height: 0;
+  width: 0;
+}
+
+.hostly-segmented--unified {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--hostly-table-divider-soft);
+  border-radius: var(--hostly-radius-sm);
+  background: color-mix(in srgb, var(--hostly-ice-50) 88%, white);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  max-width: none;
+  min-width: min-content;
+}
+
+.hostly-tab--unified,
+.hostly-pill--unified {
+  min-height: var(--hostly-op-tab-min-h);
+  padding: var(--hostly-op-tab-pad-y) var(--hostly-op-tab-pad-x);
+  border-radius: calc(var(--hostly-radius-sm) - 2px);
+  font-size: var(--hostly-op-tab-font-size);
+  font-weight: var(--hostly-op-tab-font-weight);
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hostly-inventario-route-tabs .hostly-tab.hostly-tab--inventory-hub {
+  min-height: var(--hostly-op-tab-min-h);
+  padding: var(--hostly-op-tab-pad-y) var(--hostly-op-tab-pad-x);
+  font-size: var(--hostly-op-tab-font-size);
+  min-width: 88px;
+}
+
+/* KPI unificado (HostlyKpiCard + mobile grid) */
+.hostly-kpi-card {
+  min-width: 0;
+  padding: var(--hostly-op-kpi-pad-y) var(--hostly-op-kpi-pad-x) !important;
+  border-radius: var(--hostly-radius-sm) !important;
+  border: 1px solid var(--hostly-table-divider-soft) !important;
+  box-shadow: var(--hostly-shadow-hairline) !important;
+}
+
+.hostly-kpi-card .hostly-kpi-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.hostly-kpi-card .hostly-kpi-value {
+  margin-top: 2px;
+  font-size: clamp(15px, 2.1vw, 19px);
+  font-weight: 750;
+  line-height: 1.06;
+}
+
+.hostly-kpi-card .hostly-kpi-helper {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.25;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-kpi-grid-unified {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--hostly-op-gap-sm);
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .hostly-kpi-grid-unified {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--hostly-op-gap-md);
+  }
+}
+
+/* Secciones modulares — densidad operacional */
+.hostly-section-header--operational {
+  gap: var(--hostly-op-gap-sm) !important;
+}
+
+.hostly-section-header--operational .hostly-heading {
+  font-size: clamp(15px, 2vw, 18px);
+  line-height: 1.12;
+}
+
+.hostly-section-header--operational .hostly-muted--section-lead {
+  font-size: 11px;
+  line-height: 1.28;
+}
+
+.hostly-stack-md--operational {
+  gap: var(--hostly-op-section-gap);
+}
+
+/* Analytics hub — toolbar + densidad (Visual System v2.1) */
+.hostly-analytics-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-analytics-section-gap);
+  min-width: 0;
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.hostly-analytics-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-analytics-section-gap);
+  padding: var(--hostly-op-analytics-panel-pad);
+  border-radius: var(--hostly-radius-sm);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
+  overflow: auto;
+  box-sizing: border-box;
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
+.hostly-analytics-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+  padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+  border-radius: var(--hostly-radius-sm);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: color-mix(in srgb, var(--hostly-surface-card-solid) 92%, var(--hostly-ice-50));
+  box-sizing: border-box;
+}
+
+.hostly-analytics-toolbar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.hostly-analytics-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--hostly-op-gap-xs);
+  flex-shrink: 0;
+}
+
+.hostly-analytics-date-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
+  min-width: 0;
+}
+
+.hostly-input--toolbar-compact,
+.hostly-select--toolbar-compact {
+  width: auto;
+  min-width: 9.5rem;
+  max-width: 100%;
+  min-height: var(--hostly-op-tab-min-h) !important;
+  padding: var(--hostly-op-tab-pad-y) var(--hostly-op-tab-pad-x) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border-radius: var(--hostly-radius-sm) !important;
+}
+
+.hostly-kpi-grid-unified--analytics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--hostly-op-gap-xs);
+}
+
+@media (min-width: 640px) {
+  .hostly-kpi-grid-unified--analytics {
+    grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+    gap: var(--hostly-op-gap-sm);
+  }
+}
+
+@media (min-width: 1024px) {
+  .hostly-analytics-toolbar {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .hostly-kpi-grid-unified--analytics.hostly-kpi-grid-unified--5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  [data-hostly-touch] .hostly-page-header--mobile .hostly-touch-nav-link {
+    min-height: 42px !important;
+    padding: 8px 12px !important;
+    margin: -4px -6px !important;
+    font-size: 13px !important;
+  }
+
+  [data-hostly-touch] .hostly-segmented--unified > .hostly-tab,
+  [data-hostly-touch] .hostly-segmented--unified > .hostly-pill,
+  [data-hostly-touch] .hostly-segmented--unified > a.hostly-tab {
+    min-height: var(--hostly-op-tab-min-h-touch) !important;
+    padding: 7px 12px !important;
+  }
+
+  [data-hostly-touch] .hostly-button-compact {
+    min-height: var(--hostly-op-button-compact-min-h) !important;
+  }
+
+  [data-hostly-touch] .hostly-kpi-card {
+    padding: 8px 10px !important;
+  }
+
+  [data-hostly-touch] .hostly-container,
+  [data-hostly-touch] .hostly-container-wide {
+    padding-left: var(--hostly-mobile-pad-x);
+    padding-right: var(--hostly-mobile-pad-x);
+  }
+
+  [data-hostly-touch] .hostly-stack-md {
+    gap: var(--hostly-op-section-gap);
+  }
+
+  [data-hostly-touch] .hostly-stack-lg {
+    gap: var(--hostly-op-gap-md);
+  }
+}
+
+/* Launcher operacional — /dashboard/operacion */
+.hostly-op-launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--hostly-op-launcher-gap);
+  width: 100%;
+  min-width: 0;
+  margin-top: var(--hostly-op-gap-md);
+  box-sizing: border-box;
+}
+
+.hostly-op-launcher-card {
+  box-sizing: border-box;
+  min-height: var(--hostly-op-launcher-height-mobile);
+  padding: var(--hostly-op-launcher-padding);
+  border-radius: var(--hostly-op-launcher-radius);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink-strong);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  min-width: 0;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-op-launcher-card:hover {
+  border-color: color-mix(in srgb, var(--hostly-accent) 22%, var(--hostly-table-divider-soft));
+  background: color-mix(in srgb, var(--hostly-surface-card-solid) 94%, var(--hostly-ice-50));
+}
+
+.hostly-op-launcher-card:active {
+  transform: scale(0.985);
+}
+
+.hostly-op-launcher-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--hostly-accent) 34%, transparent);
+  outline-offset: 2px;
+}
+
+.hostly-op-launcher-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hostly-op-launcher-icon-size);
+  height: var(--hostly-op-launcher-icon-size);
+  color: color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink-strong));
+}
+
+.hostly-op-launcher-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hostly-op-launcher-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.hostly-op-launcher-title {
+  font-size: var(--hostly-op-launcher-title-size);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.018em;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-op-launcher-subtitle {
+  font-size: var(--hostly-op-launcher-subtitle-size);
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--hostly-ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  .hostly-op-launcher-grid > .hostly-op-launcher-card:nth-child(odd):last-child {
+    grid-column: 1 / -1;
+    width: calc(50% - calc(var(--hostly-op-launcher-gap) / 2));
+    justify-self: center;
+  }
+}
+
+@media (min-width: 768px) {
+  .hostly-op-launcher-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--hostly-op-gap-sm);
+    margin-top: var(--hostly-op-gap-lg);
+  }
+
+  .hostly-op-launcher-card {
+    min-height: var(--hostly-op-launcher-height-desktop);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .hostly-page-header {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .hostly-kpi-grid-unified {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .hostly-btn-soft {
   border: 1px solid var(--hostly-line);
   border-radius: 10px;
@@ -1391,6 +2028,17 @@ body {
   min-height: var(--hostly-touch-min) !important;
   touch-action: manipulation;
   -webkit-tap-highlight-color: rgba(255, 255, 255, 0.07);
+}
+
+[data-hostly-touch] .hostly-button-compact {
+  min-height: var(--hostly-op-button-compact-min-h) !important;
+}
+
+/* Tabs/pills fuera de CTA genérico — altura operacional, no 50px de botón */
+[data-hostly-touch] button.hostly-tab,
+[data-hostly-touch] button.hostly-pill,
+[data-hostly-touch] a.hostly-tab {
+  min-height: var(--hostly-op-tab-min-h-touch) !important;
 }
 
 /* Segmentados: más compactos que el CTA genérico; sigue siendo táctil (iOS ~44pt) */

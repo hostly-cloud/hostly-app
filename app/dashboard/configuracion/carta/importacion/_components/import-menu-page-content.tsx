@@ -6,8 +6,10 @@ import {
   HostlyKpiCard,
   HostlySection,
   HostlySectionHeader,
+  HostlySegmentedControl,
   HostlySurface,
   hostlyCx,
+  hostlySegmentTabClassName,
 } from "@/components/ui/hostly";
 import { ConfigCartaWorkbench } from "../../../_components/config-carta-workbench";
 import { ImportMenuRecentList } from "./import-menu-recent-list";
@@ -401,14 +403,14 @@ function UploadStep({
 
       <HostlySurface variant="ice" className="p-4 sm:p-5">
         <p className="hostly-section-label mb-2.5">Método de entrada</p>
-        <div className="hostly-segmented flex w-full flex-wrap gap-1 sm:inline-flex sm:w-auto" role="tablist" aria-label="Método de importación">
+        <HostlySegmentedControl aria-label="Método de importación" className="w-full sm:w-auto">
           {INPUT_METHODS.map((m) => (
             <button
               key={m.id}
               type="button"
               role="tab"
               aria-selected={inputMethod === m.id}
-              className="hostly-pill min-h-[var(--hostly-mobile-cta-min-h)] flex-1 px-3 sm:flex-none sm:min-h-[30px]"
+              className={hostlySegmentTabClassName("flex-1 sm:flex-none")}
               onClick={() => {
                 onInputMethodChange(m.id);
                 onFileSelect(null);
@@ -417,7 +419,7 @@ function UploadStep({
               {m.label}
             </button>
           ))}
-        </div>
+        </HostlySegmentedControl>
         <p className="mt-2 text-xs font-medium text-[var(--hostly-ink-soft)]">{methodMeta.hint}</p>
       </HostlySurface>
 

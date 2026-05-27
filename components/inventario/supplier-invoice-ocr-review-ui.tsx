@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { HostlyKpiCard } from "@/components/ui/hostly/HostlyKpiCard";
+import { HostlySegmentedControl, hostlySegmentTabClassName } from "@/components/ui/hostly";
 import type { ExtractedInvoiceLineDraft } from "@/lib/inventory/extracted-invoice-to-supplier-invoice";
 import type { ExtractedInvoiceValidationSummary } from "@/lib/inventory/extracted-invoice-to-supplier-invoice";
 import type { ExtractedSupplierInvoiceDraft } from "@/lib/inventory/extracted-supplier-invoice-types";
@@ -621,7 +622,7 @@ export function MobileViewTabs({
   onChange: (tab: "document" | "review") => void;
 }) {
   return (
-    <div className="hostly-segmented" style={{ display: "flex", width: "100%" }}>
+    <HostlySegmentedControl aria-label="Vista móvil factura" scrollable={false} className="w-full">
       {(
         [
           ["document", "Documento"],
@@ -631,21 +632,16 @@ export function MobileViewTabs({
         <button
           key={id}
           type="button"
-          className="hostly-tab"
+          role="tab"
+          aria-selected={active === id}
           data-active={active === id ? "true" : undefined}
+          className={hostlySegmentTabClassName("flex-1")}
           onClick={() => onChange(id)}
-          style={{
-            flex: 1,
-            padding: "8px 10px",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
         >
           {label}
         </button>
       ))}
-    </div>
+    </HostlySegmentedControl>
   );
 }
 

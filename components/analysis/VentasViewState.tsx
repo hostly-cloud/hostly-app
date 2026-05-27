@@ -1,19 +1,3 @@
-import type { CSSProperties } from "react";
-
-const boxStyle: CSSProperties = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.14)",
-  background: "var(--hostly-ice-50)",
-};
-
-const textStyle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: "var(--hostly-ink-muted)",
-  lineHeight: 1.45,
-};
-
 export type VentasViewStateProps = {
   hasOrders: boolean;
   ordersCount: number;
@@ -21,12 +5,10 @@ export type VentasViewStateProps = {
 
 export function VentasViewState({ hasOrders, ordersCount }: VentasViewStateProps) {
   const message = hasOrders
-    ? `Se han detectado ${ordersCount} pedidos para esta vista.`
-    : "Todavía no hay pedidos conectados a esta pestaña.";
+    ? `${ordersCount} pedidos en el periodo`
+    : "Sin pedidos conectados a esta pestaña";
 
   return (
-    <div style={boxStyle}>
-      <p style={{ ...textStyle, margin: 0 }}>{message}</p>
-    </div>
+    <p className="hostly-muted m-0 min-w-0 flex-1 text-xs leading-snug sm:text-[13px]">{message}</p>
   );
 }

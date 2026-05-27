@@ -1,0 +1,152 @@
+/* Marketing layer — isolated from dashboard / TPV styles */
+
+.marketing-site {
+  --mk-bg: var(--hostly-surface-page-soft, #f7fcff);
+  --mk-bg-alt: #ffffff;
+  --mk-ink: var(--hostly-ink-strong, #121a22);
+  --mk-muted: var(--hostly-ink-muted, #667085);
+  --mk-faint: var(--hostly-ink-faint, #9aa5b2);
+  --mk-accent: var(--hostly-accent, #315f7d);
+  --mk-accent-soft: var(--hostly-accent-soft, rgba(49, 95, 125, 0.13));
+  --mk-line: var(--hostly-line, rgba(54, 86, 116, 0.15));
+  --mk-line-soft: var(--hostly-table-divider-soft, rgba(54, 86, 116, 0.052));
+  --mk-shadow: var(--hostly-shadow-float, 0 10px 28px rgba(15, 23, 42, 0.08));
+  --mk-shadow-soft: var(--hostly-shadow-elevated, 0 2px 12px rgba(15, 23, 42, 0.055));
+  --mk-radius: 20px;
+  --mk-radius-sm: 14px;
+  --mk-max: 1180px;
+  color: var(--mk-ink);
+  background: var(--mk-bg);
+  min-height: 100vh;
+}
+
+.marketing-container {
+  width: min(100%, var(--mk-max));
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2rem);
+}
+
+.marketing-section {
+  padding-block: clamp(4rem, 8vw, 7rem);
+}
+
+.marketing-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mk-accent);
+}
+
+.marketing-headline {
+  font-size: clamp(2.125rem, 5vw, 3.75rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  font-weight: 650;
+  color: var(--mk-ink);
+}
+
+.marketing-subhead {
+  font-size: clamp(1rem, 2vw, 1.1875rem);
+  line-height: 1.65;
+  color: var(--mk-muted);
+  max-width: 42rem;
+}
+
+.marketing-card {
+  border: 1px solid var(--mk-line-soft);
+  background: var(--mk-bg-alt);
+  border-radius: var(--mk-radius-sm);
+  box-shadow: var(--mk-shadow-soft);
+  transition:
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    transform 0.22s ease;
+}
+
+.marketing-card:hover {
+  border-color: color-mix(in srgb, var(--mk-accent) 18%, transparent);
+  box-shadow: var(--mk-shadow);
+}
+
+@media (hover: hover) {
+  .marketing-card:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.marketing-mockup-shell {
+  border: 1px solid var(--mk-line-soft);
+  border-radius: calc(var(--mk-radius) + 2px);
+  background: linear-gradient(180deg, #ffffff 0%, var(--hostly-ice-50, #f5fbff) 100%);
+  box-shadow: var(--mk-shadow);
+  overflow: hidden;
+}
+
+.marketing-mockup-chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--mk-line-soft);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.marketing-mockup-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mk-accent) 16%, #dbeafe);
+}
+
+@keyframes marketing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.marketing-rise {
+  animation: marketing-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.marketing-rise-delay-1 {
+  animation-delay: 0.08s;
+}
+.marketing-rise-delay-2 {
+  animation-delay: 0.16s;
+}
+.marketing-rise-delay-3 {
+  animation-delay: 0.24s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-rise,
+  .marketing-rise-delay-1,
+  .marketing-rise-delay-2,
+  .marketing-rise-delay-3 {
+    animation: none;
+  }
+}
+
+.marketing-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(54, 86, 116, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(54, 86, 116, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.marketing-gradient-spot {
+  pointer-events: none;
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(64px);
+  opacity: 0.45;
+}

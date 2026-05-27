@@ -52,19 +52,7 @@ export function ComensalesAnalyticsSection({
   } = comensalesSelectors;
 
   return (
-    <div
-      className="hostly-card"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        padding: 20,
-        borderRadius: "var(--hostly-radius-md)",
-        overflow: "auto",
-      }}
-    >
+    <div className="hostly-analytics-panel">
       <ComensalesHeaderBlock
         dateFrom={dateFrom}
         dateTo={dateTo}

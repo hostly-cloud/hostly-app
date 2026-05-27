@@ -4,6 +4,7 @@ import "./product-timeline-ui.css";
 
 import Link from "next/link";
 import { type CSSProperties, useState } from "react";
+import { HostlySegmentedControl, hostlySegmentTabClassName } from "@/components/ui/hostly";
 import {
   buildProductTimelineContextLinks,
   formatTimelineRelative,
@@ -144,20 +145,21 @@ export function ProductTimelineToolbar({
           alignItems: "center",
         }}
       >
-      <div className="hostly-segmented" style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      <HostlySegmentedControl aria-label="Filtrar timeline" scrollable={false} className="min-w-0">
         {PRODUCT_TIMELINE_FILTER_OPTIONS.map((option) => (
           <button
             key={option.id}
             type="button"
-            className="hostly-tab"
+            role="tab"
+            aria-selected={filter === option.id}
             data-active={filter === option.id ? "true" : undefined}
+            className={hostlySegmentTabClassName()}
             onClick={() => onFilterChange(option.id)}
-            style={{ padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
           >
             {option.label}
           </button>
         ))}
-      </div>
+      </HostlySegmentedControl>
       <input
         type="date"
         value={dateRange.fromMs ? new Date(dateRange.fromMs).toISOString().slice(0, 10) : ""}

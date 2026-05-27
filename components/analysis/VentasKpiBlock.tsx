@@ -16,13 +16,7 @@ export function VentasKpiBlock({ data }: VentasKpiBlockProps) {
   const { totalVentas, totalTickets, ticketMedio, zonaMasVentas } = data;
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-        gap: 12,
-      }}
-    >
+    <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics">
       <HostlyKpiCard title="Ventas totales" value={`${totalVentas.toFixed(2)} €`} />
       <HostlyKpiCard title="Total tickets" value={totalTickets} />
       <HostlyKpiCard title="Ticket medio" value={`${ticketMedio.toFixed(2)} €`} />

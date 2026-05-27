@@ -1,4 +1,5 @@
 import type { ZonasSelectorsKpis } from "@/components/analysis/hooks/useZonasSelectors";
+import { HostlyKpiCard } from "@/components/ui/hostly";
 
 export type ZonasKpiBlockData = ZonasSelectorsKpis;
 
@@ -7,34 +8,23 @@ type Props = {
 };
 
 export function ZonasKpiBlock({ data }: Props) {
-  const {
-    totalZonas,
-    mejorZona,
-    peorZona,
-    balanceOperativoZonas,
-    confianzaZonas,
-  } = data;
+  const { totalZonas, mejorZona, peorZona, balanceOperativoZonas, confianzaZonas } = data;
 
   return (
-    <div>
-      <p>Zonas activas: {totalZonas}</p>
-
-      <p>
-        Mejor:{" "}
-        {mejorZona
-          ? `${mejorZona.zoneName} (${Math.round(mejorZona.ocupacion * 100)}%)`
-          : "N/A"}
-      </p>
-
-      <p>
-        Peor:{" "}
-        {peorZona
-          ? `${peorZona.zoneName} (${Math.round(peorZona.ocupacion * 100)}%)`
-          : "N/A"}
-      </p>
-
-      <p>Balance: {balanceOperativoZonas}</p>
-      <p>Confianza: {confianzaZonas}</p>
+    <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics">
+      <HostlyKpiCard title="Zonas activas" value={totalZonas} />
+      <HostlyKpiCard
+        title="Mejor zona"
+        value={mejorZona ? mejorZona.zoneName : "N/A"}
+        helper={mejorZona ? `${Math.round(mejorZona.ocupacion * 100)}% ocupación` : undefined}
+      />
+      <HostlyKpiCard
+        title="Peor zona"
+        value={peorZona ? peorZona.zoneName : "N/A"}
+        helper={peorZona ? `${Math.round(peorZona.ocupacion * 100)}% ocupación` : undefined}
+      />
+      <HostlyKpiCard title="Balance" value={balanceOperativoZonas} variant="soft" />
+      <HostlyKpiCard title="Confianza" value={confianzaZonas} variant="soft" />
     </div>
   );
 }

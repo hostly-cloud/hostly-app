@@ -422,7 +422,7 @@ export default function ReportesPage() {
             refreshLocal();
             void loadEscandallos();
           }}
-          className="hostly-button-secondary shrink-0 !min-h-0 px-3.5 py-2 text-sm whitespace-nowrap"
+          className="hostly-button-secondary hostly-button-compact shrink-0 whitespace-nowrap"
         >
           {t("common.reload")}
         </button>

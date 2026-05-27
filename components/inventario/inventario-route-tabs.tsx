@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { HostlySegmentedControl, hostlySegmentTabClassName } from "@/components/ui/hostly";
 
 /** Tabs del hub Inventario → rutas reales (`/dashboard/...`). */
 export type InventarioHubTabId =
@@ -94,7 +95,7 @@ export function InventarioRouteTabs({ className }: { className?: string }) {
       className={["hostly-inventario-route-tabs", className].filter(Boolean).join(" ")}
       style={{ display: "flex", justifyContent: "flex-start", width: "100%", minHeight: 0 }}
     >
-      <div role="tablist" aria-label="Secciones de inventario" className="hostly-segmented">
+      <HostlySegmentedControl aria-label="Secciones de inventario">
         {TABS.map((t) => {
           const selected = tabActive(pathname, t.id);
           return (
@@ -104,21 +105,15 @@ export function InventarioRouteTabs({ className }: { className?: string }) {
               role="tab"
               aria-selected={selected}
               data-active={selected ? "true" : undefined}
-              className="hostly-tab hostly-tab--inventory-hub"
+              className={hostlySegmentTabClassName("hostly-tab--inventory-hub")}
               prefetch
-              style={{
-                minWidth: 92,
-                padding: "5px 12px",
-                textDecoration: "none",
-                cursor: "pointer",
-                boxSizing: "border-box",
-              }}
+              style={{ textDecoration: "none", cursor: "pointer", boxSizing: "border-box" }}
             >
               {t.label}
             </Link>
           );
         })}
-      </div>
+      </HostlySegmentedControl>
     </div>
   );
 }

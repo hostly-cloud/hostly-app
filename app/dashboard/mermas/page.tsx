@@ -6,7 +6,14 @@ import { useI18n } from "@/components/i18n-provider";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
+import {
+  HostlyKpiCard,
+  HostlySection,
+  HostlySectionHeader,
+  HostlySegmentedControl,
+  HostlySurface,
+  hostlySegmentTabClassName,
+} from "@/components/ui/hostly";
 import {
   type MermaLocal,
   type MermaMotivo,
@@ -395,7 +402,7 @@ export default function MermasPage() {
         <button
           type="button"
           onClick={openCreate}
-          className="hostly-button-secondary shrink-0 !min-h-0 whitespace-nowrap px-3.5 py-2 text-sm !border-amber-400/40 !bg-amber-50 !font-semibold !text-[color:#78350f] hover:!border-amber-400/55 hover:!bg-amber-100/90"
+          className="hostly-button-secondary hostly-button-compact shrink-0 whitespace-nowrap !border-amber-400/40 !bg-amber-50 !font-semibold !text-[color:#78350f] hover:!border-amber-400/55 hover:!bg-amber-100/90"
         >
           {t("mermas.registerMermaCta")}
         </button>
@@ -520,48 +527,30 @@ export default function MermasPage() {
                   padding: "4px 8px 6px",
                 }}
               >
-                <span className="hostly-kpi-label !text-[10px]">{t("stock.filterHint")}</span>                <button
-                  type="button"
-                  onClick={() => setMotivoListFilter("todos")}
-                  style={{
-                    border:
-                      motivoListFilter === "todos"
-                        ? "1px solid rgba(49, 95, 125, 0.4)"
-                        : "1px solid var(--hostly-table-divider-soft)",                    background: motivoListFilter === "todos" ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
-                    color: motivoListFilter === "todos" ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
-                    padding: "6px 10px",
-                    borderRadius: 999,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    lineHeight: 1.25,
-                  }}
-                >
-                  {t("stock.filterAll")}
-                </button>
-                {MERMA_MOTIVOS.map((mo) => {
-                  const active = motivoListFilter === mo;
-                  return (
+                <span className="hostly-kpi-label !text-[10px]">{t("stock.filterHint")}</span>
+                <HostlySegmentedControl aria-label={t("stock.filterHint")} className="min-w-0">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={motivoListFilter === "todos"}
+                    className={hostlySegmentTabClassName()}
+                    onClick={() => setMotivoListFilter("todos")}
+                  >
+                    {t("stock.filterAll")}
+                  </button>
+                  {MERMA_MOTIVOS.map((mo) => (
                     <button
                       key={mo}
                       type="button"
+                      role="tab"
+                      aria-selected={motivoListFilter === mo}
+                      className={hostlySegmentTabClassName("max-w-full")}
                       onClick={() => setMotivoListFilter(mo)}
-                      style={{
-                        border: active ? "1px solid rgba(49, 95, 125, 0.4)" : "1px solid var(--hostly-table-divider-soft)",                        background: active ? "var(--hostly-accent-soft)" : "var(--hostly-surface-card-solid)",
-                        color: active ? "var(--hostly-navy-deep)" : "var(--hostly-ink-muted)",
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontSize: 13,
-                        lineHeight: 1.25,
-                        maxWidth: "100%",
-                      }}
                     >
                       {formatMotivoLabel(mo)}
                     </button>
-                  );
-                })}
+                  ))}
+                </HostlySegmentedControl>
               </div>
 
               <div

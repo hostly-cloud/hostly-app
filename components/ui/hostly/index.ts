@@ -16,3 +16,5 @@ export { HostlySectionHeader } from "./HostlySectionHeader";
 export type { HostlySectionHeaderProps } from "./HostlySectionHeader";
 export { HostlyKpiCard } from "./HostlyKpiCard";
 export type { HostlyKpiCardProps } from "./HostlyKpiCard";
+export { HostlySegmentedControl, hostlySegmentPillClassName, hostlySegmentTabClassName } from "./HostlySegmentedControl";
+export type { HostlySegmentedControlProps } from "./HostlySegmentedControl";

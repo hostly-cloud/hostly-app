@@ -1,3 +1,4 @@
+import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
 import { HostlySectionHeader } from "@/components/ui/hostly";
 
 export type ComensalesHeaderBlockProps = {
@@ -16,52 +17,21 @@ export function ComensalesHeaderBlock({
   formatDateEs,
 }: ComensalesHeaderBlockProps) {
   return (
-    <>
-      <HostlySectionHeader
-        title="Comensales"
-        description={`Del ${formatDateEs(dateFrom)} al ${formatDateEs(dateTo)}`}
-      />
-
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <label style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
-          Desde
-        </label>
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid rgba(148, 163, 184, 0.22)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-strong)",
-            fontSize: 14,
-            fontWeight: 700,
-            outline: "none",
-          }}
-          aria-label="Desde"
+    <div className="hostly-analytics-toolbar">
+      <div className="hostly-analytics-toolbar__filters min-w-0 flex-1 flex-col items-stretch gap-[var(--hostly-op-gap-sm)] sm:flex-row sm:items-center">
+        <HostlySectionHeader
+          title="Comensales"
+          description={`Del ${formatDateEs(dateFrom)} al ${formatDateEs(dateTo)}`}
+          titleVariant="section"
+          className="hostly-section-header--operational w-full min-w-0 flex-1"
         />
-        <label style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--hostly-ink-muted)" }}>
-          Hasta
-        </label>
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid rgba(148, 163, 184, 0.22)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-strong)",
-            fontSize: 14,
-            fontWeight: 700,
-            outline: "none",
-          }}
-          aria-label="Hasta"
+        <AnalyticsDateRangeFields
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
         />
       </div>
-    </>
+    </div>
   );
 }

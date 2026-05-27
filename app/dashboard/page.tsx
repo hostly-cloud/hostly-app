@@ -584,14 +584,7 @@ export default function DashboardPage() {
           </div>
         </HostlySurface>
 
-        <div
-          style={{
-            flexShrink: 0,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-            gap: 12,
-          }}
-        >
+        <div className="hostly-kpi-grid-unified shrink-0">
           {kpiCards.map((k) => (
             <HostlyKpiCard
               key={k.label}

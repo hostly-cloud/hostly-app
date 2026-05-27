@@ -228,15 +228,7 @@ export function VentasAnalyticsSection({
 
   if (!hasOrders) {
     return (
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
+      <div className="hostly-analytics-panel">
         <VentasHeaderBlock title="Ventas" />
         <VentasContentBlock
           hasOrders={hasOrders}
@@ -261,19 +253,7 @@ export function VentasAnalyticsSection({
   }
 
   return (
-    <div
-      className="hostly-card"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        padding: 20,
-        borderRadius: "var(--hostly-radius-md)",
-        overflow: "auto",
-      }}
-    >
+    <div className="hostly-analytics-panel">
       <VentasHeaderBlock title="Ventas" />
       <VentasContentBlock
         hasOrders={hasOrders}

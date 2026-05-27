@@ -1,13 +1,16 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
+import { hostlyCx } from "@/components/ui/hostly";
 
 export type HostlyBackButtonProps = {
   label: ReactNode;
   ariaLabel?: string;
-  /** `light`: cabecera clara (Configuración). Por defecto `dark` (dashboard oscuro). */
+  /** `light`: cabecera clara (dashboard modules). Por defecto `dark`. */
   tone?: "dark" | "light";
+  /** Cabecera unificada de módulos dashboard (`ModulePageShell` + `compactLayout`). */
+  moduleChrome?: boolean;
 } & (
   | { href: string; onClick?: never }
   | { onClick: () => void; href?: never }
@@ -15,11 +18,10 @@ export type HostlyBackButtonProps = {
 
 function normalizeLabel(label: ReactNode): ReactNode {
   if (typeof label !== "string") return label;
-  // Prevent double arrows when translations include "← ...".
   return label.replace(/^\s*←\s*/u, "");
 }
 
-const sharedDark: CSSProperties = {
+const sharedDark = {
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
@@ -31,61 +33,24 @@ const sharedDark: CSSProperties = {
   lineHeight: 1.15,
   borderRadius: 10,
   textDecoration: "none",
-};
+} as const;
 
-const sharedLight: CSSProperties = {
-  ...sharedDark,
-  border: "1px solid rgba(148, 163, 184, 0.35)",
-  background: "rgba(255, 255, 255, 0.72)",
-  color: "#0f172a",
-};
-
-const arrowDark: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 18,
-  height: 18,
-  borderRadius: 6,
-  border: "1px solid rgba(148, 163, 184, 0.12)",
-  background: "rgba(2, 6, 23, 0.12)",
-  color: "#e2e8f0",
-  fontWeight: 900,
-  lineHeight: 1,
-  flexShrink: 0,
-};
-
-const arrowLight: CSSProperties = {
-  ...arrowDark,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "rgba(248, 250, 252, 0.95)",
-  color: "#0f172a",
-};
-
-const labelDark: CSSProperties = {
-  fontWeight: 700,
-  fontSize: 13,
-  color: "#cbd5e1",
-  minWidth: 0,
-};
-
-const labelLight: CSSProperties = {
-  ...labelDark,
-  color: "#334155",
-};
+const linkClassName = (tone: "dark" | "light", moduleChrome?: boolean) =>
+  hostlyCx(
+    "hostly-touch-nav-link hostly-nav-aux",
+    tone === "light" && moduleChrome && "hostly-back-button--module",
+  );
 
 export function HostlyBackButton(props: HostlyBackButtonProps) {
   const tone = props.tone ?? "dark";
-  const sharedStyle = tone === "light" ? sharedLight : sharedDark;
-  const arrowStyle = tone === "light" ? arrowLight : arrowDark;
-  const labelStyle = tone === "light" ? labelLight : labelDark;
+  const moduleChrome = Boolean(props.moduleChrome && tone === "light");
   const label = normalizeLabel(props.label);
   const content = (
     <>
-      <span aria-hidden="true" style={arrowStyle}>
+      <span aria-hidden="true" className="hostly-back-button__arrow inline-flex shrink-0 items-center justify-center font-black leading-none">
         ←
       </span>
-      <span style={labelStyle}>{label}</span>
+      <span className="hostly-back-button__label min-w-0">{label}</span>
     </>
   );
 
@@ -93,10 +58,10 @@ export function HostlyBackButton(props: HostlyBackButtonProps) {
     return (
       <Link
         href={props.href}
-        className="hostly-touch-nav-link hostly-nav-aux"
+        className={linkClassName(tone, moduleChrome)}
         aria-label={props.ariaLabel ?? "Volver"}
         title="Volver"
-        style={sharedStyle}
+        style={moduleChrome ? undefined : tone === "light" ? { ...sharedDark, border: "1px solid rgba(148, 163, 184, 0.35)", background: "rgba(255, 255, 255, 0.72)", color: "#0f172a" } : sharedDark}
       >
         {content}
       </Link>
@@ -107,13 +72,12 @@ export function HostlyBackButton(props: HostlyBackButtonProps) {
     <button
       type="button"
       onClick={props.onClick}
-      className="hostly-touch-nav-link hostly-nav-aux"
+      className={linkClassName(tone, moduleChrome)}
       aria-label={props.ariaLabel ?? "Volver"}
       title="Volver"
-      style={sharedStyle}
+      style={moduleChrome ? undefined : tone === "light" ? { ...sharedDark, border: "1px solid rgba(148, 163, 184, 0.35)", background: "rgba(255, 255, 255, 0.72)", color: "#0f172a" } : sharedDark}
     >
       {content}
     </button>
   );
 }
-

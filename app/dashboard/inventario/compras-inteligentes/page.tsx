@@ -8,7 +8,12 @@ import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyKpiCard, HostlySectionHeader } from "@/components/ui/hostly";
+import {
+  HostlyKpiCard,
+  HostlySectionHeader,
+  HostlySegmentedControl,
+  hostlySegmentTabClassName,
+} from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { getProductKindDisplayLabel, type ProductKind } from "@/lib/carta/product-kind-options";
 import { listenProductsForInventory, type ProductDocument } from "@/lib/firestore/products";
@@ -786,21 +791,20 @@ export default function ComprasInteligentesPage() {
           )}
         </div>
 
-        <div role="tablist" aria-label="Filtrar sugerencias" className="hostly-segmented">
+        <HostlySegmentedControl aria-label="Filtrar sugerencias">
           {FILTER_OPTIONS.map((option) => (
             <button
               key={option.id}
               type="button"
               role="tab"
               aria-selected={filter === option.id}
-              className="hostly-tab"
+              className={hostlySegmentTabClassName("min-w-[88px]")}
               onClick={() => setFilter(option.id)}
-              style={{ minWidth: 88, padding: "6px 12px", cursor: "pointer" }}
             >
               {option.label}
             </button>
           ))}
-        </div>
+        </HostlySegmentedControl>
 
         <div className="hostly-panel p-3" style={{ overflow: "auto", minHeight: 0 }}>
           {filteredRows.length === 0 ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AnalyticsDateRangeFields } from "@/components/analysis/AnalyticsDateRangeFields";
 import { HostlyKpiCard, HostlySectionHeader } from "@/components/ui/hostly";
 import {
   buildInventoryMarginAnalytics,
@@ -25,10 +26,6 @@ function formatEur(value: number): string {
 function formatPercent(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return `${value.toFixed(1).replace(".", ",")} %`;
-}
-
-function filterPillClass(active: boolean): string {
-  return `hostly-pill px-3 py-2 text-sm${active ? "" : ""}`;
 }
 
 function MarginProductsTable({
@@ -127,122 +124,50 @@ export function RentabilidadAnalyticsSection({
   const hasCompleteData = summary.completeLineCount > 0;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        minHeight: 0,
-        flex: 1,
-      }}
-    >
+    <div className="hostly-analytics-panel">
+      <div className="hostly-analytics-stack">
       <HostlySectionHeader
         title="Rentabilidad"
         description={`Margen histórico con costes congelados al enviar · ${formatDateEs(dateFrom)} – ${formatDateEs(dateTo)}`}
+        titleVariant="section"
+        className="hostly-section-header--operational"
       />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <label
-          style={{
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-            color: "var(--hostly-ink-muted)",
-          }}
-        >
-          Desde
-        </label>
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid rgba(148, 163, 184, 0.22)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-strong)",
-            fontSize: 14,
-            fontWeight: 700,
-            outline: "none",
-          }}
-          aria-label="Desde"
-        />
-        <label
-          style={{
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-            color: "var(--hostly-ink-muted)",
-          }}
-        >
-          Hasta
-        </label>
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid rgba(148, 163, 184, 0.22)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-strong)",
-            fontSize: 14,
-            fontWeight: 700,
-            outline: "none",
-          }}
-          aria-label="Hasta"
-        />
-      </div>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <select
-          value={familyFilter}
-          onChange={(e) => setFamilyFilter(e.target.value)}
-          className={filterPillClass(familyFilter !== "all")}
-          aria-label="Filtrar por familia"
-          style={{
-            padding: "8px 12px",
-            borderRadius: 10,
-            border: "1px solid rgba(148, 163, 184, 0.22)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-strong)",
-            fontSize: 13,
-            fontWeight: 700,
-          }}
-        >
-          <option value="all">Todas las familias</option>
-          {baseAnalytics.filterOptions.families.map((family) => (
-            <option key={family} value={family}>
-              {family}
-            </option>
-          ))}
-        </select>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className={filterPillClass(categoryFilter !== "all")}
-          aria-label="Filtrar por categoría"
-          style={{
-            padding: "8px 12px",
-            borderRadius: 10,
-            border: "1px solid rgba(148, 163, 184, 0.22)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-strong)",
-            fontSize: 13,
-            fontWeight: 700,
-          }}
-        >
-          <option value="all">Todas las categorías</option>
-          {baseAnalytics.filterOptions.categories.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
+      <div className="hostly-analytics-toolbar">
+        <div className="hostly-analytics-toolbar__filters">
+          <AnalyticsDateRangeFields
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+          />
+          <select
+            value={familyFilter}
+            onChange={(e) => setFamilyFilter(e.target.value)}
+            className="hostly-select hostly-select--toolbar-compact"
+            aria-label="Filtrar por familia"
+          >
+            <option value="all">Todas las familias</option>
+            {baseAnalytics.filterOptions.families.map((family) => (
+              <option key={family} value={family}>
+                {family}
+              </option>
+            ))}
+          </select>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="hostly-select hostly-select--toolbar-compact"
+            aria-label="Filtrar por categoría"
+          >
+            <option value="all">Todas las categorías</option>
+            {baseAnalytics.filterOptions.categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {!hasCompleteData ? (
@@ -259,13 +184,7 @@ export function RentabilidadAnalyticsSection({
         </div>
       ) : (
         <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: 12,
-            }}
-          >
+          <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--analytics">
             <HostlyKpiCard title="Ventas" value={formatEur(summary.salesTotal)} />
             <HostlyKpiCard title="Coste inventario" value={formatEur(summary.costTotal)} />
             <HostlyKpiCard title="Margen bruto" value={formatEur(summary.grossMargin)} />
@@ -316,6 +235,7 @@ export function RentabilidadAnalyticsSection({
           ) : null}
         </>
       )}
+      </div>
     </div>
   );
 }
