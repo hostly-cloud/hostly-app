@@ -279,6 +279,8 @@ Clases operacionales unificadas (post-[L]):
 - `.hostly-analytics-stack`, `.hostly-analytics-panel`, `.hostly-analytics-toolbar*`
 - `.hostly-kpi-grid-unified--analytics`, `.hostly-input--toolbar-compact`, `.hostly-select--toolbar-compact`
 - Tokens: `--hostly-op-analytics-section-gap`, `--hostly-op-analytics-panel-pad`
+- **Dashboard home (`/dashboard`, v2.3):** `.hostly-dashboard-stack*`, `.hostly-kpi-grid-unified--dashboard`, `.hostly-dashboard-op-launcher*`, `.hostly-dashboard-panels-grid`, `.hostly-dashboard-panel*`, `.hostly-dashboard-alert-item[data-tone]`, `.hostly-dashboard-activity-*`, `.hostly-dashboard-module-grid`, `.hostly-dashboard-module-card*`, `.hostly-dashboard-onboarding*`, `.hostly-dashboard-owner-panel`
+- Tokens dashboard home: `--hostly-op-dashboard-section-gap`, `--hostly-op-dashboard-panel-pad`, `--hostly-op-dashboard-op-min-h`, `--hostly-op-dashboard-header-pad-y`, `--hostly-op-dashboard-content-gap`
 
 ---
 
@@ -380,7 +382,7 @@ Validar: npm run build.
 | **v2.1** | Analytics hub — toolbar + KPI densidad (`hostly-analytics-*`) | ✅ Analytics ventas + tabs análisis |
 | **v2.1b** | Tabs/botones sueltos → `HostlySegmentedControl` / `hostly-button-compact` | Parcial (inventario, recepciones…) |
 | **v2.2** | Shell dashboard unificado + launcher operación + ES/EN discreto | ✅ `ModulePageShell` + `/dashboard/operacion` |
-| **v2.3** | KPI + headers unificados en todos los hubs | Pendiente |
+| **v2.3** | Dashboard home compacto — KPI densos, launcher operación, paneles alertas/actividad, módulos secundarios | ✅ `/dashboard` + clases `.hostly-dashboard-*` |
 | **v2.4** | Eliminar inline legacy + skins locales (`.hostly-*-skin`) | Pendiente |
 | **v2.5** | Formularios y tablas 100% tokenizados | Pendiente |
 
@@ -395,4 +397,4 @@ Validar: npm run build.
 
 ---
 
-*Última actualización: Hostly Visual System v2 — fase 2.2 (shell dashboard + launcher operación).*
+*Última actualización: Hostly Visual System v2 — fase 2.3 (dashboard home compacto).*

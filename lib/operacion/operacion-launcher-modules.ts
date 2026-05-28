@@ -40,3 +40,23 @@ export function isOperacionModuleSlug(value: string | null): value is OperacionM
 export function operacionModuleHref(slug: OperacionModuleSlug): string {
   return `/dashboard/operacion/${slug}`;
 }
+
+/** Marcador de build — comprobar en consola/DOM tras deploy. */
+export const OPERACION_LAUNCHER_BUILD_ID = "launcher-8-unfiltered-v1";
+
+export function getOperacionLauncherDiagnostic() {
+  return {
+    buildId: OPERACION_LAUNCHER_BUILD_ID,
+    nodeEnv: process.env.NODE_ENV,
+    moduleCount: OPERACION_LAUNCHER_MODULES.length,
+    modules: OPERACION_LAUNCHER_MODULES.map((module) => ({
+      slug: module.slug,
+      label: module.label,
+      href: operacionModuleHref(module.slug),
+    })),
+  };
+}
+
+if (typeof window !== "undefined") {
+  console.log("[operation-launcher] source constant", getOperacionLauncherDiagnostic());
+}

@@ -6,7 +6,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import ModulePageShell from "@/components/module-page-shell";
 import {
+  getOperacionLauncherDiagnostic,
   isOperacionModuleSlug,
+  OPERACION_LAUNCHER_BUILD_ID,
   operacionModuleHref,
   OPERACION_LAUNCHER_MODULES,
   type OperacionModuleSlug,
@@ -170,6 +172,19 @@ export default function OperacionMenuPage() {
     router.replace(`${operacionModuleHref(legacyTab)}${qs ? `?${qs}` : ""}`);
   }, [shouldRedirect, legacyTab, searchParams, router]);
 
+  useEffect(() => {
+    const modules = OPERACION_LAUNCHER_MODULES;
+    console.log(
+      "[operation-launcher] render",
+      modules.map((module) => ({
+        slug: module.slug,
+        label: module.label,
+        href: operacionModuleHref(module.slug),
+      })),
+    );
+    console.log("[operation-launcher] diagnostic", getOperacionLauncherDiagnostic());
+  }, []);
+
   if (shouldRedirect) {
     return null;
   }
@@ -183,7 +198,12 @@ export default function OperacionMenuPage() {
       operationalFocus
       shellSurface="configLight"
     >
-      <nav aria-label="Módulos de operación" className="hostly-op-launcher-grid">
+      <nav
+        aria-label="Módulos de operación"
+        className="hostly-op-launcher-grid"
+        data-launcher-build={OPERACION_LAUNCHER_BUILD_ID}
+        data-launcher-count={OPERACION_LAUNCHER_MODULES.length}
+      >
         {OPERACION_LAUNCHER_MODULES.map((module) => {
           const Icon = MODULE_ICONS[module.slug];
           return (

@@ -1,7 +1,7 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { useAuth } from "@/components/auth/auth-context";
@@ -242,7 +242,6 @@ export default function DashboardPage() {
   const [mermas, setMermas] = useState<MermaLocal[]>([]);
   const [escandallos, setEscandallos] = useState<EscandalloRow[]>([]);
   const [escandalloError, setEscandalloError] = useState<string | null>(null);
-  const [hoverModule, setHoverModule] = useState<string | null>(null);
 
   const refreshLocal = useCallback(() => {
     setStock(loadStock());
@@ -432,27 +431,19 @@ export default function DashboardPage() {
     ],
   );
 
-  const activityLineMuted: CSSProperties = {
-    display: "block",
-    fontSize: 10,
-    color: "var(--hostly-ink-soft)",
-    marginTop: 2,
-    lineHeight: 1.3,
-  };
-
   const ownerBlock =
     role === "owner" && restaurantId && isFirebaseConfigured ? (
-      <HostlySurface variant="ice" className="flex shrink-0 flex-col p-4 box-border">
-        <div className={`${sectionTitleClass} mb-2.5`}>Nombre del restaurante</div>
+      <HostlySurface variant="ice" className="hostly-dashboard-owner-panel flex shrink-0 flex-col box-border">
+        <div className={`${sectionTitleClass} mb-2`}>Nombre del restaurante</div>
         <input
           type="text"
           value={restaurantNameInput}
           onChange={(e) => setRestaurantNameInput(e.target.value)}
-          className="hostly-input mb-2.5 max-w-[360px]"
+          className="hostly-input mb-2 max-w-[360px]"
         />
         <button
           type="button"
-          className="hostly-button-secondary w-fit"
+          className="hostly-button-secondary hostly-button-compact w-fit"
           onClick={() => {
             void (async () => {
               if (!restaurantId) return;
@@ -471,67 +462,30 @@ export default function DashboardPage() {
     [can],
   );
 
-  const moduleEntriesOperacion = visibleModuleEntries.slice(0, 1);
-  const moduleEntriesRest = visibleModuleEntries.slice(1);
+  const operacionEntry = visibleModuleEntries.find((mod) => mod.path === "/dashboard/operacion");
+  const secondaryModuleEntries = visibleModuleEntries.filter((mod) => mod.path !== "/dashboard/operacion");
 
-  const renderModuleGrid = (modules: readonly (typeof MODULE_ENTRIES)[number][]) => (
-    <div style={{ flexShrink: 0 }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-          gap: 12,
-        }}
-      >
-        {modules.map((mod) => {
-          const hovered = hoverModule === mod.path;
+  const renderSecondaryModules = () =>
+    secondaryModuleEntries.length === 0 ? null : (
+      <div className="hostly-dashboard-module-grid shrink-0">
+        {secondaryModuleEntries.map((mod) => {
           const Icon = mod.Icon;
           return (
             <button
               key={mod.path}
               type="button"
               onClick={() => router.push(mod.path)}
-              onMouseEnter={() => setHoverModule(mod.path)}
-              onMouseLeave={() => setHoverModule(null)}
-              className="flex min-h-[76px] cursor-pointer items-center gap-3.5 rounded-[14px] border px-5 py-[18px] text-left transition-[border-color,background] duration-150 ease-out sm:gap-3.5"
-              style={{
-                borderColor: hovered ? "var(--hostly-line-strong)" : "var(--hostly-line)",
-                background: hovered ? "#ffffff" : "var(--hostly-ice-50)",
-                color: "var(--hostly-ink)",
-              }}
+              className="hostly-dashboard-module-card"
             >
-              <span
-                style={{
-                  color: hovered ? "var(--hostly-accent)" : "var(--hostly-ink-soft)",
-                  flexShrink: 0,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 40,
-                  height: 40,
-                  borderRadius: 10,
-                  background: hovered ? "var(--hostly-accent-soft)" : "var(--hostly-ice-100)",
-                }}
-              >
-                <Icon size={22} />
+              <span className="hostly-dashboard-module-card__icon">
+                <Icon size={18} />
               </span>
-              <span
-                style={{
-                  fontSize: 16,
-                  fontWeight: 700,
-                  letterSpacing: "-0.02em",
-                  lineHeight: 1.25,
-                  color: "var(--hostly-navy-deep)",
-                }}
-              >
-                {mod.label}
-              </span>
+              <span className="hostly-dashboard-module-card__label">{mod.label}</span>
             </button>
           );
         })}
       </div>
-    </div>
-  );
+    );
 
   return (
     <ModulePageShell
@@ -539,52 +493,19 @@ export default function DashboardPage() {
       subtitle={t("dashboard.subtitle")}
       maxWidth={1280}
       compactLayout
+      operationalFocus
       lockViewport={!mobileScroll}
       hideBackLink
       shellSurface="configLight"
     >
-        <div
-          className={
-            mobileScroll
-              ? "hostly-stack-md min-h-[min(100%,100dvh)] overflow-y-auto pb-24"
-              : "hostly-stack-md flex min-h-0 flex-1 flex-col overflow-hidden"
-          }
-          style={mobileScroll ? { WebkitOverflowScrolling: "touch" } : undefined}
-        >
-        {!mobileScroll && ownerBlock}
-        {mobileScroll ? renderModuleGrid(moduleEntriesOperacion) : null}
-
-        <HostlySurface
-          variant="elevated"
-          className="box-border flex shrink-0 flex-col gap-5 overflow-hidden rounded-[16px] border border-[color-mix(in_srgb,var(--hostly-table-divider-soft)_75%,transparent)] p-4 shadow-[var(--hostly-shadow-card)] sm:flex-row sm:items-stretch sm:justify-between sm:gap-6 sm:p-5"
-        >
-          <div className="flex min-w-0 flex-1 flex-col gap-4">
-            <div className="min-w-0">
-              <h2 className="hostly-heading mb-1.5 leading-tight">{t("dashboard.onboardingPromoTitle")}</h2>
-              <p className="m-0 text-[15px] font-medium leading-snug text-[color:var(--hostly-ink-muted)]">{t("dashboard.onboardingPromoBody")}</p>
-            </div>
-            <ul className="m-0 flex list-none flex-col gap-2 p-0 sm:grid sm:max-w-xl sm:grid-cols-2 sm:gap-x-8 sm:gap-y-2">
-              {[t("onboarding.chkNegocio"), t("onboarding.chkCarta"), t("onboarding.chkInventario"), t("onboarding.chkEscandallo")].map((label) => (
-                <li key={label} className="flex items-start gap-2.5 text-xs font-semibold leading-snug text-[color:var(--hostly-ink-soft)]">
-                  <span className="mt-[0.3em] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--hostly-accent)]" aria-hidden />
-                  {label}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="flex shrink-0 flex-col justify-center gap-2 border-t border-[var(--hostly-table-divider-faint)] pt-4 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
-            <button
-              type="button"
-              onClick={() => router.push("/dashboard/onboarding")}
-              className="hostly-button-primary w-full whitespace-nowrap sm:w-auto sm:min-w-[200px]"
-            >
-              {t("dashboard.onboardingPromoCta")}
-            </button>
-            <p className="m-0 text-center text-[11px] font-medium leading-snug text-[color:var(--hostly-ink-faint)] sm:text-left">{t("onboarding.sideHint")}</p>
-          </div>
-        </HostlySurface>
-
-        <div className="hostly-kpi-grid-unified shrink-0">
+      <div
+        className={
+          mobileScroll
+            ? "hostly-dashboard-stack hostly-dashboard-stack--scroll min-h-[min(100%,100dvh)] overflow-y-auto pb-24"
+            : "hostly-dashboard-stack hostly-dashboard-stack--viewport"
+        }
+      >
+        <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--dashboard shrink-0">
           {kpiCards.map((k) => (
             <HostlyKpiCard
               key={k.label}
@@ -593,126 +514,141 @@ export default function DashboardPage() {
               helper={k.sub}
               accentColor={k.accent}
               valueTitle={String(k.value)}
+              variant="soft"
             />
           ))}
         </div>
 
-        {mobileScroll && ownerBlock}
+        {operacionEntry ? (
+          <Link href={operacionEntry.path} className="hostly-dashboard-op-launcher shrink-0">
+            <span className="hostly-dashboard-op-launcher__icon">
+              <operacionEntry.Icon size={20} />
+            </span>
+            <span className="hostly-dashboard-op-launcher__text">
+              <span className="hostly-dashboard-op-launcher__title">{operacionEntry.label}</span>
+              <span className="hostly-dashboard-op-launcher__subtitle">Flujo diario del servicio</span>
+            </span>
+          </Link>
+        ) : null}
 
         <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-            gap: 12,
-            overflow: "hidden",
-          }}
+          className={
+            mobileScroll
+              ? "hostly-dashboard-panels-grid shrink-0"
+              : "hostly-dashboard-panels-grid min-h-0 flex-1 overflow-hidden"
+          }
         >
           <HostlySurface
-            variant="ice"
-            className="flex min-h-0 min-w-0 flex-col overflow-y-auto p-4 box-border"
-            style={{ WebkitOverflowScrolling: "touch" }}
+            variant="soft"
+            className={
+              mobileScroll
+                ? "hostly-dashboard-panel"
+                : "hostly-dashboard-panel hostly-dashboard-panel--scroll"
+            }
           >
-            <HostlySectionHeader title={t("dashboard.sectionActivity")} titleVariant="section" />
-            <ul className="hostly-stack-md m-0 list-none p-0">
-              <li className="border-b border-[var(--hostly-line)] pb-2.5">
+            <HostlySectionHeader
+              title={t("dashboard.sectionAlerts")}
+              titleVariant="section"
+              className="hostly-section-header--operational"
+            />
+            {alerts.length === 0 ? (
+              <p className="hostly-muted m-0 text-xs leading-snug">{t("dashboard.alertNone")}</p>
+            ) : (
+              <ul className="hostly-stack-sm m-0 list-none p-0">
+                {alerts.map((a) => (
+                  <li key={a.key} className="hostly-dashboard-alert-item" data-tone={a.tone}>
+                    <div className="hostly-dashboard-alert-title">{a.title}</div>
+                    <div className="hostly-dashboard-alert-body">{a.body}</div>
+                    {a.key === "stock" && lowStockProducts.length > 0 ? (
+                      <div className="hostly-dashboard-alert-detail">
+                        {lowStockProducts
+                          .slice(0, 4)
+                          .map((p) => p.nombre)
+                          .join(" · ")}
+                        {lowStockProducts.length > 4 ? "…" : ""}
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </HostlySurface>
+
+          <HostlySurface
+            variant="soft"
+            className={
+              mobileScroll
+                ? "hostly-dashboard-panel"
+                : "hostly-dashboard-panel hostly-dashboard-panel--scroll"
+            }
+          >
+            <HostlySectionHeader
+              title={t("dashboard.sectionActivity")}
+              titleVariant="section"
+              className="hostly-section-header--operational"
+            />
+            <ul className="hostly-stack-sm m-0 list-none p-0">
+              <li className="hostly-dashboard-activity-row">
                 <div className="hostly-kpi-label">{t("dashboard.activityLastMerma")}</div>
                 {lastMerma && hydrated ? (
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--hostly-ink-strong)", lineHeight: 1.35, marginTop: 4 }}>
+                  <div className="hostly-dashboard-activity-value">
                     {lastMerma.producto_stock_nombre}
-                    <span style={activityLineMuted}>
+                    <span className="hostly-dashboard-activity-meta">
                       {formatIsoDate(lastMerma.fecha, locale)} · {formatMotivoMerma(lastMerma.motivo)}
                     </span>
                   </div>
                 ) : (
-                  <div style={{ color: "var(--hostly-ink-soft)", fontSize: 12, marginTop: 4 }}>{t("dashboard.activityEmpty")}</div>
+                  <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
                 )}
               </li>
-              <li className="border-b border-[var(--hostly-line)] pb-2.5">
+              <li className="hostly-dashboard-activity-row">
                 <div className="hostly-kpi-label">{t("dashboard.activityLastOrder")}</div>
                 {lastCompra && hydrated ? (
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--hostly-ink-strong)", lineHeight: 1.35, marginTop: 4 }}>
+                  <div className="hostly-dashboard-activity-value">
                     {lastCompra.proveedor}
-                    <span style={activityLineMuted}>
+                    <span className="hostly-dashboard-activity-meta">
                       {formatIsoDate(lastCompra.fecha, locale)} · {compraEstadoLabel(lastCompra.estado, t)}
                     </span>
                   </div>
                 ) : (
-                  <div style={{ color: "var(--hostly-ink-soft)", fontSize: 12, marginTop: 4 }}>{t("dashboard.activityEmpty")}</div>
+                  <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
                 )}
               </li>
-              <li>
+              <li className="hostly-dashboard-activity-row">
                 <div className="hostly-kpi-label">{t("dashboard.activityLastRelevant")}</div>
                 {lastPriceRow && hydrated && !escandalloError ? (
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--hostly-ink-strong)", lineHeight: 1.35, marginTop: 4 }}>
+                  <div className="hostly-dashboard-activity-value">
                     {lastPriceRow.nombre_plato ?? "—"} · {formatEuro(lastPriceRow.precio_venta ?? 0, locale)}
-                    <span style={activityLineMuted}>{t("dashboard.activityRelevantHint")}</span>
+                    <span className="hostly-dashboard-activity-meta">{t("dashboard.activityRelevantHint")}</span>
                   </div>
                 ) : (
-                  <div style={{ color: "var(--hostly-ink-soft)", fontSize: 12, marginTop: 4 }}>{t("dashboard.activityEmpty")}</div>
+                  <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
                 )}
               </li>
             </ul>
           </HostlySurface>
-
-          <HostlySurface
-            variant="ice"
-            className="flex min-h-0 min-w-0 flex-col overflow-y-auto p-4 box-border"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
-            <HostlySectionHeader title={t("dashboard.sectionAlerts")} titleVariant="section" />
-            {alerts.length === 0 ? (
-              <p className="hostly-muted text-xs leading-snug">{t("dashboard.alertNone")}</p>
-            ) : (
-              <ul className="hostly-stack-md m-0 list-none p-0">
-                {alerts.map((a) => {
-                  const border =
-                    a.tone === "amber"
-                      ? "rgba(251, 191, 36, 0.4)"
-                      : a.tone === "rose"
-                        ? "rgba(251, 113, 133, 0.45)"
-                        : a.tone === "orange"
-                          ? "rgba(251, 146, 60, 0.45)"
-                          : "rgba(56, 189, 248, 0.4)";
-                  const bg =
-                    a.tone === "amber"
-                      ? "rgba(251, 191, 36, 0.07)"
-                      : a.tone === "rose"
-                        ? "rgba(251, 113, 113, 0.09)"
-                        : a.tone === "orange"
-                          ? "rgba(251, 146, 60, 0.08)"
-                          : "rgba(56, 189, 248, 0.07)";
-                  return (
-                    <li
-                      key={a.key}
-                      style={{
-                        padding: "12px 14px",
-                        borderRadius: 10,
-                        border: `1px solid ${border}`,
-                        backgroundColor: bg,
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: "var(--hostly-ink-strong)" }}>{a.title}</div>
-                      <div style={{ fontSize: 13, color: "var(--hostly-ink-muted)", lineHeight: 1.35 }}>{a.body}</div>
-                      {a.key === "stock" && lowStockProducts.length > 0 ? (
-                        <div style={{ marginTop: 4, fontSize: 10, color: "var(--hostly-ink-soft)", lineHeight: 1.35 }}>
-                          {lowStockProducts
-                            .slice(0, 4)
-                            .map((p) => p.nombre)
-                            .join(" · ")}
-                          {lowStockProducts.length > 4 ? "…" : ""}
-                        </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </HostlySurface>
         </div>
 
-        {renderModuleGrid(mobileScroll ? moduleEntriesRest : visibleModuleEntries)}
+        {renderSecondaryModules()}
+
+        <HostlySurface variant="soft" className="hostly-dashboard-onboarding shrink-0">
+          <div className="hostly-dashboard-onboarding__copy">
+            <h2 className="hostly-dashboard-onboarding__title">{t("dashboard.onboardingPromoTitle")}</h2>
+            <p className="hostly-dashboard-onboarding__body">{t("dashboard.onboardingPromoBody")}</p>
+          </div>
+          <div className="hostly-dashboard-onboarding__actions">
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard/onboarding")}
+              className="hostly-button-secondary hostly-button-compact whitespace-nowrap"
+            >
+              {t("dashboard.onboardingPromoCta")}
+            </button>
+            <p className="hostly-muted m-0 text-center text-[10px] leading-snug sm:text-left">{t("onboarding.sideHint")}</p>
+          </div>
+        </HostlySurface>
+
+        {ownerBlock}
       </div>
     </ModulePageShell>
   );
