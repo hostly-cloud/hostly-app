@@ -2747,6 +2747,8 @@ export default function ProductosManagementPage({
           </div>
         ) : null}
 
+        {!configCartaProductosChrome ? (
+        <>
         <CatalogMigrationPreviewPanel
           restaurantId={operationalRestaurantId}
           catalogSource={operationalCatalog.source}
@@ -2762,6 +2764,8 @@ export default function ProductosManagementPage({
             window.setTimeout(() => setNotice(null), 3200);
           }}
         />
+        </>
+        ) : null}
 
         {formError && !formOpen ? (
           <div
@@ -2994,7 +2998,6 @@ export default function ProductosManagementPage({
                 }}
               />
             </HostlySectionHeader>
-            )
           ) : (
           <div
             style={{
@@ -3220,28 +3223,6 @@ export default function ProductosManagementPage({
               <div className={iceVisual ? "hostly-productos-carta-muted-empty" : undefined} style={iceVisual ? undefined : { padding: "24px 8px", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>{t("stock.filterEmpty")}</div>
             ) : displayed.length === 0 ? (
               <div className={iceVisual ? "hostly-productos-carta-muted-empty" : undefined} style={iceVisual ? undefined : { padding: "24px 8px", textAlign: "center", color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("carta.searchNoResults")}</div>
-            ) : configCartaProductosChrome ? (
-              <ProductosCartaDataView
-                displayed={displayed}
-                groupedByCategoria={groupedByCategoria}
-                viewMode={viewMode}
-                selectedIds={selectedIds}
-                selectAllRef={selectAllRef}
-                isLegacyReadOnly={isLegacyReadOnly}
-                meta={meta}
-                escNavId={escNavId}
-                locale={locale as Locale}
-                t={t}
-                toggleRowSelected={toggleRowSelected}
-                toggleSelectAllDisplayed={toggleSelectAllDisplayed}
-                openEdit={openEdit}
-                toggleActivo={toggleActivo}
-                activateProducto={activateProducto}
-                goToEscandallo={goToEscandallo}
-                deleteProducto={deleteProducto}
-                bulkSelectionBreakdown={bulkSelectionBreakdown}
-                bulkApplyToIds={bulkApplyToIds}
-              />
             ) : (
               <div
                 style={{
@@ -3690,84 +3671,8 @@ export default function ProductosManagementPage({
               </div>
             )}
           </div>
-          {configCartaProductosChrome ? (
-            <div className="hostly-productos-carta-advanced-anchor">
-              <button
-                type="button"
-                className="hostly-productos-carta-advanced-toggle"
-                aria-expanded={configCartaAdvancedOpen}
-                aria-controls="hostly-productos-carta-advanced-panel"
-                onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
-              >
-                {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
-              </button>
-              {configCartaAdvancedOpen ? (
-                <div
-                  id="hostly-productos-carta-advanced-panel"
-                  className="hostly-productos-carta-advanced-panel"
-                >
-                  <nav className="hostly-productos-carta-advanced-nav" aria-label="Navegación avanzada de carta">
-                    <Link href="/dashboard/configuracion/carta/categorias">{t("cartaCategories.manageLink")}</Link>
-                    <button
-                      type="button"
-                      onClick={() => router.push("/dashboard/configuracion/carta/modificadores")}
-                    >
-                      {t("carta.ctaModifiers")}
-                    </button>
-                    <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
-                  </nav>
-                  <div className="hostly-productos-carta-advanced-section">
-                    <span className="hostly-productos-carta-advanced-section__label">Estado</span>
-                    <div className="hostly-productos-carta-filter-chips">
-                      {iceToolbarFilterButtons(true, CONFIG_CARTA_BASIC_FILTER_IDS)}
-                    </div>
-                  </div>
-                  <div className="hostly-productos-carta-advanced-section">
-                    <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
-                    <div className="hostly-productos-carta-filter-chips">
-                      {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
-                    </div>
-                  </div>
-                  <div className="hostly-productos-carta-advanced-section">
-                    <span className="hostly-productos-carta-advanced-section__label">Familia</span>
-                    <div className="hostly-productos-carta-filter-chips">
-                      {iceToolbarProductFamilyFilterButtons(true)}
-                    </div>
-                  </div>
-                  <div className="hostly-productos-carta-advanced-section">
-                    <span className="hostly-productos-carta-advanced-section__label">Categorías de carta</span>
-                    <div
-                      className="hostly-productos-carta-category-tabs hostly-productos-carta-category-tabs--secondary"
-                      aria-label="Pestañas de categoría"
-                    >
-                      {tabOptions
-                        .filter((tab) => tab.id !== "__all__")
-                        .map((tab) => {
-                          const active = categoryTab === tab.id;
-                          return (
-                            <button
-                              key={tab.id}
-                              type="button"
-                              onClick={() => setCategoryTab(tab.id)}
-                              aria-pressed={active}
-                              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${active ? " is-active" : ""}`}
-                            >
-                              {tab.label}
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-                  <div className="hostly-productos-carta-advanced-section">
-                    <span className="hostly-productos-carta-advanced-section__label">Vista</span>
-                    <div className="hostly-productos-carta-view-discreet" role="group" aria-label="Modo de vista">
-                      {iceToolbarViewControls(true)}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+            </>
+          )}
         </ProductosTableChrome>
       </HostlySection>
       {formOpen ? (

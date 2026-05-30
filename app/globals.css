@@ -3481,13 +3481,31 @@ body {
 /* Ocultar restos de toolbar legacy en Config → Carta → Productos */
 .hostly-productos-config-skin--simplified .hostly-productos-carta-kpi-strip,
 .hostly-productos-config-skin--simplified .hostly-carta-config-kpi-strip,
-.hostly-productos-config-skin--simplified .hostly-productos-carta-filters-panel,
+.hostly-productos-config-skin--simplified .hostly-kpi-card,
+.hostly-productos-config-skin--simplified .hostly-productos-carta-toolbar-meta,
 .hostly-productos-config-skin--simplified .hostly-productos-carta-filters-stack,
+.hostly-productos-config-skin--simplified .hostly-productos-carta-filters-panel,
 .hostly-productos-config-skin--simplified .hostly-productos-carta-secondary-bar,
-.hostly-productos-config-skin--simplified .hostly-productos-carta-toolbar-meta--desktop,
-.hostly-productos-config-skin--simplified .hostly-productos-carta-quick-filters,
-.hostly-productos-config-skin--simplified .hostly-productos-carta-list-meta {
+.hostly-productos-config-skin--simplified .hostly-productos-carta-list-meta,
+.hostly-productos-config-skin--simplified .hostly-section-header {
   display: none !important;
+}
+
+/* Chips/KPIs fuera del panel avanzado — red de seguridad JSX */
+.hostly-productos-config-skin--simplified .hostly-productos-carta-filter-chip,
+.hostly-productos-config-skin--simplified .hostly-productos-carta-category-tabs,
+.hostly-productos-config-skin--simplified .hostly-productos-carta-view-discreet {
+  display: none !important;
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-advanced-panel .hostly-productos-carta-filter-chip,
+.hostly-productos-config-skin--simplified .hostly-productos-carta-advanced-panel .hostly-productos-carta-category-tabs,
+.hostly-productos-config-skin--simplified .hostly-productos-carta-advanced-panel .hostly-productos-carta-view-discreet {
+  display: flex !important;
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-advanced-panel .hostly-productos-carta-filter-chip {
+  display: inline-flex !important;
 }
 
 .hostly-productos-carta-advanced-anchor {
@@ -5847,8 +5865,12 @@ body {
     display: flex;
   }
 
-  .hostly-productos-carta-toolbar--radical {
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-toolbar--radical {
     padding: 4px 8px 2px;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host {
+    border-top: none;
   }
 
   .hostly-productos-carta-search--prominent {
