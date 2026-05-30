@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { HostlyOperationalEmptyState } from "@/components/ui/hostly";
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
@@ -263,7 +264,7 @@ export default function PedidosCompraPage() {
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+      <div className="hostly-mobile-op-page-stack">
         <HostlySectionHeader
           title="Recepción de pedidos"
           description="Recibe total o parcialmente un pedido. El stock solo se actualiza mediante movimientos purchase_receipt en el ledger central."
@@ -286,9 +287,19 @@ export default function PedidosCompraPage() {
             Pendientes de recibir ({pendingOrders.length})
           </div>
           {pendingOrders.length === 0 ? (
-            <div style={{ fontSize: 13, color: "var(--hostly-ink-muted)" }}>
-              No hay pedidos pendientes. Convierte un borrador en compras sugeridas para crear uno.
-            </div>
+            <HostlyOperationalEmptyState
+              title="Sin pedidos pendientes"
+              text="Cuando conviertas un borrador en pedido, aparecerá aquí para recibirlo total o parcialmente."
+              primaryAction={{
+                label: "Crear borrador de pedido",
+                href: "/dashboard/inventario/compras-inteligentes",
+              }}
+              hints={[
+                "Recepción total o parcial",
+                "Stock actualizado por ledger",
+                "Factura vinculable después",
+              ]}
+            />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {pendingOrders.map((order) => {

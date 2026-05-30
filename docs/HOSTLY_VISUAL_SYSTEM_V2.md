@@ -147,7 +147,10 @@ Botones estándar: `padding: 0 18px` (definido en `.hostly-button-*`, no duplica
 ### 4.1 Mobile (`max-width: 767px` / `[data-hostly-touch]`)
 
 - Shell: `.hostly-module-shell--mobile`, padding bottom `--hostly-op-shell-pad-bottom-mobile`.
-- Header: `.hostly-page-header--mobile`, títulos `.hostly-page-title--module-mobile`.
+- Header dashboard: `.hostly-mobile-page-header` (volver + ES/EN en fila superior; título debajo) vía `HostlyPageHeader` + `ModulePageShell`.
+- Header legacy excepción: `mobileStackLeftColumn` (p. ej. Carta TPV).
+- Tabs inventario: scroll horizontal compacto en `.hostly-inventario-route-tabs`.
+- Filtros inventario: `.hostly-inventory-filters-stack` (grupos verticales + chips wrap).
 - Tabs: `--hostly-op-tab-min-h-touch`, scroll horizontal en tablists.
 - KPI: grid `.hostly-kpi-grid-unified` (2 columnas).
 - Launcher: altura `--hostly-op-launcher-height-mobile`, grid 2 columnas.
@@ -281,6 +284,18 @@ Clases operacionales unificadas (post-[L]):
 - Tokens: `--hostly-op-analytics-section-gap`, `--hostly-op-analytics-panel-pad`
 - **Dashboard home (`/dashboard`, v2.3):** `.hostly-dashboard-stack*`, `.hostly-kpi-grid-unified--dashboard`, `.hostly-dashboard-op-launcher*`, `.hostly-dashboard-panels-grid`, `.hostly-dashboard-panel*`, `.hostly-dashboard-alert-item[data-tone]`, `.hostly-dashboard-activity-*`, `.hostly-dashboard-module-grid`, `.hostly-dashboard-module-card*`, `.hostly-dashboard-onboarding*`, `.hostly-dashboard-owner-panel`
 - Tokens dashboard home: `--hostly-op-dashboard-section-gap`, `--hostly-op-dashboard-panel-pad`, `--hostly-op-dashboard-op-min-h`, `--hostly-op-dashboard-header-pad-y`, `--hostly-op-dashboard-content-gap`
+- **Mobile page header (v2.4):** `.hostly-mobile-page-header`, `.hostly-mobile-page-header-inner`, `.hostly-mobile-page-header-top`, `.hostly-mobile-page-header-nav`, `.hostly-mobile-page-title-block`, `.hostly-mobile-page-actions`
+- Tokens mobile header: `--hostly-mobile-page-header-pad-y`, `--hostly-mobile-page-header-gap`, `--hostly-mobile-page-header-top-gap`
+- **Inventario mobile (v2.4):** `.hostly-inventory-filters-stack`, `.hostly-inventory-filter-group*`, `.hostly-inventory-filter-chips`, `.hostly-inventory-filter-chip`, `.hostly-inventory-toolbar-count`, `.hostly-inventory-toolbar-actions`
+- Tokens inventario filtros: `--hostly-inventory-filter-group-gap`, `--hostly-inventory-filter-chip-gap`, `--hostly-inventory-mobile-toolbar-gap`
+- **Config Carta → Productos (v2.5):** `.hostly-productos-carta-header-below`, `.hostly-productos-carta-route-tabs`, `.hostly-productos-carta-header-actions`, `.hostly-productos-carta-kpi-strip`, `.hostly-productos-carta-kpi-pill*`, `.hostly-productos-carta-toolbar*`, `.hostly-productos-carta-filters-stack`, `.hostly-productos-carta-filter-*`, `.hostly-productos-carta-category-tabs`, `.hostly-productos-carta-empty*`
+- **Config Carta ecosystem (v2.6):** `.hostly-carta-config-*` (shell compartido con productos en header/KPI/empty), `ConfigCartaRouteTabs`, `ConfigCartaWorkbench` sobre `ModulePageShell`; cards, alerts, drawer, form, layout-split, status-chip, text-link
+- **Hostly Data Table (v2.7):** `.hostly-data-table-*`, `.hostly-mobile-list-*`, `.hostly-row-actions-*`, `.hostly-status-badge-*`; componentes `HostlyDataTable`, `HostlyDataRow`, `HostlyMobileList`, `HostlyTableToolbar`, `HostlyRowActions`, `HostlyStatusBadge`
+- **Config Carta tablas (v2.8):** variantes `.hostly-data-table--categorias`, `.hostly-data-table--familias`; vistas `CategoriasCartaDataView`, `FamiliasCartaDataView`; KPI `.hostly-carta-config-kpi-strip--dense`
+- **Modificadores Config Carta (v2.9):** variante `.hostly-data-table--modificadores`; vistas `ModificadoresCartaDataView`, `ModifierGroupEditorCard`; toggle `.hostly-form-toggle*`; editor `.hostly-modifier-form-*`; ruta `/dashboard/configuracion/modificadores`
+- **Escandallos Config Carta (v2.10):** variantes `.hostly-data-table--escandallos`, `--recipe-ingredients`; vistas `EscandallosCartaDataView`, `EscandalloRecipeEditor`; badges `.hostly-cost-badge`, `.hostly-margin-badge`; editor `.hostly-recipe-editor-*`; ruta `/dashboard/configuracion/carta/escandallos`
+- **Compras / Recepciones / Facturas (v2.11):** variantes `.hostly-data-table--compras`, `--compras-draft`, `--recepciones`, `--facturas-proveedor`, `--invoice-ocr-lines`; vistas `ComprasInteligentesDataView`, `ComprasDraftLinesDataView`, `RecepcionesListDataView`, `FacturasProveedorListDataView`; utilidades `.hostly-procurement-*`, `.hostly-receiving-*`, `.hostly-invoice-ocr-*`; rutas `/dashboard/inventario/compras-inteligentes`, `/dashboard/recepciones`, `/dashboard/inventario/facturas-proveedor`
+- **Mobile Operational Layout (v2.12):** `.hostly-mobile-operational-layout`, `.hostly-mobile-operational-tabs`, `.hostly-mobile-operational-tab`, `.hostly-mobile-op-page-stack`, `.hostly-mobile-op-kpi-grid`, `.hostly-mobile-op-toolbar*`; hub inventario/compras/recepciones/mermas en móvil
 
 ---
 
@@ -302,6 +317,23 @@ Clases operacionales unificadas (post-[L]):
 | `LanguageSwitcher` | `components/language-switcher.tsx` | Selector ES/EN utilitario (`.hostly-language-switch`) |
 | `HostlyPageContainer` | `components/hostly/page-container.tsx` | Ancho + padding página |
 | `InventarioRouteTabs` | `components/inventario/inventario-route-tabs.tsx` | Referencia tabs hub |
+| `ConfigCartaRouteTabs` | `app/dashboard/configuracion/_components/config-carta-route-tabs.tsx` | Tabs hub Configuración → Carta |
+| `ConfigCartaWorkbench` | `app/dashboard/configuracion/_components/config-carta-workbench.tsx` | Shell carta config + `ConfigCard` / botones tokenizados |
+| `HostlyDataTable` / `HostlyMobileList` | `components/ui/hostly/data-table/*` | Sistema tablas/listados operacionales responsive |
+| `ProductosCartaDataView` | `components/productos/productos-carta-data-view.tsx` | Primera migración v2.7 (Config → Carta → Productos) |
+| `CategoriasCartaDataView` | `components/carta/categorias-carta-data-view.tsx` | Listado categorías v2.8 |
+| `FamiliasCartaDataView` | `components/carta/familias-carta-data-view.tsx` | Listado familias v2.8 |
+| `ModificadoresCartaDataView` | `components/carta/modificadores-carta-data-view.tsx` | Listado grupos modificadores v2.9 |
+| `ModifierGroupEditorCard` | `components/carta/modifier-group-editor-card.tsx` | Editor compacto grupo + opciones v2.9 |
+| `HostlyFormToggle` | `components/carta/hostly-form-toggle.tsx` | Checkbox accesible con skin operacional v2.9 |
+| `EscandallosCartaDataView` | `components/carta/escandallos/escandallos-carta-data-view.tsx` | Listado escandallos coste/margen v2.10 |
+| `EscandalloRecipeEditor` | `components/carta/escandallos/escandallo-recipe-editor.tsx` | Editor receta + ingredientes v2.10 |
+| `EscandallosCartaToolbar` | `components/carta/escandallos/escandallos-carta-toolbar.tsx` | Toolbar búsqueda/filtros margen v2.10 |
+| `ComprasInteligentesDataView` | `components/inventario/procurement/compras-inteligentes-data-view.tsx` | Sugerencias compra + mobile list v2.11 |
+| `ComprasDraftLinesDataView` | `components/inventario/procurement/compras-draft-lines-data-view.tsx` | Líneas borrador pedido v2.11 |
+| `RecepcionesListDataView` | `components/inventario/procurement/recepciones-list-data-view.tsx` | Listado recepciones desktop/mobile v2.11 |
+| `FacturasProveedorListDataView` | `components/inventario/procurement/facturas-proveedor-list-data-view.tsx` | Listado facturas proveedor v2.11 |
+| `ConfigCartaEditToggleActions` | `components/carta/config-carta-row-actions.tsx` | Acciones fila editar/activar compartidas |
 | `AnalyticsDateRangeFields` | `components/analysis/AnalyticsDateRangeFields.tsx` | Fechas desde/hasta en toolbar analytics |
 | README UI | `components/ui/hostly/README.md` | Guía rápida componentes |
 
@@ -383,8 +415,15 @@ Validar: npm run build.
 | **v2.1b** | Tabs/botones sueltos → `HostlySegmentedControl` / `hostly-button-compact` | Parcial (inventario, recepciones…) |
 | **v2.2** | Shell dashboard unificado + launcher operación + ES/EN discreto | ✅ `ModulePageShell` + `/dashboard/operacion` |
 | **v2.3** | Dashboard home compacto — KPI densos, launcher operación, paneles alertas/actividad, módulos secundarios | ✅ `/dashboard` + clases `.hostly-dashboard-*` |
-| **v2.4** | Eliminar inline legacy + skins locales (`.hostly-*-skin`) | Pendiente |
-| **v2.5** | Formularios y tablas 100% tokenizados | Pendiente |
+| **v2.4** | Header mobile unificado + inventario responsive (filtros/tabs/lista) | ✅ `.hostly-mobile-page-header*` + `.hostly-inventory-filter-*` |
+| **v2.5** | Config Carta → Productos unificado (header, tabs, KPIs, filtros, empty) | ✅ `.hostly-productos-carta-*` |
+| **v2.6** | Ecosistema Config Carta unificado (categorías, familias, modificadores, escandallos, importación IA) | ✅ `.hostly-carta-config-*` + `ConfigCartaRouteTabs` |
+| **v2.7** | Sistema global `HostlyDataTable` + migración visual Productos (Config Carta) | ✅ `.hostly-data-table-*` + `ProductosCartaDataView` |
+| **v2.8** | Migración Categorías + Familias al HostlyDataTable | ✅ `--categorias` / `--familias` + data views |
+| **v2.9** | Migración Modificadores al HostlyDataTable + formulario compacto | ✅ `--modificadores` + `ModificadoresCartaDataView` + `ModifierGroupEditorCard` |
+| **v2.10** | Migración Escandallos al HostlyDataTable + editor culinario compacto | ✅ `--escandallos` + `EscandallosCartaDataView` + `EscandalloRecipeEditor` |
+| **v2.11** | Compras / Recepciones / Facturas proveedor → HostlyDataTable + densidad ERP ligero | ✅ `--compras` / `--recepciones` / `--facturas-proveedor` + data views procurement |
+| **v2.12** | Mobile Operational Layout — header/tabs/KPI/toolbars compactos hub inventario | ✅ `.hostly-mobile-operational-*` + `.hostly-mobile-op-*` |
 
 ---
 
@@ -397,4 +436,4 @@ Validar: npm run build.
 
 ---
 
-*Última actualización: Hostly Visual System v2 — fase 2.3 (dashboard home compacto).*
+*Última actualización: Hostly Visual System v2 — fase 2.12 (Mobile Operational Layout hub inventario/compras).*

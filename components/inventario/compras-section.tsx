@@ -775,16 +775,12 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
         }}
       />
       <div
+        className="hostly-mobile-op-page-stack min-h-0 flex-1 overflow-hidden"
         style={{
           flexGrow: 1,
           flexShrink: 1,
           flexBasis: 0,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
           paddingTop: 0,
-          overflow: "hidden",
         }}
       >
         <Suspense fallback={null}>
@@ -807,14 +803,7 @@ export default function HostlyComprasSection({ embedded = false }: HostlyCompras
           </div>
         ) : null}
 
-        <div
-          style={{
-            flexShrink: 0,
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 10,
-          }}
-        >
+        <div className="hostly-mobile-op-kpi-grid shrink-0">
           {[
             {
               label: t("compras.metricTotalPurchases"),

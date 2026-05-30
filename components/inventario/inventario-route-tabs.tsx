@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HostlySegmentedControl, hostlySegmentTabClassName } from "@/components/ui/hostly";
+import { hostlySegmentTabClassName } from "@/components/ui/hostly";
 
 /** Tabs del hub Inventario → rutas reales (`/dashboard/...`). */
 export type InventarioHubTabId =
@@ -84,18 +84,20 @@ function tabActive(pathname: string | null, id: InventarioHubTabId): boolean {
 }
 
 /**
- * Tabs de navegación del hub Inventario (`hostly-segmented` / `hostly-tab`).
- * Colocar en `ModulePageShell` → `headerBelow` para alinear con shell existente.
+ * Tabs de navegación del hub Inventario.
+ * Mobile: pills horizontales compactas con scroll limpio (Hostly Mobile Operational Layout).
  */
 export function InventarioRouteTabs({ className }: { className?: string }) {
   const pathname = usePathname();
 
   return (
-    <div
-      className={["hostly-inventario-route-tabs", className].filter(Boolean).join(" ")}
-      style={{ display: "flex", justifyContent: "flex-start", width: "100%", minHeight: 0 }}
+    <nav
+      className={["hostly-mobile-operational-tabs", "hostly-inventario-route-tabs", className]
+        .filter(Boolean)
+        .join(" ")}
+      aria-label="Secciones de inventario"
     >
-      <HostlySegmentedControl aria-label="Secciones de inventario">
+      <div className="hostly-mobile-operational-tabs__scroll" role="tablist">
         {TABS.map((t) => {
           const selected = tabActive(pathname, t.id);
           return (
@@ -105,15 +107,16 @@ export function InventarioRouteTabs({ className }: { className?: string }) {
               role="tab"
               aria-selected={selected}
               data-active={selected ? "true" : undefined}
-              className={hostlySegmentTabClassName("hostly-tab--inventory-hub")}
+              className={hostlySegmentTabClassName(
+                "hostly-mobile-operational-tab hostly-tab--inventory-hub",
+              )}
               prefetch
-              style={{ textDecoration: "none", cursor: "pointer", boxSizing: "border-box" }}
             >
               {t.label}
             </Link>
           );
         })}
-      </HostlySegmentedControl>
-    </div>
+      </div>
+    </nav>
   );
 }

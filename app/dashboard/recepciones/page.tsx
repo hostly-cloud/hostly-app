@@ -7,9 +7,13 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useI18n } from "@/components/i18n-provider";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
+import {
+  RecepcionesListDataView,
+  type RecepcionListDisplayRow,
+} from "@/components/inventario/procurement/recepciones-list-data-view";
+import { recepcionOperBadgeTone } from "@/components/inventario/procurement/procurement-display-utils";
 import ModulePageShell from "@/components/module-page-shell";
 import {
-  HostlyKpiCard,
   HostlySection,
   HostlySectionHeader,
   HostlySegmentedControl,
@@ -1417,6 +1421,69 @@ export default function RecepcionesPage() {
     soloIncidencias,
   ]);
 
+  const recepcionListDisplayRows = useMemo((): RecepcionListDisplayRow[] => {
+    return displayedRows.map((c) => {
+      const sinF = compraSinFacturaDoc(c);
+      const sync = stockSyncUiKind(c);
+      const phase = validationPhase(c);
+      const { title: phaseTitle, sub: phaseSub } = phaseLabels(phase, t);
+      const nItems = lineItemCount(c);
+      const itemStr =
+        nItems === 0
+          ? t("recepciones.rowItemsNone")
+          : nItems === 1
+            ? t("recepciones.rowItemsOne")
+            : t("recepciones.rowItemsMany", { count: nItems });
+      const notas = (c.notas ?? "").trim();
+      const refSnippet = notas ? (notas.length > 36 ? `${notas.slice(0, 34)}…` : notas) : "";
+      const incidents = collectRowIncidents(c, sinF, sync, t);
+      const primaryIncident = incidents[0];
+      const invVariant: RecepBadgeVariant =
+        c.estado !== "recibido" ? "muted" : sinF ? "bad" : "ok";
+      const invVal =
+        c.estado !== "recibido" ? "—" : sinF ? t("recepciones.invoiceMissing") : t("recepciones.invoiceOk");
+      const stkVariant: RecepBadgeVariant =
+        sync === "applied" ? "ok" : sync === "not_applied" ? "warn" : "muted";
+      const stkVal =
+        sync === "applied"
+          ? t("recepciones.stockOk")
+          : sync === "not_applied"
+            ? t("recepciones.stockPending")
+            : t("recepciones.stockNA");
+      const pedVariant: RecepBadgeVariant =
+        c.estado === "pendiente" ? "warn" : c.estado === "recibido" ? "ok" : "muted";
+
+      return {
+        id: c.id,
+        supplierPrimary: supplierPrimaryLabel(c),
+        supplierLegal: supplierLegalSubtitle(c) || undefined,
+        dateLabel: formatFechaCorta(c.fecha, locale),
+        orderLabel: `${t("recepciones.orderRef")} · ${c.id.slice(-6)}`,
+        itemsLabel: itemStr,
+        refSnippet: refSnippet ? `${t("recepciones.rowAlbaran")} ${refSnippet}` : undefined,
+        phaseTitle,
+        phaseSub,
+        incidentText: primaryIncident?.text,
+        extraIncidents: incidents.length > 1 ? incidents.length - 1 : undefined,
+        amountLabel: formatEuro(
+          typeof c.total === "number" && Number.isFinite(c.total) ? c.total : 0,
+          locale,
+        ),
+        invoiceStatus: { label: invVal, tone: recepcionOperBadgeTone(invVariant) },
+        stockStatus: { label: stkVal, tone: recepcionOperBadgeTone(stkVariant) },
+        orderStatus: { label: estadoLabel(c.estado, t), tone: recepcionOperBadgeTone(pedVariant) },
+        selected: selectedReceptionId === c.id,
+        attention: hasIncidencia(c),
+      };
+    });
+  }, [displayedRows, locale, selectedReceptionId, t]);
+
+  const displayedRowsById = useMemo(() => {
+    const map = new Map<string, CompraLocal>();
+    for (const row of displayedRows) map.set(row.id, row);
+    return map;
+  }, [displayedRows]);
+
   const selectedReception = useMemo(
     () => (selectedReceptionId ? items.find((c) => c.id === selectedReceptionId) ?? null : null),
     [selectedReceptionId, items],
@@ -1651,55 +1718,28 @@ export default function RecepcionesPage() {
         stack="sm"
         className="hostly-recepciones-skin min-h-0 flex-1 overflow-hidden"
       >
-        <div
-          className="hostly-recep-kpis shrink-0"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-            gap: 10,
-          }}
-        >
-          {[
-            {
-              label: t("recepciones.kpiPending"),
-              sub: t("recepciones.kpiPendingSub"),
-              v: String(kpis.pend),
-              accent: "#fbbf24",
-            },
-            {
-              label: t("recepciones.kpiReceivedToday"),
-              sub: t("recepciones.kpiReceivedTodaySub"),
-              v: String(kpis.hoy),
-              accent: "#38bdf8",
-            },
-            {
-              label: t("recepciones.kpiIncidents"),
-              sub: t("recepciones.kpiIncidentsSub"),
-              v: String(kpis.inc),
-              accent: "#fb7185",
-            },
-            {
-              label: t("recepciones.kpiNoInvoice"),
-              sub: t("recepciones.kpiNoInvoiceSub"),
-              v: String(kpis.sinF),
-              accent: "var(--hostly-ink-muted)",
-            },
-          ].map((k) => (
-            <HostlyKpiCard
-              key={k.label}
-              title={k.label}
-              value={k.v}
-              helper={k.sub}
-              accentColor={k.accent}
-              valueTitle={k.v}
-              className="px-3 py-2"
-            />
-          ))}
+        <div className="hostly-carta-config-kpi-strip hostly-carta-config-kpi-strip--dense hostly-carta-config-kpi-strip--mobile-op shrink-0">
+          <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--warning">
+            <span className="hostly-carta-config-kpi-pill__label">{t("recepciones.kpiPending")}</span>
+            <span className="hostly-carta-config-kpi-pill__value">{kpis.pend}</span>
+          </div>
+          <div className="hostly-carta-config-kpi-pill">
+            <span className="hostly-carta-config-kpi-pill__label">{t("recepciones.kpiReceivedToday")}</span>
+            <span className="hostly-carta-config-kpi-pill__value">{kpis.hoy}</span>
+          </div>
+          <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--danger">
+            <span className="hostly-carta-config-kpi-pill__label">{t("recepciones.kpiIncidents")}</span>
+            <span className="hostly-carta-config-kpi-pill__value">{kpis.inc}</span>
+          </div>
+          <div className="hostly-carta-config-kpi-pill">
+            <span className="hostly-carta-config-kpi-pill__label">{t("recepciones.kpiNoInvoice")}</span>
+            <span className="hostly-carta-config-kpi-pill__value">{kpis.sinF}</span>
+          </div>
         </div>
 
         <HostlySurface
           variant="soft"
-          className="box-border flex min-w-0 shrink-0 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden px-2 py-1"
+          className="hostly-mobile-op-segment-bar box-border flex min-w-0 shrink-0 items-stretch gap-1.5 overflow-x-auto overflow-y-hidden px-2 py-1"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           <div
@@ -1777,11 +1817,12 @@ export default function RecepcionesPage() {
         <HostlySurface
           variant="soft"
           role="search"
-          className="box-border flex min-w-0 shrink-0 flex-nowrap items-center gap-2 overflow-x-auto px-2 py-1"
+          className="hostly-mobile-op-toolbar box-border flex min-w-0 shrink-0 flex-nowrap items-center gap-2 overflow-x-auto px-2 py-1"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           <input
             type="search"
+            className="hostly-mobile-op-toolbar__search hostly-input"
             value={listSearch}
             onChange={(e) => setListSearch(e.target.value)}
             placeholder={t("recepciones.toolbarSearchPlaceholder")}
@@ -1802,6 +1843,7 @@ export default function RecepcionesPage() {
               touchAction: "manipulation",
             }}
           />
+          <div className="hostly-mobile-op-toolbar__filters">
           <label
             style={{
               display: "flex",
@@ -1880,6 +1922,7 @@ export default function RecepcionesPage() {
               <option value="importe_asc">{t("recepciones.sortImporteAsc")}</option>
             </select>
           </label>
+          </div>
           <button
             type="button"
             onClick={() => setSoloIncidencias((v) => !v)}
@@ -1975,536 +2018,126 @@ export default function RecepcionesPage() {
                   WebkitOverflowScrolling: "touch",
                 }}
               >
-                <div style={{ padding: 0, display: "flex", flexDirection: "column" }}>
-                  {displayedRows.map((c) => {
+                <RecepcionesListDataView
+                  rows={recepcionListDisplayRows}
+                  onSelect={(id) => {
+                    setMenuRowId(null);
+                    setSelectedReceptionId(id);
+                  }}
+                  renderActions={(row) => {
+                    const c = displayedRowsById.get(row.id);
+                    if (!c) return null;
                     const look = estadoLook[c.estado];
-                    const sync = stockSyncUiKind(c);
-                    const sinF = compraSinFacturaDoc(c);
                     const phase = validationPhase(c);
-                    const { title: phaseTitle, sub: phaseSub } = phaseLabels(phase, t);
-                    const nItems = lineItemCount(c);
-                    const itemStr = nItems === 0 ? t("recepciones.rowItemsNone") : nItems === 1 ? t("recepciones.rowItemsOne") : t("recepciones.rowItemsMany", { count: nItems });
-                    const notas = (c.notas ?? "").trim();
-                    const refSnippet = notas ? (notas.length > 36 ? `${notas.slice(0, 34)}…` : notas) : "";
-                    const incidents = collectRowIncidents(c, sinF, sync, t);
-                    const primaryIncident = incidents[0];
-                    const extraIncidents = incidents.length - 1;
-                    const incidentsTitle = incidents.map((i) => i.text).join(" · ");
-                    const orderLabel = `${t("recepciones.orderRef")} · ${c.id.slice(-6)}`;
                     const validatePrimary = phase === "pendiente" || phase === "incidencia";
-                    const selected = selectedReceptionId === c.id;
-                    const hovered = hoverRowId === c.id;
-                    const attention = hasIncidencia(c);
-                    const sinVin = c.estado !== "cancelado" && !(c.producto_stock_id ?? "").trim();
-                    const boost: "high" | "mid" | "low" = attention
-                      ? "high"
-                      : (sinF && c.estado === "recibido") || sync === "not_applied" || sinVin
-                        ? "mid"
-                        : "low";
-
-                    const leftBar =
-                      boost === "high"
-                        ? "rgba(180, 83, 74, 0.55)"
-                        : boost === "mid"
-                          ? "rgba(184, 149, 58, 0.5)"
-                          : "transparent";
-                    const rowBorderLeft = selected
-                      ? `3px solid color-mix(in srgb, var(--hostly-accent) 52%, transparent)`
-                      : leftBar !== "transparent"
-                        ? `2px solid ${leftBar}`
-                        : "3px solid transparent";
-                    const rowSurface = selected
-                      ? "rgba(225, 238, 252, 0.42)"
-                      : hovered
-                        ? "var(--hostly-table-row-hover)"
-                        : "var(--hostly-surface-card-solid)";
-
-                    const invVariant: RecepBadgeVariant =
-                      c.estado !== "recibido" ? "muted" : sinF ? "bad" : "ok";
-                    const invVal =
-                      c.estado !== "recibido" ? "—" : sinF ? t("recepciones.invoiceMissing") : t("recepciones.invoiceOk");
-                    const stkVariant: RecepBadgeVariant =
-                      sync === "applied" ? "ok" : sync === "not_applied" ? "warn" : "muted";
-                    const stkVal = sync === "applied" ? t("recepciones.stockOk") : sync === "not_applied" ? t("recepciones.stockPending") : t("recepciones.stockNA");
-                    const pedVariant: RecepBadgeVariant =
-                      c.estado === "pendiente" ? "warn" : c.estado === "recibido" ? "ok" : "muted";
-
-                    const supPrimary = supplierPrimaryLabel(c);
-                    const supLegal = supplierLegalSubtitle(c);
-
                     return (
-                      <div
-                        key={c.id}
-                        role="presentation"
-                        className="hostly-recep-row"
-                        onClick={() => {
-                          setMenuRowId(null);
-                          setSelectedReceptionId(c.id);
-                        }}
-                        onMouseEnter={() => setHoverRowId(c.id)}
-                        onMouseLeave={() => setHoverRowId(null)}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "minmax(168px, 0.62fr) minmax(292px, 1.72fr) minmax(86px, auto) minmax(192px, auto)",
-                          gap: 2,
-                          alignItems: "center",
-                          padding: "3px 8px",
-                          borderBottom: "1px solid var(--hostly-table-divider-faint)",
-                          borderLeft: rowBorderLeft,
-                          background: rowSurface,
-                          cursor: "pointer",
-                          touchAction: "manipulation",
-                          boxSizing: "border-box",
-                          transition: "background-color 0.18s ease",
-                        }}
-                      >
-                        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 0 }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "baseline",
-                              gap: 4,
-                              flexWrap: "wrap",
-                              minWidth: 0,
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: 14,
-                                fontWeight: 740,
-                                color: "var(--hostly-ink-strong)",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                                maxWidth: "100%",
-                                letterSpacing: "-0.022em",
-                              }}
-                            >
-                              {supPrimary}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: 9,
-                                color: "color-mix(in srgb, var(--hostly-ink-muted) 75%, transparent)",
-                                fontVariantNumeric: "tabular-nums",
-                                flexShrink: 0,
-                                fontWeight: 500,
-                              }}
-                            >
-                              {formatFechaCorta(c.fecha, locale)}
-                            </span>
-                          </div>
-                          {supLegal ? (
-                            <div
-                              style={{
-                                fontSize: 8.5,
-                                color: "color-mix(in srgb, var(--hostly-ink-soft) 88%, transparent)",
-                                fontWeight: 480,
-                                letterSpacing: "0.015em",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {supLegal}
-                            </div>
-                          ) : null}
-                          <div
-                            style={{
-                              fontSize: 9,
-                              color: "color-mix(in srgb, var(--hostly-ink-muted) 70%, transparent)",
-                              fontVariantNumeric: "tabular-nums",
-                              fontWeight: 480,
-                            }}
-                            title={c.id}
-                          >
-                            {orderLabel}
-                          </div>
-                          <div
-                            style={{
-                              display: "flex",
-                              flexWrap: "wrap",
-                              alignItems: "center",
-                              gap: 2,
-                              rowGap: 2,
-                            }}
-                          >
-                            <span style={{ fontSize: 9, color: "color-mix(in srgb, var(--hostly-ink-soft) 90%, transparent)", fontWeight: 480 }}>{itemStr}</span>
-                            {refSnippet ? (
-                              <>
-                                <span style={metaHairlineSep} aria-hidden />
-                                <span style={{ fontSize: 9, color: "color-mix(in srgb, var(--hostly-ink-soft) 88%, transparent)", fontWeight: 480 }}>
-                                  {t("recepciones.rowAlbaran")} {refSnippet}
-                                </span>
-                              </>
-                            ) : null}
-                          </div>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-                            <RecepOperBadge label={t("recepciones.badgeLabelFactura")} value={invVal} variant={invVariant} />
-                            <RecepOperBadge label={t("recepciones.badgeLabelStock")} value={stkVal} variant={stkVariant} />
-                            <RecepOperBadge label={t("recepciones.badgeLabelPedido")} value={estadoLabel(c.estado, t)} variant={pedVariant} />
-                          </div>
-                        </div>
-
-                        <div
-                          style={{
-                            minWidth: 0,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 0,
-                            justifyContent: "center",
-                          }}
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReceptionId(c.id)}
+                          className={
+                            "hostly-recep-validate hostly-button-compact" +
+                            (validatePrimary ? " hostly-recep-validate--on" : "")
+                          }
                         >
-                          {attention ? (
+                          {t("recepciones.actionValidatePrimary")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReceptionId(c.id)}
+                          className="hostly-btn-soft hostly-button-compact"
+                        >
+                          {t("recepciones.actionInvoice")}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={receiptBusyId === c.id}
+                          onClick={() => void applyCentralInventoryReceipt(c)}
+                          className="hostly-btn-soft hostly-button-compact"
+                        >
+                          {receiptBusyId === c.id ? "…" : t("recepciones.actionStock")}
+                        </button>
+                        <div style={{ position: "relative", display: "inline-flex" }}>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuRowId((p) => (p === c.id ? null : c.id));
+                            }}
+                            aria-expanded={menuRowId === c.id}
+                            className="hostly-btn-soft hostly-button-compact"
+                          >
+                            {t("recepciones.actionMore")}
+                          </button>
+                          {menuRowId === c.id ? (
                             <div
-                              role="status"
-                              title={extraIncidents > 0 ? incidentsTitle : undefined}
+                              role="menu"
+                              onMouseDown={(e) => e.stopPropagation()}
                               style={{
-                                display: "flex",
-                                alignItems: "center",
-                                minWidth: 0,
-                                gap: 4,
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: "color-mix(in srgb, var(--hostly-ink) 52%, var(--hostly-ink-muted))",
-                                lineHeight: 1.2,
+                                position: "absolute",
+                                right: 0,
+                                top: "calc(100% + 6px)",
+                                zIndex: 40,
+                                minWidth: 180,
+                                borderRadius: 10,
+                                border: "1px solid var(--hostly-line)",
+                                background: "var(--hostly-surface-card-solid)",
+                                boxShadow: "var(--hostly-shadow-float)",
+                                padding: 4,
                               }}
                             >
-                              <span
-                                aria-hidden
-                                style={{
-                                  flexShrink: 0,
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: 999,
-                                  background: "rgba(180, 83, 74, 0.55)",
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMenuRowId(null);
+                                  router.push("/dashboard/compras");
                                 }}
-                              />
-                              <span
                                 style={{
-                                  flexShrink: 0,
-                                  fontSize: 9,
-                                  fontWeight: 700,
-                                  letterSpacing: "0.04em",
-                                  textTransform: "uppercase",
-                                  color: "color-mix(in srgb, var(--hostly-ink) 42%, var(--hostly-ink-muted))",
-                                }}
-                              >
-                                {t("recepciones.rowIncidentHeadline")}
-                              </span>
-                              <span
-                                aria-hidden
-                                style={{ flexShrink: 0, color: "var(--hostly-ink-muted)", fontWeight: 500, userSelect: "none" }}
-                              >
-                                ·
-                              </span>
-                              <span
-                                style={{
-                                  minWidth: 0,
-                                  flex: 1,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  color: "color-mix(in srgb, var(--hostly-ink) 58%, var(--hostly-ink-muted))",
+                                  border: "none",
+                                  background: "transparent",
+                                  color: "var(--hostly-ink)",
+                                  textAlign: "left",
+                                  width: "100%",
+                                  padding: "10px 12px",
+                                  borderRadius: 8,
+                                  fontSize: 12,
                                   fontWeight: 600,
+                                  cursor: "pointer",
+                                  boxSizing: "border-box",
                                 }}
                               >
-                                {primaryIncident ? (
-                                  <>
-                                    {primaryIncident.text}
-                                    {extraIncidents > 0 ? (
-                                      <>
-                                        {" "}
-                                        <span style={{ color: "color-mix(in srgb, var(--hostly-ink) 45%, var(--hostly-ink-muted))", fontWeight: 600 }}>
-                                          · {t("recepciones.incidentsMore", { count: extraIncidents })}
-                                        </span>
-                                      </>
-                                    ) : null}
-                                  </>
-                                ) : null}
-                              </span>
+                                {t("recepciones.menuEditCompra")}
+                              </button>
                             </div>
                           ) : null}
-                          <div
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 500,
-                              color: "color-mix(in srgb, var(--hostly-ink-muted) 86%, var(--hostly-ink))",
-                              lineHeight: 1.35,
-                            }}
-                          >
-                            <span style={{ color: "var(--hostly-ink)", fontWeight: 700 }}>{phaseTitle}</span>
-                            <span> · {phaseSub}</span>
-                          </div>
-                          <div
-                            style={{
-                              display: "flex",
-                              flexWrap: "wrap",
-                              alignItems: "center",
-                              rowGap: 2,
-                              marginTop: 2,
-                              fontSize: 10,
-                              fontWeight: 700,
-                              letterSpacing: "0.07em",
-                              color: "color-mix(in srgb, var(--hostly-ink-soft) 88%, var(--hostly-ink-muted))",
-                              lineHeight: 1.25,
-                            }}
-                          >
-                            {(
-                              [
-                                { ok: true, abbr: "Ped" },
-                                { ok: c.estado === "recibido", abbr: "Rec" },
-                                { ok: sync === "applied", abbr: "Stk" },
-                                { ok: c.estado === "recibido" && !sinF, abbr: "Doc" },
-                              ] as const
-                            ).map((s, ti) => (
-                              <span key={`${c.id}-tl-${ti}`} style={{ display: "inline-flex", alignItems: "center" }}>
-                                {ti > 0 ? (
-                                  <span
-                                    aria-hidden
-                                    style={{
-                                    margin: "0 6px",
-                                    color: "var(--hostly-ink-soft)",
-                                    fontWeight: 600,
-                                    opacity: 0.65,
-                                    }}
-                                  >
-                                    ·
-                                  </span>
-                                ) : null}
-                                <span
-                                  style={{
-                                    fontWeight: s.ok ? 800 : 600,
-                                    color: s.ok
-                                      ? "color-mix(in srgb, var(--hostly-accent) 34%, var(--hostly-ink))"
-                                      : "color-mix(in srgb, var(--hostly-ink-soft) 92%, var(--hostly-ink-muted))",
-                                    fontVariantNumeric: "tabular-nums",
-                                  }}
-                                >
-                                  {s.abbr}
-                                </span>
-                              </span>
-                            ))}
-                          </div>
                         </div>
-
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "flex-end",
-                            minWidth: 0,
-                            paddingRight: 2,
-                            alignSelf: "stretch",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 13.25,
-                              fontWeight: 720,
-                              color: "color-mix(in srgb, var(--hostly-ink-strong) 95%, var(--hostly-ink-muted))",
-                              fontVariantNumeric: "tabular-nums",
-                              letterSpacing: "-0.016em",
-                              lineHeight: 1,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {formatEuro(typeof c.total === "number" && Number.isFinite(c.total) ? c.total : 0, locale)}
-                          </span>
-                        </div>
-
-                        <div
-                          className="hostly-recep-row-actions"
+                        <select
+                          value={c.estado}
+                          onChange={(e) => updateEstado(c.id, e.target.value as CompraEstado)}
                           onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
+                          aria-label={t("recepciones.ariaEstado", { supplier: supplierPrimaryLabel(c) })}
+                          className="hostly-input hostly-procurement-form__status-select"
                           style={{
-                            display: "flex",
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            alignItems: "center",
-                            justifyContent: "flex-end",
-                            gap: 2,
-                            minWidth: 0,
+                            flex: "1 1 56px",
+                            minWidth: 72,
+                            maxWidth: 118,
+                            border: `1px solid ${look.border}`,
+                            background: look.bg,
+                            color: look.color,
                           }}
                         >
-                          <button
-                            type="button"
-                            onClick={() => setSelectedReceptionId(c.id)}
-                            className={
-                              "hostly-recep-validate" + (validatePrimary ? " hostly-recep-validate--on" : "")
-                            }
-                            style={{
-                              flex: "0 0 auto",
-                              border: validatePrimary
-                                ? "1px solid color-mix(in srgb, var(--hostly-accent) 26%, var(--hostly-table-divider-soft))"
-                                : "1px solid var(--hostly-table-divider-soft)",
-                              borderRadius: 6,
-                              padding: "4px 8px",
-                              fontSize: 10,
-                              fontWeight: 620,
-                              letterSpacing: "-0.008em",
-                              cursor: "pointer",
-                              boxSizing: "border-box",
-                              touchAction: "manipulation",
-                              color: validatePrimary ? "var(--hostly-ink-strong)" : "color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink))",
-                              background: validatePrimary
-                                ? "color-mix(in srgb, var(--hostly-accent) 8%, var(--hostly-surface-card-solid))"
-                                : "transparent",
-                              boxShadow: "none",
-                              lineHeight: 1.25,
-                            }}
-                          >
-                            {t("recepciones.actionValidatePrimary")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedReceptionId(c.id)}
-                            className="hostly-btn-soft"
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              fontSize: 10,
-                              fontWeight: 560,
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                              color: "color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink))",
-                              border: "1px solid var(--hostly-table-divider-soft)",
-                              background: "transparent",
-                              boxShadow: "none",
-                              lineHeight: 1.25,
-                            }}
-                          >
-                            {t("recepciones.actionInvoice")}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={receiptBusyId === c.id}
-                            onClick={() => void applyCentralInventoryReceipt(c)}
-                            className="hostly-btn-soft"
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              fontSize: 10,
-                              fontWeight: 560,
-                              cursor: receiptBusyId === c.id ? "wait" : "pointer",
-                              whiteSpace: "nowrap",
-                              color: "color-mix(in srgb, var(--hostly-ink-muted) 88%, var(--hostly-ink))",
-                              border: "1px solid var(--hostly-table-divider-soft)",
-                              background: "transparent",
-                              boxShadow: "none",
-                              opacity: receiptBusyId === c.id ? 0.65 : 1,
-                              lineHeight: 1.25,
-                            }}
-                          >
-                            {receiptBusyId === c.id ? "…" : t("recepciones.actionStock")}
-                          </button>
-                          <div style={{ position: "relative", display: "inline-flex" }}>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuRowId((p) => (p === c.id ? null : c.id));
-                              }}
-                              aria-expanded={menuRowId === c.id}
-                              className="hostly-btn-soft"
-                              style={{
-                                padding: "4px 8px",
-                                minWidth: 30,
-                                fontSize: 11,
-                                fontWeight: 620,
-                                cursor: "pointer",
-                                borderRadius: 6,
-                                boxSizing: "border-box",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "color-mix(in srgb, var(--hostly-ink-muted) 88%, transparent)",
-                                border: "1px solid var(--hostly-table-divider-soft)",
-                                background: "transparent",
-                                boxShadow: "none",
-                                lineHeight: 1.25,
-                              }}
-                            >
-                              {t("recepciones.actionMore")}
-                            </button>
-                            {menuRowId === c.id ? (
-                              <div
-                                role="menu"
-                                onMouseDown={(e) => e.stopPropagation()}
-                                style={{
-                                  position: "absolute",
-                                  right: 0,
-                                  top: "calc(100% + 6px)",
-                                  zIndex: 40,
-                                  minWidth: 180,
-                                  borderRadius: 10,
-                                  border: "1px solid var(--hostly-line)",
-                                  background: "var(--hostly-surface-card-solid)",
-                                  boxShadow: "var(--hostly-shadow-float)",
-                                  padding: 4,
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setMenuRowId(null);
-                                    router.push("/dashboard/compras");
-                                  }}
-                                  style={{
-                                    border: "none",
-                                    background: "transparent",
-                                    color: "var(--hostly-ink)",
-                                    textAlign: "left",
-                                    width: "100%",
-                                    padding: "10px 12px",
-                                    borderRadius: 8,
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    cursor: "pointer",
-                                    boxSizing: "border-box",
-                                  }}
-                                >
-                                  {t("recepciones.menuEditCompra")}
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                          <select
-                            value={c.estado}
-                            onChange={(e) => updateEstado(c.id, e.target.value as CompraEstado)}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={t("recepciones.ariaEstado", { supplier: supplierPrimaryLabel(c) })}
-                            style={{
-                              flex: "1 1 56px",
-                              minWidth: 72,
-                              maxWidth: 118,
-                              minHeight: 30,
-                              padding: "2px 7px",
-                              fontSize: 10,
-                              fontWeight: 600,
-                              borderRadius: 6,
-                              border: `1px solid ${look.border}`,
-                              background: look.bg,
-                              color: look.color,
-                              cursor: "pointer",
-                              boxSizing: "border-box",
-                              lineHeight: 1.25,
-                            }}
-                          >
-                            {COMPRA_ESTADOS.map((e) => (
-                              <option key={e} value={e}>
-                                {estadoLabel(e, t)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
+                          {COMPRA_ESTADOS.map((e) => (
+                            <option key={e} value={e}>
+                              {estadoLabel(e, t)}
+                            </option>
+                          ))}
+                        </select>
+                      </>
                     );
-                  })}
-                </div>
+                  }}
+                />
               </div>
             )}
           </HostlySurface>

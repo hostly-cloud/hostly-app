@@ -16,13 +16,12 @@ import {
   AliasConfirmModal,
   AliasDetailPanel,
   AliasesBulkToolbar,
-  AliasesEmptyState,
   AliasesFilterToolbar,
   AliasesLoadingSkeleton,
   AliasesTable,
 } from "@/components/inventario/supplier-product-aliases-ui";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyKpiCard, HostlySectionHeader } from "@/components/ui/hostly";
+import { HostlyKpiCard, HostlyOperationalEmptyState, HostlySectionHeader } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { listenProductsForInventory, type ProductDocument } from "@/lib/firestore/products";
 import {
@@ -414,7 +413,7 @@ export default function AliasesProveedorPage() {
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="hostly-mobile-op-page-stack">
         <Link
           href="/dashboard/inventario/facturas-proveedor"
           style={{
@@ -438,13 +437,7 @@ export default function AliasesProveedorPage() {
           description="Controla qué textos OCR enlazan con productos Hostly. Desactivar un alias no modifica facturas ya registradas."
         />
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-            gap: 8,
-          }}
-        >
+        <div className="hostly-mobile-op-kpi-grid">
           <HostlyKpiCard title="Total" value={aliases.length} accentColor="#64748b" />
           <HostlyKpiCard title="Activos" value={activeCount} accentColor="#10b981" />
           <HostlyKpiCard
@@ -491,7 +484,20 @@ export default function AliasesProveedorPage() {
           <AliasesLoadingSkeleton />
         ) : filteredRows.length === 0 ? (
           aliases.length === 0 ? (
-            <AliasesEmptyState />
+            <HostlyOperationalEmptyState
+              title="Sin aliases OCR todavía"
+              text="Cuando vincules textos detectados por OCR con productos o proveedores, Hostly aprenderá esas relaciones aquí."
+              secondaryAction={{
+                label: "Volver a facturas",
+                href: "/dashboard/inventario/facturas-proveedor",
+                variant: "secondary",
+              }}
+              hints={[
+                "Aprendizaje controlado",
+                "Sin modificar facturas antiguas",
+                "Mejora futuras revisiones",
+              ]}
+            />
           ) : (
             <div className="hostly-panel p-3" style={{ fontSize: 13, color: "var(--hostly-ink-muted)" }}>
               Ningún alias coincide con los filtros actuales.

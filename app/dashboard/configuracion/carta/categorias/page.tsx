@@ -13,7 +13,6 @@ import {
 import {
   buildCategoryProductFamilyFields,
   productFamilySelectValueFromCategory,
-  resolveCategoryProductFamilyLabel,
   resolveProductFamilyFromSelectValue,
 } from "@/lib/carta/category-product-family";
 import {
@@ -40,15 +39,9 @@ import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import { loadPlatos } from "@/lib/platos-local";
+import { CategoriasCartaDataView } from "@/components/carta/categorias-carta-data-view";
 
-function tipoLabel(t: CartaCategoriaTipo): string {
-  if (t === "food") return "Comida";
-  if (t === "drink") return "Bebida";
-  return "General";
-}
-
-const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20";
+const inputClass = "hostly-input hostly-carta-config-field-input";
 
 export default function ConfigCartaCategoriasPage() {
   const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
@@ -285,135 +278,71 @@ export default function ConfigCartaCategoriasPage() {
       title="Categorías de carta"
       description="Organiza el menú por categorías y asígnalas a una familia de producto (bebidas, comida u otros). Los productos se enlazarán en la siguiente fase."
     >
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="hostly-carta-config-actions-row">
         <ConfigBtnPrimary type="button" disabled={!restauranteId} onClick={openNew}>
           Nueva categoría
         </ConfigBtnPrimary>
         <ConfigBtnSecondary disabled={loading || !restauranteId} onClick={() => void refresh()}>
           Recargar
         </ConfigBtnSecondary>
-        <Link
-          href="/dashboard/configuracion/familias-producto"
-          className="text-xs font-medium text-sky-700 hover:text-sky-600"
-        >
+        <Link href="/dashboard/configuracion/familias-producto" className="hostly-carta-config-text-link">
           Gestionar familias de producto →
         </Link>
-        <Link
-          href="/dashboard/configuracion/carta/productos"
-          className="text-xs font-medium text-slate-600 hover:text-slate-800"
-        >
+        <Link href="/dashboard/configuracion/carta/productos" className="hostly-carta-config-text-link">
           Ir a Productos →
         </Link>
       </div>
 
       {!restauranteId ? (
-        <div className="rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-3 text-sm text-amber-950">
+        <div className="hostly-carta-config-alert hostly-carta-config-alert--warning">
           Selecciona un restaurante en la barra superior para ver categorías.
         </div>
       ) : null}
 
       {error ? (
-        <div className="rounded-xl border border-red-200/90 bg-red-50/90 px-4 py-3 text-sm text-red-900" role="alert">
+        <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
           {error}
         </div>
       ) : null}
       {notice ? (
-        <p className="text-sm text-emerald-800" role="status">
+        <p className="hostly-carta-config-alert hostly-carta-config-alert--success" role="status">
           {notice}
         </p>
       ) : null}
 
       <ConfigCard flush>
-        <div className="hostly-config-table-head grid grid-cols-[minmax(0,1fr)_minmax(0,0.45fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_minmax(0,0.4fr)_minmax(0,0.4fr)_minmax(0,0.45fr)] gap-2 px-4 py-2.5">
-          <span>Nombre</span>
-          <span>Tipo</span>
-          <span>Familia producto</span>
-          <span>Modificadores</span>
-          <span>Orden</span>
-          <span>Estado</span>
-          <span className="text-right">Productos</span>
-        </div>
-        <div className="max-h-[min(52vh,520px)] overflow-auto">
-          {loading ? (
-            <div className="px-4 py-10 text-center text-sm text-slate-500">Cargando categorías…</div>
-          ) : sorted.length === 0 ? (
-            <div className="px-4 py-12 text-center">
-              <p className="text-sm font-semibold text-slate-900">Aún no hay categorías registradas</p>
-              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-600">
-                Crea la primera con el botón superior o importa una carta con IA.
-              </p>
-            </div>
-          ) : (
-            sorted.map((c) => {
-              const n = countsByCatId.get(c.id) ?? 0;
-              const familyLabel = resolveCategoryProductFamilyLabel(
-                c,
-                productFamilies,
-              );
-              const modifierLabels = resolveEffectiveModifierGroupLabels(
-                null,
-                c,
-                modifierGroups,
-              );
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => openEdit(c)}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,0.45fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_minmax(0,0.4fr)_minmax(0,0.4fr)_minmax(0,0.45fr)] items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-left text-xs text-slate-700 transition hover:bg-slate-50/80 last:border-0"
-                >
-                  <span className="truncate font-medium text-slate-900">{c.name}</span>
-                  <span className="text-slate-500">{tipoLabel(c.type)}</span>
-                  <span className="truncate text-slate-500">{familyLabel}</span>
-                  <span className="truncate text-slate-500">
-                    {modifierLabels.length > 0
-                      ? modifierLabels.join(", ")
-                      : "—"}
-                  </span>
-                  <span className="tabular-nums text-slate-500">{c.sortOrder}</span>
-                  <span>
-                    {c.isActive ? (
-                      <span className="inline-flex rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                        Activa
-                      </span>
-                    ) : (
-                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                        Inactiva
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-right tabular-nums text-slate-500">{n}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
+        <CategoriasCartaDataView
+          items={sorted}
+          loading={loading}
+          countsByCatId={countsByCatId}
+          productFamilies={productFamilies}
+          modifierGroups={modifierGroups}
+          onEdit={openEdit}
+          onToggleActive={(c) => void toggleActive(c)}
+          onCreateNew={openNew}
+        />
       </ConfigCard>
 
       {panelOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
-          role="dialog"
-          aria-modal="true"
-        >
-          <ConfigCard className="w-full max-w-lg sm:max-h-[90vh] sm:overflow-y-auto">
-            <h2 className="text-sm font-semibold text-slate-900">
+        <div className="hostly-carta-config-drawer-backdrop" role="dialog" aria-modal="true">
+          <ConfigCard className="hostly-carta-config-drawer">
+            <h2 className="hostly-carta-config-drawer__title">
               {editing ? "Editar categoría" : "Nueva categoría"}
             </h2>
-            <div className="mt-4 grid gap-3">
-              <label className="block">
-                <span className="text-xs font-medium text-slate-600">Nombre</span>
+            <div className="hostly-carta-config-form hostly-carta-config-drawer__body">
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Nombre</span>
                 <input
-                  className={`${inputClass} mt-1`}
+                  className={inputClass}
                   value={draftName}
                   onChange={(e) => setDraftName(e.target.value)}
                   placeholder="Ginebras"
                 />
               </label>
-              <label className="block">
-                <span className="text-xs font-medium text-slate-600">Tipo de carta</span>
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Tipo de carta</span>
                 <select
-                  className={`${inputClass} mt-1`}
+                  className={inputClass}
                   value={draftType}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -425,11 +354,9 @@ export default function ConfigCartaCategoriasPage() {
                   <option value="general">General</option>
                 </select>
               </label>
-              <label className="block">
-                <span className="text-xs font-medium text-slate-600">
-                  Familia de producto
-                </span>
-                <div className="mt-1">
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Familia de producto</span>
+                <div>
                   <CategoryProductFamilySelect
                     restaurantId={restauranteId}
                     value={draftFamilyId}
@@ -437,41 +364,32 @@ export default function ConfigCartaCategoriasPage() {
                     disabled={saving}
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className="hostly-carta-config-form-hint">
                   Opcional. Agrupa para inventario y análisis (distinto de familias de menú).
                 </p>
               </label>
-              <label className="block">
-                <span className="text-xs font-medium text-slate-600">
-                  Modificadores
-                </span>
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Modificadores</span>
                 {activeModifierGroups.length === 0 ? (
-                  <p className="mt-2 text-xs text-slate-500">
+                  <p className="hostly-carta-config-form-hint">
                     No hay grupos activos. Créalos en{" "}
-                    <Link
-                      href="/dashboard/configuracion/modificadores"
-                      className="font-medium text-sky-700 hover:text-sky-600"
-                    >
+                    <Link href="/dashboard/configuracion/modificadores" className="hostly-carta-config-text-link">
                       Configuración → Modificadores
                     </Link>
                     .
                   </p>
                 ) : (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="hostly-productos-carta-filter-chips">
                     {activeModifierGroups.map((group) => {
                       const selected = draftModifierGroupIds.includes(group.id);
                       return (
                         <label
                           key={group.id}
-                          className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                            selected
-                              ? "border-sky-300 bg-sky-50 text-sky-900"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                          }`}
+                          className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${selected ? " is-active" : ""}`}
                         >
                           <input
                             type="checkbox"
-                            className="h-3.5 w-3.5 rounded border-slate-300"
+                            className="sr-only"
                             checked={selected}
                             onChange={() => {
                               setDraftModifierGroupIds((prev) =>
@@ -488,31 +406,28 @@ export default function ConfigCartaCategoriasPage() {
                   </div>
                 )}
                 {draftModifierGroupIds.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="hostly-productos-carta-filter-chips hostly-carta-config-form-chips">
                     {resolveEffectiveModifierGroupLabels(
                       null,
                       { modifierGroupIds: draftModifierGroupIds },
                       modifierGroups,
                     ).map((label) => (
-                      <span
-                        key={label}
-                        className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700"
-                      >
+                      <span key={label} className="hostly-carta-config-status-chip hostly-carta-config-status-chip--inactive">
                         {label}
                       </span>
                     ))}
                   </div>
                 ) : null}
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Formatos y mixers para productos de esta categoría (p. ej. chupito,
-                  copa + tónica). El TPV los usará en una fase posterior.
+                <p className="hostly-carta-config-form-hint">
+                  Formatos y mixers para productos de esta categoría (p. ej. chupito, copa + tónica). El TPV los
+                  usará en una fase posterior.
                 </p>
               </label>
-              <label className="block">
-                <span className="text-xs font-medium text-slate-600">Orden</span>
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Orden</span>
                 <input
                   type="number"
-                  className={`${inputClass} mt-1`}
+                  className={inputClass}
                   value={draftOrder}
                   onChange={(e) =>
                     setDraftOrder(Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)
@@ -525,10 +440,10 @@ export default function ConfigCartaCategoriasPage() {
                   checked={draftActive}
                   onChange={(e) => setDraftActive(e.target.checked)}
                 />
-                <span className="text-sm text-slate-700">Categoría activa</span>
+                <span className="hostly-carta-config-form-label">Categoría activa</span>
               </label>
             </div>
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="hostly-carta-config-drawer__footer">
               <ConfigBtnPrimary
                 type="button"
                 disabled={saving}
@@ -557,7 +472,7 @@ export default function ConfigCartaCategoriasPage() {
         </div>
       ) : null}
 
-      <p className="text-[11px] leading-relaxed text-slate-600">
+      <p className="hostly-carta-config-section-body">
         Las categorías viven en{" "}
         <span className="font-mono text-[10px] text-slate-500">
           restaurantes/&#123;id&#125;/cartaCategorias

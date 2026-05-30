@@ -210,7 +210,13 @@ export default function ModulePageShell({
 
   return (
     <main
-      className={["hostly-module-shell", isMobile ? "hostly-module-shell--mobile" : ""].filter(Boolean).join(" ")}
+      className={[
+        "hostly-module-shell",
+        isMobile ? "hostly-module-shell--mobile" : "",
+        isMobile && effectiveDenseInventory ? "hostly-mobile-operational-layout" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{
         boxSizing: "border-box",
         background:
@@ -304,13 +310,18 @@ export default function ModulePageShell({
       <HostlyPageContainer
         wide={isWide}
         className={
-          dashboardModuleChrome
-            ? isMobile
-              ? "hostly-module-content--mobile"
-              : "hostly-module-content--dashboard"
-            : isMobile
-              ? "hostly-module-content--mobile"
-              : undefined
+          [
+            dashboardModuleChrome
+              ? isMobile
+                ? "hostly-module-content--mobile"
+                : "hostly-module-content--dashboard"
+              : isMobile
+                ? "hostly-module-content--mobile"
+                : undefined,
+            isMobile && effectiveDenseInventory ? "hostly-mobile-operational-content" : undefined,
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined
         }
         style={{
           ...(stretchContentWidth

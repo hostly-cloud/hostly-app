@@ -12,7 +12,7 @@ import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlySectionHeader } from "@/components/ui/hostly";
+import { HostlyOperationalEmptyState, HostlySectionHeader } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   listenPurchaseOrderById,
@@ -30,9 +30,13 @@ import {
   buildSupplierInvoiceDraftLinesFromPurchaseOrder,
   type SupplierInvoiceLineInput,
 } from "@/lib/inventory/supplier-invoice-types";
-import { productTimelineHref, hostlyHighlightInvoiceElementId } from "@/lib/inventory/product-timeline";
+import { hostlyHighlightInvoiceElementId } from "@/lib/inventory/product-timeline";
 import { scheduleScrollAndHighlightById } from "@/lib/ui/scroll-and-highlight";
 import { DeepLinkOutOfWindowNotice } from "@/components/inventario/deep-link-out-of-window-notice";
+import {
+  FacturasProveedorListDataView,
+  mapSupplierInvoiceToListRow,
+} from "@/components/inventario/procurement/facturas-proveedor-list-data-view";
 
 function formatQty(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -156,6 +160,20 @@ export default function FacturasProveedorPage() {
       (a, b) => b.updatedAt - a.updatedAt,
     );
   }, [invoices, linkedOutOfWindowInvoice]);
+
+  const invoiceListRows = useMemo(
+    () =>
+      displayInvoices.map((invoice) =>
+        mapSupplierInvoiceToListRow(invoice, {
+          formatDate,
+          formatEur,
+          formatQty,
+          formatShortId,
+          highlightId: highlightInvoiceId || undefined,
+        }),
+      ),
+    [displayInvoices, highlightInvoiceId],
+  );
 
   useEffect(() => {
     if (!highlightInvoiceId || !authReady || !isFirebaseConfigured || !restaurantId) {
@@ -320,7 +338,7 @@ export default function FacturasProveedorPage() {
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+      <div className="hostly-mobile-op-page-stack">
         <HostlySectionHeader
           title="Registro de factura"
           description="Registra el coste real facturado. No modifica stock. Los márgenes históricos del TPV siguen usando snapshots persistidos."
@@ -372,58 +390,37 @@ export default function FacturasProveedorPage() {
         ) : null}
 
         {showForm ? (
-          <div className="hostly-panel p-3" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: 10,
-              }}
-            >
-              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-                <span style={{ fontWeight: 700 }}>Proveedor</span>
+          <div className="hostly-panel p-3 hostly-procurement-form">
+            <div className="hostly-procurement-form__grid">
+              <label className="hostly-procurement-form__field">
+                <span className="hostly-procurement-form__field-label">Proveedor</span>
                 <input
+                  className="hostly-input"
                   value={supplierName}
                   onChange={(e) => setSupplierName(e.target.value)}
                   placeholder="Sin proveedor"
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(148, 163, 184, 0.28)",
-                    fontSize: 13,
-                  }}
                 />
               </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-                <span style={{ fontWeight: 700 }}>Nº factura</span>
+              <label className="hostly-procurement-form__field">
+                <span className="hostly-procurement-form__field-label">Nº factura</span>
                 <input
+                  className="hostly-input"
                   value={invoiceNumber}
                   onChange={(e) => setInvoiceNumber(e.target.value)}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(148, 163, 184, 0.28)",
-                    fontSize: 13,
-                  }}
                 />
               </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-                <span style={{ fontWeight: 700 }}>Fecha factura</span>
+              <label className="hostly-procurement-form__field">
+                <span className="hostly-procurement-form__field-label">Fecha factura</span>
                 <input
+                  className="hostly-input"
                   type="date"
                   value={invoiceDate}
                   onChange={(e) => setInvoiceDate(e.target.value)}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(148, 163, 184, 0.28)",
-                    fontSize: 13,
-                  }}
                 />
               </label>
             </div>
 
-            <div style={{ overflow: "auto" }}>
+            <div className="hostly-data-table-viewport hostly-data-table-viewport--embedded hostly-data-table-viewport--facturas-proveedor">
               <table className="hostly-inv-native-table">
                 <thead>
                   <tr>
@@ -438,85 +435,58 @@ export default function FacturasProveedorPage() {
                     <tr key={line.key}>
                       <td className="hostly-inv-td-primary">
                         {line.productName}
-                        <div style={{ fontSize: 11, color: "var(--hostly-ink-muted)" }}>
-                          {displayUnit(line.unit)}
+                        <div className="hostly-data-table-primary__meta">{displayUnit(line.unit)}</div>
+                      </td>
+                      <td className="hostly-inv-td-amount">
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          className="hostly-input hostly-procurement-form__qty-input"
+                          value={line.quantity}
+                          onChange={(e) => handleLineQuantityChange(line.productId, e.target.value)}
+                        />
+                      </td>
+                      <td className="hostly-inv-td-amount">
+                        <div className="hostly-procurement-form__qty-cell">
+                          <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            className="hostly-input hostly-procurement-form__qty-input"
+                            value={line.realUnitCost}
+                            onChange={(e) => handleLineUnitCostChange(line.productId, e.target.value)}
+                          />
+                          <span className="hostly-procurement-form__qty-unit">€</span>
                         </div>
                       </td>
                       <td className="hostly-inv-td-amount">
-                        <input
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={line.quantity}
-                          onChange={(e) =>
-                            handleLineQuantityChange(line.productId, e.target.value)
-                          }
-                          style={{
-                            width: 88,
-                            padding: "6px 8px",
-                            borderRadius: 8,
-                            border: "1px solid rgba(148, 163, 184, 0.28)",
-                            textAlign: "right",
-                          }}
-                        />
+                        <span className="hostly-cost-badge">{formatEur(computeLineTotal(line))}</span>
                       </td>
-                      <td className="hostly-inv-td-amount">
-                        <input
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={line.realUnitCost}
-                          onChange={(e) =>
-                            handleLineUnitCostChange(line.productId, e.target.value)
-                          }
-                          style={{
-                            width: 96,
-                            padding: "6px 8px",
-                            borderRadius: 8,
-                            border: "1px solid rgba(148, 163, 184, 0.28)",
-                            textAlign: "right",
-                          }}
-                        />
-                        <span style={{ marginLeft: 4, fontSize: 11 }}>€</span>
-                      </td>
-                      <td className="hostly-inv-td-amount">{formatEur(computeLineTotal(line))}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-              <span style={{ fontWeight: 700 }}>Notas</span>
+            <label className="hostly-procurement-form__field">
+              <span className="hostly-procurement-form__field-label">Notas</span>
               <textarea
+                className="hostly-input"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(148, 163, 184, 0.28)",
-                  fontSize: 13,
-                  resize: "vertical",
-                }}
+                style={{ resize: "vertical" }}
               />
             </label>
 
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div style={{ fontSize: 14, fontWeight: 800 }}>
+            <div className="hostly-procurement-draft-panel__head">
+              <div className="hostly-procurement-draft-panel__title">
                 Total factura: {formatEur(invoiceTotal)}
               </div>
               <button
                 type="button"
-                style={primaryButtonStyle}
+                className="hostly-button-primary hostly-button-compact"
                 disabled={isSubmitting || !canManageSupplierInvoices}
                 title={capabilityDeniedTitle(canManageSupplierInvoices)}
                 onClick={() => void handleSubmitInvoice()}
@@ -527,111 +497,38 @@ export default function FacturasProveedorPage() {
           </div>
         ) : null}
 
-        <div className="hostly-panel p-3" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="hostly-panel p-3 hostly-procurement-form">
           {linkedOutOfWindowInvoice ? <DeepLinkOutOfWindowNotice /> : null}
-          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>
-            Facturas registradas ({displayInvoices.length})
-          </div>
-          {displayInvoices.length === 0 ? (
-            <div style={{ fontSize: 13, color: "var(--hostly-ink-muted)" }}>Sin facturas todavía.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {displayInvoices.map((invoice) => (
-                <div
-                  key={invoice.id}
-                  id={hostlyHighlightInvoiceElementId(invoice.id)}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(148, 163, 184, 0.18)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 8,
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>
-                        {invoice.supplierName?.trim() || "Sin proveedor"}
-                        {invoice.invoiceNumber ? ` · ${invoice.invoiceNumber}` : ""}
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--hostly-ink-muted)", marginTop: 4 }}>
-                        {formatDate(invoice.invoiceDate ?? invoice.createdAt)} ·{" "}
-                        {invoice.lines.length} línea(s) · {formatEur(invoice.total)}
-                      </div>
-                      {invoice.purchaseOrderId ? (
-                        <Link
-                          href={`/dashboard/inventario/pedidos-compra/${encodeURIComponent(invoice.purchaseOrderId)}`}
-                          style={{ fontSize: 12, color: "#1d4ed8", marginTop: 4, display: "inline-block" }}
-                          prefetch
-                        >
-                          Pedido {formatShortId(invoice.purchaseOrderId)}
-                        </Link>
-                      ) : null}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: "3px 8px",
-                        borderRadius: 999,
-                        background:
-                          invoice.status === "recorded"
-                            ? "rgba(16, 185, 129, 0.12)"
-                            : "rgba(148, 163, 184, 0.16)",
-                        color:
-                          invoice.status === "recorded" ? "#047857" : "#64748b",
-                      }}
-                    >
-                      {invoice.status === "recorded" ? "Registrada" : "Borrador"}
-                    </span>
-                  </div>
-                  {invoice.status === "recorded" ? (
-                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                      {invoice.lines.slice(0, 4).map((line) => (
-                        <div
-                          key={`${invoice.id}-${line.productId}`}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 8,
-                            fontSize: 12,
-                          }}
-                        >
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                            {line.productName}
-                            <Link
-                              href={productTimelineHref(line.productId)}
-                              style={{ ...actionButtonStyle, padding: "2px 6px", fontSize: 10 }}
-                              prefetch
-                            >
-                              Timeline
-                            </Link>
-                          </span>
-                          <span style={{ whiteSpace: "nowrap" }}>
-                            {formatQty(line.quantity)} {displayUnit(line.unit)} ·{" "}
-                            {formatEur(line.realUnitCost)}/ud
-                            {line.previousUnitCost != null && line.updatedInventoryUnitCost != null ? (
-                              <span style={{ color: "var(--hostly-ink-muted)" }}>
-                                {" "}
-                                (coste {formatQty(line.previousUnitCost)} →{" "}
-                                {formatQty(line.updatedInventoryUnitCost)})
-                              </span>
-                            ) : null}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+          {displayInvoices.length > 0 ? (
+            <div className="hostly-procurement-draft-panel__title">
+              Facturas registradas ({displayInvoices.length})
             </div>
-          )}
+          ) : null}
+          <FacturasProveedorListDataView
+            rows={invoiceListRows}
+            emptyContent={
+              <HostlyOperationalEmptyState
+                title="Sin facturas registradas"
+                text="Registra una factura desde un pedido recibido o sube una factura con OCR para actualizar costes reales."
+                actions={
+                  <CapabilityGuard capability="supplier_invoices.manage">
+                    <Link
+                      href="/dashboard/inventario/facturas-proveedor/nueva"
+                      className="hostly-button-primary hostly-button-compact hostly-operational-empty__action"
+                      prefetch
+                    >
+                      Nueva factura (OCR)
+                    </Link>
+                  </CapabilityGuard>
+                }
+                hints={[
+                  "Coste real por producto",
+                  "Histórico protegido por snapshots",
+                  "Preparado para matching OCR",
+                ]}
+              />
+            }
+          />
         </div>
       </div>
     </ModulePageShell>

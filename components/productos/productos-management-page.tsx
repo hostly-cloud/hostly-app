@@ -3,11 +3,12 @@
 import type { CSSProperties, ReactNode, SVGProps } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
+import { ProductosCartaDataView } from "@/components/productos/productos-carta-data-view";
+import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface, hostlySegmentTabClassName, HostlySegmentedControl } from "@/components/ui/hostly";
 import { fetchCartaCategorias, fetchCartaFamilias, createCartaCategoriaApi } from "@/lib/carta-categorias/api-client";
 import { buildCartaGroupedSections } from "@/lib/carta-categorias/grouping";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
@@ -1126,10 +1127,14 @@ export default function ProductosManagementPage({
   const { t, locale } = useI18n();
   const { restaurantId: profileRestaurantId } = useAuth();
   const router = useRouter();
+  const pathname = usePathname() ?? "";
   const emb = Boolean(embedConfigVisual);
   const iceVisual = emb || Boolean(dashboardListIceVisual);
-  /** Solo Config → Carta → Productos: menos ruido, prioridad en la tabla */
-  const configCartaProductosChrome = emb && iceVisual;
+  /** Solo /dashboard/configuracion/carta/productos — ruta explícita, no depender solo del prop */
+  const isConfigCartaProductosRoute =
+    pathname === "/dashboard/configuracion/carta/productos" ||
+    pathname.endsWith("/configuracion/carta/productos");
+  const configCartaProductosChrome = isConfigCartaProductosRoute && iceVisual;
   const iceProductosDataGridStyle = iceVisual ? (configCartaProductosChrome ? rowGridEmbedIcons : rowGridEmbed) : rowGrid;
   const iceProductosGroupBarGridStyle = iceVisual
     ? configCartaProductosChrome
@@ -1160,6 +1165,7 @@ export default function ProductosManagementPage({
   const [productFamilyFilter, setProductFamilyFilter] =
     useState<ProductFamilyListFilter>("all");
   const [listSearch, setListSearch] = useState("");
+  const [configCartaAdvancedOpen, setConfigCartaAdvancedOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped");
   const [categoryTab, setCategoryTab] = useState<string>("__all__");
   const [formOpen, setFormOpen] = useState(false);
@@ -2176,12 +2182,28 @@ export default function ProductosManagementPage({
     { id: "conEscandallo" as const, label: t("carta.filterConEsc") },
     { id: "sinEscandallo" as const, label: t("carta.filterSinEsc") },
   ] as const;
+  const CONFIG_CARTA_BASIC_FILTER_IDS = ["todos", "activos", "inactivos"] as const;
+  const CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS = ["conEscandallo", "sinEscandallo"] as const;
 
   /** Pills de familia de producto (Bebidas/Comida/Otros); distinto de filtros escandallo/activo. */
   function iceToolbarProductFamilyFilterButtons(cfgMergedStripe: boolean): ReactNode {
+    const useCartaV25 = configCartaProductosChrome;
     const dense = cfgMergedStripe;
     return PRODUCT_FAMILY_LIST_FILTER_OPTIONS.map((f) => {
       const active = productFamilyFilter === f.id;
+      if (useCartaV25) {
+        return (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setProductFamilyFilter(f.id)}
+            aria-pressed={active}
+            className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--family${active ? " is-active" : ""}`}
+          >
+            {f.label}
+          </button>
+        );
+      }
       const passiveBorder =
         dense
           ? "1px solid rgba(148, 163, 184, 0.16)"
@@ -2231,10 +2253,28 @@ export default function ProductosManagementPage({
   }
 
   /** UI only: filtros rápidos hielo; `cfgMergedStripe` = barra ultra compacta (config carta embed). */
-  function iceToolbarFilterButtons(cfgMergedStripe: boolean): ReactNode {
+  function iceToolbarFilterButtons(
+    cfgMergedStripe: boolean,
+    onlyIds?: readonly (typeof iceToolbarFilterSpecs)[number]["id"][],
+  ): ReactNode {
+    const useCartaV25 = configCartaProductosChrome;
     const dense = cfgMergedStripe;
-    return iceToolbarFilterSpecs.map((f) => {
+    const specs = onlyIds ? iceToolbarFilterSpecs.filter((f) => onlyIds.includes(f.id)) : iceToolbarFilterSpecs;
+    return specs.map((f) => {
       const active = listFilter === f.id;
+      if (useCartaV25) {
+        return (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setListFilter(f.id)}
+            aria-pressed={active}
+            className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--status${active ? " is-active" : ""}`}
+          >
+            {f.label}
+          </button>
+        );
+      }
       const passiveBorder =
         dense
           ? "1px solid rgba(148, 163, 184, 0.16)"
@@ -2282,7 +2322,30 @@ export default function ProductosManagementPage({
   }
 
   function iceToolbarViewControls(cfgMergedStripe: boolean): ReactNode {
+    const useCartaV25 = configCartaProductosChrome;
     const dense = cfgMergedStripe;
+    if (useCartaV25) {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => setViewMode("grouped")}
+            aria-pressed={viewMode === "grouped"}
+            className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--view${viewMode === "grouped" ? " is-active" : ""}`}
+          >
+            Vista agrupada
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            aria-pressed={viewMode === "list"}
+            className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--view${viewMode === "list" ? " is-active" : ""}`}
+          >
+            Vista lista
+          </button>
+        </>
+      );
+    }
     const shellStyle: CSSProperties = {
       display: "flex",
       gap: dense ? 4 : configCartaProductosChrome ? 5 : 6,
@@ -2443,7 +2506,9 @@ export default function ProductosManagementPage({
       <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
       <ModulePageShell
       title={t("productos.title")}
-      subtitle={t("productos.subtitle")}
+      subtitle={
+        configCartaProductosChrome ? "Gestiona tu carta y catálogo de venta." : t("productos.subtitle")
+      }
       maxWidth={PRODUCTOS_SHELL_MAX_WIDTH}
       compactLayout
       operationalFocus
@@ -2453,6 +2518,33 @@ export default function ProductosManagementPage({
       shellSurface={iceVisual ? "configLight" : "default"}
       denseInventoryHeader={emb}
       headerBelow={
+        configCartaProductosChrome ? (
+          <div className="hostly-productos-carta-page-head">
+            <div className="hostly-productos-carta-hero-actions">
+              <button
+                type="button"
+                disabled={isLegacyReadOnly}
+                title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
+                onClick={openCreate}
+                className="hostly-button-primary hostly-button-compact hostly-productos-carta-hero-cta whitespace-nowrap"
+                style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
+              >
+                {t("carta.ctaNew")}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  router.push("/dashboard/configuracion/carta/importacion");
+                }}
+                className="hostly-button-secondary hostly-button-compact hostly-productos-carta-hero-cta whitespace-nowrap"
+              >
+                Importar carta IA
+              </button>
+            </div>
+          </div>
+        ) : (
         <div
           style={{
             display: "flex",
@@ -2621,13 +2713,14 @@ export default function ProductosManagementPage({
             </button>
           </div>
         </div>
+        )
       }
     >
       <HostlySection
         stack="sm"
         className={
           iceVisual
-            ? `hostly-productos-config-skin min-h-0 min-w-0 flex-1 overflow-hidden${configCartaProductosChrome ? " !gap-1" : ""}`
+            ? `hostly-productos-config-skin min-h-0 min-w-0 flex-1 overflow-hidden${configCartaProductosChrome ? " hostly-productos-config-skin--simplified !gap-0" : ""}`
             : "min-h-0 min-w-0 flex-1 overflow-hidden"
         }
         style={{
@@ -2687,30 +2780,7 @@ export default function ProductosManagementPage({
         ) : null}
 
         {iceVisual ? (
-          configCartaProductosChrome ? (
-            <div
-              aria-label="Indicadores de catálogo"
-              className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-px border-b border-[rgba(148,163,184,0.16)] px-0.5 pb-px pt-0"
-              style={{ color: "var(--hostly-ink-muted)" }}
-            >
-              {kpiPills.map((m, i) => (
-                <span key={m.key} className="inline-flex items-baseline gap-0.5">
-                  {i > 0 ? (
-                    <span className="select-none opacity-[0.28]" aria-hidden>
-                      ·
-                    </span>
-                  ) : null}
-                  <span className="text-[7px] font-bold uppercase tracking-[0.1em] opacity-[0.78]">{m.label}</span>
-                  <span
-                    className="tabular-nums text-[11px] font-semibold leading-none"
-                    style={{ color: "var(--hostly-ink-strong)" }}
-                  >
-                    {m.value}
-                  </span>
-                </span>
-              ))}
-            </div>
-          ) : (
+          configCartaProductosChrome ? null : (
             <div
               className="grid shrink-0 gap-1.5"
               style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
@@ -2755,144 +2825,145 @@ export default function ProductosManagementPage({
         )}
 
         <ProductosTableChrome iceVisual={iceVisual} embedFlatChrome={configCartaProductosChrome}>
-          {iceVisual ? (
-            configCartaProductosChrome ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  gap: 4,
-                  rowGap: 3,
-                  padding: "2px 4px",
-                  borderBottom: "1px solid rgba(148, 163, 184, 0.2)",
-                  boxSizing: "border-box",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    gap: 5,
-                    minWidth: 0,
-                    flex: "1 1 min(520px, 100%)",
-                    rowGap: 3,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "baseline",
-                      gap: "2px 8px",
-                      minWidth: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 750,
-                        letterSpacing: "-0.02em",
-                        color: "var(--hostly-ink-strong)",
-                        lineHeight: 1.1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t("carta.listTitle")}
-                    </span>
-                    <span
-                      className="tabular-nums"
-                      style={{
-                        fontSize: 9,
-                        fontWeight: 600,
-                        color: "var(--hostly-ink-muted)",
-                        lineHeight: 1.1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t("carta.listCount", { shown: displayed.length, total: items.length })}
-                    </span>
-                  </div>
-                  <span
-                    aria-hidden
-                    style={{
-                      opacity: 0.16,
-                      color: "#475569",
-                      fontWeight: 900,
-                      userSelect: "none",
-                      fontSize: 10,
-                      lineHeight: 1,
-                    }}
-                  >
-                    ·
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 800,
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      color: "#94a3b8",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {t("stock.filterHint")}
-                  </span>
-                  {iceToolbarFilterButtons(true)}
-                  <span
-                    aria-hidden
-                    style={{
-                      opacity: 0.16,
-                      color: "#475569",
-                      fontWeight: 900,
-                      userSelect: "none",
-                      fontSize: 10,
-                      lineHeight: 1,
-                      flexShrink: 0,
-                    }}
-                  >
-                    ·
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 800,
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      color: "#94a3b8",
-                      flexShrink: 0,
-                    }}
-                  >
-                    Familia
-                  </span>
-                  {iceToolbarProductFamilyFilterButtons(true)}
-                </div>
+          {configCartaProductosChrome ? (
+            <>
+              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical">
                 <input
                   type="search"
                   value={listSearch}
                   onChange={(e) => setListSearch(e.target.value)}
-                  placeholder={t("carta.searchPlaceholder")}
-                  aria-label={t("carta.searchPlaceholder")}
-                  style={{
-                    minWidth: 116,
-                    flex: "1 1 200px",
-                    maxWidth: 420,
-                    padding: "3px 9px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(148, 163, 184, 0.26)",
-                    background: "var(--hostly-surface-page-soft)",
-                    color: "var(--hostly-ink-strong)",
-                    fontSize: 11,
-                    outline: "none",
-                    boxSizing: "border-box",
-                    minHeight: 24,
-                  }}
+                  placeholder="Buscar producto..."
+                  aria-label="Buscar producto"
+                  className="hostly-productos-carta-search hostly-productos-carta-search--prominent"
                 />
-                {iceToolbarViewControls(true)}
               </div>
-            ) : (
+              <div
+                className="hostly-productos-carta-list-host"
+                style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
+              >
+                {items.length === 0 ? (
+                  <div className="hostly-productos-carta-empty">
+                    <p className="hostly-productos-carta-empty__title">{t("carta.emptyTitle")}</p>
+                    <p className="hostly-productos-carta-empty__body">{t("carta.emptyBody")}</p>
+                    <button
+                      type="button"
+                      disabled={isLegacyReadOnly}
+                      title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
+                      onClick={openCreate}
+                      className="hostly-button-primary hostly-button-compact"
+                      style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
+                    >
+                      {t("carta.emptyCta")}
+                    </button>
+                  </div>
+                ) : filteredSorted.length === 0 ? (
+                  <div className="hostly-productos-carta-muted-empty">{t("stock.filterEmpty")}</div>
+                ) : displayed.length === 0 ? (
+                  <div className="hostly-productos-carta-muted-empty">{t("carta.searchNoResults")}</div>
+                ) : (
+                  <ProductosCartaDataView
+                    displayed={displayed}
+                    groupedByCategoria={groupedByCategoria}
+                    viewMode={viewMode}
+                    selectedIds={selectedIds}
+                    selectAllRef={selectAllRef}
+                    isLegacyReadOnly={isLegacyReadOnly}
+                    meta={meta}
+                    escNavId={escNavId}
+                    locale={locale as Locale}
+                    t={t}
+                    toggleRowSelected={toggleRowSelected}
+                    toggleSelectAllDisplayed={toggleSelectAllDisplayed}
+                    openEdit={openEdit}
+                    toggleActivo={toggleActivo}
+                    activateProducto={activateProducto}
+                    goToEscandallo={goToEscandallo}
+                    deleteProducto={deleteProducto}
+                    bulkSelectionBreakdown={bulkSelectionBreakdown}
+                    bulkApplyToIds={bulkApplyToIds}
+                  />
+                )}
+              </div>
+              <div className="hostly-productos-carta-advanced-anchor">
+                <button
+                  type="button"
+                  className="hostly-productos-carta-advanced-toggle"
+                  aria-expanded={configCartaAdvancedOpen}
+                  aria-controls="hostly-productos-carta-advanced-panel"
+                  onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
+                >
+                  {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
+                </button>
+                {configCartaAdvancedOpen ? (
+                  <div
+                    id="hostly-productos-carta-advanced-panel"
+                    className="hostly-productos-carta-advanced-panel"
+                  >
+                    <nav className="hostly-productos-carta-advanced-nav" aria-label="Navegación avanzada de carta">
+                      <Link href="/dashboard/configuracion/carta/categorias">{t("cartaCategories.manageLink")}</Link>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/dashboard/configuracion/carta/modificadores")}
+                      >
+                        {t("carta.ctaModifiers")}
+                      </button>
+                      <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
+                    </nav>
+                    <div className="hostly-productos-carta-advanced-section">
+                      <span className="hostly-productos-carta-advanced-section__label">Estado</span>
+                      <div className="hostly-productos-carta-filter-chips">
+                        {iceToolbarFilterButtons(true, CONFIG_CARTA_BASIC_FILTER_IDS)}
+                      </div>
+                    </div>
+                    <div className="hostly-productos-carta-advanced-section">
+                      <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
+                      <div className="hostly-productos-carta-filter-chips">
+                        {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
+                      </div>
+                    </div>
+                    <div className="hostly-productos-carta-advanced-section">
+                      <span className="hostly-productos-carta-advanced-section__label">Familia</span>
+                      <div className="hostly-productos-carta-filter-chips">
+                        {iceToolbarProductFamilyFilterButtons(true)}
+                      </div>
+                    </div>
+                    <div className="hostly-productos-carta-advanced-section">
+                      <span className="hostly-productos-carta-advanced-section__label">Categorías de carta</span>
+                      <div
+                        className="hostly-productos-carta-category-tabs hostly-productos-carta-category-tabs--secondary"
+                        aria-label="Pestañas de categoría"
+                      >
+                        {tabOptions
+                          .filter((tab) => tab.id !== "__all__")
+                          .map((tab) => {
+                            const active = categoryTab === tab.id;
+                            return (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setCategoryTab(tab.id)}
+                                aria-pressed={active}
+                                className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${active ? " is-active" : ""}`}
+                              >
+                                {tab.label}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                    <div className="hostly-productos-carta-advanced-section">
+                      <span className="hostly-productos-carta-advanced-section__label">Vista</span>
+                      <div className="hostly-productos-carta-view-discreet" role="group" aria-label="Modo de vista">
+                        {iceToolbarViewControls(true)}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+          {iceVisual ? (
             <HostlySectionHeader
               title={t("carta.listTitle")}
               description={t("carta.listCount", { shown: displayed.length, total: items.length })}
@@ -3023,17 +3094,14 @@ export default function ProductosManagementPage({
             {iceToolbarProductFamilyFilterButtons(false)}
           </div>
 
+          {!configCartaProductosChrome ? (
           <div
             style={{
               flexShrink: 0,
-              padding: configCartaProductosChrome ? "1px 3px" : "1px 5px 2px",
-              borderBottom: iceVisual
-                ? configCartaProductosChrome
-                  ? "1px solid rgba(148, 163, 184, 0.2)"
-                  : "1px solid var(--hostly-line)"
-                : "1px solid rgba(51, 65, 85, 0.75)",
+              padding: "1px 5px 2px",
+              borderBottom: iceVisual ? "1px solid var(--hostly-line)" : "1px solid rgba(51, 65, 85, 0.75)",
               display: "flex",
-              gap: configCartaProductosChrome ? 4 : 6,
+              gap: 6,
               overflowX: "auto",
               WebkitOverflowScrolling: "touch",
             }}
@@ -3088,9 +3156,29 @@ export default function ProductosManagementPage({
               );
             })}
           </div>
+          ) : null}
 
-          <div style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div
+            className={configCartaProductosChrome ? "hostly-productos-carta-list-host" : undefined}
+            style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
+          >
             {items.length === 0 ? (
+              iceVisual ? (
+                <div className="hostly-productos-carta-empty">
+                  <p className="hostly-productos-carta-empty__title">{t("carta.emptyTitle")}</p>
+                  <p className="hostly-productos-carta-empty__body">{t("carta.emptyBody")}</p>
+                  <button
+                    type="button"
+                    disabled={isLegacyReadOnly}
+                    title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
+                    onClick={openCreate}
+                    className="hostly-button-primary hostly-button-compact"
+                    style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
+                  >
+                    {t("carta.emptyCta")}
+                  </button>
+                </div>
+              ) : (
               <div
                 style={{
                   flex: 1,
@@ -3100,10 +3188,10 @@ export default function ProductosManagementPage({
                   justifyContent: "center",
                   padding: "28px 16px",
                   textAlign: "center",
-                  color: iceVisual ? "#64748b" : "#94a3b8",
+                  color: "#94a3b8",
                 }}
               >
-                <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: iceVisual ? "#0f172a" : "#e2e8f0" }}>{t("carta.emptyTitle")}</p>
+                <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#e2e8f0" }}>{t("carta.emptyTitle")}</p>
                 <p style={{ margin: "12px 0 0", maxWidth: 400, fontSize: 14, lineHeight: 1.5 }}>{t("carta.emptyBody")}</p>
                 <button
                   type="button"
@@ -3122,16 +3210,38 @@ export default function ProductosManagementPage({
                     fontSize: 15,
                     minHeight: 48,
                     opacity: isLegacyReadOnly ? 0.48 : 1,
-                    boxShadow: iceVisual ? "0 10px 28px -14px rgba(22, 163, 74, 0.55)" : undefined,
                   }}
                 >
                   {t("carta.emptyCta")}
                 </button>
               </div>
+              )
             ) : filteredSorted.length === 0 ? (
-              <div style={{ padding: "24px 8px", textAlign: "center", color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("stock.filterEmpty")}</div>
+              <div className={iceVisual ? "hostly-productos-carta-muted-empty" : undefined} style={iceVisual ? undefined : { padding: "24px 8px", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>{t("stock.filterEmpty")}</div>
             ) : displayed.length === 0 ? (
-              <div style={{ padding: "24px 8px", textAlign: "center", color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("carta.searchNoResults")}</div>
+              <div className={iceVisual ? "hostly-productos-carta-muted-empty" : undefined} style={iceVisual ? undefined : { padding: "24px 8px", textAlign: "center", color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 14 }}>{t("carta.searchNoResults")}</div>
+            ) : configCartaProductosChrome ? (
+              <ProductosCartaDataView
+                displayed={displayed}
+                groupedByCategoria={groupedByCategoria}
+                viewMode={viewMode}
+                selectedIds={selectedIds}
+                selectAllRef={selectAllRef}
+                isLegacyReadOnly={isLegacyReadOnly}
+                meta={meta}
+                escNavId={escNavId}
+                locale={locale as Locale}
+                t={t}
+                toggleRowSelected={toggleRowSelected}
+                toggleSelectAllDisplayed={toggleSelectAllDisplayed}
+                openEdit={openEdit}
+                toggleActivo={toggleActivo}
+                activateProducto={activateProducto}
+                goToEscandallo={goToEscandallo}
+                deleteProducto={deleteProducto}
+                bulkSelectionBreakdown={bulkSelectionBreakdown}
+                bulkApplyToIds={bulkApplyToIds}
+              />
             ) : (
               <div
                 style={{
@@ -3580,6 +3690,84 @@ export default function ProductosManagementPage({
               </div>
             )}
           </div>
+          {configCartaProductosChrome ? (
+            <div className="hostly-productos-carta-advanced-anchor">
+              <button
+                type="button"
+                className="hostly-productos-carta-advanced-toggle"
+                aria-expanded={configCartaAdvancedOpen}
+                aria-controls="hostly-productos-carta-advanced-panel"
+                onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
+              >
+                {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
+              </button>
+              {configCartaAdvancedOpen ? (
+                <div
+                  id="hostly-productos-carta-advanced-panel"
+                  className="hostly-productos-carta-advanced-panel"
+                >
+                  <nav className="hostly-productos-carta-advanced-nav" aria-label="Navegación avanzada de carta">
+                    <Link href="/dashboard/configuracion/carta/categorias">{t("cartaCategories.manageLink")}</Link>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/dashboard/configuracion/carta/modificadores")}
+                    >
+                      {t("carta.ctaModifiers")}
+                    </button>
+                    <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
+                  </nav>
+                  <div className="hostly-productos-carta-advanced-section">
+                    <span className="hostly-productos-carta-advanced-section__label">Estado</span>
+                    <div className="hostly-productos-carta-filter-chips">
+                      {iceToolbarFilterButtons(true, CONFIG_CARTA_BASIC_FILTER_IDS)}
+                    </div>
+                  </div>
+                  <div className="hostly-productos-carta-advanced-section">
+                    <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
+                    <div className="hostly-productos-carta-filter-chips">
+                      {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
+                    </div>
+                  </div>
+                  <div className="hostly-productos-carta-advanced-section">
+                    <span className="hostly-productos-carta-advanced-section__label">Familia</span>
+                    <div className="hostly-productos-carta-filter-chips">
+                      {iceToolbarProductFamilyFilterButtons(true)}
+                    </div>
+                  </div>
+                  <div className="hostly-productos-carta-advanced-section">
+                    <span className="hostly-productos-carta-advanced-section__label">Categorías de carta</span>
+                    <div
+                      className="hostly-productos-carta-category-tabs hostly-productos-carta-category-tabs--secondary"
+                      aria-label="Pestañas de categoría"
+                    >
+                      {tabOptions
+                        .filter((tab) => tab.id !== "__all__")
+                        .map((tab) => {
+                          const active = categoryTab === tab.id;
+                          return (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => setCategoryTab(tab.id)}
+                              aria-pressed={active}
+                              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${active ? " is-active" : ""}`}
+                            >
+                              {tab.label}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                  <div className="hostly-productos-carta-advanced-section">
+                    <span className="hostly-productos-carta-advanced-section__label">Vista</span>
+                    <div className="hostly-productos-carta-view-discreet" role="group" aria-label="Modo de vista">
+                      {iceToolbarViewControls(true)}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </ProductosTableChrome>
       </HostlySection>
       {formOpen ? (

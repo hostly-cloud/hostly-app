@@ -702,14 +702,13 @@ export function ReviewLinesTable({
 
   return (
     <div
-      style={{
-        overflow: "auto",
-        maxHeight: compact ? undefined : "min(62vh, 720px)",
-        borderRadius: 10,
-        border: "1px solid rgba(148, 163, 184, 0.16)",
-      }}
+      className={
+        compact
+          ? "hostly-invoice-ocr-table-shell hostly-data-table-viewport--invoice-ocr"
+          : "hostly-invoice-ocr-table-shell hostly-data-table-viewport hostly-data-table-viewport--embedded hostly-data-table-viewport--invoice-ocr"
+      }
     >
-      <table className="hostly-inv-native-table" style={{ minWidth: compact ? 760 : 980 }}>
+      <table className="hostly-inv-native-table hostly-invoice-ocr-table" style={{ minWidth: compact ? 760 : 980 }}>
         <thead>
           <tr>
             <th style={{ width: 32 }}>

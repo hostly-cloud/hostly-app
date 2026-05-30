@@ -139,11 +139,8 @@ export function AliasesFilterToolbar({
 }) {
   return (
     <div
-      className="hostly-alias-sticky-toolbar hostly-panel"
+      className="hostly-alias-sticky-toolbar hostly-mobile-op-toolbar hostly-panel"
       style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 8,
         padding: "8px 10px",
         borderRadius: 10,
         border: "1px solid rgba(148, 163, 184, 0.18)",
@@ -151,11 +148,13 @@ export function AliasesFilterToolbar({
     >
       <input
         ref={searchInputRef}
+        className="hostly-mobile-op-toolbar__search hostly-input"
         value={filters.query}
         onChange={(event) => onChange({ query: event.target.value })}
         placeholder="Buscar alias, producto o proveedor…"
         style={{ ...touchInputStyle, flex: "1 1 200px", minWidth: 180 }}
       />
+      <div className="hostly-mobile-op-toolbar__filters">
       <select
         value={filters.supplierName}
         onChange={(event) => onChange({ supplierName: event.target.value })}
@@ -188,6 +187,7 @@ export function AliasesFilterToolbar({
         <option value="most_used">Más usados</option>
         <option value="stale">Sin usar recientemente</option>
       </select>
+      </div>
     </div>
   );
 }

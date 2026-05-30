@@ -312,6 +312,116 @@ function mapProductDocumentToRow(item: ProductDocument): ProductoRow {
   };
 }
 
+type StockFilterOption<T extends string> = {
+  id: T;
+  label: string;
+};
+
+type InventoryStockFilterGroupConfig =
+  | {
+      groupKey: "kind";
+      label: "Tipo";
+      ariaLabel: "Filtrar por tipo de inventario";
+      value: ProductKindListFilter;
+      onChange: (value: ProductKindListFilter) => void;
+      options: typeof PRODUCT_KIND_LIST_FILTER_OPTIONS;
+    }
+  | {
+      groupKey: "family";
+      label: "Familia";
+      ariaLabel: "Filtrar por familia de producto";
+      value: ProductFamilyListFilter;
+      onChange: (value: ProductFamilyListFilter) => void;
+      options: typeof PRODUCT_FAMILY_LIST_FILTER_OPTIONS;
+    }
+  | {
+      groupKey: "stock";
+      label: "Stock";
+      ariaLabel: "Filtrar por nivel de stock";
+      value: StockLevelListFilter;
+      onChange: (value: StockLevelListFilter) => void;
+      options: typeof STOCK_LEVEL_LIST_FILTER_OPTIONS;
+    };
+
+function StockFilterGroup<T extends string>({
+  groupKey,
+  label,
+  ariaLabel,
+  value,
+  onChange,
+  options,
+}: {
+  groupKey: InventoryStockFilterGroupConfig["groupKey"];
+  label: string;
+  ariaLabel: string;
+  value: T;
+  onChange: (next: T) => void;
+  options: readonly StockFilterOption<T>[];
+}) {
+  return (
+    <div className="hostly-stock-filter-group" role="group" aria-label={ariaLabel}>
+      <span className="hostly-stock-filter-label">{label}</span>
+      <div className="hostly-stock-filter-chips">
+        {options.map((opt) => {
+          const active = value === opt.id;
+          return (
+            <button
+              key={`${groupKey}-${String(opt.id)}`}
+              type="button"
+              className={`hostly-stock-filter-chip${active ? " is-active" : ""}`}
+              aria-pressed={active}
+              onClick={() => onChange(opt.id)}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function renderInventoryStockFilterGroup(group: InventoryStockFilterGroupConfig) {
+  switch (group.groupKey) {
+    case "kind":
+      return (
+        <StockFilterGroup<ProductKindListFilter>
+          key={group.groupKey}
+          groupKey={group.groupKey}
+          label={group.label}
+          ariaLabel={group.ariaLabel}
+          value={group.value}
+          onChange={group.onChange}
+          options={group.options}
+        />
+      );
+    case "family":
+      return (
+        <StockFilterGroup<ProductFamilyListFilter>
+          key={group.groupKey}
+          groupKey={group.groupKey}
+          label={group.label}
+          ariaLabel={group.ariaLabel}
+          value={group.value}
+          onChange={group.onChange}
+          options={group.options}
+        />
+      );
+    case "stock":
+      return (
+        <StockFilterGroup<StockLevelListFilter>
+          key={group.groupKey}
+          groupKey={group.groupKey}
+          label={group.label}
+          ariaLabel={group.ariaLabel}
+          value={group.value}
+          onChange={group.onChange}
+          options={group.options}
+        />
+      );
+  }
+}
+
 export default function InventarioStockSection() {
   const { t } = useI18n();
   const { restaurantId, ready, profileReady } = useAuth();
@@ -1386,12 +1496,8 @@ export default function InventarioStockSection() {
     >
       <div className="hostly-inventory-workbench">
         <div className="hostly-inventory-toolbar">
-          <div>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#526b7d" }}>
-              {listCountLabel}
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <p className="hostly-inventory-toolbar-count">{listCountLabel}</p>
+          <div className="hostly-inventory-toolbar-actions">
             <button onClick={cargar} type="button" className="hostly-inventory-secondary-btn">
               {t("common.reload")}
             </button>
@@ -1418,65 +1524,35 @@ export default function InventarioStockSection() {
                 className="hostly-inventory-search"
               />
             </div>
-            <div
-              className="hostly-inventory-kind-filters"
-              role="group"
-              aria-label="Filtrar por tipo de inventario"
-            >
-              <span className="hostly-inventory-filter-label">Tipo</span>
-              {PRODUCT_KIND_LIST_FILTER_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={`hostly-inventory-kind-filter${
-                    productKindFilter === opt.id ? " is-active" : ""
-                  }`}
-                  aria-pressed={productKindFilter === opt.id}
-                  onClick={() => setProductKindFilter(opt.id)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <div
-              className="hostly-inventory-family-filters"
-              role="group"
-              aria-label="Filtrar por familia de producto"
-            >
-              <span className="hostly-inventory-filter-label">Familia</span>
-              {PRODUCT_FAMILY_LIST_FILTER_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={`hostly-inventory-family-filter${
-                    productFamilyFilter === opt.id ? " is-active" : ""
-                  }`}
-                  aria-pressed={productFamilyFilter === opt.id}
-                  onClick={() => setProductFamilyFilter(opt.id)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <div
-              className="hostly-inventory-stock-filters"
-              role="group"
-              aria-label="Filtrar por nivel de stock"
-            >
-              <span className="hostly-inventory-filter-label">Stock</span>
-              {STOCK_LEVEL_LIST_FILTER_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={`hostly-inventory-stock-filter${
-                    stockLevelFilter === opt.id ? " is-active" : ""
-                  }`}
-                  aria-pressed={stockLevelFilter === opt.id}
-                  onClick={() => setStockLevelFilter(opt.id)}
-                >
-                  {opt.label}
-                </button>
-              ))}
+            <div className="hostly-stock-filter-panel">
+              {(
+                [
+                  {
+                    groupKey: "kind",
+                    label: "Tipo",
+                    ariaLabel: "Filtrar por tipo de inventario",
+                    value: productKindFilter,
+                    onChange: setProductKindFilter,
+                    options: PRODUCT_KIND_LIST_FILTER_OPTIONS,
+                  },
+                  {
+                    groupKey: "family",
+                    label: "Familia",
+                    ariaLabel: "Filtrar por familia de producto",
+                    value: productFamilyFilter,
+                    onChange: setProductFamilyFilter,
+                    options: PRODUCT_FAMILY_LIST_FILTER_OPTIONS,
+                  },
+                  {
+                    groupKey: "stock",
+                    label: "Stock",
+                    ariaLabel: "Filtrar por nivel de stock",
+                    value: stockLevelFilter,
+                    onChange: setStockLevelFilter,
+                    options: STOCK_LEVEL_LIST_FILTER_OPTIONS,
+                  },
+                ] satisfies InventoryStockFilterGroupConfig[]
+              ).map(renderInventoryStockFilterGroup)}
             </div>
             <div className="hostly-inventory-list">
               {filteredRows.length === 0 ? (
@@ -1596,78 +1672,30 @@ export default function InventarioStockSection() {
           color: #102033;
           font-weight: 700;
         }
-        .hostly-inventory-kind-filters {
+        .hostly-stock-filter-panel .hostly-stock-filter-group {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          min-width: 0;
+          width: 100%;
+        }
+        .hostly-stock-filter-panel .hostly-stock-filter-label {
+          display: block;
+          width: 100%;
+        }
+        .hostly-stock-filter-panel .hostly-stock-filter-chips {
           display: flex;
           flex-wrap: wrap;
-          gap: 6px;
-          padding: 8px 10px;
-          border-bottom: 1px solid rgba(77, 107, 128, 0.1);
-          background: rgba(248, 251, 254, 0.88);
+          align-items: center;
+          min-width: 0;
+          width: 100%;
+          max-width: 100%;
         }
-        .hostly-inventory-kind-filter {
-          flex: 0 1 auto;
-          border: 1px solid rgba(77, 107, 128, 0.18);
-          border-radius: 999px;
-          padding: 6px 11px;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.01em;
-          background: #fff;
-          color: #526b7d;
-          cursor: pointer;
-          min-height: 32px;
-          touch-action: manipulation;
-          transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-        }
-        .hostly-inventory-kind-filter:hover,
-        .hostly-inventory-family-filter:hover {
-          border-color: rgba(79, 159, 200, 0.45);
-          color: #2d5f7c;
-        }
-        .hostly-inventory-kind-filter.is-active {
-          background: #4f9fc8;
-          border-color: #4f9fc8;
-          color: #fff;
-          box-shadow: 0 4px 12px rgba(79, 159, 200, 0.28);
-        }
-        .hostly-inventory-family-filter.is-active {
-          background: #3d7a9a;
-          border-color: #3d7a9a;
-          color: #fff;
-          box-shadow: 0 4px 12px rgba(61, 122, 154, 0.26);
-        }
-        .hostly-inventory-stock-filters {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          padding: 8px 10px;
-          border-bottom: 1px solid rgba(77, 107, 128, 0.1);
-          background: rgba(251, 252, 254, 0.9);
-        }
-        .hostly-inventory-stock-filter {
-          flex: 0 1 auto;
-          border: 1px solid rgba(77, 107, 128, 0.18);
-          border-radius: 999px;
-          padding: 6px 11px;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.01em;
-          background: #fff;
-          color: #526b7d;
-          cursor: pointer;
-          min-height: 32px;
-          touch-action: manipulation;
-          transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-        }
-        .hostly-inventory-stock-filter:hover {
-          border-color: rgba(79, 159, 200, 0.45);
-          color: #2d5f7c;
-        }
-        .hostly-inventory-stock-filter.is-active {
-          background: #64748b;
-          border-color: #64748b;
-          color: #fff;
-          box-shadow: 0 4px 12px rgba(100, 116, 139, 0.24);
+        .hostly-stock-filter-panel button.hostly-stock-filter-chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
         }
         .hostly-inventory-list {
           display: grid;
@@ -2365,10 +2393,6 @@ export default function InventarioStockSection() {
           display: none;
         }
         @media (max-width: 767.98px) {
-          .hostly-inventory-toolbar {
-            align-items: stretch;
-            flex-direction: column;
-          }
           .hostly-inventory-split {
             display: block;
           }

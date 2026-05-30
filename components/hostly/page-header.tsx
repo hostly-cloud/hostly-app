@@ -13,7 +13,7 @@ export type HostlyPageHeaderProps = {
   wide?: boolean;
   /** Cabecera apilada y sin sticky (p. ej. móvil). */
   isMobileLayout?: boolean;
-  /** En móvil: volver arriba y título debajo (columna izquierda). */
+  /** En móvil: volver arriba y título debajo (columna izquierda). Excepción legacy (p. ej. Carta TPV). */
   mobileStackLeftColumn?: boolean;
   /** Cabecera unificada de módulos dashboard (`ModulePageShell` + `compactLayout`). */
   dashboardModule?: boolean;
@@ -32,6 +32,74 @@ export type HostlyPageHeaderProps = {
    */
   belowStripe?: "default" | "ultraCompact";
 };
+
+function headerClassName(
+  isMobileLayout: boolean | undefined,
+  compactSpacing: boolean | undefined,
+  dashboardModule: boolean | undefined,
+  mobileStackLeftColumn?: boolean,
+): string {
+  return [
+    "hostly-page-header",
+    isMobileLayout ? "hostly-page-header--mobile" : "",
+    isMobileLayout && !mobileStackLeftColumn ? "hostly-mobile-page-header" : "",
+    compactSpacing ? "hostly-page-header--compact" : "",
+    dashboardModule ? "hostly-page-header--dashboard-module" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function belowClassName(compactSpacing: boolean | undefined, belowStripe: "default" | "ultraCompact"): string {
+  return [
+    "hostly-module-header-below",
+    compactSpacing
+      ? belowStripe === "ultraCompact"
+        ? "hostly-module-header-below--ultra-compact"
+        : "hostly-module-header-below--compact"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function TitleBlock({
+  title,
+  subtitle,
+  titleClassName,
+  subtitleClassName,
+  titleStyle,
+  subtitleStyle,
+  wrapperClassName,
+}: {
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  titleClassName?: string;
+  subtitleClassName?: string;
+  titleStyle?: React.CSSProperties;
+  subtitleStyle?: React.CSSProperties;
+  wrapperClassName?: string;
+}) {
+  if ((title == null || title === "") && subtitle == null) return null;
+
+  return (
+    <div className={wrapperClassName}>
+      {title != null && title !== "" ? (
+        <div className={["hostly-page-title", titleClassName].filter(Boolean).join(" ")} style={titleStyle}>
+          {title}
+        </div>
+      ) : null}
+      {subtitle != null ? (
+        <div
+          className={["hostly-page-subtitle", subtitleClassName].filter(Boolean).join(" ")}
+          style={subtitleStyle}
+        >
+          {subtitle}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function HostlyPageHeader({
   title,
@@ -52,21 +120,6 @@ export function HostlyPageHeader({
   surfaceStyle,
   belowStripe = "default",
 }: HostlyPageHeaderProps) {
-  const rowGap =
-    compactSpacing
-      ? isMobileLayout && mobileStackLeftColumn
-        ? 6
-        : isMobileLayout
-          ? 5
-          : 6
-      : isMobileLayout && mobileStackLeftColumn
-        ? 10
-        : isMobileLayout
-          ? 8
-          : 12;
-  const leftColGap = compactSpacing ? 6 : 10;
-  const rightMarginLeft = compactSpacing ? 6 : 12;
-
   const belowMarginTop =
     below === undefined
       ? undefined
@@ -84,18 +137,41 @@ export function HostlyPageHeader({
           : 8
         : 16;
 
+  if (isMobileLayout && !mobileStackLeftColumn) {
+    return (
+      <header className={headerClassName(isMobileLayout, compactSpacing, dashboardModule, mobileStackLeftColumn)} style={surfaceStyle}>
+        <HostlyPageContainer wide={wide} style={containerStyle}>
+          <div className="hostly-mobile-page-header-inner">
+            {left || right ? (
+              <div className="hostly-mobile-page-header-top">
+                {left ? <div className="hostly-mobile-page-header-nav">{left}</div> : null}
+                {right ? <div className="hostly-mobile-page-actions">{right}</div> : null}
+              </div>
+            ) : null}
+            <TitleBlock
+              title={title}
+              subtitle={subtitle}
+              titleClassName={titleClassName}
+              subtitleClassName={subtitleClassName}
+              titleStyle={titleStyle}
+              subtitleStyle={subtitleStyle}
+              wrapperClassName="hostly-mobile-page-title-block"
+            />
+            {below ? (
+              <div className={belowClassName(compactSpacing, belowStripe)}>{below}</div>
+            ) : null}
+          </div>
+        </HostlyPageContainer>
+      </header>
+    );
+  }
+
+  const rowGap = compactSpacing ? (isMobileLayout && mobileStackLeftColumn ? 6 : isMobileLayout ? 5 : 6) : isMobileLayout && mobileStackLeftColumn ? 10 : isMobileLayout ? 8 : 12;
+  const leftColGap = compactSpacing ? 6 : 10;
+  const rightMarginLeft = compactSpacing ? 6 : 12;
+
   return (
-    <header
-      className={[
-        "hostly-page-header",
-        isMobileLayout ? "hostly-page-header--mobile" : "",
-        compactSpacing ? "hostly-page-header--compact" : "",
-        dashboardModule ? "hostly-page-header--dashboard-module" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      style={isMobileLayout ? surfaceStyle : surfaceStyle}
-    >
+    <header className={headerClassName(isMobileLayout, compactSpacing, dashboardModule, mobileStackLeftColumn)} style={surfaceStyle}>
       <HostlyPageContainer wide={wide} style={containerStyle}>
         <div
           style={{
@@ -129,24 +205,14 @@ export function HostlyPageHeader({
               }}
             >
               {left}
-              <div style={{ minWidth: 0, flex: isMobileLayout ? undefined : "1 1 0%" }}>
-                {title != null && title !== "" ? (
-                  <div
-                    className={["hostly-page-title", titleClassName].filter(Boolean).join(" ")}
-                    style={titleStyle}
-                  >
-                    {title}
-                  </div>
-                ) : null}
-                {subtitle != null ? (
-                  <div
-                    className={["hostly-page-subtitle", subtitleClassName].filter(Boolean).join(" ")}
-                    style={subtitleStyle}
-                  >
-                    {subtitle}
-                  </div>
-                ) : null}
-              </div>
+              <TitleBlock
+                title={title}
+                subtitle={subtitle}
+                titleClassName={titleClassName}
+                subtitleClassName={subtitleClassName}
+                titleStyle={titleStyle}
+                subtitleStyle={subtitleStyle}
+              />
             </div>
             {right ? (
               <div
@@ -163,16 +229,7 @@ export function HostlyPageHeader({
           </div>
           {below ? (
             <div
-              className={[
-                "hostly-module-header-below",
-                compactSpacing
-                  ? belowStripe === "ultraCompact"
-                    ? "hostly-module-header-below--ultra-compact"
-                    : "hostly-module-header-below--compact"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
+              className={belowClassName(compactSpacing, belowStripe)}
               style={
                 compactSpacing
                   ? undefined
@@ -191,4 +248,3 @@ export function HostlyPageHeader({
     </header>
   );
 }
-

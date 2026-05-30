@@ -410,14 +410,7 @@ export default function MermasPage() {
     >
       <HostlySection stack="sm" className="min-h-0 flex-1 overflow-hidden">
         {/* KPI — tarjetas claras con acento superior */}
-        <div
-          style={{
-            flexShrink: 0,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
-            gap: 10,
-          }}
-        >
+        <div className="hostly-mobile-op-kpi-grid">
           {kpiCards.map((card) => (
             <HostlyKpiCard
               key={card.title}

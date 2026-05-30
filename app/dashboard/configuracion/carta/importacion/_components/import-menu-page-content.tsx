@@ -1486,9 +1486,9 @@ export function ImportMenuPageContent() {
       title="Importar carta con IA"
       description="Sube una foto, PDF o URL de menú QR. Hostly preparará una propuesta editable — siempre con revisión humana antes de publicar en Productos."
     >
-      <div className="grid min-h-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(240px,300px)] xl:items-start">
+      <div className="hostly-carta-config-layout-split">
         <div className="min-w-0">{mainPanel}</div>
-        <aside className="min-w-0 xl:sticky xl:top-4">
+        <aside className="hostly-carta-config-layout-split__aside min-w-0">
           <ImportMenuRecentList
             drafts={recentDrafts}
             activeDraftId={activeDraftId}

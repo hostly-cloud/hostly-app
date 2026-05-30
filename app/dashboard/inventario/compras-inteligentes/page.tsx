@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { capabilityDeniedTitle } from "@/components/auth/capability-guard";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
@@ -9,13 +8,11 @@ import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-s
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
 import ModulePageShell from "@/components/module-page-shell";
 import {
-  HostlyKpiCard,
   HostlySectionHeader,
   HostlySegmentedControl,
   hostlySegmentTabClassName,
 } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
-import { getProductKindDisplayLabel, type ProductKind } from "@/lib/carta/product-kind-options";
 import { listenProductsForInventory, type ProductDocument } from "@/lib/firestore/products";
 import {
   listenCentralStockMovementsForRestaurant,
@@ -40,12 +37,12 @@ import {
   PURCHASE_INTELLIGENCE_LOOKBACK_DAYS,
   type PurchaseIntelligenceFilter,
   type PurchaseIntelligenceRow,
-  type PurchaseRiskLevel,
 } from "@/lib/inventory/purchase-intelligence";
-import { productTimelineHref } from "@/lib/inventory/product-timeline";
 import {
   buildSuggestedPurchaseDraft,
+  calculateSuggestedPurchaseQuantity,
   computeSuggestedDraftTotalEstimatedCost,
+  estimatePurchaseLineCost,
   formatSuggestedPurchaseDraftSummary,
   SUGGESTED_DRAFT_COVERAGE_OPTIONS,
   updateSuggestedDraftLineQuantity,
@@ -54,6 +51,8 @@ import {
   type SuggestedPurchaseDraft,
   type SuggestedPurchaseDraftSourceLine,
 } from "@/lib/inventory/suggested-purchase-draft";
+import { ComprasDraftLinesDataView, ComprasDraftSummaryLines } from "@/components/inventario/procurement/compras-draft-lines-data-view";
+import { ComprasInteligentesDataView } from "@/components/inventario/procurement/compras-inteligentes-data-view";
 
 const FILTER_OPTIONS: { id: PurchaseIntelligenceFilter; label: string }[] = [
   { id: "all", label: "Todos" },
@@ -63,52 +62,12 @@ const FILTER_OPTIONS: { id: PurchaseIntelligenceFilter; label: string }[] = [
   { id: "unknown", label: "Sin datos" },
 ];
 
-function formatQty(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(value);
-}
-
 function formatEur(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return `${new Intl.NumberFormat("es-ES", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)} €`;
-}
-
-function formatDays(value: number | null): string {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 }).format(value);
-}
-
-function displayUnit(unit: string): string {
-  return unit === "unit" ? "ud" : unit;
-}
-
-function riskPillStyle(level: PurchaseRiskLevel): CSSProperties {
-  const base: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "3px 8px",
-    borderRadius: 999,
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: "0.03em",
-    whiteSpace: "nowrap",
-  };
-  switch (level) {
-    case "out":
-    case "urgent":
-      return { ...base, background: "rgba(239, 68, 68, 0.12)", color: "#b91c1c" };
-    case "soon":
-      return { ...base, background: "rgba(245, 158, 11, 0.14)", color: "#b45309" };
-    case "watch":
-      return { ...base, background: "rgba(59, 130, 246, 0.12)", color: "#1d4ed8" };
-    case "ok":
-      return { ...base, background: "rgba(16, 185, 129, 0.12)", color: "#047857" };
-    default:
-      return { ...base, background: "rgba(148, 163, 184, 0.16)", color: "#64748b" };
-  }
 }
 
 function mapProductCostInput(doc: ProductDocument): SuggestedPurchaseCostInput {
@@ -144,27 +103,12 @@ function formatDraftDate(ms: number): string {
   });
 }
 
-function countByRisk(rows: PurchaseIntelligenceRow[], levels: PurchaseRiskLevel[]): number {
+function countByRisk(
+  rows: PurchaseIntelligenceRow[],
+  levels: PurchaseIntelligenceRow["riskLevel"][],
+): number {
   return rows.filter((row) => levels.includes(row.riskLevel)).length;
 }
-
-const actionButtonStyle: CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "var(--hostly-surface-card-solid)",
-  color: "var(--hostly-ink-strong)",
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const primaryButtonStyle: CSSProperties = {
-  ...actionButtonStyle,
-  background: "var(--hostly-ink-strong)",
-  color: "#fff",
-  border: "1px solid var(--hostly-ink-strong)",
-};
 
 export default function ComprasInteligentesPage() {
   const { restaurantId, ready: authReady } = useAuth();
@@ -315,6 +259,33 @@ export default function ComprasInteligentesPage() {
     }),
     [rows],
   );
+
+  const { suggestedQtyByProductId, estimatedCostByProductId } = useMemo(() => {
+    const qtyMap = new Map<string, number>();
+    const costMap = new Map<string, number | null>();
+    for (const row of rows) {
+      if (row.dailyConsumption == null || row.dailyConsumption <= 0) {
+        qtyMap.set(row.productId, 0);
+        costMap.set(row.productId, null);
+        continue;
+      }
+      const suggested = calculateSuggestedPurchaseQuantity({
+        averageDailyConsumption: row.dailyConsumption,
+        targetCoverageDays,
+        currentStock: row.currentStock,
+      });
+      qtyMap.set(row.productId, suggested);
+      costMap.set(
+        row.productId,
+        estimatePurchaseLineCost({
+          quantity: suggested,
+          productUnit: row.unit,
+          cost: costByProductId.get(row.productId),
+        }),
+      );
+    }
+    return { suggestedQtyByProductId: qtyMap, estimatedCostByProductId: costMap };
+  }, [rows, targetCoverageDays, costByProductId]);
 
   const draftTotalEstimated = useMemo(
     () => (draft ? computeSuggestedDraftTotalEstimatedCost(draft.lines) : null),
@@ -518,7 +489,7 @@ export default function ComprasInteligentesPage() {
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+      <div className="hostly-mobile-op-page-stack">
         <HostlySectionHeader
           title="Riesgo de rotura"
           description="Basado en stock actual y movimientos TPV (modifier/recipe sale). No modifica stock ni crea pedidos."
@@ -530,34 +501,27 @@ export default function ComprasInteligentesPage() {
           </div>
         ) : null}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: 10,
-          }}
-        >
-          <HostlyKpiCard title="Urgente" value={kpis.urgent} helper="Sin stock o ≤1 día" />
-          <HostlyKpiCard title="Comprar pronto" value={kpis.soon} helper="≤3 días" />
-          <HostlyKpiCard title="Vigilar" value={kpis.watch} helper="≤7 días" />
-          <HostlyKpiCard title="Sin datos" value={kpis.unknown} helper="Sin consumo reciente" />
+        <div className="hostly-carta-config-kpi-strip hostly-carta-config-kpi-strip--dense hostly-carta-config-kpi-strip--mobile-op">
+          <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--danger">
+            <span className="hostly-carta-config-kpi-pill__label">Urgente</span>
+            <span className="hostly-carta-config-kpi-pill__value">{kpis.urgent}</span>
+          </div>
+          <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--warning">
+            <span className="hostly-carta-config-kpi-pill__label">Comprar pronto</span>
+            <span className="hostly-carta-config-kpi-pill__value">{kpis.soon}</span>
+          </div>
+          <div className="hostly-carta-config-kpi-pill">
+            <span className="hostly-carta-config-kpi-pill__label">Vigilar</span>
+            <span className="hostly-carta-config-kpi-pill__value">{kpis.watch}</span>
+          </div>
+          <div className="hostly-carta-config-kpi-pill">
+            <span className="hostly-carta-config-kpi-pill__label">Sin datos</span>
+            <span className="hostly-carta-config-kpi-pill__value">{kpis.unknown}</span>
+          </div>
         </div>
 
-        <div
-          className="hostly-panel p-3"
-          style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}
-        >
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              color: "var(--hostly-ink-muted)",
-            }}
-          >
-            Cobertura objetivo
-          </span>
+        <div className="hostly-panel p-3 hostly-procurement-toolbar">
+          <span className="hostly-procurement-toolbar__label">Cobertura objetivo</span>
           <div role="tablist" aria-label="Días de cobertura" className="hostly-segmented">
             {SUGGESTED_DRAFT_COVERAGE_OPTIONS.map((days) => (
               <button
@@ -565,9 +529,8 @@ export default function ComprasInteligentesPage() {
                 type="button"
                 role="tab"
                 aria-selected={targetCoverageDays === days}
-                className="hostly-tab"
+                className="hostly-tab hostly-button-compact"
                 onClick={() => setTargetCoverageDays(days)}
-                style={{ minWidth: 64, padding: "6px 12px", cursor: "pointer" }}
               >
                 {days} días
               </button>
@@ -575,7 +538,7 @@ export default function ComprasInteligentesPage() {
           </div>
           <button
             type="button"
-            style={primaryButtonStyle}
+            className="hostly-button-primary hostly-button-compact"
             onClick={handleCreateDraft}
             disabled={!canManagePurchases}
             title={capabilityDeniedTitle(canManagePurchases)}
@@ -588,36 +551,20 @@ export default function ComprasInteligentesPage() {
         </div>
 
         {draft ? (
-          <div className="hostly-panel p-3" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
+          <div className="hostly-panel p-3 hostly-procurement-draft-panel">
+            <div className="hostly-procurement-draft-panel__head">
               <div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 800,
-                    color: "var(--hostly-ink-strong)",
-                  }}
-                >
-                  Borrador de pedido
-                </div>
-                <div style={{ fontSize: 12, color: "var(--hostly-ink-muted)", marginTop: 2 }}>
+                <div className="hostly-procurement-draft-panel__title">Borrador de pedido</div>
+                <div className="hostly-procurement-draft-panel__meta">
                   {draft.lines.length} líneas · cobertura {draft.targetCoverageDays} días · total{" "}
                   {formatEur(draftTotalEstimated)}
                   {activeDraftId ? " · guardado" : " · sin guardar"}
                 </div>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className="hostly-procurement-draft-panel__actions">
                 <button
                   type="button"
-                  style={primaryButtonStyle}
+                  className="hostly-button-primary hostly-button-compact"
                   onClick={() => void handleSaveDraft()}
                   disabled={isDraftSaving || isConvertingToOrder}
                 >
@@ -626,27 +573,21 @@ export default function ComprasInteligentesPage() {
                 {canConvertDraftToOrder ? (
                   <button
                     type="button"
-                    style={{
-                      ...primaryButtonStyle,
-                      background: "#1d4ed8",
-                      borderColor: "#1d4ed8",
-                    }}
+                    className="hostly-button-primary hostly-button-compact"
                     onClick={handleOpenConvertModal}
-                    disabled={
-                      isDraftSaving || isConvertingToOrder || !canManagePurchases
-                    }
+                    disabled={isDraftSaving || isConvertingToOrder || !canManagePurchases}
                     title={capabilityDeniedTitle(canManagePurchases)}
                   >
                     Convertir en pedido
                   </button>
                 ) : null}
-                <button type="button" style={actionButtonStyle} onClick={handleCopySummary}>
+                <button type="button" className="hostly-button-secondary hostly-button-compact" onClick={handleCopySummary}>
                   Copiar resumen
                 </button>
                 {activeDraftId && !activeDraftMeta?.linkedPurchaseOrderId ? (
                   <button
                     type="button"
-                    style={actionButtonStyle}
+                    className="hostly-button-secondary hostly-button-compact"
                     onClick={() => void handleArchiveSavedDraft(activeDraftId)}
                     disabled={isDraftSaving || isConvertingToOrder}
                   >
@@ -655,7 +596,7 @@ export default function ComprasInteligentesPage() {
                 ) : null}
                 <button
                   type="button"
-                  style={actionButtonStyle}
+                  className="hostly-button-secondary hostly-button-compact"
                   onClick={handleDiscardDraft}
                   disabled={isConvertingToOrder}
                 >
@@ -664,65 +605,11 @@ export default function ComprasInteligentesPage() {
               </div>
             </div>
 
-            <div style={{ overflow: "auto" }}>
-              <table className="hostly-inv-native-table">
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th>Proveedor</th>
-                    <th className="hostly-inv-th-num">Stock</th>
-                    <th className="hostly-inv-th-num">Consumo/día</th>
-                    <th className="hostly-inv-th-num">Sugerido</th>
-                    <th className="hostly-inv-th-num">Cantidad</th>
-                    <th className="hostly-inv-th-num">Coste est.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {draft.lines.map((line) => (
-                    <tr key={line.productId}>
-                      <td className="hostly-inv-td-primary">{line.productName}</td>
-                      <td className="hostly-inv-td-muted">
-                        {line.supplierName?.trim() || "—"}
-                      </td>
-                      <td className="hostly-inv-td-amount">
-                        {formatQty(line.currentStock)} {displayUnit(line.unit)}
-                      </td>
-                      <td className="hostly-inv-td-amount">
-                        {formatQty(line.averageDailyConsumption)} {displayUnit(line.unit)}
-                      </td>
-                      <td className="hostly-inv-td-muted">
-                        {formatQty(line.suggestedQuantity)} {displayUnit(line.unit)}
-                      </td>
-                      <td className="hostly-inv-td-amount">
-                        <input
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={line.editableQuantity}
-                          onChange={(e) =>
-                            handleDraftQuantityChange(line.productId, e.target.value)
-                          }
-                          aria-label={`Cantidad para ${line.productName}`}
-                          style={{
-                            width: 88,
-                            padding: "6px 8px",
-                            borderRadius: 8,
-                            border: "1px solid rgba(148, 163, 184, 0.28)",
-                            fontSize: 13,
-                            fontWeight: 600,
-                            textAlign: "right",
-                          }}
-                        />
-                        <span style={{ marginLeft: 4, fontSize: 11, color: "var(--hostly-ink-muted)" }}>
-                          {displayUnit(line.unit)}
-                        </span>
-                      </td>
-                      <td className="hostly-inv-td-amount">{formatEur(line.estimatedCost)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ComprasDraftLinesDataView
+              lines={draft.lines}
+              onQuantityChange={handleDraftQuantityChange}
+              disabled={isDraftSaving || isConvertingToOrder}
+            />
           </div>
         ) : null}
 
@@ -745,20 +632,9 @@ export default function ComprasInteligentesPage() {
               {activeSavedDrafts.map((item) => (
                 <div
                   key={item.id}
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 8,
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 10px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(148, 163, 184, 0.18)",
-                    background:
-                      activeDraftId === item.id
-                        ? "rgba(59, 130, 246, 0.06)"
-                        : "transparent",
-                  }}
+                  className={
+                    "hostly-procurement-saved-draft" + (activeDraftId === item.id ? " is-active" : "")
+                  }
                 >
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--hostly-ink-strong)" }}>
@@ -771,14 +647,14 @@ export default function ComprasInteligentesPage() {
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button
                       type="button"
-                      style={actionButtonStyle}
+                      className="hostly-button-secondary hostly-button-compact"
                       onClick={() => handleOpenSavedDraft(item)}
                     >
                       Abrir
                     </button>
                     <button
                       type="button"
-                      style={actionButtonStyle}
+                      className="hostly-button-secondary hostly-button-compact"
                       onClick={() => void handleArchiveSavedDraft(item.id)}
                       disabled={isDraftSaving}
                     >
@@ -806,65 +682,12 @@ export default function ComprasInteligentesPage() {
           ))}
         </HostlySegmentedControl>
 
-        <div className="hostly-panel p-3" style={{ overflow: "auto", minHeight: 0 }}>
-          {filteredRows.length === 0 ? (
-            <div style={{ fontSize: 13, color: "var(--hostly-ink-muted)", padding: "8px 4px" }}>
-              No hay productos para este filtro.
-            </div>
-          ) : (
-            <table className="hostly-inv-native-table">
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th className="hostly-inv-th-num">Stock</th>
-                  <th className="hostly-inv-th-num">Consumo/día</th>
-                  <th className="hostly-inv-th-num">Días rest.</th>
-                  <th>Estado</th>
-                  <th>Familia / tipo</th>
-                  <th aria-label="Timeline" />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((row) => (
-                  <tr key={row.productId}>
-                    <td className="hostly-inv-td-primary">{row.productName}</td>
-                    <td className="hostly-inv-td-amount">
-                      {formatQty(row.currentStock)} {displayUnit(row.unit)}
-                    </td>
-                    <td className="hostly-inv-td-amount">
-                      {row.dailyConsumption != null
-                        ? `${formatQty(row.dailyConsumption)} ${displayUnit(row.unit)}`
-                        : "—"}
-                    </td>
-                    <td className="hostly-inv-td-muted">{formatDays(row.daysRemaining)}</td>
-                    <td>
-                      <span style={riskPillStyle(row.riskLevel)}>{row.riskLabel}</span>
-                    </td>
-                    <td className="hostly-inv-td-muted">
-                      {row.familyLabel}
-                      {" · "}
-                      {row.kindLabel === "—"
-                        ? "Sin clasificar"
-                        : getProductKindDisplayLabel(row.kindLabel as ProductKind)}
-                    </td>
-                    <td>
-                      <Link
-                        href={productTimelineHref(row.productId)}
-                        style={{
-                          ...actionButtonStyle,
-                          padding: "4px 8px",
-                          fontSize: 11,
-                        }}
-                        prefetch
-                      >
-                        Timeline
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div className="hostly-panel p-3" style={{ minHeight: 0 }}>
+          <ComprasInteligentesDataView
+            rows={filteredRows}
+            suggestedQtyByProductId={suggestedQtyByProductId}
+            estimatedCostByProductId={estimatedCostByProductId}
+          />
         </div>
       </div>
 
@@ -918,7 +741,7 @@ export default function ComprasInteligentesPage() {
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
                   <button
                     type="button"
-                    style={primaryButtonStyle}
+                    className="hostly-button-primary hostly-button-compact"
                     onClick={() => setConvertModalOpen(false)}
                   >
                     Cerrar
@@ -948,37 +771,12 @@ export default function ComprasInteligentesPage() {
                   No se enviará automáticamente al proveedor.
                 </div>
                 <div style={{ overflow: "auto", minHeight: 0, flex: 1 }}>
-                  <table className="hostly-inv-native-table">
-                    <thead>
-                      <tr>
-                        <th>Producto</th>
-                        <th>Proveedor</th>
-                        <th className="hostly-inv-th-num">Cantidad</th>
-                        <th className="hostly-inv-th-num">Coste est.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(draft?.lines ?? [])
-                        .filter((line) => line.editableQuantity > 0)
-                        .map((line) => (
-                          <tr key={line.productId}>
-                            <td className="hostly-inv-td-primary">{line.productName}</td>
-                            <td className="hostly-inv-td-muted">
-                              {line.supplierName?.trim() || "—"}
-                            </td>
-                            <td className="hostly-inv-td-amount">
-                              {formatQty(line.editableQuantity)} {displayUnit(line.unit)}
-                            </td>
-                            <td className="hostly-inv-td-amount">{formatEur(line.estimatedCost)}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+                  <ComprasDraftSummaryLines lines={draft?.lines ?? []} />
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
                   <button
                     type="button"
-                    style={actionButtonStyle}
+                    className="hostly-button-secondary hostly-button-compact"
                     onClick={handleCloseConvertModal}
                     disabled={isConvertingToOrder}
                   >
@@ -986,7 +784,7 @@ export default function ComprasInteligentesPage() {
                   </button>
                   <button
                     type="button"
-                    style={primaryButtonStyle}
+                    className="hostly-button-primary hostly-button-compact"
                     onClick={() => void handleConfirmConvertToOrder()}
                     disabled={isConvertingToOrder || !canManagePurchases}
                     title={capabilityDeniedTitle(canManagePurchases)}
