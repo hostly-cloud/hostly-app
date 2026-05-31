@@ -3695,7 +3695,7 @@ body {
   .hostly-productos-config-skin--simplified .hostly-productos-carta-workspace .hostly-data-table--productos-carta,
   .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table--productos-carta {
     --hostly-dt-dense-select: 32px;
-    --hostly-dt-dense-product: minmax(176px, 1fr);
+    --hostly-dt-dense-product: minmax(176px, 2.5fr);
   }
 }
 
@@ -4470,12 +4470,12 @@ body {
 /* Hostly Data Table — patrón dense config (8 cols: sel · nombre · meta · meta · precio · estado · estado · acciones) */
 .hostly-data-table--dense-config {
   --hostly-dt-dense-select: 28px;
-  --hostly-dt-dense-product: minmax(148px, 1fr);
-  --hostly-dt-dense-meta-sm: 52px;
-  --hostly-dt-dense-meta-md: minmax(64px, 84px);
-  --hostly-dt-dense-price: 84px;
-  --hostly-dt-dense-status: 58px;
-  --hostly-dt-dense-actions: 116px;
+  --hostly-dt-dense-product: minmax(160px, 2.5fr);
+  --hostly-dt-dense-meta-sm: 48px;
+  --hostly-dt-dense-meta-md: minmax(72px, 100px);
+  --hostly-dt-dense-price: 88px;
+  --hostly-dt-dense-status: 80px;
+  --hostly-dt-dense-actions: 124px;
   --hostly-data-table-columns:
     var(--hostly-dt-dense-select)
     var(--hostly-dt-dense-product)
@@ -4534,7 +4534,7 @@ body {
 .hostly-data-table--dense-config .hostly-data-table-col--categoria {
   grid-column: 4;
   min-width: 0;
-  max-width: var(--hostly-dt-dense-meta-md);
+  max-width: 100px;
   overflow: hidden;
 }
 
