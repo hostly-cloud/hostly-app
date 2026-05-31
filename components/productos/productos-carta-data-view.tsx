@@ -135,6 +135,46 @@ function ProductPrimaryCell({ p }: { p: PlatoCarta }) {
   );
 }
 
+/** Cabecera y filas comparten este orden de columnas y clases `col`. */
+function renderProductosCartaHeaderCells(args: {
+  allSelected: boolean;
+  displayedCount: number;
+  isLegacyReadOnly: boolean;
+  selectAllRef: RefObject<HTMLInputElement | null>;
+  t: TranslateFn;
+  toggleSelectAllDisplayed: () => void;
+}) {
+  const { allSelected, displayedCount, isLegacyReadOnly, selectAllRef, t, toggleSelectAllDisplayed } = args;
+  return (
+    <>
+      <HostlyDataCell align="center" col="select">
+        <SelectionCheckbox
+          checked={allSelected}
+          disabled={displayedCount === 0 || isLegacyReadOnly}
+          onChange={toggleSelectAllDisplayed}
+          ariaLabel={t("productos.selectAllVisible")}
+          inputRef={selectAllRef}
+        />
+      </HostlyDataCell>
+      <HostlyDataCell col="product">{t("carta.colNombre")}</HostlyDataCell>
+      <HostlyDataCell col="tipo">{t("carta.colTipo")}</HostlyDataCell>
+      <HostlyDataCell col="categoria">{t("carta.colCategoria")}</HostlyDataCell>
+      <HostlyDataCell align="end" col="price">
+        {t("carta.colPrecio")}
+      </HostlyDataCell>
+      <HostlyDataCell align="center" col="carta">
+        {t("productos.colCarta")}
+      </HostlyDataCell>
+      <HostlyDataCell align="center" col="esc">
+        {t("productos.colEscandallo")}
+      </HostlyDataCell>
+      <HostlyDataCell align="end" col="actions">
+        {t("carta.colActions")}
+      </HostlyDataCell>
+    </>
+  );
+}
+
 function renderProductRowCells(args: {
   p: PlatoCarta;
   meta: EscandalloMetaMap;
@@ -354,30 +394,14 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
       <HostlyDataTable variant="productos-carta">
         <HostlyDataTableScroll>
           <HostlyDataTableHead>
-            <HostlyDataCell align="center" col="select">
-              <SelectionCheckbox
-                checked={allSelected}
-                disabled={displayed.length === 0 || isLegacyReadOnly}
-                onChange={toggleSelectAllDisplayed}
-                ariaLabel={t("productos.selectAllVisible")}
-                inputRef={selectAllRef}
-              />
-            </HostlyDataCell>
-            <HostlyDataCell col="product">{t("carta.colNombre")}</HostlyDataCell>
-            <HostlyDataCell col="tipo">{t("carta.colTipo")}</HostlyDataCell>
-            <HostlyDataCell col="categoria">{t("carta.colCategoria")}</HostlyDataCell>
-            <HostlyDataCell align="end" col="price">
-              {t("carta.colPrecio")}
-            </HostlyDataCell>
-            <HostlyDataCell align="center" col="carta">
-              {t("productos.colCarta")}
-            </HostlyDataCell>
-            <HostlyDataCell align="center" col="esc">
-              {t("productos.colEscandallo")}
-            </HostlyDataCell>
-            <HostlyDataCell align="end" col="actions">
-              {t("carta.colActions")}
-            </HostlyDataCell>
+            {renderProductosCartaHeaderCells({
+              allSelected,
+              displayedCount: displayed.length,
+              isLegacyReadOnly,
+              selectAllRef,
+              t,
+              toggleSelectAllDisplayed,
+            })}
           </HostlyDataTableHead>
           <HostlyDataTableBody>
             {viewMode === "grouped"

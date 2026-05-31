@@ -3045,8 +3045,8 @@ export default function ProductosManagementPage({
               </div>
               {renderConfigCartaStatusFilterBar()}
               <div
-              className="hostly-productos-carta-list-host"
-              style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
+              className="hostly-productos-carta-list-host hostly-productos-carta-list-host--config-table"
+              style={{ flexGrow: 1, minHeight: 0, minWidth: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
               >
               {items.length === 0 ? (
               <div className="hostly-productos-carta-empty">
