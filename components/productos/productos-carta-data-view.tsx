@@ -19,8 +19,7 @@ import type { Locale, TranslateFn } from "@/lib/i18n";
 import type { EscandalloMetaMap } from "@/lib/platos-escandallo-bridge";
 import type { PlatoCarta, TipoProductoVenta } from "@/lib/platos-local";
 import {
-  ProductosCartaEscandalloBadge,
-  ProductosCartaPublicationBadge,
+  getPublicationFlags,
   ProductosCartaRowActions,
   PRODUCTOS_CARTA_LEGACY_BLOCKED,
 } from "./productos-table-cells";
@@ -48,6 +47,83 @@ function tieneEscandalloForPlato(p: PlatoCarta, meta: EscandalloMetaMap): boolea
   const sid = p.escandalloSupabaseId;
   if (sid == null) return false;
   return meta.get(sid)?.tieneEscandallo === true;
+}
+
+/** Etiqueta corta de carta: solo visibilidad en carta (sin Activo/Inactivo). */
+function compactCartaBadgeCopy(
+  p: PlatoCarta,
+  t: TranslateFn,
+  locale: Locale,
+): { short: string; full: string; tone: "success" | "warning" | "muted" } {
+  const { enCarta, status } = getPublicationFlags(p);
+  const full =
+    status === "onMenu"
+      ? t("productos.statusBadgeOnMenu")
+      : status === "offMenu"
+        ? t("productos.statusBadgeOffMenu")
+        : t("productos.statusBadgeInactive");
+  const short = enCarta
+    ? t("productos.pubEnCarta")
+    : locale === "en"
+      ? "Off"
+      : "Fuera";
+  const tone = status === "onMenu" ? "success" : status === "offMenu" ? "warning" : "muted";
+  return { short, full, tone };
+}
+
+function compactEscBadgeCopy(
+  tiene: boolean,
+  t: TranslateFn,
+  locale: Locale,
+): { short: string; full: string; tone: "success" | "muted" } {
+  const full = tiene ? t("productos.escCon") : t("productos.escSin");
+  const short =
+    locale === "en" ? (tiene ? "Costed" : "No cost") : tiene ? "Con esc." : "Sin esc.";
+  return { short, full, tone: tiene ? "success" : "muted" };
+}
+
+function ProductosCartaTableCartaBadge({
+  p,
+  t,
+  locale,
+}: {
+  p: PlatoCarta;
+  t: TranslateFn;
+  locale: Locale;
+}) {
+  const { short, full, tone } = compactCartaBadgeCopy(p, t, locale);
+  return (
+    <HostlyStatusBadge
+      tone={tone}
+      title={full}
+      aria-label={full}
+      className="hostly-productos-carta-table-badge"
+    >
+      {short}
+    </HostlyStatusBadge>
+  );
+}
+
+function ProductosCartaTableEscBadge({
+  tiene,
+  t,
+  locale,
+}: {
+  tiene: boolean;
+  t: TranslateFn;
+  locale: Locale;
+}) {
+  const { short, full, tone } = compactEscBadgeCopy(tiene, t, locale);
+  return (
+    <HostlyStatusBadge
+      tone={tone}
+      title={full}
+      aria-label={full}
+      className="hostly-productos-carta-table-badge"
+    >
+      {short}
+    </HostlyStatusBadge>
+  );
 }
 
 export type ProductosCartaGroup = {
@@ -235,10 +311,10 @@ function renderProductRowCells(args: {
         <span className="hostly-data-table-price">{formatEuro(p.precioVenta, locale)}</span>
       </HostlyDataCell>
       <HostlyDataCell align="center" col="carta">
-        <ProductosCartaPublicationBadge p={p} t={t} />
+        <ProductosCartaTableCartaBadge p={p} t={t} locale={locale} />
       </HostlyDataCell>
       <HostlyDataCell align="center" col="esc">
-        <ProductosCartaEscandalloBadge tiene={tiene} t={t} />
+        <ProductosCartaTableEscBadge tiene={tiene} t={t} locale={locale} />
       </HostlyDataCell>
       <HostlyDataCell align="end" col="actions">
         <ProductosCartaRowActions
@@ -297,8 +373,8 @@ function MobileProductItem(props: ProductosCartaDataViewProps & { p: PlatoCarta 
         <>
           <span className="hostly-mobile-list-item__price">{formatEuro(p.precioVenta, locale)}</span>
           <div className="hostly-mobile-list-item__badges">
-            <ProductosCartaPublicationBadge p={p} t={t} />
-            <ProductosCartaEscandalloBadge tiene={tiene} t={t} />
+            <ProductosCartaTableCartaBadge p={p} t={t} locale={locale} />
+            <ProductosCartaTableEscBadge tiene={tiene} t={t} locale={locale} />
           </div>
         </>
       }

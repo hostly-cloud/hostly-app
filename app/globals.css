@@ -3694,7 +3694,7 @@ body {
 @media (min-width: 1024px) {
   .hostly-productos-config-skin--simplified .hostly-productos-carta-workspace .hostly-data-table--productos-carta,
   .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table--productos-carta {
-    --hostly-data-table-columns: 32px minmax(180px, 1fr) 72px minmax(120px, 1fr) 80px 96px 96px 112px;
+    --hostly-data-table-columns: 32px minmax(180px, 1fr) 72px minmax(120px, 1fr) 76px 72px 72px 118px;
   }
 }
 
@@ -4467,7 +4467,7 @@ body {
 }
 
 .hostly-data-table--productos-carta {
-  --hostly-data-table-columns: 28px minmax(140px, 1fr) 72px minmax(100px, 1fr) 76px 96px 96px 112px;
+  --hostly-data-table-columns: 28px minmax(140px, 1fr) 72px minmax(100px, 1fr) 76px 72px 72px 118px;
 }
 
 /* Cabecera y filas comparten la misma rejilla (subgrid) y slot por columna. */
@@ -4524,42 +4524,72 @@ body {
 .hostly-data-table--productos-carta .hostly-data-table-col--carta {
   grid-column: 6;
   min-width: 0;
+  max-width: 72px;
   overflow: hidden;
 }
 
 .hostly-data-table--productos-carta .hostly-data-table-col--esc {
   grid-column: 7;
   min-width: 0;
+  max-width: 72px;
   overflow: hidden;
 }
 
 .hostly-data-table--productos-carta .hostly-data-table-col--actions {
   grid-column: 8;
-  min-width: 0;
+  min-width: 118px;
+  max-width: 118px;
+  overflow: hidden;
 }
 
 .hostly-data-table--productos-carta .hostly-data-table-col--price .hostly-data-table-price {
   display: block;
   width: 100%;
   text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+.hostly-productos-carta-table-badge,
 .hostly-data-table--productos-carta .hostly-data-table-col--carta .hostly-status-badge,
 .hostly-data-table--productos-carta .hostly-data-table-col--esc .hostly-status-badge {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.15;
 }
 
 .hostly-data-table--productos-carta .hostly-data-table-col--actions .hostly-row-actions {
+  display: inline-flex;
   flex-wrap: nowrap;
+  flex-shrink: 0;
   justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
+}
+
+.hostly-data-table--productos-carta .hostly-data-table-col--actions .hostly-row-actions__btn--icon {
+  flex-shrink: 0;
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
   .hostly-data-table--productos-carta {
-    --hostly-data-table-columns: 28px minmax(120px, 1fr) 76px 96px 96px 112px;
+    --hostly-data-table-columns: 28px minmax(120px, 1fr) 76px 72px 72px 118px;
   }
 
   .hostly-data-table--productos-carta .hostly-data-table-col--tipo,
