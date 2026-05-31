@@ -2500,15 +2500,551 @@ export default function ProductosManagementPage({
       </ModulePageShell>
     );
   }
+  const sharedProductModals = (
+    <>
+      {formOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={editingId ? t("carta.editProduct") : t("carta.newProduct")}
+          style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end", background: "rgba(2, 6, 23, 0.62)", backdropFilter: "blur(6px)" }}
+          onMouseDown={(e) => {
+            if (e.currentTarget === e.target) closeForm();
+          }}
+        >
+          <aside
+            style={{
+              height: "100%",
+              width: "min(520px, 92vw)",
+              background: "linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(2, 6, 23, 0.98) 100%)",
+              borderLeft: "1px solid rgba(148, 163, 184, 0.16)",
+              boxShadow: "-16px 0 48px rgba(0,0,0,0.45)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(148, 163, 184, 0.14)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ minWidth: 0, flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em" }}>{editingId ? t("carta.editProduct") : t("carta.newProduct")}</div>
+                  {editingId && editingPlato ? (
+                    <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>
+                      {t("carta.colEscandallo")}:{" "}
+                      <span style={{ color: editingHasEscandallo ? "#86efac" : "#fbbf24", fontWeight: 800 }}>
+                        {editingHasEscandallo ? t("carta.escSi") : t("carta.escNo")}
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>{t("carta.kpiSinEscSub")}</div>
+                  )}
+                </div>
+                <button type="button" onClick={closeForm} style={{ border: "1px solid #334155", background: "rgba(15, 23, 42, 0.55)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontWeight: 800, cursor: "pointer", minHeight: 44 }}>
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "14px 16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>{t("carta.fieldNombre")}</label>
+                  <input ref={nombreInputRef} value={draftNombre} onChange={(e) => setDraftNombre(e.target.value)} style={{ ...inputStyle, fontSize: 17, padding: "14px 14px" }} />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>{t("carta.fieldTipo")}</label>
+                  <select
+                    value={draftTipo}
+                    onChange={(e) => {
+                      const next = e.target.value as TipoProductoVenta;
+                      setDraftTipo(next);
+                      setDraftCartaMenuFamiliaId(null);
+                      setDraftCategoriaCartaId((id) => {
+                        if (!id) return null;
+                        const c = cartaCategorias.find((x) => x.id === id);
+                        return c && isCartaCategoriaCompatibleWithTipoProducto(c, next) ? id : null;
+                      });
+                    }}
+                    style={{ ...inputStyle, fontSize: 16, padding: "14px 14px", minHeight: 52, cursor: "pointer" }}
+                  >
+                    {TIPOS_PRODUCTO_VENTA.map((tipo) => (
+                      <option key={tipo} value={tipo}>
+                        {labelTipoVenta(t, tipo)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Estación operativa</label>
+                  <OperationStationProductSelect
+                    restaurantId={operationalRestaurantId}
+                    value={draftOperationStationSelect}
+                    onChange={setDraftOperationStationSelect}
+                    disabled={drawerSyncing}
+                    style={{
+                      ...inputStyle,
+                      fontSize: 16,
+                      padding: "14px 14px",
+                      minHeight: 52,
+                      cursor: drawerSyncing ? "not-allowed" : "pointer",
+                    }}
+                  />
+                  {isLegacyOperationStationSelectValue(draftOperationStationSelect) ? (
+                    <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
+                      Valor legacy: se conserva hasta que elijas una estación y
+                      guardes.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div>
+                  <label style={labelStyle}>{t("carta.fieldCartaFamilia")}</label>
+                  <select
+                    value={draftCartaMenuFamiliaId === null ? "" : draftCartaMenuFamiliaId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const nextFilter = v === "" ? null : v;
+                      setDraftCartaMenuFamiliaId(nextFilter);
+                      setDraftCategoriaCartaId((cur) => {
+                        if (!cur) return null;
+                        const allowed = cartaCategoriasForTipoYFamiliaFiltro(cartaCategorias, draftTipo, nextFilter);
+                        return allowed.some((x) => x.id === cur) ? cur : null;
+                      });
+                    }}
+                    style={{ ...inputStyle, fontSize: 16, padding: "14px 14px", minHeight: 52, cursor: "pointer" }}
+                  >
+                    <option value="">{t("carta.familiaFilterAll")}</option>
+                    <option value={CARTA_MENU_FAMILIA_FILTER_UNASSIGNED}>{t("carta.familiaFilterUnassigned")}</option>
+                    {[...cartaFamilias]
+                      .filter((f) => f.isActive !== false)
+                      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+                      .map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                  </select>
+                  <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>{t("carta.fieldCartaFamiliaHint")}</p>
+                </div>
+
+                <CategoriaCartaFormField
+                  labelStyle={labelStyle}
+                  inputStyle={{ ...inputStyle, fontSize: 16, padding: "14px 14px" }}
+                  t={t}
+                  categorias={categoriasForForm}
+                  selectedId={draftCategoriaCartaId}
+                  onSelectId={(id) => {
+                    setDraftCategoriaCartaId(id);
+                    if (!id) return;
+                    const c = cartaCategorias.find((x) => x.id === id);
+                    if (!c) return;
+                    setDraftCartaMenuFamiliaId(
+                      c.cartaFamiliaId?.trim() ? c.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
+                    );
+                  }}
+                  onOpenAddCategory={() => {
+                    setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
+                    const fid = draftCartaMenuFamiliaId;
+                    setAddCatCartaFamiliaId(
+                      fid && fid !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED ? fid : undefined,
+                    );
+                    setAddCategoryOpen(true);
+                  }}
+                />
+                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#94a3b8" }}>
+                  Familia de producto (desde categoría):{" "}
+                  <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
+                    {draftProductFamilyLabel}
+                  </span>
+                </p>
+                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#94a3b8" }}>
+                  Modificadores heredados:{" "}
+                  <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
+                    {draftEffectiveModifierLabel}
+                  </span>
+                </p>
+
+                <div>
+                  <label style={labelStyle}>{t("carta.fieldPrecio")}</label>
+                  <input type="number" inputMode="decimal" step="any" min={0} value={draftPrecio} onChange={(e) => setDraftPrecio(e.target.value)} style={{ ...inputStyle, ...tabularFigures, fontSize: 17, padding: "14px 14px" }} />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 2 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#e2e8f0", userSelect: "none" }}>
+                    <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} style={{ width: 24, height: 24, accentColor: "#22c55e" }} />
+                    {t("carta.fieldActivo")}
+                  </label>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>{t("carta.fieldDescripcion")}</label>
+                  <textarea value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 90, padding: "14px 14px", fontSize: 15 }} />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>{t("carta.fieldFoto")}</label>
+                  <input value={draftFoto} onChange={(e) => setDraftFoto(e.target.value)} style={{ ...inputStyle, padding: "14px 14px" }} />
+                </div>
+
+                {isCentralCatalog ? (
+                  <ProductRecipeEditorSection
+                    saleProductId={editingId}
+                    enabled={draftRecipeEnabled}
+                    onEnabledChange={setDraftRecipeEnabled}
+                    rows={draftRecipeRows}
+                    onRowsChange={setDraftRecipeRows}
+                    inventoryProducts={inventoryLookup}
+                    warnings={draftRecipeWarnings}
+                    disabled={drawerSyncing}
+                    labelStyle={labelStyle}
+                    inputStyle={inputStyle}
+                  />
+                ) : null}
+
+                {formError ? (
+                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(248, 113, 113, 0.12)", border: "1px solid rgba(248, 113, 113, 0.35)", color: "#fecaca", fontSize: 13, lineHeight: 1.35 }}>
+                    {formError}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div style={{ flexShrink: 0, padding: "12px 16px", borderTop: "1px solid rgba(148, 163, 184, 0.14)", background: "rgba(2, 6, 23, 0.9)", display: "flex", gap: 10 }}>
+              <button type="button" onClick={() => void submitForm()} disabled={drawerSyncing} style={{ flex: 1, border: "none", background: drawerSyncing ? "rgba(59, 130, 246, 0.5)" : "#3b82f6", color: "#fff", padding: "14px 18px", borderRadius: 12, fontWeight: 800, cursor: drawerSyncing ? "not-allowed" : "pointer", fontSize: 16, minHeight: 54 }}>
+                {drawerSyncing ? t("common.preparing") : t("common.save")}
+              </button>
+              <button type="button" onClick={closeForm} style={{ border: "1px solid #475569", background: "transparent", color: "#e2e8f0", padding: "14px 18px", borderRadius: 12, fontWeight: 800, cursor: "pointer", fontSize: 16, minHeight: 54 }}>
+                {t("common.cancel")}
+              </button>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      {addCategoryOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("cartaCategories.quickAddTitle")}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 55,
+            background: "rgba(2, 6, 23, 0.65)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setAddCategoryOpen(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(400px, 100%)",
+              borderRadius: 14,
+              border: "1px solid #334155",
+              background: "#0f172a",
+              padding: 20,
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#f8fafc" }}>{t("cartaCategories.quickAddTitle")}</h2>
+            <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+              <div>
+                <label style={labelStyle}>{t("cartaCategories.name")}</label>
+                <input value={addCatName} onChange={(e) => setAddCatName(e.target.value)} style={{ ...inputStyle, fontSize: 16, padding: "12px 14px" }} />
+              </div>
+              <div>
+                <label style={labelStyle}>{t("cartaCategories.typeField")}</label>
+                <select
+                  value={addCatType}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAddCatType(isCartaCategoriaTipo(v) ? v : "general");
+                  }}
+                  style={{ ...inputStyle, fontSize: 16, padding: "12px 14px", minHeight: 48, cursor: "pointer" }}
+                >
+                  <option value="food">{t("cartaCategories.type.food")}</option>
+                  <option value="drink">{t("cartaCategories.type.drink")}</option>
+                  <option value="general">{t("cartaCategories.type.general")}</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button
+                type="button"
+                disabled={addCatSaving}
+                onClick={() => void saveQuickCategory()}
+                style={{
+                  flex: 1,
+                  minHeight: 48,
+                  borderRadius: 10,
+                  border: "none",
+                  background: addCatSaving ? "#475569" : "#22c55e",
+                  color: "#fff",
+                  fontWeight: 800,
+                  cursor: addCatSaving ? "not-allowed" : "pointer",
+                }}
+              >
+                {t("common.save")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddCategoryOpen(false)}
+                style={{
+                  flex: 1,
+                  minHeight: 48,
+                  borderRadius: 10,
+                  border: "1px solid #475569",
+                  background: "transparent",
+                  color: "#e2e8f0",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (configCartaProductosChrome) {
+    return (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
+        <ModulePageShell
+          title={t("productos.title")}
+          subtitle="Gestiona tu carta y catálogo de venta."
+          maxWidth={PRODUCTOS_SHELL_MAX_WIDTH}
+          compactLayout
+          operationalFocus
+          denseWorkbench
+          lockViewport
+          lockViewportFillParent={lockViewportFillParent}
+          shellSurface="configLight"
+          denseInventoryHeader={emb}
+          headerBelow={
+            <div className="hostly-productos-carta-page-head">
+              <div className="hostly-productos-carta-hero-actions">
+                <button
+                  type="button"
+                  disabled={isLegacyReadOnly}
+                  title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
+                  onClick={openCreate}
+                  className="hostly-button-primary hostly-button-compact hostly-productos-carta-hero-cta whitespace-nowrap"
+                  style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
+                >
+                  {t("carta.ctaNew")}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    router.push("/dashboard/configuracion/carta/importacion");
+                  }}
+                  className="hostly-button-secondary hostly-button-compact hostly-productos-carta-hero-cta whitespace-nowrap"
+                >
+                  Importar carta IA
+                </button>
+              </div>
+            </div>
+          }
+        >
+          <HostlySection
+            stack="sm"
+            className="hostly-productos-config-skin hostly-productos-config-skin--simplified min-h-0 min-w-0 flex-1 overflow-hidden !gap-0"
+            style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0 }}
+          >
+            {notice ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: "5px 8px",
+                  borderRadius: 8,
+                  background: "rgba(220, 252, 231, 0.85)",
+                  border: "1px solid rgba(34, 197, 94, 0.35)",
+                  color: "#166534",
+                  fontSize: 11,
+                  lineHeight: 1.32,
+                }}
+              >
+                {notice}
+              </div>
+            ) : null}
+            {formError && !formOpen ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: "5px 8px",
+                  borderRadius: 8,
+                  background: "rgba(254, 242, 242, 0.95)",
+                  border: "1px solid rgba(248, 113, 113, 0.4)",
+                  color: "#b91c1c",
+                  fontSize: 11,
+                }}
+              >
+                {formError}
+              </div>
+            ) : null}
+            <ProductosTableChrome iceVisual embedFlatChrome>
+              <>
+              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical">
+              <input
+              type="search"
+              value={listSearch}
+              onChange={(e) => setListSearch(e.target.value)}
+              placeholder="Buscar producto..."
+              aria-label="Buscar producto"
+              className="hostly-productos-carta-search hostly-productos-carta-search--prominent"
+              />
+              </div>
+              <div
+              className="hostly-productos-carta-list-host"
+              style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
+              >
+              {items.length === 0 ? (
+              <div className="hostly-productos-carta-empty">
+              <p className="hostly-productos-carta-empty__title">{t("carta.emptyTitle")}</p>
+              <p className="hostly-productos-carta-empty__body">{t("carta.emptyBody")}</p>
+              <button
+              type="button"
+              disabled={isLegacyReadOnly}
+              title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
+              onClick={openCreate}
+              className="hostly-button-primary hostly-button-compact"
+              style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
+              >
+              {t("carta.emptyCta")}
+              </button>
+              </div>
+              ) : filteredSorted.length === 0 ? (
+              <div className="hostly-productos-carta-muted-empty">{t("stock.filterEmpty")}</div>
+              ) : displayed.length === 0 ? (
+              <div className="hostly-productos-carta-muted-empty">{t("carta.searchNoResults")}</div>
+              ) : (
+              <ProductosCartaDataView
+              displayed={displayed}
+              groupedByCategoria={groupedByCategoria}
+              viewMode={viewMode}
+              selectedIds={selectedIds}
+              selectAllRef={selectAllRef}
+              isLegacyReadOnly={isLegacyReadOnly}
+              meta={meta}
+              escNavId={escNavId}
+              locale={locale as Locale}
+              t={t}
+              toggleRowSelected={toggleRowSelected}
+              toggleSelectAllDisplayed={toggleSelectAllDisplayed}
+              openEdit={openEdit}
+              toggleActivo={toggleActivo}
+              activateProducto={activateProducto}
+              goToEscandallo={goToEscandallo}
+              deleteProducto={deleteProducto}
+              bulkSelectionBreakdown={bulkSelectionBreakdown}
+              bulkApplyToIds={bulkApplyToIds}
+              />
+              )}
+              </div>
+              <div className="hostly-productos-carta-advanced-anchor">
+              <button
+              type="button"
+              className="hostly-productos-carta-advanced-toggle"
+              aria-expanded={configCartaAdvancedOpen}
+              aria-controls="hostly-productos-carta-advanced-panel"
+              onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
+              >
+              {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
+              </button>
+              {configCartaAdvancedOpen ? (
+              <div
+              id="hostly-productos-carta-advanced-panel"
+              className="hostly-productos-carta-advanced-panel"
+              >
+              <nav className="hostly-productos-carta-advanced-nav" aria-label="Navegación avanzada de carta">
+              <Link href="/dashboard/configuracion/carta/categorias">{t("cartaCategories.manageLink")}</Link>
+              <button
+              type="button"
+              onClick={() => router.push("/dashboard/configuracion/carta/modificadores")}
+              >
+              {t("carta.ctaModifiers")}
+              </button>
+              <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
+              </nav>
+              <div className="hostly-productos-carta-advanced-section">
+              <span className="hostly-productos-carta-advanced-section__label">Estado</span>
+              <div className="hostly-productos-carta-filter-chips">
+              {iceToolbarFilterButtons(true, CONFIG_CARTA_BASIC_FILTER_IDS)}
+              </div>
+              </div>
+              <div className="hostly-productos-carta-advanced-section">
+              <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
+              <div className="hostly-productos-carta-filter-chips">
+              {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
+              </div>
+              </div>
+              <div className="hostly-productos-carta-advanced-section">
+              <span className="hostly-productos-carta-advanced-section__label">Familia</span>
+              <div className="hostly-productos-carta-filter-chips">
+              {iceToolbarProductFamilyFilterButtons(true)}
+              </div>
+              </div>
+              <div className="hostly-productos-carta-advanced-section">
+              <span className="hostly-productos-carta-advanced-section__label">Categorías de carta</span>
+              <div
+              className="hostly-productos-carta-category-tabs hostly-productos-carta-category-tabs--secondary"
+              aria-label="Pestañas de categoría"
+              >
+              {tabOptions
+              .filter((tab) => tab.id !== "__all__")
+              .map((tab) => {
+              const active = categoryTab === tab.id;
+              return (
+              <button
+              key={tab.id}
+              type="button"
+              onClick={() => setCategoryTab(tab.id)}
+              aria-pressed={active}
+              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${active ? " is-active" : ""}`}
+              >
+              {tab.label}
+              </button>
+              );
+              })}
+              </div>
+              </div>
+              <div className="hostly-productos-carta-advanced-section">
+              <span className="hostly-productos-carta-advanced-section__label">Vista</span>
+              <div className="hostly-productos-carta-view-discreet" role="group" aria-label="Modo de vista">
+              {iceToolbarViewControls(true)}
+              </div>
+              </div>
+              </div>
+              ) : null}
+              </div>
+              </>
+            </ProductosTableChrome>
+          </HostlySection>
+          {sharedProductModals}
+        </ModulePageShell>
+      </>
+    );
+  }
+
 
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
       <ModulePageShell
       title={t("productos.title")}
-      subtitle={
-        configCartaProductosChrome ? "Gestiona tu carta y catálogo de venta." : t("productos.subtitle")
-      }
+      subtitle={t("productos.subtitle")}
       maxWidth={PRODUCTOS_SHELL_MAX_WIDTH}
       compactLayout
       operationalFocus
@@ -2518,33 +3054,6 @@ export default function ProductosManagementPage({
       shellSurface={iceVisual ? "configLight" : "default"}
       denseInventoryHeader={emb}
       headerBelow={
-        configCartaProductosChrome ? (
-          <div className="hostly-productos-carta-page-head">
-            <div className="hostly-productos-carta-hero-actions">
-              <button
-                type="button"
-                disabled={isLegacyReadOnly}
-                title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
-                onClick={openCreate}
-                className="hostly-button-primary hostly-button-compact hostly-productos-carta-hero-cta whitespace-nowrap"
-                style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
-              >
-                {t("carta.ctaNew")}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  router.push("/dashboard/configuracion/carta/importacion");
-                }}
-                className="hostly-button-secondary hostly-button-compact hostly-productos-carta-hero-cta whitespace-nowrap"
-              >
-                Importar carta IA
-              </button>
-            </div>
-          </div>
-        ) : (
         <div
           style={{
             display: "flex",
@@ -2713,14 +3222,13 @@ export default function ProductosManagementPage({
             </button>
           </div>
         </div>
-        )
       }
     >
       <HostlySection
         stack="sm"
         className={
           iceVisual
-            ? `hostly-productos-config-skin min-h-0 min-w-0 flex-1 overflow-hidden${configCartaProductosChrome ? " hostly-productos-config-skin--simplified !gap-0" : ""}`
+            ? "hostly-productos-config-skin min-h-0 min-w-0 flex-1 overflow-hidden"
             : "min-h-0 min-w-0 flex-1 overflow-hidden"
         }
         style={{
@@ -2747,7 +3255,6 @@ export default function ProductosManagementPage({
           </div>
         ) : null}
 
-        {!configCartaProductosChrome ? (
         <>
         <CatalogMigrationPreviewPanel
           restaurantId={operationalRestaurantId}
@@ -2765,7 +3272,6 @@ export default function ProductosManagementPage({
           }}
         />
         </>
-        ) : null}
 
         {formError && !formOpen ? (
           <div
@@ -2784,7 +3290,6 @@ export default function ProductosManagementPage({
         ) : null}
 
         {iceVisual ? (
-          configCartaProductosChrome ? null : (
             <div
               className="grid shrink-0 gap-1.5"
               style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
@@ -2793,7 +3298,6 @@ export default function ProductosManagementPage({
                 <HostlyKpiCard key={m.key} title={m.label} value={m.value} className="px-3 py-2" />
               ))}
             </div>
-          )
         ) : (
           <div style={{ flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", marginBottom: 2 }}>
             {kpiPills.map((m) => (
@@ -2828,145 +3332,8 @@ export default function ProductosManagementPage({
           </div>
         )}
 
-        <ProductosTableChrome iceVisual={iceVisual} embedFlatChrome={configCartaProductosChrome}>
-          {configCartaProductosChrome ? (
-            <>
-              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical">
-                <input
-                  type="search"
-                  value={listSearch}
-                  onChange={(e) => setListSearch(e.target.value)}
-                  placeholder="Buscar producto..."
-                  aria-label="Buscar producto"
-                  className="hostly-productos-carta-search hostly-productos-carta-search--prominent"
-                />
-              </div>
-              <div
-                className="hostly-productos-carta-list-host"
-                style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
-              >
-                {items.length === 0 ? (
-                  <div className="hostly-productos-carta-empty">
-                    <p className="hostly-productos-carta-empty__title">{t("carta.emptyTitle")}</p>
-                    <p className="hostly-productos-carta-empty__body">{t("carta.emptyBody")}</p>
-                    <button
-                      type="button"
-                      disabled={isLegacyReadOnly}
-                      title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
-                      onClick={openCreate}
-                      className="hostly-button-primary hostly-button-compact"
-                      style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
-                    >
-                      {t("carta.emptyCta")}
-                    </button>
-                  </div>
-                ) : filteredSorted.length === 0 ? (
-                  <div className="hostly-productos-carta-muted-empty">{t("stock.filterEmpty")}</div>
-                ) : displayed.length === 0 ? (
-                  <div className="hostly-productos-carta-muted-empty">{t("carta.searchNoResults")}</div>
-                ) : (
-                  <ProductosCartaDataView
-                    displayed={displayed}
-                    groupedByCategoria={groupedByCategoria}
-                    viewMode={viewMode}
-                    selectedIds={selectedIds}
-                    selectAllRef={selectAllRef}
-                    isLegacyReadOnly={isLegacyReadOnly}
-                    meta={meta}
-                    escNavId={escNavId}
-                    locale={locale as Locale}
-                    t={t}
-                    toggleRowSelected={toggleRowSelected}
-                    toggleSelectAllDisplayed={toggleSelectAllDisplayed}
-                    openEdit={openEdit}
-                    toggleActivo={toggleActivo}
-                    activateProducto={activateProducto}
-                    goToEscandallo={goToEscandallo}
-                    deleteProducto={deleteProducto}
-                    bulkSelectionBreakdown={bulkSelectionBreakdown}
-                    bulkApplyToIds={bulkApplyToIds}
-                  />
-                )}
-              </div>
-              <div className="hostly-productos-carta-advanced-anchor">
-                <button
-                  type="button"
-                  className="hostly-productos-carta-advanced-toggle"
-                  aria-expanded={configCartaAdvancedOpen}
-                  aria-controls="hostly-productos-carta-advanced-panel"
-                  onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
-                >
-                  {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
-                </button>
-                {configCartaAdvancedOpen ? (
-                  <div
-                    id="hostly-productos-carta-advanced-panel"
-                    className="hostly-productos-carta-advanced-panel"
-                  >
-                    <nav className="hostly-productos-carta-advanced-nav" aria-label="Navegación avanzada de carta">
-                      <Link href="/dashboard/configuracion/carta/categorias">{t("cartaCategories.manageLink")}</Link>
-                      <button
-                        type="button"
-                        onClick={() => router.push("/dashboard/configuracion/carta/modificadores")}
-                      >
-                        {t("carta.ctaModifiers")}
-                      </button>
-                      <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
-                    </nav>
-                    <div className="hostly-productos-carta-advanced-section">
-                      <span className="hostly-productos-carta-advanced-section__label">Estado</span>
-                      <div className="hostly-productos-carta-filter-chips">
-                        {iceToolbarFilterButtons(true, CONFIG_CARTA_BASIC_FILTER_IDS)}
-                      </div>
-                    </div>
-                    <div className="hostly-productos-carta-advanced-section">
-                      <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
-                      <div className="hostly-productos-carta-filter-chips">
-                        {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
-                      </div>
-                    </div>
-                    <div className="hostly-productos-carta-advanced-section">
-                      <span className="hostly-productos-carta-advanced-section__label">Familia</span>
-                      <div className="hostly-productos-carta-filter-chips">
-                        {iceToolbarProductFamilyFilterButtons(true)}
-                      </div>
-                    </div>
-                    <div className="hostly-productos-carta-advanced-section">
-                      <span className="hostly-productos-carta-advanced-section__label">Categorías de carta</span>
-                      <div
-                        className="hostly-productos-carta-category-tabs hostly-productos-carta-category-tabs--secondary"
-                        aria-label="Pestañas de categoría"
-                      >
-                        {tabOptions
-                          .filter((tab) => tab.id !== "__all__")
-                          .map((tab) => {
-                            const active = categoryTab === tab.id;
-                            return (
-                              <button
-                                key={tab.id}
-                                type="button"
-                                onClick={() => setCategoryTab(tab.id)}
-                                aria-pressed={active}
-                                className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${active ? " is-active" : ""}`}
-                              >
-                                {tab.label}
-                              </button>
-                            );
-                          })}
-                      </div>
-                    </div>
-                    <div className="hostly-productos-carta-advanced-section">
-                      <span className="hostly-productos-carta-advanced-section__label">Vista</span>
-                      <div className="hostly-productos-carta-view-discreet" role="group" aria-label="Modo de vista">
-                        {iceToolbarViewControls(true)}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <>
+        <ProductosTableChrome iceVisual={iceVisual}>
+          <>
           {iceVisual ? (
             <HostlySectionHeader
               title={t("carta.listTitle")}
@@ -3041,7 +3408,6 @@ export default function ProductosManagementPage({
           </div>
           )}
 
-          {!configCartaProductosChrome ? (
           <div
             style={{
               flexShrink: 0,
@@ -3066,12 +3432,11 @@ export default function ProductosManagementPage({
             {iceToolbarFilterButtons(false)}
             {iceToolbarViewControls(false)}
           </div>
-          ) : null}
 
           <div
             style={{
               flexShrink: 0,
-              display: configCartaProductosChrome ? "none" : "flex",
+              display: "flex",
               flexWrap: "wrap",
               gap: 5,
               padding: "2px 5px 4px",
@@ -3097,7 +3462,6 @@ export default function ProductosManagementPage({
             {iceToolbarProductFamilyFilterButtons(false)}
           </div>
 
-          {!configCartaProductosChrome ? (
           <div
             style={{
               flexShrink: 0,
@@ -3159,10 +3523,8 @@ export default function ProductosManagementPage({
               );
             })}
           </div>
-          ) : null}
 
           <div
-            className={configCartaProductosChrome ? "hostly-productos-carta-list-host" : undefined}
             style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
           >
             {items.length === 0 ? (
@@ -3671,320 +4033,10 @@ export default function ProductosManagementPage({
               </div>
             )}
           </div>
-            </>
-          )}
+          </>
         </ProductosTableChrome>
       </HostlySection>
-      {formOpen ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={editingId ? t("carta.editProduct") : t("carta.newProduct")}
-          style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end", background: "rgba(2, 6, 23, 0.62)", backdropFilter: "blur(6px)" }}
-          onMouseDown={(e) => {
-            if (e.currentTarget === e.target) closeForm();
-          }}
-        >
-          <aside
-            style={{
-              height: "100%",
-              width: "min(520px, 92vw)",
-              background: "linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(2, 6, 23, 0.98) 100%)",
-              borderLeft: "1px solid rgba(148, 163, 184, 0.16)",
-              boxShadow: "-16px 0 48px rgba(0,0,0,0.45)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(148, 163, 184, 0.14)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ minWidth: 0, flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em" }}>{editingId ? t("carta.editProduct") : t("carta.newProduct")}</div>
-                  {editingId && editingPlato ? (
-                    <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>
-                      {t("carta.colEscandallo")}:{" "}
-                      <span style={{ color: editingHasEscandallo ? "#86efac" : "#fbbf24", fontWeight: 800 }}>
-                        {editingHasEscandallo ? t("carta.escSi") : t("carta.escNo")}
-                      </span>
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>{t("carta.kpiSinEscSub")}</div>
-                  )}
-                </div>
-                <button type="button" onClick={closeForm} style={{ border: "1px solid #334155", background: "rgba(15, 23, 42, 0.55)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontWeight: 800, cursor: "pointer", minHeight: 44 }}>
-                  {t("common.cancel")}
-                </button>
-              </div>
-            </div>
-
-            <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "14px 16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldNombre")}</label>
-                  <input ref={nombreInputRef} value={draftNombre} onChange={(e) => setDraftNombre(e.target.value)} style={{ ...inputStyle, fontSize: 17, padding: "14px 14px" }} />
-                </div>
-
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldTipo")}</label>
-                  <select
-                    value={draftTipo}
-                    onChange={(e) => {
-                      const next = e.target.value as TipoProductoVenta;
-                      setDraftTipo(next);
-                      setDraftCartaMenuFamiliaId(null);
-                      setDraftCategoriaCartaId((id) => {
-                        if (!id) return null;
-                        const c = cartaCategorias.find((x) => x.id === id);
-                        return c && isCartaCategoriaCompatibleWithTipoProducto(c, next) ? id : null;
-                      });
-                    }}
-                    style={{ ...inputStyle, fontSize: 16, padding: "14px 14px", minHeight: 52, cursor: "pointer" }}
-                  >
-                    {TIPOS_PRODUCTO_VENTA.map((tipo) => (
-                      <option key={tipo} value={tipo}>
-                        {labelTipoVenta(t, tipo)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Estación operativa</label>
-                  <OperationStationProductSelect
-                    restaurantId={operationalRestaurantId}
-                    value={draftOperationStationSelect}
-                    onChange={setDraftOperationStationSelect}
-                    disabled={drawerSyncing}
-                    style={{
-                      ...inputStyle,
-                      fontSize: 16,
-                      padding: "14px 14px",
-                      minHeight: 52,
-                      cursor: drawerSyncing ? "not-allowed" : "pointer",
-                    }}
-                  />
-                  {isLegacyOperationStationSelectValue(draftOperationStationSelect) ? (
-                    <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
-                      Valor legacy: se conserva hasta que elijas una estación y
-                      guardes.
-                    </p>
-                  ) : null}
-                </div>
-
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldCartaFamilia")}</label>
-                  <select
-                    value={draftCartaMenuFamiliaId === null ? "" : draftCartaMenuFamiliaId}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const nextFilter = v === "" ? null : v;
-                      setDraftCartaMenuFamiliaId(nextFilter);
-                      setDraftCategoriaCartaId((cur) => {
-                        if (!cur) return null;
-                        const allowed = cartaCategoriasForTipoYFamiliaFiltro(cartaCategorias, draftTipo, nextFilter);
-                        return allowed.some((x) => x.id === cur) ? cur : null;
-                      });
-                    }}
-                    style={{ ...inputStyle, fontSize: 16, padding: "14px 14px", minHeight: 52, cursor: "pointer" }}
-                  >
-                    <option value="">{t("carta.familiaFilterAll")}</option>
-                    <option value={CARTA_MENU_FAMILIA_FILTER_UNASSIGNED}>{t("carta.familiaFilterUnassigned")}</option>
-                    {[...cartaFamilias]
-                      .filter((f) => f.isActive !== false)
-                      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
-                      .map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.name}
-                        </option>
-                      ))}
-                  </select>
-                  <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>{t("carta.fieldCartaFamiliaHint")}</p>
-                </div>
-
-                <CategoriaCartaFormField
-                  labelStyle={labelStyle}
-                  inputStyle={{ ...inputStyle, fontSize: 16, padding: "14px 14px" }}
-                  t={t}
-                  categorias={categoriasForForm}
-                  selectedId={draftCategoriaCartaId}
-                  onSelectId={(id) => {
-                    setDraftCategoriaCartaId(id);
-                    if (!id) return;
-                    const c = cartaCategorias.find((x) => x.id === id);
-                    if (!c) return;
-                    setDraftCartaMenuFamiliaId(
-                      c.cartaFamiliaId?.trim() ? c.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
-                    );
-                  }}
-                  onOpenAddCategory={() => {
-                    setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
-                    const fid = draftCartaMenuFamiliaId;
-                    setAddCatCartaFamiliaId(
-                      fid && fid !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED ? fid : undefined,
-                    );
-                    setAddCategoryOpen(true);
-                  }}
-                />
-                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#94a3b8" }}>
-                  Familia de producto (desde categoría):{" "}
-                  <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
-                    {draftProductFamilyLabel}
-                  </span>
-                </p>
-                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#94a3b8" }}>
-                  Modificadores heredados:{" "}
-                  <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
-                    {draftEffectiveModifierLabel}
-                  </span>
-                </p>
-
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldPrecio")}</label>
-                  <input type="number" inputMode="decimal" step="any" min={0} value={draftPrecio} onChange={(e) => setDraftPrecio(e.target.value)} style={{ ...inputStyle, ...tabularFigures, fontSize: 17, padding: "14px 14px" }} />
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 2 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#e2e8f0", userSelect: "none" }}>
-                    <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} style={{ width: 24, height: 24, accentColor: "#22c55e" }} />
-                    {t("carta.fieldActivo")}
-                  </label>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldDescripcion")}</label>
-                  <textarea value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 90, padding: "14px 14px", fontSize: 15 }} />
-                </div>
-
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldFoto")}</label>
-                  <input value={draftFoto} onChange={(e) => setDraftFoto(e.target.value)} style={{ ...inputStyle, padding: "14px 14px" }} />
-                </div>
-
-                {isCentralCatalog ? (
-                  <ProductRecipeEditorSection
-                    saleProductId={editingId}
-                    enabled={draftRecipeEnabled}
-                    onEnabledChange={setDraftRecipeEnabled}
-                    rows={draftRecipeRows}
-                    onRowsChange={setDraftRecipeRows}
-                    inventoryProducts={inventoryLookup}
-                    warnings={draftRecipeWarnings}
-                    disabled={drawerSyncing}
-                    labelStyle={labelStyle}
-                    inputStyle={inputStyle}
-                  />
-                ) : null}
-
-                {formError ? (
-                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(248, 113, 113, 0.12)", border: "1px solid rgba(248, 113, 113, 0.35)", color: "#fecaca", fontSize: 13, lineHeight: 1.35 }}>
-                    {formError}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div style={{ flexShrink: 0, padding: "12px 16px", borderTop: "1px solid rgba(148, 163, 184, 0.14)", background: "rgba(2, 6, 23, 0.9)", display: "flex", gap: 10 }}>
-              <button type="button" onClick={() => void submitForm()} disabled={drawerSyncing} style={{ flex: 1, border: "none", background: drawerSyncing ? "rgba(59, 130, 246, 0.5)" : "#3b82f6", color: "#fff", padding: "14px 18px", borderRadius: 12, fontWeight: 800, cursor: drawerSyncing ? "not-allowed" : "pointer", fontSize: 16, minHeight: 54 }}>
-                {drawerSyncing ? t("common.preparing") : t("common.save")}
-              </button>
-              <button type="button" onClick={closeForm} style={{ border: "1px solid #475569", background: "transparent", color: "#e2e8f0", padding: "14px 18px", borderRadius: 12, fontWeight: 800, cursor: "pointer", fontSize: 16, minHeight: 54 }}>
-                {t("common.cancel")}
-              </button>
-            </div>
-          </aside>
-        </div>
-      ) : null}
-
-      {addCategoryOpen ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("cartaCategories.quickAddTitle")}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 55,
-            background: "rgba(2, 6, 23, 0.65)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setAddCategoryOpen(false);
-          }}
-        >
-          <div
-            style={{
-              width: "min(400px, 100%)",
-              borderRadius: 14,
-              border: "1px solid #334155",
-              background: "#0f172a",
-              padding: 20,
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#f8fafc" }}>{t("cartaCategories.quickAddTitle")}</h2>
-            <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>{t("cartaCategories.name")}</label>
-                <input value={addCatName} onChange={(e) => setAddCatName(e.target.value)} style={{ ...inputStyle, fontSize: 16, padding: "12px 14px" }} />
-              </div>
-              <div>
-                <label style={labelStyle}>{t("cartaCategories.typeField")}</label>
-                <select
-                  value={addCatType}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setAddCatType(isCartaCategoriaTipo(v) ? v : "general");
-                  }}
-                  style={{ ...inputStyle, fontSize: 16, padding: "12px 14px", minHeight: 48, cursor: "pointer" }}
-                >
-                  <option value="food">{t("cartaCategories.type.food")}</option>
-                  <option value="drink">{t("cartaCategories.type.drink")}</option>
-                  <option value="general">{t("cartaCategories.type.general")}</option>
-                </select>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button
-                type="button"
-                disabled={addCatSaving}
-                onClick={() => void saveQuickCategory()}
-                style={{
-                  flex: 1,
-                  minHeight: 48,
-                  borderRadius: 10,
-                  border: "none",
-                  background: addCatSaving ? "#475569" : "#22c55e",
-                  color: "#fff",
-                  fontWeight: 800,
-                  cursor: addCatSaving ? "not-allowed" : "pointer",
-                }}
-              >
-                {t("common.save")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddCategoryOpen(false)}
-                style={{
-                  flex: 1,
-                  minHeight: 48,
-                  borderRadius: 10,
-                  border: "1px solid #475569",
-                  background: "transparent",
-                  color: "#e2e8f0",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                {t("common.cancel")}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {sharedProductModals}
     </ModulePageShell>
     </>
   );
