@@ -49,24 +49,15 @@ function tieneEscandalloForPlato(p: PlatoCarta, meta: EscandalloMetaMap): boolea
   return meta.get(sid)?.tieneEscandallo === true;
 }
 
-/** Etiqueta corta de carta: solo visibilidad en carta (sin Activo/Inactivo). */
+/** Microchip Carta: solo visibilidad en carta (sin Activo/Inactivo). */
 function compactCartaBadgeCopy(
   p: PlatoCarta,
   t: TranslateFn,
   locale: Locale,
 ): { short: string; full: string; tone: "success" | "warning" | "muted" } {
   const { enCarta, status } = getPublicationFlags(p);
-  const full =
-    status === "onMenu"
-      ? t("productos.statusBadgeOnMenu")
-      : status === "offMenu"
-        ? t("productos.statusBadgeOffMenu")
-        : t("productos.statusBadgeInactive");
-  const short = enCarta
-    ? t("productos.pubEnCarta")
-    : locale === "en"
-      ? "Off"
-      : "Fuera";
+  const full = enCarta ? t("productos.pubEnCarta") : t("productos.pubFueraCarta");
+  const short = enCarta ? (locale === "en" ? "Menu" : "Carta") : locale === "en" ? "Off" : "Fuera";
   const tone = status === "onMenu" ? "success" : status === "offMenu" ? "warning" : "muted";
   return { short, full, tone };
 }
@@ -78,7 +69,7 @@ function compactEscBadgeCopy(
 ): { short: string; full: string; tone: "success" | "muted" } {
   const full = tiene ? t("productos.escCon") : t("productos.escSin");
   const short =
-    locale === "en" ? (tiene ? "Costed" : "No cost") : tiene ? "Con esc." : "Sin esc.";
+    locale === "en" ? (tiene ? "Cost." : "No cost") : tiene ? "Esc." : "Sin esc.";
   return { short, full, tone: tiene ? "success" : "muted" };
 }
 
@@ -97,7 +88,8 @@ function ProductosCartaTableCartaBadge({
       tone={tone}
       title={full}
       aria-label={full}
-      className="hostly-productos-carta-table-badge"
+      dot={false}
+      className="hostly-data-table-microchip"
     >
       {short}
     </HostlyStatusBadge>
@@ -119,7 +111,8 @@ function ProductosCartaTableEscBadge({
       tone={tone}
       title={full}
       aria-label={full}
-      className="hostly-productos-carta-table-badge"
+      dot={false}
+      className="hostly-data-table-microchip"
     >
       {short}
     </HostlyStatusBadge>
@@ -242,7 +235,9 @@ function renderProductosCartaHeaderCells(args: {
         {t("productos.colCarta")}
       </HostlyDataCell>
       <HostlyDataCell align="center" col="esc">
-        {t("productos.colEscandallo")}
+        <span title={t("productos.colEscandallo")} aria-label={t("productos.colEscandallo")}>
+          Esc.
+        </span>
       </HostlyDataCell>
       <HostlyDataCell align="end" col="actions">
         {t("carta.colActions")}
@@ -317,17 +312,19 @@ function renderProductRowCells(args: {
         <ProductosCartaTableEscBadge tiene={tiene} t={t} locale={locale} />
       </HostlyDataCell>
       <HostlyDataCell align="end" col="actions">
-        <ProductosCartaRowActions
-          p={p}
-          busyEsc={busyEsc}
-          t={t}
-          legacyReadOnly={isLegacyReadOnly}
-          onEdit={() => openEdit(p)}
-          onToggleCarta={() => toggleActivo(p)}
-          onActivateProduct={() => activateProducto(p)}
-          onEsc={() => void goToEscandallo(p)}
-          onDelete={() => deleteProducto(p)}
-        />
+        <div className="hostly-data-table-actions-shell">
+          <ProductosCartaRowActions
+            p={p}
+            busyEsc={busyEsc}
+            t={t}
+            legacyReadOnly={isLegacyReadOnly}
+            onEdit={() => openEdit(p)}
+            onToggleCarta={() => toggleActivo(p)}
+            onActivateProduct={() => activateProducto(p)}
+            onEsc={() => void goToEscandallo(p)}
+            onDelete={() => deleteProducto(p)}
+          />
+        </div>
       </HostlyDataCell>
     </>
   );
@@ -467,7 +464,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
         </HostlyTableBulkBar>
       ) : null}
 
-      <HostlyDataTable variant="productos-carta">
+      <HostlyDataTable variant="productos-carta" className="hostly-data-table--dense-config">
         <HostlyDataTableScroll>
           <HostlyDataTableHead>
             {renderProductosCartaHeaderCells({
