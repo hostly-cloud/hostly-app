@@ -64,9 +64,11 @@ import {
 import { CatalogMigrationPreviewPanel } from "@/components/productos/catalog-migration-preview-panel";
 import { LegacyPlatosArchivePanel } from "@/components/productos/legacy-platos-archive-panel";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
+import { resolveCartaProductDeleteAction } from "@/lib/carta/carta-product-delete-policy";
 import {
   activateCentralProduct,
   createCentralProduct,
+  deleteCentralProductPermanently,
   disableCentralProduct,
   formatCentralCatalogWriteError,
   listenCentralProducts,
@@ -2142,14 +2144,49 @@ export default function ProductosManagementPage({
 
   async function deleteProducto(p: PlatoCarta) {
     if (isLegacyReadOnly) return;
-    const ok = window.confirm(
-      isCentralCatalog
-        ? `¿Desactivar "${p.nombre}" en el catálogo central? No se borrará el documento.`
-        : `¿Borrar "${p.nombre}" del catálogo? Esta acción no se puede deshacer.`,
-    );
-    if (!ok) return;
     const restauranteId = operationalRestaurantId;
+
     if (isCentralCatalog) {
+      const decision = await resolveCartaProductDeleteAction({
+        p,
+        meta,
+        centralDoc: centralDocsById.get(p.id),
+        restaurantId: restauranteId,
+        tieneEscandallo: tieneEscandalloForPlato,
+      });
+
+      if (decision.action === "delete") {
+        const confirmMessage =
+          decision.reason === "disposable_test"
+            ? `¿Eliminar definitivamente "${p.nombre}"? Es un producto de prueba sin histórico.`
+            : `¿Eliminar definitivamente "${p.nombre}"? No tiene ventas ni escandallo asociado.`;
+        const ok = window.confirm(confirmMessage);
+        if (!ok) return;
+        try {
+          await deleteCentralProductPermanently(restauranteId, p.id);
+          if (editingId === p.id) {
+            setFormOpen(false);
+            setEditingId(null);
+            setFormError(null);
+          }
+          setItems((prev) => prev.filter((x) => x.id !== p.id));
+          setCentralDocsById((prev) => {
+            const next = new Map(prev);
+            next.delete(p.id);
+            return next;
+          });
+          setNotice("Producto eliminado.");
+        } catch (e) {
+          setFormError(formatCentralCatalogWriteError(e));
+        }
+        window.setTimeout(() => setNotice(null), 2200);
+        return;
+      }
+
+      const ok = window.confirm(
+        `"${p.nombre}" tiene histórico o dependencias y no se puede eliminar.\n\n¿Desactivarlo para ocultarlo de la carta?`,
+      );
+      if (!ok) return;
       try {
         await disableCentralProduct(restauranteId, p.id);
         if (editingId === p.id) {
@@ -2157,13 +2194,30 @@ export default function ProductosManagementPage({
           setEditingId(null);
           setFormError(null);
         }
-        setNotice("Producto desactivado en catálogo central");
+        const now = new Date().toISOString();
+        setItems((prev) =>
+          prev.map((x) =>
+            x.id === p.id
+              ? ({
+                  ...x,
+                  activo: false,
+                  enCarta: false,
+                  isActive: false,
+                  updatedAt: now,
+                } as PlatoCarta & { enCarta?: boolean; isActive?: boolean })
+              : x,
+          ),
+        );
+        setNotice("Producto desactivado para conservar el histórico.");
       } catch (e) {
         setFormError(formatCentralCatalogWriteError(e));
       }
       window.setTimeout(() => setNotice(null), 2200);
       return;
     }
+
+    const ok = window.confirm(`¿Borrar "${p.nombre}" del catálogo? Esta acción no se puede deshacer.`);
+    if (!ok) return;
     const next = items.filter((x) => x.id !== p.id);
     persist(next);
     if (editingId === p.id) {

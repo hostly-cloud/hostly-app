@@ -1362,6 +1362,7 @@ export async function disableProductInventory(
 export {
   activateCentralProduct,
   createCentralProduct,
+  deleteCentralProductPermanently,
   disableCentralProduct,
   formatCentralCatalogWriteError,
   setCentralProductPublication,

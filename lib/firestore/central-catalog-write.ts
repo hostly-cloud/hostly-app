@@ -2,6 +2,7 @@ import { FirebaseError } from "firebase/app";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   updateDoc,
@@ -316,6 +317,21 @@ export async function disableCentralProduct(
     active: false,
     visibleOnMenu: false,
   });
+}
+
+/** Borrado definitivo del documento en catálogo central (solo productos sin histórico). */
+export async function deleteCentralProductPermanently(
+  restaurantId: string,
+  productId: string,
+): Promise<void> {
+  const rid = restaurantId.trim();
+  const pid = productId.trim();
+  if (!rid || !pid) throw new Error("MISSING_IDS");
+  requireAuthUid();
+  const ref = centralProductRef(rid, pid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("PRODUCT_NOT_FOUND");
+  await deleteDoc(ref);
 }
 
 /** Actualiza flags de publicación/venta. */
