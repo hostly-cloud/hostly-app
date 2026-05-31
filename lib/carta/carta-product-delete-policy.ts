@@ -70,8 +70,8 @@ export async function centralSaleProductHasOrderUsage(
     }
     return false;
   } catch {
-    // Ante duda, conservar histórico (solo desactivar).
-    return true;
+    // Sin lectura de comandas no bloqueamos borrado definitivo de productos sin dependencias.
+    return false;
   }
 }
 

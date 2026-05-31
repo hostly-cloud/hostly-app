@@ -1200,6 +1200,9 @@ export default function ProductosManagementPage({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const selectAllRef = useRef<HTMLInputElement | null>(null);
   const nombreInputRef = useRef<HTMLInputElement | null>(null);
+  /** Oculta al instante productos borrados hasta que el snapshot central confirme el delete. */
+  const pendingRemovedProductIdsRef = useRef<Set<string>>(new Set());
+  const configListFilterInitRef = useRef(false);
   const [drawerSyncing, setDrawerSyncing] = useState(false);
   const [draftRecipeEnabled, setDraftRecipeEnabled] = useState(false);
   const [draftRecipeRows, setDraftRecipeRows] = useState<RecipeIngredientDraftRow[]>([]);
@@ -1274,9 +1277,23 @@ export default function ProductosManagementPage({
   }, [operationalRestaurantId, isCentralCatalog, formOpen]);
 
   useEffect(() => {
+    if (!configCartaProductosChrome || configListFilterInitRef.current) return;
+    configListFilterInitRef.current = true;
+    setListFilter("activos");
+  }, [configCartaProductosChrome]);
+
+  useEffect(() => {
     if (operationalCatalog.loading) return;
     queueMicrotask(() => {
-      setItems(operationalCatalog.platos);
+      const pendingRemoved = pendingRemovedProductIdsRef.current;
+      for (const id of [...pendingRemoved]) {
+        if (!operationalCatalog.platos.some((p) => p.id === id)) {
+          pendingRemoved.delete(id);
+        }
+      }
+      setItems(
+        operationalCatalog.platos.filter((p) => !pendingRemoved.has(p.id)),
+      );
       setHydrated(true);
     });
   }, [operationalCatalog.loading, operationalCatalog.platos]);
@@ -1392,12 +1409,28 @@ export default function ProductosManagementPage({
     return { activos, inactivos, conEsc, sinEsc, total: items.length };
   }, [items, meta]);
 
+  const catalogListFilter: CartaFilter = listFilter;
+
+  const configStatusFilterCounts = useMemo(() => {
+    let activos = 0;
+    let inactivos = 0;
+    for (const p of items) {
+      if (getPublicationFlags(p).isActive) activos += 1;
+      else inactivos += 1;
+    }
+    return { activos, inactivos, total: items.length };
+  }, [items]);
+
   const filteredSorted = useMemo(() => {
     let rows = items;
-    if (listFilter === "activos") rows = rows.filter((p) => p.activo);
-    else if (listFilter === "inactivos") rows = rows.filter((p) => !p.activo);
-    else if (listFilter === "conEscandallo") rows = rows.filter((p) => tieneEscandalloForPlato(p, meta));
-    else if (listFilter === "sinEscandallo") rows = rows.filter((p) => !tieneEscandalloForPlato(p, meta));
+    const matchesActivos = (p: PlatoCarta) =>
+      configCartaProductosChrome ? getPublicationFlags(p).isActive : p.activo;
+    const matchesInactivos = (p: PlatoCarta) => !matchesActivos(p);
+
+    if (catalogListFilter === "activos") rows = rows.filter(matchesActivos);
+    else if (catalogListFilter === "inactivos") rows = rows.filter(matchesInactivos);
+    else if (catalogListFilter === "conEscandallo") rows = rows.filter((p) => tieneEscandalloForPlato(p, meta));
+    else if (catalogListFilter === "sinEscandallo") rows = rows.filter((p) => !tieneEscandalloForPlato(p, meta));
     if (productFamilyFilter !== "all") {
       rows = rows.filter((p) =>
         matchesProductFamilyListFilter(
@@ -1412,7 +1445,7 @@ export default function ProductosManagementPage({
     }
 
     return [...rows].sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { sensitivity: "base" }));
-  }, [items, listFilter, meta, productFamilyFilter]);
+  }, [items, catalogListFilter, configCartaProductosChrome, meta, productFamilyFilter]);
 
   const tabOptions = useMemo(() => {
     const sorted = [...cartaCategorias].sort(
@@ -2169,6 +2202,7 @@ export default function ProductosManagementPage({
             setEditingId(null);
             setFormError(null);
           }
+          pendingRemovedProductIdsRef.current.add(p.id);
           setItems((prev) => prev.filter((x) => x.id !== p.id));
           setCentralDocsById((prev) => {
             const next = new Map(prev);
@@ -2236,7 +2270,6 @@ export default function ProductosManagementPage({
     { id: "conEscandallo" as const, label: t("carta.filterConEsc") },
     { id: "sinEscandallo" as const, label: t("carta.filterSinEsc") },
   ] as const;
-  const CONFIG_CARTA_BASIC_FILTER_IDS = ["todos", "activos", "inactivos"] as const;
   const CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS = ["conEscandallo", "sinEscandallo"] as const;
 
   /** Pills de familia de producto (Bebidas/Comida/Otros); distinto de filtros escandallo/activo. */
@@ -2533,6 +2566,56 @@ export default function ProductosManagementPage({
           Vista lista
         </button>
       </span>
+    );
+  }
+
+  /** Barra fija Activos/Inactivos/Todos — reutiliza listFilter (config carta productos). */
+  function renderConfigCartaStatusFilterBar(): ReactNode {
+    const specs = [
+      { id: "activos" as const, label: `Activos (${configStatusFilterCounts.activos})` },
+      { id: "inactivos" as const, label: `Inactivos (${configStatusFilterCounts.inactivos})` },
+      { id: "todos" as const, label: `Todos (${configStatusFilterCounts.total})` },
+    ];
+    return (
+      <div
+        className="hostly-productos-carta-status-filter-bar"
+        style={{
+          flexShrink: 0,
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 6,
+          padding: "5px 8px",
+          borderBottom: "1px solid var(--hostly-line)",
+          background: "var(--hostly-surface-card-solid)",
+          minWidth: 0,
+          boxSizing: "border-box",
+        }}
+        role="group"
+        aria-label="Filtrar por estado del producto"
+      >
+        {specs.map((f) => {
+          const active = listFilter === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setListFilter(f.id)}
+              aria-pressed={active}
+              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--status${active ? " is-active" : ""}`}
+              style={{
+                padding: "4px 10px",
+                fontSize: 11,
+                fontWeight: active ? 700 : 650,
+                minHeight: 28,
+                lineHeight: 1.15,
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
     );
   }
 
@@ -2960,6 +3043,7 @@ export default function ProductosManagementPage({
               className="hostly-productos-carta-search hostly-productos-carta-search--prominent"
               />
               </div>
+              {renderConfigCartaStatusFilterBar()}
               <div
               className="hostly-productos-carta-list-host"
               style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
@@ -3032,12 +3116,6 @@ export default function ProductosManagementPage({
               </button>
               <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
               </nav>
-              <div className="hostly-productos-carta-advanced-section">
-              <span className="hostly-productos-carta-advanced-section__label">Estado</span>
-              <div className="hostly-productos-carta-filter-chips">
-              {iceToolbarFilterButtons(true, CONFIG_CARTA_BASIC_FILTER_IDS)}
-              </div>
-              </div>
               <div className="hostly-productos-carta-advanced-section">
               <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
               <div className="hostly-productos-carta-filter-chips">
