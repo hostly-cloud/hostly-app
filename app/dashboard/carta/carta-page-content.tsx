@@ -81,9 +81,13 @@ import {
 } from "@/lib/firestore/order-table-occupancy";
 import {
   fetchOpenOrderForTable,
-  fetchOpenOrdersForTable,
-  sortOpenOrderDocsByCreatedAt,
 } from "@/lib/firestore/open-orders-same-table";
+import { mergeOpenOrdersForTableGroup } from "@/lib/firestore/merge-table-group-orders";
+import {
+  logTableJoinMerge,
+  TABLE_GROUP_ORDERS_MERGED_EVENT,
+  type TableGroupOrdersMergedDetail,
+} from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
 import { handlePayTableOrder } from "@/lib/firestore/pay-table-order";
 import {
@@ -118,7 +122,18 @@ import {
   listenReservationsForDate,
   type Reservation,
 } from "@/lib/firestore/reservations";
-import { isBarItem } from "@/lib/kds/bar-classification";
+import {
+  resolveKdsDestination,
+  type KdsDestination,
+} from "@/lib/kds/kds-destination";
+import {
+  isPendingMarchPostresLine,
+  isPendingMarchSegundosLine,
+  shouldAutoReleaseLineOnComanda,
+  type ComandaReleaseAction,
+} from "@/lib/carta/comanda-line-release";
+import { deriveLegacyStationFromOperationStation } from "@/lib/operacion/product-operation-station";
+import { mapStationToPreparationArea } from "@/lib/carta/map-station-to-preparation-area";
 import {
   readOperationStationFieldsFromFirestoreRecord,
   readStationFieldsFromFirestoreRecord,
@@ -167,19 +182,19 @@ import {
   TpvQuickActionsMenu,
   type TpvQuickActionItem,
 } from "./_components/tpv/tpv-quick-actions-menu";
-import { TpvRecentProductsStrip } from "./_components/tpv/tpv-recent-products-strip";
 import { TpvTablePresenceIndicators } from "./_components/tpv/tpv-table-presence-indicators";
+import {
+  Beer,
+  MapPin,
+  Martini,
+  type LucideIcon,
+} from "lucide-react";
 import { useTablePresenceHeartbeat } from "@/hooks/useTablePresenceHeartbeat";
 import { useConnectivityStatus } from "@/hooks/useConnectivityStatus";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import { capabilityDeniedTitle } from "@/components/auth/capability-guard";
 import { confirmCriticalActionIfUnstable } from "@/lib/client/connectivity-critical-action";
 import { ConnectivityStatusPill } from "@/components/system/connectivity-status-pill";
-import {
-  readTpvRecentProducts,
-  recordTpvRecentProducts,
-  type TpvRecentProductEntry,
-} from "./_components/tpv/tpv-recent-products";
 import { computeTpvRushMode } from "./_components/tpv/tpv-rush-mode";
 import {
   TpvInlineMixerChips,
@@ -270,11 +285,6 @@ async function upsertVoucherBalanceAfterPayment(
   }
 }
 
-function isBarProduct(product: Product | null | undefined): boolean {
-  if (!product) return false;
-  return isBarItem({ categoria: product.categoria });
-}
-
 function destinationBadgeStyle(bar: boolean): CSSProperties {
   return bar
     ? {
@@ -287,6 +297,66 @@ function destinationBadgeStyle(bar: boolean): CSSProperties {
         color: "#9a3412",
         border: "1px solid rgba(249, 115, 22, 0.32)",
       };
+}
+
+const COMANDA_DESTINATION_LABEL: Record<KdsDestination, string> = {
+  kitchen: "Cocina",
+  bar: "Barra",
+  cocktail: "Coctelería",
+  none: "—",
+};
+
+/** Estación canónica desde producto/línea; si falta, deriva del tipo operativo configurado. */
+function resolveComandaLineStationFields(
+  line: CartOrderLine,
+): ReturnType<typeof resolveStationFieldsForCartLine> {
+  const fields = resolveStationFieldsForCartLine(line);
+  if (fields.station || fields.preparationArea) return fields;
+
+  const opType = line.product.operationStationType;
+  if (!opType) return fields;
+
+  const legacy = deriveLegacyStationFromOperationStation({ type: opType });
+  if (legacy !== "kitchen" && legacy !== "bar" && legacy !== "cocktail") {
+    return fields;
+  }
+
+  const station = legacy as OrderLineStation;
+  const preparationAreaRaw = mapStationToPreparationArea(station);
+  const preparationArea =
+    preparationAreaRaw === "cocina" ||
+    preparationAreaRaw === "barra" ||
+    preparationAreaRaw === "cocteleria"
+      ? (preparationAreaRaw as OrderLinePreparationArea)
+      : undefined;
+
+  return {
+    station,
+    ...(preparationArea ? { preparationArea } : {}),
+  };
+}
+
+/** Badge de destino en comanda TPV: prioriza estación configurada del producto/línea. */
+function resolveComandaLineDestinationBadge(line: CartOrderLine): {
+  label: string;
+  useBarStyle: boolean;
+} {
+  const opFields = resolveOperationStationFieldsForCartLine(line);
+  const stationFields = resolveComandaLineStationFields(line);
+  const dest = resolveKdsDestination({
+    station: stationFields.station,
+    preparationArea: stationFields.preparationArea,
+    categoria: line.product.categoria,
+    categoryName: line.product.categoria,
+    name: line.product.nombre,
+    nombre: line.product.nombre,
+  });
+  const useBarStyle = dest === "bar" || dest === "cocktail";
+  const opName = opFields.operationStationName?.trim();
+  if (opName) {
+    return { label: opName, useBarStyle };
+  }
+  return { label: COMANDA_DESTINATION_LABEL[dest], useBarStyle };
 }
 
 /** Texto corto para badge de camarero en mapa (inicial o 2 letras). */
@@ -485,10 +555,10 @@ function normalizeComandaCourseForStorage(raw: unknown): number | undefined {
 }
 
 function getProductDefaultCourse(product: Product): number | undefined {
-  const explicitCourse = normalizeComandaCourseForStorage(
-    (product as unknown as { course?: unknown }).course,
-  );
-  if (explicitCourse) return explicitCourse;
+  if ("course" in product && product.course != null) {
+    const explicitCourse = normalizeComandaCourseForStorage(product.course);
+    if (explicitCourse) return explicitCourse;
+  }
 
   if (
     isTpvDrinkProduct({
@@ -756,9 +826,29 @@ function countActiveComandaLines(lines: CartOrderLine[]): number {
   ).length;
 }
 
+/** Evita auto-cierre justo tras enviar comanda (hueco local ↔ snapshot Firestore). */
+const AUTO_CLOSE_AFTER_SEND_GRACE_MS = 12_000;
+
+/** Mesa sin líneas activas pero con sesión (comanda vacía/cancelada) → cerrar como al cobrar. */
+function tableEmptySessionWarrantsAutoClose(args: {
+  lines: CartOrderLine[];
+  cachedTableLines?: CartOrderLine[];
+  openOrderIds: readonly string[];
+  firestoreOccupied: boolean;
+  draftOrderId: string | null;
+}): boolean {
+  if (countActiveComandaLines(args.lines) > 0) return false;
+  if (countActiveComandaLines(args.cachedTableLines ?? []) > 0) return false;
+  if (args.lines.length > 0) return true;
+  if (args.openOrderIds.length > 0) return true;
+  if (args.draftOrderId) return true;
+  if (args.firestoreOccupied) return true;
+  return false;
+}
+
 function isOrderLineCancellable(line: CartOrderLine): boolean {
   const st = normalizeOrderLineStatus(line.status);
-  return st !== "pending" && st !== "cancelled" && st !== "served";
+  return st !== "pending" && st !== "cancelled";
 }
 
 function parseFirestoreLineExtras(raw: unknown): CartOrderLineExtra[] {
@@ -1078,29 +1168,6 @@ function isPaymentRequestedAtSet(raw: unknown): boolean {
   return false;
 }
 
-function asFirestoreRawItems(raw: unknown): Array<Record<string, unknown>> {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((x) => x && typeof x === "object")
-    .map((x) => ({ ...(x as Record<string, unknown>) }));
-}
-
-function normalizeMergedFirestoreItems(
-  items: Array<Record<string, unknown>>,
-): Array<Record<string, unknown>> {
-  const seen = new Set<string>();
-  return items.map((it) => {
-    const next = { ...it };
-    let id = typeof next.id === "string" ? next.id : "";
-    if (!id || seen.has(id)) {
-      id = generateOrderLineId();
-      next.id = id;
-    }
-    seen.add(id);
-    return next;
-  });
-}
-
 /**
  * Identidad mínima para hidratar líneas desde `orders.items`.
  * Tras actualizar desde KDS, los ítems pueden traer `name`/`qty`/`status` pero no `productId`
@@ -1371,6 +1438,34 @@ function formatTpveurEs(amount: number): string {
   );
 }
 
+function resolveTpvFloorPlanIcon(planName: string): LucideIcon | null {
+  const n = planName.trim().toLowerCase();
+  if (!n) return null;
+  if (n.includes("cocktail") || n.includes("martini")) return Martini;
+  if (/\bbar\b/.test(n) && !n.includes("cocktail")) return Beer;
+  if (n.includes("principal") || n.includes("main")) return MapPin;
+  return null;
+}
+
+function TpvFloorPlanIcon({
+  planName,
+  className,
+}: {
+  planName: string;
+  className?: string;
+}) {
+  const Icon = resolveTpvFloorPlanIcon(planName);
+  if (!Icon) return null;
+  return (
+    <Icon
+      className={className}
+      size={12}
+      strokeWidth={2.25}
+      aria-hidden
+    />
+  );
+}
+
 function paymentMethodLabelEs(method: string): string {
   const m = String(method ?? "")
     .trim()
@@ -1472,6 +1567,35 @@ function resolveJoinedTableGroupMapState(
   return { mainTableId: mainTableId || id, memberIds, serviceTableId, busy };
 }
 
+function resolveGroupMemberIdsForTable(
+  tableId: string,
+  groupedTablesMapHandlers: CartaPageContentProps["groupedTablesMapHandlers"],
+): string[] {
+  const id = String(tableId ?? "").trim();
+  if (!id) return [];
+  return groupedTablesMapHandlers?.getGroupTableIds?.(id) ?? [id];
+}
+
+function buildTableAvailableClosePayload(closeMs: number) {
+  return {
+    busy: false,
+    status: "available" as const,
+    currentOrderId: null,
+    activeOrderId: null,
+    occupancyStartMs: null,
+    occupiedAt: null,
+    startedAt: null,
+    openedAt: null,
+    activeLineCount: 0,
+    priorityScore: 0,
+    total: 0,
+    guestCount: 0,
+    dinersCount: 0,
+    updatedAt: closeMs,
+    closedAt: closeMs,
+  };
+}
+
 export function CartaPageContent({
   embeddedInOperacion = false,
   tablesReadyToClose,
@@ -1508,9 +1632,12 @@ export function CartaPageContent({
   const lastChangeTsRef = useRef(0);
   const isInteractingRef = useRef(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
-  /** Evita mezclar líneas al cambiar de mesa y vacía solo cuando toca (mesa ocupada sin caché tras switch). */
-  const prevSelectedTableForOrderSyncRef = useRef<string | null>(null);
+  /** Evita mezclar líneas al cambiar de mesa (sync `order` ← `ordersByTable`). */
   const openingTableRef = useRef<string | null>(null);
+  const sessionTableScopeRef = useRef<string | null>(null);
+  const suppressUrlTableSelectionRef = useRef(false);
+  /** Mesa abierta desde el mapa (no deep link / URL obsoleta). */
+  const userOpenedTableFromMapRef = useRef<string | null>(null);
   const restaurantId = profileRestaurantId ?? null;
   const operationalRestaurantId = useMemo(
     () => resolveOperationalRestaurantId(restaurantId),
@@ -1956,6 +2083,8 @@ export function CartaPageContent({
   const [now, setNow] = useState(Date.now());
   /** Mesa seleccionada: siempre `tables[].id` (clave de `ordersByTable`). */
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const selectedTableIdRef = useRef<string | null>(null);
+  selectedTableIdRef.current = selectedTableId;
   const [order, setOrder] = useState<CartOrderLine[]>([]);
   const tpvLineInventoryCostLabelByLineId = useMemo(() => {
     const map = new Map<string, string>();
@@ -1989,6 +2118,8 @@ export function CartaPageContent({
   const [ordersByTable, setOrdersByTable] = useState<
     Record<string, CartOrderLine[]>
   >({});
+  const ordersByTableRef = useRef(ordersByTable);
+  ordersByTableRef.current = ordersByTable;
   /** Mesas con order activa en Firestore (`orders.tableId` = `table.id`). */
   const [firestoreOccupiedTableIds, setFirestoreOccupiedTableIds] = useState<
     Set<string>
@@ -2074,7 +2205,6 @@ export function CartaPageContent({
     y: number;
   } | null>(null);
   const [qtyBumpLineId, setQtyBumpLineId] = useState<string | null>(null);
-  const [recentProductsRevision, setRecentProductsRevision] = useState(0);
   /** Ancla visual del menú de acciones de línea (popover contextual, no modal centrado). */
   const [comandaLineActionsAnchorRect, setComandaLineActionsAnchorRect] = useState<{
     top: number;
@@ -2172,6 +2302,7 @@ export function CartaPageContent({
   );
   /** `orders/{id}` reutilizado por mesa para borrador sincronizado con Firestore. */
   const openDraftOrderIdByTableRef = useRef<Record<string, string>>({});
+  const lastComandaSentAtByTableRef = useRef<Record<string, number>>({});
   /** En navegador los timers son `number`; evitar `NodeJS.Timeout` del merge de tipos. */
   const draftPersistDebounceByTableRef = useRef<
     Record<string, number | undefined>
@@ -2741,16 +2872,12 @@ export function CartaPageContent({
       if (paymentMethod === "card") {
         const raw = cardReceived.trim();
         const c = raw === "" ? r : roundMoney(parseMoney(cardReceived));
-        return c > 0 && c <= r + MONEY_EPS;
+        return c > MONEY_EPS;
       }
 
       if (paymentMethod === "voucher") {
         const v = roundMoney(parseMoney(voucherAmount));
-        return (
-          v > 0 &&
-          v <= r + MONEY_EPS &&
-          voucherNumber.trim().length > 0
-        );
+        return v > MONEY_EPS && voucherNumber.trim().length > 0;
       }
 
       return false;
@@ -2786,13 +2913,83 @@ export function CartaPageContent({
     setCurrentSplitIndex(1);
   }, [isConfirmingPayment]);
 
-  const finishPaymentAndReturnToMap = useCallback((clearedTableId: string | null) => {
-    if (clearedTableId) {
-      groupedTablesMapHandlers?.separateTable?.(clearedTableId);
+  const clearLocalTableSessionState = useCallback((tableIds: string[]) => {
+    const ids = [
+      ...new Set(tableIds.map((t) => String(t ?? "").trim()).filter(Boolean)),
+    ];
+    if (ids.length === 0) return;
+    for (const tid of ids) {
+      delete openDraftOrderIdByTableRef.current[tid];
+      delete lastComandaSentAtByTableRef.current[tid];
+      window.dispatchEvent(
+        new CustomEvent("tablesReadyToClose:clear", { detail: tid }),
+      );
     }
-    const selectedTable =
+    setOrdersByTable((prev) => {
+      const next = { ...prev };
+      for (const tid of ids) delete next[tid];
+      return next;
+    });
+    setFirestoreOccupancyStartMsByTable((prev) => {
+      const next = { ...prev };
+      for (const tid of ids) delete next[tid];
+      return next;
+    });
+    setOrderTotalsByTable((prev) => {
+      const next = { ...prev };
+      for (const tid of ids) delete next[tid];
+      return next;
+    });
+    setLastActivityAtByTable((prev) => {
+      const next = { ...prev };
+      for (const tid of ids) delete next[tid];
+      return next;
+    });
+    setFirestoreOccupiedTableIds((prev) => {
+      const next = new Set(prev);
+      for (const tid of ids) next.delete(tid);
+      return next;
+    });
+  }, []);
+
+  const closeTableGroupInFirestore = useCallback(
+    async (anchorTableId: string) => {
+      if (!restaurantId || !isFirebaseConfigured) return;
+      const memberIds = resolveGroupMemberIdsForTable(
+        anchorTableId,
+        groupedTablesMapHandlers,
+      );
+      const closeMs = Date.now();
+      const payload = buildTableAvailableClosePayload(closeMs);
+      for (const memberId of memberIds) {
+        await handlePayTableOrder(memberId, { db, restaurantId });
+        await updateDoc(doc(db, "tables", memberId), payload);
+      }
+    },
+    [restaurantId, isFirebaseConfigured, groupedTablesMapHandlers],
+  );
+
+  const finishPaymentAndReturnToMap = useCallback((clearedTableId: string | null) => {
+    const memberIds = clearedTableId
+      ? resolveGroupMemberIdsForTable(
+          clearedTableId,
+          groupedTablesMapHandlers,
+        )
+      : [];
+    const mainId =
       clearedTableId != null
-        ? tablesList.find((t) => t.id === clearedTableId) ?? null
+        ? (groupedTablesMapHandlers?.resolveMainTableId?.(clearedTableId) ??
+          clearedTableId)
+        : null;
+
+    if (mainId) {
+      groupedTablesMapHandlers?.separateTable?.(mainId);
+    }
+
+    const feedbackTableId = mainId ?? clearedTableId;
+    const selectedTable =
+      feedbackTableId != null
+        ? tablesList.find((t) => t.id === feedbackTableId) ?? null
         : null;
     const tableName =
       selectedTable?.name ||
@@ -2802,58 +2999,40 @@ export function CartaPageContent({
     setIsPaymentOpen(false);
     setSessionTableAmountPaidSum(0);
     setSessionPaymentHistory([]);
+    sessionTableScopeRef.current = null;
+    suppressUrlTableSelectionRef.current = true;
     setSelectedTableId(null);
     setOrder([]);
-    if (clearedTableId) {
-      window.dispatchEvent(
-        new CustomEvent("tablesReadyToClose:clear", {
-          detail: clearedTableId,
-        }),
-      );
-    }
+
+    const idsToClear =
+      memberIds.length > 0
+        ? memberIds
+        : clearedTableId
+          ? [clearedTableId]
+          : [];
+    clearLocalTableSessionState(idsToClear);
+
     setPaymentMethod(null);
     setCashReceived("");
     setCardReceived("");
+    setCardReceivedTouched(false);
     setVoucherAmount("");
     setVoucherNumber("");
     setDiscountAmount("");
     setDiscountPercent("");
-    if (clearedTableId) {
-      delete openDraftOrderIdByTableRef.current[clearedTableId];
-      setOrdersByTable((prev) => ({
-        ...prev,
-        [clearedTableId]: [],
-      }));
-      setFirestoreOccupancyStartMsByTable((prev) => {
-        const next = { ...prev };
-        delete next[clearedTableId];
-        return next;
-      });
-      setOrderTotalsByTable((prev) => {
-        const next = { ...prev };
-        delete next[clearedTableId];
-        return next;
-      });
-      setLastActivityAtByTable((prev) => {
-        const next = { ...prev };
-        delete next[clearedTableId];
-        return next;
-      });
-      setFirestoreOccupiedTableIds((prev) => {
-        const next = new Set(prev);
-        next.delete(clearedTableId);
-        return next;
-      });
-    }
-    if (clearedTableId) {
+    if (idsToClear.length > 0) {
       setTableClosedFeedback(true);
       window.setTimeout(() => setTableClosedFeedback(false), 1500);
     }
     setClosingFeedback({ tableName });
+    setTpvEntryMode("map");
     window.setTimeout(() => {
       setClosingFeedback(null);
-      setTpvEntryMode("map");
     }, 900);
+    const basePath = embeddedInOperacion
+      ? "/dashboard/operacion/tpv"
+      : "/dashboard/carta";
+    router.replace(basePath);
     setIsInvoice(false);
     setInvoiceName("");
     setInvoiceTaxId("");
@@ -2866,7 +3045,114 @@ export function CartaPageContent({
     setSplitCount(2);
     setCurrentSplitIndex(1);
     setPaidSplitItemIds([]);
-  }, [groupedTablesMapHandlers, tablesList]);
+  }, [
+    embeddedInOperacion,
+    groupedTablesMapHandlers,
+    router,
+    tablesList,
+    clearLocalTableSessionState,
+  ]);
+
+  const autoCloseEmptyTableInProgressRef = useRef<string | null>(null);
+
+  const autoCloseEmptyTableIfNeeded = useCallback(
+    async (
+      tableId: string,
+      lines: CartOrderLine[],
+      cachedTableLines?: CartOrderLine[],
+    ) => {
+      const tid = tableId.trim();
+      if (!tid) return;
+      if (countActiveComandaLines(lines) > 0) return;
+      if (countActiveComandaLines(cachedTableLines ?? []) > 0) return;
+      if (autoCloseEmptyTableInProgressRef.current === tid) return;
+
+      const sentAt = lastComandaSentAtByTableRef.current[tid];
+      if (
+        sentAt != null &&
+        Date.now() - sentAt < AUTO_CLOSE_AFTER_SEND_GRACE_MS
+      ) {
+        return;
+      }
+
+      autoCloseEmptyTableInProgressRef.current = tid;
+      try {
+        if (restaurantId && isFirebaseConfigured) {
+          const rid = restaurantId.trim();
+          const snap = await getDocs(
+            query(
+              collection(db, "orders"),
+              where("restaurantId", "==", rid),
+              where("tableId", "==", tid),
+            ),
+          );
+          for (const d of snap.docs) {
+            const data = d.data() as {
+              restaurantId?: string;
+              status?: string;
+              items?: unknown;
+              total?: unknown;
+            };
+            if (data.restaurantId !== rid) continue;
+            if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
+            if (orderDocHasActiveLinesForMapOccupancy(data)) {
+              return;
+            }
+          }
+          const itemsPayload =
+            lines.length > 0 ? orderLinesToFirestoreItems(lines) : [];
+          const batch = new DbgWriteBatch(db, {
+            label: "carta:autoCloseEmptyTable",
+            collection: "orders",
+            restaurantId: rid,
+            tableId: tid,
+          });
+          let n = 0;
+          for (const d of snap.docs) {
+            const data = d.data() as { status?: string; restaurantId?: string };
+            if (data.restaurantId !== rid) continue;
+            if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
+            batch.update(d.ref, {
+              status: "closed",
+              closedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              total: 0,
+              paymentRequestedAt: null,
+              items: itemsPayload,
+            });
+            n++;
+          }
+          if (n > 0) await batch.commit();
+
+          await updateDoc(doc(db, "tables", tid), {
+            busy: false,
+            status: "available",
+            currentOrderId: null,
+            activeOrderId: null,
+            occupancyStartMs: null,
+            occupiedAt: null,
+            startedAt: null,
+            openedAt: null,
+            activeLineCount: 0,
+            priorityScore: 0,
+            total: 0,
+            guestCount: 0,
+            dinersCount: 0,
+            updatedAt: Date.now(),
+            closedAt: Date.now(),
+          });
+        }
+        finishPaymentAndReturnToMap(tid);
+      } catch (error) {
+        console.error("[autoCloseEmptyTable]", error);
+      } finally {
+        if (autoCloseEmptyTableInProgressRef.current === tid) {
+          autoCloseEmptyTableInProgressRef.current = null;
+        }
+      }
+    },
+    [restaurantId, isFirebaseConfigured, finishPaymentAndReturnToMap],
+  );
 
   const reloadSessionTableAmountPaidSum = useCallback(async () => {
     if (!restaurantId?.trim() || !selectedTableId?.trim()) {
@@ -2973,6 +3259,7 @@ export function CartaPageContent({
     const remainingDue = roundMoney(
       Math.max(finalTotal - sessionTableAmountPaidSum, 0),
     );
+    if (remainingDue <= MONEY_EPS) return;
     const prefill = remainingDue.toFixed(2).replace(".", ",");
     setPaymentMethod("cash");
     setCashReceived(prefill);
@@ -2995,6 +3282,47 @@ export function CartaPageContent({
     }, 60);
     return () => window.clearTimeout(id);
   }, [isPaymentOpen, isSimplePaymentMode, paymentMethod]);
+
+  const handleCloseZeroTotalAccount = useCallback(async () => {
+    if (!canCharge) return;
+    if (!restaurantId) {
+      window.alert("No se pudo cerrar la cuenta");
+      return;
+    }
+    if (!selectedTableId?.trim()) return;
+    if (!confirmCriticalActionIfUnstable(connectivityStatus)) return;
+
+    const remainingBeforeClose = roundMoney(
+      Math.max(
+        calculateFinalTotal(total).finalTotal - sessionTableAmountPaidSum,
+        0,
+      ),
+    );
+    if (remainingBeforeClose > MONEY_EPS) return;
+
+    const tableIdForFinish = selectedTableId.trim();
+    try {
+      await closeTableGroupInFirestore(tableIdForFinish);
+      setGuestCount(0);
+      if (soundEnabled) playClickSound();
+      finishPaymentAndReturnToMap(tableIdForFinish);
+    } catch (error) {
+      console.error("[handleCloseZeroTotalAccount]", error);
+      window.alert("No se pudo cerrar la cuenta");
+    }
+  }, [
+    canCharge,
+    restaurantId,
+    selectedTableId,
+    connectivityStatus,
+    calculateFinalTotal,
+    total,
+    sessionTableAmountPaidSum,
+    closeTableGroupInFirestore,
+    finishPaymentAndReturnToMap,
+    soundEnabled,
+    playClickSound,
+  ]);
 
   const handleConfirmPayment = useCallback(async (opts?: {
     overrideTotal?: number;
@@ -3229,6 +3557,11 @@ export function CartaPageContent({
         ...invoiceData,
       };
 
+      console.log("[handleConfirmPayment] await dbgAddDoc start", {
+        paymentMethod: pm,
+        chargeAmount,
+        isAccountFinalPayment,
+      });
       const paymentRef = await dbgAddDoc(
         collection(db, "payments"),
         safeOpts.minimalPaymentDoc ? minimalPayload : fullTableAmountPayload,
@@ -3240,6 +3573,9 @@ export function CartaPageContent({
           orderId: primaryOrderId,
         },
       );
+      console.log("[handleConfirmPayment] await dbgAddDoc ok", {
+        paymentId: paymentRef.id,
+      });
 
       void createActivityLog({
         restaurantId,
@@ -3264,12 +3600,20 @@ export function CartaPageContent({
           route: "tpv",
         }),
       });
+      if (pm === "voucher") {
+        console.log("[handleConfirmPayment] activity log dispatched (void, no await)");
+      }
 
       if (!isSplitEqualInstallment) {
         void reloadSessionTableAmountPaidSum();
       }
 
       if (pm === "voucher") {
+        console.log("[handleConfirmPayment] await upsertVoucherBalanceAfterPayment start", {
+          voucherNumber: voucherNumber.trim(),
+          voucherValue,
+          voucherRemaining,
+        });
         await upsertVoucherBalanceAfterPayment(
           db,
           restaurantId,
@@ -3277,6 +3621,7 @@ export function CartaPageContent({
           voucherValue,
           voucherRemaining,
         );
+        console.log("[handleConfirmPayment] await upsertVoucherBalanceAfterPayment ok");
       }
 
       if (soundEnabled) playClickSound();
@@ -3303,24 +3648,12 @@ export function CartaPageContent({
         (isSplitEqualInstallment || isAccountFinalPayment);
 
       if (shouldCloseTable) {
-        const tid = selectedTableId!;
-        const closeMs = Date.now();
-        await handlePayTableOrder(tid, { db, restaurantId });
-        await updateDoc(doc(db, "tables", tid), {
-          busy: false,
-          status: "available",
-          currentOrderId: null,
-          activeOrderId: null,
-          occupancyStartMs: null,
-          occupiedAt: null,
-          startedAt: null,
-          openedAt: null,
-          activeLineCount: 0,
-          priorityScore: 0,
-          total: 0,
-          guestCount: 0,
-          updatedAt: closeMs,
-          closedAt: closeMs,
+        console.log("[handleConfirmPayment] await closeTableGroupInFirestore start", {
+          tableId: selectedTableId,
+        });
+        await closeTableGroupInFirestore(selectedTableId!);
+        console.log("[handleConfirmPayment] await closeTableGroupInFirestore ok", {
+          tableId: selectedTableId,
         });
         setGuestCount(0);
       }
@@ -3329,6 +3662,15 @@ export function CartaPageContent({
         finishPaymentAndReturnToMap(tableIdForFinish ?? null);
       }
     } catch (error) {
+      console.error(
+        "[VOUCHER PAYMENT ERROR]",
+        error,
+        {
+          code: (error as { code?: string })?.code,
+          message: (error as { message?: string })?.message,
+          stack: (error as { stack?: string })?.stack,
+        },
+      );
       console.error("ERROR REGISTRANDO COBRO", error);
       window.alert("No se pudo registrar el cobro");
       return;
@@ -3376,6 +3718,7 @@ export function CartaPageContent({
     cashReceived,
     calculateFinalTotal,
     finishPaymentAndReturnToMap,
+    closeTableGroupInFirestore,
     isPaymentValid,
     openOrderIdsForTable,
     order,
@@ -3907,44 +4250,215 @@ export function CartaPageContent({
   ]);
 
   useEffect(() => {
+    if (viewMode !== "normal") return;
+    if (isPaymentOpen || isComandaSending || cancellingLineIds.size > 0) return;
+
+    const tableId = (
+      orderIdFromUrl ? orderUrlTableId : selectedTableId
+    )?.trim();
+    if (!tableId) return;
+
+    const draftOrderId =
+      openDraftOrderIdByTableRef.current[tableId]?.trim() || null;
+    const cachedTableLines = ordersByTable[tableId];
+    if (
+      !tableEmptySessionWarrantsAutoClose({
+        lines: order,
+        cachedTableLines,
+        openOrderIds: openOrderIdsForTable,
+        firestoreOccupied: firestoreOccupiedTableIds.has(tableId),
+        draftOrderId,
+      })
+    ) {
+      return;
+    }
+
+    void autoCloseEmptyTableIfNeeded(tableId, order, cachedTableLines);
+  }, [
+    order,
+    ordersByTable,
+    orderIdFromUrl,
+    orderUrlTableId,
+    selectedTableId,
+    openOrderIdsForTable,
+    firestoreOccupiedTableIds,
+    viewMode,
+    isPaymentOpen,
+    isComandaSending,
+    cancellingLineIds,
+    autoCloseEmptyTableIfNeeded,
+  ]);
+
+  useEffect(() => {
     if (orderIdFromUrl) return;
+    if (suppressUrlTableSelectionRef.current) {
+      if (!tableIdFromUrl?.trim()) {
+        suppressUrlTableSelectionRef.current = false;
+      }
+      return;
+    }
     if (!tableIdFromUrl?.trim()) return;
     const id = tableIdFromUrl.trim();
     setSelectedTableId(id);
     setTpvEntryMode(tpvViewFromUrl === "summary" ? "summary" : "tpv");
   }, [orderIdFromUrl, tableIdFromUrl, tpvViewFromUrl]);
 
+  const tpvBasePath = embeddedInOperacion
+    ? "/dashboard/operacion/tpv"
+    : "/dashboard/carta";
+
+  /** Sin mesa activa: nunca dejar catálogo TPV suelto (p. ej. tras refresh post-cobro). */
   useEffect(() => {
     if (orderIdFromUrl) return;
-    if (!isFirebaseConfigured) {
-      setTpvEntryMode("tpv");
-      return;
+    if (selectedTableId?.trim()) return;
+    if (tableIdFromUrl?.trim()) return;
+
+    setOrder([]);
+    if (tpvEntryMode !== "map") {
+      setTpvEntryMode("map");
     }
-    if (authReady && !restaurantId) {
-      setTpvEntryMode("tpv");
-    }
-  }, [orderIdFromUrl, isFirebaseConfigured, authReady, restaurantId]);
+  }, [orderIdFromUrl, selectedTableId, tpvEntryMode, tableIdFromUrl]);
+
+  useEffect(() => {
+    if (orderIdFromUrl) return;
+    if (selectedTableId?.trim() || tableIdFromUrl?.trim()) return;
+    setTpvEntryMode("map");
+  }, [
+    orderIdFromUrl,
+    selectedTableId,
+    tableIdFromUrl,
+    isFirebaseConfigured,
+    authReady,
+    restaurantId,
+  ]);
 
   useEffect(() => {
     if (orderIdFromUrl) return;
     if (!selectedTableId) {
       setOrder([]);
-      prevSelectedTableForOrderSyncRef.current = null;
       return;
     }
-    const prevSel = prevSelectedTableForOrderSyncRef.current;
-    const switched = prevSel !== null && prevSel !== selectedTableId;
-    prevSelectedTableForOrderSyncRef.current = selectedTableId;
-
-    const lines = ordersByTable[selectedTableId];
-    if (lines !== undefined) {
-      setOrder(lines);
-      return;
+    const tid = selectedTableId.trim();
+    if (openingTableRef.current === tid) {
+      // La hidratación puede terminar mientras el gate de apertura bloquea el sync;
+      // al liberar el gate, volcar `ordersByTable` a `order` (la UI renderiza `order`).
+      const openId = tid;
+      const t = window.setTimeout(() => {
+        if (openingTableRef.current === openId) return;
+        if (selectedTableIdRef.current !== openId) return;
+        const lines = ordersByTableRef.current[openId];
+        if (lines !== undefined) {
+          setOrder(lines);
+        }
+      }, 320);
+      return () => window.clearTimeout(t);
     }
-    if (switched) {
-      setOrder([]);
-    }
+    const lines = ordersByTable[tid];
+    setOrder(lines ?? []);
   }, [selectedTableId, ordersByTable, orderIdFromUrl]);
+
+  useEffect(() => {
+    if (orderIdFromUrl) return;
+    const tid = selectedTableId?.trim() ?? null;
+    if (sessionTableScopeRef.current === tid) return;
+    sessionTableScopeRef.current = tid;
+    setSessionTableAmountPaidSum(0);
+    setSessionPaymentHistory([]);
+    setIsPaymentOpen(false);
+  }, [orderIdFromUrl, selectedTableId]);
+
+  const invalidateTableGroupOrderCache = useCallback((memberIds: string[]) => {
+    const ids = [
+      ...new Set(memberIds.map((id) => String(id ?? "").trim()).filter(Boolean)),
+    ];
+    if (ids.length === 0) return;
+    for (const mid of ids) {
+      delete openDraftOrderIdByTableRef.current[mid];
+    }
+    setOrdersByTable((prev) => {
+      const next = { ...prev };
+      for (const mid of ids) {
+        delete next[mid];
+      }
+      return next;
+    });
+  }, []);
+
+  const hydrateTableOrderFromFirestore = useCallback(
+    async (tableId: string, opts?: { force?: boolean }) => {
+      const tid = tableId.trim();
+      if (!tid || !restaurantId || !isFirebaseConfigured || !isAuthReady()) {
+        return;
+      }
+      try {
+        const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
+        if (!snapDoc) {
+          if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
+            setOrdersByTable((prev) => ({ ...prev, [tid]: prev[tid] ?? [] }));
+            if (selectedTableIdRef.current === tid) {
+              setOrder([]);
+            }
+          }
+          return;
+        }
+        const data = snapDoc.data() as FirestoreOrderDocForCart;
+        const mapped = mapFirestoreOrderDocToCartLines(data, restaurantId);
+        if (!mapped || mapped.length === 0) {
+          if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
+            setOrdersByTable((prev) => ({ ...prev, [tid]: prev[tid] ?? [] }));
+            if (selectedTableIdRef.current === tid) {
+              setOrder([]);
+            }
+          }
+          return;
+        }
+        openDraftOrderIdByTableRef.current[tid] = snapDoc.id;
+        setOrdersByTable((prev) => ({ ...prev, [tid]: mapped }));
+        if (selectedTableIdRef.current === tid) {
+          setOrder(mapped);
+        }
+        if (opts?.force) {
+          console.group(
+            "[Hostly:TableJoinMerge] TPV rehidratado desde Firestore",
+          );
+          console.log("tableId:", tid);
+          console.log("orderId:", snapDoc.id);
+          console.log(
+            "items:",
+            mapped.map(
+              (line) =>
+                `${line.quantity}x ${String(line.product?.nombre ?? "").trim()}`,
+            ),
+          );
+          console.groupEnd();
+        }
+      } catch (e) {
+        console.error("[hydrateTableOrderFromFirestore]", e);
+      }
+    },
+    [restaurantId, isFirebaseConfigured],
+  );
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<TableGroupOrdersMergedDetail>).detail;
+      if (!detail?.mainTableId?.trim()) return;
+      const rid = String(detail.restaurantId ?? "").trim();
+      if (rid && restaurantId?.trim() !== rid) return;
+      invalidateTableGroupOrderCache(detail.memberIds ?? []);
+      void hydrateTableOrderFromFirestore(detail.mainTableId.trim(), {
+        force: true,
+      });
+    };
+    window.addEventListener(TABLE_GROUP_ORDERS_MERGED_EVENT, handler);
+    return () => {
+      window.removeEventListener(TABLE_GROUP_ORDERS_MERGED_EVENT, handler);
+    };
+  }, [
+    restaurantId,
+    invalidateTableGroupOrderCache,
+    hydrateTableOrderFromFirestore,
+  ]);
 
   useEffect(() => {
     if (orderIdFromUrl) return;
@@ -3959,14 +4473,23 @@ export function CartaPageContent({
       try {
         const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
         if (cancelled) return;
+        const explicitMapOpen = userOpenedTableFromMapRef.current === tid;
+        if (explicitMapOpen) {
+          userOpenedTableFromMapRef.current = null;
+        }
         if (!snapDoc) {
           if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrder([]);
-            setOrdersByTable((prev) => {
-              const next = { ...prev };
-              delete next[tid];
-              return next;
-            });
+            setOrdersByTable((prev) => ({ ...prev, [tid]: [] }));
+            if (
+              tableIdFromUrl?.trim() === tid &&
+              !explicitMapOpen
+            ) {
+              suppressUrlTableSelectionRef.current = true;
+              setSelectedTableId(null);
+              setTpvEntryMode("map");
+              router.replace(tpvBasePath);
+            }
           }
           return;
         }
@@ -3975,11 +4498,16 @@ export function CartaPageContent({
         if (!mapped || mapped.length === 0) {
           if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrder([]);
-            setOrdersByTable((prev) => {
-              const next = { ...prev };
-              delete next[tid];
-              return next;
-            });
+            setOrdersByTable((prev) => ({ ...prev, [tid]: [] }));
+            if (
+              tableIdFromUrl?.trim() === tid &&
+              !explicitMapOpen
+            ) {
+              suppressUrlTableSelectionRef.current = true;
+              setSelectedTableId(null);
+              setTpvEntryMode("map");
+              router.replace(tpvBasePath);
+            }
           }
           return;
         }
@@ -3991,6 +4519,9 @@ export function CartaPageContent({
           }
           return { ...prev, [tid]: mapped };
         });
+        if (selectedTableIdRef.current === tid) {
+          setOrder(mapped);
+        }
       } catch (e) {
         console.error("[hydrateOrder]", e);
       }
@@ -4005,6 +4536,9 @@ export function CartaPageContent({
     isFirebaseConfigured,
     ordersByTable,
     selectedTableIsFirestoreOccupied,
+    tableIdFromUrl,
+    router,
+    tpvBasePath,
   ]);
 
   useEffect(() => {
@@ -4200,31 +4734,6 @@ export function CartaPageContent({
 
   const handleQuickAdd = handleProductAddRequest;
 
-  const handleRecentProductTap = useCallback(
-    (productId: string) => {
-      const product = products.find((entry) => entry.id === productId);
-      if (product) handleProductAddRequest(product);
-    },
-    [handleProductAddRequest, products],
-  );
-
-  const handleRecentProductLongPress = useCallback(
-    (productId: string) => {
-      const product = products.find((entry) => entry.id === productId);
-      if (!product) return;
-      const category = resolveCategoryForProduct(product, cartaCategories);
-      const groups = resolveActiveEffectiveModifierGroups(
-        product,
-        category,
-        modifierGroups,
-      );
-      if (groups.length === 0) return;
-      setModifierModalProduct(product);
-      setModifierModalGroups(groups);
-    },
-    [cartaCategories, modifierGroups, products],
-  );
-
   const handleIncrementLine = (lineId: string) => {
     updateCurrentTableOrder((prev) =>
       prev.map((l) =>
@@ -4397,14 +4906,14 @@ export function CartaPageContent({
       const st = normalizeOrderLineStatus(line.status);
       if (st === "pending") return;
       if (st === "cancelled") return;
-      if (st === "served") {
-        window.alert("No se puede cancelar una línea ya servida.");
-        return;
-      }
 
       const statusBeforeCancel = st;
 
-      const ok = window.confirm("¿Cancelar este producto ya enviado?");
+      const confirmMessage =
+        st === "served"
+          ? "¿Anular esta línea ya servida?"
+          : "¿Anular esta línea ya enviada?";
+      const ok = window.confirm(confirmMessage);
       if (!ok) return;
       if (!confirmCriticalActionIfUnstable(connectivityStatus)) return;
 
@@ -4417,12 +4926,17 @@ export function CartaPageContent({
         lineAny.orderItemDocId.trim()
           ? lineAny.orderItemDocId.trim()
           : null;
+      const draftOrderId =
+        selectedTableId != null
+          ? openDraftOrderIdByTableRef.current[selectedTableId]?.trim() || null
+          : null;
       const orderDocId =
         (typeof lineAny.orderId === "string" && lineAny.orderId.trim()
           ? lineAny.orderId.trim()
           : null) ??
         (orderIdFromUrl && orderIdFromUrl.trim() ? orderIdFromUrl.trim() : null) ??
-        (openOrderIdsForTable.length > 0 ? openOrderIdsForTable[0]! : null);
+        (openOrderIdsForTable.length > 0 ? openOrderIdsForTable[0]! : null) ??
+        draftOrderId;
 
       if (!orderDocId) {
         window.alert("No se encontró la comanda activa de esta mesa.");
@@ -4434,6 +4948,7 @@ export function CartaPageContent({
         (user as { uid?: string } | null | undefined)?.uid?.trim() ?? null;
 
       setCancellingLineIds((prev) => new Set(prev).add(line.id));
+      let orderCancellationPersisted = false;
       try {
         let next: CartOrderLine[] = [];
         updateCurrentTableOrder((prev) => {
@@ -4466,6 +4981,7 @@ export function CartaPageContent({
             orderId: orderDocId,
           },
         );
+        orderCancellationPersisted = true;
 
         const orderItemPayload = {
           status: "cancelled",
@@ -4474,60 +4990,67 @@ export function CartaPageContent({
           updatedAt: nowMs,
         };
 
-        if (orderItemDocId) {
-          await dbgUpdateDoc(
-            doc(db, "orderItems", orderItemDocId),
-            orderItemPayload,
-            {
-              label: "carta:handleCancelSentOrderLine:orderItems",
-              collection: "orderItems",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderDocId,
-            },
-          );
-        } else {
-          const itemsSnap = await getDocs(
-            query(
-              collection(db, "orderItems"),
-              where("orderId", "==", orderDocId),
-            ),
-          );
-          const lineName = String(line.product.nombre ?? "").trim();
-          const lineQty = Number(line.quantity) || 0;
-          for (const itemDoc of itemsSnap.docs) {
-            const data = itemDoc.data() as Record<string, unknown>;
-            const itemSt = String(data.status ?? "")
-              .trim()
-              .toLowerCase();
-            if (
-              itemSt === "cancelled" ||
-              itemSt === "canceled" ||
-              itemSt === "cancelado"
-            ) {
-              continue;
-            }
-            const linkedLineId =
-              typeof data.lineId === "string" ? data.lineId.trim() : "";
-            const matchesByLineId = linkedLineId === line.id;
-            const matchesLegacy =
-              !linkedLineId &&
-              String(data.name ?? "").trim() === lineName &&
-              (Number(data.quantity) || 0) === lineQty;
-            if (!matchesByLineId && !matchesLegacy) continue;
+        try {
+          if (orderItemDocId) {
             await dbgUpdateDoc(
-              doc(db, "orderItems", itemDoc.id),
+              doc(db, "orderItems", orderItemDocId),
               orderItemPayload,
               {
-                label: "carta:handleCancelSentOrderLine:orderItemsQuery",
+                label: "carta:handleCancelSentOrderLine:orderItems",
                 collection: "orderItems",
                 restaurantId,
                 tableId: selectedTableId,
                 orderId: orderDocId,
               },
             );
-            break;
+          } else {
+            const itemsSnap = await getDocs(
+              query(
+                collection(db, "orderItems"),
+                where("orderId", "==", orderDocId),
+              ),
+            );
+            const lineName = String(line.product.nombre ?? "").trim();
+            const lineQty = Number(line.quantity) || 0;
+            for (const itemDoc of itemsSnap.docs) {
+              const data = itemDoc.data() as Record<string, unknown>;
+              const itemSt = String(data.status ?? "")
+                .trim()
+                .toLowerCase();
+              if (
+                itemSt === "cancelled" ||
+                itemSt === "canceled" ||
+                itemSt === "cancelado"
+              ) {
+                continue;
+              }
+              const linkedLineId =
+                typeof data.lineId === "string" ? data.lineId.trim() : "";
+              const matchesByLineId = linkedLineId === line.id;
+              const matchesLegacy =
+                !linkedLineId &&
+                String(data.name ?? "").trim() === lineName &&
+                (Number(data.quantity) || 0) === lineQty;
+              if (!matchesByLineId && !matchesLegacy) continue;
+              await dbgUpdateDoc(
+                doc(db, "orderItems", itemDoc.id),
+                orderItemPayload,
+                {
+                  label: "carta:handleCancelSentOrderLine:orderItemsQuery",
+                  collection: "orderItems",
+                  restaurantId,
+                  tableId: selectedTableId,
+                  orderId: orderDocId,
+                },
+              );
+              break;
+            }
           }
+        } catch (orderItemSyncErr) {
+          console.warn(
+            "[handleCancelSentOrderLine] orderItems sync failed; comanda anulada en orders.",
+            orderItemSyncErr,
+          );
         }
 
         if (restaurantId) {
@@ -4636,7 +5159,14 @@ export function CartaPageContent({
         }
       } catch (error) {
         console.error("handleCancelSentOrderLine", error);
-        window.alert("No se pudo cancelar el producto. Inténtalo otra vez.");
+        if (!orderCancellationPersisted) {
+          window.alert("No se pudo anular la línea. Inténtalo otra vez.");
+        } else {
+          console.warn(
+            "[handleCancelSentOrderLine] paso secundario falló tras anular comanda; línea ya cancelada.",
+            error,
+          );
+        }
       } finally {
         setCancellingLineIds((prev) => {
           const n = new Set(prev);
@@ -5022,41 +5552,6 @@ export function CartaPageContent({
     },
     [orderIdFromUrl, isFirebaseConfigured, updateCurrentTableOrder],
   );
-
-  const handleRepeatLastRound = useCallback(() => {
-    const sentLines = order.filter(
-      (line) =>
-        line.status !== "pending" &&
-        line.status !== "cancelled" &&
-        line.status !== "served",
-    );
-    if (sentLines.length === 0) return;
-
-    const latestSentAt = Math.max(...sentLines.map((line) => line.sentAt ?? 0));
-    if (!Number.isFinite(latestSentAt) || latestSentAt <= 0) return;
-
-    const lastRoundLines = sentLines.filter(
-      (line) => (line.sentAt ?? 0) === latestSentAt,
-    );
-    if (lastRoundLines.length === 0) return;
-
-    updateCurrentTableOrder((prev) => [
-      ...prev,
-      ...lastRoundLines.map((item) => ({
-        ...item,
-        id: generateOrderLineId(),
-        status: "pending" as const,
-        addedAt: Date.now(),
-        createdAt: Date.now(),
-        sentAt: undefined,
-        preparedAt: undefined,
-        servedAt: undefined,
-        inventoryCost: undefined,
-        isComped: undefined,
-        compedReason: undefined,
-      })),
-    ]);
-  }, [order, updateCurrentTableOrder]);
 
   const handleApplyInlineMixer = useCallback(
     (
@@ -5603,13 +6098,16 @@ export function CartaPageContent({
   }, []);
 
   const showTableMap = useMemo(
-    () =>
-      viewMode === "normal" &&
-      tpvEntryMode === "map" &&
-      !orderIdFromUrl &&
-      authReady &&
-      isFirebaseConfigured &&
-      Boolean(restaurantId),
+    () => {
+      if (viewMode !== "normal" || orderIdFromUrl) return false;
+      if (!selectedTableId?.trim()) return true;
+      return (
+        tpvEntryMode === "map" &&
+        authReady &&
+        isFirebaseConfigured &&
+        Boolean(restaurantId)
+      );
+    },
     [
       viewMode,
       tpvEntryMode,
@@ -5617,6 +6115,7 @@ export function CartaPageContent({
       authReady,
       isFirebaseConfigured,
       restaurantId,
+      selectedTableId,
     ],
   );
 
@@ -5967,28 +6466,50 @@ export function CartaPageContent({
       const id = String(tableId).trim();
       if (!id) return;
 
-      if (openingTableRef.current === id) return;
-      openingTableRef.current = id;
+      const memberIds = groupedTablesMapHandlers?.getGroupTableIds?.(id) ?? [
+        id,
+      ];
+      const mainId = groupedTablesMapHandlers?.resolveMainTableId?.(id) ?? id;
+      const isGrouped = memberIds.length > 1;
+      const openId = isGrouped ? mainId : id;
 
-      setSelectedTableId(id);
+      if (openingTableRef.current === openId) return;
+      openingTableRef.current = openId;
+      suppressUrlTableSelectionRef.current = false;
+
+      if (isGrouped) {
+        invalidateTableGroupOrderCache(memberIds);
+      }
+
+      selectedTableIdRef.current = openId;
+      setSelectedTableId(openId);
 
       if (!orderIdFromUrl) {
-        const cached = ordersByTable[id];
-        if (cached !== undefined) {
-          setOrder(cached);
+        setOrder([]);
+        userOpenedTableFromMapRef.current = openId;
+        const tableOccupiedOnMap = memberIds.some((memberId) =>
+          firestoreOccupiedTableIdsRef.current.has(memberId),
+        );
+        if (!tableOccupiedOnMap) {
+          setOrdersByTable((prev) => ({
+            ...prev,
+            [openId]: prev[openId] ?? [],
+          }));
+          userOpenedTableFromMapRef.current = null;
         }
+        void hydrateTableOrderFromFirestore(openId, { force: true });
       } else {
         setOrdersByTable((prev) =>
-          Object.prototype.hasOwnProperty.call(prev, id)
+          Object.prototype.hasOwnProperty.call(prev, openId)
             ? prev
-            : { ...prev, [id]: [] },
+            : { ...prev, [openId]: [] },
         );
       }
 
       const entry = options?.entry ?? "tpv";
       setTpvEntryMode(entry === "summary" ? "summary" : "tpv");
       const qs = new URLSearchParams();
-      qs.set("tableId", id);
+      qs.set("tableId", openId);
       if (entry === "summary") qs.set("tpvView", "summary");
       // Mantener la ruta embebida cuando estamos dentro de /dashboard/operacion/tpv
       // para no desmontar el OperacionModuleShell (eso era lo que provocaba el "paso
@@ -5998,17 +6519,24 @@ export function CartaPageContent({
         : "/dashboard/carta";
       router.push(`${basePath}?${qs.toString()}`);
       window.setTimeout(() => {
-        if (openingTableRef.current === id) {
+        if (openingTableRef.current === openId) {
           openingTableRef.current = null;
+        }
+        if (selectedTableIdRef.current === openId) {
+          const lines = ordersByTableRef.current[openId];
+          if (lines !== undefined) {
+            setOrder(lines);
+          }
         }
       }, 300);
     },
     [
       embeddedInOperacion,
       orderIdFromUrl,
-      ordersByTable,
-      restaurantId,
       router,
+      groupedTablesMapHandlers,
+      invalidateTableGroupOrderCache,
+      hydrateTableOrderFromFirestore,
     ],
   );
 
@@ -6066,7 +6594,11 @@ export function CartaPageContent({
       });
       delete openDraftOrderIdByTableRef.current[selectedTableId];
       setOrder([]);
-      setOrdersByTable((prev) => ({ ...prev, [selectedTableId]: [] }));
+      setOrdersByTable((prev) => {
+        const next = { ...prev };
+        delete next[selectedTableId];
+        return next;
+      });
       setGuestCount(0);
       groupedTablesMapHandlers?.separateTable?.(selectedTableId);
     } catch (e) {
@@ -6227,101 +6759,17 @@ export function CartaPageContent({
 
     setIsMergingOrders(true);
     try {
-      const openDocs = await fetchOpenOrdersForTable(
+      const result = await mergeOpenOrdersForTableGroup(
         db,
         restaurantId,
         tableId,
+        [tableId],
       );
-      if (openDocs.length < 2) return;
+      if (!result.merged || !result.destOrderId) return;
 
-      let destDoc: (typeof openDocs)[0];
-      if (orderIdFromUrl) {
-        const found = openDocs.find((d) => d.id === orderIdFromUrl);
-        if (!found) {
-          window.alert("No se pudo identificar la comanda actual.");
-          return;
-        }
-        destDoc = found;
-      } else {
-        destDoc = sortOpenOrderDocsByCreatedAt(openDocs)[0]!;
-      }
-
-      const sources = openDocs.filter((d) => d.id !== destDoc.id);
-      if (sources.length === 0) return;
-
-      const destData = destDoc.data() as {
-        restaurantId?: string;
-        items?: unknown;
-        note?: unknown;
-        paymentRequestedAt?: unknown;
-      };
-      if (destData.restaurantId !== restaurantId) return;
-
-      const destItems = asFirestoreRawItems(destData.items);
-      const flatSource = sources.flatMap((s) =>
-        asFirestoreRawItems((s.data() as { items?: unknown }).items),
-      );
-
-      const mergedItems = normalizeMergedFirestoreItems([
-        ...destItems,
-        ...flatSource,
-      ]);
-      const mergedTotal = computeOrderDocTotal({
-        items: mergedItems as FirestoreOrderDocForCart["items"],
-        total: 0,
-      });
-
-      const noteParts: string[] = [];
-      const pushNote = (n: unknown) => {
-        const s = typeof n === "string" ? n.trim() : "";
-        if (s) noteParts.push(s);
-      };
-      pushNote(destData.note);
-      for (const s of sources) {
-        pushNote((s.data() as { note?: unknown }).note);
-      }
-      const mergedNote = noteParts.join("\n");
-
-      const prRaw: unknown[] = [destData.paymentRequestedAt];
-      for (const s of sources) {
-        prRaw.push(
-          (s.data() as { paymentRequestedAt?: unknown }).paymentRequestedAt,
-        );
-      }
-      let mergedPr: unknown = null;
-      let bestMs = -1;
-      for (const raw of prRaw) {
-        if (!isPaymentRequestedAtSet(raw)) continue;
-        const ms = readOrderCreatedAtMs(raw) ?? 0;
-        if (ms > bestMs) {
-          bestMs = ms;
-          mergedPr = raw;
-        }
-      }
-
-      const batch = new DbgWriteBatch(db, {
-        label: "carta:handleMergeOrders",
-        collection: "orders",
-        restaurantId,
-        tableId,
-        orderId: destDoc.id,
-      });
-      batch.update(destDoc.ref, {
-        items: mergedItems,
-        total: Number.isFinite(mergedTotal) ? mergedTotal : 0,
-        note: mergedNote,
-        paymentRequestedAt: mergedPr,
-        updatedAt: serverTimestamp(),
-      });
-      for (const s of sources) {
-        batch.delete(s.ref);
-      }
-      await batch.commit();
-
-      const destId = destDoc.id;
+      const destId = result.destOrderId;
       const hadSourceAsCurrentUrl =
-        Boolean(orderIdFromUrl) &&
-        sources.some((s) => s.id === orderIdFromUrl);
+        Boolean(orderIdFromUrl) && orderIdFromUrl !== destId;
 
       if (hadSourceAsCurrentUrl) {
         router.replace(
@@ -6384,7 +6832,10 @@ export function CartaPageContent({
             ? orderTotalsByTable[readyMemberId]
             : 0;
         const tablePendingTotal = Math.max(fromLines, fromAggregate);
-        handleOpenTableOrder(serviceTableId, { entry: "summary" });
+        handleOpenTableOrder(
+          memberIds.length > 1 ? mainTableId : serviceTableId,
+          { entry: "summary" },
+        );
         if (tablePendingTotal <= 0) {
           return;
         }
@@ -6438,7 +6889,28 @@ export function CartaPageContent({
         });
       }
 
-      handleOpenTableOrder(busy ? serviceTableId : mainTableId);
+      const openTableId =
+        memberIds.length > 1 ? mainTableId : busy ? serviceTableId : mainTableId;
+      if (memberIds.length > 1) {
+        logTableJoinMerge("join:tpv-open-after-group", {
+          clickedTableId: tid,
+          mainTableId,
+          serviceTableId,
+          openTableId,
+          memberIds,
+          localCacheLines: Object.fromEntries(
+            memberIds.map((memberId) => [
+              memberId,
+              (ordersByTable[memberId] ?? []).map(
+                (line) =>
+                  `${line.quantity}x ${String(line.product?.nombre ?? "").trim()}`,
+              ),
+            ]),
+          ),
+          hint: "Mesas agrupadas: se abre mainTableId y se rehidrata desde Firestore.",
+        });
+      }
+      handleOpenTableOrder(openTableId);
     },
     [
       handleOpenTableOrder,
@@ -6454,6 +6926,7 @@ export function CartaPageContent({
       setFirestoreOccupancyStartMsByTable,
       setOrdersByTable,
       groupedTablesMapHandlers,
+      canCharge,
     ],
   );
 
@@ -6479,6 +6952,21 @@ export function CartaPageContent({
         floorPlans,
       );
       if (fpA !== fpB) return;
+      logTableJoinMerge("join:ui-drop", {
+        targetTableId: t,
+        draggedTableId: d,
+        localOrdersByTable: {
+          [d]: (ordersByTable[d] ?? []).map(
+            (line) =>
+              `${line.quantity}x ${String(line.product?.nombre ?? "").trim()}`,
+          ),
+          [t]: (ordersByTable[t] ?? []).map(
+            (line) =>
+              `${line.quantity}x ${String(line.product?.nombre ?? "").trim()}`,
+          ),
+        },
+        hint: "Estado local antes del join; si difiere de Firestore, merge puede ver solo una comanda.",
+      });
       join(t, d);
     },
     [
@@ -6487,13 +6975,31 @@ export function CartaPageContent({
       tablesById,
       selectedTpvFloorPlanId,
       floorPlans,
+      ordersByTable,
     ],
   );
 
   const handleBackToMap = useCallback(() => {
+    const tid = selectedTableId?.trim();
+    userOpenedTableFromMapRef.current = null;
+    if (tid) {
+      delete openDraftOrderIdByTableRef.current[tid];
+      setOrdersByTable((prev) => {
+        const next = { ...prev };
+        delete next[tid];
+        return next;
+      });
+    }
     setTpvEntryMode("map");
+    suppressUrlTableSelectionRef.current = true;
     setSelectedTableId(null);
-  }, []);
+    setOrder([]);
+    sessionTableScopeRef.current = null;
+    const basePath = embeddedInOperacion
+      ? "/dashboard/operacion/tpv"
+      : "/dashboard/carta";
+    router.replace(basePath);
+  }, [embeddedInOperacion, router, selectedTableId]);
 
   const handlePrintPreTicket = useCallback(() => {
     window.print();
@@ -6616,7 +7122,6 @@ export function CartaPageContent({
         1) as 1 | 2 | 3 | 4;
       buckets[course].push(line);
     };
-    linesPending.forEach(pushByCourse);
     linesSent.forEach(pushByCourse);
     linesPrepared.forEach(pushByCourse);
     if (viewMode === "normal") {
@@ -6624,10 +7129,14 @@ export function CartaPageContent({
     }
     linesCancelled.forEach(pushByCourse);
     return buckets;
-  }, [linesPending, linesSent, linesPrepared, linesServed, linesCancelled, viewMode]);
+  }, [linesSent, linesPrepared, linesServed, linesCancelled, viewMode]);
 
-  const sendLinesToComanda = useCallback(
-    async (linesToSend: CartOrderLine[]): Promise<boolean> => {
+  /** Libera líneas pending → sent (Comanda parcial o Marchar). */
+  const releaseLinesToProduction = useCallback(
+    async (
+      linesToSend: CartOrderLine[],
+      options?: { releaseAction?: ComandaReleaseAction },
+    ): Promise<boolean> => {
       if (!selectedTableId) return false;
       if (!restaurantId || !isFirebaseConfigured) return false;
       if (linesToSend.length === 0) return false;
@@ -6638,6 +7147,7 @@ export function CartaPageContent({
         selectedTableId;
 
       setIsComandaSending(true);
+      lastComandaSentAtByTableRef.current[selectedTableId] = Date.now();
       try {
         const now = Date.now();
         const sendIds = new Set(linesToSend.map((l) => l.id));
@@ -6894,24 +7404,6 @@ export function CartaPageContent({
           comandaFlashTimeoutRef.current = null;
         }, 1000);
 
-        if (restaurantId) {
-          const seenProductIds = new Set<string>();
-          const recentEntries: Array<{ productId: string; productName: string }> = [];
-          for (const line of linesToSend) {
-            const productId = line.product.id?.trim();
-            if (!productId || seenProductIds.has(productId)) continue;
-            seenProductIds.add(productId);
-            recentEntries.push({
-              productId,
-              productName: String(line.product.nombre ?? "").trim() || "Producto",
-            });
-          }
-          if (recentEntries.length > 0) {
-            recordTpvRecentProducts(restaurantId, recentEntries);
-            setRecentProductsRevision((value) => value + 1);
-          }
-        }
-
         void createActivityLog({
           restaurantId,
           type: existingOrderId ? "order_updated" : "order_created",
@@ -6926,7 +7418,7 @@ export function CartaPageContent({
             lineCount: linesToSend.length,
             lineIds: linesToSend.map((line) => line.id),
             total: Number.isFinite(grandTotal) ? grandTotal : 0,
-            action: "send_to_comanda",
+            action: options?.releaseAction ?? "send_to_comanda",
             route: "tpv",
           }),
         });
@@ -6959,6 +7451,16 @@ export function CartaPageContent({
     ],
   );
 
+  const sendLinesToComanda = releaseLinesToProduction;
+
+  const showSentFeedback = (message: string) => {
+    setSentFeedbackMessage(message);
+
+    setTimeout(() => {
+      setSentFeedbackMessage(null);
+    }, 1500);
+  };
+
   const handleComanda = useCallback(async (): Promise<boolean> => {
     if (isComandaSending) {
       return false;
@@ -6966,11 +7468,21 @@ export function CartaPageContent({
     if (!selectedTableId) return false;
     if (!restaurantId || !isFirebaseConfigured) return false;
     if (order.length === 0) return false;
-    if (!order.some((l) => l.status === "pending")) return false;
     if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
 
-    const linesToSend = order.filter((l) => l.status === "pending");
-    const ok = await sendLinesToComanda(linesToSend);
+    const linesToSend = order.filter(
+      (l) => l.status === "pending" && shouldAutoReleaseLineOnComanda(l),
+    );
+    if (linesToSend.length === 0) {
+      showSentFeedback(
+        "No hay líneas para comanda ahora. Usa Marchar segundos o postres.",
+      );
+      return false;
+    }
+
+    const ok = await releaseLinesToProduction(linesToSend, {
+      releaseAction: "send_to_comanda",
+    });
     if (ok) {
       showSentFeedback("Comanda enviada");
     }
@@ -6981,20 +7493,70 @@ export function CartaPageContent({
     isFirebaseConfigured,
     order,
     isComandaSending,
-    sendLinesToComanda,
+    releaseLinesToProduction,
     connectivityStatus,
   ]);
 
-  const showSentFeedback = (message: string) => {
-    setSentFeedbackMessage(message);
+  const handleMarchSegundos = useCallback(async (): Promise<boolean> => {
+    if (isComandaSending) return false;
+    if (!selectedTableId) return false;
+    if (!restaurantId || !isFirebaseConfigured) return false;
+    if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
 
-    setTimeout(() => {
-      setSentFeedbackMessage(null);
-    }, 1500);
-  };
+    const linesToSend = order.filter((l) => isPendingMarchSegundosLine(l));
+    if (linesToSend.length === 0) return false;
+
+    const ok = await releaseLinesToProduction(linesToSend, {
+      releaseAction: "march_segundos",
+    });
+    if (ok) {
+      showSentFeedback("Segundos marchados");
+    }
+    return ok;
+  }, [
+    isComandaSending,
+    selectedTableId,
+    restaurantId,
+    isFirebaseConfigured,
+    order,
+    connectivityStatus,
+    releaseLinesToProduction,
+  ]);
+
+  const handleMarchPostres = useCallback(async (): Promise<boolean> => {
+    if (isComandaSending) return false;
+    if (!selectedTableId) return false;
+    if (!restaurantId || !isFirebaseConfigured) return false;
+    if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
+
+    const linesToSend = order.filter((l) => isPendingMarchPostresLine(l));
+    if (linesToSend.length === 0) return false;
+
+    const ok = await releaseLinesToProduction(linesToSend, {
+      releaseAction: "march_postres",
+    });
+    if (ok) {
+      showSentFeedback("Postres marchados");
+    }
+    return ok;
+  }, [
+    isComandaSending,
+    selectedTableId,
+    restaurantId,
+    isFirebaseConfigured,
+    order,
+    connectivityStatus,
+    releaseLinesToProduction,
+  ]);
 
   const handleComandaAndExit = useCallback(async () => {
-    if (!order.some((l) => l.status === "pending")) return;
+    if (
+      !order.some(
+        (l) => l.status === "pending" && shouldAutoReleaseLineOnComanda(l),
+      )
+    ) {
+      return;
+    }
     const ok = await handleComanda();
     if (!ok) {
       if (order.some((l) => l.status === "pending")) {
@@ -7119,21 +7681,27 @@ export function CartaPageContent({
             : `Pendiente ${linesPending.length}`}
         </span>
         {hasPendingSegundos ? (
-          <span
-            className="ml-2 shrink-0 px-2 py-0.5 rounded bg-orange-100 text-orange-600 text-xs font-medium whitespace-nowrap border border-orange-200/80"
-            title="Hay primeros o segundos pendientes de marchar"
+          <button
+            type="button"
+            className="ml-2 shrink-0 rounded border border-orange-200/80 bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-800 whitespace-nowrap hover:bg-orange-200/80 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Liberar primeros y segundos a cocina"
+            disabled={isComandaSending}
+            onClick={() => void handleMarchSegundos()}
           >
-            Segundos pendientes
-          </span>
+            {cartaHeaderMobile ? "March. seg." : "Marchar segundos"}
+          </button>
         ) : null}
-        {hasPendingPostres && (
-          <span
-            className="ml-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-600"
-            title="Hay postres pendientes de marchar"
+        {hasPendingPostres ? (
+          <button
+            type="button"
+            className="ml-1 shrink-0 rounded-full border border-purple-200/80 bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800 whitespace-nowrap hover:bg-purple-200/80 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Liberar postres a cocina"
+            disabled={isComandaSending}
+            onClick={() => void handleMarchPostres()}
           >
-            Postres pendientes
-          </span>
-        )}
+            {cartaHeaderMobile ? "March. post." : "Marchar postres"}
+          </button>
+        ) : null}
         <span
           style={{
             color: "#1e3a8a",
@@ -7177,6 +7745,9 @@ export function CartaPageContent({
       linesSent.length,
       linesPrepared.length,
       linesServed.length,
+      isComandaSending,
+      handleMarchSegundos,
+      handleMarchPostres,
     ],
   );
 
@@ -7226,6 +7797,14 @@ export function CartaPageContent({
     [order],
   );
 
+  const hasPendingComandaRelease = useMemo(
+    () =>
+      order.some(
+        (l) => l.status === "pending" && shouldAutoReleaseLineOnComanda(l),
+      ),
+    [order],
+  );
+
   const tpvRushMode = useMemo(
     () =>
       computeTpvRushMode({
@@ -7234,19 +7813,6 @@ export function CartaPageContent({
       }),
     [firestoreOccupiedTableIds.size, linesPending.length],
   );
-
-  const tpvRecentProducts = useMemo((): TpvRecentProductEntry[] => {
-    if (!restaurantId) return [];
-    return readTpvRecentProducts(restaurantId);
-  }, [restaurantId, recentProductsRevision]);
-
-  const tpvRecentProductNameLookup = useMemo(() => {
-    const map = new Map<string, { id: string; nombre: string }>();
-    for (const product of products) {
-      map.set(product.id, { id: product.id, nombre: product.nombre });
-    }
-    return map;
-  }, [products]);
 
   const tpvQuickActionsLine = useMemo(() => {
     if (!tpvQuickActionsAnchor) return null;
@@ -7281,7 +7847,7 @@ export function CartaPageContent({
       },
       {
         id: "cancel-line",
-        label: isPending ? "Eliminar línea" : "Cancelar línea",
+        label: isPending ? "Eliminar línea" : "Anular línea",
         tone: "danger",
         disabled: isPending ? false : !canCancel || isCancelling || !canCancelLine,
         onSelect: () => {
@@ -7294,34 +7860,16 @@ export function CartaPageContent({
           }
         },
       },
-      {
-        id: "repeat-round",
-        label: "Repetir ronda",
-        onSelect: () => handleRepeatLastRound(),
-      },
     ];
   }, [
     cancellingLineIds,
     handleCancelSentOrderLine,
     handleRemoveLine,
     handleRepeatItem,
-    handleRepeatLastRound,
     openComandaLineEditor,
     tpvQuickActionsLine,
     canCancelLine,
   ]);
-
-  const hasRepeatableRound = useMemo(
-    () =>
-      order.some(
-        (line) =>
-          line.status !== "pending" &&
-          line.status !== "cancelled" &&
-          line.status !== "served" &&
-          (line.sentAt ?? 0) > 0,
-      ),
-    [order],
-  );
 
   const showComandaAside =
     viewMode !== "normal" || Boolean(selectedTableId || orderIdFromUrl);
@@ -7478,6 +8026,7 @@ export function CartaPageContent({
           )?.optionId ?? null
         : null;
     const lineNoteTrimmed = item.lineNote?.trim() ?? "";
+    const destinationBadge = resolveComandaLineDestinationBadge(item);
     return (
       <TpvLineGestureRow
         key={`line-gesture-${item.id}`}
@@ -7548,7 +8097,7 @@ export function CartaPageContent({
       >
         <div
           className="carta-comanda-line-grid"
-          style={{ rowGap: 6 }}
+          style={{ rowGap: 3 }}
         >
           <div className="carta-comanda-line-main">
             <div className="carta-comanda-line-head">
@@ -7586,7 +8135,7 @@ export function CartaPageContent({
                 {lineNoteTrimmed ? (
                   <div className="carta-comanda-line-meta-note">{lineNoteTrimmed}</div>
                 ) : null}
-                {lineCourseLabel ? (
+                {lineCourseLabel && item.status !== "pending" ? (
                   <span
                     className="carta-line-course-badge"
                     aria-label={`Pase: ${lineCourseLabel}`}
@@ -7680,15 +8229,11 @@ export function CartaPageContent({
                     padding: "1px 5px",
                     borderRadius: 999,
                     lineHeight: 1.1,
-                    ...destinationBadgeStyle(isBarProduct(item.product)),
+                    ...destinationBadgeStyle(destinationBadge.useBarStyle),
                   }}
-                  title={
-                    isBarProduct(item.product)
-                      ? "Se envía a Barra"
-                      : "Se envía a Cocina"
-                  }
+                  title={`Se envía a ${destinationBadge.label}`}
                 >
-                  {isBarProduct(item.product) ? "Barra" : "Cocina"}
+                  {destinationBadge.label}
                 </span>
               </div>
             </div>
@@ -8156,7 +8701,7 @@ export function CartaPageContent({
                         close();
                       }}
                     >
-                      {isCancelling ? "Cancelando…" : "Cancelar producto"}
+                      {isCancelling ? "Anulando…" : "Anular línea"}
                     </button>
                   </div>
                 </>
@@ -8718,6 +9263,29 @@ export function CartaPageContent({
   background: rgba(255, 255, 255, 0.94) !important;
 }
 
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-line {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  flex-wrap: nowrap !important;
+  gap: 2px !important;
+  height: 100% !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster {
+  flex: 0 0 auto !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-divider {
+  height: 14px !important;
+  margin: 0 1px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-label {
+  font-size: 7.5px !important;
+}
+
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main {
   flex: 1 1 auto !important;
   min-width: 0 !important;
@@ -8777,11 +9345,11 @@ export function CartaPageContent({
   line-height: 1 !important;
 }
 
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-wrap {
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster .carta-tpv-floor-plan-wrap {
   flex: 0 0 auto !important;
 }
 
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-trigger {
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster .carta-tpv-floor-plan-trigger {
   max-width: min(148px, 30vw) !important;
   min-height: 20px !important;
   height: 20px !important;
@@ -8790,17 +9358,25 @@ export function CartaPageContent({
   gap: 3px !important;
 }
 
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-trigger-label {
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster .carta-tpv-floor-plan-trigger-label {
   display: none !important;
 }
 
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-trigger-name {
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster .carta-tpv-floor-plan-trigger-name {
   font-size: 8.5px !important;
   font-weight: 750 !important;
 }
 
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-tpv-floor-plan-trigger-chevron {
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster .carta-tpv-floor-plan-trigger-chevron {
   font-size: 8px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster .carta-tpv-layout-active-badge {
+  min-height: 20px !important;
+  max-height: 20px !important;
+  padding: 1px 6px !important;
+  font-size: 8px !important;
+  max-width: min(120px, 32vw) !important;
 }
 
 .carta-tpv-floor-plan-menu--portal[data-carta-tpv-compact-menu="true"] {
@@ -8879,6 +9455,64 @@ export function CartaPageContent({
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.carta-map-top-strip-line {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.carta-map-floor-plan-cluster {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(520px, 52vw);
+  box-sizing: border-box;
+}
+
+.carta-map-floor-plan-divider {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: rgba(148, 163, 184, 0.38);
+  border-radius: 1px;
+}
+
+.carta-map-floor-plan-label {
+  flex: 0 0 auto;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(100, 116, 139, 0.82);
+  white-space: nowrap;
+  line-height: 1;
+  user-select: none;
+}
+
+.carta-map-floor-plan-cluster .carta-tpv-floor-plan-seg {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  gap: 4px;
+  padding: 0;
+}
+
+.carta-map-floor-plan-cluster .carta-tpv-layout-active-badge {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .carta-map-summary-status {
@@ -8983,12 +9617,12 @@ export function CartaPageContent({
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"]
-  .carta-map-top-strip-main
+  .carta-map-floor-plan-cluster
   .carta-tpv-layout-active-badge {
-  min-height: 24px;
-  max-width: min(160px, 42vw);
-  padding: 2px 8px !important;
-  font-size: 9px !important;
+  min-height: 20px;
+  max-width: min(120px, 36vw);
+  padding: 1px 6px !important;
+  font-size: 8px !important;
 }
 
 /* Desktop/tablet (≥768px): pills segmentadas; móvil sigue con chip + popover. */
@@ -9024,31 +9658,58 @@ export function CartaPageContent({
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   flex: 0 0 auto;
-  padding: 3px 11px;
-  min-height: 26px;
-  max-width: 148px;
-  border-radius: 999px;
-  border: 1px solid var(--hostly-line);
-  background: rgba(255, 255, 255, 0.5);
+  padding: 0 12px;
+  min-height: 34px;
+  height: 34px;
+  max-height: 34px;
+  max-width: 160px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  background: rgba(255, 255, 255, 0.98);
   cursor: pointer;
   font-family: inherit;
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: -0.01em;
-  line-height: 1.15;
-  color: #475569;
+  line-height: 1.1;
+  color: #334155;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   box-sizing: border-box;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.carta-tpv-floor-plan-seg-pill-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carta-tpv-floor-plan-seg-pill-icon {
+  flex: 0 0 auto;
+  color: #64748b;
+  opacity: 0.78;
 }
 
 .carta-tpv-floor-plan-seg-pill:hover {
-  background: rgba(241, 245, 249, 0.92);
-  color: #334155;
+  background: rgba(248, 250, 252, 1);
+  border-color: rgba(100, 116, 139, 0.46);
+  color: #1e293b;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.carta-tpv-floor-plan-seg-pill:hover .carta-tpv-floor-plan-seg-pill-icon {
+  color: #475569;
+  opacity: 0.92;
 }
 
 .carta-tpv-floor-plan-seg-pill:focus-visible {
@@ -9059,45 +9720,62 @@ export function CartaPageContent({
 .carta-tpv-floor-plan-seg-pill--active {
   background: linear-gradient(
     180deg,
-    rgba(239, 246, 255, 0.98) 0%,
-    rgba(224, 242, 254, 0.86) 100%
+    rgba(236, 246, 255, 0.98) 0%,
+    rgba(219, 236, 250, 0.94) 100%
   );
-  border-color: rgba(30, 58, 95, 0.22);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.07);
-  color: #0f172a;
-  font-weight: 750;
+  border-color: rgba(56, 120, 168, 0.42);
+  box-shadow: 0 1px 3px rgba(30, 64, 112, 0.1);
+  color: #0c4a6e;
+  font-weight: 600;
+}
+
+.carta-tpv-floor-plan-seg-pill--active .carta-tpv-floor-plan-seg-pill-icon {
+  color: #0369a1;
+  opacity: 0.95;
 }
 
 .carta-tpv-floor-plan-seg-pill--active:hover {
   background: linear-gradient(
     180deg,
-    rgba(239, 246, 255, 1) 0%,
-    rgba(224, 242, 254, 0.94) 100%
+    rgba(236, 246, 255, 1) 0%,
+    rgba(214, 234, 248, 0.98) 100%
   );
-  color: #0f172a;
+  border-color: rgba(56, 120, 168, 0.5);
+  color: #0c4a6e;
+  box-shadow: 0 1px 4px rgba(30, 64, 112, 0.12);
 }
 
 .carta-tpv-floor-plan-trigger {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  max-width: min(210px, 38vw);
-  padding: 3px 9px 3px 8px;
-  min-height: 28px;
+  max-width: min(220px, 40vw);
+  padding: 0 10px 0 9px;
+  min-height: 34px;
+  height: 34px;
   box-sizing: border-box;
-  border-radius: 999px;
-  border: 1px solid var(--hostly-line);
+  border-radius: 10px;
+  border: 1px solid rgba(56, 120, 168, 0.38);
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.98) 0%,
-    rgba(246, 250, 253, 0.94) 100%
+    rgba(236, 246, 255, 0.98) 0%,
+    rgba(219, 236, 250, 0.94) 100%
   );
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 3px rgba(30, 64, 112, 0.08);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   font-family: inherit;
-  color: #0f172a;
+  color: #0c4a6e;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.carta-tpv-floor-plan-trigger:hover {
+  border-color: rgba(56, 120, 168, 0.5);
+  box-shadow: 0 1px 4px rgba(30, 64, 112, 0.11);
 }
 
 .carta-tpv-floor-plan-trigger:focus-visible {
@@ -9107,22 +9785,31 @@ export function CartaPageContent({
 
 .carta-tpv-floor-plan-trigger-label {
   flex: 0 0 auto;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.58);
+  color: rgba(100, 116, 139, 0.82);
 }
 
 .carta-tpv-floor-plan-trigger-name {
   flex: 1 1 auto;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 600;
   letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.carta-tpv-floor-plan-trigger-icon {
+  flex: 0 0 auto;
+  color: #0369a1;
+  opacity: 0.92;
 }
 
 .carta-tpv-floor-plan-trigger-chevron {
@@ -9185,11 +9872,13 @@ export function CartaPageContent({
 .carta-tpv-floor-plan-option--active {
   background: linear-gradient(
     180deg,
-    rgba(239, 246, 255, 0.95) 0%,
-    rgba(224, 242, 254, 0.65) 100%
+    rgba(236, 246, 255, 0.98) 0%,
+    rgba(219, 236, 250, 0.92) 100%
   );
-  color: #0f172a;
-  font-weight: 750;
+  border: 1px solid rgba(56, 120, 168, 0.28);
+  color: #0c4a6e;
+  font-weight: 650;
+  box-shadow: 0 1px 2px rgba(30, 64, 112, 0.06);
 }
 
 .carta-tpv-floor-plan-option-check {
@@ -9204,6 +9893,9 @@ export function CartaPageContent({
 .carta-tpv-floor-plan-option-name {
   flex: 1 1 auto;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9276,7 +9968,7 @@ export function CartaPageContent({
   box-sizing: border-box;
 }
 
-/* Alto fijo del strip de métricas (prioridad máxima; evita fugas desde padding/global). */
+/* Alto compacto del strip de métricas (una sola fila). */
 .carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
 .carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
   height: 1.1cm !important;
@@ -9290,20 +9982,48 @@ export function CartaPageContent({
   overflow: hidden !important;
   flex-shrink: 0 !important;
   box-sizing: border-box !important;
+  box-shadow: none !important;
 }
 
-.carta-map-metrics-strip-host .carta-map-top-strip-main .carta-map-summary-pill,
-.carta-map-metrics-strip-host .carta-map-top-strip-main .carta-map-summary-pill--interactive,
-.carta-map-metrics-strip-host .carta-map-top-strip-main .carta-table-map-zone-btn {
+.carta-map-metrics-strip-host .carta-map-top-strip-line .carta-map-top-strip-main .carta-map-summary-pill,
+.carta-map-metrics-strip-host .carta-map-top-strip-line .carta-map-top-strip-main .carta-map-summary-pill--interactive,
+.carta-map-metrics-strip-host .carta-map-top-strip-line .carta-map-top-strip-main .carta-table-map-zone-btn {
   min-height: 0 !important;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
 }
 
-.carta-map-metrics-strip-host .carta-map-summary-status {
+.carta-map-metrics-strip-host .carta-map-top-strip-line .carta-map-summary-status {
   line-height: 1 !important;
   max-height: 100%;
   overflow: hidden;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1024px) {
+  .carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
+  .carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
+    height: auto !important;
+    min-height: 1.1cm !important;
+    max-height: none !important;
+    align-items: stretch !important;
+  }
+
+  .carta-map-top-strip-line {
+    row-gap: 3px;
+  }
+
+  .carta-map-floor-plan-cluster {
+    max-width: 100%;
+    flex-basis: auto;
+  }
+}
+
+.carta-map-floor-plan-cluster .carta-tpv-floor-plan-seg-pill {
+  min-height: 34px;
+  height: 34px;
+  max-height: 34px;
 }
 
 .carta-map-summary-row {
@@ -9713,42 +10433,40 @@ export function CartaPageContent({
   margin: 0;
 }
 
-/* Cabecera comanda: laterales 1fr (aire real) | centro auto (mesa) | laterales 1fr.
-   Equivale a 1fr auto 1fr con minmax(0,1fr) para truncado sin romper grid. */
+/* Cabecera comanda: bloque operativo compacto (comensales + mesa · tiempo · mapa). */
 .carta-comanda-head-top-grid {
-  display: grid;
-  width: 100%;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  column-gap: 8px;
-  row-gap: 0;
+  gap: 6px;
+  width: 100%;
   box-sizing: border-box;
 }
 
-.carta-comanda-head-cell--left {
-  justify-self: start;
-  align-self: center;
-  text-align: left;
-  margin-left: -8px;
-}
-
-.carta-comanda-head-cell--center {
-  min-width: 0;
-  justify-self: center;
-  align-self: center;
-  max-width: 100%;
-  padding-left: 4px;
-  padding-right: 4px;
-}
-
-.carta-comanda-head-cell--right {
-  justify-self: end;
-  align-self: center;
+.carta-comanda-head-mesa-cluster {
   display: inline-flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.carta-comanda-head-mesa-cluster .carta-comanda-headline {
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carta-comanda-head-sep {
+  flex: 0 0 auto;
+  color: rgba(15, 23, 42, 0.28);
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
 }
 
 .carta-comanda-headline-time {
@@ -10212,17 +10930,17 @@ export function CartaPageContent({
 }
 
 .carta-comanda-line {
-  padding: 6px 8px 7px 10px;
+  padding: 4px 7px 4px 9px;
   margin-left: 0;
   margin-right: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.85);
   transition: background-color 0.1s ease;
 }
 
 .carta-comanda-line.is-pending {
   position: relative;
-  padding-left: 14px !important;
+  padding-left: 12px !important;
   background: rgba(15, 23, 42, 0.04) !important;
   border: 1px solid rgba(15, 23, 42, 0.11) !important;
 }
@@ -10230,19 +10948,19 @@ export function CartaPageContent({
 .carta-comanda-line.is-pending::before {
   content: "";
   position: absolute;
-  left: 6px;
+  left: 5px;
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
-  height: calc(100% - 10px);
-  max-height: 32px;
+  height: calc(100% - 6px);
+  max-height: 24px;
   border-radius: 2px;
   background: rgba(30, 41, 59, 0.72);
   pointer-events: none;
 }
 
 .carta-comanda-group {
-  margin-bottom: 7px;
+  margin-bottom: 4px;
 }
 
 .carta-comanda-group-title {
@@ -10251,7 +10969,7 @@ export function CartaPageContent({
   color: #94a3b8;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  margin: 8px 0 5px;
+  margin: 5px 0 3px;
 }
 
 .carta-comanda-line-grid {
@@ -10291,7 +11009,7 @@ export function CartaPageContent({
 .carta-comanda-line-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -10300,17 +11018,16 @@ export function CartaPageContent({
   min-width: 0;
   flex: 1;
   align-items: baseline;
-  gap: 2px;
+  gap: 1px;
 }
 
-/* Badge de pase inline en la línea de comanda. Se muestra entre el
-   nombre del producto y la cantidad (cuando no está en pending).
-   Lectura derivada de line.course ya existente en CartOrderLine. */
+/* Badge de pase inline en la línea de comanda (enviados/preparados/servidos).
+   Oculto en pending: el pase no aporta valor operativo hasta el envío. */
 .carta-line-course-badge {
   display: inline-flex;
   align-items: center;
-  margin-left: 6px;
-  padding: 2px 6px;
+  margin-left: 4px;
+  padding: 1px 5px;
   border-radius: 999px;
   background: rgba(17, 24, 39, 0.08);
   color: #111827;
@@ -10340,7 +11057,7 @@ export function CartaPageContent({
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .carta-comanda-status-chip--clickable {
@@ -10368,10 +11085,10 @@ export function CartaPageContent({
 
 .carta-comanda-line-pricing {
   font-size: 10px;
-  line-height: 1.12;
+  line-height: 1.05;
   color: #64748b;
   padding-left: 0;
-  margin-top: 1px;
+  margin-top: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -10379,9 +11096,9 @@ export function CartaPageContent({
 
 .carta-comanda-line-cost-hint {
   font-size: 9px;
-  line-height: 1.15;
+  line-height: 1.1;
   color: #94a3b8;
-  margin-top: 1px;
+  margin-top: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -10451,9 +11168,9 @@ export function CartaPageContent({
 
 .carta-comanda-extras {
   font-size: 9px;
-  line-height: 1.25;
+  line-height: 1.15;
   color: #64748b;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .carta-comanda-extras-row {
@@ -10496,7 +11213,7 @@ export function CartaPageContent({
 .carta-comanda-name {
   font-weight: 500;
   font-size: 13px;
-  line-height: 1.2;
+  line-height: 1.15;
   min-width: 0;
   padding-left: 0;
   margin-left: 0;
@@ -10551,15 +11268,15 @@ export function CartaPageContent({
 .carta-comanda-qty-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .carta-comanda-qty-btn {
   box-sizing: border-box;
-  min-width: 36px;
-  min-height: 36px;
-  border-radius: 10px;
-  font-size: 16px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1;
   display: inline-flex;
@@ -11419,16 +12136,16 @@ export function CartaPageContent({
   }
 
   .carta-comanda-line {
-    padding: 6px 8px !important;
-    min-height: 46px;
+    padding: 4px 7px !important;
+    min-height: 40px;
     box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
   }
 
   .carta-comanda-line.is-pending {
-    padding: 6px 8px 6px 14px !important;
+    padding: 4px 7px 4px 11px !important;
   }
 
   .carta-comanda-line > div:first-child {
@@ -11455,12 +12172,12 @@ export function CartaPageContent({
   }
 
   .carta-comanda-qty-btn {
-    width: 28px !important;
-    height: 28px !important;
-    min-width: 28px !important;
-    min-height: 28px !important;
-    border-radius: 8px !important;
-    font-size: 13px !important;
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+    border-radius: 7px !important;
+    font-size: 12px !important;
   }
 
   .carta-comanda-button {
@@ -11524,17 +12241,11 @@ export function CartaPageContent({
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-top-grid {
   min-height: 21px !important;
-  column-gap: 3px !important;
-}
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-cell--left {
-  margin-left: 0 !important;
-}
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-cell--center {
-  padding-left: 2px !important;
-  padding-right: 2px !important;
-}
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-cell--right {
   gap: 4px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-mesa-cluster {
+  gap: 4px !important;
+  min-width: 0 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline {
   font-size: 15px !important;
@@ -11608,21 +12319,21 @@ export function CartaPageContent({
   padding: 10px 8px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-group {
-  margin-bottom: 4px !important;
+  margin-bottom: 2px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-group-title {
-  margin: 2px 0 2px !important;
+  margin: 1px 0 1px !important;
   font-size: 9px !important;
   line-height: 1 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line {
-  min-height: 36px !important;
-  padding: 3px 6px !important;
-  border-radius: 6px !important;
-  gap: 4px !important;
+  min-height: 32px !important;
+  padding: 2px 5px !important;
+  border-radius: 5px !important;
+  gap: 3px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line.is-pending {
-  padding: 3px 6px 3px 11px !important;
+  padding: 2px 5px 2px 10px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line-grid {
   column-gap: 4px !important;
@@ -11975,17 +12686,18 @@ export function CartaPageContent({
                     flexShrink: 0,
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 8,
+                    gap: 6,
                     border:
                       mapSummaryAlertLevel === "critical"
                         ? "1px solid rgba(201, 99, 91, 0.38)"
                         : mapSummaryAlertLevel === "warning"
                           ? "1px solid rgba(196, 144, 61, 0.36)"
                           : "1px solid var(--hostly-line)",
-                    boxShadow: "var(--hostly-shadow-card)",
+                    boxShadow: "none",
                     marginBottom: 0,
                   }}
                 >
+                <div className="carta-map-top-strip-line">
                 <div className="carta-map-top-strip-main">
                   <button
                     type="button"
@@ -12084,99 +12796,60 @@ export function CartaPageContent({
                       ))}
                     </div>
                   ) : null}
-                  {operationalFloorPlansForTpv.length > 1 ? (
-                    cartaHeaderMobile ? (
-                      <div
-                        ref={tpvFloorPlanMenuRef}
-                        className="carta-tpv-floor-plan-wrap"
-                      >
-                        <button
-                          type="button"
-                          className="carta-tpv-floor-plan-trigger"
-                          aria-haspopup="listbox"
-                          aria-expanded={tpvFloorPlanMenuOpen}
-                          aria-label={`Plano operativo: ${selectedTpvFloorPlan?.name?.trim() ?? "plano"}. Elegir otro plano.`}
-                          onClick={() =>
-                            setTpvFloorPlanMenuOpen((open) => !open)
-                          }
-                        >
-                          <span className="carta-tpv-floor-plan-trigger-label">
-                            Plano
-                          </span>
-                          <span className="carta-tpv-floor-plan-trigger-name">
-                            {selectedTpvFloorPlan?.name?.trim() ?? "—"}
-                          </span>
-                          <span
-                            className="carta-tpv-floor-plan-trigger-chevron"
-                            aria-hidden
-                          >
-                            ▾
-                          </span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div
-                        className="carta-tpv-floor-plan-seg"
-                        role="tablist"
-                        aria-label="Planos operativos"
-                      >
-                        {operationalFloorPlansForTpv.map((plan) => {
-                          const active =
-                            plan.id === selectedTpvFloorPlanId;
-                          return (
-                            <button
-                              key={plan.id}
-                              type="button"
-                              role="tab"
-                              aria-selected={active}
-                              className={
-                                active
-                                  ? "carta-tpv-floor-plan-seg-pill carta-tpv-floor-plan-seg-pill--active"
-                                  : "carta-tpv-floor-plan-seg-pill"
-                              }
-                              onClick={() =>
-                                selectOperationalTpvFloorPlan(plan.id)
-                              }
-                            >
-                              {plan.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )
-                  ) : null}
-                  {restaurantId && isFirebaseConfigured ? (
+                </div>
+                {operationalFloorPlansForTpv.length > 1 ||
+                (restaurantId && isFirebaseConfigured) ? (
+                  <div
+                    className="carta-map-floor-plan-cluster"
+                    role="group"
+                    aria-label="Plano"
+                  >
                     <span
-                      className="carta-tpv-layout-active-badge hostly-pill hostly-muted"
-                      title={tpvActiveLayoutLabel}
-                      aria-live="polite"
-                    >
-                      {tpvActiveLayoutLabel}
-                    </span>
-                  ) : null}
-                  {operationalFloorPlansForTpv.length > 1 &&
-                  cartaHeaderMobile &&
-                  tpvFloorPlanMenuOpen &&
-                  tpvFloorPlanMenuRect &&
-                  typeof document !== "undefined"
-                    ? createPortal(
+                      className="carta-map-floor-plan-divider"
+                      aria-hidden="true"
+                    />
+                    <span className="carta-map-floor-plan-label">Plano</span>
+                    {operationalFloorPlansForTpv.length > 1 ? (
+                      cartaHeaderMobile ? (
                         <div
-                          ref={tpvFloorPlanMenuPanelRef}
-                          className="carta-tpv-floor-plan-menu carta-tpv-floor-plan-menu--portal"
-                          role="listbox"
+                          ref={tpvFloorPlanMenuRef}
+                          className="carta-tpv-floor-plan-wrap"
+                        >
+                          <button
+                            type="button"
+                            className="carta-tpv-floor-plan-trigger"
+                            aria-haspopup="listbox"
+                            aria-expanded={tpvFloorPlanMenuOpen}
+                            aria-label={`Plano operativo: ${selectedTpvFloorPlan?.name?.trim() ?? "plano"}. Elegir otro plano.`}
+                            onClick={() =>
+                              setTpvFloorPlanMenuOpen((open) => !open)
+                            }
+                          >
+                            <span className="carta-tpv-floor-plan-trigger-label">
+                              Plano
+                            </span>
+                            <span className="carta-tpv-floor-plan-trigger-name">
+                              <TpvFloorPlanIcon
+                                planName={
+                                  selectedTpvFloorPlan?.name?.trim() ?? ""
+                                }
+                                className="carta-tpv-floor-plan-trigger-icon"
+                              />
+                              {selectedTpvFloorPlan?.name?.trim() ?? "—"}
+                            </span>
+                            <span
+                              className="carta-tpv-floor-plan-trigger-chevron"
+                              aria-hidden
+                            >
+                              ▾
+                            </span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          className="carta-tpv-floor-plan-seg"
+                          role="tablist"
                           aria-label="Planos operativos"
-                          data-carta-tpv-compact-menu={
-                            embeddedInOperacion && cartaHeaderMobile
-                              ? "true"
-                              : undefined
-                          }
-                          style={{
-                            position: "fixed",
-                            top: tpvFloorPlanMenuRect.top,
-                            left: tpvFloorPlanMenuRect.left,
-                            minWidth: tpvFloorPlanMenuRect.minWidth,
-                            zIndex: 4500,
-                          }}
                         >
                           {operationalFloorPlansForTpv.map((plan) => {
                             const active =
@@ -12185,34 +12858,41 @@ export function CartaPageContent({
                               <button
                                 key={plan.id}
                                 type="button"
-                                role="option"
+                                role="tab"
                                 aria-selected={active}
                                 className={
                                   active
-                                    ? "carta-tpv-floor-plan-option carta-tpv-floor-plan-option--active"
-                                    : "carta-tpv-floor-plan-option"
+                                    ? "carta-tpv-floor-plan-seg-pill carta-tpv-floor-plan-seg-pill--active"
+                                    : "carta-tpv-floor-plan-seg-pill"
                                 }
                                 onClick={() =>
                                   selectOperationalTpvFloorPlan(plan.id)
                                 }
                               >
-                                <span
-                                  className="carta-tpv-floor-plan-option-check"
-                                  aria-hidden
-                                >
-                                  {active ? "✓" : "\u00a0"}
-                                </span>
-                                <span className="carta-tpv-floor-plan-option-name">
+                                <TpvFloorPlanIcon
+                                  planName={plan.name}
+                                  className="carta-tpv-floor-plan-seg-pill-icon"
+                                />
+                                <span className="carta-tpv-floor-plan-seg-pill-label">
                                   {plan.name}
                                 </span>
                               </button>
                             );
                           })}
-                        </div>,
-                        document.body,
+                        </div>
                       )
-                    : null}
-                </div>
+                    ) : null}
+                    {restaurantId && isFirebaseConfigured ? (
+                      <span
+                        className="carta-tpv-layout-active-badge hostly-pill hostly-muted"
+                        title={tpvActiveLayoutLabel}
+                        aria-live="polite"
+                      >
+                        {tpvActiveLayoutLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
                 {cartaHeaderMobile &&
                 embeddedInOperacion &&
                 mapSummaryAlertLevel === "normal" ? null : (
@@ -12224,6 +12904,69 @@ export function CartaPageContent({
                         : "Servicio estable"}
                   </span>
                 )}
+                {operationalFloorPlansForTpv.length > 1 &&
+                cartaHeaderMobile &&
+                tpvFloorPlanMenuOpen &&
+                tpvFloorPlanMenuRect &&
+                typeof document !== "undefined"
+                  ? createPortal(
+                      <div
+                        ref={tpvFloorPlanMenuPanelRef}
+                        className="carta-tpv-floor-plan-menu carta-tpv-floor-plan-menu--portal"
+                        role="listbox"
+                        aria-label="Planos operativos"
+                        data-carta-tpv-compact-menu={
+                          embeddedInOperacion && cartaHeaderMobile
+                            ? "true"
+                            : undefined
+                        }
+                        style={{
+                          position: "fixed",
+                          top: tpvFloorPlanMenuRect.top,
+                          left: tpvFloorPlanMenuRect.left,
+                          minWidth: tpvFloorPlanMenuRect.minWidth,
+                          zIndex: 4500,
+                        }}
+                      >
+                        {operationalFloorPlansForTpv.map((plan) => {
+                          const active =
+                            plan.id === selectedTpvFloorPlanId;
+                          return (
+                            <button
+                              key={plan.id}
+                              type="button"
+                              role="option"
+                              aria-selected={active}
+                              className={
+                                active
+                                  ? "carta-tpv-floor-plan-option carta-tpv-floor-plan-option--active"
+                                  : "carta-tpv-floor-plan-option"
+                              }
+                              onClick={() =>
+                                selectOperationalTpvFloorPlan(plan.id)
+                              }
+                            >
+                              <span
+                                className="carta-tpv-floor-plan-option-check"
+                                aria-hidden
+                              >
+                                {active ? "✓" : "\u00a0"}
+                              </span>
+                              <span className="carta-tpv-floor-plan-option-name">
+                                <TpvFloorPlanIcon
+                                  planName={plan.name}
+                                  className="carta-tpv-floor-plan-seg-pill-icon"
+                                />
+                                {plan.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>,
+                      document.body,
+                    )
+                  : null}
+                </div>
                 </div>
               )}
               {!embeddedInOperacion ? (
@@ -12589,9 +13332,9 @@ export function CartaPageContent({
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-start",
               gap: 6,
-              minHeight: 42,
+              minHeight: 36,
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -12611,47 +13354,36 @@ export function CartaPageContent({
                 }
               >
                 <div className="carta-comanda-head-top-stack w-full min-w-0">
-                  <div className="carta-comanda-head-top-grid mb-0 w-full min-h-[32px]">
-                    <div className="carta-comanda-head-cell--left">
-                      {viewMode === "normal" && selectedTableId ? (
-                        <div className="carta-comensales-compact carta-comensales--pill">
-                          <span className="carta-comensales-label">
-                            Comensales:
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => void persistGuestCount(guestCount - 1)}
-                            disabled={guestCount <= 0}
-                          >
-                            -
-                          </button>
-                          <span className="carta-comensales-count">
-                            {guestCount}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => void persistGuestCount(guestCount + 1)}
-                          >
-                            +
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="carta-comanda-head-cell--center">
+                  <div className="carta-comanda-head-top-grid mb-0 w-full min-h-[28px]">
+                    {viewMode === "normal" && selectedTableId ? (
+                      <div className="carta-comensales-compact carta-comensales--pill">
+                        <span className="carta-comensales-label">Comensales:</span>
+                        <button
+                          type="button"
+                          onClick={() => void persistGuestCount(guestCount - 1)}
+                          disabled={guestCount <= 0}
+                        >
+                          -
+                        </button>
+                        <span className="carta-comensales-count">{guestCount}</span>
+                        <button
+                          type="button"
+                          onClick={() => void persistGuestCount(guestCount + 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    ) : null}
+                    <div className="carta-comanda-head-mesa-cluster">
                       <p
                         className="carta-comanda-headline min-w-0 truncate"
                         style={{
                           fontSize: 17,
                           fontWeight: 950,
                           letterSpacing: "-0.01em",
-                          textAlign: "center",
+                          textAlign: "left",
                           margin: 0,
                           padding: 0,
-                          minWidth: 0,
-                          maxWidth: "100%",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
                         }}
                       >
                         {selectedTableId ? (
@@ -12667,40 +13399,33 @@ export function CartaPageContent({
                               )
                             : "Comanda"
                         ) : (
-                          <span style={{ color: "rgba(15, 23, 42, 0.38)" }}>
-                            Sin mesa
-                          </span>
+                          <span style={{ color: "rgba(15, 23, 42, 0.38)" }}>Sin mesa</span>
                         )}
                       </p>
-                    </div>
-                    <div className="carta-comanda-head-cell--right">
                       {tpvComandaHeaderTime ? (
-                        <span
-                          className="carta-comanda-headline-time shrink-0 whitespace-nowrap text-[11px] font-semibold tabular-nums leading-none tracking-tight"
-                          style={{ color: tpvComandaHeaderTime.color }}
-                        >
-                          {tpvComandaHeaderTime.label}
-                        </span>
-                      ) : null}
-                      <div
-                        className={
-                          viewMode === "normal"
-                            ? "flex shrink-0 justify-end md:hidden"
-                            : "flex shrink-0 justify-end"
-                        }
-                      >
-                        {!orderIdFromUrl &&
-                        (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
-                          <button
-                            type="button"
-                            className="carta-tpv-to-map-btn"
-                            onClick={handleBackToMap}
-                            style={{ flexShrink: 0 }}
+                        <>
+                          <span className="carta-comanda-head-sep" aria-hidden="true">
+                            ·
+                          </span>
+                          <span
+                            className="carta-comanda-headline-time shrink-0 whitespace-nowrap text-[11px] font-semibold tabular-nums leading-none tracking-tight"
+                            style={{ color: tpvComandaHeaderTime.color }}
                           >
-                            {t("cartaTpv.mapNavVisible")}
-                          </button>
-                        ) : null}
-                      </div>
+                            {tpvComandaHeaderTime.label}
+                          </span>
+                        </>
+                      ) : null}
+                      {!orderIdFromUrl &&
+                      (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
+                        <button
+                          type="button"
+                          className="carta-tpv-to-map-btn"
+                          onClick={handleBackToMap}
+                          style={{ flexShrink: 0 }}
+                        >
+                          {t("cartaTpv.mapNavVisible")}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -12771,15 +13496,6 @@ export function CartaPageContent({
                 <div className="carta-estados carta-comanda-status-row">
                   {tpvComandaEstadosChipsEl}
                 </div>
-                {hasRepeatableRound ? (
-                  <button
-                    type="button"
-                    className="hostly-tpv-repeat-round-btn"
-                    onClick={handleRepeatLastRound}
-                  >
-                    Repetir ronda
-                  </button>
-                ) : null}
               </div>
             </div>
           )}
@@ -12915,6 +13631,22 @@ export function CartaPageContent({
                       padding: 0,
                     }}
                   >
+                    {linesPending.length > 0 ? (
+                      <ul
+                        style={{
+                          margin: 0,
+                          padding: 0,
+                          listStyle: "none",
+                        }}
+                      >
+                        {linesPending.map((line) =>
+                          renderComandaLine(line, "Pendiente", {
+                            attachFirstPendingRef:
+                              line.id === linesPending[0]?.id,
+                          }),
+                        )}
+                      </ul>
+                    ) : null}
                     {([1, 2, 3, 4] as const).map((course) => {
                       const lines = groupedLines[course];
                       if (!lines.length) return null;
@@ -12934,12 +13666,6 @@ export function CartaPageContent({
                           >
                             {lines.map((line) => {
                               const st = normalizeOrderLineStatus(line.status);
-                              if (st === "pending") {
-                                return renderComandaLine(line, "Pendiente", {
-                                  attachFirstPendingRef:
-                                    line.id === linesPending[0]?.id,
-                                });
-                              }
                               if (st === "sent") {
                                 return renderComandaLine(line, "Enviado", {});
                               }
@@ -12996,14 +13722,14 @@ export function CartaPageContent({
                       : ""
                   }`}
                   onClick={() => {
-                    if (!hasPendingItems) return;
+                    if (!hasPendingComandaRelease) return;
                     void handleComandaAndExit();
                   }}
                   disabled={
                     isComandaSending ||
                     order.length === 0 ||
                     !selectedTableId ||
-                    !hasPendingItems
+                    !hasPendingComandaRelease
                   }
                   style={{
                     width: "100%",
@@ -13014,7 +13740,7 @@ export function CartaPageContent({
                       isComandaSending ||
                       order.length === 0 ||
                       !selectedTableId ||
-                      !hasPendingItems
+                      !hasPendingComandaRelease
                         ? "not-allowed"
                         : "pointer",
                     borderRadius: 14,
@@ -13027,7 +13753,7 @@ export function CartaPageContent({
                         ? 0.6
                         : order.length === 0 ||
                             !selectedTableId ||
-                            !hasPendingItems
+                            !hasPendingComandaRelease
                           ? 0.5
                           : 1,
                     filter: comandaSentFlash ? "brightness(1.03)" : "none",
@@ -13372,6 +14098,7 @@ export function CartaPageContent({
                         const remainingDue = roundMoney(
                           Math.max(payTotal - sessionTableAmountPaidSum, 0),
                         );
+                        const isZeroAccountClose = remainingDue <= MONEY_EPS;
                         const cardRawTrim = cardReceived.trim();
                         const cardParsedNum = roundMoney(parseMoney(cardReceived));
                         const cashParsedNum = roundMoney(parseMoney(cashReceived));
@@ -13397,10 +14124,6 @@ export function CartaPageContent({
                         } else if (paymentMethod === "card") {
                           receivedDisplay =
                             cardRawTrim === "" ? remainingDue : cardParsedNum;
-                          changeDisplay = Math.max(
-                            receivedDisplay - remainingDue,
-                            0,
-                          );
                         } else if (paymentMethod === "voucher") {
                           receivedDisplay = voucherUsedUi;
                           changeDisplay = 0;
@@ -13584,6 +14307,7 @@ export function CartaPageContent({
                                   {formatTpveurEs(remainingDue)}
                                 </div>
                               </div>
+                              {!isZeroAccountClose ? (
                               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="space-y-1">
                                   <div className="text-sm font-bold uppercase tracking-wide text-slate-500">
@@ -13595,27 +14319,35 @@ export function CartaPageContent({
                                 </div>
                                 <div className="space-y-1">
                                   <div className="text-sm font-bold uppercase tracking-wide text-slate-500">
-                                    Cambio
+                                    {paymentMethod === "card" ? "Propina" : "Cambio"}
                                   </div>
                                   <div
                                     className={`text-3xl sm:text-4xl font-extrabold tabular-nums leading-none ${
-                                      changeDisplay > MONEY_EPS
+                                      (paymentMethod === "card"
+                                        ? tipRaw
+                                        : changeDisplay) > MONEY_EPS
                                         ? "text-emerald-600"
                                         : "text-slate-400"
                                     }`}
                                   >
-                                    {formatTpveurEs(changeDisplay)}
+                                    {formatTpveurEs(
+                                      paymentMethod === "card"
+                                        ? tipRaw
+                                        : changeDisplay,
+                                    )}
                                   </div>
                                 </div>
                               </div>
-                              {paymentMethod === "card" && tipRaw > 0 ? (
-                                <div className="text-sm font-semibold text-emerald-700">
-                                  Propina / exceso tarjeta:{" "}
-                                  {formatTpveurEs(tipRaw)}
-                                </div>
                               ) : null}
                             </div>
 
+                            {isZeroAccountClose ? (
+                              <p className="text-center text-sm font-medium text-slate-600 px-1">
+                                Cuenta a 0 € — invitaciones aplicadas. No requiere
+                                cobro.
+                              </p>
+                            ) : (
+                              <>
                             <div className="flex gap-2 pt-1">
                               <button
                                 type="button"
@@ -13855,6 +14587,8 @@ export function CartaPageContent({
                                 </div>
                               </div>
                             ) : null}
+                              </>
+                            )}
 
                             <div className="mt-2 rounded-2xl border-2 border-gray-200 bg-gray-50 p-3 space-y-2.5">
                               <div className="text-xs font-bold text-gray-600 uppercase tracking-wide">
@@ -13956,6 +14690,35 @@ export function CartaPageContent({
                                   {cashPaymentHint}
                                 </p>
                               ) : null}
+                              {isZeroAccountClose ? (
+                                <button
+                                  type="button"
+                                  disabled={isConfirmingPayment || !canCharge}
+                                  className="w-full min-h-[56px] rounded-2xl text-lg font-bold shadow-md touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                  style={{
+                                    background:
+                                      isConfirmingPayment || !canCharge
+                                        ? "rgba(148,163,184,0.55)"
+                                        : "#2563eb",
+                                    color: "#fff",
+                                  }}
+                                  onClick={() => {
+                                    if (isConfirmingPayment) return;
+                                    void (async () => {
+                                      setIsConfirmingPayment(true);
+                                      try {
+                                        await handleCloseZeroTotalAccount();
+                                      } finally {
+                                        setIsConfirmingPayment(false);
+                                      }
+                                    })();
+                                  }}
+                                >
+                                  {isConfirmingPayment
+                                    ? "Cerrando…"
+                                    : "Cerrar cuenta"}
+                                </button>
+                              ) : (
                               <button
                                 type="button"
                                 disabled={
@@ -13994,6 +14757,7 @@ export function CartaPageContent({
                                   ? "Registrando…"
                                   : confirmLabel}
                               </button>
+                              )}
                             </div>
                           </>
                         );
@@ -14487,27 +15251,9 @@ export function CartaPageContent({
                                   const tableIdToFinish = selectedTableId;
                                   if (tableIdToFinish) {
                                     try {
-                                      const closeMs = Date.now();
-                                      await handlePayTableOrder(tableIdToFinish, {
-                                        db,
-                                        restaurantId: restaurantId,
-                                      });
-                                      await updateDoc(doc(db, "tables", tableIdToFinish), {
-                                        busy: false,
-                                        status: "available",
-                                        currentOrderId: null,
-                                        activeOrderId: null,
-                                        occupancyStartMs: null,
-                                        occupiedAt: null,
-                                        startedAt: null,
-                                        openedAt: null,
-                                        activeLineCount: 0,
-                                        priorityScore: 0,
-                                        total: 0,
-                                        guestCount: 0,
-                                        closedAt: closeMs,
-                                        updatedAt: closeMs,
-                                      });
+                                      await closeTableGroupInFirestore(
+                                        tableIdToFinish,
+                                      );
                                       setGuestCount(0);
                                     } catch (error) {
                                       console.error("ERROR REGISTRANDO COBRO", error);
@@ -15032,6 +15778,7 @@ export function CartaPageContent({
                     const remainingDue = roundMoney(
                       Math.max(payTotal - sessionTableAmountPaidSum, 0),
                     );
+                    const isZeroAccountClose = remainingDue <= MONEY_EPS;
                     const received = Number(cashReceived.replace(",", "."));
                     const change = Math.max(received - remainingDue, 0);
                     const hasPartialPayments = paidSplitItemIds.length > 0;
@@ -15061,6 +15808,35 @@ export function CartaPageContent({
                             </div>
                           </div>
                         ) : null}
+                        {isZeroAccountClose ? (
+                          <>
+                            <div className="text-[11px] text-slate-600 leading-tight">
+                              Cuenta a 0 € — invitaciones aplicadas. No requiere
+                              cobro.
+                            </div>
+                            <div className="sticky bottom-0 z-[2] mt-1 border-t border-slate-200/90 bg-white pt-1.5 pb-0.5">
+                              <button
+                                type="button"
+                                disabled={!canCharge}
+                                title={capabilityDeniedTitle(canCharge)}
+                                className="w-full py-2 rounded-md text-xs font-semibold shadow"
+                                style={{
+                                  background: !canCharge
+                                    ? "rgba(148,163,184,0.55)"
+                                    : "#2563eb",
+                                  color: "#fff",
+                                  cursor: !canCharge ? "not-allowed" : "pointer",
+                                }}
+                                onClick={() => {
+                                  void handleCloseZeroTotalAccount();
+                                }}
+                              >
+                                Cerrar cuenta
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
                         <div className="flex gap-1.5">
                           <button
                             type="button"
@@ -15295,6 +16071,8 @@ export function CartaPageContent({
                           >
                             Hay pagos parciales realizados. Usa dividir cuenta.
                           </div>
+                        )}
+                          </>
                         )}
                       </div>
                     );
@@ -15533,28 +16311,7 @@ export function CartaPageContent({
                         );
                       })}
                     </div>
-                      <div className="hidden shrink-0 md:flex md:items-center md:justify-end">
-                        {!orderIdFromUrl &&
-                        (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
-                          <button
-                            type="button"
-                            className="carta-tpv-to-map-btn"
-                            onClick={handleBackToMap}
-                            style={{ flexShrink: 0 }}
-                          >
-                            {t("cartaTpv.mapNavVisible")}
-                          </button>
-                        ) : null}
-                      </div>
                     </div>
-                  {(selectedTableId || orderIdFromUrl) && tpvRecentProducts.length > 0 ? (
-                    <TpvRecentProductsStrip
-                      items={tpvRecentProducts}
-                      productById={tpvRecentProductNameLookup}
-                      onTap={handleRecentProductTap}
-                      onLongPress={handleRecentProductLongPress}
-                    />
-                  ) : null}
                   <div
                     className="carta-cats-wrap"
                     style={{
@@ -16121,7 +16878,7 @@ export function CartaPageContent({
                     Destino
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 900, color: "#0f172a" }}>
-                    {isBarProduct(lineEditorTarget.product) ? "Barra" : "Cocina"}
+                    {resolveComandaLineDestinationBadge(lineEditorTarget).label}
                   </div>
                 </div>
 

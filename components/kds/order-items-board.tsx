@@ -53,6 +53,14 @@ import {
 import { KdsHeatHeader } from "@/components/kds/kds-heat-header";
 import { KdsVisualBatchSummary } from "@/components/kds/kds-batch-lines";
 import { KdsLineGestureRow } from "@/components/kds/kds-line-gesture-row";
+import {
+  getHomogeneousPassChunkTypeLabel,
+  getMenuCourseLabel,
+  getMenuCourseSectionLabel,
+  menuCourseGroupKey,
+  readItemCourseFromRecord,
+  sortMenuCourseKey,
+} from "@/lib/carta/menu-course";
 
 export type BoardItem = {
   id: string;
@@ -173,9 +181,9 @@ export type OrderItemsBoardProps = {
   preparedAction: BoardColumnAction;
   /** Cocina: agrupa columna Pendiente por ventanas de envío (~2s) usando sentAt. Barra puede usar solo UI. */
   groupSentPasses?: boolean;
-  /** Si es false con `groupSentPasses`, solo agrupación visual sin “Preparar pase”. Cocina: omitir (por defecto preparación masiva activa). */
+  /** Si es false con `groupSentPasses`, solo agrupación visual sin “Preparar pase”. Cocina: `false` (Fase 1: solo Listo por línea). */
   enablePreparePassBulk?: boolean;
-  /** Cabecera de tipo de pase agrupado (ej. Barra → “Bebidas”). Cocina: omitir para Entrantes/Segundos/Postres/Mixto. */
+  /** Cabecera de tipo de pase agrupado (ej. Barra → “Bebidas”). Cocina: Entrantes/Primeros/Segundos/Postres/Mixto. */
   passTypeLabelOverride?: string;
   /** Cocina: tickets en fila horizontal con scroll táctil por columna de estado. */
   ticketRailLayout?: boolean;
@@ -183,8 +191,12 @@ export type OrderItemsBoardProps = {
   kitchenHideServedColumn?: boolean;
   /** Abierto el panel compacto de líneas servidas (solo presentación). */
   servedArchiveOpen?: boolean;
+  /** Cocina Fase 2: panel colapsable de líneas listas (prepared); columna principal = En producción. */
+  preparedPanelOpen?: boolean;
   /** Notifica total de líneas en estado servido (para chip en barra de métricas). */
   onServedLineCountChange?: (count: number) => void;
+  /** Notifica total de líneas prepared (para chip Listos en barra de métricas). */
+  onPreparedLineCountChange?: (count: number) => void;
   /** SLA y heat map por estación (cocina vs barra/cóctel). */
   kdsStationKind?: KdsStationKind;
 };
@@ -196,45 +208,6 @@ function readItemNoteFromRecord(rec: Record<string, unknown>): string | undefine
     if (typeof v === "string" && v.trim()) return v.trim();
   }
   return undefined;
-}
-
-function readItemCourseFromRecord(rec: Record<string, unknown>): number {
-  const raw = rec.course ?? rec.pase;
-  if (raw == null || raw === "") return 0;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return 0;
-  const u = Math.floor(n);
-  if (u === 0) return 0;
-  if (u >= 1 && u <= 4) return u;
-  return Math.min(4, Math.max(1, u));
-}
-
-function sortCourseKey(course: number): number {
-  if (course === 0) return 999;
-  if (course >= 1 && course <= 4) return course;
-  return 998;
-}
-
-function getCourseLabel(course: number): string {
-  if (course === 1) return "Entrante";
-  if (course === 2) return "Principal";
-  if (course === 3) return "Postre";
-  if (course === 4) return "Postre";
-  return "";
-}
-
-function getCourseSectionLabel(course: number): string {
-  if (course === 1) return "Entrantes";
-  if (course === 2) return "Segundos";
-  if (course === 3 || course === 4) return "Postres";
-  return "Sin pase";
-}
-
-function sortCourseSectionKey(course: number): number {
-  if (course === 1) return 1;
-  if (course === 2) return 2;
-  if (course === 3 || course === 4) return 3;
-  return 4;
 }
 
 /** Etiqueta corta para chip “Mesa …” en KDS (sin `undefined`). */
@@ -546,7 +519,7 @@ function applyKitchenAdvancePreparedToRawItems(
   return applyKitchenMarkNextToRawItems(items, itemId, "prepared", now);
 }
 
-const TERMINAL_STATUSES = new Set(["closed", "paid", "cancelled", "canceled"]);
+const TERMINAL_STATUSES = new Set(["closed", "paid", "cancelled", "canceled", "merged"]);
 
 function isOrderActive(status: string | undefined): boolean {
   if (!status) return true;
@@ -601,6 +574,14 @@ function formatMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = Math.floor(minutes % 60);
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+/** Cocina: texto del badge de tiempo (SLA/urgencia siguen usando minutos en bruto). */
+function formatKitchenTicketElapsed(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes < 0) return "—";
+  if (minutes < 1) return "ahora";
+  if (minutes < 60) return `${Math.floor(minutes)} min`;
+  return `${Math.floor(minutes / 60)}h`;
 }
 
 const boardStyle: CSSProperties = {
@@ -691,6 +672,16 @@ const ticketRailStripStyle: CSSProperties = {
   WebkitOverflowScrolling: "touch",
 };
 
+/** Carril horizontal cocina: gap/padding mínimos (ancho vía CSS `cqi` en globals). */
+const kitchenTicketRailStripStyle: CSSProperties = {
+  ...ticketRailStripStyle,
+  gap: 5,
+  paddingLeft: 3,
+  paddingRight: 3,
+  paddingBottom: 5,
+  scrollSnapType: "x mandatory",
+};
+
 /** Una tarjeta-ticket dentro del rail: ancho estable + snap + scroll vertical interno. */
 const ticketRailCardWrapStyle: CSSProperties = {
   flex: "0 0 auto",
@@ -740,17 +731,26 @@ const ticketRailInnerLegacyStyle: CSSProperties = {
   gap: 6,
 };
 
-/** Panel desplegable cocina: archivo de líneas servidas (solo UI). */
-const kitchenServedArchivePanelStyle: CSSProperties = {
+/** Panel desplegable cocina: archivo servidos o bandeja Listos (solo UI). */
+const kitchenSecondaryPanelStyle: CSSProperties = {
   flexShrink: 0,
   borderRadius: 12,
   border: "1px solid var(--hostly-line)",
   background: "var(--hostly-surface-card-solid)",
-  maxHeight: "min(40vh, 360px)",
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
   boxShadow: "var(--hostly-shadow-hairline)",
+};
+
+const kitchenServedArchivePanelStyle: CSSProperties = {
+  ...kitchenSecondaryPanelStyle,
+  maxHeight: "min(40vh, 360px)",
+};
+
+const kitchenPreparedPanelStyle: CSSProperties = {
+  ...kitchenSecondaryPanelStyle,
+  maxHeight: "min(34vh, 300px)",
 };
 
 const cardBaseStyle: CSSProperties = {
@@ -829,6 +829,86 @@ const lineNameStyle: CSSProperties = {
   fontWeight: 700,
   color: "var(--hostly-navy-deep)",
   lineHeight: 1.2,
+};
+
+/** Cocina — chrome del ticket; ancho vía `.hostly-kds-kitchen-ticket` + container query del rail. */
+const kitchenTicketCardWrapStyle: CSSProperties = {
+  flex: "0 0 auto",
+  maxHeight: "100%",
+  overflowY: "auto",
+  scrollSnapAlign: "start",
+};
+
+const kitchenTicketCardSurfaceStyle: CSSProperties = {
+  ...cardBaseStyle,
+  gap: 7,
+  padding: "9px 10px",
+  borderRadius: 10,
+};
+
+const kitchenTicketHeaderMesaStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  alignSelf: "flex-start",
+  padding: "5px 11px",
+  borderRadius: 8,
+  background: "var(--hostly-navy-deep)",
+  color: "#ffffff",
+  fontSize: 15,
+  fontWeight: 800,
+  letterSpacing: "0.04em",
+  lineHeight: 1.1,
+  textTransform: "uppercase",
+};
+
+const kitchenTicketTimeBadgeStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  padding: "5px 10px",
+  borderRadius: 999,
+  letterSpacing: "0.02em",
+  lineHeight: 1.1,
+  flexShrink: 0,
+};
+
+const kitchenLineNameStyle: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  color: "var(--hostly-navy-deep)",
+  lineHeight: 1.32,
+  letterSpacing: "-0.02em",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+  minWidth: 0,
+  flex: "1 1 auto",
+};
+
+const kitchenLineRowStyle: CSSProperties = {
+  ...lineRowStyle,
+  padding: "7px 8px",
+  gap: 6,
+  alignItems: "flex-start",
+};
+
+const kitchenMarkBtnPrimaryClass =
+  "hostly-button-primary hostly-kds-kitchen-line-cta !min-h-11 !min-w-[44px] !px-2 !py-2 !text-[13px] !font-semibold";
+
+const kitchenMarkBtnServeClass =
+  "hostly-button-secondary hostly-kds-kitchen-line-cta !min-h-11 !min-w-[44px] !border-emerald-200 !bg-emerald-600 !px-2 !py-2 !text-[13px] !font-semibold !text-white hover:!bg-emerald-700";
+
+const kitchenPassPrepareBtnClass =
+  "hostly-button-primary hostly-kds-kitchen-pass-cta !min-h-11 !px-2.5 !py-2 !text-[12px] !font-semibold shrink-0";
+
+const kitchenLineSecondaryStyle: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  lineHeight: 1.3,
+  color: "var(--hostly-ink-muted)",
+  opacity: 0.88,
 };
 
 const lineMetaStyle: CSSProperties = {
@@ -933,8 +1013,8 @@ function groupLinesByTable(lines: DecoratedLine[]): BoardTableGroup[] {
   const list = Array.from(byKey.values());
   for (const g of list) {
     g.lines.sort((a, b) => {
-      const ka = sortCourseKey(a.course);
-      const kb = sortCourseKey(b.course);
+      const ka = sortMenuCourseKey(a.course);
+      const kb = sortMenuCourseKey(b.course);
       if (ka !== kb) return ka - kb;
       return (a.sentAtMs ?? 0) - (b.sentAtMs ?? 0);
     });
@@ -968,8 +1048,8 @@ function groupKitchenSentLinesByPase(lines: BoardLine[]): BoardLine[][] | null {
   return keys.map((k) => {
     const chunk = byBucket.get(k)!;
     chunk.sort((a, b) => {
-      const ka = sortCourseKey(a.course);
-      const kb = sortCourseKey(b.course);
+      const ka = sortMenuCourseKey(a.course);
+      const kb = sortMenuCourseKey(b.course);
       if (ka !== kb) return ka - kb;
       return (a.sentAtMs ?? 0) - (b.sentAtMs ?? 0);
     });
@@ -1080,11 +1160,7 @@ function passElapsedUrgencyTextClassFromMs(elapsedMs: number): string {
 
 /** Etiqueta de tipo de pase según cursos homogéneos del chunk (solo cocina / UI). */
 function kitchenPassChunkTypeLabel(chunk: BoardLine[]): string {
-  if (chunk.length === 0) return "Mixto";
-  if (chunk.every((l) => l.course === 1)) return "Entrantes";
-  if (chunk.every((l) => l.course === 2 || l.course === 3)) return "Segundos";
-  if (chunk.every((l) => l.course === 4)) return "Postres";
-  return "Mixto";
+  return getHomogeneousPassChunkTypeLabel(chunk);
 }
 
 function getPassChunkClassName(label: string): string {
@@ -1092,6 +1168,8 @@ function getPassChunkClassName(label: string): string {
     return "rounded-lg border border-sky-200/80 bg-sky-50/90 p-1.5";
   if (label === "Entrantes")
     return "rounded-lg border border-emerald-200/80 bg-emerald-50/80 p-1.5";
+  if (label === "Primeros")
+    return "rounded-lg border border-sky-200/80 bg-sky-50/85 p-1.5";
   if (label === "Segundos")
     return "rounded-lg border border-amber-200/80 bg-amber-50/70 p-1.5";
   if (label === "Postres")
@@ -1102,6 +1180,7 @@ function getPassChunkClassName(label: string): string {
 function getPassHeaderTextClassName(label: string): string {
   if (label === "Bebidas") return "text-[11px] font-bold text-sky-800";
   if (label === "Entrantes") return "text-[11px] font-bold text-emerald-800";
+  if (label === "Primeros") return "text-[11px] font-bold text-sky-900";
   if (label === "Segundos") return "text-[11px] font-bold text-amber-900";
   if (label === "Postres") return "text-[11px] font-bold text-violet-800";
   return "text-[11px] font-bold text-[var(--hostly-ink-muted)]";
@@ -1118,7 +1197,9 @@ export default function OrderItemsBoard({
   ticketRailLayout = false,
   kitchenHideServedColumn = false,
   servedArchiveOpen = false,
+  preparedPanelOpen = false,
   onServedLineCountChange,
+  onPreparedLineCountChange,
   kdsStationKind = "kitchen",
 }: OrderItemsBoardProps) {
   const { restaurantId, ready: authReady, user } = useAuth();
@@ -1166,7 +1247,9 @@ export default function OrderItemsBoard({
   };
 
   const showPreparePassBulk =
-    groupSentPasses && enablePreparePassBulk !== false;
+    kdsStationKind !== "kitchen" &&
+    groupSentPasses &&
+    enablePreparePassBulk !== false;
 
   useEffect(() => {
     if (!authReady || !isFirebaseConfigured || !restaurantId) return;
@@ -1290,9 +1373,18 @@ export default function OrderItemsBoard({
     [columns.served],
   );
 
+  const preparedLineCount = useMemo(
+    () => columns.prepared.reduce((acc, g) => acc + g.lines.length, 0),
+    [columns.prepared],
+  );
+
   useEffect(() => {
     onServedLineCountChange?.(servedLineCount);
   }, [servedLineCount, onServedLineCountChange]);
+
+  useEffect(() => {
+    onPreparedLineCountChange?.(preparedLineCount);
+  }, [preparedLineCount, onPreparedLineCountChange]);
 
   const kdsHeatSnapshot = useMemo(() => {
     let pendingCount = 0;
@@ -1642,6 +1734,10 @@ export default function OrderItemsBoard({
     );
   }
 
+  const kitchenOpsUi = Boolean(
+    kitchenHideServedColumn && ticketRailLayout && kdsStationKind === "kitchen",
+  );
+
   return (
     <>
       {actionError && (
@@ -1654,23 +1750,68 @@ export default function OrderItemsBoard({
           {actionSuccess}
         </div>
       )}
-      <KdsHeatHeader
-        snapshot={kdsHeatSnapshot}
-        stationLabel={
-          kdsStationKind === "bar"
-            ? "Barra · operación"
-            : kdsStationKind === "cocktail"
-              ? "Coctelería · operación"
-              : "Cocina · operación"
-        }
-        saturationMessage={
-          kdsStationKind === "bar"
-            ? "Barra entrando en saturación"
-            : kdsStationKind === "cocktail"
-              ? "Coctelería entrando en saturación"
-              : "Cocina entrando en saturación"
-        }
-      />
+      {!kitchenHideServedColumn ? (
+        <KdsHeatHeader
+          snapshot={kdsHeatSnapshot}
+          stationLabel={
+            kdsStationKind === "bar"
+              ? "Barra · operación"
+              : kdsStationKind === "cocktail"
+                ? "Coctelería · operación"
+                : "Cocina · operación"
+          }
+          saturationMessage={
+            kdsStationKind === "bar"
+              ? "Barra entrando en saturación"
+              : kdsStationKind === "cocktail"
+                ? "Coctelería entrando en saturación"
+                : "Cocina entrando en saturación"
+          }
+        />
+      ) : null}
+      {kitchenOpsUi && preparedPanelOpen ? (
+        <figure
+          className="hostly-mobile-operational-card hostly-kds-kitchen-prepared-panel !gap-0 !p-0 !shadow-none ring-1 ring-amber-500/15"
+          style={kitchenPreparedPanelStyle}
+          role="region"
+          aria-label="Platos listos para servir"
+          id="kds-prepared-panel"
+        >
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: "hidden",
+              padding: "8px 10px 10px",
+            }}
+          >
+            <BoardColumn
+              title="Listo"
+              count={preparedLineCount}
+              groups={columns.prepared}
+              nowMs={nowMs}
+              showUrgency
+              ticketRailLayout={ticketRailLayout}
+              railAccent="#fbbf24"
+              compactArchiveColumn
+              kitchenOpsUi={kitchenOpsUi}
+              action={preparedAction}
+              busyItemIds={busyItemIds}
+              onMark={handleMarkNext}
+              sentPassesGrouping={false}
+              lineQuickNotes={lineQuickNotes}
+              onLineLongPress={(line, anchor) =>
+                setKdsQuickMenu({
+                  orderId: line.orderId,
+                  itemId: line.itemId,
+                  x: anchor.x,
+                  y: anchor.y,
+                })
+              }
+            />
+          </div>
+        </figure>
+      ) : null}
       {kitchenHideServedColumn && servedArchiveOpen ? (
         <figure
           className="hostly-mobile-operational-card !gap-0 !p-0 !shadow-none ring-1 ring-emerald-500/10"
@@ -1708,8 +1849,10 @@ export default function OrderItemsBoard({
       ) : null}
       <div
         className={`hostly-kds-board${
+          kitchenOpsUi ? " hostly-kds-board--kitchen-ops hostly-kds-board--kitchen-single-focus" : ""
+        }${
           ticketRailLayout && kitchenHideServedColumn
-            ? " flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+            ? " flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
             : ticketRailLayout
               ? " flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-3"
               : ""
@@ -1730,23 +1873,26 @@ export default function OrderItemsBoard({
         style={
           ticketRailLayout
             ? { flex: 1, minHeight: 0, minWidth: 0 }
-            : kitchenHideServedColumn
+            : kitchenHideServedColumn && !kitchenOpsUi
               ? { ...boardStyle, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }
               : boardStyle
         }
       >
         <BoardColumn
-          title="Pendiente"
+          title={kitchenOpsUi ? "En producción" : "Pendiente"}
           count={columns.sent.reduce((a, g) => a + g.lines.length, 0)}
           groups={columns.sent}
           nowMs={nowMs}
           showUrgency
           ticketRailLayout={ticketRailLayout}
           railVerticalBand={
-            ticketRailLayout && kitchenHideServedColumn ? "main" : undefined
+            ticketRailLayout && kitchenHideServedColumn && !kitchenOpsUi
+              ? "main"
+              : undefined
           }
           railAccent="#38bdf8"
-          showPendingColumnMetrics
+          showPendingColumnMetrics={!kitchenHideServedColumn}
+          kitchenOpsUi={kitchenOpsUi}
           action={sentAction}
           busyItemIds={busyItemIds}
           onMark={handleMarkNext}
@@ -1789,6 +1935,7 @@ export default function OrderItemsBoard({
             })
           }
         />
+        {!kitchenOpsUi ? (
         <BoardColumn
           title="Listo"
           count={columns.prepared.reduce((a, g) => a + g.lines.length, 0)}
@@ -1800,11 +1947,13 @@ export default function OrderItemsBoard({
             ticketRailLayout && kitchenHideServedColumn ? "compact" : undefined
           }
           railAccent="#fbbf24"
+          kitchenOpsUi={kitchenOpsUi}
           action={preparedAction}
           busyItemIds={busyItemIds}
           onMark={handleMarkNext}
           sentPassesGrouping={false}
         />
+        ) : null}
         {!kitchenHideServedColumn ? (
           <BoardColumn
             title="Servido"
@@ -1854,7 +2003,7 @@ export default function OrderItemsBoard({
                 setKdsQuickMenu(null);
               }}
             >
-              Marcar preparado
+              {kitchenOpsUi ? "Marcar listo" : "Marcar preparado"}
             </button>
             <button
               type="button"
@@ -1910,6 +2059,7 @@ function BoardLineRow({
   kdsStationKind,
   lineQuickNote,
   onLongPress,
+  kitchenOpsUi = false,
 }: {
   line: BoardLine;
   nowMs: number;
@@ -1926,22 +2076,34 @@ function BoardLineRow({
   kdsStationKind?: KdsStationKind;
   lineQuickNote?: string;
   onLongPress?: (anchor: { x: number; y: number }) => void;
+  /** Cocina Fase 2: tipografía táctil y sin mesa/tiempo duplicados en rail. */
+  kitchenOpsUi?: boolean;
 }) {
   const minutes =
     line.sentAtMs != null ? Math.floor((nowMs - line.sentAtMs) / 60000) : 0;
   const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
   const isServeAction = action?.nextStatus === "served";
-  const markBtnClass = isServeAction
-    ? "hostly-button-secondary !min-h-8 !border-emerald-200 !bg-emerald-600 !px-2.5 !py-1.5 !text-[11px] !font-semibold !text-white hover:!bg-emerald-700"
-    : "hostly-button-primary !min-h-8 !px-2.5 !py-1.5 !text-[11px]";
-  const markLabel = isServeAction ? "Servir" : (action?.label ?? "");
+  const markBtnClass = kitchenOpsUi
+    ? isServeAction
+      ? kitchenMarkBtnServeClass
+      : kitchenMarkBtnPrimaryClass
+    : isServeAction
+      ? "hostly-button-secondary !min-h-8 !border-emerald-200 !bg-emerald-600 !px-2.5 !py-1.5 !text-[11px] !font-semibold !text-white hover:!bg-emerald-700"
+      : "hostly-button-primary !min-h-8 !px-2.5 !py-1.5 !text-[11px]";
+  const markLabel = kitchenOpsUi
+    ? isServeAction
+      ? "Servir"
+      : "Listo"
+    : isServeAction
+      ? "Servir"
+      : (action?.label ?? "");
 
   const archiveProductRow =
     servedArchiveLayout && line.status === "served";
 
   if (archiveProductRow) {
     const coursePart =
-      line.course >= 1 && line.course <= 4 ? getCourseLabel(line.course) : "";
+      line.course >= 1 && line.course <= 4 ? getMenuCourseLabel(line.course) : "";
     const servedPhrase =
       line.servedAtMs != null
         ? `Servido hace ${formatMinutes(
@@ -2043,8 +2205,9 @@ function BoardLineRow({
 
   const rowBody = (
     <div
+      className={kitchenOpsUi ? "hostly-kds-kitchen-line-row" : undefined}
       style={{
-        ...lineRowStyle,
+        ...(kitchenOpsUi ? kitchenLineRowStyle : lineRowStyle),
         border: itemBorder,
         background: itemBg,
       }}
@@ -2055,11 +2218,13 @@ function BoardLineRow({
             display: "flex",
             flexDirection: "column",
             alignItems: "stretch",
-            gap: 6,
+            gap: kitchenOpsUi ? 4 : 6,
           }}
         >
-          <span style={mesaChipStyle}>{formatMesaChipLabel(line)}</span>
-          {line.course >= 1 && line.course <= 4 ? (
+          {!kitchenOpsUi ? (
+            <span style={mesaChipStyle}>{formatMesaChipLabel(line)}</span>
+          ) : null}
+          {line.course >= 1 && line.course <= 4 && !kitchenOpsUi ? (
             <span
               style={{
                 fontSize: 11,
@@ -2069,18 +2234,32 @@ function BoardLineRow({
                 textTransform: "uppercase",
               }}
             >
-              {getCourseLabel(line.course)}
+              {getMenuCourseLabel(line.course)}
             </span>
           ) : null}
           <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: 6,
-              flexWrap: "wrap",
-            }}
+            style={
+              kitchenOpsUi
+                ? {
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 6,
+                    minWidth: 0,
+                  }
+                : {
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: 6,
+                    flexWrap: "wrap",
+                  }
+            }
           >
-            <span style={lineNameStyle}>
+            <span
+              className={
+                kitchenOpsUi ? "hostly-kds-kitchen-product-name" : undefined
+              }
+              style={kitchenOpsUi ? kitchenLineNameStyle : lineNameStyle}
+            >
               x{line.qty} {line.name}
             </span>
             {line.kdsDestination === "cocktail" ? (
@@ -2126,15 +2305,35 @@ function BoardLineRow({
           </div>
         </div>
         {line.extras && line.extras.length > 0 ? (
-          <div style={lineExtrasJoinedStyle}>
+          <div
+            style={
+              kitchenOpsUi
+                ? { ...lineExtrasJoinedStyle, ...kitchenLineSecondaryStyle }
+                : lineExtrasJoinedStyle
+            }
+          >
             {line.extras.map((e) => `+ ${e.name}`).join(" · ")}
           </div>
         ) : null}
         {line.modifiersSubtitle ? (
-          <div style={lineModifiersStyle}>{line.modifiersSubtitle}</div>
+          <div
+            style={
+              kitchenOpsUi
+                ? { ...lineModifiersStyle, ...kitchenLineSecondaryStyle }
+                : lineModifiersStyle
+            }
+          >
+            {line.modifiersSubtitle}
+          </div>
         ) : null}
         {line.removedIngredients && line.removedIngredients.length > 0 ? (
-          <div style={lineRemovedStyle}>
+          <div
+            style={
+              kitchenOpsUi
+                ? { ...lineRemovedStyle, ...kitchenLineSecondaryStyle }
+                : lineRemovedStyle
+            }
+          >
             Sin: {line.removedIngredients.join(" · ")}
           </div>
         ) : null}
@@ -2144,38 +2343,40 @@ function BoardLineRow({
             Quick: {lineQuickNote}
           </div>
         ) : null}
-        <div style={lineMetaStyle}>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              marginRight: 6,
-            }}
-          >
-            {minutes} min
-          </div>
-          {kdsStationKind && slaLevel !== "normal" ? (
-            <span
-              className={`hostly-kds-sla-pill${
-                slaLevel === "critical" ? " is-critical" : " is-attention"
-              }`}
+        {!kitchenOpsUi ? (
+          <div style={lineMetaStyle}>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                marginRight: 6,
+              }}
             >
-              {kdsSlaLevelLabel(slaLevel)}
+              {minutes} min
+            </div>
+            {kdsStationKind && slaLevel !== "normal" ? (
+              <span
+                className={`hostly-kds-sla-pill${
+                  slaLevel === "critical" ? " is-critical" : " is-attention"
+                }`}
+              >
+                {kdsSlaLevelLabel(slaLevel)}
+              </span>
+            ) : null}
+            <span>
+              {showUrgency && line.sentAtMs != null
+                ? `Avisado hace ${formatMinutes(minutes)}`
+                : line.status === "served" && line.servedAtMs != null
+                  ? `Servido hace ${formatMinutes(
+                      (nowMs - line.servedAtMs) / 60000,
+                    )}`
+                  : line.status === "served"
+                    ? "Servido"
+                    : "Avisado"}
             </span>
-          ) : null}
-          <span>
-            {showUrgency && line.sentAtMs != null
-              ? `Avisado hace ${formatMinutes(minutes)}`
-              : line.status === "served" && line.servedAtMs != null
-                ? `Servido hace ${formatMinutes(
-                    (nowMs - line.servedAtMs) / 60000,
-                  )}`
-                : line.status === "served"
-                  ? "Servido"
-                  : "Avisado"}
-          </span>
-        </div>
-        {kdsStationKind && elapsedMs != null ? (
+          </div>
+        ) : null}
+        {!kitchenOpsUi && kdsStationKind && elapsedMs != null ? (
           <div className="hostly-kds-sla-progress" aria-hidden>
             <span
               style={{
@@ -2189,7 +2390,9 @@ function BoardLineRow({
         <button
           type="button"
           disabled={busy}
-          className={`${markBtnClass} shrink-0 self-center disabled:opacity-60`}
+          className={`${markBtnClass} shrink-0 ${
+            kitchenOpsUi ? "self-end" : "self-center"
+          } disabled:opacity-60`}
           style={{ cursor: busy ? "progress" : "pointer" }}
           onClick={() =>
             onMark(line.orderId, line.itemId, action.nextStatus)
@@ -2253,6 +2456,7 @@ function BoardColumn({
   onToggleBatchCollapsed,
   lineQuickNotes,
   onLineLongPress,
+  kitchenOpsUi = false,
 }: {
   title: string;
   count: number;
@@ -2315,6 +2519,8 @@ function BoardColumn({
     line: BoardLine,
     anchor: { x: number; y: number },
   ) => void;
+  /** Cocina Fase 2: tickets más legibles en rail de cocina. */
+  kitchenOpsUi?: boolean;
 }) {
   const prepareLabel =
     passTypeLabelOverride === "Bebidas"
@@ -2506,7 +2712,9 @@ function BoardColumn({
   const ticketRailInnerStyle: CSSProperties = ticketRailLayout
     ? groups.length === 0
       ? ticketRailEmptyAreaStyle
-      : ticketRailStripStyle
+      : kitchenOpsUi
+        ? kitchenTicketRailStripStyle
+        : ticketRailStripStyle
     : ticketRailInnerLegacyStyle;
 
   return (
@@ -2628,7 +2836,12 @@ function BoardColumn({
             ) : null}
           </div>
         ) : null}
-        <div style={ticketRailInnerStyle}>
+        <div
+          style={ticketRailInnerStyle}
+          {...(kitchenOpsUi && ticketRailLayout
+            ? { "data-kds-kitchen-ticket-rail": "" }
+            : {})}
+        >
         {groups.length === 0 ? (
           <div style={emptyColumnStyle}>—</div>
         ) : (
@@ -2642,21 +2855,16 @@ function BoardColumn({
               : servedTone;
             const byCourse = new Map<number, BoardLine[]>();
             for (const line of g.lines) {
-              const key =
-                line.course === 3 || line.course === 4
-                  ? 3
-                  : line.course >= 1 && line.course <= 2
-                    ? line.course
-                    : 0;
+              const key = menuCourseGroupKey(line.course);
               const arr = byCourse.get(key) ?? [];
               arr.push(line);
               byCourse.set(key, arr);
             }
             const courseSections = Array.from(byCourse.entries())
-              .sort((a, b) => sortCourseSectionKey(a[0]) - sortCourseSectionKey(b[0]))
+              .sort((a, b) => sortMenuCourseKey(a[0]) - sortMenuCourseKey(b[0]))
               .map(([course, lines]) => ({
                 course,
-                label: getCourseSectionLabel(course).toUpperCase(),
+                label: getMenuCourseSectionLabel(course).toUpperCase(),
                 lines,
               }));
             const passChunks =
@@ -2679,10 +2887,16 @@ function BoardColumn({
             const urgencyLabel = getUrgencyLabel(score);
             const cardUrgencyClass = getGroupCardUrgencyClassName(score);
             const isFocusTicket = focusTableKeys.includes(g.tableKey);
-            const tableCardStyle: CSSProperties = {
-              ...cardBaseStyle,
-              ...(cardUrgencyClass ? {} : { border: tone.border }),
-            };
+            const tableCardStyle: CSSProperties =
+              kitchenOpsUi && ticketRailLayout
+                ? {
+                    ...kitchenTicketCardSurfaceStyle,
+                    ...(cardUrgencyClass ? {} : { border: tone.border }),
+                  }
+                : {
+                    ...cardBaseStyle,
+                    ...(cardUrgencyClass ? {} : { border: tone.border }),
+                  };
             if (cardUrgencyClass) {
               delete tableCardStyle.background;
             }
@@ -2692,12 +2906,16 @@ function BoardColumn({
                 data-kds-focus-table={g.tableKey}
                 className={`transition-all duration-300 hostly-kds-line-enter${
                   cardUrgencyClass ? ` border ${cardUrgencyClass}` : ""
-                }${isFocusTicket ? " hostly-kds-focus-ticket" : ""}`.trim()}
+                }${isFocusTicket ? " hostly-kds-focus-ticket" : ""}${
+                  kitchenOpsUi ? " hostly-kds-kitchen-ticket" : ""
+                }`.trim()}
                 style={{
                   ...tableCardStyle,
                   ...(ticketRailLayout
                     ? {
-                        ...ticketRailCardWrapStyle,
+                        ...(kitchenOpsUi
+                          ? kitchenTicketCardWrapStyle
+                          : ticketRailCardWrapStyle),
                         ...(archiveMuted
                           ? archiveTicketChromeStyle
                           : ticketRailCardChromeStyle),
@@ -2708,9 +2926,9 @@ function BoardColumn({
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "flex-start",
+                    alignItems: kitchenOpsUi ? "center" : "flex-start",
                     justifyContent: "space-between",
-                    gap: 8,
+                    gap: kitchenOpsUi ? 10 : 8,
                   }}
                 >
                   <div
@@ -2718,19 +2936,25 @@ function BoardColumn({
                       display: "flex",
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 6,
+                      gap: kitchenOpsUi ? 0 : 6,
                       flexWrap: "wrap",
                       minWidth: 0,
-                      flex: "1 1 auto",
+                      flex: kitchenOpsUi ? "0 1 auto" : "1 1 auto",
                     }}
                   >
-                    <span style={mesaChipStyle}>
+                    <span
+                      style={
+                        kitchenOpsUi
+                          ? kitchenTicketHeaderMesaStyle
+                          : mesaChipStyle
+                      }
+                    >
                       {formatMesaChipLabel({
                         mesaRowText: g.tableLabel,
                         tableKey: g.tableKey,
                       })}
                     </span>
-                    {urgencyLabel ? (
+                    {!kitchenOpsUi && urgencyLabel ? (
                       <span
                         className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                           urgencyLabel === "Urgente"
@@ -2745,16 +2969,20 @@ function BoardColumn({
                   {showUrgency && g.oldestSentAtMs != null ? (
                     <span
                       style={{
-                        ...badgeStyle,
+                        ...(kitchenOpsUi
+                          ? kitchenTicketTimeBadgeStyle
+                          : badgeStyle),
                         background: tone.badgeBg,
                         color: tone.badgeColor,
                       }}
                     >
-                      {formatMinutes(oldestMinutes)}
+                      {kitchenOpsUi
+                        ? formatKitchenTicketElapsed(oldestMinutes)
+                        : formatMinutes(oldestMinutes)}
                     </span>
                   ) : null}
                 </div>
-                {ticketRailLayout ? (
+                {ticketRailLayout && !kitchenOpsUi ? (
                   <div
                     style={{
                       margin: "4px 0 6px",
@@ -2765,15 +2993,70 @@ function BoardColumn({
                 ) : null}
                 <div
                   className={
-                    sortedPassChunks != null ? "flex flex-col space-y-2" : undefined
+                    kitchenOpsUi
+                      ? "hostly-kds-kitchen-course-stack"
+                      : sortedPassChunks != null
+                        ? "flex flex-col space-y-2"
+                        : undefined
                   }
                   style={
-                    sortedPassChunks != null
-                      ? { display: "flex", flexDirection: "column" }
-                      : { display: "flex", flexDirection: "column", gap: 6 }
+                    kitchenOpsUi
+                      ? undefined
+                      : sortedPassChunks != null
+                        ? { display: "flex", flexDirection: "column" }
+                        : { display: "flex", flexDirection: "column", gap: 6 }
                   }
                 >
-                  {sortedPassChunks != null ? (
+                  {kitchenOpsUi ? (
+                    courseSections.map((section) => (
+                      <div
+                        key={`${g.tableKey}-course-${section.course}`}
+                        className="hostly-kds-kitchen-course-section"
+                        data-kds-course={section.course}
+                      >
+                        <p
+                          className="hostly-kds-kitchen-course-heading"
+                          role="heading"
+                          aria-level={3}
+                          aria-label={`${getMenuCourseSectionLabel(section.course)}: ${section.lines.length} líneas`}
+                        >
+                          <span className="hostly-kds-kitchen-course-heading__label">
+                            {section.label}
+                          </span>
+                          <span
+                            className="hostly-kds-kitchen-course-heading__count"
+                            aria-hidden
+                          >
+                            ({section.lines.length})
+                          </span>
+                        </p>
+                        <div className="hostly-kds-kitchen-course-lines">
+                          {section.lines.map((line) => (
+                            <BoardLineRow
+                              key={`${line.orderId}:${line.itemId}`}
+                              line={line}
+                              nowMs={nowMs}
+                              showUrgency={showUrgency}
+                              action={action}
+                              busyItemIds={busyItemIds}
+                              onMark={onMark}
+                              servedArchiveLayout={servedHistoryPresentation}
+                              kdsStationKind={kdsStationKind}
+                              kitchenOpsUi={kitchenOpsUi}
+                              lineQuickNote={
+                                lineQuickNotes?.[`${line.orderId}:${line.itemId}`]
+                              }
+                              onLongPress={
+                                onLineLongPress
+                                  ? (anchor) => onLineLongPress(line, anchor)
+                                  : undefined
+                              }
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  ) : sortedPassChunks != null ? (
                     sortedPassChunks.map(({ chunk, originalIndex }) => {
                       const oldestSent = oldestSentAtMsInChunk(chunk);
                       const passElapsedMs =
@@ -2811,13 +3094,126 @@ function BoardColumn({
                       const collapsed =
                         isBatchCollapsed?.(passKey, defaultCollapsed) ??
                         defaultCollapsed;
+                      const showPreparePass =
+                        Boolean(onPreparePassChunk) &&
+                        Boolean(action) &&
+                        action?.nextStatus === "prepared" &&
+                        passTargets.length > 0;
+                      const preparePassButton = showPreparePass ? (
+                        <button
+                          type="button"
+                          className={`${
+                            kitchenOpsUi
+                              ? kitchenPassPrepareBtnClass
+                              : "hostly-button-primary !min-h-8 !px-3 !py-1.5 !text-[11px] !font-semibold shrink-0"
+                          } ${
+                            !!busyPassKey || passBulkBusy
+                              ? "cursor-not-allowed opacity-60"
+                              : ""
+                          }`}
+                          disabled={!!busyPassKey || passBulkBusy}
+                          onClick={() =>
+                            void onPreparePassChunk!(
+                              chunk,
+                              passKey,
+                              prepareFeedbackMessage,
+                            )
+                          }
+                        >
+                          {passPrepareBusy ? "Preparando..." : prepareLabel}
+                        </button>
+                      ) : null;
+                      const passLineRows = !collapsed
+                        ? chunk.map((line) => (
+                            <BoardLineRow
+                              key={`${line.orderId}:${line.itemId}`}
+                              line={line}
+                              nowMs={nowMs}
+                              showUrgency={showUrgency}
+                              action={action}
+                              busyItemIds={busyItemIds}
+                              onMark={onMark}
+                              servedArchiveLayout={servedHistoryPresentation}
+                              kdsStationKind={kdsStationKind}
+                              kitchenOpsUi={kitchenOpsUi}
+                              lineQuickNote={
+                                lineQuickNotes?.[`${line.orderId}:${line.itemId}`]
+                              }
+                              onLongPress={
+                                onLineLongPress
+                                  ? (anchor) => onLineLongPress(line, anchor)
+                                  : undefined
+                              }
+                            />
+                          ))
+                        : null;
                       return (
                       <div
                         key={`${g.tableKey}-pase-${originalIndex}`}
                         className={`${getPassChunkClassName(passTypeLabel)}${
+                          kitchenOpsUi ? " hostly-kds-kitchen-pass-chunk" : ""
+                        }${
                           isPassFullyPrepared ? " opacity-50" : ""
                         }${kdsRushMode ? " !p-1" : ""}`}
                       >
+                        {kitchenOpsUi ? (
+                          <>
+                            <div
+                              className="hostly-kds-kitchen-pass-lines"
+                              style={{
+                                display: "grid",
+                                gap: kdsRushMode ? 4 : 6,
+                              }}
+                            >
+                              {passLineRows}
+                            </div>
+                            <div
+                              className={`hostly-kds-kitchen-pass-footer${
+                                isPassFullyPrepared ? " opacity-60" : ""
+                              }`}
+                            >
+                              {preparePassButton ? (
+                                <div className="hostly-kds-kitchen-pass-cta-row">
+                                  {preparePassButton}
+                                </div>
+                              ) : null}
+                              <p className="hostly-kds-kitchen-pass-aux">
+                                <span>
+                                  Pase {originalIndex + 1} · {progressLabel} ·{" "}
+                                  {passTypeLabel}
+                                </span>
+                                <span
+                                  className={
+                                    isPassFullyPrepared
+                                      ? "hostly-kds-kitchen-pass-aux-status is-done"
+                                      : "hostly-kds-kitchen-pass-aux-status is-pending"
+                                  }
+                                >
+                                  {isPassFullyPrepared
+                                    ? " · Listo"
+                                    : kitchenOpsUi
+                                      ? " · En producción"
+                                      : " · Pendiente"}
+                                </span>
+                              </p>
+                              {batchVisual.length >= 2 ? (
+                                <div className="hostly-kds-kitchen-batch-wrap">
+                                  <KdsVisualBatchSummary
+                                    batches={batchVisual}
+                                    collapsed={collapsed}
+                                    onToggle={() =>
+                                      onToggleBatchCollapsed?.(
+                                        passKey,
+                                        defaultCollapsed,
+                                      )
+                                    }
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
+                          </>
+                        ) : (
+                          <>
                         <div className="mb-1 flex items-start justify-between gap-2">
                           <div
                             className={`min-w-0 flex-1 flex flex-col gap-1.5 ${
@@ -2825,7 +3221,9 @@ function BoardColumn({
                             }`}
                           >
                             <div className="flex flex-wrap items-center gap-2">
-                              <span style={mesaChipStyle}>{passMesaHeadline}</span>
+                              <span style={mesaChipStyle}>
+                                {passMesaHeadline}
+                              </span>
                               <span className="text-[13px] font-extrabold tracking-tight text-[var(--hostly-navy-deep)]">
                                 Pase {originalIndex + 1}
                                 {` · ${progressLabel}`}
@@ -2861,29 +3259,7 @@ function BoardColumn({
                               )}
                             </div>
                           </div>
-                          {onPreparePassChunk &&
-                          action &&
-                          action.nextStatus === "prepared" &&
-                          passTargets.length > 0 ? (
-                            <button
-                              type="button"
-                              className={`hostly-button-primary !min-h-8 !px-3 !py-1.5 !text-[11px] !font-semibold shrink-0 ${
-                                !!busyPassKey || passBulkBusy
-                                  ? "cursor-not-allowed opacity-60"
-                                  : ""
-                              }`}
-                              disabled={!!busyPassKey || passBulkBusy}
-                              onClick={() =>
-                                void onPreparePassChunk(
-                                  chunk,
-                                  passKey,
-                                  prepareFeedbackMessage,
-                                )
-                              }
-                            >
-                              {passPrepareBusy ? "Preparando..." : prepareLabel}
-                            </button>
-                          ) : null}
+                          {preparePassButton}
                         </div>
                         <div className="my-1 h-px w-full bg-black/5" />
                         {batchVisual.length >= 2 ? (
@@ -2895,31 +3271,13 @@ function BoardColumn({
                             }
                           />
                         ) : null}
-                        <div style={{ display: "grid", gap: kdsRushMode ? 4 : 6 }}>
-                          {!collapsed
-                            ? chunk.map((line) => (
-                            <BoardLineRow
-                              key={`${line.orderId}:${line.itemId}`}
-                              line={line}
-                              nowMs={nowMs}
-                              showUrgency={showUrgency}
-                              action={action}
-                              busyItemIds={busyItemIds}
-                              onMark={onMark}
-                              servedArchiveLayout={servedHistoryPresentation}
-                              kdsStationKind={kdsStationKind}
-                              lineQuickNote={
-                                lineQuickNotes?.[`${line.orderId}:${line.itemId}`]
-                              }
-                              onLongPress={
-                                onLineLongPress
-                                  ? (anchor) => onLineLongPress(line, anchor)
-                                  : undefined
-                              }
-                            />
-                          ))
-                            : null}
+                        <div
+                          style={{ display: "grid", gap: kdsRushMode ? 4 : 6 }}
+                        >
+                          {passLineRows}
                         </div>
+                          </>
+                        )}
                       </div>
                       );
                     })
@@ -2951,6 +3309,7 @@ function BoardColumn({
                             onMark={onMark}
                             servedArchiveLayout={servedHistoryPresentation}
                             kdsStationKind={kdsStationKind}
+                            kitchenOpsUi={kitchenOpsUi}
                             lineQuickNote={
                               lineQuickNotes?.[`${line.orderId}:${line.itemId}`]
                             }

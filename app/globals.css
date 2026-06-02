@@ -3107,6 +3107,285 @@ body {
   color: var(--hostly-ink);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Configuración — sidebar V2 (tokens Hostly; misma identidad que el shell)  */
+/* -------------------------------------------------------------------------- */
+.hostly-config-sidebar {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  min-height: 100dvh;
+  width: min(216px, 88vw);
+  flex-direction: column;
+  border-right: 1px solid var(--hostly-line);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink);
+  box-shadow: var(--hostly-shadow-card);
+  transition: transform 200ms ease-out;
+  transform: translateX(-100%);
+}
+
+.hostly-config-sidebar--open {
+  transform: translateX(0);
+}
+
+.hostly-config-sidebar--closed {
+  transform: translateX(-100%);
+}
+
+@media (min-width: 1024px) {
+  .hostly-config-sidebar {
+    position: static;
+    z-index: auto;
+    width: 216px;
+    min-height: 100dvh;
+    transform: translateX(0);
+    box-shadow: var(--hostly-shadow-hairline);
+  }
+
+  .hostly-config-sidebar--open,
+  .hostly-config-sidebar--closed {
+    transform: translateX(0);
+  }
+}
+
+.hostly-config-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: 0;
+  padding: 0;
+  background: color-mix(in srgb, var(--hostly-navy-deep) 16%, transparent);
+  backdrop-filter: blur(0.5px);
+  cursor: default;
+}
+
+.hostly-config-sidebar__header {
+  display: flex;
+  height: 44px;
+  shrink: 0;
+  align-items: center;
+  border-bottom: 1px solid var(--hostly-table-divider-soft);
+  padding: 0 12px;
+}
+
+.hostly-config-sidebar__header-link {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+  outline: none;
+  border-radius: var(--hostly-config-radius);
+}
+
+.hostly-config-sidebar__header-link:focus-visible {
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-config-sidebar__header-icon {
+  display: flex;
+  height: 26px;
+  width: 26px;
+  shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(var(--hostly-config-radius) - 2px);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: color-mix(in srgb, var(--hostly-accent-soft) 55%, var(--hostly-surface-card-solid));
+  color: var(--hostly-navy-deep);
+  font-size: 12px;
+}
+
+.hostly-config-sidebar__header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-config-sidebar__nav {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 10px 14px;
+}
+
+.hostly-config-sidebar__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hostly-config-sidebar__group-label {
+  padding: 0 8px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-faint);
+}
+
+.hostly-config-sidebar__group-label.is-active-group {
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-config-sidebar__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hostly-config-sidebar__link {
+  display: block;
+  min-height: var(--hostly-m-touch-target);
+  padding: 9px 10px 9px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--hostly-config-radius);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--hostly-ink-muted);
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out,
+    box-shadow 150ms ease-out;
+  outline: none;
+}
+
+.hostly-config-sidebar__link:hover {
+  background: var(--hostly-table-row-hover);
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-config-sidebar__link:focus-visible {
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-config-sidebar__link.is-active {
+  background: color-mix(in srgb, var(--hostly-accent-soft) 72%, var(--hostly-surface-card-solid));
+  border-color: color-mix(in srgb, var(--hostly-accent) 38%, var(--hostly-table-divider-soft));
+  color: var(--hostly-navy-deep);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--hostly-accent);
+}
+
+.hostly-config-sidebar__footer {
+  display: flex;
+  shrink: 0;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--hostly-table-divider-soft);
+  padding: 10px;
+}
+
+.hostly-config-sidebar__footer-link {
+  display: block;
+  min-height: var(--hostly-m-touch-target);
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--hostly-config-radius);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--hostly-ink-soft);
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out;
+  outline: none;
+}
+
+.hostly-config-sidebar__footer-link:hover {
+  background: var(--hostly-table-row-hover);
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-config-sidebar__footer-link:focus-visible {
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-config-sidebar__footer-link--outbound {
+  color: var(--hostly-accent);
+  font-weight: 600;
+}
+
+.hostly-config-sidebar__footer-link--outbound:hover {
+  background: color-mix(in srgb, var(--hostly-accent-soft) 45%, var(--hostly-surface-card-solid));
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-config-mobile-header {
+  display: none;
+  height: 48px;
+  shrink: 0;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--hostly-table-divider-soft);
+  background: color-mix(in srgb, var(--hostly-surface-card-solid) 95%, transparent);
+  padding: 0 12px;
+  backdrop-filter: blur(6px);
+}
+
+@media (max-width: 1023px) {
+  .hostly-config-mobile-header {
+    display: flex;
+  }
+}
+
+.hostly-config-mobile-header__menu-btn {
+  display: inline-flex;
+  min-height: var(--hostly-m-touch-target);
+  min-width: var(--hostly-m-touch-target);
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hostly-table-divider-soft);
+  border-radius: var(--hostly-config-radius);
+  background: var(--hostly-surface-card-solid);
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--hostly-ink-strong);
+  box-shadow: var(--hostly-shadow-hairline);
+  touch-action: manipulation;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
+.hostly-config-mobile-header__menu-btn:hover {
+  background: var(--hostly-table-row-hover);
+  border-color: color-mix(in srgb, var(--hostly-accent) 18%, var(--hostly-table-divider-soft));
+}
+
+.hostly-config-mobile-header__menu-btn:focus-visible {
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-config-mobile-header__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hostly-ink-strong);
+}
+
 /* Tablas listado en Config (Categorías, Familias, etc.) + tono inventario premium */
 .hostly-config-table-head {
   border-bottom: 1px solid var(--hostly-table-divider-soft);
@@ -3623,7 +3902,7 @@ body {
 
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-head,
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-row {
-  padding: 6px var(--hostly-op-gap-sm);
+  padding: 8px 10px;
 }
 
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-head {
@@ -3636,11 +3915,77 @@ body {
   font-size: 10px;
   letter-spacing: 0.08em;
   color: var(--hostly-ink-muted);
+  padding-block: 2px;
 }
 
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-row {
-  min-height: 44px;
+  min-height: 48px;
   border-bottom: 1px solid var(--hostly-table-divider-faint);
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-row .hostly-data-table-cell {
+  padding-block: 3px;
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-primary__name {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-price {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-tipo-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 18%, var(--hostly-line));
+  background: var(--hostly-info-soft);
+  color: var(--hostly-accent);
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-microchip--carta.hostly-status-badge {
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  justify-content: center;
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-microchip--carta .hostly-status-badge__dot {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-microchip--esc.hostly-status-badge {
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-status-filter-bar {
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: color-mix(in srgb, var(--hostly-surface-card-solid) 96%, var(--hostly-surface-page-soft));
+}
+
+.hostly-productos-config-skin--simplified .hostly-productos-carta-status-filter-bar .hostly-productos-carta-filter-chip {
+  display: inline-flex !important;
 }
 
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-row:hover {
@@ -3793,6 +4138,45 @@ body {
   flex-shrink: 0;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.hostly-productos-carta-toolbar--config-primary {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: color-mix(in srgb, var(--hostly-surface-card-solid) 92%, var(--hostly-surface-page-soft));
+}
+
+.hostly-productos-carta-toolbar--config-primary .hostly-productos-carta-search--prominent {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hostly-productos-carta-advanced-toggle--toolbar {
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: var(--hostly-radius-sm, 8px);
+  border: 1px solid var(--hostly-line);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  min-height: 32px;
+  box-sizing: border-box;
+}
+
+.hostly-productos-carta-advanced-toggle--toolbar:hover {
+  color: var(--hostly-ink);
+  border-color: var(--hostly-line-strong);
+  background: color-mix(in srgb, var(--hostly-surface-page-soft) 65%, var(--hostly-surface-card-solid));
+}
+
+.hostly-productos-carta-advanced-panel--inline {
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: color-mix(in srgb, var(--hostly-surface-page-soft) 55%, var(--hostly-surface-card-solid));
 }
 
 .hostly-productos-carta-toolbar-meta {
@@ -7040,6 +7424,450 @@ body {
 }
 
 /* KDS operational intelligence layer */
+.hostly-kds-kitchen-metrics-strip {
+  flex-shrink: 0;
+  padding: 4px var(--hostly-mobile-pad-x) 2px;
+  box-sizing: border-box;
+}
+
+.hostly-kds-kitchen-metrics-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 32px;
+}
+
+.hostly-kds-kitchen-kpi {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+  flex: 1 1 0;
+  min-height: 32px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.94);
+  box-sizing: border-box;
+}
+
+.hostly-kds-kitchen-kpi__value {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.hostly-kds-kitchen-kpi__label {
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.hostly-kds-kitchen-kpi--info {
+  border-color: rgba(56, 189, 248, 0.28);
+  background: rgba(239, 246, 255, 0.92);
+}
+
+.hostly-kds-kitchen-kpi--warning {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(255, 251, 235, 0.94);
+}
+
+.hostly-kds-kitchen-kpi--success {
+  border-color: rgba(52, 211, 153, 0.32);
+  background: rgba(236, 253, 245, 0.94);
+}
+
+.hostly-kds-kitchen-kpi--danger {
+  border-color: rgba(252, 165, 165, 0.42);
+  background: rgba(254, 242, 242, 0.94);
+}
+
+.hostly-kds-kitchen-kpi--danger .hostly-kds-kitchen-kpi__value {
+  color: #b91c1c;
+}
+
+.hostly-kds-kitchen-metrics-details-btn,
+.hostly-kds-kitchen-servidos-btn,
+.hostly-kds-kitchen-listos-btn {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(248, 250, 252, 0.95);
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+.hostly-kds-kitchen-listos-btn.is-open {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(255, 251, 235, 0.96);
+  color: #92400e;
+}
+
+.hostly-kds-kitchen-servidos-btn.is-open {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(236, 253, 245, 0.94);
+  color: #065f46;
+}
+
+/* Cocina Fase 2: una sola columna de trabajo (En producción) a pantalla completa */
+.hostly-kds-board--kitchen-ops.hostly-kds-board--kitchen-single-focus {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.hostly-kds-board--kitchen-single-focus > div {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  border-top: none !important;
+}
+
+.hostly-kds-board--kitchen-single-focus > div > div:first-child h3 {
+  font-size: 15px !important;
+  letter-spacing: 0.12em !important;
+}
+
+.hostly-kds-kitchen-metrics-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px dashed rgba(226, 232, 240, 0.95);
+  background: rgba(248, 250, 252, 0.72);
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.hostly-kds-kitchen-chrome .hostly-mobile-section {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* Cocina: densidad del rail — ancho por cqi (no 88vw); más tickets sin reducir producto */
+.hostly-kds-board--kitchen-ops [data-kds-kitchen-ticket-rail] {
+  container-type: inline-size;
+  container-name: hostly-kds-kitchen-rail;
+  gap: 5px !important;
+  padding-left: 3px !important;
+  padding-right: 3px !important;
+  padding-bottom: 5px !important;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-ticket {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  /* ~3 en portátil 1366: evita 88vw→340px que dejaba ~2 tickets */
+  width: clamp(228px, calc((100cqi - 10px) / 3), 302px);
+  min-width: clamp(228px, calc((100cqi - 10px) / 3), 302px);
+  max-height: 100%;
+  overflow-y: auto;
+  scroll-snap-align: start;
+  padding: 8px 8px !important;
+}
+
+/* Tablet estrecha / rail pequeño: 2 tickets cómodos */
+@container hostly-kds-kitchen-rail (max-width: 559px) {
+  .hostly-kds-board--kitchen-ops .hostly-kds-kitchen-ticket {
+    width: clamp(232px, calc((100cqi - 5px) / 2), 318px);
+    min-width: clamp(232px, calc((100cqi - 5px) / 2), 318px);
+  }
+}
+
+/* Portátil y desktop medio: 3 tickets (objetivo 1366×768) */
+@container hostly-kds-kitchen-rail (min-width: 560px) {
+  .hostly-kds-board--kitchen-ops .hostly-kds-kitchen-ticket {
+    width: clamp(228px, calc((100cqi - 10px) / 3), 300px);
+    min-width: clamp(228px, calc((100cqi - 10px) / 3), 300px);
+  }
+}
+
+/* Desktop: 4 tickets */
+@container hostly-kds-kitchen-rail (min-width: 920px) {
+  .hostly-kds-board--kitchen-ops .hostly-kds-kitchen-ticket {
+    width: clamp(230px, calc((100cqi - 15px) / 4), 292px);
+    min-width: clamp(230px, calc((100cqi - 15px) / 4), 292px);
+  }
+}
+
+/* Pantalla grande: 5 tickets si cabe */
+@container hostly-kds-kitchen-rail (min-width: 1160px) {
+  .hostly-kds-board--kitchen-ops .hostly-kds-kitchen-ticket {
+    width: clamp(232px, calc((100cqi - 20px) / 5), 286px);
+    min-width: clamp(232px, calc((100cqi - 20px) / 5), 286px);
+  }
+}
+
+/* Cocina: jerarquía ticket — producto dominante, metadatos en una línea auxiliar */
+/* Cocina: bloques por curso (Entrantes / Primeros / Segundos / Postres) dentro del ticket */
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-course-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-course-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-course-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  margin: 0;
+  padding: 0 0 5px;
+  border-bottom: 2px solid rgba(15, 23, 42, 0.14);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-course-heading__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-course-heading__count {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  opacity: 0.88;
+}
+
+.hostly-kds-board--kitchen-ops
+  .hostly-kds-kitchen-course-section[data-kds-course="1"]
+  .hostly-kds-kitchen-course-heading {
+  color: #065f46;
+  border-bottom-color: rgba(5, 150, 105, 0.35);
+}
+
+.hostly-kds-board--kitchen-ops
+  .hostly-kds-kitchen-course-section[data-kds-course="2"]
+  .hostly-kds-kitchen-course-heading {
+  color: #1e40af;
+  border-bottom-color: rgba(37, 99, 235, 0.3);
+}
+
+.hostly-kds-board--kitchen-ops
+  .hostly-kds-kitchen-course-section[data-kds-course="3"]
+  .hostly-kds-kitchen-course-heading {
+  color: #92400e;
+  border-bottom-color: rgba(217, 119, 6, 0.38);
+}
+
+.hostly-kds-board--kitchen-ops
+  .hostly-kds-kitchen-course-section[data-kds-course="4"]
+  .hostly-kds-kitchen-course-heading {
+  color: #5b21b6;
+  border-bottom-color: rgba(124, 58, 237, 0.32);
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-course-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-chunk {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px 5px !important;
+  border-color: rgba(226, 232, 240, 0.55) !important;
+  background: rgba(248, 250, 252, 0.38) !important;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-lines {
+  order: 1;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-footer {
+  order: 2;
+  margin-top: 2px;
+  padding-top: 3px;
+  border-top: 1px solid rgba(226, 232, 240, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-cta-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 0;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-aux {
+  margin: 0;
+  padding: 0;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  color: #a8b4c4;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-aux-status.is-pending {
+  color: #b8c2ce;
+  font-weight: 500;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-aux-status.is-done {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-batch-wrap {
+  margin: 0;
+  padding: 0;
+}
+
+/* Sin tocar fondos SLA (urgency); solo separación ligera entre líneas */
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-line-row {
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-product-name {
+  font-weight: 800 !important;
+  color: #0c1424 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.32 !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-index {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-meta {
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: #a8b4c4;
+  letter-spacing: 0.01em;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-status.is-pending {
+  color: #b8c2ce;
+  font-weight: 500;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-status.is-done {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-line-cta {
+  max-width: 5.75rem;
+  white-space: nowrap;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-pass-cta {
+  max-width: 6.5rem;
+  white-space: nowrap;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-batch-wrap .hostly-kds-batch-summary {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 3px;
+  width: auto;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-batch-wrap .hostly-kds-batch-summary-label {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-size: 9px;
+  font-weight: 500;
+  color: #a8b4c4;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-batch-wrap .hostly-kds-batch-summary-label::after {
+  content: " · ";
+  color: #c5cdd8;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-batch-wrap .hostly-kds-batch-summary-lines {
+  display: inline;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-batch-wrap .hostly-kds-batch-summary-item {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 9px;
+  font-weight: 500;
+  color: #a8b4c4;
+  opacity: 0.9;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-batch-wrap .hostly-kds-batch-summary-item:not(:last-child)::after {
+  content: " · ";
+  color: #c5cdd8;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-line-row .hostly-kds-kitchen-line-cta {
+  margin-top: 1px;
+}
+
 .hostly-kds-heat-header {
   position: sticky;
   top: 0;
