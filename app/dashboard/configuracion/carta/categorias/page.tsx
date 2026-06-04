@@ -38,6 +38,9 @@ import {
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
+import { countProductsByCategoryIdFromCentral, countProductsByCategoryIdFromPlatos } from "@/lib/carta/catalog-category-counts";
+import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
+import { LegacyCatalogPendingNotice } from "@/components/carta/legacy-catalog-pending-notice";
 import { loadPlatos } from "@/lib/platos-local";
 import { CategoriasCartaDataView } from "@/components/carta/categorias-carta-data-view";
 
@@ -49,6 +52,9 @@ export default function ConfigCartaCategoriasPage() {
     () => resolveOperationalRestaurantId(profileRestaurantId),
     [profileRestaurantId],
   );
+  const operationalCatalog = useCentralProductsForCarta(restauranteId, {
+    scope: "management",
+  });
 
   const [items, setItems] = useState<CartaCategoria[]>([]);
   const [productFamilies, setProductFamilies] = useState<ProductFamilyDocument[]>([]);
@@ -159,15 +165,17 @@ export default function ConfigCartaCategoriasPage() {
 
   const countsByCatId = useMemo(() => {
     if (!restauranteId) return new Map<string, number>();
-    const platos = loadPlatos(restauranteId);
-    const m = new Map<string, number>();
-    for (const p of platos) {
-      const id = p.categoriaCartaId?.trim();
-      if (!id) continue;
-      m.set(id, (m.get(id) ?? 0) + 1);
+    if (operationalCatalog.source === "central") {
+      return countProductsByCategoryIdFromCentral([
+        ...operationalCatalog.productDocumentsById.values(),
+      ]);
     }
-    return m;
-  }, [restauranteId, items]);
+    return countProductsByCategoryIdFromPlatos(loadPlatos(restauranteId));
+  }, [
+    restauranteId,
+    operationalCatalog.source,
+    operationalCatalog.productDocumentsById,
+  ]);
 
   function openNew() {
     setEditing(null);
@@ -276,7 +284,7 @@ export default function ConfigCartaCategoriasPage() {
   return (
     <ConfigCartaWorkbench
       title="Categorías de carta"
-      description="Organiza el menú por categorías y asígnalas a una familia de producto (bebidas, comida u otros). Los productos se enlazarán en la siguiente fase."
+      description="Crea las secciones de tu carta (Pizzas, Vinos, Cafés…) y, si quieres, asígnalas a una familia de producto para filtros e informes."
     >
       <div className="hostly-carta-config-actions-row">
         <ConfigBtnPrimary type="button" disabled={!restauranteId} onClick={openNew}>
@@ -310,6 +318,13 @@ export default function ConfigCartaCategoriasPage() {
         </p>
       ) : null}
 
+      {restauranteId ? (
+        <LegacyCatalogPendingNotice
+          restaurantId={restauranteId}
+          catalogSource={operationalCatalog.source}
+        />
+      ) : null}
+
       <ConfigCard flush>
         <CategoriasCartaDataView
           items={sorted}
@@ -340,7 +355,7 @@ export default function ConfigCartaCategoriasPage() {
                 />
               </label>
               <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Tipo de carta</span>
+                <span className="hostly-carta-config-form-label">¿Comida o bebida?</span>
                 <select
                   className={inputClass}
                   value={draftType}
@@ -351,8 +366,11 @@ export default function ConfigCartaCategoriasPage() {
                 >
                   <option value="food">Comida</option>
                   <option value="drink">Bebida</option>
-                  <option value="general">General</option>
+                  <option value="general">Mixto</option>
                 </select>
+                <p className="hostly-carta-config-form-hint">
+                  Clasifica la sección del menú. Distinto del formato del producto (plato, café, menú del día…).
+                </p>
               </label>
               <label className="hostly-carta-config-form-field">
                 <span className="hostly-carta-config-form-label">Familia de producto</span>
@@ -365,7 +383,7 @@ export default function ConfigCartaCategoriasPage() {
                   />
                 </div>
                 <p className="hostly-carta-config-form-hint">
-                  Opcional. Agrupa para inventario y análisis (distinto de familias de menú).
+                  Opcional. Agrupa a nivel interno (informes, filtros). Distinto de la familia de menú, que ordena Platos y Bebidas en carta.
                 </p>
               </label>
               <label className="hostly-carta-config-form-field">
@@ -419,8 +437,7 @@ export default function ConfigCartaCategoriasPage() {
                   </div>
                 ) : null}
                 <p className="hostly-carta-config-form-hint">
-                  Formatos y mixers para productos de esta categoría (p. ej. chupito, copa + tónica). El TPV los
-                  usará en una fase posterior.
+                  Formatos y mixers para productos de esta sección (p. ej. chupito, copa + tónica). Los productos los heredan al asignar la categoría.
                 </p>
               </label>
               <label className="hostly-carta-config-form-field">

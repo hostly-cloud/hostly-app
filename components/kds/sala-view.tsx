@@ -18,6 +18,11 @@ import ServiceMetricsBar from "@/components/kds/service-metrics-bar";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
+import {
+  getHomogeneousPassChunkTypeLabel,
+  getMenuCourseLabel,
+  readItemCourseFromRecord,
+} from "@/lib/carta/menu-course";
 
 type SalaItem = {
   id: string;
@@ -25,6 +30,7 @@ type SalaItem = {
   qty: number;
   status?: string;
   preparedAt?: unknown;
+  course?: number;
   extras?: { name: string }[];
   note?: string;
 };
@@ -44,6 +50,7 @@ type SalaLine = {
   name: string;
   qty: number;
   preparedAtMs?: number;
+  course?: number;
   extras?: { name: string }[];
   note?: string;
 };
@@ -117,12 +124,14 @@ function readItemsArray(raw: unknown): SalaItem[] {
     const status = typeof rec.status === "string" ? rec.status : undefined;
     const extras = readItemExtrasFromRecord(rec);
     const note = readItemNoteFromRecord(rec);
+    const course = readItemCourseFromRecord(rec);
     out.push({
       id,
       name: String(name || "Producto"),
       qty,
       status,
       preparedAt: rec.preparedAt,
+      ...(course >= 1 && course <= 4 ? { course } : {}),
       ...(extras.length > 0 ? { extras } : {}),
       ...(note ? { note } : {}),
     });
@@ -130,7 +139,7 @@ function readItemsArray(raw: unknown): SalaItem[] {
   return out;
 }
 
-const TERMINAL_STATUSES = new Set(["closed", "paid", "cancelled", "canceled"]);
+const TERMINAL_STATUSES = new Set(["closed", "paid", "cancelled", "canceled", "merged"]);
 
 function isOrderActive(status: string | undefined): boolean {
   if (!status) return true;
@@ -534,6 +543,9 @@ export default function SalaView() {
           name: item.name,
           qty: item.qty,
           preparedAtMs,
+          ...(item.course != null && item.course >= 1 && item.course <= 4
+            ? { course: item.course }
+            : {}),
           ...(item.extras && item.extras.length > 0
             ? { extras: item.extras }
             : {}),
@@ -1000,6 +1012,15 @@ function SalaBoard({
                   const urgencyLabel = getSalaPassUrgencyLabel(
                     !isPassFullyServed ? passElapsedMs : null,
                   );
+                  const passCourseLabel = getHomogeneousPassChunkTypeLabel(chunk);
+                  const passCourseTitle =
+                    passCourseLabel === "Mixto"
+                      ? null
+                      : chunk[0]?.course != null &&
+                          chunk[0].course >= 1 &&
+                          chunk[0].course <= 4
+                        ? getMenuCourseLabel(chunk[0].course)
+                        : null;
                   return (
                     <div
                       key={`${g.tableKey}-pase-${passIdx}`}
@@ -1013,6 +1034,7 @@ function SalaBoard({
                         )}`}
                       >
                         <span>
+                          {passCourseTitle ? `${passCourseTitle} · ` : ""}
                           Pase {passIdx + 1} · Listo
                           {oldestPrep != null ? ` · ${formatSalaPrepClockHm(oldestPrep)}` : ""}
                           {` · ${chunk.length === 1 ? "1 línea" : `${chunk.length} líneas`}`}
@@ -1084,6 +1106,13 @@ function SalaBoard({
                               <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                                 <div style={lineNameStyle}>
                                   {line.qty}x {line.name}
+                                  {line.course != null &&
+                                  line.course >= 1 &&
+                                  line.course <= 4 ? (
+                                    <span className="ml-1.5 inline-flex rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                                      {getMenuCourseLabel(line.course)}
+                                    </span>
+                                  ) : null}
                                 </div>
                                 {line.extras && line.extras.length > 0 ? (
                                   <div

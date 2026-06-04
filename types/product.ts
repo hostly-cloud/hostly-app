@@ -17,7 +17,7 @@ export type Product = {
   modifierGroupIds?: string[];
   precio: number;
   /** Pase / curso del catálogo (1–4: entrante…postre). Opcional en datos legados. */
-  course?: number;
+  course?: number | null;
   /** Área operativa donde se prepara el producto (p. ej. cocina, barra, cocteleria). */
   preparationArea?: string;
   /** Estación canónica central (kitchen | bar | cocktail). */

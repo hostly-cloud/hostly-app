@@ -1,5 +1,9 @@
 import { collection, getDocs, limit, query, where } from "firebase/firestore";
 import type { EscandalloMetaMap } from "@/lib/platos-escandallo-bridge";
+import {
+  deleteCentralProductPermanently,
+  disableCentralProduct,
+} from "@/lib/firestore/products";
 import type { ProductDocument } from "@/lib/firestore/products";
 import { db } from "@/lib/firebase/client";
 import type { PlatoCarta } from "@/lib/platos-local";
@@ -102,4 +106,22 @@ export async function resolveCartaProductDeleteAction(args: {
   }
 
   return { action: "delete", reason: "no_dependencies" };
+}
+
+/** Aplica en Firestore la decisión de `resolveCartaProductDeleteAction` (misma ruta que borrado individual). */
+export async function applyResolvedCartaCentralProductDelete(
+  restaurantId: string,
+  productId: string,
+  decision: CartaProductDeleteDecision,
+): Promise<"deleted" | "deactivated"> {
+  const rid = restaurantId.trim();
+  const pid = productId.trim();
+  if (!rid || !pid) throw new Error("MISSING_IDS");
+
+  if (decision.action === "delete") {
+    await deleteCentralProductPermanently(rid, pid);
+    return "deleted";
+  }
+  await disableCentralProduct(rid, pid);
+  return "deactivated";
 }

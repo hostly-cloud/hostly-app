@@ -3902,7 +3902,7 @@ body {
 
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-head,
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-row {
-  padding: 8px 10px;
+  padding: 8px 8px;
 }
 
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-head {
@@ -3944,7 +3944,7 @@ body {
   justify-content: center;
   box-sizing: border-box;
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 650;
@@ -3958,8 +3958,8 @@ body {
 }
 
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-microchip--carta.hostly-status-badge {
-  gap: 5px;
-  padding: 3px 8px;
+  gap: 4px;
+  padding: 3px 6px;
   font-size: 10px;
   font-weight: 650;
   line-height: 1.2;
@@ -3972,7 +3972,7 @@ body {
 }
 
 .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-microchip--esc.hostly-status-badge {
-  padding: 3px 8px;
+  padding: 3px 6px;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
@@ -4039,8 +4039,8 @@ body {
 @media (min-width: 1024px) {
   .hostly-productos-config-skin--simplified .hostly-productos-carta-workspace .hostly-data-table--productos-carta,
   .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table--productos-carta {
-    --hostly-dt-dense-select: 32px;
-    --hostly-dt-dense-product: minmax(176px, 2.5fr);
+    --hostly-dt-dense-select: 26px;
+    --hostly-dt-dense-product: minmax(160px, 2.3fr);
   }
 }
 
@@ -4152,6 +4152,20 @@ body {
 .hostly-productos-carta-toolbar--config-primary .hostly-productos-carta-search--prominent {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.hostly-productos-carta-food-drink-segment {
+  flex-shrink: 0;
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: color-mix(in srgb, var(--hostly-surface-card-solid) 88%, var(--hostly-surface-page-soft));
+}
+
+.hostly-productos-carta-food-drink-segment .hostly-tab--unified {
+  font-size: 11px;
+  font-weight: 650;
+  min-height: 30px;
+  padding: 4px 10px;
 }
 
 .hostly-productos-carta-advanced-toggle--toolbar {
@@ -5015,6 +5029,10 @@ body {
   max-width: 100%;
 }
 
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--actions .hostly-row-actions {
+  gap: 1px;
+}
+
 .hostly-data-table--dense-config .hostly-data-table-col--actions .hostly-row-actions__btn--icon {
   flex-shrink: 0;
   width: 24px;
@@ -5023,7 +5041,107 @@ body {
 }
 
 .hostly-data-table--productos-carta.hostly-data-table--dense-config {
-  /* Productos usa el patrón dense-config con valores por defecto. */
+  --hostly-dt-dense-select: 26px;
+  --hostly-dt-dense-product: minmax(148px, 2.3fr);
+  --hostly-dt-dense-meta-sm: 54px;
+  --hostly-dt-dense-meta-family: minmax(58px, 78px);
+  --hostly-dt-dense-meta-oper: 38px;
+  --hostly-dt-dense-price: 86px;
+  --hostly-dt-dense-status: 72px;
+  --hostly-dt-dense-actions: 114px;
+  --hostly-data-table-columns:
+    var(--hostly-dt-dense-select)
+    var(--hostly-dt-dense-product)
+    var(--hostly-dt-dense-meta-sm)
+    minmax(72px, 98px)
+    var(--hostly-dt-dense-meta-family)
+    var(--hostly-dt-dense-meta-oper)
+    var(--hostly-dt-dense-meta-oper)
+    var(--hostly-dt-dense-price)
+    var(--hostly-dt-dense-status)
+    var(--hostly-dt-dense-status)
+    var(--hostly-dt-dense-actions);
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-scroll {
+  column-gap: 7px;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head,
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-row {
+  column-gap: 7px;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--tipo {
+  max-width: var(--hostly-dt-dense-meta-sm);
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--categoria {
+  grid-column: 4;
+  max-width: 98px;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--familia {
+  grid-column: 5;
+  min-width: 0;
+  max-width: var(--hostly-dt-dense-meta-family);
+  overflow: hidden;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--pase {
+  grid-column: 6;
+  min-width: var(--hostly-dt-dense-meta-oper);
+  max-width: var(--hostly-dt-dense-meta-oper);
+  overflow: hidden;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--destino {
+  grid-column: 7;
+  min-width: var(--hostly-dt-dense-meta-oper);
+  max-width: var(--hostly-dt-dense-meta-oper);
+  overflow: hidden;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--price {
+  grid-column: 8;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--carta {
+  grid-column: 9;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--esc {
+  grid-column: 10;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--actions {
+  grid-column: 11;
+}
+
+.hostly-data-table-microchip--oper.hostly-data-table-microchip {
+  min-width: 0;
+  max-width: 100%;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-microchip--oper.hostly-data-table-microchip {
+  padding: 1px 5px;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--familia .hostly-data-table-secondary {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-primary__meta.hostly-data-table-col--tablet-only {
+  font-size: 10px;
+  line-height: 1.15;
+  max-width: 100%;
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
@@ -5038,7 +5156,10 @@ body {
   }
 
   .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--tipo,
-  .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--categoria {
+  .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--categoria,
+  .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--familia,
+  .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--pase,
+  .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--destino {
     display: none;
   }
 
@@ -6318,6 +6439,75 @@ body {
   color: #92400e;
 }
 
+.hostly-productos-bulk-course-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.hostly-productos-bulk-course-modal {
+  width: min(400px, 100%);
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid var(--hostly-line);
+  background: var(--hostly-surface-card, #fff);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+}
+
+.hostly-productos-bulk-course-modal__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--hostly-ink, #0f172a);
+}
+
+.hostly-productos-bulk-course-modal__hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--hostly-ink-muted, #64748b);
+}
+
+.hostly-productos-bulk-course-modal__hint--sub {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.92;
+}
+
+.hostly-productos-bulk-course-modal__label {
+  display: block;
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hostly-ink-muted, #64748b);
+}
+
+.hostly-productos-bulk-course-modal__select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--hostly-line);
+  background: var(--hostly-surface-page, #fff);
+  color: var(--hostly-ink, #0f172a);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.hostly-productos-bulk-course-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
 .hostly-status-badge {
   display: inline-flex;
   align-items: center;
@@ -7341,11 +7531,33 @@ body {
   border-color: rgba(125, 211, 252, 0.55);
 }
 
+.hostly-tpv-modifiers-step-kicker {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.hostly-tpv-inline-mixer-wrap {
+  margin-top: 4px;
+}
+
+.hostly-tpv-inline-mixer-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
 .hostly-tpv-inline-mixer {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 4px;
 }
 
 .hostly-tpv-inline-mixer-chip {
@@ -7668,6 +7880,41 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.06em;
   opacity: 0.88;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-course-heading__ops {
+  flex: 0 0 100%;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: #1d4ed8;
+}
+
+.hostly-kds-board--kitchen-ops
+  .hostly-kds-kitchen-course-heading__ops.is-waiting-march {
+  color: #9a3412;
+}
+
+.hostly-kds-board--kitchen-ops
+  .hostly-kds-kitchen-course-section.is-waiting-march
+  .hostly-kds-kitchen-course-heading {
+  opacity: 0.92;
+}
+
+.hostly-kds-board--kitchen-ops .hostly-kds-kitchen-line-row.is-waiting-march {
+  opacity: 0.92;
+  border-style: dashed !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+  background: rgba(241, 245, 249, 0.92) !important;
+}
+
+.hostly-kds-board--kitchen-ops
+  .hostly-kds-kitchen-line-row.is-waiting-march
+  .hostly-kds-kitchen-product-name {
+  color: #64748b;
+  font-weight: 600;
 }
 
 .hostly-kds-board--kitchen-ops

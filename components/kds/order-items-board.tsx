@@ -61,6 +61,7 @@ import {
   readItemCourseFromRecord,
   sortMenuCourseKey,
 } from "@/lib/carta/menu-course";
+import { isKitchenLineWaitingMarch } from "@/lib/carta/comanda-line-release";
 
 export type BoardItem = {
   id: string;
@@ -100,7 +101,7 @@ export type BoardOrder = {
   items: BoardItem[];
 };
 
-type BoardStatus = "sent" | "prepared" | "served";
+type BoardStatus = "sent" | "prepared" | "served" | "waiting_march";
 
 function cleanFirestoreData<T extends Record<string, unknown>>(data: T) {
   return Object.fromEntries(
@@ -533,6 +534,27 @@ function classifyBoardStatus(raw: string | undefined): BoardStatus | null {
   if (s === "prepared" || s === "ready") return "prepared";
   if (s === "served") return "served";
   return null;
+}
+
+/** Cocina: pending retenido (post-Comanda) → waiting_march; barra/sala sin cambio. */
+function classifyKitchenBoardStatus(
+  item: BoardItem,
+  orderStatus: string | undefined,
+): BoardStatus | null {
+  const direct = classifyBoardStatus(item.status);
+  if (direct) return direct;
+  if (isKitchenLineWaitingMarch(item, orderStatus)) {
+    return "waiting_march";
+  }
+  return null;
+}
+
+function kitchenCourseSectionOpsLabel(lines: BoardLine[]): string {
+  if (lines.length === 0) return "";
+  if (lines.every((l) => l.status === "waiting_march")) {
+    return "Esperando marcha";
+  }
+  return "En producción";
 }
 
 function urgencyTone(minutes: number): {
@@ -1316,7 +1338,10 @@ export default function OrderItemsBoard({
         "Sin mesa";
       const tableKey = order.tableId?.trim() || tableLabel;
       for (const item of order.items) {
-        const bs = classifyBoardStatus(item.status);
+        const bs =
+          kdsStationKind === "kitchen"
+            ? classifyKitchenBoardStatus(item, order.status)
+            : classifyBoardStatus(item.status);
         if (!bs) continue;
         if (!itemFilter(item)) continue;
         const sentAtMs = readMs(item.sentAt);
@@ -1356,7 +1381,7 @@ export default function OrderItemsBoard({
             ? { operationStationName: item.operationStationName }
             : {}),
         };
-        if (bs === "sent") sent.push(line);
+        if (bs === "sent" || bs === "waiting_march") sent.push(line);
         else if (bs === "prepared") prepared.push(line);
         else served.push(line);
       }
@@ -1366,7 +1391,7 @@ export default function OrderItemsBoard({
       prepared: groupLinesByTable(prepared),
       served: groupLinesByTable(served),
     };
-  }, [orders, itemFilter, matchesOrder]);
+  }, [orders, itemFilter, matchesOrder, kdsStationKind]);
 
   const servedLineCount = useMemo(
     () => columns.served.reduce((acc, g) => acc + g.lines.length, 0),
@@ -2082,7 +2107,10 @@ function BoardLineRow({
   const minutes =
     line.sentAtMs != null ? Math.floor((nowMs - line.sentAtMs) / 60000) : 0;
   const busy = busyItemIds[`${line.orderId}:${line.itemId}`];
-  const isServeAction = action?.nextStatus === "served";
+  const isWaitingMarch = line.status === "waiting_march";
+  const lineAction =
+    action && line.status === "sent" ? action : null;
+  const isServeAction = lineAction?.nextStatus === "served";
   const markBtnClass = kitchenOpsUi
     ? isServeAction
       ? kitchenMarkBtnServeClass
@@ -2096,7 +2124,7 @@ function BoardLineRow({
       : "Listo"
     : isServeAction
       ? "Servir"
-      : (action?.label ?? "");
+      : (lineAction?.label ?? "");
 
   const archiveProductRow =
     servedArchiveLayout && line.status === "served";
@@ -2164,17 +2192,17 @@ function BoardLineRow({
             </div>
           ) : null}
         </div>
-        {action ? (
+        {lineAction ? (
           <button
             type="button"
             disabled={busy}
             className={`${markBtnClass} shrink-0 self-center disabled:opacity-60`}
             style={{ cursor: busy ? "progress" : "pointer" }}
             onClick={() =>
-              onMark(line.orderId, line.itemId, action.nextStatus)
+              onMark(line.orderId, line.itemId, lineAction.nextStatus)
             }
           >
-            {busy ? (action.busyLabel ?? "Guardando…") : markLabel}
+            {busy ? (lineAction.busyLabel ?? "Guardando…") : markLabel}
           </button>
         ) : null}
       </div>
@@ -2183,6 +2211,10 @@ function BoardLineRow({
 
   let itemBorder = "1px solid #e5e7eb"; // gray-200
   let itemBg = "#ffffff";
+  if (isWaitingMarch) {
+    itemBorder = "1px solid rgba(148, 163, 184, 0.35)";
+    itemBg = "rgba(248, 250, 252, 0.96)";
+  }
   const elapsedMs =
     line.sentAtMs != null ? Math.max(0, nowMs - line.sentAtMs) : null;
   const slaLevel: KdsSlaLevel =
@@ -2205,7 +2237,13 @@ function BoardLineRow({
 
   const rowBody = (
     <div
-      className={kitchenOpsUi ? "hostly-kds-kitchen-line-row" : undefined}
+      className={
+        kitchenOpsUi
+          ? `hostly-kds-kitchen-line-row${
+              isWaitingMarch ? " is-waiting-march" : ""
+            }`
+          : undefined
+      }
       style={{
         ...(kitchenOpsUi ? kitchenLineRowStyle : lineRowStyle),
         border: itemBorder,
@@ -2386,7 +2424,7 @@ function BoardLineRow({
           </div>
         ) : null}
       </div>
-      {action ? (
+      {lineAction ? (
         <button
           type="button"
           disabled={busy}
@@ -2395,24 +2433,28 @@ function BoardLineRow({
           } disabled:opacity-60`}
           style={{ cursor: busy ? "progress" : "pointer" }}
           onClick={() =>
-            onMark(line.orderId, line.itemId, action.nextStatus)
+            onMark(line.orderId, line.itemId, lineAction.nextStatus)
           }
         >
-          {busy ? (action.busyLabel ?? "Guardando…") : markLabel}
+          {busy ? (lineAction.busyLabel ?? "Guardando…") : markLabel}
         </button>
       ) : null}
     </div>
   );
 
-  if (!action || servedArchiveLayout) {
+  if (!lineAction || servedArchiveLayout || isWaitingMarch) {
     return rowBody;
   }
 
   return (
     <KdsLineGestureRow
-      enabled={Boolean(onLongPress) || Boolean(action)}
-      onSwipePrepare={() => onMark(line.orderId, line.itemId, action.nextStatus)}
-      onDoubleTapPrepare={() => onMark(line.orderId, line.itemId, action.nextStatus)}
+      enabled={Boolean(onLongPress) || Boolean(lineAction)}
+      onSwipePrepare={() =>
+        onMark(line.orderId, line.itemId, lineAction.nextStatus)
+      }
+      onDoubleTapPrepare={() =>
+        onMark(line.orderId, line.itemId, lineAction.nextStatus)
+      }
       onLongPress={onLongPress}
     >
       {rowBody}
@@ -3008,17 +3050,26 @@ function BoardColumn({
                   }
                 >
                   {kitchenOpsUi ? (
-                    courseSections.map((section) => (
+                    courseSections.map((section) => {
+                      const sectionOpsLabel = kitchenCourseSectionOpsLabel(
+                        section.lines,
+                      );
+                      const sectionAllWaiting = section.lines.every(
+                        (l) => l.status === "waiting_march",
+                      );
+                      return (
                       <div
                         key={`${g.tableKey}-course-${section.course}`}
-                        className="hostly-kds-kitchen-course-section"
+                        className={`hostly-kds-kitchen-course-section${
+                          sectionAllWaiting ? " is-waiting-march" : ""
+                        }`}
                         data-kds-course={section.course}
                       >
                         <p
                           className="hostly-kds-kitchen-course-heading"
                           role="heading"
                           aria-level={3}
-                          aria-label={`${getMenuCourseSectionLabel(section.course)}: ${section.lines.length} líneas`}
+                          aria-label={`${getMenuCourseSectionLabel(section.course)}: ${section.lines.length} líneas, ${sectionOpsLabel}`}
                         >
                           <span className="hostly-kds-kitchen-course-heading__label">
                             {section.label}
@@ -3028,6 +3079,13 @@ function BoardColumn({
                             aria-hidden
                           >
                             ({section.lines.length})
+                          </span>
+                          <span
+                            className={`hostly-kds-kitchen-course-heading__ops${
+                              sectionAllWaiting ? " is-waiting-march" : ""
+                            }`}
+                          >
+                            {sectionOpsLabel}
                           </span>
                         </p>
                         <div className="hostly-kds-kitchen-course-lines">
@@ -3055,7 +3113,8 @@ function BoardColumn({
                           ))}
                         </div>
                       </div>
-                    ))
+                    );
+                    })
                   ) : sortedPassChunks != null ? (
                     sortedPassChunks.map(({ chunk, originalIndex }) => {
                       const oldestSent = oldestSentAtMsInChunk(chunk);

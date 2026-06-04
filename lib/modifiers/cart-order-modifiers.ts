@@ -8,6 +8,7 @@ import {
   DEFAULT_DRINK_MIXER_GROUP_ID,
   sortModifierOptions,
   type ModifierGroupDocument,
+  type ModifierOptionDocument,
 } from "@/lib/modifiers/modifier-types";
 import { resolveEffectiveModifierGroupIds } from "@/lib/modifiers/effective-product-modifiers";
 import type { CartaCategoria } from "@/lib/carta-categorias/types";
@@ -240,33 +241,107 @@ export function resolveActiveEffectiveModifierGroups(
   return out;
 }
 
-function formatGroupRequiresMixer(
+export function isMixerModifierGroup(group: ModifierGroupDocument): boolean {
+  if (group.type === "mixer" || group.id === DEFAULT_DRINK_MIXER_GROUP_ID) {
+    return true;
+  }
+  const blob = `${group.name} ${group.normalizedName}`.toLowerCase();
+  return /\bmixer\b/.test(blob) || /\brefresco\b/.test(blob) || /\bmezcla\b/.test(blob);
+}
+
+export function isFormatModifierGroup(group: ModifierGroupDocument): boolean {
+  if (group.type === "format" || group.id === DEFAULT_DRINK_FORMAT_GROUP_ID) {
+    return true;
+  }
+  const blob = `${group.name} ${group.normalizedName}`.toLowerCase();
+  return /\bformato\b/.test(blob);
+}
+
+export function formatOptionRequiresMixer(option: ModifierOptionDocument): boolean {
+  const id = option.id.trim().toLowerCase();
+  if (id === "copa-mixer" || id.includes("copa-mixer") || id.includes("copa_mixer")) {
+    return true;
+  }
+  if (id.includes("copa") && (id.includes("refresco") || id.includes("mixer"))) {
+    return true;
+  }
+  const name = option.name.trim().toLowerCase();
+  if (/copa\s*\+\s*(mixer|refresco|mezcla)/.test(name)) return true;
+  if (name.includes("copa") && name.includes("mixer")) return true;
+  if (name.includes("copa") && name.includes("refresco")) return true;
+  if (/\bcombinad[oa]\b/.test(name) && name.includes("copa")) return true;
+  return false;
+}
+
+export function selectionRequiresMixerStep(
   groups: readonly ModifierGroupDocument[],
   selection: ModifierSelectionByGroup,
 ): boolean {
   const formatGroup =
     groups.find((g) => g.id === DEFAULT_DRINK_FORMAT_GROUP_ID) ??
-    groups.find((g) => g.type === "format");
+    groups.find((g) => isFormatModifierGroup(g));
   if (!formatGroup) return false;
   const selectedId = (selection[formatGroup.id] ?? [])[0];
   if (!selectedId) return false;
-  if (selectedId === "copa-mixer") return true;
   const option = formatGroup.options.find((o) => o.id === selectedId);
   if (!option) return false;
-  return option.name.toLowerCase().includes("mixer");
+  return formatOptionRequiresMixer(option);
+}
+
+export function modifierSelectionFromLine(
+  selectedModifiers?: readonly CartOrderLineSelectedModifier[],
+): ModifierSelectionByGroup {
+  const out: ModifierSelectionByGroup = {};
+  if (!Array.isArray(selectedModifiers)) return out;
+  for (const mod of selectedModifiers) {
+    const groupId = String(mod.groupId ?? "").trim();
+    const optionId = String(mod.optionId ?? "").trim();
+    if (!groupId || !optionId) continue;
+    const prev = out[groupId] ?? [];
+    if (!prev.includes(optionId)) {
+      out[groupId] = [...prev, optionId];
+    }
+  }
+  return out;
+}
+
+export function lineSelectionRequiresMixerStep(
+  groups: readonly ModifierGroupDocument[],
+  selectedModifiers?: readonly CartOrderLineSelectedModifier[],
+): boolean {
+  return selectionRequiresMixerStep(
+    groups,
+    modifierSelectionFromLine(selectedModifiers),
+  );
 }
 
 export function filterVisibleModifierGroupsForSelection(
   groups: readonly ModifierGroupDocument[],
   selection: ModifierSelectionByGroup,
 ): ModifierGroupDocument[] {
-  const needsMixer = formatGroupRequiresMixer(groups, selection);
+  const needsMixer = selectionRequiresMixerStep(groups, selection);
   return groups.filter((group) => {
-    if (group.type === "mixer" || group.id === DEFAULT_DRINK_MIXER_GROUP_ID) {
-      return needsMixer;
-    }
+    if (isMixerModifierGroup(group)) return needsMixer;
     return true;
   });
+}
+
+export function partitionVisibleModifierGroupsForTpv(
+  groups: readonly ModifierGroupDocument[],
+  selection: ModifierSelectionByGroup,
+): {
+  formatGroups: ModifierGroupDocument[];
+  mixerGroups: ModifierGroupDocument[];
+  showMixerStep: boolean;
+} {
+  const visible = filterVisibleModifierGroupsForSelection(groups, selection);
+  const formatGroups = visible.filter((g) => !isMixerModifierGroup(g));
+  const mixerGroups = visible.filter((g) => isMixerModifierGroup(g));
+  return {
+    formatGroups,
+    mixerGroups,
+    showMixerStep: mixerGroups.length > 0,
+  };
 }
 
 export function buildSelectedModifiersFromDraft(
@@ -305,6 +380,37 @@ export function isModifierSelectionValid(
       group.maxSelected > 0 ? group.maxSelected : Math.max(min, 99);
     if (count < min) return false;
     if (count > max) return false;
+  }
+  return true;
+}
+
+/** Hay al menos un refresco/mezcla elegido en el borrador. */
+export function selectionHasChosenMixer(
+  groups: readonly ModifierGroupDocument[],
+  selection: ModifierSelectionByGroup,
+): boolean {
+  for (const group of groups) {
+    if (!isMixerModifierGroup(group)) continue;
+    if ((selection[group.id] ?? []).length > 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Validación del botón «Añadir» en el modal TPV de bebidas:
+ * reglas de grupo visibles + refresco obligatorio si el formato lo exige.
+ */
+export function isTpvModifierModalConfirmValid(
+  groups: readonly ModifierGroupDocument[],
+  selection: ModifierSelectionByGroup,
+): boolean {
+  const visible = filterVisibleModifierGroupsForSelection(groups, selection);
+  if (!isModifierSelectionValid(visible, selection)) return false;
+  if (
+    selectionRequiresMixerStep(groups, selection) &&
+    !selectionHasChosenMixer(groups, selection)
+  ) {
+    return false;
   }
   return true;
 }

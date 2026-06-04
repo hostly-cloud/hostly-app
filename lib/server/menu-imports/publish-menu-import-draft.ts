@@ -11,6 +11,7 @@ import type {
 import {
   canPublishEvaluation,
   evaluateImportItemForPublish,
+  publishSkipMessage,
 } from "./evaluate-import-item-for-publish";
 import { getMenuImportDraftAdmin, updateMenuImportDraftAdmin } from "./menu-import-draft-admin";
 import { loadCentralProductsAdmin } from "./load-central-products-admin";
@@ -170,6 +171,7 @@ export async function publishMenuImportDraft(params: {
   userId: string;
   itemIds?: string[];
   confirmDuplicates?: string[];
+  confirmReviews?: string[];
 }): Promise<MenuImportPublishResult> {
   const { db, restaurantId, userId } = params;
   const draftId = params.draftId.trim();
@@ -177,9 +179,14 @@ export async function publishMenuImportDraft(params: {
     throw new PublishMenuImportDraftError("INVALID_DRAFT_ID", "draftId obligatorio", 400);
   }
 
-  const confirmDuplicates = new Set(
-    (params.confirmDuplicates ?? []).map((id) => id.trim()).filter(Boolean),
-  );
+  const publishConfirmations = {
+    confirmDuplicates: new Set(
+      (params.confirmDuplicates ?? []).map((id) => id.trim()).filter(Boolean),
+    ),
+    confirmReviews: new Set(
+      (params.confirmReviews ?? []).map((id) => id.trim()).filter(Boolean),
+    ),
+  };
 
   const draft = await getMenuImportDraftAdmin(db, restaurantId, draftId);
   if (!draft) {
@@ -296,18 +303,19 @@ export async function publishMenuImportDraft(params: {
         categories,
         categoryNameById,
         catalog,
-        confirmDuplicates,
+        confirmDuplicates: publishConfirmations.confirmDuplicates,
       });
 
       const isConfirmedDuplicate =
-        evaluation.action === "possible_duplicate" && confirmDuplicates.has(item.id);
+        evaluation.action === "possible_duplicate" &&
+        publishConfirmations.confirmDuplicates.has(item.id);
 
-      if (!canPublishEvaluation(evaluation, confirmDuplicates)) {
+      if (!canPublishEvaluation(evaluation, publishConfirmations)) {
         skipped.push({
           itemId: item.id,
           itemName: item.name,
           outcome: "skipped",
-          message: evaluation.publishBlockReasons.join("; ") || "No apto para publicación",
+          message: publishSkipMessage(evaluation, publishConfirmations),
         });
         continue;
       }

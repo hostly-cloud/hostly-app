@@ -28,6 +28,40 @@ export function defaultCartaCategoriaTipoForTipoProducto(tipo: TipoProductoVenta
   return tipo === "plato" ? "food" : "drink";
 }
 
+/** Inverso canónico de `defaultCartaCategoriaTipoForTipoProducto`. Mixto (`general`) → null. */
+export function inferTipoVentaFromCategoryType(
+  categoryType: CartaCategoria["type"],
+): TipoProductoVenta | null {
+  if (categoryType === "food") return "plato";
+  if (categoryType === "drink") return "bebida";
+  return null;
+}
+
+export function inferTipoVentaFromCategory(
+  category: Pick<CartaCategoria, "type"> | null | undefined,
+): TipoProductoVenta | null {
+  if (!category) return null;
+  return inferTipoVentaFromCategoryType(category.type);
+}
+
+export function categoryRequiresManualTipoVenta(
+  category: Pick<CartaCategoria, "type"> | null | undefined,
+): boolean {
+  return !category || category.type === "general";
+}
+
+/** Categorías visibles según filtro de familia de menú (sin filtrar por formato del producto). */
+export function cartaCategoriasForMenuFamiliaFiltro(
+  categorias: readonly CartaCategoria[],
+  familiaFiltroId: string | null,
+): CartaCategoria[] {
+  if (familiaFiltroId == null) return [...categorias];
+  if (familiaFiltroId === CARTA_MENU_FAMILIA_FILTER_UNASSIGNED) {
+    return categorias.filter((c) => !c.cartaFamiliaId?.trim());
+  }
+  return categorias.filter((c) => c.cartaFamiliaId === familiaFiltroId);
+}
+
 /**
  * Categorías visibles según tipo de producto y filtro opcional por familia de carta.
  * - `familiaFiltroId === null`: todas las compatibles con el tipo.

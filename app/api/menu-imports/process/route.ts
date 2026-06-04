@@ -42,6 +42,12 @@ export async function POST(req: Request) {
       status: result.status,
       alreadyProcessed: result.alreadyProcessed,
       itemCount: result.itemCount,
+      ...(process.env.NODE_ENV !== "production"
+        ? {
+            _devPipelineHint:
+              "Trazabilidad completa en terminal del servidor: [Hostly][MenuImport Pipeline]",
+          }
+        : {}),
     });
   } catch (e) {
     if (e instanceof ProcessMenuImportDraftError) {

@@ -22,7 +22,7 @@ import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 function tipoLabel(t: CartaCategoriaTipo): string {
   if (t === "food") return "Comida";
   if (t === "drink") return "Bebida";
-  return "General";
+  return "Mixto";
 }
 
 function CategoryStatusBadge({ active }: { active: boolean }) {
@@ -155,11 +155,25 @@ export function CategoriasCartaDataView({
             <HostlyDataCell align="center" col="status">
               Estado
             </HostlyDataCell>
-            <HostlyDataCell col="family">Familia</HostlyDataCell>
+            <HostlyDataCell col="family">
+              <span
+                className="hostly-data-table-secondary"
+                title="Familia de producto: filtros e informes. Distinta de la familia de menú (Platos / Bebidas)."
+              >
+                Fam. producto
+              </span>
+            </HostlyDataCell>
             <HostlyDataCell align="end" col="products">
               Productos
             </HostlyDataCell>
-            <HostlyDataCell col="type">Tipo</HostlyDataCell>
+            <HostlyDataCell col="type">
+              <span
+                className="hostly-data-table-secondary"
+                title="Si la sección es de comida, bebida o mixta."
+              >
+                Comida/bebida
+              </span>
+            </HostlyDataCell>
             <HostlyDataCell col="modifiers">Modificadores</HostlyDataCell>
             <HostlyDataCell align="end" col="order">
               Orden

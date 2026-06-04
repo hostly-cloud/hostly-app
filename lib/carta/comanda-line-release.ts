@@ -2,6 +2,7 @@ import { mapStationToPreparationArea } from "@/lib/carta/map-station-to-preparat
 import {
   resolveKdsDestination,
   type KdsDestination,
+  type KdsRoutableItem,
 } from "@/lib/kds/kds-destination";
 import {
   resolveStationFieldsForCartLine,
@@ -22,6 +23,7 @@ export type ComandaReleaseLine = {
 
 export type ComandaReleaseAction =
   | "send_to_comanda"
+  | "march_primeros"
   | "march_segundos"
   | "march_postres";
 
@@ -89,15 +91,58 @@ export function shouldAutoReleaseLineOnComanda(line: ComandaReleaseLine): boolea
   return course === 1;
 }
 
-/** Marchar segundos: primeros + segundos (course 2 y 3) aún pending. */
+/** Marchar primeros: course 2 (Primeros) pending. */
+export function isPendingMarchPrimeroLine(line: ComandaReleaseLine): boolean {
+  if (line.status !== "pending") return false;
+  return normalizeComandaCourseValue(line.course) === 2;
+}
+
+/** Marchar segundos: course 3 (Segundos) pending. */
 export function isPendingMarchSegundosLine(line: ComandaReleaseLine): boolean {
   if (line.status !== "pending") return false;
-  const course = normalizeComandaCourseValue(line.course);
-  return course === 2 || course === 3;
+  return normalizeComandaCourseValue(line.course) === 3;
 }
 
 /** Marchar postres: course 4 pending. */
 export function isPendingMarchPostresLine(line: ComandaReleaseLine): boolean {
   if (line.status !== "pending") return false;
   return normalizeComandaCourseValue(line.course) === 4;
+}
+
+/** Pedido en borrador TPV (`orders.status === "open"`): pending no va a Cocina. */
+export function isComandaOrderStatusOpen(
+  orderStatus: string | undefined,
+): boolean {
+  return (orderStatus?.trim().toLowerCase() ?? "") === "open";
+}
+
+/**
+ * Cocina KDS: pending retenido tras Comanda (curso 2–4), solo lectura UI.
+ * No modifica Firestore ni políticas de liberación.
+ */
+export function isKitchenLineWaitingMarch(
+  item: KdsRoutableItem & { status?: string; course?: unknown },
+  orderStatus: string | undefined,
+): boolean {
+  const status = (item.status ?? "").trim().toLowerCase();
+  if (status !== "pending") return false;
+  if (isComandaOrderStatusOpen(orderStatus)) return false;
+  if (resolveKdsDestination(item) !== "kitchen") return false;
+  const course = normalizeComandaCourseValue(item.course) ?? 1;
+  return course >= 2 && course <= 4;
+}
+
+/**
+ * TPV: pending cocina curso 2–4 tras al menos un envío (Comanda/Marchar).
+ * Solo presentación; no altera estados ni liberación.
+ */
+export function isTpvComandaLineHeldForMarch(
+  line: ComandaReleaseLine,
+  comandaAlreadyIssued: boolean,
+): boolean {
+  if (!comandaAlreadyIssued) return false;
+  if (line.status !== "pending") return false;
+  if (resolveComandaLineKdsDestination(line) !== "kitchen") return false;
+  const course = normalizeComandaCourseValue(line.course) ?? 1;
+  return course >= 2 && course <= 4;
 }

@@ -65,7 +65,7 @@ export function CategoryProductFamilySelect({
       className={className}
       style={{ cursor: disabled ? "not-allowed" : "pointer" }}
     >
-      <option value={CATEGORY_PRODUCT_FAMILY_NONE}>Sin familia</option>
+      <option value={CATEGORY_PRODUCT_FAMILY_NONE}>Sin familia de producto</option>
       {activeFamilies.map((f) => (
         <option key={f.id} value={f.id}>
           {f.name} ({PRODUCT_FAMILY_TYPE_LABELS[f.type]})

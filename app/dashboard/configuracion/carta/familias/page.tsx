@@ -2,15 +2,29 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/components/auth/auth-context";
 import { ConfigCard, ConfigCartaWorkbench, ConfigBtnSecondary } from "../../_components/config-carta-workbench";
+import { LegacyCatalogPendingNotice } from "@/components/carta/legacy-catalog-pending-notice";
 import { fetchCartaCategorias, fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
-import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import {
+  countOrganizedProductsFromCentral,
+  countOrganizedProductsFromPlatos,
+} from "@/lib/carta/catalog-category-counts";
+import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
+import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { loadPlatos } from "@/lib/platos-local";
 import { FamiliasCartaDataView } from "@/components/carta/familias-carta-data-view";
 
 export default function ConfigCartaFamiliasPage() {
-  const restauranteId = useMemo(() => getBrowserRestauranteId()?.trim() ?? "", []);
+  const { restaurantId: profileRestaurantId } = useAuth();
+  const restauranteId = useMemo(
+    () => resolveOperationalRestaurantId(profileRestaurantId),
+    [profileRestaurantId],
+  );
+  const operationalCatalog = useCentralProductsForCarta(restauranteId, {
+    scope: "management",
+  });
   const [items, setItems] = useState<CartaFamilia[]>([]);
   const [categorias, setCategorias] = useState<CartaCategoria[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,15 +65,25 @@ export default function ConfigCartaFamiliasPage() {
     }
     const activeFamilies = items.filter((f) => f.isActive).length;
     const linkedCategories = categorias.filter((c) => Boolean(c.cartaFamiliaId?.trim())).length;
-    const platos = loadPlatos(restauranteId);
-    const organizedProducts = platos.filter((p) => Boolean(p.categoriaCartaId?.trim())).length;
+    const organizedProducts =
+      operationalCatalog.source === "central"
+        ? countOrganizedProductsFromCentral([
+            ...operationalCatalog.productDocumentsById.values(),
+          ])
+        : countOrganizedProductsFromPlatos(loadPlatos(restauranteId));
     return { activeFamilies, linkedCategories, organizedProducts };
-  }, [restauranteId, items, categorias]);
+  }, [
+    restauranteId,
+    items,
+    categorias,
+    operationalCatalog.source,
+    operationalCatalog.productDocumentsById,
+  ]);
 
   return (
     <ConfigCartaWorkbench
       title="Familias de menú"
-      description="Las familias agrupan categorías (por ejemplo Platos y Bebidas) para ordenar la carta en Hostly y alimentar reglas de TPV. La creación avanzada seguirá evolucionando aquí; de momento puedes revisar el inventario y enlazar con Productos."
+      description="Las familias de menú agrupan secciones de carta en bloques grandes (por ejemplo Platos y Bebidas). Ordenan lo que ve el camarero al tomar nota."
     >
       <div className="hostly-carta-config-actions-row">
         <Link
@@ -89,6 +113,13 @@ export default function ConfigCartaFamiliasPage() {
         <div className="hostly-carta-config-alert hostly-carta-config-alert--error">{error}</div>
       ) : null}
 
+      {restauranteId ? (
+        <LegacyCatalogPendingNotice
+          restaurantId={restauranteId}
+          catalogSource={operationalCatalog.source}
+        />
+      ) : null}
+
       {restauranteId && !loading && !error ? (
         <div className="hostly-carta-config-kpi-strip hostly-carta-config-kpi-strip--dense">
           <div className="hostly-carta-config-kpi-pill">
@@ -114,9 +145,9 @@ export default function ConfigCartaFamiliasPage() {
         <ConfigCard compact className="hostly-carta-config-card--muted">
           <p className="hostly-carta-config-section-title">Relación</p>
           <p className="hostly-carta-config-section-body">
-            Las categorías pueden enlazarse a una familia para ordenar la carta y agrupar reglas en TPV.
+            Cada categoría puede pertenecer a una familia de menú para ordenar la carta. Configúralo al editar la categoría.
           </p>
-          <p className="hostly-carta-config-form-hint">Alta desde esta pantalla: en cuanto el endpoint esté enlazado.</p>
+          <p className="hostly-carta-config-form-hint">Próximamente podrás crear familias de menú desde aquí.</p>
         </ConfigCard>
       </div>
     </ConfigCartaWorkbench>

@@ -191,16 +191,46 @@ export function evaluateImportItemForPublish(args: {
   };
 }
 
+export type PublishConfirmationSets = {
+  confirmDuplicates: Set<string>;
+  confirmReviews: Set<string>;
+};
+
 export function canPublishEvaluation(
   evaluation: ItemPublishEvaluation,
-  confirmDuplicates: Set<string>,
+  confirmations: PublishConfirmationSets,
 ): boolean {
   if (evaluation.publishBlockReasons.length > 0) return false;
   if (evaluation.action === "create") return true;
-  if (evaluation.action === "possible_duplicate" && confirmDuplicates.has(evaluation.itemId)) {
+  if (
+    evaluation.action === "possible_duplicate" &&
+    confirmations.confirmDuplicates.has(evaluation.itemId)
+  ) {
+    return true;
+  }
+  if (evaluation.action === "review" && confirmations.confirmReviews.has(evaluation.itemId)) {
     return true;
   }
   return false;
+}
+
+export function publishSkipMessage(
+  evaluation: ItemPublishEvaluation,
+  confirmations: PublishConfirmationSets,
+): string {
+  if (evaluation.publishBlockReasons.length > 0) {
+    return evaluation.publishBlockReasons.join("; ");
+  }
+  if (evaluation.action === "review" && !confirmations.confirmReviews.has(evaluation.itemId)) {
+    return "Revisión humana sin confirmar";
+  }
+  if (
+    evaluation.action === "possible_duplicate" &&
+    !confirmations.confirmDuplicates.has(evaluation.itemId)
+  ) {
+    return "Duplicado de catálogo sin confirmar";
+  }
+  return "No apto para publicación";
 }
 
 export { normalizeProductName };

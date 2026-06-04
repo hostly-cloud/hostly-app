@@ -128,7 +128,10 @@ import {
 } from "@/lib/kds/kds-destination";
 import {
   isPendingMarchPostresLine,
+  isPendingMarchPrimeroLine,
   isPendingMarchSegundosLine,
+  isTpvComandaLineHeldForMarch,
+  resolveComandaLineKdsDestination,
   shouldAutoReleaseLineOnComanda,
   type ComandaReleaseAction,
 } from "@/lib/carta/comanda-line-release";
@@ -199,6 +202,7 @@ import { computeTpvRushMode } from "./_components/tpv/tpv-rush-mode";
 import {
   TpvInlineMixerChips,
   buildMixerSelectionForLine,
+  lineShowsInlineMixerPicker,
   resolveSimpleMixerGroup,
 } from "./_components/tpv/tpv-inline-mixer-chips";
 
@@ -554,6 +558,52 @@ function normalizeComandaCourseForStorage(raw: unknown): number | undefined {
   return Math.min(4, Math.max(1, Math.floor(n)));
 }
 
+/** Etiqueta corta de pase para chip TPV (solo presentación). */
+function comandaCoursePassChipLabel(rawCourse: unknown): string {
+  const course = normalizeComandaCourseForStorage(rawCourse);
+  if (course === undefined) return "S/P";
+  if (course === 1) return "ENTR.";
+  if (course === 2) return "1º";
+  if (course === 3) return "2º";
+  if (course === 4) return "POST.";
+  return "S/P";
+}
+
+function comandaCoursePassChipAriaLabel(rawCourse: unknown): string {
+  const course = normalizeComandaCourseForStorage(rawCourse);
+  if (course === undefined) return "Sin pase";
+  if (course === 1) return "Entrante";
+  if (course === 2) return "Primero";
+  if (course === 3) return "Segundo";
+  if (course === 4) return "Postre";
+  return "Sin pase";
+}
+
+function comandaCoursePassChipStyle(): CSSProperties {
+  return {
+    background: "rgba(100, 116, 139, 0.17)",
+    color: "#475569",
+    border: "1px solid rgba(100, 116, 139, 0.34)",
+  };
+}
+
+function isActiveComandaLineForOps(line: CartOrderLine): boolean {
+  return normalizeOrderLineStatus(line.status) !== "cancelled";
+}
+
+function isComandaKitchenLine(line: CartOrderLine): boolean {
+  return resolveComandaLineKdsDestination(line) === "kitchen";
+}
+
+function isComandaBebidaLine(line: CartOrderLine): boolean {
+  const dest = resolveComandaLineKdsDestination(line);
+  return dest === "bar" || dest === "cocktail";
+}
+
+function comandaLineCourseNum(line: CartOrderLine): number {
+  return normalizeComandaCourseForStorage(line.course) ?? 1;
+}
+
 function getProductDefaultCourse(product: Product): number | undefined {
   if ("course" in product && product.course != null) {
     const explicitCourse = normalizeComandaCourseForStorage(product.course);
@@ -752,6 +802,19 @@ function comandaLineStatusOutline(status: OrderLineStatus): string {
   if (status === "prepared") return "2px solid rgba(234, 88, 12, 0.55)";
   if (status === "cancelled") return "2px solid rgba(148, 163, 184, 0.55)";
   return "2px solid rgba(22, 163, 74, 0.5)";
+}
+
+function comandaHeldForMarchBadgeStyle(): CSSProperties {
+  return {
+    background: "rgba(245, 158, 11, 0.22)",
+    color: "#92400e",
+    border: "1px solid rgba(245, 158, 11, 0.4)",
+  };
+}
+
+function comandaLineRowBgHeldForMarch(opts: { hover: boolean }): string {
+  if (opts.hover) return "rgba(245, 158, 11, 0.12)";
+  return "rgba(245, 158, 11, 0.06)";
 }
 
 function comandaStatusBadgeStyle(status: OrderLineStatus): CSSProperties {
@@ -1024,6 +1087,16 @@ function comandaLineSortKey(line: CartOrderLine): number {
     return line.servedAt;
   }
   return 0;
+}
+
+/** Pending en comanda: el último tocado primero (addedAt / createdAt). */
+function compareComandaPendingLinesNewestFirst(
+  a: CartOrderLine,
+  b: CartOrderLine,
+): number {
+  const d = comandaLineSortKey(b) - comandaLineSortKey(a);
+  if (d !== 0) return d;
+  return a.id.localeCompare(b.id);
 }
 
 function enrichProductWithStationFields(
@@ -2289,6 +2362,10 @@ export function CartaPageContent({
   const [modifierModalGroups, setModifierModalGroups] = useState<
     ModifierGroupDocument[]
   >([]);
+  const [marchConfirmDialog, setMarchConfirmDialog] = useState<null | {
+    kind: "primeros" | "segundos" | "postres";
+    count: number;
+  }>(null);
   const [lineEditDraft, setLineEditDraft] = useState<ComandaLineEditorDraft>({
     pase: 0,
     lineNote: "",
@@ -4665,9 +4742,11 @@ export function CartaPageContent({
         if (existingIndex !== -1) {
           const updated = [...prev];
           const cur = updated[existingIndex]!;
+          const touchedAt = Date.now();
           const bumped: CartOrderLine = {
             ...cur,
             quantity: cur.quantity + 1,
+            addedAt: touchedAt,
           };
           updated[existingIndex] = bumped;
           setQtyBumpLineId(bumped.id);
@@ -7029,36 +7108,19 @@ export function CartaPageContent({
       visibleOrderLines
         .filter((l) => normalizeOrderLineStatus(l.status) === "pending")
         .slice()
-        .sort((a, b) => {
-          const d = comandaLineSortKey(a) - comandaLineSortKey(b);
-          if (d !== 0) return d;
-          return a.id.localeCompare(b.id);
-        }),
+        .sort(compareComandaPendingLinesNewestFirst),
     [visibleOrderLines],
   );
 
-  const pendingDessertLines = useMemo(
+  /** Al menos una línea ya enviada/preparada/servida: Comanda ya se pulsó en esta mesa. */
+  const comandaAlreadyIssuedForTable = useMemo(
     () =>
-      linesPending.filter(
-        (line) => (normalizeComandaCourseForStorage(line.course) ?? 1) === 4,
-      ),
-    [linesPending],
-  );
-
-  /** Primeros + segundos pendientes (course 2 ó 3). */
-  const pendingPrimerosSegundos = useMemo(
-    () =>
-      linesPending.filter((line) => {
-        const c = normalizeComandaCourseForStorage(line.course) ?? 1;
-        return c === 2 || c === 3;
+      visibleOrderLines.some((line) => {
+        const st = normalizeOrderLineStatus(line.status);
+        return st === "sent" || st === "prepared" || st === "served";
       }),
-    [linesPending],
+    [visibleOrderLines],
   );
-
-  const hasPendingSegundos =
-    pendingPrimerosSegundos.length > 0;
-
-  const hasPendingPostres = pendingDessertLines.length > 0;
 
   const linesSent = useMemo(
     () =>
@@ -7475,7 +7537,7 @@ export function CartaPageContent({
     );
     if (linesToSend.length === 0) {
       showSentFeedback(
-        "No hay líneas para comanda ahora. Usa Marchar segundos o postres.",
+        "No hay entrantes ni bebidas pendientes. Usa Marchar primeros, segundos o postres.",
       );
       return false;
     }
@@ -7495,6 +7557,32 @@ export function CartaPageContent({
     isComandaSending,
     releaseLinesToProduction,
     connectivityStatus,
+  ]);
+
+  const handleMarchPrimeros = useCallback(async (): Promise<boolean> => {
+    if (isComandaSending) return false;
+    if (!selectedTableId) return false;
+    if (!restaurantId || !isFirebaseConfigured) return false;
+    if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
+
+    const linesToSend = order.filter((l) => isPendingMarchPrimeroLine(l));
+    if (linesToSend.length === 0) return false;
+
+    const ok = await releaseLinesToProduction(linesToSend, {
+      releaseAction: "march_primeros",
+    });
+    if (ok) {
+      showSentFeedback("Primeros marchados");
+    }
+    return ok;
+  }, [
+    isComandaSending,
+    selectedTableId,
+    restaurantId,
+    isFirebaseConfigured,
+    order,
+    connectivityStatus,
+    releaseLinesToProduction,
   ]);
 
   const handleMarchSegundos = useCallback(async (): Promise<boolean> => {
@@ -7549,17 +7637,39 @@ export function CartaPageContent({
     releaseLinesToProduction,
   ]);
 
-  const handleComandaAndExit = useCallback(async () => {
-    if (
-      !order.some(
-        (l) => l.status === "pending" && shouldAutoReleaseLineOnComanda(l),
-      )
-    ) {
+  const closeMarchConfirmDialog = useCallback(() => {
+    if (isComandaSending) return;
+    setMarchConfirmDialog(null);
+  }, [isComandaSending]);
+
+  const confirmMarchFromDialog = useCallback(async () => {
+    if (!marchConfirmDialog || isComandaSending) return;
+    const kind = marchConfirmDialog.kind;
+    setMarchConfirmDialog(null);
+    if (kind === "primeros") {
+      await handleMarchPrimeros();
       return;
     }
+    if (kind === "segundos") {
+      await handleMarchSegundos();
+      return;
+    }
+    await handleMarchPostres();
+  }, [
+    marchConfirmDialog,
+    isComandaSending,
+    handleMarchPrimeros,
+    handleMarchSegundos,
+    handleMarchPostres,
+  ]);
+
+  const handleComandaAndExit = useCallback(async () => {
     const ok = await handleComanda();
     if (!ok) {
-      if (order.some((l) => l.status === "pending")) {
+      const hadReleasablePending = order.some(
+        (l) => l.status === "pending" && shouldAutoReleaseLineOnComanda(l),
+      );
+      if (hadReleasablePending) {
         window.alert("No se pudo enviar la comanda. Inténtalo otra vez.");
       }
       return;
@@ -7666,90 +7776,222 @@ export function CartaPageContent({
     comandaHeaderNow,
   ]);
 
-  const tpvComandaEstadosChipsEl = useMemo(
+  const tpvComandaEstadosGridEl = useMemo(
     () => (
-      <>
+      <div
+        className="carta-comanda-status-grid"
+        role="group"
+        aria-label="Estados de la comanda"
+      >
         <span
+          className="carta-comanda-status-grid__cell carta-comanda-status-grid__cell--pending"
           style={{
             color: "#0f172a",
             background: "rgba(15,23,42,0.06)",
             border: "1px solid rgba(15,23,42,0.12)",
           }}
         >
-          {cartaHeaderMobile
-            ? `Pen ${linesPending.length}`
-            : `Pendiente ${linesPending.length}`}
-        </span>
-        {hasPendingSegundos ? (
-          <button
-            type="button"
-            className="ml-2 shrink-0 rounded border border-orange-200/80 bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-800 whitespace-nowrap hover:bg-orange-200/80 disabled:cursor-not-allowed disabled:opacity-50"
-            title="Liberar primeros y segundos a cocina"
-            disabled={isComandaSending}
-            onClick={() => void handleMarchSegundos()}
-          >
-            {cartaHeaderMobile ? "March. seg." : "Marchar segundos"}
-          </button>
-        ) : null}
-        {hasPendingPostres ? (
-          <button
-            type="button"
-            className="ml-1 shrink-0 rounded-full border border-purple-200/80 bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800 whitespace-nowrap hover:bg-purple-200/80 disabled:cursor-not-allowed disabled:opacity-50"
-            title="Liberar postres a cocina"
-            disabled={isComandaSending}
-            onClick={() => void handleMarchPostres()}
-          >
-            {cartaHeaderMobile ? "March. post." : "Marchar postres"}
-          </button>
-        ) : null}
-        <span
-          style={{
-            color: "#1e3a8a",
-            background: "rgba(59,130,246,0.14)",
-            border: "1px solid rgba(37, 99, 235, 0.25)",
-          }}
-        >
-          {cartaHeaderMobile
-            ? `Env ${linesSent.length}`
-            : `Enviado ${linesSent.length}`}
+          {`Pendiente ${linesPending.length}`}
         </span>
         <span
+          className="carta-comanda-status-grid__cell carta-comanda-status-grid__cell--prepared"
           style={{
             color: "#9a3412",
             background: "rgba(245,158,11,0.14)",
             border: "1px solid rgba(245, 158, 11, 0.25)",
           }}
         >
-          {cartaHeaderMobile
-            ? `Prep ${linesPrepared.length}`
-            : `Preparado ${linesPrepared.length}`}
+          {`Preparado ${linesPrepared.length}`}
         </span>
         <span
+          className="carta-comanda-status-grid__cell carta-comanda-status-grid__cell--sent"
+          style={{
+            color: "#1e3a8a",
+            background: "rgba(59,130,246,0.14)",
+            border: "1px solid rgba(37, 99, 235, 0.25)",
+          }}
+        >
+          {`Enviado ${linesSent.length}`}
+        </span>
+        <span
+          className="carta-comanda-status-grid__cell carta-comanda-status-grid__cell--served"
           style={{
             color: "#166534",
             background: "rgba(34,197,94,0.14)",
             border: "1px solid rgba(34, 197, 94, 0.25)",
           }}
         >
-          {cartaHeaderMobile
-            ? `Ser ${linesServed.length}`
-            : `Servido ${linesServed.length}`}
+          {`Servido ${linesServed.length}`}
         </span>
-      </>
+      </div>
     ),
     [
-      cartaHeaderMobile,
       linesPending.length,
-      hasPendingSegundos,
-      hasPendingPostres,
       linesSent.length,
       linesPrepared.length,
       linesServed.length,
-      isComandaSending,
-      handleMarchSegundos,
-      handleMarchPostres,
     ],
   );
+
+  const tpvComandaCourseSummaryEl = useMemo(() => {
+    const activeLines = order.filter(isActiveComandaLineForOps);
+    const entrantesLines = activeLines.filter(
+      (line) => isComandaKitchenLine(line) && comandaLineCourseNum(line) === 1,
+    );
+    const primeroLines = activeLines.filter(
+      (line) => isComandaKitchenLine(line) && comandaLineCourseNum(line) === 2,
+    );
+    const segundoLines = activeLines.filter(
+      (line) => isComandaKitchenLine(line) && comandaLineCourseNum(line) === 3,
+    );
+    const postresLines = activeLines.filter(
+      (line) => isComandaKitchenLine(line) && comandaLineCourseNum(line) === 4,
+    );
+    const bebidasLines = activeLines.filter((line) => isComandaBebidaLine(line));
+
+    const primeroPendingMarch = primeroLines.filter((line) =>
+      isPendingMarchPrimeroLine(line),
+    ).length;
+    const segundosPendingMarch = segundoLines.filter((line) =>
+      isPendingMarchSegundosLine(line),
+    ).length;
+    const postresPendingMarch = postresLines.filter((line) =>
+      isPendingMarchPostresLine(line),
+    ).length;
+
+    const primeroMarch = primeroPendingMarch;
+    const segundoMarch = segundosPendingMarch;
+
+    type CoursePassChipSegment = {
+      key: string;
+      label: string;
+      count: number;
+      tone: "entrantes" | "primero" | "segundo" | "postres" | "bebidas";
+      action?: "primeros" | "segundos" | "postres";
+    };
+
+    const segments: CoursePassChipSegment[] = [];
+
+    if (entrantesLines.length > 0) {
+      segments.push({
+        key: "entrantes",
+        label: "Entrantes",
+        count: entrantesLines.length,
+        tone: "entrantes",
+      });
+    }
+
+    if (primeroLines.length > 0) {
+      segments.push({
+        key: "primero",
+        label: "Primeros",
+        count: primeroMarch > 0 ? primeroMarch : primeroLines.length,
+        tone: "primero",
+        ...(primeroMarch > 0 ? { action: "primeros" as const } : {}),
+      });
+    }
+
+    if (segundoLines.length > 0) {
+      segments.push({
+        key: "segundo",
+        label: "Segundos",
+        count: segundoMarch > 0 ? segundoMarch : segundoLines.length,
+        tone: "segundo",
+        ...(segundoMarch > 0 ? { action: "segundos" as const } : {}),
+      });
+    }
+
+    if (postresLines.length > 0) {
+      segments.push({
+        key: "postres",
+        label: "Postres",
+        count:
+          postresPendingMarch > 0 ? postresPendingMarch : postresLines.length,
+        tone: "postres",
+        ...(postresPendingMarch > 0 ? { action: "postres" as const } : {}),
+      });
+    }
+
+    if (bebidasLines.length > 0) {
+      segments.push({
+        key: "bebidas",
+        label: "Bebidas",
+        count: bebidasLines.length,
+        tone: "bebidas",
+      });
+    }
+
+    if (segments.length === 0) return null;
+
+    const openMarchPrimeros = () =>
+      setMarchConfirmDialog({
+        kind: "primeros",
+        count: primeroPendingMarch,
+      });
+    const openMarchSegundos = () =>
+      setMarchConfirmDialog({
+        kind: "segundos",
+        count: segundosPendingMarch,
+      });
+    const openMarchPostres = () =>
+      setMarchConfirmDialog({
+        kind: "postres",
+        count: postresPendingMarch,
+      });
+
+    return (
+      <div
+        className="carta-comanda-pass-chips"
+        role="group"
+        aria-label="Resumen por pase"
+      >
+        {segments.map((segment) => {
+          const onMarch =
+            segment.action === "primeros"
+              ? openMarchPrimeros
+              : segment.action === "segundos"
+                ? openMarchSegundos
+                : segment.action === "postres"
+                  ? openMarchPostres
+                  : undefined;
+          const chipClass = `carta-comanda-pass-chip carta-comanda-pass-chip--${segment.tone}${
+            onMarch ? " is-action" : ""
+          }`;
+          const chipBody = (
+            <>
+              <span className="carta-comanda-pass-chip__label">{segment.label}</span>
+              <span className="carta-comanda-pass-chip__count">{segment.count}</span>
+            </>
+          );
+
+          if (onMarch) {
+            return (
+              <button
+                key={segment.key}
+                type="button"
+                className={chipClass}
+                disabled={isComandaSending}
+                onClick={onMarch}
+                aria-label={`${segment.label}: ${segment.count} pendientes de marchar`}
+              >
+                {chipBody}
+              </button>
+            );
+          }
+
+          return (
+            <span
+              key={segment.key}
+              className={chipClass}
+              aria-label={`${segment.label}: ${segment.count}`}
+            >
+              {chipBody}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }, [order, isComandaSending]);
 
   /** Sin selector manual de pase: no hay “pase activo” para resaltar filas. */
   const activeCourseNum = -1;
@@ -7962,9 +8204,19 @@ export function CartaPageContent({
 
   const renderComandaLine = (
     item: CartOrderLine,
-    statusLabel: "Pendiente" | "Enviado" | "Preparado" | "Servido" | "Cancelado",
+    statusLabel:
+      | "Pendiente"
+      | "Por marchar"
+      | "Enviado"
+      | "Preparado"
+      | "Servido"
+      | "Cancelado",
     opts: { strike?: boolean; attachFirstPendingRef?: boolean },
   ) => {
+    const heldForMarch =
+      normalizeOrderLineStatus(item.status) === "pending" &&
+      isTpvComandaLineHeldForMarch(item, comandaAlreadyIssuedForTable);
+    const displayStatusLabel = heldForMarch ? "Por marchar" : statusLabel;
     const i = order.indexOf(item);
     const base = Number(item.product.precio);
     const extrasSum = sumLineExtrasPrices(item);
@@ -7977,8 +8229,12 @@ export function CartaPageContent({
         ? unit * item.quantity
         : null;
     const firstPendingId = linesPending[0]?.id;
-    const nm = item.product.nombre;
-    const modifierSubtitle = buildCartLineModifierSubtitle(item.selectedModifiers);
+    const lineModifierPresentation = resolveOrderLineModifierPresentation({
+      baseProductName: item.product.nombre,
+      displayName: item.displayName,
+      selectedModifiers: item.selectedModifiers,
+      lineNote: item.lineNote,
+    });
     const lineInventoryCostLabel = tpvLineInventoryCostLabelByLineId.get(item.id);
     const courseForBadge = normalizeComandaCourseForStorage(item.course);
     const isDrinkLine = isTpvDrinkProduct({
@@ -7987,17 +8243,7 @@ export function CartaPageContent({
       categoria: item.product.categoria,
       tipoVenta: item.product.tipoVenta,
     });
-    /* Etiqueta breve del pase (`course` 1–4 en línea). No mostrar pase de comida en bebidas. */
-    const lineCourseLabel =
-      !isDrinkLine && courseForBadge === 1
-        ? "Entrante"
-        : !isDrinkLine && courseForBadge === 2
-          ? "Primero"
-          : !isDrinkLine && courseForBadge === 3
-            ? "Segundo"
-            : !isDrinkLine && courseForBadge === 4
-              ? "Postre"
-              : null;
+    const coursePassChipLabel = comandaCoursePassChipLabel(item.course);
     const lineSt = normalizeOrderLineStatus(item.status);
     const statusChipClickable = lineSt === "sent" || lineSt === "prepared";
     /* ¿Esta línea pertenece al pase activo? Sirve para resaltar
@@ -8009,16 +8255,37 @@ export function CartaPageContent({
     const lineCourseNumForActiveHighlight = courseForBadge ?? 1;
     const isActiveCourseLine =
       lineCourseNumForActiveHighlight === activeCourseNum;
-    const inlineMixerGroup =
-      item.status === "pending" && isDrinkLine
-        ? resolveSimpleMixerGroup(
-            resolveActiveEffectiveModifierGroups(
-              item.product,
-              resolveCategoryForProduct(item.product, cartaCategories),
-              modifierGroups,
-            ),
-          )
-        : null;
+    const effectiveModifierGroupsForLine = resolveActiveEffectiveModifierGroups(
+      item.product,
+      resolveCategoryForProduct(item.product, cartaCategories),
+      modifierGroups,
+    );
+    const showInlineMixerPicker =
+      item.status === "pending" &&
+      isDrinkLine &&
+      lineShowsInlineMixerPicker(
+        effectiveModifierGroupsForLine,
+        item.selectedModifiers,
+      );
+    const inlineMixerGroup = showInlineMixerPicker
+      ? resolveSimpleMixerGroup(
+          effectiveModifierGroupsForLine,
+          item.selectedModifiers,
+        )
+      : null;
+    const modifierSubtitle = showInlineMixerPicker
+      ? buildCartLineModifierSubtitle(item.selectedModifiers)
+      : lineModifierPresentation.modifiersSubtitle || null;
+    const comandaBaseName = showInlineMixerPicker
+      ? item.product.nombre
+      : lineModifierPresentation.baseProductName;
+    const comandaModsLabel = showInlineMixerPicker
+      ? (modifierSubtitle ?? "")
+      : lineModifierPresentation.modifiersLabel;
+    const comandaLineTitle =
+      comandaModsLabel.trim().length > 0
+        ? `${comandaBaseName} · ${comandaModsLabel}`
+        : comandaBaseName;
     const selectedMixerOptionId =
       inlineMixerGroup != null
         ? item.selectedModifiers?.find(
@@ -8033,7 +8300,7 @@ export function CartaPageContent({
         lineId={item.id}
         enabled={item.status !== "cancelled" && viewMode === "normal"}
         onSwipeLeft={() => {
-          if (item.status === "pending") {
+          if (item.status === "pending" && !heldForMarch) {
             handleRemoveLine(item.id);
           }
         }}
@@ -8052,9 +8319,9 @@ export function CartaPageContent({
         id={hostlyHighlightOrderLineElementId(item.id)}
         className={`carta-comanda-line${
           isActiveCourseLine ? " is-active-course-line" : ""
-        }${item.status === "pending" ? " is-pending" : ""}${
+        }${heldForMarch ? " is-held-for-march" : item.status === "pending" ? " is-pending" : ""}${
           item.status === "cancelled" ? " is-cancelled" : ""
-        }${qtyBumpLineId === item.id ? " hostly-tpv-line-add-flash" : ""}`}
+        }${opts.strike ? " is-line-muted" : ""}${qtyBumpLineId === item.id ? " hostly-tpv-line-add-flash" : ""}`}
         ref={
           opts.attachFirstPendingRef &&
           orderIdFromUrl &&
@@ -8079,17 +8346,25 @@ export function CartaPageContent({
           opacity:
             item.status === "cancelled"
               ? 0.62
-              : item.status === "pending"
+              : heldForMarch
                 ? opts.strike
-                  ? 0.92
-                  : 1
-                : opts.strike
-                  ? 0.78
-                  : 0.75,
-          backgroundColor: comandaLineRowBg(item.status, {
-            hover: hoveredComandaLineIndex === i,
-            selected: false,
-          }),
+                  ? 0.88
+                  : 0.86
+                : item.status === "pending"
+                  ? opts.strike
+                    ? 0.92
+                    : 1
+                  : opts.strike
+                    ? 0.78
+                    : 0.75,
+          backgroundColor: heldForMarch
+            ? comandaLineRowBgHeldForMarch({
+                hover: hoveredComandaLineIndex === i,
+              })
+            : comandaLineRowBg(item.status, {
+                hover: hoveredComandaLineIndex === i,
+                selected: false,
+              }),
           outline: "none",
           outlineOffset: 0,
           borderBottom: "1px solid #eeeeee",
@@ -8102,27 +8377,18 @@ export function CartaPageContent({
           <div className="carta-comanda-line-main">
             <div className="carta-comanda-line-head">
               <div className="carta-comanda-name-block">
-                <span
-                  className="carta-comanda-name"
-                  style={{
-                    color: opts.strike ? "#64748b" : "#0f172a",
-                    textDecoration:
-                      opts.strike || item.status === "cancelled"
-                        ? "line-through"
-                        : "none",
-                  }}
-                  title={nm}
-                >
-                  {nm}
-                </span>
-                {modifierSubtitle ? (
-                  <div
-                    className="carta-comanda-extras carta-comanda-modifiers"
-                    title={modifierSubtitle}
-                  >
-                    <div className="carta-comanda-extras-row">{modifierSubtitle}</div>
-                  </div>
-                ) : null}
+                <div className="carta-comanda-name-row" title={comandaLineTitle}>
+                  <span className="carta-comanda-name-primary">{comandaBaseName}</span>
+                  {comandaModsLabel.trim().length > 0 ? (
+                    <>
+                      <span className="carta-comanda-name-dot" aria-hidden="true">
+                        {" "}
+                        ·{" "}
+                      </span>
+                      <span className="carta-comanda-name-mods">{comandaModsLabel}</span>
+                    </>
+                  ) : null}
+                </div>
                 {inlineMixerGroup ? (
                   <TpvInlineMixerChips
                     mixer={inlineMixerGroup}
@@ -8135,15 +8401,7 @@ export function CartaPageContent({
                 {lineNoteTrimmed ? (
                   <div className="carta-comanda-line-meta-note">{lineNoteTrimmed}</div>
                 ) : null}
-                {lineCourseLabel && item.status !== "pending" ? (
-                  <span
-                    className="carta-line-course-badge"
-                    aria-label={`Pase: ${lineCourseLabel}`}
-                  >
-                    {lineCourseLabel}
-                  </span>
-                ) : null}
-                {item.status !== "pending" ? (
+                {item.status !== "pending" || heldForMarch ? (
                   <span
                     className="carta-comanda-qty-inline"
                     style={{
@@ -8154,6 +8412,24 @@ export function CartaPageContent({
               </div>
               <div className="carta-comanda-line-badges">
                 <span
+                  className="carta-comanda-course-pass-chip"
+                  aria-label={`Pase: ${comandaCoursePassChipAriaLabel(item.course)}`}
+                  title={comandaCoursePassChipAriaLabel(item.course)}
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 7,
+                    fontWeight: 800,
+                    letterSpacing: "0.035em",
+                    textTransform: "uppercase",
+                    padding: "1px 5px",
+                    borderRadius: 999,
+                    lineHeight: 1.1,
+                    ...comandaCoursePassChipStyle(),
+                  }}
+                >
+                  {coursePassChipLabel}
+                </span>
+                <span
                   className={
                     statusChipClickable
                       ? "carta-comanda-status-chip--clickable"
@@ -8163,7 +8439,7 @@ export function CartaPageContent({
                   tabIndex={statusChipClickable ? 0 : undefined}
                   aria-label={
                     statusChipClickable
-                      ? `Marcar como servido (${statusLabel}). Pulse para confirmar.`
+                      ? `Marcar como servido (${displayStatusLabel}). Pulse para confirmar.`
                       : undefined
                   }
                   onClick={
@@ -8194,10 +8470,12 @@ export function CartaPageContent({
                     padding: "1px 5px",
                     borderRadius: 999,
                     lineHeight: 1.1,
-                    ...comandaStatusBadgeStyle(item.status),
+                    ...(heldForMarch
+                      ? comandaHeldForMarchBadgeStyle()
+                      : comandaStatusBadgeStyle(item.status)),
                   }}
                 >
-                  {statusLabel}
+                  {displayStatusLabel}
                 </span>
               {item.isComped ? (
                 <span
@@ -8237,55 +8515,43 @@ export function CartaPageContent({
                 </span>
               </div>
             </div>
-            <div
-              className="carta-comanda-line-pricing"
-              style={{ color: opts.strike ? "#94a3b8" : undefined }}
-            >
+            <div className="carta-comanda-line-pricing">
               {unit !== null && lineTotal !== null ? (
                 <>
-                  <span className="carta-comanda-pu">
-                    <span
-                      style={{
-                        textDecoration:
-                          item.isComped || item.status === "cancelled"
-                            ? "line-through"
-                            : "none",
-                        color:
-                          item.isComped || item.status === "cancelled"
-                            ? "#64748b"
-                            : undefined,
-                      }}
-                    >
-                      {formatComandaLineEuroEs(unit)}
-                    </span>
+                  <span
+                    className={`carta-comanda-pu${
+                      item.isComped || item.status === "cancelled"
+                        ? " is-price-muted"
+                        : ""
+                    }`}
+                  >
+                    {formatComandaLineEuroEs(unit)}
                   </span>
                   <span className="carta-comanda-pu-suffix">/ud</span>
-                  <span className="carta-comanda-pricing-sep"> · </span>
-                  <span className="carta-comanda-total-lead">Total </span>
+                  <span className="carta-comanda-pricing-sep" aria-hidden="true">
+                    {" "}
+                    ·{" "}
+                  </span>
+                  <span className="carta-comanda-total-lead">Total</span>
                   <span
-                    className="carta-comanda-line-total-value"
-                    style={{
-                      color: opts.strike ? "#64748b" : "#0f172a",
-                      textDecoration:
-                        item.isComped || item.status === "cancelled"
-                          ? "line-through"
-                          : "none",
-                      opacity:
-                        item.isComped || item.status === "cancelled" ? 0.75 : 1,
-                    }}
+                    className={`carta-comanda-line-total-value${
+                      item.isComped || item.status === "cancelled"
+                        ? " is-price-muted"
+                        : ""
+                    }`}
                   >
                     {formatComandaLineEuroEs(lineTotal)}
                   </span>
                 </>
               ) : (
-                <span>— · Total —</span>
+                <span className="carta-comanda-pricing-empty">— · Total —</span>
               )}
             </div>
             {lineInventoryCostLabel ? (
               <div className="carta-comanda-line-cost-hint">{lineInventoryCostLabel}</div>
             ) : null}
           </div>
-          {item.status === "pending" ? (
+          {item.status === "pending" && !heldForMarch ? (
             <div className="carta-comanda-qty-controls ml-auto">
               <button
                 type="button"
@@ -8331,6 +8597,34 @@ export function CartaPageContent({
                 aria-label="Eliminar línea"
               >
                 ×
+              </button>
+            </div>
+          ) : item.status === "pending" && heldForMarch ? (
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const el = e.currentTarget;
+                  const r = el.getBoundingClientRect();
+                  setComandaLineActionsAnchorRect({
+                    top: r.top,
+                    left: r.left,
+                    right: r.right,
+                    bottom: r.bottom,
+                    width: r.width,
+                    height: r.height,
+                  });
+                  setComandaLineActionsTargetId(item.id);
+                  setComandaLineActionsOpen(true);
+                }}
+                className="h-6 px-2 flex items-center justify-center rounded bg-gray-100 text-xs font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-200"
+                style={{ position: "relative", zIndex: 3 }}
+                title="Acciones"
+                aria-label="Acciones"
+              >
+                ⋯
               </button>
             </div>
           ) : item.status !== "cancelled" ? (
@@ -8577,6 +8871,52 @@ export function CartaPageContent({
                 </>
               );
             })()}
+          </div>
+        </div>
+      ) : null}
+      {marchConfirmDialog ? (
+        <div
+          className="fixed inset-0 z-[82] flex items-center justify-center bg-black/45 p-3"
+          role="presentation"
+          onClick={closeMarchConfirmDialog}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="carta-march-confirm-title"
+            className="carta-march-confirm-modal"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h3 id="carta-march-confirm-title">
+              {marchConfirmDialog.kind === "primeros"
+                ? "Marchar primeros"
+                : marchConfirmDialog.kind === "segundos"
+                  ? "Marchar segundos"
+                  : "Marchar postres"}
+            </h3>
+            <p className="carta-march-confirm-modal__hint">
+              Se enviarán {marchConfirmDialog.count}{" "}
+              {marchConfirmDialog.count === 1 ? "producto" : "productos"} a cocina.
+            </p>
+            <div className="carta-march-confirm-modal__actions">
+              <button
+                type="button"
+                className="carta-march-confirm-modal__btn carta-march-confirm-modal__btn-secondary"
+                disabled={isComandaSending}
+                onClick={closeMarchConfirmDialog}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="carta-march-confirm-modal__btn carta-march-confirm-modal__btn-primary"
+                disabled={isComandaSending}
+                onClick={() => void confirmMarchFromDialog()}
+              >
+                Marchar
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -10303,8 +10643,8 @@ export function CartaPageContent({
   min-width: 0;
 }
 
-.carta-aside-meta-row .carta-tpv-to-map-btn {
-  margin-left: auto;
+.carta-aside-meta-row .carta-tpv-to-map-btn--prominent {
+  margin-left: 0;
 }
 
 .carta-header-compact {
@@ -10328,13 +10668,174 @@ export function CartaPageContent({
   display: none;
 }
 
-.carta-header-compact.carta-comanda-header-compact .carta-estados {
-  flex: 1 1 auto;
-  justify-content: space-between;
-  align-self: stretch;
+.carta-comanda-header-ops-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
   width: 100%;
-  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.carta-comanda-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.carta-comanda-status-grid__cell {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.carta-comanda-pass-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.carta-comanda-pass-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.carta-comanda-pass-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(248, 250, 252, 0.95);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #0f172a;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+button.carta-comanda-pass-chip {
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button.carta-comanda-pass-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.carta-comanda-pass-chip__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.carta-comanda-pass-chip--entrantes {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(240, 253, 244, 0.95);
+  color: #166534;
+}
+
+.carta-comanda-pass-chip--primero,
+.carta-comanda-pass-chip--segundo {
+  border-color: rgba(251, 146, 60, 0.38);
+  background: rgba(255, 247, 237, 0.96);
+  color: #c2410c;
+}
+
+button.carta-comanda-pass-chip--primero.is-action:hover:not(:disabled),
+button.carta-comanda-pass-chip--segundo.is-action:hover:not(:disabled) {
+  background: rgba(254, 215, 170, 0.98);
+}
+
+.carta-comanda-pass-chip--postres {
+  border-color: rgba(192, 132, 252, 0.38);
+  background: rgba(250, 245, 255, 0.96);
+  color: #7e22ce;
+}
+
+button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
+  background: rgba(237, 233, 254, 0.98);
+}
+
+.carta-comanda-pass-chip--bebidas {
+  border-color: rgba(59, 130, 246, 0.32);
+  background: rgba(239, 246, 255, 0.96);
+  color: #1d4ed8;
+}
+
+.carta-march-confirm-modal {
+  width: min(360px, 100%);
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.carta-march-confirm-modal h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.carta-march-confirm-modal__hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.carta-march-confirm-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.carta-march-confirm-modal__btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.carta-march-confirm-modal__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.carta-march-confirm-modal__btn-secondary {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.carta-march-confirm-modal__btn-primary {
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #ffffff;
 }
 
 .carta-comensales-compact.carta-comensales--pill {
@@ -10433,32 +10934,60 @@ export function CartaPageContent({
   margin: 0;
 }
 
-/* Cabecera comanda: bloque operativo compacto (comensales + mesa · tiempo · mapa). */
-.carta-comanda-head-top-grid {
+/* Cabecera comanda: una sola banda — comensales | mesa · tiempo | volver al mapa. */
+.carta-comanda-head-compact-band {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 8px;
   width: 100%;
-  box-sizing: border-box;
+  min-width: 0;
+  min-height: 34px;
 }
 
-.carta-comanda-head-mesa-cluster {
+.carta-comanda-head-guests {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.carta-comensales--head-band {
+  max-width: min(168px, 38vw);
+  height: 32px;
+  min-height: 32px;
+  padding: 3px 6px;
+  border-radius: 10px;
+}
+
+.carta-comensales--head-band .carta-comensales-label {
+  font-size: 11px;
+}
+
+.carta-comensales--head-band .carta-comensales-count {
+  font-size: 13px;
+}
+
+.carta-comanda-head-mesa-line {
   display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-wrap: nowrap;
+  align-items: baseline;
   gap: 6px;
   min-width: 0;
   flex: 1 1 auto;
+  justify-content: flex-start;
 }
 
-.carta-comanda-head-mesa-cluster .carta-comanda-headline {
+.carta-comanda-head-mesa-line .carta-comanda-headline {
   min-width: 0;
   flex: 0 1 auto;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.carta-comanda-head-compact-band .carta-tpv-to-map-btn--prominent {
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .carta-comanda-head-sep {
@@ -10569,22 +11098,11 @@ export function CartaPageContent({
 
 .carta-tpv-to-map-btn {
   flex-shrink: 0;
-  margin-left: 6px;
-  padding: 5px 11px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(255, 255, 255, 0.72);
-  color: #334155;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  white-space: nowrap;
   box-sizing: border-box;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  backdrop-filter: blur(8px);
+  cursor: pointer;
+  border: none;
   transition:
     background-color 0.16s ease,
     border-color 0.16s ease,
@@ -10593,23 +11111,61 @@ export function CartaPageContent({
     transform 0.08s ease;
 }
 
-.carta-tpv-to-map-btn:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(56, 189, 248, 0.42);
-  color: #0f172a;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+.carta-tpv-to-map-btn--prominent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(14, 165, 233, 0.45);
+  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
+  color: #0c4a6e;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  box-shadow:
+    0 1px 2px rgba(14, 165, 233, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
-.carta-tpv-to-map-btn:active {
+.carta-tpv-to-map-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: rgba(14, 165, 233, 0.16);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.carta-tpv-to-map-btn__label {
+  min-width: 0;
+}
+
+.carta-tpv-to-map-btn--prominent:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
+  border-color: rgba(2, 132, 199, 0.55);
+  color: #082f49;
+  box-shadow: 0 2px 10px rgba(14, 165, 233, 0.18);
+}
+
+.carta-tpv-to-map-btn--prominent:active {
   transform: translateY(0.5px);
-  background: rgba(241, 245, 249, 0.95);
-  border-color: rgba(56, 189, 248, 0.35);
+  background: #e0f2fe;
   box-shadow: none;
 }
 
-.carta-tpv-to-map-btn:focus-visible {
+.carta-tpv-to-map-btn--prominent:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+  box-shadow:
+    0 0 0 2px rgba(56, 189, 248, 0.45),
+    0 2px 8px rgba(14, 165, 233, 0.15);
 }
 
 .carta-cats-wrap {
@@ -10959,6 +11515,27 @@ export function CartaPageContent({
   pointer-events: none;
 }
 
+.carta-comanda-line.is-held-for-march {
+  position: relative;
+  padding-left: 12px !important;
+  background: rgba(245, 158, 11, 0.08) !important;
+  border: 1px solid rgba(245, 158, 11, 0.22) !important;
+}
+
+.carta-comanda-line.is-held-for-march::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: calc(100% - 6px);
+  max-height: 24px;
+  border-radius: 2px;
+  background: rgba(217, 119, 6, 0.78);
+  pointer-events: none;
+}
+
 .carta-comanda-group {
   margin-bottom: 4px;
 }
@@ -11017,40 +11594,79 @@ export function CartaPageContent({
   display: flex;
   min-width: 0;
   flex: 1;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 1px;
 }
 
-/* Badge de pase inline en la línea de comanda (enviados/preparados/servidos).
-   Oculto en pending: el pase no aporta valor operativo hasta el envío. */
-.carta-line-course-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 4px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: rgba(17, 24, 39, 0.08);
-  color: #111827;
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-  line-height: 1;
-  flex-shrink: 0;
-  transition: background-color 120ms ease, color 120ms ease;
+.carta-comanda-name-row {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.2;
+  overflow: hidden;
 }
 
-/* Resaltado sutil de las líneas que pertenecen al pase actualmente
-   activo en el selector. Solo afecta al fondo y al borde inferior, y
-   oscurece el badge inline para que destaque sin reescribir colores
-   de estado (Pendiente / Enviado / etc.). */
+.carta-comanda-name-primary {
+  flex-shrink: 0;
+  font-weight: 750;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.carta-comanda-name-dot {
+  flex-shrink: 0;
+  font-weight: 500;
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: pre;
+}
+
+.carta-comanda-name-mods {
+  min-width: 0;
+  flex: 1;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: -0.01em;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carta-comanda-line.is-line-muted .carta-comanda-name-primary,
+.carta-comanda-line.is-line-muted .carta-comanda-name-mods,
+.carta-comanda-line.is-cancelled .carta-comanda-name-primary,
+.carta-comanda-line.is-cancelled .carta-comanda-name-mods {
+  color: #64748b;
+  text-decoration: line-through;
+}
+
+.carta-comanda-line.is-line-muted .carta-comanda-line-pricing,
+.carta-comanda-line.is-cancelled .carta-comanda-line-pricing {
+  color: #94a3b8;
+}
+
+.carta-comanda-course-pass-chip {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+/* Resaltado sutil de las líneas que pertenecen al pase actualmente activo. */
 .carta-comanda-line.is-active-course-line {
   border-color: rgba(17, 24, 39, 0.24);
   background: rgba(17, 24, 39, 0.04);
 }
 
-.carta-comanda-line.is-active-course-line .carta-line-course-badge {
-  background: #111827;
-  color: white;
+.carta-comanda-line.is-active-course-line .carta-comanda-course-pass-chip {
+  background: rgba(71, 85, 105, 0.14) !important;
+  color: #334155 !important;
+  border-color: rgba(71, 85, 105, 0.42) !important;
 }
 
 .carta-comanda-line-badges {
@@ -11084,14 +11700,19 @@ export function CartaPageContent({
 }
 
 .carta-comanda-line-pricing {
-  font-size: 10px;
-  line-height: 1.05;
+  font-size: 11px;
+  line-height: 1.15;
   color: #64748b;
   padding-left: 0;
-  margin-top: 0;
+  margin-top: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.carta-comanda-pricing-empty {
+  font-weight: 600;
+  color: #94a3b8;
 }
 
 .carta-comanda-line-cost-hint {
@@ -11181,46 +11802,51 @@ export function CartaPageContent({
 }
 
 .carta-comanda-pu {
-  font-weight: 500;
+  font-weight: 650;
   letter-spacing: -0.02em;
   font-size: 11px;
-  opacity: 0.7;
+  color: #64748b;
+}
+
+.carta-comanda-pu.is-price-muted {
+  color: #94a3b8;
+  text-decoration: line-through;
 }
 
 .carta-comanda-pu-suffix {
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.01em;
-  font-size: 11px;
-  opacity: 0.7;
+  font-size: 10px;
+  color: #94a3b8;
 }
 
 .carta-comanda-pricing-sep {
   font-weight: 500;
-  opacity: 0.85;
+  color: #cbd5e1;
+  margin: 0 1px;
 }
 
 .carta-comanda-total-lead {
-  font-weight: 600;
-  margin-left: 2px;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-left: 3px;
 }
 
 .carta-comanda-line-total-value {
   font-weight: 800;
-  letter-spacing: -0.02em;
-  margin-left: 2px;
+  font-size: 13px;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  margin-left: 3px;
 }
 
-.carta-comanda-name {
-  font-weight: 500;
-  font-size: 13px;
-  line-height: 1.15;
-  min-width: 0;
-  padding-left: 0;
-  margin-left: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
+.carta-comanda-line-total-value.is-price-muted {
+  color: #64748b;
+  text-decoration: line-through;
+  opacity: 0.85;
 }
 
 .carta-comanda-meta {
@@ -12052,13 +12678,15 @@ export function CartaPageContent({
     scrollbar-width: none !important;
   }
 
-  .carta-comanda-header-compact .carta-estados {
-    flex: 1 1 auto !important;
-    justify-content: space-between !important;
-    align-self: stretch !important;
-    min-width: 0 !important;
-    width: 100% !important;
-    gap: 10px !important;
+  .carta-comanda-status-grid__cell {
+    font-size: 9px !important;
+    padding: 2px 4px !important;
+  }
+
+  .carta-comanda-pass-chip {
+    font-size: 9px !important;
+    min-height: 20px !important;
+    padding: 2px 7px !important;
   }
 
   .carta-comensales-compact.carta-comensales--pill {
@@ -12107,34 +12735,6 @@ export function CartaPageContent({
     padding: 1px 0 !important;
   }
 
-  .carta-comanda-status-row {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    flex-wrap: nowrap;
-    flex: 0 1 auto;
-    min-width: 0;
-    justify-content: flex-start;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .carta-comanda-status-row::-webkit-scrollbar {
-    display: none;
-  }
-
-  .carta-comanda-status-row span,
-  .carta-comanda-status-row div,
-  .carta-comanda-status-row button {
-    flex: 0 0 auto;
-    font-size: 9px !important;
-    padding: 2px 4px !important;
-    line-height: 1 !important;
-    border-radius: 999px !important;
-    white-space: nowrap;
-  }
-
   .carta-comanda-line {
     padding: 4px 7px !important;
     min-height: 40px;
@@ -12148,23 +12748,37 @@ export function CartaPageContent({
     padding: 4px 7px 4px 11px !important;
   }
 
+  .carta-comanda-line.is-held-for-march {
+    padding: 4px 7px 4px 11px !important;
+  }
+
   .carta-comanda-line > div:first-child {
     min-width: 0;
     flex: 1;
   }
 
-  .carta-comanda-name {
-    font-size: 13px !important;
-    max-width: 110px;
+  .carta-comanda-name-primary {
+    font-size: 14px !important;
+  }
+
+  .carta-comanda-name-mods {
+    font-size: 11px !important;
   }
 
   .carta-comanda-line-pricing {
     font-size: 11px !important;
   }
 
-  .carta-line-course-badge {
-    font-size: 9px !important;
-    padding: 2px 5px !important;
+  .carta-comanda-line-total-value {
+    font-size: 13px !important;
+  }
+
+  .carta-comanda-course-pass-chip {
+    font-size: 7px !important;
+    font-weight: 800 !important;
+    padding: 1px 4px !important;
+    color: #475569 !important;
+    border-color: rgba(100, 116, 139, 0.34) !important;
   }
 
   .carta-comanda-qty-controls {
@@ -12239,16 +12853,16 @@ export function CartaPageContent({
   padding: 0 !important;
   line-height: 1.05 !important;
 }
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-top-grid {
-  min-height: 21px !important;
-  gap: 4px !important;
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-compact-band {
+  gap: 5px !important;
+  min-height: 32px !important;
 }
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-mesa-cluster {
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-head-mesa-line {
   gap: 4px !important;
   min-width: 0 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline {
-  font-size: 15px !important;
+  font-size: 16px !important;
   font-weight: 900 !important;
   letter-spacing: -0.02em !important;
   line-height: 1 !important;
@@ -12256,34 +12870,44 @@ export function CartaPageContent({
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-headline-time {
   font-size: 10px !important;
 }
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-to-map-btn {
-  min-height: 18px !important;
-  max-width: 54px !important;
-  padding: 2px 4px !important;
-  border-radius: 7px !important;
-  font-size: 9px !important;
-  line-height: 1 !important;
-  box-shadow: none !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  opacity: 0.78 !important;
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-to-map-btn--prominent {
+  min-height: 32px !important;
+  padding: 5px 8px !important;
+  border-radius: 9px !important;
+  font-size: 10px !important;
+  gap: 4px !important;
+  max-width: none !important;
+  opacity: 1 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-to-map-btn__icon {
+  width: 16px !important;
+  height: 16px !important;
+  font-size: 12px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales--head-band {
+  max-width: 124px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-header-compact {
   gap: 1px !important;
   margin-top: 0 !important;
   min-height: 0 !important;
 }
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-header-compact .carta-estados,
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row {
-  gap: 1px !important;
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-grid {
+  gap: 1px 3px !important;
 }
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row span,
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row div,
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-row button {
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-status-grid__cell {
   font-size: 8px !important;
-  padding: 1px 2px !important;
-  min-height: 14px !important;
+  padding: 1px 3px !important;
+  line-height: 1.05 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-pass-chips {
+  gap: 3px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-pass-chip {
+  font-size: 8px !important;
+  min-height: 20px !important;
+  padding: 2px 6px !important;
+  gap: 3px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales-compact.carta-comensales--pill {
   height: 24px !important;
@@ -12335,23 +12959,35 @@ export function CartaPageContent({
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line.is-pending {
   padding: 2px 5px 2px 10px !important;
 }
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line.is-held-for-march {
+  padding: 2px 5px 2px 10px !important;
+}
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line-grid {
   column-gap: 4px !important;
 }
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-name {
-  font-size: 12px !important;
-  line-height: 1.05 !important;
-  max-width: 132px !important;
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-name-primary {
+  font-size: 13px !important;
+  line-height: 1.1 !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-name-mods {
+  font-size: 11px !important;
+  line-height: 1.1 !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line-pricing,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-pu,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-pu-suffix {
-  font-size: 9px !important;
-  line-height: 1 !important;
+  font-size: 10px !important;
+  line-height: 1.1 !important;
 }
-.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-line-course-badge {
-  font-size: 8px !important;
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-line-total-value {
+  font-size: 12px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-course-pass-chip {
+  font-size: 6px !important;
+  font-weight: 800 !important;
   padding: 1px 4px !important;
+  color: #475569 !important;
+  border-color: rgba(100, 116, 139, 0.34) !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-qty-controls {
   gap: 2px !important;
@@ -13334,7 +13970,7 @@ export function CartaPageContent({
               alignItems: "center",
               justifyContent: "flex-start",
               gap: 6,
-              minHeight: 36,
+              minHeight: 0,
             }}
           >
             <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -13353,15 +13989,16 @@ export function CartaPageContent({
                       : undefined
                 }
               >
-                <div className="carta-comanda-head-top-stack w-full min-w-0">
-                  <div className="carta-comanda-head-top-grid mb-0 w-full min-h-[28px]">
-                    {viewMode === "normal" && selectedTableId ? (
-                      <div className="carta-comensales-compact carta-comensales--pill">
-                        <span className="carta-comensales-label">Comensales:</span>
+                <div className="carta-comanda-head-compact-band w-full min-w-0">
+                  {viewMode === "normal" && selectedTableId ? (
+                    <div className="carta-comanda-head-guests">
+                      <div className="carta-comensales-compact carta-comensales--pill carta-comensales--head-band">
+                        <span className="carta-comensales-label">Comensales</span>
                         <button
                           type="button"
                           onClick={() => void persistGuestCount(guestCount - 1)}
                           disabled={guestCount <= 0}
+                          aria-label="Menos comensales"
                         >
                           -
                         </button>
@@ -13369,65 +14006,70 @@ export function CartaPageContent({
                         <button
                           type="button"
                           onClick={() => void persistGuestCount(guestCount + 1)}
+                          aria-label="Más comensales"
                         >
                           +
                         </button>
                       </div>
-                    ) : null}
-                    <div className="carta-comanda-head-mesa-cluster">
-                      <p
-                        className="carta-comanda-headline min-w-0 truncate"
-                        style={{
-                          fontSize: 17,
-                          fontWeight: 950,
-                          letterSpacing: "-0.01em",
-                          textAlign: "left",
-                          margin: 0,
-                          padding: 0,
-                        }}
-                      >
-                        {selectedTableId ? (
-                          formatActiveMesaIndicator(
-                            tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
-                              selectedTableId,
-                          )
-                        ) : orderIdFromUrl ? (
-                          orderUrlTableId
-                            ? formatActiveMesaIndicator(
-                                tablesList.find((t) => t.id === orderUrlTableId)?.name?.trim() ||
-                                  orderUrlTableId,
-                              )
-                            : "Comanda"
-                        ) : (
-                          <span style={{ color: "rgba(15, 23, 42, 0.38)" }}>Sin mesa</span>
-                        )}
-                      </p>
-                      {tpvComandaHeaderTime ? (
-                        <>
-                          <span className="carta-comanda-head-sep" aria-hidden="true">
-                            ·
-                          </span>
-                          <span
-                            className="carta-comanda-headline-time shrink-0 whitespace-nowrap text-[11px] font-semibold tabular-nums leading-none tracking-tight"
-                            style={{ color: tpvComandaHeaderTime.color }}
-                          >
-                            {tpvComandaHeaderTime.label}
-                          </span>
-                        </>
-                      ) : null}
-                      {!orderIdFromUrl &&
-                      (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
-                        <button
-                          type="button"
-                          className="carta-tpv-to-map-btn"
-                          onClick={handleBackToMap}
-                          style={{ flexShrink: 0 }}
-                        >
-                          {t("cartaTpv.mapNavVisible")}
-                        </button>
-                      ) : null}
                     </div>
+                  ) : null}
+                  <div className="carta-comanda-head-mesa-line">
+                    <p
+                      className="carta-comanda-headline min-w-0 truncate"
+                      style={{
+                        fontSize: 17,
+                        fontWeight: 950,
+                        letterSpacing: "-0.01em",
+                        textAlign: "left",
+                        margin: 0,
+                        padding: 0,
+                      }}
+                    >
+                      {selectedTableId ? (
+                        formatActiveMesaIndicator(
+                          tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
+                            selectedTableId,
+                        )
+                      ) : orderIdFromUrl ? (
+                        orderUrlTableId
+                          ? formatActiveMesaIndicator(
+                              tablesList.find((t) => t.id === orderUrlTableId)?.name?.trim() ||
+                                orderUrlTableId,
+                            )
+                          : "Comanda"
+                      ) : (
+                        <span style={{ color: "rgba(15, 23, 42, 0.38)" }}>Sin mesa</span>
+                      )}
+                    </p>
+                    {tpvComandaHeaderTime ? (
+                      <>
+                        <span className="carta-comanda-head-sep" aria-hidden="true">
+                          ·
+                        </span>
+                        <span
+                          className="carta-comanda-headline-time shrink-0 whitespace-nowrap text-[11px] font-semibold tabular-nums leading-none tracking-tight"
+                          style={{ color: tpvComandaHeaderTime.color }}
+                        >
+                          {tpvComandaHeaderTime.label}
+                        </span>
+                      </>
+                    ) : null}
                   </div>
+                  {!orderIdFromUrl &&
+                  (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
+                    <button
+                      type="button"
+                      className="carta-tpv-to-map-btn carta-tpv-to-map-btn--prominent"
+                      onClick={handleBackToMap}
+                    >
+                      <span className="carta-tpv-to-map-btn__icon" aria-hidden>
+                        ←
+                      </span>
+                      <span className="carta-tpv-to-map-btn__label">
+                        {t("cartaTpv.mapNavVisible")}
+                      </span>
+                    </button>
+                  ) : null}
                 </div>
                 {((!orderDocIsPaid &&
                   billRequestedForComanda &&
@@ -13485,17 +14127,9 @@ export function CartaPageContent({
           </div>
           {viewMode === "normal" && (
             <div className="carta-header-compact carta-comanda-header-compact">
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div className="carta-estados carta-comanda-status-row">
-                  {tpvComandaEstadosChipsEl}
-                </div>
+              <div className="carta-comanda-header-ops-wrap">
+                {tpvComandaEstadosGridEl}
+                {tpvComandaCourseSummaryEl}
               </div>
             </div>
           )}
@@ -13722,14 +14356,14 @@ export function CartaPageContent({
                       : ""
                   }`}
                   onClick={() => {
-                    if (!hasPendingComandaRelease) return;
+                    if (!hasPendingItems) return;
                     void handleComandaAndExit();
                   }}
                   disabled={
                     isComandaSending ||
                     order.length === 0 ||
                     !selectedTableId ||
-                    !hasPendingComandaRelease
+                    !hasPendingItems
                   }
                   style={{
                     width: "100%",
@@ -13740,7 +14374,7 @@ export function CartaPageContent({
                       isComandaSending ||
                       order.length === 0 ||
                       !selectedTableId ||
-                      !hasPendingComandaRelease
+                      !hasPendingItems
                         ? "not-allowed"
                         : "pointer",
                     borderRadius: 14,
@@ -13753,7 +14387,7 @@ export function CartaPageContent({
                         ? 0.6
                         : order.length === 0 ||
                             !selectedTableId ||
-                            !hasPendingComandaRelease
+                            !hasPendingItems
                           ? 0.5
                           : 1,
                     filter: comandaSentFlash ? "brightness(1.03)" : "none",

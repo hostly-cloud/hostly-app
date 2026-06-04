@@ -31,17 +31,32 @@ const SECTION_HINTS: Array<{ re: RegExp; section: string; category: string; stat
 const NOISE_LINE_RE =
   /\b(iv[aá]|iva incluido|suplemento|al[eé]rgeno|horario|reservas?|tel[eé]fono|www\.|https?:\/\/)\b/i;
 
+/** Cabeceras de sección que no deben emparejarse como producto. */
+const SECTION_BLOCKLIST_RE =
+  /^(?:pizze\s+(?:gourmet|clasico|classico)|entrantes|postres|principales?|bebidas?|carta|menu|menú)$/i;
+
+const NAME_CONNECTORS = new Set(["e", "y", "de", "del", "la", "el", "con", "&"]);
+
+const ORPHAN_PRICE_ONE_LINE_RE = /^(\d{1,3}[.,]\d{1,2})\s*(?:€|eur)?\s*$/i;
+const ORPHAN_PRICE_INT_RE = /^(\d{1,3})\s*$/;
+const ORPHAN_PRICE_DECIMAL_PART_RE = /^(\d{2})\s*(?:€|eur)?\s*$/i;
+
 function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
-function normalizeOcrText(rawText: string): string {
+/** Texto OCR normalizado antes del parser heurístico (solo lectura/diagnóstico). */
+export function normalizeMenuImportOcrText(rawText: string): string {
   return rawText
     .replace(/\r/g, "\n")
     .replace(/[|¦]/g, "I")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function normalizeOcrText(rawText: string): string {
+  return normalizeMenuImportOcrText(rawText);
 }
 
 function parsePriceToken(raw: string): number | undefined {
@@ -111,6 +126,133 @@ function extractNameAndPrice(line: string): { name: string; price?: number; conf
   return null;
 }
 
+function isBlockedSectionLabel(line: string): boolean {
+  const t = line.replace(/[:：*]/g, "").trim();
+  return SECTION_BLOCKLIST_RE.test(t);
+}
+
+/** Línea con solo precio (13,90 / 15.50) o entero+decimal en dos líneas (14 + 50). */
+function parseOrphanPriceAt(
+  lines: string[],
+  index: number,
+): { price: number; linesConsumed: number } | null {
+  if (index < 0 || index >= lines.length) return null;
+  const line = lines[index]?.trim();
+  if (!line) return null;
+
+  const full = line.match(ORPHAN_PRICE_ONE_LINE_RE);
+  if (full?.[1]) {
+    const price = parsePriceToken(full[1]);
+    if (price != null) return { price, linesConsumed: 1 };
+  }
+
+  const intPart = line.match(ORPHAN_PRICE_INT_RE);
+  const next = lines[index + 1]?.trim();
+  if (intPart?.[1] && next) {
+    const decPart = next.match(ORPHAN_PRICE_DECIMAL_PART_RE);
+    if (decPart?.[1]) {
+      const price = parsePriceToken(`${intPart[1]}.${decPart[1]}`);
+      if (price != null) return { price, linesConsumed: 2 };
+    }
+  }
+
+  return null;
+}
+
+function isOrphanPriceLine(line: string): boolean {
+  return parseOrphanPriceAt([line], 0) != null;
+}
+
+/**
+ * Extrae nombre corto de producto antes de ingredientes OCR.
+ * Ej: "Margherita* tomate-mozzarella..." → "Margherita"
+ *     "Tonno e Cipolle" → "Tonno e Cipolle"
+ */
+function extractProductNameFromLine(line: string): string | null {
+  const trimmed = line.replace(/\.{2,}/g, " ").replace(/\s+/g, " ").trim();
+  if (trimmed.length < 3) return null;
+
+  if (trimmed.includes("*")) {
+    const before = trimmed.split("*")[0]?.trim() ?? "";
+    if (before.length >= 3) return before;
+  }
+
+  const words = trimmed.split(/\s+/);
+  const nameWords: string[] = [];
+  for (const rawWord of words) {
+    const word = rawWord.replace(/[,;:.]+$/g, "");
+    if (!word) continue;
+
+    if (nameWords.length === 0) {
+      if (/^[\d]+[.,]\d+$/.test(word)) return null;
+      nameWords.push(word);
+      continue;
+    }
+
+    if (NAME_CONNECTORS.has(word.toLowerCase())) {
+      nameWords.push(word);
+      continue;
+    }
+
+    if (/^[A-ZÁÉÍÓÚÑ0-9]/.test(word) && !/^[\d]+[.,]\d+$/.test(word)) {
+      nameWords.push(word);
+      continue;
+    }
+
+    break;
+  }
+
+  const name = nameWords.join(" ").trim();
+  return name.length >= 3 ? name : null;
+}
+
+function looksLikeProductNameCandidate(line: string): boolean {
+  if (isBlockedSectionLabel(line)) return false;
+  if (looksLikeSectionHeader(line)) return false;
+  if (NOISE_LINE_RE.test(line)) return false;
+  if (extractNameAndPrice(line)) return false;
+  if (isOrphanPriceLine(line)) return false;
+
+  const name = extractProductNameFromLine(line);
+  if (!name || name.length < 4) return false;
+  if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(name)) return false;
+  return true;
+}
+
+function pushParsedItem(args: {
+  items: ImportedMenuItem[];
+  input: ParseMenuTextInput;
+  name: string;
+  price: number | undefined;
+  confidence: number;
+  rawText: string;
+  currentSection: string;
+  currentCategory: string;
+  currentStation: ImportedMenuSuggestedStation;
+  forceNeedsReview?: boolean;
+}): void {
+  const station = inferStationFromName(args.name, args.currentStation);
+  const needsReview =
+    args.forceNeedsReview ||
+    args.price == null ||
+    args.confidence < 75 ||
+    args.name.length < 4;
+
+  args.items.push({
+    id: uid("item"),
+    sourceType: args.input.sourceType,
+    name: args.name,
+    price: args.price,
+    sectionName: args.currentSection,
+    suggestedCategory: args.currentCategory,
+    suggestedStation: station,
+    confidence: args.confidence,
+    rawText: args.rawText,
+    needsReview,
+    selectedForPublish: !needsReview,
+  });
+}
+
 export type ParseMenuTextInput = {
   sourceType: ImportedMenuSourceType;
   menuType: MenuImportMenuType;
@@ -134,17 +276,29 @@ export function parseMenuText(rawText: string, input: ParseMenuTextInput): Parse
   let currentStation: ImportedMenuSuggestedStation = "kitchen";
   const items: ImportedMenuItem[] = [];
   let skippedNoise = 0;
+  let orphanPricePairs = 0;
+  let orphanPriceColumnPairs = 0;
 
-  for (const line of lines) {
+  type PendingName = {
+    name: string;
+    rawText: string;
+    currentSection: string;
+    currentCategory: string;
+    currentStation: ImportedMenuSuggestedStation;
+  };
+  const pendingNames: PendingName[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (NOISE_LINE_RE.test(line)) {
       skippedNoise++;
       continue;
     }
 
-    if (looksLikeSectionHeader(line)) {
+    if (looksLikeSectionHeader(line) || isBlockedSectionLabel(line)) {
       const inferred = inferSectionFromLine(line) ?? {
-        sectionName: line.replace(/[:：]$/, "").trim(),
-        category: line.replace(/[:：]$/, "").trim(),
+        sectionName: line.replace(/[:：*]/g, "").trim(),
+        category: line.replace(/[:：*]/g, "").trim(),
         station: "kitchen" as ImportedMenuSuggestedStation,
       };
       currentSection = inferred.sectionName;
@@ -154,28 +308,87 @@ export function parseMenuText(rawText: string, input: ParseMenuTextInput): Parse
     }
 
     const extracted = extractNameAndPrice(line);
-    if (!extracted) continue;
+    if (extracted) {
+      pushParsedItem({
+        items,
+        input,
+        name: extracted.name,
+        price: extracted.price,
+        confidence: extracted.confidence,
+        rawText: line,
+        currentSection,
+        currentCategory,
+        currentStation,
+      });
+      continue;
+    }
 
-    const station = inferStationFromName(extracted.name, currentStation);
-    const needsReview = extracted.price == null || extracted.confidence < 75 || extracted.name.length < 4;
+    const orphanPrice = parseOrphanPriceAt(lines, i);
+    if (orphanPrice && pendingNames.length > 0) {
+      const pending = pendingNames.shift()!;
+      pushParsedItem({
+        items,
+        input,
+        name: pending.name,
+        price: orphanPrice.price,
+        confidence: 70,
+        rawText: `${pending.rawText}\n${lines.slice(i, i + orphanPrice.linesConsumed).join("\n")}`,
+        currentSection: pending.currentSection,
+        currentCategory: pending.currentCategory,
+        currentStation: pending.currentStation,
+        forceNeedsReview: true,
+      });
+      orphanPricePairs++;
+      orphanPriceColumnPairs++;
+      i += orphanPrice.linesConsumed - 1;
+      continue;
+    }
 
-    items.push({
-      id: uid("item"),
-      sourceType: input.sourceType,
-      name: extracted.name,
-      price: extracted.price,
-      sectionName: currentSection,
-      suggestedCategory: currentCategory,
-      suggestedStation: station,
-      confidence: extracted.confidence,
-      rawText: line,
-      needsReview,
-      selectedForPublish: !needsReview,
-    });
+    if (looksLikeProductNameCandidate(line)) {
+      const name = extractProductNameFromLine(line);
+      if (!name) continue;
+
+      const priceAt = parseOrphanPriceAt(lines, i + 1);
+      if (priceAt) {
+        const rawParts = [line, ...lines.slice(i + 1, i + 1 + priceAt.linesConsumed)];
+        pushParsedItem({
+          items,
+          input,
+          name,
+          price: priceAt.price,
+          confidence: 72,
+          rawText: rawParts.join("\n"),
+          currentSection,
+          currentCategory,
+          currentStation,
+          forceNeedsReview: true,
+        });
+        orphanPricePairs++;
+        i += priceAt.linesConsumed;
+        continue;
+      }
+
+      pendingNames.push({
+        name,
+        rawText: line,
+        currentSection,
+        currentCategory,
+        currentStation,
+      });
+    }
   }
 
   if (skippedNoise > 0) {
     warnings.push(`${skippedNoise} líneas de ruido/legal ignoradas`);
+  }
+  if (orphanPricePairs > 0) {
+    warnings.push(`${orphanPricePairs} producto(s) emparejados por precio huérfano`);
+  }
+  if (orphanPriceColumnPairs > 0) {
+    warnings.push(`${orphanPriceColumnPairs} producto(s) emparejados por columna nombre→precio`);
+  }
+  if (pendingNames.length > 0) {
+    warnings.push(`${pendingNames.length} nombre(s) sin precio emparejado al final del OCR`);
   }
   if (items.length === 0) {
     warnings.push("No se detectaron líneas con precio; revisa rawText manualmente");

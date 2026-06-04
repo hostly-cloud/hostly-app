@@ -1,11 +1,37 @@
 /**
- * Une el catálogo de venta local con costes (override local en navegador).
+ * Une catálogo de venta con costes de escandallo.
+ * Fase unificada: catálogo central Firestore primero; legacy localStorage como fallback / pendiente.
  */
 
-import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { countLegacyPlatosForRestaurant } from "@/lib/carta/legacy-platos-client";
+import type { OperationalCatalogSource } from "@/lib/carta/use-central-products-for-carta";
+import {
+  fetchCentralProductsOnce,
+  type ProductDocument,
+} from "@/lib/firestore/products";
+import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { estimateRecipeCostTotal } from "@/lib/recipes/product-recipe-helpers";
 import { loadPlatos, type PlatoCarta } from "@/lib/platos-local";
 
 const ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY = "hostly.escandallos.coste_total_override.v1";
+
+export type EscandalloCatalogSource = OperationalCatalogSource;
+
+export type EscandalloMergedRow = {
+  id: string | number;
+  nombre_plato: string | null;
+  coste_total: number | null;
+  precio_venta: number | null;
+};
+
+export type EscandalloMergedFetchResult = {
+  rows: EscandalloMergedRow[];
+  error: string | null;
+  source: EscandalloCatalogSource;
+  /** Platos en `hostly.platos.v1` cuando el catálogo central ya está activo. */
+  legacyPendingCount: number;
+  centralProductCount: number;
+};
 
 function readCosteOverridesBrowser(): Record<string, number> {
   if (typeof window === "undefined") return {};
@@ -17,11 +43,77 @@ function readCosteOverridesBrowser(): Record<string, number> {
   }
 }
 
-export type EscandalloMergedRow = {
-  id: string | number;
-  nombre_plato: string | null;
-  coste_total: number | null;
-  precio_venta: number | null;
+function resolveCosteTotal(
+  rowKey: string,
+  overrides: Record<string, number>,
+  recipeCost: number | null,
+): number | null {
+  const ov = overrides[rowKey];
+  if (typeof ov === "number" && Number.isFinite(ov)) return ov;
+  return recipeCost;
+}
+
+function centralDocsToEscandalloRows(
+  docs: ProductDocument[],
+  overrides: Record<string, number>,
+): EscandalloMergedRow[] {
+  const rows: EscandalloMergedRow[] = [];
+
+  for (const doc of docs) {
+    if (doc.active === false) continue;
+    const key = doc.id;
+    const precioVenta =
+      typeof doc.price === "number" && Number.isFinite(doc.price) ? doc.price : null;
+    const recipeCost = estimateRecipeCostTotal(doc.recipe);
+    rows.push({
+      id: key,
+      nombre_plato: doc.name?.trim() || "Sin nombre",
+      coste_total: resolveCosteTotal(key, overrides, recipeCost),
+      precio_venta: precioVenta,
+    });
+  }
+
+  rows.sort((a, b) =>
+    (a.nombre_plato ?? "").localeCompare(b.nombre_plato ?? "", undefined, {
+      sensitivity: "base",
+    }),
+  );
+  return rows;
+}
+
+function legacyPlatosToEscandalloRows(
+  platos: PlatoCarta[],
+  overrides: Record<string, number>,
+): EscandalloMergedRow[] {
+  const activeLinked = platos.filter(
+    (p) => p.activo && p.escandalloSupabaseId != null,
+  ) as (PlatoCarta & { escandalloSupabaseId: number })[];
+
+  const rows: EscandalloMergedRow[] = activeLinked.map((p) => {
+    const sid = p.escandalloSupabaseId;
+    const key = String(sid);
+    return {
+      id: sid,
+      nombre_plato: p.nombre,
+      coste_total: resolveCosteTotal(key, overrides, null),
+      precio_venta: p.precioVenta,
+    };
+  });
+
+  rows.sort((a, b) =>
+    (a.nombre_plato ?? "").localeCompare(b.nombre_plato ?? "", undefined, {
+      sensitivity: "base",
+    }),
+  );
+  return rows;
+}
+
+export type FetchEscandalloMergedOptions = {
+  restaurantId?: string | null;
+  profileRestaurantId?: string | null;
+  /** Si ya hay listener central (p. ej. useCentralProductsForCarta), evitar getDocs duplicado. */
+  centralProducts?: ProductDocument[] | null;
+  catalogSource?: EscandalloCatalogSource | null;
 };
 
 /** Si la carta está vacía, no hay importación remota: solo catálogo local. */
@@ -37,34 +129,80 @@ export async function ensureEscandalloRowsForPlatos(platos: PlatoCarta[]): Promi
 }
 
 /**
- * Listado unificado para Escandallos / KPIs: productos activos con vínculo numérico legacy y coste desde override local.
+ * Listado unificado para Escandallos / KPIs.
+ * Prioridad: catálogo central (`restaurants/{id}/products`); legacy solo si central vacío o sin auth.
  */
-export async function fetchEscandalloMergedRowsForBrowser(): Promise<{ rows: EscandalloMergedRow[]; error: string | null }> {
-  const restauranteId = getBrowserRestauranteId();
-  const platos = await bootstrapPlatosFromEscandallosIfEmpty(restauranteId);
-  const overrides = readCosteOverridesBrowser();
+export async function fetchEscandalloMergedRowsForRestaurant(
+  options: FetchEscandalloMergedOptions = {},
+): Promise<EscandalloMergedFetchResult> {
+  const restauranteId = resolveOperationalRestaurantId(
+    options.profileRestaurantId ?? options.restaurantId ?? null,
+  ).trim();
 
-  const activeLinked = platos.filter((p) => p.activo && p.escandalloSupabaseId != null) as (PlatoCarta & {
-    escandalloSupabaseId: number;
-  })[];
-
-  const rows: EscandalloMergedRow[] = activeLinked.map((p) => {
-    const sid = p.escandalloSupabaseId;
-    const ov = overrides[String(sid)];
-    const coste_total = typeof ov === "number" && Number.isFinite(ov) ? ov : null;
+  if (!restauranteId) {
     return {
-      id: sid,
-      nombre_plato: p.nombre,
-      coste_total,
-      precio_venta: p.precioVenta,
+      rows: [],
+      error: null,
+      source: "legacy_local",
+      legacyPendingCount: 0,
+      centralProductCount: 0,
     };
-  });
+  }
 
-  rows.sort((a, b) =>
-    (a.nombre_plato ?? "").localeCompare(b.nombre_plato ?? "", undefined, { sensitivity: "base" }),
-  );
+  const overrides = readCosteOverridesBrowser();
+  let fetchError: string | null = null;
 
-  return { rows, error: null };
+  if (options.catalogSource === "central") {
+    const docs = options.centralProducts ?? [];
+    return {
+      rows: centralDocsToEscandalloRows(docs, overrides),
+      error: fetchError,
+      source: "central",
+      legacyPendingCount: countLegacyPlatosForRestaurant(restauranteId),
+      centralProductCount: docs.length,
+    };
+  }
+
+  let centralDocs = options.centralProducts ?? null;
+  let source: EscandalloCatalogSource = options.catalogSource ?? "legacy_local";
+
+  if (centralDocs == null) {
+    const fetched = await fetchCentralProductsOnce(restauranteId);
+    centralDocs = fetched.docs;
+    fetchError = fetched.error;
+    if (centralDocs.length > 0) {
+      source = "central";
+    }
+  } else if (centralDocs.length > 0) {
+    source = "central";
+  }
+
+  if (source === "central" && centralDocs.length > 0) {
+    const legacyPendingCount = countLegacyPlatosForRestaurant(restauranteId);
+    return {
+      rows: centralDocsToEscandalloRows(centralDocs, overrides),
+      error: fetchError,
+      source: "central",
+      legacyPendingCount,
+      centralProductCount: centralDocs.length,
+    };
+  }
+
+  const platos = loadPlatos(restauranteId);
+  return {
+    rows: legacyPlatosToEscandalloRows(platos, overrides),
+    error: fetchError,
+    source: fetchError ? "legacy_fallback" : "legacy_local",
+    legacyPendingCount: 0,
+    centralProductCount: 0,
+  };
+}
+
+/** Compatibilidad: resuelve tenant operativo (perfil → localStorage). */
+export async function fetchEscandalloMergedRowsForBrowser(
+  options?: FetchEscandalloMergedOptions,
+): Promise<EscandalloMergedFetchResult> {
+  return fetchEscandalloMergedRowsForRestaurant(options);
 }
 
 /** Sin tabla remota: no-op. */
@@ -107,7 +245,7 @@ export function cartaRowEconomicsTier(input: {
   return "warning";
 }
 
-/** Metadatos solo desde override local / ausencia de datos remotos. */
+/** Metadatos desde override local (legacy ids numéricos). */
 export async function fetchEscandalloMetaForIds(ids: number[]): Promise<EscandalloMetaMap> {
   const out: EscandalloMetaMap = new Map();
   if (ids.length === 0) return out;
@@ -121,3 +259,5 @@ export async function fetchEscandalloMetaForIds(ids: number[]): Promise<Escandal
 
   return out;
 }
+
+export { ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY };

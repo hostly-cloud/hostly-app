@@ -5,6 +5,11 @@ import { truncateRawTextForStorage } from "./download-storage-file";
 import { enrichMenuItemsWithAI } from "./enrich-menu-items-with-ai";
 import { extractMenuText } from "./extract-menu-text";
 import {
+  MenuImportPipelineTracer,
+  type MenuImportPipelineStep,
+} from "./menu-import-pipeline-diagnostics";
+import {
+  explainOcrValidationDecision,
   filterItemsByOcrSource,
   logOcrValidationDiagnostics,
 } from "./validate-items-against-ocr";
@@ -13,7 +18,11 @@ import {
   getMenuImportDraftAdmin,
   updateMenuImportDraftAdmin,
 } from "./menu-import-draft-admin";
-import { groupParsedItemsIntoSections, parseMenuText } from "./parse-menu-text";
+import {
+  groupParsedItemsIntoSections,
+  normalizeMenuImportOcrText,
+  parseMenuText,
+} from "./parse-menu-text";
 
 const ANALYZING_STALE_MS = 2 * 60 * 1000;
 
@@ -56,11 +65,37 @@ export async function processMenuImportDraft(params: {
     throw new ProcessMenuImportDraftError("DRAFT_NOT_FOUND", "Borrador no encontrado", 404);
   }
 
+  const trace = new MenuImportPipelineTracer({
+    draftId,
+    restaurantId,
+    fileName: draft.originalFileName ?? null,
+    sourceType: draft.sourceType,
+  });
+
+  trace.step("draft_loaded", {
+    status: draft.status,
+    storagePath: draft.storagePath ?? null,
+    sourceUrl: draft.sourceUrl ?? null,
+    existingItems: draft.items.length,
+    existingSections: draft.sections.length,
+  });
+
   if (draft.restaurantId !== restaurantId.trim()) {
     throw new ProcessMenuImportDraftError("TENANT_MISMATCH", "Borrador fuera del tenant", 403);
   }
 
   if (draft.status === "ready" || draft.status === "published") {
+    trace.step("already_processed", {
+      status: draft.status,
+      itemCount: draft.items.length,
+      sectionCount: draft.sections.length,
+      rawTextLength: draft.rawText?.length ?? 0,
+    });
+    trace.draftFinal({
+      status: draft.status,
+      itemCount: draft.items.length,
+      alreadyProcessed: true,
+    });
     return {
       draftId,
       status: draft.status,
@@ -104,7 +139,15 @@ export async function processMenuImportDraft(params: {
     updatedBy: userId,
   });
 
+  let currentStep: MenuImportPipelineStep = "ocr_extract_start";
+
   try {
+    trace.step("ocr_extract_start", {
+      storagePath: draft.storagePath ?? null,
+      sourceUrl: draft.sourceUrl ?? null,
+    });
+
+    currentStep = "ocr_raw";
     const extracted = await extractMenuText({
       sourceType: draft.sourceType,
       menuType: draft.menuType,
@@ -112,15 +155,23 @@ export async function processMenuImportDraft(params: {
       sourceUrl: draft.sourceUrl,
       originalFileName: draft.originalFileName,
     });
+    trace.ocrRaw(extracted.rawText, extracted.warnings);
 
+    currentStep = "ocr_cleaned";
+    const cleanedText = normalizeMenuImportOcrText(extracted.rawText);
+    trace.ocrCleaned(cleanedText);
+
+    currentStep = "parser";
     const parsed = parseMenuText(extracted.rawText, {
       sourceType: draft.sourceType,
       menuType: draft.menuType,
     });
+    trace.parser(parsed.items, parsed.warnings);
 
     const parserWarnings = [...extracted.warnings, ...parsed.warnings];
     const knownCategories = await loadHostlyCategoryNames(db, restaurantId);
 
+    currentStep = "ai_enrichment";
     const enriched = await enrichMenuItemsWithAI({
       rawText: extracted.rawText,
       items: parsed.items,
@@ -128,10 +179,27 @@ export async function processMenuImportDraft(params: {
       knownCategories,
       parserWarnings,
     });
+    trace.aiEnrichment({
+      inputCount: parsed.items.length,
+      outputCount: enriched.items.length,
+      enriched: enriched.enriched,
+      aiWarnings: enriched.aiWarnings,
+      items: enriched.items,
+    });
 
+    currentStep = "ocr_validation";
     const wrapped = enriched.items.map((item) => ({ name: item.name, item }));
     const ocrValidated = filterItemsByOcrSource(wrapped, extracted.rawText);
     const finalItems = ocrValidated.accepted.map((row) => row.item);
+
+    trace.ocrValidation({
+      ocrTextLength: ocrValidated.ocrTextLength,
+      accepted: finalItems,
+      rejected: ocrValidated.rejected.map((row) => {
+        const decision = explainOcrValidationDecision(row.name, extracted.rawText);
+        return { name: row.name, reason: decision.reason };
+      }),
+    });
 
     logOcrValidationDiagnostics(
       {
@@ -146,6 +214,7 @@ export async function processMenuImportDraft(params: {
     );
 
     if (finalItems.length === 0) {
+      trace.pipelineError("ocr_validation", new Error("NO_PRODUCTS_DETECTED"));
       throw new ProcessMenuImportDraftError(
         "NO_PRODUCTS_DETECTED",
         "No hemos podido detectar productos claros en esta carta. Sube una imagen más nítida o crea productos manualmente.",
@@ -165,6 +234,14 @@ export async function processMenuImportDraft(params: {
       parserWarnings.push(...aiWarnings);
     }
 
+    currentStep = "draft_save";
+    trace.draftSave({
+      itemCount: finalItems.length,
+      sectionCount: sections.length,
+      items: finalItems,
+      status: "ready",
+    });
+
     await updateMenuImportDraftAdmin(db, restaurantId, draftId, {
       status: "ready",
       rawText: rawTextStored,
@@ -176,6 +253,12 @@ export async function processMenuImportDraft(params: {
       updatedBy: userId,
     });
 
+    trace.draftFinal({
+      status: "ready",
+      itemCount: finalItems.length,
+      alreadyProcessed: false,
+    });
+
     return {
       draftId,
       status: "ready",
@@ -183,6 +266,7 @@ export async function processMenuImportDraft(params: {
       itemCount: finalItems.length,
     };
   } catch (e) {
+    trace.pipelineError(currentStep, e);
     const message = e instanceof Error ? e.message : "Error al procesar la carta";
     await updateMenuImportDraftAdmin(db, restaurantId, draftId, {
       status: "failed",

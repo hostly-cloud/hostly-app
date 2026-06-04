@@ -102,6 +102,32 @@ export function OperacionModuleShell({
 
       <div style={contentStyle}>{children}</div>
       <style>{`
+        .hostly-operation-shell[data-operation-module="tpv"] .hostly-operation-topbar {
+          min-height: 30px;
+          padding: 4px 10px;
+          gap: 6px;
+          border-bottom-color: rgba(148, 163, 184, 0.12);
+          background: rgba(247, 252, 255, 0.55);
+        }
+
+        .hostly-operation-shell[data-operation-module="tpv"]
+          .hostly-operation-topbar
+          .hostly-nav-aux {
+          opacity: 0.68;
+          border-color: rgba(148, 163, 184, 0.2) !important;
+          background: rgba(255, 255, 255, 0.5) !important;
+          color: #64748b !important;
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .hostly-operation-shell[data-operation-module="tpv"]
+          .hostly-operation-topbar
+          > span {
+          opacity: 0.55;
+          font-size: 10px;
+        }
+
         @media (max-width: 767.98px) {
           .hostly-operation-shell[data-operation-module="tpv"] {
             background: var(--hostly-surface-page) !important;
@@ -111,8 +137,8 @@ export function OperacionModuleShell({
             min-height: 26px !important;
             padding: 2px 5px !important;
             gap: 4px !important;
-            border-bottom-color: rgba(148, 163, 184, 0.14) !important;
-            background: rgba(247, 252, 255, 0.72) !important;
+            border-bottom-color: rgba(148, 163, 184, 0.1) !important;
+            background: rgba(247, 252, 255, 0.45) !important;
           }
 
           .hostly-operation-shell[data-operation-module="tpv"]

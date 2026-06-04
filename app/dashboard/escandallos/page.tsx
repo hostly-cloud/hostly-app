@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/components/auth/auth-context";
 import { useI18n } from "@/components/i18n-provider";
 import ModulePageShell from "@/components/module-page-shell";
 import { EscandallosCartaDataView } from "@/components/carta/escandallos/escandallos-carta-data-view";
@@ -16,11 +17,15 @@ import {
   type EscandalloDraftById,
   type EscandalloListRow,
 } from "@/components/carta/escandallos/escandallo-display-utils";
-import { fetchEscandalloMergedRowsForBrowser } from "@/lib/platos-escandallo-bridge";
-import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
+import { updateCentralProduct } from "@/lib/firestore/products";
+import {
+  ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY,
+  fetchEscandalloMergedRowsForRestaurant,
+  type EscandalloCatalogSource,
+} from "@/lib/platos-escandallo-bridge";
+import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { syncPlatoPrecioFromEscandalloSave } from "@/lib/platos-local";
-
-const ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY = "hostly.escandallos.coste_total_override.v1";
 
 function formatMoney2OrDash(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "";
@@ -35,6 +40,19 @@ function formatMoneyUpTo2OrDash(value: number | null | undefined): string {
 
 export default function EscandallosPage() {
   const { t } = useI18n();
+  const { restaurantId: profileRestaurantId } = useAuth();
+  const restauranteId = useMemo(
+    () => resolveOperationalRestaurantId(profileRestaurantId),
+    [profileRestaurantId],
+  );
+  const operationalCatalog = useCentralProductsForCarta(restauranteId, {
+    scope: "management",
+  });
+  const centralDocs = useMemo(() => {
+    if (operationalCatalog.source !== "central") return null;
+    return [...operationalCatalog.productDocumentsById.values()];
+  }, [operationalCatalog.productDocumentsById, operationalCatalog.source]);
+
   const [items, setItems] = useState<EscandalloListRow[]>([]);
   const [drafts, setDrafts] = useState<EscandalloDraftById>({});
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
@@ -42,37 +60,49 @@ export default function EscandallosPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<EscandalloToolbarTier>("all");
+  const [catalogSource, setCatalogSource] = useState<EscandalloCatalogSource>("legacy_local");
+  const [legacyPendingCount, setLegacyPendingCount] = useState(0);
 
-  async function cargar() {
-    setLoading(true);
-    setError(null);
-    const { rows: baseRows, error: mergeError } = await fetchEscandalloMergedRowsForBrowser();
-
-    if (mergeError) {
-      setError(mergeError);
+  const cargar = useCallback(async () => {
+    if (!restauranteId) {
       setItems([]);
       setLoading(false);
       return;
     }
 
-    let overrides: Record<string, number> = {};
-    try {
-      const raw = localStorage.getItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY);
-      overrides = raw ? (JSON.parse(raw) as Record<string, number>) : {};
-    } catch {
-      overrides = {};
+    setLoading(true);
+    setError(null);
+
+    const waitForCentral =
+      operationalCatalog.loading &&
+      operationalCatalog.source === null &&
+      centralDocs == null;
+
+    if (waitForCentral) {
+      return;
     }
 
-    const rows = baseRows.map((r) => {
-      const key = String(r.id);
-      const ov = overrides[key];
-      return typeof ov === "number" && Number.isFinite(ov) ? { ...r, coste_total: ov } : r;
+    const {
+      rows: baseRows,
+      error: mergeError,
+      source,
+      legacyPendingCount: pending,
+    } = await fetchEscandalloMergedRowsForRestaurant({
+      profileRestaurantId,
+      centralProducts: centralDocs,
+      catalogSource: operationalCatalog.source,
     });
 
-    setItems(rows);
+    if (mergeError) {
+      setError(mergeError);
+    }
+
+    setCatalogSource(source);
+    setLegacyPendingCount(pending);
+    setItems(baseRows);
     setDrafts((prev) => {
       const next: EscandalloDraftById = { ...prev };
-      for (const r of rows) {
+      for (const r of baseRows) {
         const key = String(r.id);
         if (!next[key]) {
           next[key] = {
@@ -84,11 +114,17 @@ export default function EscandallosPage() {
       return next;
     });
     setLoading(false);
-  }
+  }, [
+    centralDocs,
+    operationalCatalog.loading,
+    operationalCatalog.source,
+    profileRestaurantId,
+    restauranteId,
+  ]);
 
   useEffect(() => {
     void cargar();
-  }, []);
+  }, [cargar]);
 
   const listStats = useMemo(() => computeEscandalloListStats(items, drafts), [items, drafts]);
 
@@ -147,7 +183,13 @@ export default function EscandallosPage() {
       const coste_total = parseNullableNumber(draft.coste_total);
       const precio_venta = parseNullableNumber(draft.precio_venta);
 
-      syncPlatoPrecioFromEscandalloSave(getBrowserRestauranteId(), Number(id), precio_venta);
+      if (catalogSource === "central") {
+        if (precio_venta != null && Number.isFinite(precio_venta)) {
+          await updateCentralProduct(restauranteId, key, { price: precio_venta });
+        }
+      } else {
+        syncPlatoPrecioFromEscandalloSave(restauranteId, Number(id), precio_venta);
+      }
 
       try {
         const raw = localStorage.getItem(ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY);
@@ -163,6 +205,8 @@ export default function EscandallosPage() {
       }
 
       setItems((prev) => prev.map((r) => (String(r.id) === key ? { ...r, coste_total, precio_venta } : r)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar la fila.");
     } finally {
       setSavingById((prev) => ({ ...prev, [key]: false }));
     }
@@ -185,6 +229,25 @@ export default function EscandallosPage() {
       <div className="hostly-recipe-editor__legacy-shell">
         {error ? (
           <div className="hostly-carta-config-alert hostly-carta-config-alert--error">{error}</div>
+        ) : null}
+
+        <div className="hostly-carta-config-alert hostly-carta-config-alert--info">
+          Vista heredada. La gestión principal de escandallos está en{" "}
+          <Link href="/dashboard/configuracion/carta/escandallos" className="hostly-carta-config-text-link">
+            Configuración → Carta → Escandallos
+          </Link>
+          . Los datos mostrados aquí siguen la misma lectura central-first que esa pantalla.
+        </div>
+
+        {catalogSource === "central" && legacyPendingCount > 0 ? (
+          <div className="hostly-carta-config-alert hostly-carta-config-alert--warning">
+            <span className="font-semibold">{legacyPendingCount} producto(s) legacy</span> siguen en este navegador (
+            <code className="text-[11px]">hostly.platos.v1</code>) y no forman parte del catálogo central mostrado
+            aquí.{" "}
+            <Link href="/dashboard/configuracion/carta/productos" className="hostly-carta-config-text-link">
+              Migrar desde Productos
+            </Link>
+          </div>
         ) : null}
 
         <div className="hostly-carta-config-alert hostly-carta-config-alert--info">
@@ -223,7 +286,7 @@ export default function EscandallosPage() {
           drafts={drafts}
           savingById={savingById}
           listStats={listStats}
-          loading={loading}
+          loading={loading || (operationalCatalog.loading && items.length === 0)}
           showFilteredEmpty={items.length > 0 && filteredSortedItems.length === 0}
           recipeHref={(id) => `/dashboard/escandallos/${encodeURIComponent(String(id))}`}
           onUpdateDraft={updateDraft}

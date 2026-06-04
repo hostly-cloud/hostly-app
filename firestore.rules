@@ -554,5 +554,17 @@ service cloud.firestore {
         && (!isRefundWrite() || canRefundTpv());
       allow delete: if false;
     }
+
+    // VOUCHERS (vales regalo — lookup TPV + saldo tras cobro)
+    // Mismo tenant gate y capability de cobro que payments.
+    match /vouchers/{voucherId} {
+      allow read: if sameRestaurant(resource.data.restaurantId);
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canChargeTpv();
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && canChargeTpv();
+      allow delete: if false;
+    }
   }
 }

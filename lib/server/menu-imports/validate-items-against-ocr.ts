@@ -107,3 +107,67 @@ export function logOcrValidationDiagnostics(diag: OcrValidationDiagnostics, cont
     rejectedNames: diag.rejectedNames.slice(0, 24),
   });
 }
+
+/** Solo desarrollo: explica por qué un nombre pasa o no la validación OCR (sin cambiar reglas). */
+export function explainOcrValidationDecision(
+  productName: string,
+  ocrSourceText: string,
+): { accepted: boolean; reason: string; minOcrLength: number; ocrTextLength: number } {
+  const ocrTextLength = ocrSourceText.trim().length;
+  const minOcrLength = MIN_OCR_SOURCE_TEXT_LENGTH;
+  if (ocrTextLength < minOcrLength) {
+    return {
+      accepted: false,
+      reason: `ocr_text_too_short (< ${minOcrLength} chars)`,
+      minOcrLength,
+      ocrTextLength,
+    };
+  }
+  if (isProductNameSupportedByOcr(productName, ocrSourceText)) {
+    return { accepted: true, reason: "supported_by_ocr", minOcrLength, ocrTextLength };
+  }
+
+  const name = productName.trim();
+  const ocrNorm = normalizeForOcrMatch(ocrSourceText);
+  const nameNorm = normalizeForOcrMatch(name);
+  if (!nameNorm) {
+    return { accepted: false, reason: "empty_normalized_name", minOcrLength, ocrTextLength };
+  }
+  if (ocrNorm.includes(nameNorm)) {
+    return { accepted: true, reason: "supported_by_ocr", minOcrLength, ocrTextLength };
+  }
+
+  const nameCompact = compactAlphanumeric(name);
+  const ocrCompact = compactAlphanumeric(ocrSourceText);
+  if (nameCompact.length >= 3 && ocrCompact.includes(nameCompact)) {
+    return { accepted: true, reason: "supported_by_ocr_compact", minOcrLength, ocrTextLength };
+  }
+
+  const tokens = significantTokens(name);
+  const strong = tokens.filter((t) => t.length >= 4);
+  const strongMatched = strong.filter((t) => ocrNorm.includes(t) || ocrCompact.includes(t));
+  if (strongMatched.length > 0) {
+    return { accepted: true, reason: "supported_by_strong_token", minOcrLength, ocrTextLength };
+  }
+
+  const medium = tokens.filter((t) => t.length >= 3);
+  const matchedMedium = medium.filter((t) => ocrNorm.includes(t));
+  const requiredMedium = medium.length > 0 ? Math.max(1, Math.ceil(medium.length * 0.6)) : 0;
+  if (medium.length > 0 && matchedMedium.length >= requiredMedium) {
+    return { accepted: true, reason: "supported_by_medium_tokens", minOcrLength, ocrTextLength };
+  }
+
+  if (tokens.length === 1 && tokens[0].length >= 3 && ocrNorm.includes(tokens[0])) {
+    return { accepted: true, reason: "supported_by_single_token", minOcrLength, ocrTextLength };
+  }
+
+  return {
+    accepted: false,
+    reason:
+      medium.length > 0
+        ? `name_not_in_ocr (tokens ${matchedMedium.length}/${medium.length}, need ${requiredMedium}; strong ${strongMatched.length}/${strong.length})`
+        : `name_not_in_ocr (no significant tokens)`,
+    minOcrLength,
+    ocrTextLength,
+  };
+}

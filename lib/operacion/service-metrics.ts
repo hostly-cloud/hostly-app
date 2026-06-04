@@ -139,6 +139,7 @@ const TERMINAL_ORDER_STATUSES = new Set([
   "paid",
   "cancelled",
   "canceled",
+  "merged",
 ]);
 
 export function isOrderActiveForMetrics(status: unknown): boolean {

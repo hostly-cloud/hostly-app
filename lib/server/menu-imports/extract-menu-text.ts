@@ -5,6 +5,7 @@ import {
   fetchRemoteMenuContent,
   htmlToVisibleText,
 } from "./fetch-remote-menu-url";
+import { isMenuImportPipelineDiagnosticsEnabled } from "./menu-import-pipeline-diagnostics";
 import { MIN_PDF_TEXT_CHARS } from "./menu-import-limits";
 import {
   extractPdfEmbeddedText,
@@ -57,12 +58,27 @@ async function extractFromStorageFile(input: ExtractMenuTextInput): Promise<Extr
   const downloaded = await downloadMenuImportStorageFile(storagePath);
   const warnings: string[] = [];
 
+  if (isMenuImportPipelineDiagnosticsEnabled()) {
+    console.info("[Hostly][MenuImport Pipeline] storage_download", {
+      storagePath,
+      originalFileName: input.originalFileName ?? null,
+      contentType: downloaded.contentType,
+      bytes: downloaded.buffer.length,
+    });
+  }
+
   if (isPdfContent(downloaded.contentType, downloaded.buffer, input.originalFileName)) {
     const pdf = await extractFromPdfBuffer(downloaded.buffer);
     return { rawText: pdf.rawText, warnings: [...warnings, ...pdf.warnings] };
   }
 
   if (isImageContent(downloaded.contentType, input.originalFileName)) {
+    if (isMenuImportPipelineDiagnosticsEnabled()) {
+      console.info("[Hostly][MenuImport Pipeline] vision_image_ocr_start", {
+        originalFileName: input.originalFileName ?? null,
+        bytes: downloaded.buffer.length,
+      });
+    }
     const text = await ocrImageBuffer(downloaded.buffer);
     warnings.push("OCR de imagen vía Google Vision");
     return { rawText: text, warnings };

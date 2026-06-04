@@ -1,7 +1,8 @@
 "use client";
 
-import { onAuthStateChanged } from "firebase/auth";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@/components/auth/auth-context";
 import {
   HostlyKpiCard,
   HostlySection,
@@ -20,7 +21,10 @@ import {
 } from "./missing-categories-wizard";
 import type { PublishPreviewResult, PublishPreviewAction, PublishPreviewBadge } from "@/lib/carta/publish-preview-types";
 import type { CategoryOutcomeMap, CreateMenuImportCategoriesResult } from "@/lib/carta/create-categories-types";
-import type { MenuImportPublishResult } from "@/lib/carta/publish-result-types";
+import type {
+  MenuImportPublishItemResult,
+  MenuImportPublishResult,
+} from "@/lib/carta/publish-result-types";
 import { requestMenuImportCreateCategories } from "@/lib/carta/request-menu-import-create-categories";
 import { requestMenuImportPublishPreview } from "@/lib/carta/request-menu-import-publish-preview";
 import { requestMenuImportPublish } from "@/lib/carta/request-menu-import-publish";
@@ -43,15 +47,21 @@ import {
   IMPORTED_MENU_STATION_LABELS,
   IMPORTED_MENU_STATION_OPTIONS,
 } from "@/lib/carta/imported-menu-types";
-import { loadUserRestaurantContext } from "@/lib/firestore/user-restaurant-profile";
 import {
   createMenuImportDraft,
   getMenuImportDraft,
   listenMenuImportDrafts,
   updateMenuImportDraft,
+  type MenuImportDraftDocument,
   type MenuImportDraftSummary,
 } from "@/lib/firestore/menu-import-drafts";
-import { auth } from "@/lib/firebase/client";
+import { logMenuImportDevAudit } from "@/lib/carta/menu-import-dev-audit";
+import {
+  logMenuImportDraftSaveError,
+  summarizeMenuImportDraftSavePayload,
+} from "@/lib/carta/menu-import-draft-save-diagnostics";
+import { fetchCentralProductsOnce } from "@/lib/firestore/products";
+import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { uploadMenuImportFile } from "@/lib/storage/menu-import-files";
 
 type InputMethod = ImportedMenuSourceType;
@@ -108,11 +118,156 @@ function previewBadgeTone(badge: PublishPreviewBadge): string {
   }
 }
 
+function isPreviewRowPublishable(
+  row: PublishPreviewResult["createProducts"][number],
+  confirmDuplicates: Set<string>,
+  confirmReviews: Set<string>,
+  blockedItemIds: Set<string>,
+): boolean {
+  if (blockedItemIds.has(row.itemId)) return false;
+  const hasValidPrice = typeof row.price === "number" && row.price > 0;
+  const hasCategory = row.resolvedCategoryId != null;
+  if (!hasValidPrice || !hasCategory) return false;
+  if (row.action === "create") return true;
+  if (row.action === "possible_duplicate" && confirmDuplicates.has(row.itemId)) return true;
+  if (row.action === "review" && confirmReviews.has(row.itemId)) return true;
+  return false;
+}
+
+function previewRowNonPublishReason(
+  row: PublishPreviewResult["createProducts"][number],
+  preview: PublishPreviewResult,
+  confirmDuplicates: Set<string>,
+  confirmReviews: Set<string>,
+  blockedItemIds: Set<string>,
+): string | null {
+  if (isPreviewRowPublishable(row, confirmDuplicates, confirmReviews, blockedItemIds)) {
+    return null;
+  }
+
+  const blocked = preview.blockedItems.find((entry) => entry.itemId === row.itemId);
+  if (blocked?.reasons.length) return blocked.reasons.join(" · ");
+
+  const reasons: string[] = [];
+  if (!row.name.trim()) reasons.push("Nombre vacío");
+  if (typeof row.price !== "number" || row.price <= 0) reasons.push("Precio inválido");
+  if (!row.resolvedCategoryId) reasons.push("Categoría no creada");
+  if (row.action === "review" && !confirmReviews.has(row.itemId)) {
+    reasons.push("Revisión humana pendiente");
+  }
+  if (row.action === "possible_duplicate" && !confirmDuplicates.has(row.itemId)) {
+    reasons.push("Duplicado sin confirmar");
+  }
+  if (row.warnings.length > 0) {
+    for (const warning of row.warnings) {
+      if (!reasons.includes(warning)) reasons.push(warning);
+    }
+  }
+  return reasons.length > 0 ? reasons.join(" · ") : "No apto para publicación";
+}
+
+type ItemPublishDisplayState = {
+  primaryLabel: string | null;
+  primaryTone: string;
+  detailMessage?: string;
+  locked: boolean;
+  suppressReviewChips: boolean;
+};
+
+function resolveItemPublishDisplayState(
+  item: ImportedMenuItem,
+  postPublish?: MenuImportPublishItemResult | null,
+): ItemPublishDisplayState {
+  if (item.publishStatus === "published") {
+    return {
+      primaryLabel: "Publicado",
+      primaryTone: "border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-900",
+      locked: true,
+      suppressReviewChips: true,
+    };
+  }
+  if (item.publishStatus === "error") {
+    return {
+      primaryLabel: "Error",
+      primaryTone: "border-rose-200/80 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-900",
+      locked: true,
+      suppressReviewChips: true,
+    };
+  }
+  if (item.publishStatus === "skipped") {
+    return {
+      primaryLabel: "Omitido",
+      primaryTone: "border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900",
+      locked: true,
+      suppressReviewChips: true,
+    };
+  }
+
+  if (postPublish) {
+    if (
+      postPublish.outcome === "created" ||
+      postPublish.outcome === "confirmed_duplicate" ||
+      postPublish.outcome === "already_published"
+    ) {
+      return {
+        primaryLabel: "Publicado",
+        primaryTone: "border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-900",
+        locked: true,
+        suppressReviewChips: true,
+      };
+    }
+    if (postPublish.outcome === "skipped") {
+      return {
+        primaryLabel: "Omitido",
+        primaryTone: "border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900",
+        detailMessage: postPublish.message,
+        locked: true,
+        suppressReviewChips: false,
+      };
+    }
+    if (postPublish.outcome === "error") {
+      return {
+        primaryLabel: "Error",
+        primaryTone: "border-rose-200/80 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-900",
+        detailMessage: postPublish.message,
+        locked: true,
+        suppressReviewChips: true,
+      };
+    }
+  }
+
+  return {
+    primaryLabel: null,
+    primaryTone: "",
+    locked: false,
+    suppressReviewChips: false,
+  };
+}
+
+function buildPostPublishByItemId(
+  result: MenuImportPublishResult,
+): Map<string, MenuImportPublishItemResult> {
+  const map = new Map<string, MenuImportPublishItemResult>();
+  for (const row of [
+    ...result.created,
+    ...result.confirmedDuplicates,
+    ...result.alreadyPublished,
+    ...result.skipped,
+    ...result.errors,
+  ]) {
+    map.set(row.itemId, row);
+  }
+  return map;
+}
+
 type PublishPreviewPanelProps = {
   preview: PublishPreviewResult;
   confirmDuplicates: Set<string>;
   onToggleConfirmDuplicate: (itemId: string, checked: boolean) => void;
+  confirmReviews: Set<string>;
+  onToggleConfirmReview: (itemId: string, checked: boolean) => void;
   categoryOutcomes?: CategoryOutcomeMap;
+  blockedItemIds: Set<string>;
 };
 
 function categoryExtraBadge(categoryName: string, outcomes?: CategoryOutcomeMap): string | null {
@@ -126,7 +281,10 @@ function PublishPreviewPanel({
   preview,
   confirmDuplicates,
   onToggleConfirmDuplicate,
+  confirmReviews,
+  onToggleConfirmReview,
   categoryOutcomes,
+  blockedItemIds,
 }: PublishPreviewPanelProps) {
   return (
     <HostlySection stack="sm">
@@ -162,11 +320,26 @@ function PublishPreviewPanel({
               <th className="px-3 py-2 font-semibold">Estación</th>
               <th className="px-3 py-2 font-semibold">Acción</th>
               <th className="px-3 py-2 font-semibold">Confirmar</th>
+              <th className="px-3 py-2 font-semibold">Motivo</th>
               <th className="px-3 py-2 font-semibold">Estado</th>
             </tr>
           </thead>
           <tbody>
-            {preview.createProducts.map((row) => (
+            {preview.createProducts.map((row) => {
+              const publishable = isPreviewRowPublishable(
+                row,
+                confirmDuplicates,
+                confirmReviews,
+                blockedItemIds,
+              );
+              const nonPublishReason = previewRowNonPublishReason(
+                row,
+                preview,
+                confirmDuplicates,
+                confirmReviews,
+                blockedItemIds,
+              );
+              return (
               <tr key={row.itemId} className="border-b border-[var(--hostly-line)]/70 last:border-0">
                 <td className="px-3 py-2.5 align-top">
                   <p className="font-medium text-[var(--hostly-navy-deep)]">{row.name}</p>
@@ -213,12 +386,52 @@ function PublishPreviewPanel({
                       />
                       Crear igualmente
                     </label>
+                  ) : row.action === "review" ? (
+                    <label className="flex items-center gap-1.5 text-[10px] text-[var(--hostly-ink-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={confirmReviews.has(row.itemId)}
+                        onChange={(e) => onToggleConfirmReview(row.itemId, e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-[var(--hostly-line-strong)]"
+                      />
+                      Confirmar revisión
+                    </label>
+                  ) : (
+                    <span className="text-[10px] text-[var(--hostly-ink-soft)]">—</span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5 align-top">
+                  {publishable ? (
+                    <span className="text-[10px] font-medium text-emerald-800">Listo para publicar</span>
+                  ) : nonPublishReason ? (
+                    <span className="text-[10px] leading-snug text-amber-950">{nonPublishReason}</span>
                   ) : (
                     <span className="text-[10px] text-[var(--hostly-ink-soft)]">—</span>
                   )}
                 </td>
                 <td className="px-3 py-2.5 align-top">
                   <div className="flex flex-wrap gap-1">
+                    {publishable ? (
+                      <span className="hostly-chip border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-900">
+                        Publicable
+                      </span>
+                    ) : blockedItemIds.has(row.itemId) ? (
+                      <span className="hostly-chip border-rose-200/80 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-900">
+                        Bloqueado
+                      </span>
+                    ) : row.action === "review" ? (
+                      <span className="hostly-chip border-rose-200/80 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-900">
+                        A revisar
+                      </span>
+                    ) : row.action === "possible_duplicate" ? (
+                      <span className="hostly-chip border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900">
+                        Duplicado
+                      </span>
+                    ) : (
+                      <span className="hostly-chip border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-800">
+                        Omitido
+                      </span>
+                    )}
                     {row.badges.map((badge) => (
                       <span
                         key={badge}
@@ -235,7 +448,8 @@ function PublishPreviewPanel({
                   </div>
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
         {preview.createProducts.length === 0 ? (
@@ -247,18 +461,25 @@ function PublishPreviewPanel({
 }
 
 function PublishResultPanel({ result }: { result: MenuImportPublishResult }) {
+  const publishedTotal =
+    result.totals.createdCount +
+    result.totals.confirmedDuplicateCount +
+    result.totals.alreadyPublishedCount;
+  const notPublishedTotal = result.totals.skippedCount + result.totals.errorCount;
+  const notPublishedRows = [...result.skipped, ...result.errors];
   const visibleInCentralCount = [
     ...result.created,
     ...result.alreadyPublished,
     ...result.confirmedDuplicates,
   ].filter((row) => row.visibleInTpv && row.productId).length;
+
   return (
     <HostlySurface variant="ice" className="p-4 sm:p-5">
       <p className="text-sm font-semibold text-[var(--hostly-navy-deep)]">Publicación completada</p>
       <p className="mt-0.5 text-xs text-[var(--hostly-ink-muted)]">
-        Estado del borrador: {result.draftStatus === "published" ? "Publicado" : result.draftStatus === "partially_published" ? "Parcialmente publicado" : "Listo"}
+        Publicados: {publishedTotal} · No publicados: {notPublishedTotal}
         {visibleInCentralCount > 0
-          ? ` · ${visibleInCentralCount} visible${visibleInCentralCount === 1 ? "" : "s"} en carta/TPV (catálogo central)`
+          ? ` · ${visibleInCentralCount} visible${visibleInCentralCount === 1 ? "" : "s"} en carta/TPV`
           : ""}
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
@@ -268,15 +489,28 @@ function PublishResultPanel({ result }: { result: MenuImportPublishResult }) {
         <HostlyKpiCard title="Omitidos" value={result.totals.skippedCount} variant="flat" />
         <HostlyKpiCard title="Errores" value={result.totals.errorCount} variant="flat" accentColor="rgba(180, 60, 60, 0.45)" />
       </div>
-      {(result.skipped.length > 0 || result.errors.length > 0) && (
-        <ul className="mt-3 space-y-1 text-[10px] text-[var(--hostly-ink-soft)]">
-          {[...result.skipped, ...result.errors].slice(0, 8).map((row) => (
-            <li key={`${row.outcome}-${row.itemId}`}>
-              · {row.itemName}: {row.message ?? row.outcome}
-            </li>
-          ))}
-        </ul>
-      )}
+      {notPublishedRows.length > 0 ? (
+        <div className="mt-3 rounded-[var(--hostly-radius-md)] border border-amber-200/80 bg-amber-50/60 p-3">
+          <p className="text-[11px] font-semibold text-amber-950">No publicados ({notPublishedRows.length})</p>
+          <ul className="mt-1.5 space-y-1 text-[10px] text-amber-950/90">
+            {notPublishedRows.map((row) => (
+              <li key={`${row.outcome}-${row.itemId}`}>
+                · {row.itemName} — {row.message ?? "Omitido en esta publicación"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {publishedTotal > 0 ? (
+        <div className="mt-4">
+          <Link
+            href="/dashboard/configuracion/carta/productos"
+            className="hostly-button-primary inline-flex w-full items-center justify-center sm:w-auto"
+          >
+            Ir a Productos
+          </Link>
+        </div>
+      ) : null}
     </HostlySurface>
   );
 }
@@ -576,23 +810,38 @@ function UploadStep({
 type ReviewItemRowProps = {
   item: ImportedMenuItem;
   onChange: (patch: Partial<ImportedMenuItem>) => void;
+  postPublish?: MenuImportPublishItemResult | null;
 };
 
-function ReviewItemRow({ item, onChange }: ReviewItemRowProps) {
+function ReviewItemRow({ item, onChange, postPublish = null }: ReviewItemRowProps) {
   const displayConfidence = item.aiConfidence ?? item.confidence;
   const tone = confidenceTone(displayConfidence);
+  const publishState = resolveItemPublishDisplayState(item, postPublish);
 
   return (
-    <HostlySurface variant="flat" className="p-3 sm:p-4">
+    <HostlySurface
+      variant="flat"
+      className={hostlyCx(
+        "p-3 sm:p-4",
+        publishState.primaryLabel === "Publicado" &&
+          "border-emerald-200/80 bg-emerald-50/35",
+        publishState.primaryLabel === "Omitido" &&
+          "border-amber-200/80 bg-amber-50/30",
+        publishState.primaryLabel === "Error" && "border-rose-200/80 bg-rose-50/35",
+      )}
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
         <label className="flex shrink-0 items-start gap-2 pt-1">
           <input
             type="checkbox"
             checked={item.selectedForPublish}
+            disabled={publishState.locked}
             onChange={(e) => onChange({ selectedForPublish: e.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-[var(--hostly-line-strong)]"
+            className="mt-0.5 h-4 w-4 rounded border-[var(--hostly-line-strong)] disabled:opacity-50"
           />
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hostly-ink-soft)]">Publicar</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hostly-ink-soft)]">
+            {publishState.locked ? "Publicado" : "Publicar"}
+          </span>
         </label>
 
         <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -667,17 +916,17 @@ function ReviewItemRow({ item, onChange }: ReviewItemRowProps) {
               IA
             </span>
           ) : null}
-          {item.needsReview ? (
-            <span className="hostly-chip px-2 py-0.5 text-[10px]">Revisar</span>
-          ) : null}
-          {item.duplicateOf ? (
-            <span className="hostly-chip border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900">
-              Posible duplicado
+          {publishState.primaryLabel ? (
+            <span className={hostlyCx("hostly-chip", publishState.primaryTone)}>
+              {publishState.primaryLabel}
             </span>
           ) : null}
-          {item.publishStatus === "published" ? (
-            <span className="hostly-chip border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-900">
-              Publicado
+          {!publishState.suppressReviewChips && item.needsReview ? (
+            <span className="hostly-chip px-2 py-0.5 text-[10px]">Revisar</span>
+          ) : null}
+          {!publishState.suppressReviewChips && item.duplicateOf ? (
+            <span className="hostly-chip border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900">
+              Posible duplicado
             </span>
           ) : null}
           {item.publishStatus === "published" && item.publishedProductId ? (
@@ -685,13 +934,13 @@ function ReviewItemRow({ item, onChange }: ReviewItemRowProps) {
               Visible en TPV
             </span>
           ) : null}
-          {item.publishStatus === "error" ? (
-            <span className="hostly-chip border-rose-200/80 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-900">
-              Error
-            </span>
-          ) : null}
         </div>
       </div>
+      {publishState.detailMessage ? (
+        <p className="mt-2 text-[10px] font-medium text-amber-950">
+          Motivo: {publishState.detailMessage}
+        </p>
+      ) : null}
       {item.aiWarnings && item.aiWarnings.length > 0 ? (
         <ul className="mt-2 space-y-0.5 text-[10px] text-[var(--hostly-ink-soft)]">
           {item.aiWarnings.map((w) => (
@@ -713,6 +962,9 @@ type ReviewStepProps = {
   draft: ImportedMenuDraft;
   onDraftChange: (draft: ImportedMenuDraft) => void;
   onReset: () => void;
+  flowError?: string | null;
+  onReprocessDraft?: () => void;
+  reprocessing?: boolean;
   saving?: boolean;
   saveError?: string | null;
   previewLoading?: boolean;
@@ -721,6 +973,8 @@ type ReviewStepProps = {
   onPreviewPublish?: () => void;
   confirmDuplicates: Set<string>;
   onToggleConfirmDuplicate: (itemId: string, checked: boolean) => void;
+  confirmReviews: Set<string>;
+  onToggleConfirmReview: (itemId: string, checked: boolean) => void;
   publishLoading?: boolean;
   publishError?: string | null;
   publishResult?: MenuImportPublishResult | null;
@@ -741,6 +995,9 @@ function ReviewStep({
   draft,
   onDraftChange,
   onReset,
+  flowError,
+  onReprocessDraft,
+  reprocessing = false,
   saving,
   saveError,
   previewLoading,
@@ -749,6 +1006,8 @@ function ReviewStep({
   onPreviewPublish,
   confirmDuplicates,
   onToggleConfirmDuplicate,
+  confirmReviews,
+  onToggleConfirmReview,
   publishLoading,
   publishError,
   publishResult,
@@ -767,9 +1026,25 @@ function ReviewStep({
   const items = useMemo(() => flattenItems(draft.sections), [draft.sections]);
   const selectedCount = items.filter((i) => i.selectedForPublish).length;
   const reviewCount = items.filter((i) => i.needsReview).length;
-  const isAnalyzing = draft.status === "analyzing";
-  const isFailed = draft.status === "failed";
-  const showReviewContent = !isAnalyzing && !isFailed;
+  const publishedCount = items.filter((i) => i.publishStatus === "published").length;
+  const notPublishedCount = Math.max(0, items.length - publishedCount);
+  const previewBlockedItemIds = useMemo(
+    () => new Set(preview?.blockedItems.map((entry) => entry.itemId) ?? []),
+    [preview?.blockedItems],
+  );
+  const postPublishByItemId = useMemo(
+    () => (publishResult ? buildPostPublishByItemId(publishResult) : new Map<string, MenuImportPublishItemResult>()),
+    [publishResult],
+  );
+  const isAnalyzing = draft.status === "analyzing" || reprocessing;
+  const isFailed = draft.status === "failed" && !reprocessing;
+  const isEmpty = items.length === 0;
+  const isUnprocessedEmpty =
+    isEmpty && (draft.status === "draft" || draft.status === "ready" || draft.status === "failed");
+  const canPublish =
+    (draft.status === "ready" || draft.status === "partially_published") && items.length > 0;
+  const showProductList = !isAnalyzing && !isFailed && !isUnprocessedEmpty && items.length > 0;
+  const showPublishControls = canPublish && !isAnalyzing;
 
   const patchItem = useCallback(
     (itemId: string, patch: Partial<ImportedMenuItem>) => {
@@ -794,6 +1069,27 @@ function ReviewStep({
         </div>
       </HostlySectionHeader>
 
+      {flowError ? (
+        <HostlySurface variant="flat" className="border-amber-200/90 bg-amber-50/90 p-4">
+          <p className="text-sm font-medium text-amber-950">{flowError}</p>
+        </HostlySurface>
+      ) : null}
+
+      {draft.status === "published" || draft.status === "partially_published" ? (
+        <HostlySurface variant="flat" className="border-violet-200/80 bg-violet-50/70 p-4">
+          <p className="text-sm font-semibold text-violet-950">
+            {draft.status === "published" ? "Borrador publicado" : "Publicación parcial"}
+          </p>
+          <p className="mt-1 text-xs text-violet-900/90">
+            {publishedCount} de {items.length} producto{items.length === 1 ? "" : "s"} ya publicado
+            {publishedCount === 1 ? "" : "s"} en Productos.
+            {draft.status === "partially_published"
+              ? " Revisa los pendientes antes de volver a publicar."
+              : ""}
+          </p>
+        </HostlySurface>
+      ) : null}
+
       {isAnalyzing ? (
         <HostlySurface variant="ice" className="p-4 sm:p-5">
           <p className="text-sm font-semibold text-[var(--hostly-navy-deep)]">Analizando carta…</p>
@@ -807,6 +1103,38 @@ function ReviewStep({
         <HostlySurface variant="flat" className="border-rose-200/90 bg-rose-50/90 p-4">
           <p className="text-sm font-semibold text-rose-950">Error en el análisis</p>
           <p className="mt-1 text-xs text-rose-800">{draft.errorMessage ?? "No se pudo completar el análisis."}</p>
+          {onReprocessDraft ? (
+            <button
+              type="button"
+              className="hostly-button-primary mt-3"
+              disabled={reprocessing}
+              onClick={() => onReprocessDraft()}
+            >
+              {reprocessing ? "Analizando…" : "Volver a analizar este borrador"}
+            </button>
+          ) : null}
+        </HostlySurface>
+      ) : null}
+
+      {isUnprocessedEmpty && !isAnalyzing && !isFailed ? (
+        <HostlySurface variant="ice" className="p-4 sm:p-5">
+          <p className="text-sm font-semibold text-[var(--hostly-navy-deep)]">Sin productos detectados</p>
+          <p className="mt-1 text-xs text-[var(--hostly-ink-muted)]">
+            {draft.status === "draft"
+              ? "Este borrador tiene archivo guardado pero aún no se ha analizado, o el análisis no guardó productos."
+              : "El análisis no generó productos en este borrador."}
+            {draft.sourceLabel ? ` Origen: ${draft.sourceLabel}.` : ""}
+          </p>
+          {onReprocessDraft ? (
+            <button
+              type="button"
+              className="hostly-button-primary mt-3"
+              disabled={reprocessing}
+              onClick={() => onReprocessDraft()}
+            >
+              {reprocessing ? "Analizando…" : "Analizar este borrador"}
+            </button>
+          ) : null}
         </HostlySurface>
       ) : null}
 
@@ -816,7 +1144,7 @@ function ReviewStep({
         </HostlySurface>
       ) : null}
 
-      {showReviewContent && draft.aiWarnings && draft.aiWarnings.length > 0 ? (
+      {showProductList && draft.aiWarnings && draft.aiWarnings.length > 0 ? (
         <HostlySurface variant="flat" className="border-violet-200/80 bg-violet-50/70 p-3">
           <p className="text-[11px] font-semibold text-violet-950">Avisos IA</p>
           <ul className="mt-1 space-y-0.5 text-[10px] text-violet-900/90">
@@ -827,18 +1155,34 @@ function ReviewStep({
         </HostlySurface>
       ) : null}
 
-      {showReviewContent ? (
+      {showProductList ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <HostlyKpiCard title="Productos detectados" value={items.length} variant="ice" />
-            <HostlyKpiCard title="Marcados para publicar" value={selectedCount} variant="soft" />
-            <HostlyKpiCard title="Necesitan revisión" value={reviewCount} variant="flat" accentColor="rgba(180, 120, 40, 0.55)" />
-            <HostlyKpiCard
-              title="Tipo de carta"
-              value={IMPORTED_MENU_CARTA_TYPE_LABELS[draft.cartaType]}
-              helper={draft.sourceLabel ? `Origen: ${draft.sourceLabel}` : undefined}
-              variant="ice"
-            />
+            {publishResult || publishedCount > 0 ? (
+              <>
+                <HostlyKpiCard title="Publicados" value={publishedCount} variant="ice" />
+                <HostlyKpiCard title="No publicados" value={notPublishedCount} variant="flat" accentColor="rgba(180, 120, 40, 0.55)" />
+                <HostlyKpiCard title="Detectados" value={items.length} variant="soft" />
+                <HostlyKpiCard
+                  title="Tipo de carta"
+                  value={IMPORTED_MENU_CARTA_TYPE_LABELS[draft.cartaType]}
+                  helper={draft.sourceLabel ? `Origen: ${draft.sourceLabel}` : undefined}
+                  variant="ice"
+                />
+              </>
+            ) : (
+              <>
+                <HostlyKpiCard title="Productos detectados" value={items.length} variant="ice" />
+                <HostlyKpiCard title="Marcados para publicar" value={selectedCount} variant="soft" />
+                <HostlyKpiCard title="Necesitan revisión" value={reviewCount} variant="flat" accentColor="rgba(180, 120, 40, 0.55)" />
+                <HostlyKpiCard
+                  title="Tipo de carta"
+                  value={IMPORTED_MENU_CARTA_TYPE_LABELS[draft.cartaType]}
+                  helper={draft.sourceLabel ? `Origen: ${draft.sourceLabel}` : undefined}
+                  variant="ice"
+                />
+              </>
+            )}
           </div>
 
           {draft.sections.map((section) => (
@@ -846,7 +1190,12 @@ function ReviewStep({
               <HostlySectionHeader title={section.name} titleVariant="section" description={`${section.items.length} productos`} />
               <div className="grid gap-2">
                 {section.items.map((item) => (
-                  <ReviewItemRow key={item.id} item={item} onChange={(patch) => patchItem(item.id, patch)} />
+                  <ReviewItemRow
+                    key={item.id}
+                    item={item}
+                    postPublish={postPublishByItemId.get(item.id) ?? null}
+                    onChange={(patch) => patchItem(item.id, patch)}
+                  />
                 ))}
               </div>
             </HostlySection>
@@ -862,7 +1211,7 @@ function ReviewStep({
             <button
               type="button"
               className="hostly-button-primary w-full sm:w-auto"
-              disabled={selectedCount === 0 || previewLoading || saving}
+              disabled={selectedCount === 0 || previewLoading || saving || !showPublishControls}
               onClick={() => onPreviewPublish?.()}
             >
               {previewLoading ? "Generando preview…" : "Previsualizar publicación"}
@@ -875,55 +1224,62 @@ function ReviewStep({
             </HostlySurface>
           ) : null}
 
-          {preview && !categoryWizardDismissed && preview.missingCategories.length > 0 ? (
-            <MissingCategoriesWizard
-              missingCategories={preview.missingCategories}
-              rows={categoryRows}
-              onRowChange={onCategoryRowChange}
-              onCreate={() => onCreateCategories?.()}
-              onDismiss={() => onDismissCategoryWizard?.()}
-              loading={createCategoriesLoading}
-              error={createCategoriesError}
-              lastResult={createCategoriesResult}
-              categoryOutcomes={categoryOutcomes}
-            />
-          ) : null}
+          {showPublishControls ? (
+            <>
+              {preview && !categoryWizardDismissed && preview.missingCategories.length > 0 ? (
+                <MissingCategoriesWizard
+                  missingCategories={preview.missingCategories}
+                  rows={categoryRows}
+                  onRowChange={onCategoryRowChange}
+                  onCreate={() => onCreateCategories?.()}
+                  onDismiss={() => onDismissCategoryWizard?.()}
+                  loading={createCategoriesLoading}
+                  error={createCategoriesError}
+                  lastResult={createCategoriesResult}
+                  categoryOutcomes={categoryOutcomes}
+                />
+              ) : null}
 
-          {preview ? (
-            <PublishPreviewPanel
-              preview={preview}
-              confirmDuplicates={confirmDuplicates}
-              onToggleConfirmDuplicate={onToggleConfirmDuplicate}
-              categoryOutcomes={categoryOutcomes}
-            />
-          ) : null}
+              {preview ? (
+                <PublishPreviewPanel
+                  preview={preview}
+                  confirmDuplicates={confirmDuplicates}
+                  onToggleConfirmDuplicate={onToggleConfirmDuplicate}
+                  confirmReviews={confirmReviews}
+                  onToggleConfirmReview={onToggleConfirmReview}
+                  categoryOutcomes={categoryOutcomes}
+                  blockedItemIds={previewBlockedItemIds}
+                />
+              ) : null}
 
-          {preview ? (
-            <HostlySurface variant="flat" className="flex flex-col gap-3 border-emerald-200/70 bg-emerald-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-emerald-950">Publicar en Productos</p>
-                <p className="mt-0.5 text-xs text-emerald-900/80">
-                  {publishableCount} producto{publishableCount === 1 ? "" : "s"} listo{publishableCount === 1 ? "" : "s"} tras revalidación server-side.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="hostly-button-primary w-full sm:w-auto"
-                disabled={publishableCount === 0 || publishLoading || saving || previewLoading}
-                onClick={() => onPublishConfirmed?.()}
-              >
-                {publishLoading ? "Publicando…" : "Publicar confirmados"}
-              </button>
-            </HostlySurface>
-          ) : null}
+              {preview ? (
+                <HostlySurface variant="flat" className="flex flex-col gap-3 border-emerald-200/70 bg-emerald-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-950">Publicar en Productos</p>
+                    <p className="mt-0.5 text-xs text-emerald-900/80">
+                      {publishableCount} producto{publishableCount === 1 ? "" : "s"} listo{publishableCount === 1 ? "" : "s"} tras revalidación server-side.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="hostly-button-primary w-full sm:w-auto"
+                    disabled={publishableCount === 0 || publishLoading || saving || previewLoading}
+                    onClick={() => onPublishConfirmed?.()}
+                  >
+                    {publishLoading ? "Publicando…" : "Publicar confirmados"}
+                  </button>
+                </HostlySurface>
+              ) : null}
 
-          {publishError ? (
-            <HostlySurface variant="flat" className="border-rose-200/90 bg-rose-50/90 p-4">
-              <p className="text-xs text-rose-950">{publishError}</p>
-            </HostlySurface>
-          ) : null}
+              {publishError ? (
+                <HostlySurface variant="flat" className="border-rose-200/90 bg-rose-50/90 p-4">
+                  <p className="text-xs text-rose-950">{publishError}</p>
+                </HostlySurface>
+              ) : null}
 
-          {publishResult ? <PublishResultPanel result={publishResult} /> : null}
+              {publishResult ? <PublishResultPanel result={publishResult} /> : null}
+            </>
+          ) : null}
         </>
       ) : null}
     </HostlySection>
@@ -937,7 +1293,34 @@ type AuthScope = {
   error: string | null;
 };
 
+function menuImportDraftHasItems(doc: MenuImportDraftDocument): boolean {
+  if (Array.isArray(doc.items) && doc.items.length > 0) return true;
+  const uiDraft = menuImportDocToUiDraft(doc);
+  return flattenSectionsToItems(uiDraft.sections).length > 0;
+}
+
+function resolveMenuImportDraftOpenStep(_doc: MenuImportDraftDocument): "upload" | "review" {
+  return "review";
+}
+
+function resolveMenuImportDraftOpenMessage(doc: MenuImportDraftDocument): string | null {
+  if (!menuImportDraftHasItems(doc)) {
+    if (doc.status === "draft") {
+      return "Este borrador aún no tiene productos detectados. Vuelve a analizarlo o sube la carta de nuevo.";
+    }
+    if (doc.status === "ready") {
+      return "El análisis terminó sin productos detectados. Prueba con otra imagen o revisa el archivo subido.";
+    }
+  }
+  return null;
+}
+
 export function ImportMenuPageContent() {
+  const { user, restaurantId: profileRestaurantId, ready: authReady } = useAuth();
+  const operationalRestaurantId = useMemo(
+    () => resolveOperationalRestaurantId(profileRestaurantId),
+    [profileRestaurantId],
+  );
   const [step, setStep] = useState<"upload" | "review">("upload");
   const [inputMethod, setInputMethod] = useState<InputMethod>("image");
   const [cartaType, setCartaType] = useState<ImportedMenuCartaType>("mixta");
@@ -955,6 +1338,7 @@ export function ImportMenuPageContent() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [confirmDuplicates, setConfirmDuplicates] = useState<Set<string>>(new Set());
+  const [confirmReviews, setConfirmReviews] = useState<Set<string>>(new Set());
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<MenuImportPublishResult | null>(null);
@@ -965,6 +1349,8 @@ export function ImportMenuPageContent() {
   const [createCategoriesResult, setCreateCategoriesResult] = useState<CreateMenuImportCategoriesResult | null>(null);
   const [categoryOutcomes, setCategoryOutcomes] = useState<CategoryOutcomeMap>({});
   const [saving, setSaving] = useState(false);
+  const [openingDraft, setOpeningDraft] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
   const [scope, setScope] = useState<AuthScope>({
     userId: null,
     restaurantId: null,
@@ -1074,46 +1460,36 @@ export function ImportMenuPageContent() {
     inputMethod === "qr_url" ? qrUrl.trim().length > 6 : selectedFile != null;
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      void (async () => {
-        if (!user) {
-          setScope({
-            userId: null,
-            restaurantId: null,
-            loading: false,
-            error: "Inicia sesión para importar cartas y guardar borradores.",
-          });
-          return;
-        }
-        try {
-          const ctx = await loadUserRestaurantContext(user.uid);
-          if (!ctx.restaurantId?.trim()) {
-            setScope({
-              userId: user.uid,
-              restaurantId: null,
-              loading: false,
-              error: "Tu usuario no tiene restaurante asignado. Contacta con el administrador.",
-            });
-            return;
-          }
-          setScope({
-            userId: user.uid,
-            restaurantId: ctx.restaurantId.trim(),
-            loading: false,
-            error: null,
-          });
-        } catch {
-          setScope({
-            userId: user.uid,
-            restaurantId: null,
-            loading: false,
-            error: "No se pudo cargar el restaurante de tu sesión.",
-          });
-        }
-      })();
+    if (!authReady) {
+      setScope((prev) => ({ ...prev, loading: true }));
+      return;
+    }
+    if (!user?.uid) {
+      setScope({
+        userId: null,
+        restaurantId: null,
+        loading: false,
+        error: "Inicia sesión para importar cartas y guardar borradores.",
+      });
+      return;
+    }
+    const rid = operationalRestaurantId.trim();
+    if (!rid) {
+      setScope({
+        userId: user.uid,
+        restaurantId: null,
+        loading: false,
+        error: "Tu usuario no tiene restaurante asignado. Contacta con el administrador.",
+      });
+      return;
+    }
+    setScope({
+      userId: user.uid,
+      restaurantId: rid,
+      loading: false,
+      error: null,
     });
-    return () => unsub();
-  }, []);
+  }, [authReady, operationalRestaurantId, user?.uid]);
 
   useEffect(() => {
     if (!scope.restaurantId) {
@@ -1135,25 +1511,95 @@ export function ImportMenuPageContent() {
     return () => unsub();
   }, [scope.restaurantId]);
 
+  useEffect(() => {
+    if (!scope.restaurantId || recentLoading) return;
+    let cancelled = false;
+    void (async () => {
+      let centralProductCount: number | null = null;
+      let centralFetchError: string | null = null;
+      try {
+        const { docs, error } = await fetchCentralProductsOnce(scope.restaurantId!);
+        if (!cancelled) {
+          centralProductCount = docs.length;
+          if (error) centralFetchError = error;
+        }
+      } catch (e) {
+        if (!cancelled) {
+          centralFetchError = e instanceof Error ? e.message : "No se pudo leer Productos.";
+        }
+      }
+      if (!cancelled) {
+        logMenuImportDevAudit({
+          restaurantId: scope.restaurantId!,
+          drafts: recentDrafts,
+          centralProductCount,
+          centralFetchError,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [recentDrafts, recentLoading, scope.restaurantId]);
+
   const persistDraft = useCallback(
-    async (nextDraft: ImportedMenuDraft) => {
-      if (!scope.userId || !scope.restaurantId || !nextDraft.id) return;
-      if (nextDraft.status !== "ready") return;
+    async (nextDraft: ImportedMenuDraft): Promise<boolean> => {
+      if (!scope.userId || !scope.restaurantId || !nextDraft.id) {
+        logMenuImportDraftSaveError({
+          phase: "persistDraft",
+          reason: "precheck_failed",
+          restaurantId: scope.restaurantId,
+          draftId: nextDraft.id,
+          userId: scope.userId,
+          payload: {
+            hasUserId: Boolean(scope.userId),
+            hasRestaurantId: Boolean(scope.restaurantId),
+            hasDraftId: Boolean(nextDraft.id),
+            draftStatus: nextDraft.status,
+          },
+        });
+        return false;
+      }
+      if (nextDraft.status !== "ready") return true;
+      const savePayload = {
+        sections: nextDraft.sections,
+        items: flattenSectionsToItems(nextDraft.sections),
+        updatedBy: scope.userId,
+      };
       setSaving(true);
       setSaveError(null);
       try {
-        await updateMenuImportDraft(scope.restaurantId, nextDraft.id, {
-          sections: nextDraft.sections,
-          items: flattenSectionsToItems(nextDraft.sections),
-          updatedBy: scope.userId,
-        });
+        await updateMenuImportDraft(scope.restaurantId, nextDraft.id, savePayload);
+        return true;
       } catch (e) {
+        logMenuImportDraftSaveError({
+          phase: "persistDraft",
+          reason: "updateMenuImportDraft_threw",
+          error: e,
+          restaurantId: scope.restaurantId,
+          draftId: nextDraft.id,
+          userId: scope.userId,
+          payload: summarizeMenuImportDraftSavePayload(savePayload),
+        });
         setSaveError(e instanceof Error ? e.message : "No se pudo guardar el borrador.");
+        return false;
       } finally {
         setSaving(false);
       }
     },
     [scope.restaurantId, scope.userId],
+  );
+
+  const flushPersistDraft = useCallback(
+    async (nextDraft: ImportedMenuDraft | null): Promise<boolean> => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+      if (!nextDraft) return false;
+      return persistDraft(nextDraft);
+    },
+    [persistDraft],
   );
 
   const handleDraftChange = useCallback(
@@ -1162,6 +1608,7 @@ export function ImportMenuPageContent() {
       setPreview(null);
       setPreviewError(null);
       setConfirmDuplicates(new Set());
+      setConfirmReviews(new Set());
       setPublishResult(null);
       setPublishError(null);
       if (skipNextPersistRef.current) {
@@ -1185,33 +1632,123 @@ export function ImportMenuPageContent() {
 
   const handleOpenDraft = useCallback(
     async (draftId: string) => {
-      if (!scope.restaurantId) return;
+      if (!scope.restaurantId) {
+        setFlowError(
+          scope.error ??
+            "No hay restaurante asignado. Inicia sesión o contacta con el administrador.",
+        );
+        return;
+      }
+      setOpeningDraft(true);
       setFlowError(null);
       setSaveError(null);
+      setPreview(null);
+      setPreviewError(null);
+      setPreviewLoading(false);
+      setConfirmDuplicates(new Set());
+      setConfirmReviews(new Set());
+      setPublishResult(null);
+      setPublishError(null);
+      setPublishLoading(false);
+      setCreateCategoriesResult(null);
+      setCreateCategoriesError(null);
+      setCategoryOutcomes({});
+      setCategoryWizardDismissed(false);
+      setCategoryRows([]);
       try {
         const doc = await getMenuImportDraft(scope.restaurantId, draftId);
         if (!doc) {
           setFlowError("Borrador no encontrado o sin permisos.");
+          setStep("review");
+          setDraft(null);
+          setActiveDraftId(draftId);
           return;
         }
         skipNextPersistRef.current = true;
         const uiDraft = menuImportDocToUiDraft(doc);
         setDraft(uiDraft);
         setActiveDraftId(draftId);
-        setStep(doc.status === "draft" ? "upload" : "review");
+        setStep(resolveMenuImportDraftOpenStep(doc));
+        const openMessage = resolveMenuImportDraftOpenMessage(doc);
+        if (openMessage) setFlowError(openMessage);
       } catch (e) {
         setFlowError(e instanceof Error ? e.message : "No se pudo abrir el borrador.");
+        setStep("review");
+      } finally {
+        setOpeningDraft(false);
       }
     },
-    [scope.restaurantId],
+    [scope.error, scope.restaurantId],
   );
+
+  const handleReprocessDraft = useCallback(async () => {
+    if (!activeDraftId || reprocessing || !scope.restaurantId) return;
+    setReprocessing(true);
+    setFlowError(null);
+    setSaveError(null);
+    setPreview(null);
+    setPreviewError(null);
+    setPublishResult(null);
+    setPublishError(null);
+    skipNextPersistRef.current = true;
+    setDraft((prev) =>
+      prev
+        ? { ...prev, status: "analyzing", sections: [], errorMessage: undefined }
+        : {
+            id: activeDraftId,
+            createdAt: new Date().toISOString(),
+            sourceType: "image",
+            cartaType: "mixta",
+            sections: [],
+            status: "analyzing",
+          },
+    );
+    setStep("review");
+    try {
+      const processResult = await requestMenuImportProcess(activeDraftId);
+      if (!processResult.ok) {
+        const detail = processResult.details ?? processResult.error;
+        throw new Error(
+          processResult.httpStatus === 409
+            ? "El borrador ya se está procesando. Espera unos segundos e inténtalo de nuevo."
+            : detail,
+        );
+      }
+      const persisted = await getMenuImportDraft(scope.restaurantId, activeDraftId);
+      if (!persisted) {
+        throw new Error("El borrador se procesó pero no se pudo recargar.");
+      }
+      skipNextPersistRef.current = true;
+      setDraft(menuImportDocToUiDraft(persisted));
+      const openMessage = resolveMenuImportDraftOpenMessage(persisted);
+      if (openMessage) setFlowError(openMessage);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Error al analizar la carta.";
+      setFlowError(message);
+      try {
+        const failedDoc = await getMenuImportDraft(scope.restaurantId, activeDraftId);
+        if (failedDoc) {
+          skipNextPersistRef.current = true;
+          setDraft(menuImportDocToUiDraft(failedDoc));
+        }
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      setReprocessing(false);
+    }
+  }, [activeDraftId, reprocessing, scope.restaurantId]);
 
   useEffect(() => {
     if (!activeDraftId || step !== "review" || !scope.restaurantId) return;
     const summary = recentDrafts.find((d) => d.id === activeDraftId);
     if (!summary) return;
     if (
-      (summary.status === "ready" || summary.status === "failed") &&
+      (summary.status === "ready" ||
+        summary.status === "failed" ||
+        summary.status === "analyzing" ||
+        summary.status === "partially_published" ||
+        summary.status === "published") &&
       draft?.status !== summary.status
     ) {
       void (async () => {
@@ -1344,6 +1881,7 @@ export function ImportMenuPageContent() {
     setPreviewError(null);
     setPreviewLoading(false);
     setConfirmDuplicates(new Set());
+    setConfirmReviews(new Set());
     setPublishResult(null);
     setPublishError(null);
     setPublishLoading(false);
@@ -1354,14 +1892,17 @@ export function ImportMenuPageContent() {
     setCategoryRows([]);
   }, []);
 
+  const previewBlockedItemIds = useMemo(
+    () => new Set(preview?.blockedItems.map((item) => item.itemId) ?? []),
+    [preview?.blockedItems],
+  );
+
   const publishableCount = useMemo(() => {
     if (!preview) return 0;
-    return preview.createProducts.filter(
-      (row) =>
-        row.action === "create" ||
-        (row.action === "possible_duplicate" && confirmDuplicates.has(row.itemId)),
+    return preview.createProducts.filter((row) =>
+      isPreviewRowPublishable(row, confirmDuplicates, confirmReviews, previewBlockedItemIds),
     ).length;
-  }, [preview, confirmDuplicates]);
+  }, [preview, confirmDuplicates, confirmReviews, previewBlockedItemIds]);
 
   const handleToggleConfirmDuplicate = useCallback((itemId: string, checked: boolean) => {
     setConfirmDuplicates((prev) => {
@@ -1372,18 +1913,36 @@ export function ImportMenuPageContent() {
     });
   }, []);
 
+  const handleToggleConfirmReview = useCallback((itemId: string, checked: boolean) => {
+    setConfirmReviews((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(itemId);
+      else next.delete(itemId);
+      return next;
+    });
+  }, []);
+
   const handlePreviewPublish = useCallback(async () => {
-    if (!activeDraftId || previewLoading) return;
+    if (!activeDraftId || previewLoading || !draft) return;
     setPreviewLoading(true);
     setPreviewError(null);
     setPublishResult(null);
     setPublishError(null);
     setConfirmDuplicates(new Set());
+    setConfirmReviews(new Set());
     setCreateCategoriesResult(null);
     setCreateCategoriesError(null);
     setCategoryOutcomes({});
     setCategoryWizardDismissed(false);
     try {
+      const persisted = await flushPersistDraft(draft);
+      if (!persisted) {
+        setPreview(null);
+        setPreviewError(
+          "No se pudo guardar el borrador antes de previsualizar. Revisa los cambios e inténtalo de nuevo.",
+        );
+        return;
+      }
       const ok = await runPreview(activeDraftId);
       if (!ok) setPreview(null);
     } catch {
@@ -1392,7 +1951,7 @@ export function ImportMenuPageContent() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [activeDraftId, previewLoading, runPreview]);
+  }, [activeDraftId, draft, flushPersistDraft, previewLoading, runPreview]);
 
   const handlePublishConfirmed = useCallback(async () => {
     if (!activeDraftId || !preview || publishLoading || publishableCount === 0) return;
@@ -1404,6 +1963,7 @@ export function ImportMenuPageContent() {
     try {
       const result = await requestMenuImportPublish(activeDraftId, {
         confirmDuplicates: [...confirmDuplicates],
+        confirmReviews: [...confirmReviews],
       });
       if (!result.ok) {
         setPublishError(result.details ?? result.error);
@@ -1426,6 +1986,7 @@ export function ImportMenuPageContent() {
   }, [
     activeDraftId,
     confirmDuplicates,
+    confirmReviews,
     preview,
     publishLoading,
     publishableCount,
@@ -1456,6 +2017,9 @@ export function ImportMenuPageContent() {
         draft={draft}
         onDraftChange={handleDraftChange}
         onReset={handleReset}
+        flowError={flowError}
+        onReprocessDraft={() => void handleReprocessDraft()}
+        reprocessing={reprocessing}
         saving={saving}
         saveError={saveError}
         preview={preview}
@@ -1464,6 +2028,8 @@ export function ImportMenuPageContent() {
         onPreviewPublish={() => void handlePreviewPublish()}
         confirmDuplicates={confirmDuplicates}
         onToggleConfirmDuplicate={handleToggleConfirmDuplicate}
+        confirmReviews={confirmReviews}
+        onToggleConfirmReview={handleToggleConfirmReview}
         publishLoading={publishLoading}
         publishError={publishError}
         publishResult={publishResult}
@@ -1479,7 +2045,20 @@ export function ImportMenuPageContent() {
         createCategoriesResult={createCategoriesResult}
         categoryOutcomes={categoryOutcomes}
       />
-    ) : null;
+    ) : (
+      <HostlySection stack="md">
+        <HostlySectionHeader
+          title="Revisión del borrador"
+          titleVariant="section"
+          description={openingDraft ? "Cargando borrador…" : "Selecciona un borrador de la lista o sube una carta nueva."}
+        />
+        {flowError ? (
+          <HostlySurface variant="flat" className="border-amber-200/90 bg-amber-50/90 p-4">
+            <p className="text-sm font-medium text-amber-950">{flowError}</p>
+          </HostlySurface>
+        ) : null}
+      </HostlySection>
+    );
 
   return (
     <ConfigCartaWorkbench

@@ -133,9 +133,10 @@ export function LegacyPlatosArchivePanel({
         <div style={{ minWidth: 0 }}>
           <strong style={{ fontWeight: 700 }}>Catálogo local antiguo detectado</strong>
           <p style={{ margin: "4px 0 0", opacity: 0.9, fontSize: 11 }}>
-            Este navegador conserva {legacyCount} plato{legacyCount === 1 ? "" : "s"} en{" "}
+            Hay {legacyCount} producto{legacyCount === 1 ? "" : "s"} antiguo{legacyCount === 1 ? "" : "s"} pendiente
+            {legacyCount === 1 ? "" : "s"} de migrar en{" "}
             <code style={{ fontSize: 10 }}>hostly.platos.v1</code>. Ya usas catálogo central;
-            puedes archivar la copia local antigua de forma segura.
+            revísalos antes de limpiar datos o archiva la copia local de forma segura.
           </p>
         </div>
         <button

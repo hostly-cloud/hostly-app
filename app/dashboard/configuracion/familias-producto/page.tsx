@@ -228,9 +228,7 @@ export default function ConfigFamiliasProductoPage() {
           Familias de producto
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          Agrupa categorías como bebidas, comida u otros para ordenar inventario,
-          carta y análisis. Las categorías y productos se enlazarán en la siguiente
-          fase.
+          Las familias de producto agrupan a nivel interno (filtros, informes e inventario). Se asignan en Categorías y se heredan en cada producto.
         </p>
       </header>
 
@@ -247,7 +245,7 @@ export default function ConfigFamiliasProductoPage() {
         ) : null}
 
         <ConfigCard>
-          <h2 className="text-sm font-semibold text-slate-900">Nueva familia</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Nueva familia de producto</h2>
           <p className="mt-1 text-xs text-slate-500">
             Ej.: Cócteles, Cafés, Tapas, Menú del día.
           </p>
@@ -262,7 +260,7 @@ export default function ConfigFamiliasProductoPage() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-slate-600">Tipo</span>
+              <span className="text-xs font-medium text-slate-600">Clasificación</span>
               <select
                 className={`${inputClass} mt-1`}
                 value={newType}
@@ -276,6 +274,9 @@ export default function ConfigFamiliasProductoPage() {
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Comida, bebida u otros. Alimenta filtros como Comida / Bebida en Productos.
+              </p>
             </label>
             <ConfigBtnPrimary
               type="button"
@@ -325,7 +326,7 @@ export default function ConfigFamiliasProductoPage() {
                         </label>
                         <label className="block">
                           <span className="text-xs font-medium text-slate-600">
-                            Tipo
+                            Clasificación
                           </span>
                           <select
                             className={`${inputClass} mt-1`}

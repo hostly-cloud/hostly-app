@@ -63,6 +63,37 @@ export const MENU_IMPORT_STATUS_LABELS: Record<MenuImportDraftStatus, string> = 
   published: "Publicado",
 };
 
+/** Texto corto para la lista lateral de borradores. */
+export function menuImportDraftListHint(summary: MenuImportDraftSummary): string {
+  const count = summary.itemsCount;
+  if (summary.status === "analyzing") return "Analizando carta…";
+  if (summary.status === "failed") {
+    return summary.errorMessage?.trim()
+      ? summary.errorMessage.trim().slice(0, 120)
+      : "Error en el análisis. Abre para ver detalle.";
+  }
+  if (summary.status === "published") {
+    return count > 0
+      ? `${count} producto${count === 1 ? "" : "s"} · publicado`
+      : "Publicado sin productos en borrador";
+  }
+  if (summary.status === "partially_published") {
+    const pub = summary.publishedItemsCount ?? 0;
+    return count > 0
+      ? `${pub}/${count} publicado${pub === 1 ? "" : "s"} · revisar pendientes`
+      : "Publicación parcial";
+  }
+  if (summary.status === "ready") {
+    return count > 0
+      ? `${count} producto${count === 1 ? "" : "s"} listo${count === 1 ? "" : "s"} para revisar`
+      : "Listo pero sin productos detectados";
+  }
+  if (count > 0) {
+    return `${count} producto${count === 1 ? "" : "s"} detectado${count === 1 ? "" : "s"}`;
+  }
+  return "Sin analizar · abre para analizar o subir de nuevo";
+}
+
 export function menuImportSummaryLabel(summary: MenuImportDraftSummary): string {
   if (summary.originalFileName?.trim()) return summary.originalFileName.trim();
   if (summary.sourceType === "qr_url" && summary.sourceUrl?.trim()) {

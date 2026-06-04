@@ -6,19 +6,22 @@ import {
   doc,
   getDoc,
   updateDoc,
+  writeBatch,
   type DocumentData,
 } from "firebase/firestore";
+import type { ProductCatalogCourse } from "@/lib/carta/menu-course";
+import { buildProductStationPatchFromOperationStationType } from "@/lib/operacion/product-operation-station";
+import {
+  DEFAULT_OPERATION_STATION_SPECS,
+  type OperationStationType,
+} from "@/lib/operacion/operation-station-types";
 import { normalizeProductName } from "@/lib/carta/duplicate-detection";
 import { normalizeOperationalStationSelection } from "@/lib/carta/operational-station-options";
-import {
-  buildProductStationPatchFromOperationStationType,
-} from "@/lib/operacion/product-operation-station";
 import {
   productFamilyFieldsToFirestorePatch,
   type ProductFamilyDenormFields,
 } from "@/lib/carta/product-category-family-resolver";
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
-import type { OperationStationType } from "@/lib/operacion/operation-station-types";
 import { auth, db } from "@/lib/firebase/client";
 import {
   defaultInventory,
@@ -31,7 +34,7 @@ export type CentralOperationalProductInput = {
   categoryId?: string | null;
   categoryName: string;
   price: number;
-  /** Legacy: área de preparación en texto; omitir si se envía estación operativa. */
+  /** Legacy: ?rea de preparaci?n en texto; omitir si se env?a estaci?n operativa. */
   preparationArea?: string;
   operationStationId?: string | null;
   operationStationName?: string | null;
@@ -43,6 +46,8 @@ export type CentralOperationalProductInput = {
   active?: boolean;
   visibleOnMenu?: boolean;
   description?: string;
+  /** Pase por defecto TPV: null = sin pase; 1?4 = Entrante?Postre. */
+  course?: number | null;
 };
 
 export type CentralProductPublicationPatch = {
@@ -65,7 +70,7 @@ export type CentralProductRecipeInput = {
 
 function requireAuthUid(): string {
   const uid = auth.currentUser?.uid?.trim();
-  if (!uid) throw new Error("UNAUTHORIZED: inicia sesión para guardar en el catálogo central");
+  if (!uid) throw new Error("UNAUTHORIZED: inicia sesi?n para guardar en el cat?logo central");
   return uid;
 }
 
@@ -166,6 +171,7 @@ function buildOperationalPatch(
     updatedAt: now,
     updatedBy: userId,
     ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+    ...(input.course !== undefined ? { course: input.course } : {}),
   };
 }
 
@@ -219,18 +225,21 @@ function buildPartialOperationalPatch(
     const d = input.description.trim();
     if (d) patch.description = d;
   }
+  if (input.course !== undefined) {
+    patch.course = input.course;
+  }
   return patch;
 }
 
 export function formatCentralCatalogWriteError(error: unknown): string {
   if (error instanceof FirebaseError) {
     if (error.code === "permission-denied") {
-      return "No tienes permiso para modificar el catálogo central.";
+      return "No tienes permiso para modificar el cat?logo central.";
     }
     return `${error.code}: ${error.message}`;
   }
   if (error instanceof Error) return error.message;
-  return "Error al guardar en el catálogo central.";
+  return "Error al guardar en el cat?logo central.";
 }
 
 /** Crea producto operativo en `restaurants/{restaurantId}/products`. */
@@ -256,7 +265,205 @@ export async function createCentralProduct(
   return ref.id;
 }
 
-/** Actualiza campos operativos sin pisar metadata de importación/migración. */
+/** Asigna el mismo pase (`course`) a varios productos del catálogo central. */
+export async function bulkUpdateCentralProductsCourse(
+  restaurantId: string,
+  productIds: readonly string[],
+  course: ProductCatalogCourse,
+): Promise<{ updated: number }> {
+  const rid = restaurantId.trim();
+  if (!rid) throw new Error("MISSING_RESTAURANT_ID");
+  const userId = requireAuthUid();
+  const now = Date.now();
+
+  const ids = [
+    ...new Set(
+      productIds.map((id) => id.trim()).filter((id) => id.length > 0),
+    ),
+  ];
+  if (ids.length === 0) return { updated: 0 };
+
+  const BATCH_SIZE = 400;
+  for (let offset = 0; offset < ids.length; offset += BATCH_SIZE) {
+    const chunk = ids.slice(offset, offset + BATCH_SIZE);
+    const batch = writeBatch(db);
+    for (const productId of chunk) {
+      batch.update(centralProductRef(rid, productId), {
+        course,
+        updatedAt: now,
+        updatedBy: userId,
+      } as DocumentData);
+    }
+    await batch.commit();
+  }
+
+  return { updated: ids.length };
+}
+
+/** Destinos KDS soportados en catálogo (misma resolución que `resolveKdsDestination`). */
+export type BulkCatalogKdsDestination = Extract<
+  OperationStationType,
+  "kitchen" | "bar" | "cocktail"
+>;
+
+function firestorePatchForBulkCatalogDestination(
+  destination: BulkCatalogKdsDestination,
+): Record<string, unknown> {
+  const spec = DEFAULT_OPERATION_STATION_SPECS.find((s) => s.type === destination);
+  if (!spec) throw new Error("INVALID_DESTINATION");
+  const patch = buildProductStationPatchFromOperationStationType(
+    spec.id,
+    spec.name,
+    spec.type,
+  );
+  return {
+    operationStationId: patch.operationStationId,
+    operationStationName: patch.operationStationName,
+    station: patch.station,
+    preparationArea: patch.preparationArea,
+  };
+}
+
+/** Asigna el mismo destino KDS a varios productos del catálogo central. */
+export async function bulkUpdateCentralProductsDestination(
+  restaurantId: string,
+  productIds: readonly string[],
+  destination: BulkCatalogKdsDestination,
+): Promise<{ updated: number }> {
+  const rid = restaurantId.trim();
+  if (!rid) throw new Error("MISSING_RESTAURANT_ID");
+  const userId = requireAuthUid();
+  const now = Date.now();
+  const stationPatch = firestorePatchForBulkCatalogDestination(destination);
+
+  const ids = [
+    ...new Set(
+      productIds.map((id) => id.trim()).filter((id) => id.length > 0),
+    ),
+  ];
+  if (ids.length === 0) return { updated: 0 };
+
+  const BATCH_SIZE = 400;
+  for (let offset = 0; offset < ids.length; offset += BATCH_SIZE) {
+    const chunk = ids.slice(offset, offset + BATCH_SIZE);
+    const batch = writeBatch(db);
+    for (const productId of chunk) {
+      batch.update(centralProductRef(rid, productId), {
+        ...stationPatch,
+        updatedAt: now,
+        updatedBy: userId,
+      } as DocumentData);
+    }
+    await batch.commit();
+  }
+
+  return { updated: ids.length };
+}
+
+/** Parche de categoría para asignación masiva (solo `categoryId` + `categoryName`). */
+export type BulkCatalogCategoryPatch = {
+  categoryId: string | null;
+  categoryName: string;
+};
+
+/** Asigna la misma categoría de carta a varios productos del catálogo central. */
+export async function bulkUpdateCentralProductsCategory(
+  restaurantId: string,
+  productIds: readonly string[],
+  category: BulkCatalogCategoryPatch,
+): Promise<{ updated: number }> {
+  const rid = restaurantId.trim();
+  if (!rid) throw new Error("MISSING_RESTAURANT_ID");
+  const userId = requireAuthUid();
+  const now = Date.now();
+
+  const categoryId = category.categoryId?.trim() || null;
+  const categoryName =
+    categoryId != null
+      ? category.categoryName.trim() || "General"
+      : category.categoryName.trim();
+
+  const ids = [
+    ...new Set(
+      productIds.map((id) => id.trim()).filter((id) => id.length > 0),
+    ),
+  ];
+  if (ids.length === 0) return { updated: 0 };
+
+  const BATCH_SIZE = 400;
+  for (let offset = 0; offset < ids.length; offset += BATCH_SIZE) {
+    const chunk = ids.slice(offset, offset + BATCH_SIZE);
+    const batch = writeBatch(db);
+    for (const productId of chunk) {
+      batch.update(centralProductRef(rid, productId), {
+        categoryId,
+        categoryName,
+        updatedAt: now,
+        updatedBy: userId,
+      } as DocumentData);
+    }
+    await batch.commit();
+  }
+
+  return { updated: ids.length };
+}
+
+/** Parche de familia de producto para asignación masiva. */
+export type BulkCatalogProductFamilyPatch =
+  | { clearProductFamily: true }
+  | {
+      productFamilyId: string;
+      productFamilyName: string;
+      productFamilyType: ProductFamilyType;
+    };
+
+/** Asigna la misma familia de producto a varios ítems del catálogo central. */
+export async function bulkUpdateCentralProductsFamily(
+  restaurantId: string,
+  productIds: readonly string[],
+  family: BulkCatalogProductFamilyPatch,
+): Promise<{ updated: number }> {
+  const rid = restaurantId.trim();
+  if (!rid) throw new Error("MISSING_RESTAURANT_ID");
+  const userId = requireAuthUid();
+  const now = Date.now();
+
+  let familyPatch: Record<string, unknown>;
+  if ("clearProductFamily" in family) {
+    familyPatch = productFamilyFieldsToFirestorePatch({ clearProductFamily: true });
+  } else {
+    familyPatch = productFamilyFieldsToFirestorePatch({
+      productFamilyId: family.productFamilyId.trim(),
+      productFamilyName: family.productFamilyName.trim(),
+      productFamilyType: family.productFamilyType,
+    });
+  }
+
+  const ids = [
+    ...new Set(
+      productIds.map((id) => id.trim()).filter((id) => id.length > 0),
+    ),
+  ];
+  if (ids.length === 0) return { updated: 0 };
+
+  const BATCH_SIZE = 400;
+  for (let offset = 0; offset < ids.length; offset += BATCH_SIZE) {
+    const chunk = ids.slice(offset, offset + BATCH_SIZE);
+    const batch = writeBatch(db);
+    for (const productId of chunk) {
+      batch.update(centralProductRef(rid, productId), {
+        ...familyPatch,
+        updatedAt: now,
+        updatedBy: userId,
+      } as DocumentData);
+    }
+    await batch.commit();
+  }
+
+  return { updated: ids.length };
+}
+
+/** Actualiza campos operativos sin pisar metadata de importaci?n/migraci?n. */
 export async function updateCentralProduct(
   restaurantId: string,
   productId: string,
@@ -319,7 +526,7 @@ export async function disableCentralProduct(
   });
 }
 
-/** Borrado definitivo del documento en catálogo central (solo productos sin histórico). */
+/** Borrado definitivo del documento en cat?logo central (solo productos sin hist?rico). */
 export async function deleteCentralProductPermanently(
   restaurantId: string,
   productId: string,
@@ -334,7 +541,7 @@ export async function deleteCentralProductPermanently(
   await deleteDoc(ref);
 }
 
-/** Actualiza flags de publicación/venta. */
+/** Actualiza flags de publicaci?n/venta. */
 export async function setCentralProductPublication(
   restaurantId: string,
   productId: string,

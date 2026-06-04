@@ -1,7 +1,12 @@
 "use client";
 
+import {
+  lineSelectionRequiresMixerStep,
+  modifierSelectionFromLine,
+  selectionHasChosenMixer,
+  type CartOrderLineSelectedModifier,
+} from "@/lib/modifiers/cart-order-modifiers";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
-import type { CartOrderLineSelectedModifier } from "@/lib/modifiers/cart-order-modifiers";
 
 export type TpvInlineMixerGroup = {
   group: ModifierGroupDocument;
@@ -10,7 +15,11 @@ export type TpvInlineMixerGroup = {
 
 export function resolveSimpleMixerGroup(
   groups: readonly ModifierGroupDocument[],
+  selectedModifiers?: readonly CartOrderLineSelectedModifier[],
 ): TpvInlineMixerGroup | null {
+  if (!lineSelectionRequiresMixerStep(groups, selectedModifiers)) {
+    return null;
+  }
   const mixerGroup =
     groups.find((g) => g.active && g.type === "mixer") ??
     groups.find(
@@ -27,6 +36,20 @@ export function resolveSimpleMixerGroup(
   return { group: mixerGroup, options };
 }
 
+/** Comanda: selector táctil solo mientras falta elegir refresco. */
+export function lineShowsInlineMixerPicker(
+  groups: readonly ModifierGroupDocument[],
+  selectedModifiers?: readonly CartOrderLineSelectedModifier[],
+): boolean {
+  if (!lineSelectionRequiresMixerStep(groups, selectedModifiers)) {
+    return false;
+  }
+  return !selectionHasChosenMixer(
+    groups,
+    modifierSelectionFromLine(selectedModifiers),
+  );
+}
+
 type TpvInlineMixerChipsProps = {
   selectedOptionId?: string | null;
   mixer: TpvInlineMixerGroup;
@@ -40,11 +63,13 @@ export function TpvInlineMixerChips({
 }: TpvInlineMixerChipsProps) {
   return (
     <div
-      className="hostly-tpv-inline-mixer"
+      className="hostly-tpv-inline-mixer-wrap"
       onClick={(e) => {
         e.stopPropagation();
       }}
     >
+      <span className="hostly-tpv-inline-mixer-label">Refresco</span>
+      <div className="hostly-tpv-inline-mixer">
       {mixer.options.map((option) => {
         const active = selectedOptionId === option.id;
         return (
@@ -62,6 +87,7 @@ export function TpvInlineMixerChips({
           </button>
         );
       })}
+      </div>
     </div>
   );
 }

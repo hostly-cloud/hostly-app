@@ -23,6 +23,7 @@ export async function POST(req: Request) {
       draftId?: string;
       itemIds?: unknown;
       confirmDuplicates?: unknown;
+      confirmReviews?: unknown;
     } | null;
 
     if (!body || typeof body !== "object") {
@@ -31,7 +32,11 @@ export async function POST(req: Request) {
 
     const draftId = typeof body.draftId === "string" ? body.draftId.trim() : "";
     if (!draftId) {
-      return jsonError(400, "MISSING_DRAFT_ID", "Envía { draftId, itemIds?, confirmDuplicates? }");
+      return jsonError(
+        400,
+        "MISSING_DRAFT_ID",
+        "Envía { draftId, itemIds?, confirmDuplicates?, confirmReviews? }",
+      );
     }
 
     const itemIds = Array.isArray(body.itemIds)
@@ -44,6 +49,12 @@ export async function POST(req: Request) {
         )
       : undefined;
 
+    const confirmReviews = Array.isArray(body.confirmReviews)
+      ? body.confirmReviews.filter(
+          (id): id is string => typeof id === "string" && id.trim().length > 0,
+        )
+      : undefined;
+
     const result = await publishMenuImportDraft({
       db: authCtx.db,
       restaurantId: authCtx.restaurantId,
@@ -51,6 +62,7 @@ export async function POST(req: Request) {
       userId: authCtx.uid,
       itemIds,
       confirmDuplicates,
+      confirmReviews,
     });
 
     return NextResponse.json({ ok: true, result });

@@ -8,13 +8,22 @@ import { useI18n } from "@/components/i18n-provider";
 import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
 import ModulePageShell from "@/components/module-page-shell";
 import { ProductosCartaDataView } from "@/components/productos/productos-carta-data-view";
+import { ProductosBulkAssignCourseModal } from "@/components/productos/productos-bulk-assign-course-modal";
+import { ProductosBulkAssignDestinationModal } from "@/components/productos/productos-bulk-assign-destination-modal";
+import { ProductosBulkAssignCategoryModal } from "@/components/productos/productos-bulk-assign-category-modal";
+import { ProductosBulkAssignFamilyModal } from "@/components/productos/productos-bulk-assign-family-modal";
+import { ProductosBulkDeleteModal } from "@/components/productos/productos-bulk-delete-modal";
+import { ProductosSelectionBar } from "@/components/productos/productos-selection-bar";
+import { useProductosSelection } from "@/components/productos/use-productos-selection";
 import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface, hostlySegmentTabClassName, HostlySegmentedControl } from "@/components/ui/hostly";
 import { fetchCartaCategorias, fetchCartaFamilias, createCartaCategoriaApi } from "@/lib/carta-categorias/api-client";
 import { buildCartaGroupedSections } from "@/lib/carta-categorias/grouping";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
 import {
-  cartaCategoriasForTipoYFamiliaFiltro,
+  cartaCategoriasForMenuFamiliaFiltro,
+  categoryRequiresManualTipoVenta,
   defaultCartaCategoriaTipoForTipoProducto,
+  inferTipoVentaFromCategory,
   isCartaCategoriaCompatibleWithTipoProducto,
 } from "@/lib/carta-categorias/filter-for-tipo-producto";
 import {
@@ -22,18 +31,34 @@ import {
   getProductFamilyLabel,
 } from "@/lib/carta/product-category-family-resolver";
 import {
-  PRODUCT_FAMILY_LIST_FILTER_OPTIONS,
-  matchesProductFamilyListFilter,
-  type ProductFamilyListFilter,
+  matchesCatalogFoodDrinkSegment,
+  productFamilyDenormFromPlato,
+  readProductFamilyTypeForFilter,
+  type CatalogFoodDrinkSegment,
 } from "@/lib/carta/product-family-list-filter";
 import type { CartaCategoria, CartaCategoriaTipo, CartaFamilia } from "@/lib/carta-categorias/types";
 import { CARTA_MENU_FAMILIA_FILTER_UNASSIGNED, isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import { selectValueToPreparationArea } from "@/lib/carta/operational-station-options";
+import {
+  productCatalogCourseFromSelectValue,
+  productCatalogCourseSelectValue,
+  type ProductCatalogCourse,
+} from "@/lib/carta/menu-course";
+import {
+  ProductFormDrawerBlock,
+  ProductFormDrawerCollapsibleSection,
+} from "@/components/productos/product-form-drawer-section";
+import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
 import { OperationStationProductSelect } from "@/components/operacion/operation-station-product-select";
 import {
   ensureDefaultOperationStations,
   listenOperationStations,
 } from "@/lib/firestore/operation-stations";
+import {
+  ensureDefaultProductFamilies,
+  listenProductFamilies,
+} from "@/lib/firestore/product-families";
+import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
 import { resolveEffectiveModifierGroupLabels } from "@/lib/modifiers/effective-product-modifiers";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
@@ -64,12 +89,17 @@ import {
 import { CatalogMigrationPreviewPanel } from "@/components/productos/catalog-migration-preview-panel";
 import { LegacyPlatosArchivePanel } from "@/components/productos/legacy-platos-archive-panel";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
-import { resolveCartaProductDeleteAction } from "@/lib/carta/carta-product-delete-policy";
+import {
+  applyResolvedCartaCentralProductDelete,
+  resolveCartaProductDeleteAction,
+} from "@/lib/carta/carta-product-delete-policy";
 import {
   activateCentralProduct,
+  bulkUpdateCentralProductsCourse,
+  bulkUpdateCentralProductsDestination,
+  bulkUpdateCentralProductsCategory,
+  bulkUpdateCentralProductsFamily,
   createCentralProduct,
-  deleteCentralProductPermanently,
-  disableCentralProduct,
   formatCentralCatalogWriteError,
   listenCentralProducts,
   listenProductsForInventory,
@@ -91,6 +121,8 @@ import {
   ProductRecipeEditorSection,
   type RecipeIngredientDraftRow,
 } from "@/components/productos/product-recipe-editor-section";
+import { ProductProfitabilityPanel } from "@/components/carta/escandallos/product-profitability-panel";
+import { parseNullableNumber } from "@/components/carta/escandallos/escandallo-display-utils";
 import type { ProductDocument } from "@/lib/firestore/products";
 import {
   PLATOS_CHANGED_EVENT,
@@ -103,7 +135,14 @@ import {
 } from "@/lib/platos-local";
 import type { Locale } from "@/lib/i18n";
 
-type CartaFilter = "todos" | "activos" | "inactivos" | "conEscandallo" | "sinEscandallo";
+type CartaFilter =
+  | "todos"
+  | "activos"
+  | "inactivos"
+  | "enCarta"
+  | "fueraCarta"
+  | "conEscandallo"
+  | "sinEscandallo";
 
 const PRODUCTOS_ROW_HOVER_CLASS = "hostly-productos-data-row";
 const PRODUCTOS_ROW_TEXT_BTN_CLASS = "hostly-productos-row-text-btn";
@@ -468,6 +507,7 @@ function buildCentralInputFromDraft(args: {
   precioVenta: number;
   draftActivo: boolean;
   draftDesc: string;
+  draftCourse: string;
   existingIsActive?: boolean;
 }): CentralOperationalProductInput {
   const categoryId = args.categoriaCartaIdPatch ?? null;
@@ -498,6 +538,7 @@ function buildCentralInputFromDraft(args: {
     tipoVenta: args.draftTipo,
     visibleOnMenu: args.draftActivo,
     active: args.existingIsActive !== false,
+    course: productCatalogCourseFromSelectValue(args.draftCourse),
     ...(args.draftDesc.trim() ? { description: args.draftDesc.trim() } : {}),
     ...familyFirestore,
   };
@@ -1164,8 +1205,8 @@ export default function ProductosManagementPage({
   const [items, setItems] = useState<PlatoCarta[]>([]);
   const [meta, setMeta] = useState<EscandalloMetaMap>(new Map());
   const [listFilter, setListFilter] = useState<CartaFilter>("todos");
-  const [productFamilyFilter, setProductFamilyFilter] =
-    useState<ProductFamilyListFilter>("all");
+  const [catalogFoodDrinkSegment, setCatalogFoodDrinkSegment] =
+    useState<CatalogFoodDrinkSegment>("all");
   const [listSearch, setListSearch] = useState("");
   const [configCartaAdvancedOpen, setConfigCartaAdvancedOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped");
@@ -1175,6 +1216,7 @@ export default function ProductosManagementPage({
   const [draftNombre, setDraftNombre] = useState("");
   const [draftTipo, setDraftTipo] = useState<TipoProductoVenta>("plato");
   const [cartaCategorias, setCartaCategorias] = useState<CartaCategoria[]>([]);
+  const [productFamilies, setProductFamilies] = useState<ProductFamilyDocument[]>([]);
   const [cartaFamilias, setCartaFamilias] = useState<CartaFamilia[]>([]);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroupDocument[]>([]);
   const [modifierFamilies, setModifierFamilies] = useState<ModifierFamilyRow[]>([]);
@@ -1191,14 +1233,21 @@ export default function ProductosManagementPage({
   const [draftDesc, setDraftDesc] = useState("");
   const [draftOperationStationSelect, setDraftOperationStationSelect] =
     useState("default-kitchen");
+  const [draftCourse, setDraftCourse] = useState("");
   const [operationStations, setOperationStations] = useState<
     OperationStationDocument[]
   >([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [escNavId, setEscNavId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const selectAllRef = useRef<HTMLInputElement | null>(null);
+  const {
+    selectedIds,
+    setSelectedIds,
+    selectAllRef,
+    toggleRowSelected,
+    clearSelection,
+    toggleSelectAllDisplayed: toggleSelectAllDisplayedBase,
+  } = useProductosSelection();
   const nombreInputRef = useRef<HTMLInputElement | null>(null);
   /** Oculta al instante productos borrados hasta que el snapshot central confirme el delete. */
   const pendingRemovedProductIdsRef = useRef<Set<string>>(new Set());
@@ -1210,6 +1259,16 @@ export default function ProductosManagementPage({
   const [centralDocsById, setCentralDocsById] = useState(
     () => new Map<string, ProductDocument>(),
   );
+  const [bulkAssignCourseOpen, setBulkAssignCourseOpen] = useState(false);
+  const [bulkAssignCourseSaving, setBulkAssignCourseSaving] = useState(false);
+  const [bulkAssignDestinationOpen, setBulkAssignDestinationOpen] = useState(false);
+  const [bulkAssignDestinationSaving, setBulkAssignDestinationSaving] = useState(false);
+  const [bulkAssignCategoryOpen, setBulkAssignCategoryOpen] = useState(false);
+  const [bulkAssignCategorySaving, setBulkAssignCategorySaving] = useState(false);
+  const [bulkAssignFamilyOpen, setBulkAssignFamilyOpen] = useState(false);
+  const [bulkAssignFamilySaving, setBulkAssignFamilySaving] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteSaving, setBulkDeleteSaving] = useState(false);
 
   const persist = useCallback(
     (_next: PlatoCarta[]) => {
@@ -1242,6 +1301,29 @@ export default function ProductosManagementPage({
         }
       },
       (e) => console.error("listenOperationStations", e),
+    );
+    return () => unsub();
+  }, [operationalRestaurantId, isCentralCatalog]);
+
+  useEffect(() => {
+    const rid = operationalRestaurantId.trim();
+    if (!rid || !isCentralCatalog) {
+      setProductFamilies([]);
+      return;
+    }
+    let defaultsEnsured = false;
+    const unsub = listenProductFamilies(
+      rid,
+      (list) => {
+        setProductFamilies(list);
+        if (!defaultsEnsured && list.length === 0) {
+          defaultsEnsured = true;
+          void ensureDefaultProductFamilies(rid).catch((e) =>
+            console.error("ensureDefaultProductFamilies", e),
+          );
+        }
+      },
+      (e) => console.error("listenProductFamilies", e),
     );
     return () => unsub();
   }, [operationalRestaurantId, isCentralCatalog]);
@@ -1414,14 +1496,19 @@ export default function ProductosManagementPage({
   const configStatusFilterCounts = useMemo(() => {
     let activos = 0;
     let inactivos = 0;
+    let enCarta = 0;
+    let fueraCarta = 0;
     for (const p of items) {
-      if (getPublicationFlags(p).isActive) activos += 1;
+      const flags = getPublicationFlags(p);
+      if (flags.isActive) activos += 1;
       else inactivos += 1;
+      if (flags.status === "onMenu") enCarta += 1;
+      else if (flags.status === "offMenu") fueraCarta += 1;
     }
-    return { activos, inactivos, total: items.length };
+    return { activos, inactivos, enCarta, fueraCarta, total: items.length };
   }, [items]);
 
-  const filteredSorted = useMemo(() => {
+  const catalogListFilteredRows = useMemo(() => {
     let rows = items;
     const matchesActivos = (p: PlatoCarta) =>
       configCartaProductosChrome ? getPublicationFlags(p).isActive : p.activo;
@@ -1429,23 +1516,44 @@ export default function ProductosManagementPage({
 
     if (catalogListFilter === "activos") rows = rows.filter(matchesActivos);
     else if (catalogListFilter === "inactivos") rows = rows.filter(matchesInactivos);
-    else if (catalogListFilter === "conEscandallo") rows = rows.filter((p) => tieneEscandalloForPlato(p, meta));
+    else if (catalogListFilter === "enCarta") {
+      rows = rows.filter((p) => getPublicationFlags(p).status === "onMenu");
+    } else if (catalogListFilter === "fueraCarta") {
+      rows = rows.filter((p) => getPublicationFlags(p).status === "offMenu");
+    } else if (catalogListFilter === "conEscandallo") rows = rows.filter((p) => tieneEscandalloForPlato(p, meta));
     else if (catalogListFilter === "sinEscandallo") rows = rows.filter((p) => !tieneEscandalloForPlato(p, meta));
-    if (productFamilyFilter !== "all") {
+
+    return rows;
+  }, [items, catalogListFilter, configCartaProductosChrome, meta]);
+
+  const catalogFoodDrinkCounts = useMemo(() => {
+    let food = 0;
+    let drink = 0;
+    for (const p of catalogListFilteredRows) {
+      const type = readProductFamilyTypeForFilter(productFamilyDenormFromPlato(p));
+      if (type === "food") food += 1;
+      else if (type === "drink") drink += 1;
+    }
+    return {
+      all: catalogListFilteredRows.length,
+      food,
+      drink,
+    };
+  }, [catalogListFilteredRows]);
+
+  const filteredSorted = useMemo(() => {
+    let rows = catalogListFilteredRows;
+    if (catalogFoodDrinkSegment !== "all") {
       rows = rows.filter((p) =>
-        matchesProductFamilyListFilter(
-          {
-            productFamilyId: p.productFamilyId ?? null,
-            productFamilyName: p.productFamilyName ?? null,
-            productFamilyType: p.productFamilyType ?? null,
-          },
-          productFamilyFilter,
+        matchesCatalogFoodDrinkSegment(
+          productFamilyDenormFromPlato(p),
+          catalogFoodDrinkSegment,
         ),
       );
     }
 
     return [...rows].sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { sensitivity: "base" }));
-  }, [items, catalogListFilter, configCartaProductosChrome, meta, productFamilyFilter]);
+  }, [catalogListFilteredRows, catalogFoodDrinkSegment]);
 
   const tabOptions = useMemo(() => {
     const sorted = [...cartaCategorias].sort(
@@ -1531,99 +1639,314 @@ export default function ProductosManagementPage({
     el.indeterminate = nSel > 0 && nSel < displayed.length;
   }, [displayed, selectedIds]);
 
-  const toggleRowSelected = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
   const toggleSelectAllDisplayed = useCallback(() => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      const allOn = displayed.length > 0 && displayed.every((p) => next.has(p.id));
-      if (allOn) {
-        for (const p of displayed) next.delete(p.id);
-      } else {
-        for (const p of displayed) next.add(p.id);
-      }
-      return next;
-    });
-  }, [displayed]);
+    toggleSelectAllDisplayedBase(displayed.map((p) => p.id));
+  }, [displayed, toggleSelectAllDisplayedBase]);
 
-  const bulkApplyToIds = useCallback(
-    async (ids: Set<string>, patch: Partial<{ activo: boolean; isActive: boolean }>) => {
-      if (ids.size === 0) return;
-      const restauranteId = operationalRestaurantId;
-      if (isCentralCatalog) {
-        try {
-          await Promise.all(
-            [...ids].map(async (id) => {
-              if ("activo" in patch) {
-                await setCentralProductPublication(restauranteId, id, {
-                  visibleOnMenu: patch.activo,
-                });
-              } else if ("isActive" in patch) {
-                await setCentralProductPublication(restauranteId, id, {
-                  active: patch.isActive,
-                });
-              }
-            }),
-          );
-          setNotice("Guardado en catálogo central");
-        } catch (e) {
-          setFormError(formatCentralCatalogWriteError(e));
+  const bulkAssignPassDisabled = isLegacyReadOnly || !isCentralCatalog;
+  const bulkAssignPassDisabledTitle = bulkAssignPassDisabled
+    ? isLegacyReadOnly
+      ? LEGACY_CATALOG_EDIT_BLOCKED
+      : t("productos.bulkAssignPassCentralOnly")
+    : undefined;
+
+  const bulkAssignDestinationDisabled = bulkAssignPassDisabled;
+  const bulkAssignDestinationDisabledTitle = bulkAssignPassDisabled
+    ? bulkAssignPassDisabledTitle
+    : isLegacyReadOnly
+      ? LEGACY_CATALOG_EDIT_BLOCKED
+      : t("productos.bulkAssignDestinationCentralOnly");
+
+  const bulkAssignCategoryDisabled = bulkAssignPassDisabled;
+  const bulkAssignCategoryDisabledTitle = bulkAssignPassDisabled
+    ? bulkAssignPassDisabledTitle
+    : t("productos.bulkAssignCategoryCentralOnly");
+
+  const bulkAssignFamilyDisabled = bulkAssignPassDisabled;
+  const bulkAssignFamilyDisabledTitle = bulkAssignPassDisabled
+    ? bulkAssignPassDisabledTitle
+    : t("productos.bulkAssignFamilyCentralOnly");
+
+  const bulkDeleteDisabled = bulkAssignPassDisabled;
+  const bulkDeleteDisabledTitle = bulkAssignPassDisabled
+    ? bulkAssignPassDisabledTitle
+    : t("productos.bulkDeleteCentralOnly");
+
+  const applyCentralDeleteOutcomeToUi = useCallback(
+    (p: PlatoCarta, outcome: "deleted" | "deactivated") => {
+      if (outcome === "deleted") {
+        pendingRemovedProductIdsRef.current.add(p.id);
+        setItems((prev) => prev.filter((x) => x.id !== p.id));
+        setCentralDocsById((prev) => {
+          const next = new Map(prev);
+          next.delete(p.id);
+          return next;
+        });
+        if (editingId === p.id) {
+          setFormOpen(false);
+          setEditingId(null);
+          setFormError(null);
         }
-        window.setTimeout(() => setNotice(null), 2200);
         return;
       }
-      if (isLegacyReadOnly) return;
       const now = new Date().toISOString();
-      const next = items.map((p) =>
-        ids.has(p.id) ? ({ ...p, ...patch, updatedAt: now } as PlatoCarta & { isActive?: boolean }) : p,
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === p.id
+            ? ({
+                ...x,
+                activo: false,
+                enCarta: false,
+                isActive: false,
+                updatedAt: now,
+              } as PlatoCarta & { enCarta?: boolean; isActive?: boolean })
+            : x,
+        ),
       );
-      persist(next as PlatoCarta[]);
-      void Promise.all(
-        [...ids].map((id) => {
-          const pl = next.find((x) => x.id === id);
-          return pl ? mirrorPlatoToEscandalloRow(pl) : Promise.resolve({ error: null });
-        }),
-      );
-      setNotice(t("carta.noticeSaved"));
-      window.setTimeout(() => setNotice(null), 2200);
+      if (editingId === p.id) {
+        setFormOpen(false);
+        setEditingId(null);
+        setFormError(null);
+      }
     },
-    [isCentralCatalog, isLegacyReadOnly, items, operationalRestaurantId, persist, t],
+    [editingId],
   );
 
-  const bulkSelectionBreakdown = useMemo(() => {
-    const idsFuera = new Set<string>();
-    const idsEnCarta = new Set<string>();
-    const idsInactivos = new Set<string>();
-    const idsActivosVenta = new Set<string>();
-    for (const p of items) {
-      if (!selectedIds.has(p.id)) continue;
-      const f = getPublicationFlags(p);
-      if (!f.isActive) {
-        idsInactivos.add(p.id);
-        continue;
+  const confirmBulkAssignCourse = useCallback(
+    async (courseSelectValue: string) => {
+      if (bulkAssignPassDisabled) return;
+      const rid = operationalRestaurantId.trim();
+      if (!rid) return;
+      const ids = [...selectedIds];
+      if (ids.length === 0) return;
+
+      const course: ProductCatalogCourse =
+        productCatalogCourseFromSelectValue(courseSelectValue);
+
+      setBulkAssignCourseSaving(true);
+      setFormError(null);
+      try {
+        const { updated } = await bulkUpdateCentralProductsCourse(
+          rid,
+          ids,
+          course,
+        );
+        setNotice(
+          t("productos.bulkAssignPassSuccess", { count: String(updated) }),
+        );
+        window.setTimeout(() => setNotice(null), 3200);
+        clearSelection();
+        setBulkAssignCourseOpen(false);
+      } catch (e) {
+        setFormError(formatCentralCatalogWriteError(e));
+      } finally {
+        setBulkAssignCourseSaving(false);
       }
-      idsActivosVenta.add(p.id);
-      if (f.enCarta) idsEnCarta.add(p.id);
-      else idsFuera.add(p.id);
+    },
+    [
+      bulkAssignPassDisabled,
+      operationalRestaurantId,
+      selectedIds,
+      t,
+      clearSelection,
+    ],
+  );
+
+  const confirmBulkAssignDestination = useCallback(
+    async (destination: "kitchen" | "bar" | "cocktail") => {
+      if (bulkAssignDestinationDisabled) return;
+      const rid = operationalRestaurantId.trim();
+      if (!rid) return;
+      const ids = [...selectedIds];
+      if (ids.length === 0) return;
+
+      setBulkAssignDestinationSaving(true);
+      setFormError(null);
+      try {
+        const { updated } = await bulkUpdateCentralProductsDestination(
+          rid,
+          ids,
+          destination,
+        );
+        setNotice(
+          t("productos.bulkAssignDestinationSuccess", { count: String(updated) }),
+        );
+        window.setTimeout(() => setNotice(null), 3200);
+        clearSelection();
+        setBulkAssignDestinationOpen(false);
+      } catch (e) {
+        setFormError(formatCentralCatalogWriteError(e));
+      } finally {
+        setBulkAssignDestinationSaving(false);
+      }
+    },
+    [
+      bulkAssignDestinationDisabled,
+      operationalRestaurantId,
+      selectedIds,
+      t,
+      clearSelection,
+    ],
+  );
+
+  const confirmBulkAssignCategory = useCallback(
+    async (categoryId: string | null, categoryName: string) => {
+      if (bulkAssignCategoryDisabled) return;
+      const rid = operationalRestaurantId.trim();
+      if (!rid) return;
+      const ids = [...selectedIds];
+      if (ids.length === 0) return;
+
+      setBulkAssignCategorySaving(true);
+      setFormError(null);
+      try {
+        const { updated } = await bulkUpdateCentralProductsCategory(rid, ids, {
+          categoryId,
+          categoryName,
+        });
+        setNotice(
+          t("productos.bulkAssignCategorySuccess", { count: String(updated) }),
+        );
+        window.setTimeout(() => setNotice(null), 3200);
+        clearSelection();
+        setBulkAssignCategoryOpen(false);
+      } catch (e) {
+        setFormError(formatCentralCatalogWriteError(e));
+      } finally {
+        setBulkAssignCategorySaving(false);
+      }
+    },
+    [
+      bulkAssignCategoryDisabled,
+      operationalRestaurantId,
+      selectedIds,
+      t,
+      clearSelection,
+    ],
+  );
+
+  const confirmBulkAssignFamily = useCallback(
+    async (familyId: string | null) => {
+      if (bulkAssignFamilyDisabled) return;
+      const rid = operationalRestaurantId.trim();
+      if (!rid) return;
+      const ids = [...selectedIds];
+      if (ids.length === 0) return;
+
+      const familyPatch =
+        familyId == null
+          ? ({ clearProductFamily: true } as const)
+          : (() => {
+              const fam = productFamilies.find((f) => f.id === familyId);
+              if (!fam) return null;
+              return {
+                productFamilyId: fam.id,
+                productFamilyName: fam.name.trim(),
+                productFamilyType: fam.type,
+              } as const;
+            })();
+
+      if (!familyPatch) return;
+
+      setBulkAssignFamilySaving(true);
+      setFormError(null);
+      try {
+        const { updated } = await bulkUpdateCentralProductsFamily(
+          rid,
+          ids,
+          familyPatch,
+        );
+        setNotice(
+          t("productos.bulkAssignFamilySuccess", { count: String(updated) }),
+        );
+        window.setTimeout(() => setNotice(null), 3200);
+        clearSelection();
+        setBulkAssignFamilyOpen(false);
+      } catch (e) {
+        setFormError(formatCentralCatalogWriteError(e));
+      } finally {
+        setBulkAssignFamilySaving(false);
+      }
+    },
+    [
+      bulkAssignFamilyDisabled,
+      operationalRestaurantId,
+      selectedIds,
+      productFamilies,
+      t,
+      clearSelection,
+    ],
+  );
+
+  const confirmBulkDelete = useCallback(async () => {
+    if (bulkDeleteDisabled || !isCentralCatalog) return;
+    const restauranteId = operationalRestaurantId.trim();
+    if (!restauranteId) return;
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    setBulkDeleteSaving(true);
+    setFormError(null);
+    let deleted = 0;
+    let deactivated = 0;
+    let failed = 0;
+
+    try {
+      for (const id of ids) {
+        const p = items.find((x) => x.id === id);
+        if (!p) continue;
+        try {
+          const decision = await resolveCartaProductDeleteAction({
+            p,
+            meta,
+            centralDoc: centralDocsById.get(p.id),
+            restaurantId: restauranteId,
+            tieneEscandallo: tieneEscandalloForPlato,
+          });
+          const outcome = await applyResolvedCartaCentralProductDelete(
+            restauranteId,
+            p.id,
+            decision,
+          );
+          applyCentralDeleteOutcomeToUi(p, outcome);
+          if (outcome === "deleted") deleted += 1;
+          else deactivated += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+
+      const failedSuffix =
+        failed > 0
+          ? t("productos.bulkDeleteSuccessFailedSuffix", {
+              failed: String(failed),
+            })
+          : "";
+      setNotice(
+        t("productos.bulkDeleteSuccess", {
+          deleted: String(deleted),
+          deactivated: String(deactivated),
+          failedSuffix,
+        }),
+      );
+      window.setTimeout(() => setNotice(null), 4200);
+      clearSelection();
+      setBulkDeleteOpen(false);
+    } finally {
+      setBulkDeleteSaving(false);
     }
-    return {
-      countFueraCarta: idsFuera.size,
-      countEnCarta: idsEnCarta.size,
-      countInactivos: idsInactivos.size,
-      countActivosVenta: idsActivosVenta.size,
-      idsFuera,
-      idsEnCarta,
-      idsInactivos,
-      idsActivosVenta,
-    };
-  }, [items, selectedIds]);
+  }, [
+    bulkDeleteDisabled,
+    isCentralCatalog,
+    operationalRestaurantId,
+    selectedIds,
+    items,
+    meta,
+    centralDocsById,
+    applyCentralDeleteOutcomeToUi,
+    t,
+    clearSelection,
+  ]);
 
   const groupedByCategoria = useMemo(() => {
     const sections = buildCartaGroupedSections(displayed, cartaCategorias, {
@@ -1713,9 +2036,42 @@ export default function ProductosManagementPage({
   const editingPlato = useMemo(() => (editingId ? (items.find((p) => p.id === editingId) ?? null) : null), [editingId, items]);
   const editingHasEscandallo = useMemo(() => (editingPlato ? tieneEscandalloForPlato(editingPlato, meta) : false), [editingPlato, meta]);
 
+  const draftSkipsMenuCourse = useMemo(
+    () =>
+      productFormSkipsMenuCourse({
+        tipo: draftTipo,
+        operationStationSelect: draftOperationStationSelect,
+        operationStations,
+      }),
+    [draftTipo, draftOperationStationSelect, operationStations],
+  );
+
+  useEffect(() => {
+    if (!formOpen || !draftSkipsMenuCourse) return;
+    setDraftCourse("");
+  }, [formOpen, draftSkipsMenuCourse]);
+
   const categoriasForForm = useMemo(
-    () => cartaCategoriasForTipoYFamiliaFiltro(cartaCategorias, draftTipo, draftCartaMenuFamiliaId),
-    [cartaCategorias, draftTipo, draftCartaMenuFamiliaId],
+    () => cartaCategoriasForMenuFamiliaFiltro(cartaCategorias, draftCartaMenuFamiliaId),
+    [cartaCategorias, draftCartaMenuFamiliaId],
+  );
+
+  const draftSelectedCategory = useMemo(
+    () =>
+      draftCategoriaCartaId
+        ? cartaCategorias.find((c) => c.id === draftCategoriaCartaId)
+        : undefined,
+    [draftCategoriaCartaId, cartaCategorias],
+  );
+
+  const draftInferredTipoVenta = useMemo(
+    () => inferTipoVentaFromCategory(draftSelectedCategory),
+    [draftSelectedCategory],
+  );
+
+  const draftNeedsManualTipoVenta = useMemo(
+    () => categoryRequiresManualTipoVenta(draftSelectedCategory),
+    [draftSelectedCategory],
   );
 
   const draftProductFamilyLabel = useMemo(() => {
@@ -1764,6 +2120,11 @@ export default function ProductosManagementPage({
     inventoryLookupMap,
     isCentralCatalog,
   ]);
+
+  const draftSalePriceForProfitability = useMemo(
+    () => parseNullableNumber(draftPrecio.trim() === "" ? "" : draftPrecio.replace(",", ".")),
+    [draftPrecio],
+  );
 
   function applyRecipeDraftFromDocument(
     recipe: ProductDocument["recipe"] | undefined,
@@ -1828,6 +2189,7 @@ export default function ProductosManagementPage({
     setDraftFoto("");
     setDraftDesc("");
     setDraftOperationStationSelect("default-kitchen");
+    setDraftCourse("");
     setDraftRecipeEnabled(false);
     setDraftRecipeRows([]);
     setFormError(null);
@@ -1843,8 +2205,8 @@ export default function ProductosManagementPage({
     const cat = tid ? cartaCategorias.find((c) => c.id === tid) : undefined;
     if (!tid) setDraftCategoriaCartaId(null);
     else if (!cat) setDraftCategoriaCartaId(tid);
-    else setDraftCategoriaCartaId(isCartaCategoriaCompatibleWithTipoProducto(cat, p.tipoVenta) ? tid : null);
-    if (cat && isCartaCategoriaCompatibleWithTipoProducto(cat, p.tipoVenta)) {
+    else setDraftCategoriaCartaId(tid);
+    if (cat) {
       setDraftCartaMenuFamiliaId(
         cat.cartaFamiliaId?.trim() ? cat.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
       );
@@ -1867,8 +2229,15 @@ export default function ProductosManagementPage({
       }),
     );
     if (isCentralCatalog) {
-      applyRecipeDraftFromDocument(centralDocsById.get(p.id)?.recipe);
+      const centralDoc = centralDocsById.get(p.id);
+      setDraftCourse(
+        productCatalogCourseSelectValue(
+          centralDoc?.course !== undefined ? centralDoc.course : undefined,
+        ),
+      );
+      applyRecipeDraftFromDocument(centralDoc?.recipe);
     } else {
+      setDraftCourse("");
       setDraftRecipeEnabled(false);
       setDraftRecipeRows([]);
     }
@@ -1944,6 +2313,7 @@ export default function ProductosManagementPage({
           precioVenta,
           draftActivo,
           draftDesc,
+          draftCourse,
           existingIsActive: existingFlags?.isActive,
         });
         let savedProductId = editingId?.trim() ?? "";
@@ -2195,54 +2565,25 @@ export default function ProductosManagementPage({
             : `¿Eliminar definitivamente "${p.nombre}"? No tiene ventas ni escandallo asociado.`;
         const ok = window.confirm(confirmMessage);
         if (!ok) return;
-        try {
-          await deleteCentralProductPermanently(restauranteId, p.id);
-          if (editingId === p.id) {
-            setFormOpen(false);
-            setEditingId(null);
-            setFormError(null);
-          }
-          pendingRemovedProductIdsRef.current.add(p.id);
-          setItems((prev) => prev.filter((x) => x.id !== p.id));
-          setCentralDocsById((prev) => {
-            const next = new Map(prev);
-            next.delete(p.id);
-            return next;
-          });
-          setNotice("Producto eliminado.");
-        } catch (e) {
-          setFormError(formatCentralCatalogWriteError(e));
-        }
-        window.setTimeout(() => setNotice(null), 2200);
-        return;
+      } else {
+        const ok = window.confirm(
+          `"${p.nombre}" tiene histórico o dependencias y no se puede eliminar.\n\n¿Desactivarlo para ocultarlo de la carta?`,
+        );
+        if (!ok) return;
       }
 
-      const ok = window.confirm(
-        `"${p.nombre}" tiene histórico o dependencias y no se puede eliminar.\n\n¿Desactivarlo para ocultarlo de la carta?`,
-      );
-      if (!ok) return;
       try {
-        await disableCentralProduct(restauranteId, p.id);
-        if (editingId === p.id) {
-          setFormOpen(false);
-          setEditingId(null);
-          setFormError(null);
-        }
-        const now = new Date().toISOString();
-        setItems((prev) =>
-          prev.map((x) =>
-            x.id === p.id
-              ? ({
-                  ...x,
-                  activo: false,
-                  enCarta: false,
-                  isActive: false,
-                  updatedAt: now,
-                } as PlatoCarta & { enCarta?: boolean; isActive?: boolean })
-              : x,
-          ),
+        const outcome = await applyResolvedCartaCentralProductDelete(
+          restauranteId,
+          p.id,
+          decision,
         );
-        setNotice("Producto desactivado para conservar el histórico.");
+        applyCentralDeleteOutcomeToUi(p, outcome);
+        setNotice(
+          outcome === "deleted"
+            ? "Producto eliminado."
+            : "Producto desactivado para conservar el histórico.",
+        );
       } catch (e) {
         setFormError(formatCentralCatalogWriteError(e));
       }
@@ -2272,71 +2613,49 @@ export default function ProductosManagementPage({
   ] as const;
   const CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS = ["conEscandallo", "sinEscandallo"] as const;
 
-  /** Pills de familia de producto (Bebidas/Comida/Otros); distinto de filtros escandallo/activo. */
-  function iceToolbarProductFamilyFilterButtons(cfgMergedStripe: boolean): ReactNode {
-    const useCartaV25 = configCartaProductosChrome;
-    const dense = cfgMergedStripe;
-    return PRODUCT_FAMILY_LIST_FILTER_OPTIONS.map((f) => {
-      const active = productFamilyFilter === f.id;
-      if (useCartaV25) {
-        return (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => setProductFamilyFilter(f.id)}
-            aria-pressed={active}
-            className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--family${active ? " is-active" : ""}`}
-          >
-            {f.label}
-          </button>
-        );
-      }
-      const passiveBorder =
-        dense
-          ? "1px solid rgba(148, 163, 184, 0.16)"
-          : configCartaProductosChrome
-            ? "1px solid rgba(148, 163, 184, 0.18)"
-            : iceVisual
-              ? "1px solid var(--hostly-line)"
-              : "1px solid #334155";
-      const inactiveBg =
-        dense
-          ? "rgba(255, 255, 255, 0.42)"
-          : configCartaProductosChrome && iceVisual
-            ? "rgba(255, 255, 255, 0.5)"
-            : iceVisual
-              ? "#fff"
-              : "#0f172a";
-      const inactiveInk =
-        dense ? "var(--hostly-ink-muted)" : configCartaProductosChrome ? "var(--hostly-ink-muted)" : "#94a3b8";
-      return (
-        <button
-          key={f.id}
-          type="button"
-          onClick={() => setProductFamilyFilter(f.id)}
-          aria-pressed={active}
-          style={{
-            border: active ? "1px solid rgba(56, 189, 248, 0.55)" : passiveBorder,
-            background: active
-              ? iceVisual
-                ? "rgba(224, 242, 254, 0.95)"
-                : "rgba(56, 189, 248, 0.18)"
-              : inactiveBg,
-            color: active ? (iceVisual ? "#0c4a6e" : "#e0f2fe") : inactiveInk,
-            padding: dense ? "3px 7px" : configCartaProductosChrome ? "4px 9px" : "5px 11px",
-            borderRadius: 999,
-            fontWeight: active ? 700 : dense ? 640 : configCartaProductosChrome ? 650 : 700,
-            cursor: "pointer",
-            fontSize: dense ? 10 : configCartaProductosChrome ? 11 : 12,
-            lineHeight: dense ? 1.1 : 1.2,
-            minHeight: dense ? 22 : configCartaProductosChrome ? 26 : 30,
-            flexShrink: 0,
-          }}
+  function renderCatalogFoodDrinkSegment(): ReactNode {
+    const specs: ReadonlyArray<{
+      id: CatalogFoodDrinkSegment;
+      label: string;
+      count: number;
+    }> = [
+      { id: "all", label: t("productos.catalogSegmentAll"), count: catalogFoodDrinkCounts.all },
+      { id: "food", label: t("productos.catalogSegmentFood"), count: catalogFoodDrinkCounts.food },
+      { id: "drink", label: t("productos.catalogSegmentDrink"), count: catalogFoodDrinkCounts.drink },
+    ];
+
+    return (
+      <div className="hostly-productos-carta-food-drink-segment">
+        <HostlySegmentedControl
+          aria-label={t("productos.catalogSegmentAria")}
+          className="min-w-0 w-full"
         >
-          {f.label}
-        </button>
-      );
-    });
+          {specs.map((spec) => {
+            const active = catalogFoodDrinkSegment === spec.id;
+            return (
+              <button
+                key={spec.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={hostlySegmentTabClassName(
+                  "inline-flex items-center gap-1 !text-[11px]",
+                )}
+                onClick={() => setCatalogFoodDrinkSegment(spec.id)}
+              >
+                <span>{spec.label}</span>
+                <span
+                  style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}
+                  aria-hidden
+                >
+                  ({spec.count})
+                </span>
+              </button>
+            );
+          })}
+        </HostlySegmentedControl>
+      </div>
+    );
   }
 
   /** UI only: filtros rápidos hielo; `cfgMergedStripe` = barra ultra compacta (config carta embed). */
@@ -2569,12 +2888,17 @@ export default function ProductosManagementPage({
     );
   }
 
-  /** Barra fija Activos/Inactivos/Todos — reutiliza listFilter (config carta productos). */
+  /** Barra fija Activos/Inactivos/Todos/En carta/Fuera — reutiliza listFilter (config carta productos). */
   function renderConfigCartaStatusFilterBar(): ReactNode {
     const specs = [
       { id: "activos" as const, label: `Activos (${configStatusFilterCounts.activos})` },
       { id: "inactivos" as const, label: `Inactivos (${configStatusFilterCounts.inactivos})` },
       { id: "todos" as const, label: `Todos (${configStatusFilterCounts.total})` },
+      { id: "enCarta" as const, label: `${t("productos.pubEnCarta")} (${configStatusFilterCounts.enCarta})` },
+      {
+        id: "fueraCarta" as const,
+        label: `${t("productos.pubFueraCarta")} (${configStatusFilterCounts.fueraCarta})`,
+      },
     ];
     return (
       <div
@@ -2592,7 +2916,7 @@ export default function ProductosManagementPage({
           boxSizing: "border-box",
         }}
         role="group"
-        aria-label="Filtrar por estado del producto"
+        aria-label="Filtrar por estado del producto y publicación en carta"
       >
         {specs.map((f) => {
           const active = listFilter === f.id;
@@ -2665,16 +2989,9 @@ export default function ProductosManagementPage({
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ minWidth: 0, flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em" }}>{editingId ? t("carta.editProduct") : t("carta.newProduct")}</div>
-                  {editingId && editingPlato ? (
-                    <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>
-                      {t("carta.colEscandallo")}:{" "}
-                      <span style={{ color: editingHasEscandallo ? "#86efac" : "#fbbf24", fontWeight: 800 }}>
-                        {editingHasEscandallo ? t("carta.escSi") : t("carta.escNo")}
-                      </span>
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>{t("carta.kpiSinEscSub")}</div>
-                  )}
+                  <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>
+                    {editingId ? t("carta.productFormEditHint") : t("carta.productFormNewHint")}
+                  </div>
                 </div>
                 <button type="button" onClick={closeForm} style={{ border: "1px solid #334155", background: "rgba(15, 23, 42, 0.55)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontWeight: 800, cursor: "pointer", minHeight: 44 }}>
                   {t("common.cancel")}
@@ -2683,162 +3000,283 @@ export default function ProductosManagementPage({
             </div>
 
             <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "14px 16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldNombre")}</label>
-                  <input ref={nombreInputRef} value={draftNombre} onChange={(e) => setDraftNombre(e.target.value)} style={{ ...inputStyle, fontSize: 17, padding: "14px 14px" }} />
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
+                <ProductFormDrawerBlock title={t("carta.productFormBlockProduct")} hint={t("carta.productFormBlockProductHint")}>
+                  <div>
+                    <label style={labelStyle}>{t("carta.fieldNombre")}</label>
+                    <input ref={nombreInputRef} value={draftNombre} onChange={(e) => setDraftNombre(e.target.value)} style={{ ...inputStyle, fontSize: 17, padding: "14px 14px" }} />
+                  </div>
 
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldTipo")}</label>
-                  <select
-                    value={draftTipo}
-                    onChange={(e) => {
-                      const next = e.target.value as TipoProductoVenta;
-                      setDraftTipo(next);
-                      setDraftCartaMenuFamiliaId(null);
-                      setDraftCategoriaCartaId((id) => {
-                        if (!id) return null;
-                        const c = cartaCategorias.find((x) => x.id === id);
-                        return c && isCartaCategoriaCompatibleWithTipoProducto(c, next) ? id : null;
-                      });
+                  <CategoriaCartaFormField
+                    labelStyle={labelStyle}
+                    inputStyle={{ ...inputStyle, fontSize: 16, padding: "14px 14px" }}
+                    t={t}
+                    categorias={categoriasForForm}
+                    selectedId={draftCategoriaCartaId}
+                    onSelectId={(id) => {
+                      setDraftCategoriaCartaId(id);
+                      if (!id) return;
+                      const c = cartaCategorias.find((x) => x.id === id);
+                      if (!c) return;
+                      setDraftCartaMenuFamiliaId(
+                        c.cartaFamiliaId?.trim() ? c.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
+                      );
+                      const inferred = inferTipoVentaFromCategory(c);
+                      if (inferred) setDraftTipo(inferred);
                     }}
-                    style={{ ...inputStyle, fontSize: 16, padding: "14px 14px", minHeight: 52, cursor: "pointer" }}
-                  >
-                    {TIPOS_PRODUCTO_VENTA.map((tipo) => (
-                      <option key={tipo} value={tipo}>
-                        {labelTipoVenta(t, tipo)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Estación operativa</label>
-                  <OperationStationProductSelect
-                    restaurantId={operationalRestaurantId}
-                    value={draftOperationStationSelect}
-                    onChange={setDraftOperationStationSelect}
-                    disabled={drawerSyncing}
-                    style={{
-                      ...inputStyle,
-                      fontSize: 16,
-                      padding: "14px 14px",
-                      minHeight: 52,
-                      cursor: drawerSyncing ? "not-allowed" : "pointer",
+                    onOpenAddCategory={() => {
+                      setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
+                      const fid = draftCartaMenuFamiliaId;
+                      setAddCatCartaFamiliaId(
+                        fid && fid !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED ? fid : undefined,
+                      );
+                      setAddCategoryOpen(true);
                     }}
                   />
-                  {isLegacyOperationStationSelectValue(draftOperationStationSelect) ? (
-                    <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
-                      Valor legacy: se conserva hasta que elijas una estación y
-                      guardes.
+
+                  {draftSelectedCategory &&
+                  draftInferredTipoVenta &&
+                  !draftNeedsManualTipoVenta &&
+                  draftTipo === draftInferredTipoVenta ? (
+                    <p style={{ margin: 0, fontSize: 13, color: "#94a3b8", lineHeight: 1.4 }}>
+                      {t("carta.fieldFormatDetected")}:{" "}
+                      <span style={{ fontWeight: 700, color: "#e2e8f0" }}>
+                        {labelTipoVenta(t, draftInferredTipoVenta)}
+                      </span>
                     </p>
                   ) : null}
-                </div>
 
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldCartaFamilia")}</label>
-                  <select
-                    value={draftCartaMenuFamiliaId === null ? "" : draftCartaMenuFamiliaId}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const nextFilter = v === "" ? null : v;
-                      setDraftCartaMenuFamiliaId(nextFilter);
-                      setDraftCategoriaCartaId((cur) => {
-                        if (!cur) return null;
-                        const allowed = cartaCategoriasForTipoYFamiliaFiltro(cartaCategorias, draftTipo, nextFilter);
-                        return allowed.some((x) => x.id === cur) ? cur : null;
-                      });
-                    }}
-                    style={{ ...inputStyle, fontSize: 16, padding: "14px 14px", minHeight: 52, cursor: "pointer" }}
-                  >
-                    <option value="">{t("carta.familiaFilterAll")}</option>
-                    <option value={CARTA_MENU_FAMILIA_FILTER_UNASSIGNED}>{t("carta.familiaFilterUnassigned")}</option>
-                    {[...cartaFamilias]
-                      .filter((f) => f.isActive !== false)
-                      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
-                      .map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.name}
-                        </option>
-                      ))}
-                  </select>
-                  <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>{t("carta.fieldCartaFamiliaHint")}</p>
-                </div>
+                  {draftSelectedCategory && draftNeedsManualTipoVenta ? (
+                    <div>
+                      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>
+                        {t("carta.fieldFormatManualPrompt")}
+                      </p>
+                      <div
+                        role="radiogroup"
+                        aria-label={t("carta.fieldFormatManualPrompt")}
+                        style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                      >
+                        {TIPOS_PRODUCTO_VENTA.map((tipo) => (
+                          <label
+                            key={tipo}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              cursor: "pointer",
+                              fontSize: 15,
+                              fontWeight: 600,
+                              color: "#e2e8f0",
+                              userSelect: "none",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name="product-form-draft-tipo"
+                              checked={draftTipo === tipo}
+                              onChange={() => setDraftTipo(tipo)}
+                              style={{ width: 18, height: 18, accentColor: "#3b82f6" }}
+                            />
+                            {labelTipoVenta(t, tipo)}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
-                <CategoriaCartaFormField
-                  labelStyle={labelStyle}
-                  inputStyle={{ ...inputStyle, fontSize: 16, padding: "14px 14px" }}
-                  t={t}
-                  categorias={categoriasForForm}
-                  selectedId={draftCategoriaCartaId}
-                  onSelectId={(id) => {
-                    setDraftCategoriaCartaId(id);
-                    if (!id) return;
-                    const c = cartaCategorias.find((x) => x.id === id);
-                    if (!c) return;
-                    setDraftCartaMenuFamiliaId(
-                      c.cartaFamiliaId?.trim() ? c.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
-                    );
-                  }}
-                  onOpenAddCategory={() => {
-                    setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
-                    const fid = draftCartaMenuFamiliaId;
-                    setAddCatCartaFamiliaId(
-                      fid && fid !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED ? fid : undefined,
-                    );
-                    setAddCategoryOpen(true);
-                  }}
-                />
-                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#94a3b8" }}>
-                  Familia de producto (desde categoría):{" "}
-                  <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
-                    {draftProductFamilyLabel}
-                  </span>
-                </p>
-                <p style={{ margin: "0 0 4px", fontSize: 12, color: "#94a3b8" }}>
-                  Modificadores heredados:{" "}
-                  <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
-                    {draftEffectiveModifierLabel}
-                  </span>
-                </p>
+                  <div>
+                    <label style={labelStyle}>{t("carta.fieldPrecio")}</label>
+                    <input type="number" inputMode="decimal" step="any" min={0} value={draftPrecio} onChange={(e) => setDraftPrecio(e.target.value)} style={{ ...inputStyle, ...tabularFigures, fontSize: 17, padding: "14px 14px" }} />
+                  </div>
 
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldPrecio")}</label>
-                  <input type="number" inputMode="decimal" step="any" min={0} value={draftPrecio} onChange={(e) => setDraftPrecio(e.target.value)} style={{ ...inputStyle, ...tabularFigures, fontSize: 17, padding: "14px 14px" }} />
-                </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 2 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#e2e8f0", userSelect: "none" }}>
+                      <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} style={{ width: 24, height: 24, accentColor: "#22c55e" }} />
+                      {t("carta.fieldActivo")}
+                    </label>
+                  </div>
+                </ProductFormDrawerBlock>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 2 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#e2e8f0", userSelect: "none" }}>
-                    <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} style={{ width: 24, height: 24, accentColor: "#22c55e" }} />
-                    {t("carta.fieldActivo")}
-                  </label>
-                </div>
+                <ProductFormDrawerBlock title={t("carta.productFormBlockOperation")} hint={t("carta.productFormBlockOperationHint")}>
+                  <div>
+                    <label style={labelStyle}>{t("carta.fieldOperationStation")}</label>
+                    <OperationStationProductSelect
+                      restaurantId={operationalRestaurantId}
+                      value={draftOperationStationSelect}
+                      onChange={setDraftOperationStationSelect}
+                      disabled={drawerSyncing}
+                      style={{
+                        ...inputStyle,
+                        fontSize: 16,
+                        padding: "14px 14px",
+                        minHeight: 52,
+                        cursor: drawerSyncing ? "not-allowed" : "pointer",
+                      }}
+                    />
+                    {isLegacyOperationStationSelectValue(draftOperationStationSelect) ? (
+                      <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
+                        {t("carta.fieldOperationStationLegacyHint")}
+                      </p>
+                    ) : null}
+                  </div>
 
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldDescripcion")}</label>
-                  <textarea value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 90, padding: "14px 14px", fontSize: 15 }} />
-                </div>
+                  {isCentralCatalog && draftSkipsMenuCourse ? (
+                    <div>
+                      <label style={labelStyle}>{t("carta.fieldDefaultCourse")}</label>
+                      <div
+                        style={{
+                          ...inputStyle,
+                          fontSize: 16,
+                          padding: "14px 14px",
+                          minHeight: 52,
+                          display: "flex",
+                          alignItems: "center",
+                          color: "#94a3b8",
+                          opacity: 0.92,
+                        }}
+                        aria-readonly
+                      >
+                        {t("carta.productFormCourseLockedLabel")}
+                      </div>
+                      <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
+                        {t("carta.productFormCourseNotApplicable")}
+                      </p>
+                    </div>
+                  ) : null}
 
-                <div>
-                  <label style={labelStyle}>{t("carta.fieldFoto")}</label>
-                  <input value={draftFoto} onChange={(e) => setDraftFoto(e.target.value)} style={{ ...inputStyle, padding: "14px 14px" }} />
-                </div>
+                  {isCentralCatalog && !draftSkipsMenuCourse ? (
+                    <div>
+                      <label style={labelStyle}>{t("carta.fieldDefaultCourse")}</label>
+                      <select
+                        value={draftCourse}
+                        onChange={(e) => setDraftCourse(e.target.value)}
+                        disabled={drawerSyncing}
+                        style={{
+                          ...inputStyle,
+                          fontSize: 16,
+                          padding: "14px 14px",
+                          minHeight: 52,
+                          cursor: drawerSyncing ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        <option value="">Sin pase</option>
+                        <option value="1">Entrante</option>
+                        <option value="2">Primero</option>
+                        <option value="3">Segundo</option>
+                        <option value="4">Postre</option>
+                      </select>
+                      <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
+                        {t("carta.fieldDefaultCourseHint")}
+                      </p>
+                    </div>
+                  ) : null}
+                </ProductFormDrawerBlock>
+
+                <ProductFormDrawerCollapsibleSection
+                  title={t("carta.productFormBlockExtra")}
+                  hint={t("carta.productFormBlockExtraHint")}
+                >
+                  <div>
+                    <label style={labelStyle}>{t("carta.fieldDescripcion")}</label>
+                    <textarea value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 90, padding: "14px 14px", fontSize: 15 }} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>{t("carta.fieldFoto")}</label>
+                    <input value={draftFoto} onChange={(e) => setDraftFoto(e.target.value)} style={{ ...inputStyle, padding: "14px 14px" }} placeholder="https://…" />
+                    <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>
+                      {t("carta.fieldFotoHint")}
+                    </p>
+                  </div>
+                </ProductFormDrawerCollapsibleSection>
 
                 {isCentralCatalog ? (
-                  <ProductRecipeEditorSection
-                    saleProductId={editingId}
-                    enabled={draftRecipeEnabled}
-                    onEnabledChange={setDraftRecipeEnabled}
-                    rows={draftRecipeRows}
-                    onRowsChange={setDraftRecipeRows}
-                    inventoryProducts={inventoryLookup}
-                    warnings={draftRecipeWarnings}
-                    disabled={drawerSyncing}
-                    labelStyle={labelStyle}
-                    inputStyle={inputStyle}
-                  />
+                  <ProductFormDrawerCollapsibleSection
+                    title={t("carta.productFormBlockCosts")}
+                    hint={t("carta.productFormBlockCostsHint")}
+                    defaultOpen={false}
+                  >
+                    {editingId && editingPlato ? (
+                      <p style={{ margin: 0, fontSize: 12, color: "#94a3b8" }}>
+                        {t("carta.colEscandallo")}:{" "}
+                        <span style={{ color: editingHasEscandallo ? "#86efac" : "#fbbf24", fontWeight: 800 }}>
+                          {editingHasEscandallo ? t("carta.escSi") : t("carta.escNo")}
+                        </span>
+                      </p>
+                    ) : null}
+                    <ProductProfitabilityPanel
+                      recipeEnabled={draftRecipeEnabled}
+                      recipeRows={draftRecipeRows}
+                      saleProductId={editingId}
+                      salePrice={draftSalePriceForProfitability}
+                      productDocumentsById={centralDocsById}
+                    />
+                    <ProductRecipeEditorSection
+                      saleProductId={editingId}
+                      enabled={draftRecipeEnabled}
+                      onEnabledChange={setDraftRecipeEnabled}
+                      rows={draftRecipeRows}
+                      onRowsChange={setDraftRecipeRows}
+                      inventoryProducts={inventoryLookup}
+                      warnings={draftRecipeWarnings}
+                      disabled={drawerSyncing}
+                      labelStyle={labelStyle}
+                      inputStyle={inputStyle}
+                    />
+                  </ProductFormDrawerCollapsibleSection>
                 ) : null}
+
+                <ProductFormDrawerCollapsibleSection
+                  title={t("carta.productFormBlockAdvanced")}
+                  hint={t("carta.productFormBlockAdvancedHint")}
+                  defaultOpen={false}
+                >
+                  <div>
+                    <label style={labelStyle}>{t("carta.fieldCartaFamilia")}</label>
+                    <select
+                      value={draftCartaMenuFamiliaId === null ? "" : draftCartaMenuFamiliaId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const nextFilter = v === "" ? null : v;
+                        setDraftCartaMenuFamiliaId(nextFilter);
+                        setDraftCategoriaCartaId((cur) => {
+                          if (!cur) return null;
+                          const allowed = cartaCategoriasForMenuFamiliaFiltro(cartaCategorias, nextFilter);
+                          return allowed.some((x) => x.id === cur) ? cur : null;
+                        });
+                      }}
+                      style={{ ...inputStyle, fontSize: 16, padding: "14px 14px", minHeight: 52, cursor: "pointer" }}
+                    >
+                      <option value="">{t("carta.familiaFilterAll")}</option>
+                      <option value={CARTA_MENU_FAMILIA_FILTER_UNASSIGNED}>{t("carta.familiaFilterUnassigned")}</option>
+                      {[...cartaFamilias]
+                        .filter((f) => f.isActive !== false)
+                        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+                        .map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                    </select>
+                    <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>{t("carta.fieldCartaFamiliaHint")}</p>
+                  </div>
+
+                  <p style={{ margin: 0, fontSize: 12, color: "#94a3b8" }}>
+                    {t("carta.fieldProductFamilyInherited")}:{" "}
+                    <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
+                      {draftProductFamilyLabel}
+                    </span>
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: "#64748b", lineHeight: 1.35 }}>
+                    {t("carta.fieldProductFamilyInheritedHint")}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#94a3b8" }}>
+                    {t("carta.fieldModifiersInherited")}:{" "}
+                    <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
+                      {draftEffectiveModifierLabel}
+                    </span>
+                  </p>
+                </ProductFormDrawerCollapsibleSection>
 
                 {formError ? (
                   <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(248, 113, 113, 0.12)", border: "1px solid rgba(248, 113, 113, 0.35)", color: "#fecaca", fontSize: 13, lineHeight: 1.35 }}>
@@ -2949,6 +3387,60 @@ export default function ProductosManagementPage({
           </div>
         </div>
       ) : null}
+      <ProductosBulkAssignCourseModal
+        open={bulkAssignCourseOpen}
+        count={selectedIds.size}
+        saving={bulkAssignCourseSaving}
+        onClose={() => {
+          if (!bulkAssignCourseSaving) setBulkAssignCourseOpen(false);
+        }}
+        onConfirm={(value) => void confirmBulkAssignCourse(value)}
+        t={t}
+      />
+      <ProductosBulkAssignDestinationModal
+        open={bulkAssignDestinationOpen}
+        count={selectedIds.size}
+        saving={bulkAssignDestinationSaving}
+        onClose={() => {
+          if (!bulkAssignDestinationSaving) setBulkAssignDestinationOpen(false);
+        }}
+        onConfirm={(value) => void confirmBulkAssignDestination(value)}
+        t={t}
+      />
+      <ProductosBulkAssignCategoryModal
+        open={bulkAssignCategoryOpen}
+        count={selectedIds.size}
+        saving={bulkAssignCategorySaving}
+        categorias={cartaCategorias}
+        onClose={() => {
+          if (!bulkAssignCategorySaving) setBulkAssignCategoryOpen(false);
+        }}
+        onConfirm={(categoryId, categoryName) =>
+          void confirmBulkAssignCategory(categoryId, categoryName)
+        }
+        t={t}
+      />
+      <ProductosBulkAssignFamilyModal
+        open={bulkAssignFamilyOpen}
+        count={selectedIds.size}
+        saving={bulkAssignFamilySaving}
+        families={productFamilies}
+        onClose={() => {
+          if (!bulkAssignFamilySaving) setBulkAssignFamilyOpen(false);
+        }}
+        onConfirm={(familyId) => void confirmBulkAssignFamily(familyId)}
+        t={t}
+      />
+      <ProductosBulkDeleteModal
+        open={bulkDeleteOpen}
+        count={selectedIds.size}
+        saving={bulkDeleteSaving}
+        onClose={() => {
+          if (!bulkDeleteSaving) setBulkDeleteOpen(false);
+        }}
+        onConfirm={() => void confirmBulkDelete()}
+        t={t}
+      />
     </>
   );
 
@@ -3033,7 +3525,7 @@ export default function ProductosManagementPage({
             ) : null}
             <ProductosTableChrome iceVisual embedFlatChrome>
               <>
-              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical">
+              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical hostly-productos-carta-toolbar--config-primary">
               <input
               type="search"
               value={listSearch}
@@ -3042,8 +3534,71 @@ export default function ProductosManagementPage({
               aria-label="Buscar producto"
               className="hostly-productos-carta-search hostly-productos-carta-search--prominent"
               />
+              <button
+              type="button"
+              className="hostly-productos-carta-advanced-toggle hostly-productos-carta-advanced-toggle--toolbar"
+              aria-expanded={configCartaAdvancedOpen}
+              aria-controls="hostly-productos-carta-advanced-panel"
+              onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
+              >
+              {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
+              </button>
               </div>
+              {renderCatalogFoodDrinkSegment()}
               {renderConfigCartaStatusFilterBar()}
+              {configCartaAdvancedOpen ? (
+              <div
+              id="hostly-productos-carta-advanced-panel"
+              className="hostly-productos-carta-advanced-panel hostly-productos-carta-advanced-panel--inline"
+              >
+              <nav className="hostly-productos-carta-advanced-nav" aria-label="Navegación avanzada de carta">
+              <Link href="/dashboard/configuracion/carta/categorias">{t("cartaCategories.manageLink")}</Link>
+              <button
+              type="button"
+              onClick={() => router.push("/dashboard/configuracion/carta/modificadores")}
+              >
+              {t("carta.ctaModifiers")}
+              </button>
+              <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
+              </nav>
+              <div className="hostly-productos-carta-advanced-section">
+              <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
+              <div className="hostly-productos-carta-filter-chips">
+              {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
+              </div>
+              </div>
+              <div className="hostly-productos-carta-advanced-section">
+              <span className="hostly-productos-carta-advanced-section__label">Categorías de carta</span>
+              <div
+              className="hostly-productos-carta-category-tabs hostly-productos-carta-category-tabs--secondary"
+              aria-label="Pestañas de categoría"
+              >
+              {tabOptions
+              .filter((tab) => tab.id !== "__all__")
+              .map((tab) => {
+              const active = categoryTab === tab.id;
+              return (
+              <button
+              key={tab.id}
+              type="button"
+              onClick={() => setCategoryTab(tab.id)}
+              aria-pressed={active}
+              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${active ? " is-active" : ""}`}
+              >
+              {tab.label}
+              </button>
+              );
+              })}
+              </div>
+              </div>
+              <div className="hostly-productos-carta-advanced-section">
+              <span className="hostly-productos-carta-advanced-section__label">Vista</span>
+              <div className="hostly-productos-carta-view-discreet" role="group" aria-label="Modo de vista">
+              {iceToolbarViewControls(true)}
+              </div>
+              </div>
+              </div>
+              ) : null}
               <div
               className="hostly-productos-carta-list-host hostly-productos-carta-list-host--config-table"
               style={{ flexGrow: 1, minHeight: 0, minWidth: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
@@ -3086,80 +3641,24 @@ export default function ProductosManagementPage({
               activateProducto={activateProducto}
               goToEscandallo={goToEscandallo}
               deleteProducto={deleteProducto}
-              bulkSelectionBreakdown={bulkSelectionBreakdown}
-              bulkApplyToIds={bulkApplyToIds}
+              clearSelection={clearSelection}
+              onAssignPass={() => setBulkAssignCourseOpen(true)}
+              assignPassDisabled={bulkAssignPassDisabled}
+              assignPassDisabledTitle={bulkAssignPassDisabledTitle}
+              onAssignDestination={() => setBulkAssignDestinationOpen(true)}
+              assignDestinationDisabled={bulkAssignDestinationDisabled}
+              assignDestinationDisabledTitle={bulkAssignDestinationDisabledTitle}
+              onAssignCategory={() => setBulkAssignCategoryOpen(true)}
+              assignCategoryDisabled={bulkAssignCategoryDisabled}
+              assignCategoryDisabledTitle={bulkAssignCategoryDisabledTitle}
+              onAssignFamily={() => setBulkAssignFamilyOpen(true)}
+              assignFamilyDisabled={bulkAssignFamilyDisabled}
+              assignFamilyDisabledTitle={bulkAssignFamilyDisabledTitle}
+              onBulkDelete={() => setBulkDeleteOpen(true)}
+              bulkDeleteDisabled={bulkDeleteDisabled}
+              bulkDeleteDisabledTitle={bulkDeleteDisabledTitle}
               />
               )}
-              </div>
-              <div className="hostly-productos-carta-advanced-anchor">
-              <button
-              type="button"
-              className="hostly-productos-carta-advanced-toggle"
-              aria-expanded={configCartaAdvancedOpen}
-              aria-controls="hostly-productos-carta-advanced-panel"
-              onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
-              >
-              {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
-              </button>
-              {configCartaAdvancedOpen ? (
-              <div
-              id="hostly-productos-carta-advanced-panel"
-              className="hostly-productos-carta-advanced-panel"
-              >
-              <nav className="hostly-productos-carta-advanced-nav" aria-label="Navegación avanzada de carta">
-              <Link href="/dashboard/configuracion/carta/categorias">{t("cartaCategories.manageLink")}</Link>
-              <button
-              type="button"
-              onClick={() => router.push("/dashboard/configuracion/carta/modificadores")}
-              >
-              {t("carta.ctaModifiers")}
-              </button>
-              <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
-              </nav>
-              <div className="hostly-productos-carta-advanced-section">
-              <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
-              <div className="hostly-productos-carta-filter-chips">
-              {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
-              </div>
-              </div>
-              <div className="hostly-productos-carta-advanced-section">
-              <span className="hostly-productos-carta-advanced-section__label">Familia</span>
-              <div className="hostly-productos-carta-filter-chips">
-              {iceToolbarProductFamilyFilterButtons(true)}
-              </div>
-              </div>
-              <div className="hostly-productos-carta-advanced-section">
-              <span className="hostly-productos-carta-advanced-section__label">Categorías de carta</span>
-              <div
-              className="hostly-productos-carta-category-tabs hostly-productos-carta-category-tabs--secondary"
-              aria-label="Pestañas de categoría"
-              >
-              {tabOptions
-              .filter((tab) => tab.id !== "__all__")
-              .map((tab) => {
-              const active = categoryTab === tab.id;
-              return (
-              <button
-              key={tab.id}
-              type="button"
-              onClick={() => setCategoryTab(tab.id)}
-              aria-pressed={active}
-              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${active ? " is-active" : ""}`}
-              >
-              {tab.label}
-              </button>
-              );
-              })}
-              </div>
-              </div>
-              <div className="hostly-productos-carta-advanced-section">
-              <span className="hostly-productos-carta-advanced-section__label">Vista</span>
-              <div className="hostly-productos-carta-view-discreet" role="group" aria-label="Modo de vista">
-              {iceToolbarViewControls(true)}
-              </div>
-              </div>
-              </div>
-              ) : null}
               </div>
               </>
             </ProductosTableChrome>
@@ -3540,6 +4039,8 @@ export default function ProductosManagementPage({
           </div>
           )}
 
+          {renderCatalogFoodDrinkSegment()}
+
           <div
             style={{
               flexShrink: 0,
@@ -3563,35 +4064,6 @@ export default function ProductosManagementPage({
             </span>
             {iceToolbarFilterButtons(false)}
             {iceToolbarViewControls(false)}
-          </div>
-
-          <div
-            style={{
-              flexShrink: 0,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 5,
-              padding: "2px 5px 4px",
-              alignItems: "center",
-              borderBottom: iceVisual ? "1px solid var(--hostly-line)" : "1px solid #334155",
-              overflowX: "auto",
-              WebkitOverflowScrolling: "touch",
-            }}
-            role="group"
-            aria-label="Filtrar por familia de producto"
-          >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#64748b",
-                marginRight: 2,
-                flexShrink: 0,
-              }}
-            >
-              Familia
-            </span>
-            {iceToolbarProductFamilyFilterButtons(false)}
           </div>
 
           <div
@@ -3731,102 +4203,26 @@ export default function ProductosManagementPage({
                   boxShadow: "none",
                 }}
               >
-                {selectedIds.size > 0 ? (
-                  <div
-                    style={{
-                      flexShrink: 0,
-                      padding: "4px 8px",
-                      borderBottom: iceVisual ? "1px solid var(--hostly-table-divider-soft)" : "1px solid #334155",
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      gap: 8,
-                      background: iceVisual ? "rgba(224, 242, 254, 0.92)" : "rgba(56, 189, 248, 0.07)",
-                    }}
-                  >
-                    <span style={{ fontSize: 12, fontWeight: 850, color: iceVisual ? "#0369a1" : "#bae6fd" }}>
-                      {t("productos.bulkSelectedCount", { count: String(selectedIds.size) })}
-                    </span>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                      {bulkSelectionBreakdown.countFueraCarta > 0 ? (
-                        <button
-                          type="button"
-                          disabled={isLegacyReadOnly}
-                          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
-                          onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsFuera, { activo: true })}
-                          style={{
-                            ...rowActionBtn,
-                            border: "1px solid rgba(74, 222, 128, 0.45)",
-                            background: "rgba(34, 197, 94, 0.14)",
-                            color: "#dcfce7",
-                            fontWeight: 800,
-                            opacity: isLegacyReadOnly ? 0.48 : 1,
-                            cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          {t("productos.bulkVolverCartaCount", { count: String(bulkSelectionBreakdown.countFueraCarta) })}
-                        </button>
-                      ) : null}
-                      {bulkSelectionBreakdown.countEnCarta > 0 ? (
-                        <button
-                          type="button"
-                          disabled={isLegacyReadOnly}
-                          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
-                          onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsEnCarta, { activo: false })}
-                          style={{
-                            ...rowActionBtn,
-                            border: "1px solid rgba(251, 191, 36, 0.5)",
-                            background: "rgba(245, 158, 11, 0.12)",
-                            color: "#fef3c7",
-                            fontWeight: 800,
-                            opacity: isLegacyReadOnly ? 0.48 : 1,
-                            cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          {t("productos.bulkQuitarCartaCount", { count: String(bulkSelectionBreakdown.countEnCarta) })}
-                        </button>
-                      ) : null}
-                      {bulkSelectionBreakdown.countInactivos > 0 ? (
-                        <button
-                          type="button"
-                          disabled={isLegacyReadOnly}
-                          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
-                          onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsInactivos, { isActive: true })}
-                          style={{
-                            ...rowActionBtn,
-                            border: "1px solid rgba(52, 211, 153, 0.4)",
-                            background: "rgba(16, 185, 129, 0.1)",
-                            color: "#a7f3d0",
-                            fontWeight: 700,
-                            opacity: isLegacyReadOnly ? 0.48 : 1,
-                            cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          {t("productos.bulkActivarCount", { count: String(bulkSelectionBreakdown.countInactivos) })}
-                        </button>
-                      ) : null}
-                      {bulkSelectionBreakdown.countActivosVenta > 0 ? (
-                        <button
-                          type="button"
-                          disabled={isLegacyReadOnly}
-                          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
-                          onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsActivosVenta, { isActive: false })}
-                          style={{
-                            ...rowActionBtn,
-                            border: "1px solid rgba(148, 163, 184, 0.45)",
-                            background: "rgba(51, 65, 85, 0.35)",
-                            color: "#e2e8f0",
-                            fontWeight: 700,
-                            opacity: isLegacyReadOnly ? 0.48 : 1,
-                            cursor: isLegacyReadOnly ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          {t("productos.bulkDesactivarCount", { count: String(bulkSelectionBreakdown.countActivosVenta) })}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
+                <ProductosSelectionBar
+                  count={selectedIds.size}
+                  onClear={clearSelection}
+                  onAssignPass={() => setBulkAssignCourseOpen(true)}
+                  assignPassDisabled={bulkAssignPassDisabled}
+                  assignPassDisabledTitle={bulkAssignPassDisabledTitle}
+                  onAssignDestination={() => setBulkAssignDestinationOpen(true)}
+                  assignDestinationDisabled={bulkAssignDestinationDisabled}
+                  assignDestinationDisabledTitle={bulkAssignDestinationDisabledTitle}
+                  onAssignCategory={() => setBulkAssignCategoryOpen(true)}
+                  assignCategoryDisabled={bulkAssignCategoryDisabled}
+                  assignCategoryDisabledTitle={bulkAssignCategoryDisabledTitle}
+                  onAssignFamily={() => setBulkAssignFamilyOpen(true)}
+                  assignFamilyDisabled={bulkAssignFamilyDisabled}
+                  assignFamilyDisabledTitle={bulkAssignFamilyDisabledTitle}
+                  onBulkDelete={() => setBulkDeleteOpen(true)}
+                  bulkDeleteDisabled={bulkDeleteDisabled}
+                  bulkDeleteDisabledTitle={bulkDeleteDisabledTitle}
+                  t={t}
+                />
                 <div style={{ overflowX: "auto", flex: 1, minHeight: 0, width: "100%", WebkitOverflowScrolling: "touch" }}>
                   <div style={{ width: "100%", minWidth: productosTableMinInnerWidthPx, minHeight: 0, boxSizing: "border-box" }}>
                     <div

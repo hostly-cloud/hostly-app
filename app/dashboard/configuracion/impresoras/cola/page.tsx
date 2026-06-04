@@ -40,6 +40,7 @@ import {
   type PrintJobDocument,
   type PrintJobStatus,
 } from "@/lib/printing/print-job-types";
+import { getMenuCourseLabel } from "@/lib/carta/menu-course";
 
 type StatusFilter = "all" | PrintJobStatus | "stale_pending";
 type StationFilter = "all" | PrinterStationKey;
@@ -552,6 +553,13 @@ export default function ConfigImpresorasColaPage() {
                         </div>
                         <p className="mt-2 text-sm font-semibold text-slate-900">
                           {job.quantity}× {job.productName}
+                          {typeof job.course === "number" &&
+                          job.course >= 1 &&
+                          job.course <= 4 ? (
+                            <span className="ml-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                              {getMenuCourseLabel(job.course)}
+                            </span>
+                          ) : null}
                         </p>
                         {job.modifiersLabel &&
                         !job.productName.includes(job.modifiersLabel) ? (

@@ -13,16 +13,18 @@ import {
   HostlyMobileListGroup,
   HostlyMobileListItem,
   HostlyStatusBadge,
-  HostlyTableBulkBar,
 } from "@/components/ui/hostly/data-table";
 import type { Locale, TranslateFn } from "@/lib/i18n";
 import type { EscandalloMetaMap } from "@/lib/platos-escandallo-bridge";
 import type { PlatoCarta, TipoProductoVenta } from "@/lib/platos-local";
 import {
   getPublicationFlags,
+  ProductosCartaOperMicrochip,
   ProductosCartaRowActions,
   PRODUCTOS_CARTA_LEGACY_BLOCKED,
+  productOperationalFieldsFromPlato,
 } from "./productos-table-cells";
+import { ProductosSelectionBar } from "./productos-selection-bar";
 
 const TIPO_VENTA_I18N: Record<TipoProductoVenta, string> = {
   plato: "carta.tipoPlato",
@@ -49,27 +51,29 @@ function tieneEscandalloForPlato(p: PlatoCarta, meta: EscandalloMetaMap): boolea
   return meta.get(sid)?.tieneEscandallo === true;
 }
 
-/** Microchip Carta: solo visibilidad en carta (sin Activo/Inactivo). */
+/** Microchip Carta: visibilidad en carta (sin mezclar activo/inactivo en el copy corto). */
 function compactCartaBadgeCopy(
   p: PlatoCarta,
   t: TranslateFn,
-  locale: Locale,
 ): { short: string; full: string; tone: "success" | "warning" | "muted" } {
-  const { enCarta, status } = getPublicationFlags(p);
-  const full = enCarta ? t("productos.pubEnCarta") : t("productos.pubFueraCarta");
-  const short = enCarta ? (locale === "en" ? "Menu" : "Carta") : locale === "en" ? "Off" : "Fuera";
-  const tone = status === "onMenu" ? "success" : status === "offMenu" ? "warning" : "muted";
-  return { short, full, tone };
+  const { status } = getPublicationFlags(p);
+  const fullOn = t("productos.pubEnCarta");
+  const fullOff = t("productos.pubFueraCarta");
+  if (status === "onMenu") {
+    return { short: fullOn, full: fullOn, tone: "success" };
+  }
+  if (status === "offMenu") {
+    return { short: t("productos.pubFueraCartaShort"), full: fullOff, tone: "warning" };
+  }
+  return { short: t("productos.pubFueraCartaShort"), full: fullOff, tone: "muted" };
 }
 
 function compactEscBadgeCopy(
   tiene: boolean,
   t: TranslateFn,
-  locale: Locale,
 ): { short: string; full: string; tone: "success" | "muted" } {
   const full = tiene ? t("productos.escCon") : t("productos.escSin");
-  const short =
-    locale === "en" ? (tiene ? "Cost." : "No cost") : tiene ? "Esc." : "Sin esc.";
+  const short = tiene ? t("productos.escShortYes") : t("productos.escShortNo");
   return { short, full, tone: tiene ? "success" : "muted" };
 }
 
@@ -82,14 +86,14 @@ function ProductosCartaTableCartaBadge({
   t: TranslateFn;
   locale: Locale;
 }) {
-  const { short, full, tone } = compactCartaBadgeCopy(p, t, locale);
+  const { short, full, tone } = compactCartaBadgeCopy(p, t);
   return (
     <HostlyStatusBadge
       tone={tone}
       title={full}
       aria-label={full}
-      dot={false}
-      className="hostly-data-table-microchip"
+      dot
+      className="hostly-data-table-microchip hostly-data-table-microchip--carta"
     >
       {short}
     </HostlyStatusBadge>
@@ -105,14 +109,14 @@ function ProductosCartaTableEscBadge({
   t: TranslateFn;
   locale: Locale;
 }) {
-  const { short, full, tone } = compactEscBadgeCopy(tiene, t, locale);
+  const { short, full, tone } = compactEscBadgeCopy(tiene, t);
   return (
     <HostlyStatusBadge
       tone={tone}
       title={full}
       aria-label={full}
       dot={false}
-      className="hostly-data-table-microchip"
+      className="hostly-data-table-microchip hostly-data-table-microchip--esc"
     >
       {short}
     </HostlyStatusBadge>
@@ -123,17 +127,6 @@ export type ProductosCartaGroup = {
   categoria: string;
   sectionKey: string;
   items: PlatoCarta[];
-};
-
-export type ProductosCartaBulkBreakdown = {
-  countFueraCarta: number;
-  countEnCarta: number;
-  countInactivos: number;
-  countActivosVenta: number;
-  idsFuera: Set<string>;
-  idsEnCarta: Set<string>;
-  idsInactivos: Set<string>;
-  idsActivosVenta: Set<string>;
 };
 
 export type ProductosCartaDataViewProps = {
@@ -154,8 +147,22 @@ export type ProductosCartaDataViewProps = {
   activateProducto: (p: PlatoCarta) => void;
   goToEscandallo: (p: PlatoCarta) => void;
   deleteProducto: (p: PlatoCarta) => void;
-  bulkSelectionBreakdown: ProductosCartaBulkBreakdown;
-  bulkApplyToIds: (ids: Set<string>, patch: Partial<{ activo: boolean; isActive: boolean }>) => void;
+  clearSelection: () => void;
+  onAssignPass?: () => void;
+  assignPassDisabled?: boolean;
+  assignPassDisabledTitle?: string;
+  onAssignDestination?: () => void;
+  assignDestinationDisabled?: boolean;
+  assignDestinationDisabledTitle?: string;
+  onAssignCategory?: () => void;
+  assignCategoryDisabled?: boolean;
+  assignCategoryDisabledTitle?: string;
+  onAssignFamily?: () => void;
+  assignFamilyDisabled?: boolean;
+  assignFamilyDisabledTitle?: string;
+  onBulkDelete?: () => void;
+  bulkDeleteDisabled?: boolean;
+  bulkDeleteDisabledTitle?: string;
 };
 
 function SelectionCheckbox({
@@ -187,6 +194,7 @@ function SelectionCheckbox({
 }
 
 function ProductPrimaryCell({ p }: { p: PlatoCarta }) {
+  const ops = productOperationalFieldsFromPlato(p);
   return (
     <div className="hostly-data-table-primary">
       <span className="hostly-data-table-primary__name" title={p.nombre}>
@@ -197,8 +205,11 @@ function ProductPrimaryCell({ p }: { p: PlatoCarta }) {
           IA
         </HostlyStatusBadge>
       ) : null}
-      <span className="hostly-data-table-primary__meta hostly-data-table-col--tablet-only">
-        {p.categoria}
+      <span
+        className="hostly-data-table-primary__meta hostly-data-table-col--tablet-only"
+        title={ops.tabletMeta}
+      >
+        {ops.tabletMeta}
       </span>
     </div>
   );
@@ -226,8 +237,21 @@ function renderProductosCartaHeaderCells(args: {
         />
       </HostlyDataCell>
       <HostlyDataCell col="product">{t("carta.colNombre")}</HostlyDataCell>
-      <HostlyDataCell col="tipo">{t("carta.colTipo")}</HostlyDataCell>
-      <HostlyDataCell col="categoria">{t("carta.colCategoria")}</HostlyDataCell>
+      <HostlyDataCell col="tipo">
+        <span title={t("carta.colTipoTitle")}>{t("carta.colTipo")}</span>
+      </HostlyDataCell>
+      <HostlyDataCell col="categoria">
+        <span title={t("carta.colCategoriaTitle")}>{t("carta.colCategoria")}</span>
+      </HostlyDataCell>
+      <HostlyDataCell col="familia">
+        <span title={t("productos.colFamiliaTitle")}>{t("productos.colFamilia")}</span>
+      </HostlyDataCell>
+      <HostlyDataCell align="center" col="pase">
+        <span title={t("productos.colPaseTitle")}>{t("productos.colPase")}</span>
+      </HostlyDataCell>
+      <HostlyDataCell align="center" col="destino">
+        <span title={t("productos.colDestinoTitle")}>{t("productos.colDestino")}</span>
+      </HostlyDataCell>
       <HostlyDataCell align="end" col="price">
         {t("carta.colPrecio")}
       </HostlyDataCell>
@@ -278,6 +302,7 @@ function renderProductRowCells(args: {
   } = args;
   const tiene = tieneEscandalloForPlato(p, meta);
   const busyEsc = escNavId === p.id;
+  const ops = productOperationalFieldsFromPlato(p);
 
   return (
     <>
@@ -293,14 +318,39 @@ function renderProductRowCells(args: {
         <ProductPrimaryCell p={p} />
       </HostlyDataCell>
       <HostlyDataCell col="tipo">
-        <span className="hostly-data-table-secondary" title={labelTipoVenta(t, p.tipoVenta)}>
+        <HostlyStatusBadge
+          tone="neutral"
+          dot={false}
+          title={labelTipoVenta(t, p.tipoVenta)}
+          aria-label={labelTipoVenta(t, p.tipoVenta)}
+          className="hostly-data-table-tipo-pill"
+        >
           {labelTipoVenta(t, p.tipoVenta)}
-        </span>
+        </HostlyStatusBadge>
       </HostlyDataCell>
       <HostlyDataCell col="categoria">
         <span className="hostly-data-table-secondary" title={p.categoria}>
           {p.categoria}
         </span>
+      </HostlyDataCell>
+      <HostlyDataCell col="familia">
+        <span className="hostly-data-table-secondary" title={ops.familyFull}>
+          {ops.familyShort}
+        </span>
+      </HostlyDataCell>
+      <HostlyDataCell align="center" col="pase">
+        <ProductosCartaOperMicrochip
+          label={ops.courseShort}
+          title={ops.courseFull}
+          className="hostly-data-table-microchip--pase"
+        />
+      </HostlyDataCell>
+      <HostlyDataCell align="center" col="destino">
+        <ProductosCartaOperMicrochip
+          label={ops.destinationShort}
+          title={ops.destinationFull}
+          className="hostly-data-table-microchip--dest"
+        />
       </HostlyDataCell>
       <HostlyDataCell align="end" col="price">
         <span className="hostly-data-table-price">{formatEuro(p.precioVenta, locale)}</span>
@@ -335,6 +385,7 @@ function MobileProductItem(props: ProductosCartaDataViewProps & { p: PlatoCarta 
   const tiene = tieneEscandalloForPlato(p, meta);
   const busyEsc = escNavId === p.id;
   const selected = selectedIds.has(p.id);
+  const ops = productOperationalFieldsFromPlato(p);
 
   return (
     <HostlyMobileListItem
@@ -363,7 +414,7 @@ function MobileProductItem(props: ProductosCartaDataViewProps & { p: PlatoCarta 
           <span className="hostly-mobile-list-item__dot" aria-hidden>
             ·
           </span>
-          <span>{p.categoria}</span>
+          <span title={ops.tabletMeta}>{ops.tabletMeta}</span>
         </>
       }
       aside={
@@ -402,67 +453,48 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     isLegacyReadOnly,
     t,
     toggleSelectAllDisplayed,
-    bulkSelectionBreakdown,
-    bulkApplyToIds,
+    clearSelection,
+    onAssignPass,
+    assignPassDisabled,
+    assignPassDisabledTitle,
+    onAssignDestination,
+    assignDestinationDisabled,
+    assignDestinationDisabledTitle,
+    onAssignCategory,
+    assignCategoryDisabled,
+    assignCategoryDisabledTitle,
+    onAssignFamily,
+    assignFamilyDisabled,
+    assignFamilyDisabledTitle,
+    onBulkDelete,
+    bulkDeleteDisabled,
+    bulkDeleteDisabledTitle,
   } = props;
 
   const allSelected = displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id));
 
   return (
     <div className="hostly-data-table-viewport">
-      {selectedIds.size > 0 ? (
-        <HostlyTableBulkBar>
-          <span className="hostly-data-table-bulk-bar__label">
-            {t("productos.bulkSelectedCount", { count: String(selectedIds.size) })}
-          </span>
-          <div className="hostly-data-table-bulk-bar__actions">
-            {bulkSelectionBreakdown.countFueraCarta > 0 ? (
-              <button
-                type="button"
-                disabled={isLegacyReadOnly}
-                title={isLegacyReadOnly ? PRODUCTOS_CARTA_LEGACY_BLOCKED : undefined}
-                onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsFuera, { activo: true })}
-                className="hostly-button-secondary hostly-button-compact hostly-data-table-bulk-bar__btn hostly-data-table-bulk-bar__btn--success"
-              >
-                {t("productos.bulkVolverCartaCount", { count: String(bulkSelectionBreakdown.countFueraCarta) })}
-              </button>
-            ) : null}
-            {bulkSelectionBreakdown.countEnCarta > 0 ? (
-              <button
-                type="button"
-                disabled={isLegacyReadOnly}
-                title={isLegacyReadOnly ? PRODUCTOS_CARTA_LEGACY_BLOCKED : undefined}
-                onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsEnCarta, { activo: false })}
-                className="hostly-button-secondary hostly-button-compact hostly-data-table-bulk-bar__btn hostly-data-table-bulk-bar__btn--warning"
-              >
-                {t("productos.bulkQuitarCartaCount", { count: String(bulkSelectionBreakdown.countEnCarta) })}
-              </button>
-            ) : null}
-            {bulkSelectionBreakdown.countInactivos > 0 ? (
-              <button
-                type="button"
-                disabled={isLegacyReadOnly}
-                title={isLegacyReadOnly ? PRODUCTOS_CARTA_LEGACY_BLOCKED : undefined}
-                onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsInactivos, { isActive: true })}
-                className="hostly-button-secondary hostly-button-compact hostly-data-table-bulk-bar__btn"
-              >
-                {t("productos.bulkActivarCount", { count: String(bulkSelectionBreakdown.countInactivos) })}
-              </button>
-            ) : null}
-            {bulkSelectionBreakdown.countActivosVenta > 0 ? (
-              <button
-                type="button"
-                disabled={isLegacyReadOnly}
-                title={isLegacyReadOnly ? PRODUCTOS_CARTA_LEGACY_BLOCKED : undefined}
-                onClick={() => bulkApplyToIds(bulkSelectionBreakdown.idsActivosVenta, { isActive: false })}
-                className="hostly-button-secondary hostly-button-compact hostly-data-table-bulk-bar__btn"
-              >
-                {t("productos.bulkDesactivarCount", { count: String(bulkSelectionBreakdown.countActivosVenta) })}
-              </button>
-            ) : null}
-          </div>
-        </HostlyTableBulkBar>
-      ) : null}
+      <ProductosSelectionBar
+        count={selectedIds.size}
+        onClear={clearSelection}
+        onAssignPass={onAssignPass}
+        assignPassDisabled={assignPassDisabled}
+        assignPassDisabledTitle={assignPassDisabledTitle}
+        onAssignDestination={onAssignDestination}
+        assignDestinationDisabled={assignDestinationDisabled}
+        assignDestinationDisabledTitle={assignDestinationDisabledTitle}
+        onAssignCategory={onAssignCategory}
+        assignCategoryDisabled={assignCategoryDisabled}
+        assignCategoryDisabledTitle={assignCategoryDisabledTitle}
+        onAssignFamily={onAssignFamily}
+        assignFamilyDisabled={assignFamilyDisabled}
+        assignFamilyDisabledTitle={assignFamilyDisabledTitle}
+        onBulkDelete={onBulkDelete}
+        bulkDeleteDisabled={bulkDeleteDisabled}
+        bulkDeleteDisabledTitle={bulkDeleteDisabledTitle}
+        t={t}
+      />
 
       <HostlyDataTable variant="productos-carta" className="hostly-data-table--dense-config">
         <HostlyDataTableScroll>

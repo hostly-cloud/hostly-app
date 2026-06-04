@@ -7,7 +7,7 @@ export type RequestMenuImportPublishResult =
 
 export async function requestMenuImportPublish(
   draftId: string,
-  options?: { itemIds?: string[]; confirmDuplicates?: string[] },
+  options?: { itemIds?: string[]; confirmDuplicates?: string[]; confirmReviews?: string[] },
 ): Promise<RequestMenuImportPublishResult> {
   const user = auth.currentUser;
   if (!user) {
@@ -31,6 +31,9 @@ export async function requestMenuImportPublish(
       ...(options?.itemIds && options.itemIds.length > 0 ? { itemIds: options.itemIds } : {}),
       ...(options?.confirmDuplicates && options.confirmDuplicates.length > 0
         ? { confirmDuplicates: options.confirmDuplicates }
+        : {}),
+      ...(options?.confirmReviews && options.confirmReviews.length > 0
+        ? { confirmReviews: options.confirmReviews }
         : {}),
     }),
   });

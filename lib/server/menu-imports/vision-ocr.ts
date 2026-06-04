@@ -1,4 +1,5 @@
 import { ImageAnnotatorClient } from "@google-cloud/vision";
+import { isMenuImportPipelineDiagnosticsEnabled } from "./menu-import-pipeline-diagnostics";
 import { MAX_VISION_PDF_PAGES, OCR_TIMEOUT_MS } from "./menu-import-limits";
 
 let visionClient: ImageAnnotatorClient | null | undefined;
@@ -31,20 +32,45 @@ function joinVisionText(fullTextAnnotation: { text?: string | null } | null | un
 export async function ocrImageBuffer(buffer: Buffer): Promise<string> {
   const client = getVisionClient();
   if (!client) {
-    throw new Error("Google Vision API no disponible (revisa credenciales Admin y API habilitada)");
+    const message = "Google Vision API no disponible (revisa credenciales Admin y API habilitada)";
+    if (isMenuImportPipelineDiagnosticsEnabled()) {
+      console.error("[Hostly][MenuImport Pipeline] vision_client_unavailable", { message });
+    }
+    throw new Error(message);
   }
 
-  const [result] = await withTimeout(
-    client.documentTextDetection({ image: { content: buffer } }),
-    OCR_TIMEOUT_MS,
-    "image",
-  );
+  try {
+    const [result] = await withTimeout(
+      client.documentTextDetection({ image: { content: buffer } }),
+      OCR_TIMEOUT_MS,
+      "image",
+    );
 
-  const text = joinVisionText(result.fullTextAnnotation);
-  if (!text) {
-    throw new Error("OCR no detectó texto en la imagen");
+    const text = joinVisionText(result.fullTextAnnotation);
+    if (!text) {
+      const message = "OCR no detectó texto en la imagen";
+      if (isMenuImportPipelineDiagnosticsEnabled()) {
+        console.warn("[Hostly][MenuImport Pipeline] vision_empty_text", { message, bytes: buffer.length });
+      }
+      throw new Error(message);
+    }
+
+    if (isMenuImportPipelineDiagnosticsEnabled()) {
+      console.info("[Hostly][MenuImport Pipeline] vision_image_ocr_ok", {
+        textLength: text.length,
+        preview: text.slice(0, 200),
+      });
+    }
+    return text;
+  } catch (e) {
+    if (isMenuImportPipelineDiagnosticsEnabled()) {
+      console.error("[Hostly][MenuImport Pipeline] vision_image_ocr_error", {
+        message: e instanceof Error ? e.message : String(e),
+        bytes: buffer.length,
+      });
+    }
+    throw e;
   }
-  return text;
 }
 
 export async function ocrPdfBuffer(buffer: Buffer): Promise<{ text: string; warnings: string[] }> {

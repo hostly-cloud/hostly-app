@@ -287,3 +287,27 @@ export function productDocumentsToInventoryLookup(
     unit: doc.inventory?.unit,
   }));
 }
+
+/** Coste total estimado desde ingredientes de receta (€); null si no hay datos. */
+export function estimateRecipeCostTotal(
+  recipe: ProductRecipeDocument | null | undefined,
+): number | null {
+  if (!recipe?.enabled) return null;
+  let sum = 0;
+  let hasLine = false;
+  for (const raw of recipe.ingredients ?? []) {
+    const cost =
+      typeof raw.cost === "number" && Number.isFinite(raw.cost) && raw.cost >= 0
+        ? raw.cost
+        : null;
+    const qty =
+      typeof raw.quantity === "number" && Number.isFinite(raw.quantity) && raw.quantity > 0
+        ? raw.quantity
+        : null;
+    if (cost == null || qty == null) continue;
+    sum += cost * qty;
+    hasLine = true;
+  }
+  if (!hasLine) return null;
+  return Math.round((sum + Number.EPSILON) * 100) / 100;
+}

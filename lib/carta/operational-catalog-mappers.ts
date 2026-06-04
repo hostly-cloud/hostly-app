@@ -71,6 +71,8 @@ export function centralProductToPlatoCarta(
   const visibleOnMenu = doc.visibleOnMenu !== false;
   const now = msToIso(doc.updatedAt ?? doc.createdAt);
 
+  const recipeEnabled = doc.recipe?.enabled === true;
+
   const plato: PlatoCarta & { isActive?: boolean; enCarta?: boolean } = {
     id: doc.id,
     restauranteId: rid,
@@ -92,9 +94,12 @@ export function centralProductToPlatoCarta(
     ...(doc.productFamilyName ? { productFamilyName: doc.productFamilyName } : {}),
     ...(doc.productFamilyType ? { productFamilyType: doc.productFamilyType } : {}),
     ...(doc.modifierGroupIds?.length ? { modifierGroupIds: doc.modifierGroupIds } : {}),
+    ...(doc.course !== undefined ? { course: doc.course } : {}),
     precioVenta,
     activo: visibleOnMenu,
     enCarta: visibleOnMenu,
+    tieneEscandallo: recipeEnabled,
+    estadoCoste: recipeEnabled ? "ok" : "pendiente",
     escandalloSupabaseId: null,
     createdAt: msToIso(doc.createdAt),
     updatedAt: now,
@@ -114,12 +119,14 @@ export function platoCartaToOperationalProduct(p: PlatoCarta): Product {
   const cat = typeof p.categoria === "string" ? p.categoria.trim() : "";
   const courseRaw = (p as PlatoCarta & { course?: unknown }).course;
   const course =
-    typeof courseRaw === "number" &&
-    Number.isFinite(courseRaw) &&
-    courseRaw >= 1 &&
-    courseRaw <= 4
-      ? Math.floor(courseRaw)
-      : undefined;
+    courseRaw === null
+      ? null
+      : typeof courseRaw === "number" &&
+          Number.isFinite(courseRaw) &&
+          courseRaw >= 1 &&
+          courseRaw <= 4
+        ? Math.floor(courseRaw)
+        : undefined;
   const preparationArea = p.preparationArea?.trim() || undefined;
   const station =
     mapPreparationAreaToStation(preparationArea ?? null) ?? undefined;
@@ -141,7 +148,7 @@ export function platoCartaToOperationalProduct(p: PlatoCarta): Product {
       ? { operationStationName: p.operationStationName }
       : {}),
     ...(p.operationStationType ? { operationStationType: p.operationStationType } : {}),
-    ...(course != null ? { course } : {}),
+    ...(course !== undefined ? { course } : {}),
     imageUrl:
       typeof p.fotoUrl === "string" && p.fotoUrl.trim() !== ""
         ? p.fotoUrl.trim()

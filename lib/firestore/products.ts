@@ -29,6 +29,7 @@ import {
   buildProductStationPatchFromSelectValue,
 } from "@/lib/operacion/product-operation-station";
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import { readProductCatalogCourseFromRecord } from "@/lib/carta/menu-course";
 import {
   productFamilyFieldsToFirestorePatch,
   type ProductFamilyDenormFields,
@@ -125,6 +126,8 @@ export type ProductDocument = {
   visibleOnMenu?: boolean;
   /** Grupos de modificadores asignados directamente al producto (opcional). */
   modifierGroupIds?: string[] | null;
+  /** Pase por defecto TPV (1–4). `null` = sin pase; ausente = legacy. */
+  course?: number | null;
   inventory: ProductInventoryDocument;
   recipe: ProductRecipeDocument;
   createdAt?: number;
@@ -841,6 +844,8 @@ function mapCentralDocToProductDocument(
     ? (recipeRaw.ingredients as ProductRecipeIngredientDocument[])
     : [];
 
+  const catalogCourse = readProductCatalogCourseFromRecord(data);
+
   return {
     id: snap.id,
     name,
@@ -862,6 +867,7 @@ function mapCentralDocToProductDocument(
     ...(productFamilyName ? { productFamilyName } : {}),
     ...(productFamilyType ? { productFamilyType } : {}),
     ...(modifierGroupIds.length > 0 ? { modifierGroupIds } : {}),
+    ...(catalogCourse !== undefined ? { course: catalogCourse } : {}),
     ...(visibleOnMenu !== undefined ? { visibleOnMenu } : {}),
     inventory: normalizeProductInventory(inventoryRaw),
     recipe: {
@@ -897,6 +903,27 @@ export function listenCentralProducts(
       onListenError?.(error);
     },
   );
+}
+
+/** Lectura puntual del catálogo central (Escandallos, dashboard) sin listener duplicado. */
+export async function fetchCentralProductsOnce(
+  restaurantId: string,
+): Promise<{ docs: ProductDocument[]; error: string | null }> {
+  const rid = restaurantId.trim();
+  if (!rid || !auth.currentUser) {
+    return { docs: [], error: null };
+  }
+  try {
+    const snap = await getDocs(query(centralProductsCollection(rid)));
+    const list = snap.docs.map(mapCentralDocToProductDocument);
+    list.sort((a, b) =>
+      a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
+    );
+    return { docs: list, error: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "CENTRAL_PRODUCTS_FETCH_FAILED";
+    return { docs: [], error: message };
+  }
 }
 
 function mapLegacyInventoryDocToProductDocument(
@@ -1361,6 +1388,13 @@ export async function disableProductInventory(
 
 export {
   activateCentralProduct,
+  bulkUpdateCentralProductsCourse,
+  bulkUpdateCentralProductsDestination,
+  bulkUpdateCentralProductsCategory,
+  bulkUpdateCentralProductsFamily,
+  type BulkCatalogCategoryPatch,
+  type BulkCatalogProductFamilyPatch,
+  type BulkCatalogKdsDestination,
   createCentralProduct,
   deleteCentralProductPermanently,
   disableCentralProduct,

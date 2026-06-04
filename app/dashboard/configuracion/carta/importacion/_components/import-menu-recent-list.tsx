@@ -3,6 +3,7 @@
 import { HostlySurface, hostlyCx } from "@/components/ui/hostly";
 import {
   MENU_IMPORT_STATUS_LABELS,
+  menuImportDraftListHint,
   menuImportSummaryLabel,
 } from "@/lib/carta/menu-import-draft-mapper";
 import { menuTypeToCartaType } from "@/lib/carta/menu-import-type-map";
@@ -19,6 +20,8 @@ function statusTone(status: MenuImportDraftStatus): string {
       return "bg-rose-50 text-rose-900 border-rose-200/80";
     case "published":
       return "bg-violet-50 text-violet-900 border-violet-200/80";
+    case "partially_published":
+      return "bg-amber-50 text-amber-950 border-amber-200/80";
     default:
       return "bg-slate-50 text-slate-700 border-slate-200/80";
   }
@@ -103,6 +106,10 @@ export function ImportMenuRecentList({
                       </p>
                       <p className="mt-0.5 text-[10px] text-[var(--hostly-ink-muted)]">
                         {cartaLabel} · {formatDraftDate(draft.updatedAt)}
+                        {draft.itemsCount > 0 ? ` · ${draft.itemsCount} prod.` : ""}
+                      </p>
+                      <p className="mt-1 text-[10px] leading-snug text-[var(--hostly-ink-soft)]">
+                        {menuImportDraftListHint(draft)}
                       </p>
                     </div>
                     <span

@@ -5,6 +5,9 @@ import {
   type ProductFamilyType,
 } from "@/lib/carta/product-family-types";
 
+/** Segmento principal Productos: comida / bebida por `productFamilyType` denormalizado. */
+export type CatalogFoodDrinkSegment = "all" | "food" | "drink";
+
 /** Filtro de listado por familia de producto (agrupación desde categoría). Distinto de `ProductKindListFilter`. */
 export type ProductFamilyListFilter = "all" | ProductFamilyType | "none";
 
@@ -45,4 +48,26 @@ export function matchesProductFamilyListFilter(
     return !source.productFamilyId?.trim() && type == null;
   }
   return type === filter;
+}
+
+/** Filtro principal Todos / Comida / Bebida; `other` y sin tipo solo en Todos. */
+export function matchesCatalogFoodDrinkSegment(
+  source: ProductFamilyDenormSource,
+  segment: CatalogFoodDrinkSegment,
+): boolean {
+  if (segment === "all") return true;
+  return readProductFamilyTypeForFilter(source) === segment;
+}
+
+export function productFamilyDenormFromPlato(
+  p: Pick<
+    ProductFamilyDenormSource,
+    "productFamilyId" | "productFamilyName" | "productFamilyType"
+  >,
+): ProductFamilyDenormSource {
+  return {
+    productFamilyId: p.productFamilyId ?? null,
+    productFamilyName: p.productFamilyName ?? null,
+    productFamilyType: p.productFamilyType ?? null,
+  };
 }

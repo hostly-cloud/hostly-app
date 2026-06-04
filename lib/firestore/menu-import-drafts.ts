@@ -14,6 +14,11 @@ import {
   type DocumentSnapshot,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
+import {
+  logMenuImportDraftSaveError,
+  summarizeMenuImportDraftSavePayload,
+} from "@/lib/carta/menu-import-draft-save-diagnostics";
+import { sanitizeMenuImportDraftUpdatePatch } from "@/lib/carta/sanitize-menu-import-draft-payload";
 import { auth, db } from "@/lib/firebase/client";
 import type { MenuImportPublishLogEntry } from "@/lib/carta/publish-result-types";
 import type {
@@ -62,7 +67,10 @@ export type MenuImportDraftDocument = {
 export type MenuImportDraftSummary = Omit<
   MenuImportDraftDocument,
   "sections" | "items" | "rawText"
->;
+> & {
+  itemsCount: number;
+  sectionsCount: number;
+};
 
 export type CreateMenuImportDraftInput = {
   sourceType: ImportedMenuSourceType;
@@ -370,11 +378,21 @@ export function parseMenuImportDraftDocument(
 }
 
 export function menuImportDraftToSummary(doc: MenuImportDraftDocument): MenuImportDraftSummary {
+  const sections = doc.sections ?? [];
+  const items = doc.items ?? [];
+  const itemsCount =
+    items.length > 0
+      ? items.length
+      : sections.reduce((total, section) => total + (section.items?.length ?? 0), 0);
   const { sections: _s, items: _i, rawText: _r, ...rest } = doc;
   void _s;
   void _i;
   void _r;
-  return rest;
+  return {
+    ...rest,
+    itemsCount,
+    sectionsCount: sections.length,
+  };
 }
 
 export async function createMenuImportDraft(
@@ -419,31 +437,36 @@ export async function updateMenuImportDraft(
   draftId: string,
   input: UpdateMenuImportDraftInput,
 ): Promise<void> {
-  const rid = assertRestaurantId(restaurantId);
-  const did = String(draftId ?? "").trim();
-  if (!did) {
-    throw new Error("menu-import-draft: draftId obligatorio");
-  }
-  const uid = assertUserId(input.updatedBy);
-
-  const patch: Record<string, unknown> = {
-    updatedAt: Date.now(),
-    updatedBy: uid,
-  };
-
-  if (input.sourceUrl !== undefined) patch.sourceUrl = input.sourceUrl;
-  if (input.storagePath !== undefined) patch.storagePath = input.storagePath;
-  if (input.originalFileName !== undefined) patch.originalFileName = input.originalFileName;
-  if (input.menuType !== undefined) patch.menuType = input.menuType;
-  if (input.status !== undefined) patch.status = input.status;
-  if (input.sections !== undefined) patch.sections = input.sections;
-  if (input.items !== undefined) patch.items = input.items;
-  if (input.rawText !== undefined) patch.rawText = input.rawText;
-  if (input.parserWarnings !== undefined) patch.parserWarnings = input.parserWarnings;
-  if (input.aiWarnings !== undefined) patch.aiWarnings = input.aiWarnings;
-  if (input.errorMessage !== undefined) patch.errorMessage = input.errorMessage;
+  let rid = "";
+  let did = "";
+  let uid = "";
+  let patch: Record<string, unknown> = { updatedAt: Date.now() };
 
   try {
+    rid = assertRestaurantId(restaurantId);
+    did = String(draftId ?? "").trim();
+    if (!did) {
+      throw new Error("menu-import-draft: draftId obligatorio");
+    }
+    uid = assertUserId(input.updatedBy);
+
+    patch = {
+      updatedAt: Date.now(),
+      updatedBy: uid,
+    };
+
+    if (input.sourceUrl !== undefined) patch.sourceUrl = input.sourceUrl;
+    if (input.storagePath !== undefined) patch.storagePath = input.storagePath;
+    if (input.originalFileName !== undefined) patch.originalFileName = input.originalFileName;
+    if (input.menuType !== undefined) patch.menuType = input.menuType;
+    if (input.status !== undefined) patch.status = input.status;
+    if (input.sections !== undefined) patch.sections = input.sections;
+    if (input.items !== undefined) patch.items = input.items;
+    if (input.rawText !== undefined) patch.rawText = input.rawText;
+    if (input.parserWarnings !== undefined) patch.parserWarnings = input.parserWarnings;
+    if (input.aiWarnings !== undefined) patch.aiWarnings = input.aiWarnings;
+    if (input.errorMessage !== undefined) patch.errorMessage = input.errorMessage;
+
     const ref = draftDocRef(rid, did);
     const existing = await getDoc(ref);
     if (!existing.exists()) {
@@ -455,8 +478,25 @@ export async function updateMenuImportDraft(
     if (docRid !== rid) {
       throw new Error("menu-import-draft: tenant no autorizado");
     }
-    await updateDoc(ref, patch);
+    const sanitizedPatch = sanitizeMenuImportDraftUpdatePatch(patch);
+    await updateDoc(ref, sanitizedPatch);
   } catch (e) {
+    logMenuImportDraftSaveError({
+      phase: "updateMenuImportDraft",
+      error: e,
+      restaurantId: rid || restaurantId,
+      draftId: did || draftId,
+      userId: uid || input.updatedBy,
+      payload: {
+        patchKeys: Object.keys(patch),
+        ...summarizeMenuImportDraftSavePayload({
+          sections: patch.sections,
+          items: patch.items,
+          updatedBy: uid || input.updatedBy,
+        }),
+        patch,
+      },
+    });
     rethrowWithMessage(e);
   }
 }

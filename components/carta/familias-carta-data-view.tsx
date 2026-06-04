@@ -43,9 +43,9 @@ export function FamiliasCartaDataView({ items, loading }: FamiliasCartaDataViewP
           <span className="hostly-carta-config-empty__icon" aria-hidden>
             FM
           </span>
-          <p className="hostly-carta-config-empty__title">Sin familias todavía</p>
+          <p className="hostly-carta-config-empty__title">Sin familias de menú todavía</p>
           <p className="hostly-carta-config-empty__body">
-            Importa carta con IA o estructura categorías; aquí aparecerá el listado.
+            Importa carta con IA o crea secciones en Categorías; aquí aparecerán los bloques del menú (Platos, Bebidas…).
           </p>
           <div className="hostly-carta-config-empty__actions">
             <Link href="/dashboard/configuracion/carta/importacion" className="hostly-button-primary hostly-button-compact">

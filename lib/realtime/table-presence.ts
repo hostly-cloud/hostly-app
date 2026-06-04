@@ -186,7 +186,6 @@ export function buildPresenceDisplayLabel(params: {
   staleOthers: readonly TablePresenceDocument[];
   nowMs?: number;
 }): string | null {
-  const nowMs = params.nowMs ?? Date.now();
   const { activeOthers, staleOthers } = params;
 
   if (activeOthers.length === 1) {
@@ -202,19 +201,14 @@ export function buildPresenceDisplayLabel(params: {
     return `${activeOthers.length} personas operando`;
   }
 
+  // Sesiones caducadas siguen en `staleOthers`; no se muestra etiqueta en comanda.
   if (staleOthers.length > 0) {
-    const latest = staleOthers.reduce((best, entry) =>
-      entry.lastSeenAt > best.lastSeenAt ? entry : best,
-    );
-    const minutes = Math.max(
-      1,
-      Math.round((nowMs - latest.lastSeenAt) / 60_000),
-    );
-    return `Última actividad hace ${minutes} min`;
+    return null;
   }
 
   return null;
 }
+
 
 export function resolvePresenceState(
   entries: readonly TablePresenceDocument[],

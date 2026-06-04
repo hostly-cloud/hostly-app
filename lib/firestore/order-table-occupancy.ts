@@ -11,6 +11,8 @@ const TERMINAL_ORDER_STATUSES = new Set([
   "cancelled",
   "canceled",
   "cancelado",
+  /** Comanda absorbida por unión de mesas; conserva histórico, no cuenta como activa. */
+  "merged",
 ]);
 
 export function isOrderStatusActiveForTableOccupancy(

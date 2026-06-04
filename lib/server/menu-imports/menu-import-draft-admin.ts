@@ -7,6 +7,7 @@ import {
   type MenuImportMenuType,
 } from "@/lib/firestore/menu-import-drafts";
 import type { MenuImportPublishLogEntry } from "@/lib/carta/publish-result-types";
+import { sanitizeMenuImportDraftUpdatePatch } from "@/lib/carta/sanitize-menu-import-draft-payload";
 import type {
   ImportedMenuItem,
   ImportedMenuSection,
@@ -257,9 +258,11 @@ export async function updateMenuImportDraftAdmin(
   if (docRid !== restaurantId.trim()) {
     throw new Error("TENANT_MISMATCH");
   }
-  await ref.update({
-    ...patch,
-    updatedAt: Date.now(),
-    serverSavedAt: FieldValue.serverTimestamp(),
-  });
+  await ref.update(
+    sanitizeMenuImportDraftUpdatePatch({
+      ...patch,
+      updatedAt: Date.now(),
+      serverSavedAt: FieldValue.serverTimestamp(),
+    }),
+  );
 }
