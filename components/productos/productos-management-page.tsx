@@ -35,6 +35,7 @@ import { comparePlatoCarta } from "@/lib/carta/product-sort-order";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
 import {
   cartaCategoriasForMenuFamiliaFiltro,
+  cartaCategoriasForTipoYFamiliaFiltro,
   categoryRequiresManualTipoVenta,
   defaultCartaCategoriaTipoForTipoProducto,
   inferTipoVentaFromCategory,
@@ -43,6 +44,8 @@ import {
 import {
   buildProductFamilyPatchFromCategoryId,
   getProductFamilyLabel,
+  hasProductFamily,
+  type ProductFamilyDenormFields,
 } from "@/lib/carta/product-category-family-resolver";
 import {
   matchesCatalogFoodDrinkSegment,
@@ -530,6 +533,46 @@ function getPublicationFlags(p: PlatoCarta): {
   return { isActive, enCarta, status: "offMenu" };
 }
 
+function resolveProductFamilyFirestoreFromDraft(args: {
+  categoryId: string | null;
+  cartaCategorias: readonly CartaCategoria[];
+  existingProductFamily?: ProductFamilyDenormFields | null;
+}): Pick<
+  CentralOperationalProductInput,
+  "productFamilyId" | "productFamilyName" | "productFamilyType"
+> {
+  const familyPatch = buildProductFamilyPatchFromCategoryId(
+    args.categoryId,
+    args.cartaCategorias,
+  );
+  if (familyPatch.productFamilyId && !familyPatch.clearProductFamily) {
+    return {
+      productFamilyId: familyPatch.productFamilyId,
+      productFamilyName: familyPatch.productFamilyName ?? null,
+      productFamilyType: familyPatch.productFamilyType ?? null,
+    };
+  }
+  const existing = args.existingProductFamily;
+  const existingId = existing?.productFamilyId?.trim();
+  const existingName = existing?.productFamilyName?.trim();
+  const existingType = existing?.productFamilyType;
+  if (existingId && existingName && existingType) {
+    return {
+      productFamilyId: existingId,
+      productFamilyName: existingName,
+      productFamilyType: existingType,
+    };
+  }
+  if (familyPatch.clearProductFamily) {
+    return {
+      productFamilyId: null,
+      productFamilyName: null,
+      productFamilyType: null,
+    };
+  }
+  return {};
+}
+
 function buildCentralInputFromDraft(args: {
   nombre: string;
   operationStationSelect: string;
@@ -543,26 +586,14 @@ function buildCentralInputFromDraft(args: {
   draftDesc: string;
   draftCourse: string;
   existingIsActive?: boolean;
+  existingProductFamily?: ProductFamilyDenormFields | null;
 }): CentralOperationalProductInput {
   const categoryId = args.categoriaCartaIdPatch ?? null;
-  const familyPatch = buildProductFamilyPatchFromCategoryId(
+  const familyFirestore = resolveProductFamilyFirestoreFromDraft({
     categoryId,
-    args.cartaCategorias,
-  );
-  const familyFirestore =
-    familyPatch.clearProductFamily
-      ? {
-          productFamilyId: null as string | null,
-          productFamilyName: null as string | null,
-          productFamilyType: null,
-        }
-      : familyPatch.productFamilyId
-        ? {
-            productFamilyId: familyPatch.productFamilyId,
-            productFamilyName: familyPatch.productFamilyName ?? null,
-            productFamilyType: familyPatch.productFamilyType ?? null,
-          }
-        : {};
+    cartaCategorias: args.cartaCategorias,
+    existingProductFamily: args.existingProductFamily,
+  });
 
   const base = {
     name: args.nombre,
@@ -2227,10 +2258,17 @@ export default function ProductosManagementPage({
     setDraftCourse("");
   }, [formOpen, draftSkipsMenuCourse]);
 
-  const categoriasForForm = useMemo(
-    () => cartaCategoriasForMenuFamiliaFiltro(cartaCategorias, draftCartaMenuFamiliaId),
-    [cartaCategorias, draftCartaMenuFamiliaId],
-  );
+  const categoriasForForm = useMemo(() => {
+    const base = cartaCategoriasForTipoYFamiliaFiltro(
+      cartaCategorias,
+      draftTipo,
+      draftCartaMenuFamiliaId,
+    );
+    if (!draftCategoriaCartaId) return base;
+    if (base.some((c) => c.id === draftCategoriaCartaId)) return base;
+    const current = cartaCategorias.find((c) => c.id === draftCategoriaCartaId);
+    return current ? [...base, current] : base;
+  }, [cartaCategorias, draftTipo, draftCartaMenuFamiliaId, draftCategoriaCartaId]);
 
   const draftSelectedCategory = useMemo(
     () =>
@@ -2280,14 +2318,40 @@ export default function ProductosManagementPage({
     [cartaCategorias],
   );
 
-  const draftProductFamilyPatch = useMemo(
-    () =>
-      buildProductFamilyPatchFromCategoryId(
-        draftCategoriaCartaId,
-        cartaCategorias,
-      ),
-    [draftCategoriaCartaId, cartaCategorias],
-  );
+  const draftExistingProductFamilyPatch = useMemo((): ProductFamilyDenormFields | null => {
+    const centralDoc = editingId ? centralDocsById.get(editingId) : undefined;
+    const source = {
+      productFamilyId: centralDoc?.productFamilyId ?? editingPlato?.productFamilyId,
+      productFamilyName: centralDoc?.productFamilyName ?? editingPlato?.productFamilyName,
+      productFamilyType: centralDoc?.productFamilyType ?? editingPlato?.productFamilyType,
+    };
+    if (!hasProductFamily(source)) return null;
+    const id = source.productFamilyId?.trim();
+    const type = source.productFamilyType;
+    if (!id || !type) return null;
+    return {
+      productFamilyId: id,
+      ...(source.productFamilyName?.trim()
+        ? { productFamilyName: source.productFamilyName.trim() }
+        : {}),
+      productFamilyType: type,
+    };
+  }, [editingId, editingPlato, centralDocsById]);
+
+  const draftProductFamilyPatch = useMemo(() => {
+    const fromCategory = buildProductFamilyPatchFromCategoryId(
+      draftCategoriaCartaId,
+      cartaCategorias,
+    );
+    if (fromCategory.productFamilyId && !fromCategory.clearProductFamily) {
+      return fromCategory;
+    }
+    return draftExistingProductFamilyPatch ?? fromCategory;
+  }, [
+    draftCategoriaCartaId,
+    cartaCategorias,
+    draftExistingProductFamilyPatch,
+  ]);
 
   const draftProductFamilyLabel = useMemo(() => {
     if (
@@ -2618,6 +2682,7 @@ export default function ProductosManagementPage({
           draftDesc,
           draftCourse,
           existingIsActive: existingFlags?.isActive,
+          existingProductFamily: draftExistingProductFamilyPatch,
         });
         let savedProductId = editingId?.trim() ?? "";
         if (editingId) {
@@ -3611,7 +3676,11 @@ export default function ProductosManagementPage({
                         setDraftCartaMenuFamiliaId(nextFilter);
                         setDraftCategoriaCartaId((cur) => {
                           if (!cur) return null;
-                          const allowed = cartaCategoriasForMenuFamiliaFiltro(cartaCategorias, nextFilter);
+                          const allowed = cartaCategoriasForTipoYFamiliaFiltro(
+                            cartaCategorias,
+                            draftTipo,
+                            nextFilter,
+                          );
                           return allowed.some((x) => x.id === cur) ? cur : null;
                         });
                       }}

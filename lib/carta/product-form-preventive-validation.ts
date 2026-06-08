@@ -75,6 +75,7 @@ export function evaluateProductFormPreventiveValidation(
 
   if (
     input.validateCourse &&
+    input.tipoVenta !== "bebida" &&
     !input.skipsMenuCourse &&
     isCourseSelectValueInvalid(input.courseSelectValue)
   ) {
