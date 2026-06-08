@@ -150,15 +150,15 @@ function resolveComandaReleaseLineId(
  * - Cocina sin servicio iniciado: primer pase pending más bajo (puede ser 1–4).
  * - Cocina con servicio iniciado: solo entrantes (pase 1) pending; 2–4 → Marchar.
  */
-export function selectLinesToReleaseOnComanda(
-  lines: ReadonlyArray<ComandaReleaseLine & { id?: string }>,
-): Array<ComandaReleaseLine & { id?: string }> {
+export function selectLinesToReleaseOnComanda<
+  T extends ComandaReleaseLine & { id?: string },
+>(lines: ReadonlyArray<T>): T[] {
   const pending = lines.filter(isPendingReleaseLine);
   if (pending.length === 0) return [];
 
   const kitchenServiceStarted = hasKitchenPassAlreadyReleased(lines);
   const lowestKitchenCourse = resolveLowestPendingKitchenCourse(pending);
-  const selected: Array<ComandaReleaseLine & { id?: string }> = [];
+  const selected: T[] = [];
 
   for (const line of pending) {
     if (isPendingDrinkReleaseLine(line)) {

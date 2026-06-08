@@ -259,7 +259,9 @@ function printShadowV2CostWarning(caseCount: number, caseIds: string[]): void {
 
 async function main() {
   loadEnvLocal();
-  process.env.NODE_ENV = "development";
+  Object.assign(process.env, {
+    NODE_ENV: "development",
+  });
 
   const args = parseArgs(process.argv.slice(2));
   const corpusRoot = getCorpusRoot();

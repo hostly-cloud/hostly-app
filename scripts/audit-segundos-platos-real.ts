@@ -201,6 +201,7 @@ async function main() {
       allPricesOk: matches.every((m) => !m.found || m.priceOk),
       matches,
     },
+    savedCorpusDraft: "test-corpus/cases/segundos-platos-real/input/",
   };
 
   const outDir = path.join(path.resolve(import.meta.dirname, ".."), "test-corpus", "cases", "segundos-platos-real");
@@ -222,7 +223,6 @@ async function main() {
     );
   }
 
-  report.savedCorpusDraft = "test-corpus/cases/segundos-platos-real/input/";
   console.log(JSON.stringify(report, null, 2));
 }
 

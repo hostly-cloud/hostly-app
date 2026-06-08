@@ -14,8 +14,10 @@ function loadEnv() {
       if (m) process.env[m[1].trim()] = m[2].trim();
     }
   }
-  process.env.NODE_ENV = "development";
-  process.env.HOSTLY_MENU_IMPORT_DEBUG = "1";
+  Object.assign(process.env, {
+    NODE_ENV: "development",
+    HOSTLY_MENU_IMPORT_DEBUG: "1",
+  });
 }
 
 async function main() {

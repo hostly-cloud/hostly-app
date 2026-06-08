@@ -27,6 +27,10 @@ export type ProductosSelectionBarProps = {
   t: TranslateFn;
 };
 
+function isBulkMenuItem(item: BulkMenuItem | null): item is BulkMenuItem {
+  return item !== null;
+}
+
 export function ProductosSelectionBar({
   count,
   variant = "default",
@@ -51,7 +55,7 @@ export function ProductosSelectionBar({
   if (count <= 0) return null;
 
   if (variant === "compact") {
-    const menuItems: BulkMenuItem[] = [
+    const compactMenuCandidates: (BulkMenuItem | null)[] = [
       onAssignPass
         ? {
             key: "pass",
@@ -98,7 +102,8 @@ export function ProductosSelectionBar({
             tone: "danger",
           }
         : null,
-    ].filter((item): item is BulkMenuItem => item != null);
+    ];
+    const menuItems = compactMenuCandidates.filter(isBulkMenuItem);
 
     return (
       <HostlyTableBulkBar className="hostly-data-table-bulk-bar--compact-config">

@@ -1534,7 +1534,7 @@ function buildSyncedOrderLinesFromServerDoc(
   const mergedProduction = mergeLocalLinesProductionFromServerItems(
     baseLocal,
     data.items,
-    orderLinesToFirestoreItems,
+    (line) => orderLinesToFirestoreItems([line])[0]!,
     normalizeOrderLineStatus,
   );
   const mergedIds = new Set(mergedProduction.map((line) => line.id));

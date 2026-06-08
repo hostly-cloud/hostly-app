@@ -9,6 +9,7 @@ const MATCH_RULES = {
   diceThreshold: 0.88,
   requirePrice: true,
   requireSection: false,
+  requireStation: false,
 };
 
 function toDetected(item: {

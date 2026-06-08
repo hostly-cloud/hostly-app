@@ -62,6 +62,7 @@ import {
   ProductFormDrawerCollapsibleSection,
 } from "@/components/productos/product-form-drawer-section";
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
+import { evaluateProductFormPreventiveValidation } from "@/lib/carta/product-form-preventive-validation";
 import { OperationStationProductSelect } from "@/components/operacion/operation-station-product-select";
 import {
   ensureDefaultOperationStations,
@@ -2279,18 +2280,57 @@ export default function ProductosManagementPage({
     [cartaCategorias],
   );
 
+  const draftProductFamilyPatch = useMemo(
+    () =>
+      buildProductFamilyPatchFromCategoryId(
+        draftCategoriaCartaId,
+        cartaCategorias,
+      ),
+    [draftCategoriaCartaId, cartaCategorias],
+  );
+
   const draftProductFamilyLabel = useMemo(() => {
-    const patch = buildProductFamilyPatchFromCategoryId(
-      draftCategoriaCartaId,
-      cartaCategorias,
-    );
-    if (patch.clearProductFamily || !patch.productFamilyId) return "Sin familia";
+    if (
+      draftProductFamilyPatch.clearProductFamily ||
+      !draftProductFamilyPatch.productFamilyId
+    ) {
+      return "Sin familia";
+    }
     return getProductFamilyLabel({
-      productFamilyId: patch.productFamilyId,
-      productFamilyName: patch.productFamilyName,
-      productFamilyType: patch.productFamilyType,
+      productFamilyId: draftProductFamilyPatch.productFamilyId,
+      productFamilyName: draftProductFamilyPatch.productFamilyName,
+      productFamilyType: draftProductFamilyPatch.productFamilyType,
     });
-  }, [draftCategoriaCartaId, cartaCategorias]);
+  }, [draftProductFamilyPatch]);
+
+  const draftPreventiveValidation = useMemo(
+    () =>
+      evaluateProductFormPreventiveValidation({
+        tipoVenta: draftTipo,
+        active: draftActivo,
+        categoryId: draftCategoriaCartaId,
+        hasProductFamily: Boolean(
+          draftProductFamilyPatch.productFamilyId &&
+            !draftProductFamilyPatch.clearProductFamily,
+        ),
+        operationStationSelect: draftOperationStationSelect,
+        operationStations,
+        courseSelectValue: draftCourse,
+        skipsMenuCourse: draftSkipsMenuCourse,
+        validateCourse: isCentralCatalog,
+      }),
+    [
+      draftTipo,
+      draftActivo,
+      draftCategoriaCartaId,
+      draftProductFamilyPatch,
+      draftOperationStationSelect,
+      operationStations,
+      draftCourse,
+      draftSkipsMenuCourse,
+      isCentralCatalog,
+    ],
+  );
 
   const draftEffectiveModifierLabel = useMemo(() => {
     const cat = draftCategoriaCartaId
@@ -2525,6 +2565,11 @@ export default function ProductosManagementPage({
     const precioVenta = parsePrecio(draftPrecio);
     if (precioVenta == null) {
       setFormError(t("carta.errorPrecio"));
+      return;
+    }
+
+    if (draftPreventiveValidation.blockingErrors.length > 0) {
+      setFormError(draftPreventiveValidation.blockingErrors[0]!);
       return;
     }
 
@@ -3593,6 +3638,19 @@ export default function ProductosManagementPage({
                     {t("carta.fieldModifiersInherited")}: <strong>{draftEffectiveModifierLabel}</strong>
                   </p>
                 </ProductFormDrawerCollapsibleSection>
+
+                {draftPreventiveValidation.warnings.length > 0 ? (
+                  <div
+                    className="hostly-carta-config-alert hostly-carta-config-alert--warning"
+                    role="status"
+                  >
+                    <ul className="hostly-product-form-preventive-warnings">
+                      {draftPreventiveValidation.warnings.map((message) => (
+                        <li key={message}>{message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
 
                 {formError ? (
                   <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">

@@ -221,6 +221,12 @@ export const PARSE_LINE_OUTCOME_LABELS: Record<ParseMenuLineOutcome, string> = {
   multilingual_v2_translation_consumed: "Traducción consumida por bloque V2",
   multilingual_v2_orphan_translation_skipped: "Traducción huérfana omitida (V2)",
   multilingual_v2_header_skipped: "Cabecera multilingüe descartada como producto (V2)",
+  multilingual_v2_fragment_prefix_joined:
+    "Fragmento unido por prefijo multilingüe v2",
+  multilingual_v2_fragment_translation_consumed:
+    "Traducción de fragmento consumida multilingüe v2",
+  multilingual_v2_fragment_orphan_blocked:
+    "Fragmento huérfano bloqueado multilingüe v2",
   translation_line_skipped: "Traducción omitida (EN/DE/FR)",
   ignored: "Ignorada",
 };

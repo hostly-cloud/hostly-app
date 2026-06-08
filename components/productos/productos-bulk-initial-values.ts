@@ -1,8 +1,5 @@
 import { CATEGORY_PRODUCT_FAMILY_NONE } from "@/lib/carta/category-product-family";
-import {
-  productCatalogCourseSelectValue,
-  type ProductCatalogCourse,
-} from "@/lib/carta/menu-course";
+import { productCatalogCourseSelectValue } from "@/lib/carta/menu-course";
 import type { BulkCatalogKdsDestination } from "@/lib/firestore/central-catalog-write";
 import type { ProductDocument } from "@/lib/firestore/products";
 import { resolveKdsDestination } from "@/lib/kds/kds-destination";
@@ -23,9 +20,7 @@ function uniqueOrMixed(values: readonly string[]): string {
 }
 
 function readCourseSelectValue(doc: ProductDocument | undefined): string {
-  const course: ProductCatalogCourse | undefined =
-    doc?.course !== undefined ? doc.course : undefined;
-  return productCatalogCourseSelectValue(course);
+  return productCatalogCourseSelectValue(doc?.course);
 }
 
 function readBulkDestinationValue(
