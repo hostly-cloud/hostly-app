@@ -3,6 +3,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -26,6 +27,10 @@ import {
 } from "@/lib/carta/product-category-family-resolver";
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import { auth, db } from "@/lib/firebase/client";
+import {
+  deleteCentralProductImageAtPath,
+  uploadCentralProductImage,
+} from "@/lib/firebase/central-product-image-storage";
 import {
   defaultInventory,
   defaultRecipe,
@@ -52,6 +57,8 @@ export type CentralOperationalProductInput = {
   description?: string;
   /** Pase por defecto TPV: null = sin pase; 1?4 = Entrante?Postre. */
   course?: number | null;
+  imageUrl?: string;
+  imagePath?: string;
 };
 
 export type CentralProductPublicationPatch = {
@@ -176,6 +183,9 @@ function buildOperationalPatch(
     updatedBy: userId,
     ...(input.description?.trim() ? { description: input.description.trim() } : {}),
     ...(input.course !== undefined ? { course: input.course } : {}),
+    ...(input.imageUrl?.trim() && input.imagePath?.trim()
+      ? { imageUrl: input.imageUrl.trim(), imagePath: input.imagePath.trim() }
+      : {}),
   };
 }
 
@@ -231,6 +241,14 @@ function buildPartialOperationalPatch(
   }
   if (input.course !== undefined) {
     patch.course = input.course;
+  }
+  if (typeof input.imageUrl === "string" && typeof input.imagePath === "string") {
+    const imageUrl = input.imageUrl.trim();
+    const imagePath = input.imagePath.trim();
+    if (imageUrl && imagePath) {
+      patch.imageUrl = imageUrl;
+      patch.imagePath = imagePath;
+    }
   }
   return patch;
 }
@@ -601,6 +619,46 @@ export async function disableCentralProduct(
   });
 }
 
+/** Sube imagen a Storage y la adjunta al producto central. */
+export async function uploadAndAttachCentralProductImage(
+  restaurantId: string,
+  productId: string,
+  file: File,
+  previousImagePath?: string,
+): Promise<void> {
+  const up = await uploadCentralProductImage(restaurantId, productId, file);
+  await updateCentralProduct(restaurantId, productId, {
+    imageUrl: up.url,
+    imagePath: up.path,
+  });
+  const prev = previousImagePath?.trim();
+  if (prev && prev !== up.path) {
+    await deleteCentralProductImageAtPath(prev);
+  }
+}
+
+/** Quita imagen del producto central y borra el fichero en Storage si aplica. */
+export async function clearCentralProductImage(
+  restaurantId: string,
+  productId: string,
+  previousImagePath?: string,
+): Promise<void> {
+  const rid = restaurantId.trim();
+  const pid = productId.trim();
+  if (!rid || !pid) throw new Error("MISSING_IDS");
+  const userId = requireAuthUid();
+  const now = Date.now();
+
+  await updateDoc(centralProductRef(rid, pid), {
+    imageUrl: deleteField(),
+    imagePath: deleteField(),
+    updatedAt: now,
+    updatedBy: userId,
+  } as DocumentData);
+
+  await deleteCentralProductImageAtPath(previousImagePath);
+}
+
 /** Borrado definitivo del documento en cat?logo central (solo productos sin hist?rico). */
 export async function deleteCentralProductPermanently(
   restaurantId: string,
@@ -613,7 +671,15 @@ export async function deleteCentralProductPermanently(
   const ref = centralProductRef(rid, pid);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error("PRODUCT_NOT_FOUND");
+  const data = snap.data() as Record<string, unknown>;
+  const imagePath =
+    typeof data.imagePath === "string" && data.imagePath.trim() !== ""
+      ? data.imagePath.trim()
+      : undefined;
   await deleteDoc(ref);
+  if (imagePath) {
+    await deleteCentralProductImageAtPath(imagePath);
+  }
 }
 
 /** Actualiza flags de publicaci?n/venta. */

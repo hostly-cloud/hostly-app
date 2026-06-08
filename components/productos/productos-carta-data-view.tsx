@@ -19,6 +19,7 @@ import type { EscandalloMetaMap } from "@/lib/platos-escandallo-bridge";
 import type { PlatoCarta, TipoProductoVenta } from "@/lib/platos-local";
 import {
   getPublicationFlags,
+  ProductosCartaNameThumb,
   ProductosCartaOperMicrochip,
   ProductosCartaReorderControls,
   ProductosCartaRowActions,
@@ -202,21 +203,24 @@ function SelectionCheckbox({
 function ProductPrimaryCell({ p }: { p: PlatoCarta }) {
   const ops = productOperationalFieldsFromPlato(p);
   return (
-    <div className="hostly-data-table-primary">
-      <span className="hostly-data-table-primary__name" title={p.nombre}>
-        {p.nombre}
-      </span>
-      {p.origenAlta === "importacion_ia" ? (
-        <HostlyStatusBadge tone="neutral" dot={false} className="hostly-data-table-primary__tag">
-          IA
-        </HostlyStatusBadge>
-      ) : null}
-      <span
-        className="hostly-data-table-primary__meta hostly-data-table-col--tablet-only"
-        title={ops.tabletMeta}
-      >
-        {ops.tabletMeta}
-      </span>
+    <div className="hostly-data-table-primary hostly-data-table-primary--with-thumb">
+      <ProductosCartaNameThumb p={p} />
+      <div className="hostly-data-table-primary__stack">
+        <span className="hostly-data-table-primary__name" title={p.nombre}>
+          {p.nombre}
+        </span>
+        {p.origenAlta === "importacion_ia" ? (
+          <HostlyStatusBadge tone="neutral" dot={false} className="hostly-data-table-primary__tag">
+            IA
+          </HostlyStatusBadge>
+        ) : null}
+        <span
+          className="hostly-data-table-primary__meta hostly-data-table-col--tablet-only"
+          title={ops.tabletMeta}
+        >
+          {ops.tabletMeta}
+        </span>
+      </div>
     </div>
   );
 }

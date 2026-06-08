@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import type { CSSProperties, SVGProps } from "react";
 import { HostlyRowActionButton, HostlyRowActions, HostlyStatusBadge } from "@/components/ui/hostly/data-table";
 import { getProductFamilyLabel } from "@/lib/carta/product-category-family-resolver";
 import {
@@ -11,6 +11,67 @@ import type { PlatoCarta } from "@/lib/platos-local";
 import type { TranslateFn } from "@/lib/i18n";
 
 export const PRODUCTOS_CARTA_LEGACY_BLOCKED = "Migra el catálogo para editar productos.";
+
+/** URL de imagen operativa del producto (catálogo central → `fotoUrl`). */
+export function productImageUrlFromPlato(p: PlatoCarta): string | undefined {
+  const url = p.fotoUrl?.trim();
+  return url || undefined;
+}
+
+/** Inicial del nombre para avatar de fallback (misma semántica que TPV). */
+export function productNameInitialFromPlato(p: PlatoCarta): string {
+  return (p.nombre.trim().charAt(0) || "?").toUpperCase();
+}
+
+/** Fondo pastel estable según el nombre (misma entrada → mismo color). */
+function softBackgroundFromName(name: string): string {
+  const s = name.trim();
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (s.charCodeAt(i) + ((h << 5) - h)) | 0;
+  }
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue}, 44%, 90%)`;
+}
+
+/** Miniatura 40×40 en columna Nombre: imagen real o avatar con inicial. */
+export function ProductosCartaNameThumb({
+  p,
+  className,
+  style,
+}: {
+  p: PlatoCarta;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const imageUrl = productImageUrlFromPlato(p);
+  const initial = productNameInitialFromPlato(p);
+  const classes = ["hostly-productos-carta-name-thumb", className].filter(Boolean).join(" ");
+
+  if (imageUrl) {
+    return (
+      <span className={classes} style={style} aria-hidden>
+        <img
+          src={imageUrl}
+          alt=""
+          className="hostly-productos-carta-name-thumb__img"
+          loading="lazy"
+          decoding="async"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={classes}
+      style={{ ...style, backgroundColor: softBackgroundFromName(p.nombre) }}
+      aria-hidden
+    >
+      <span className="hostly-productos-carta-name-thumb__initial">{initial}</span>
+    </span>
+  );
+}
 
 const KDS_DESTINATION_SHORT: Record<KdsDestination, string> = {
   kitchen: "Coc",

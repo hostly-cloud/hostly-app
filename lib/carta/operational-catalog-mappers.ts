@@ -97,6 +97,7 @@ export function centralProductToPlatoCarta(
     ...(doc.course !== undefined ? { course: doc.course } : {}),
     ...(doc.sortOrder !== undefined ? { sortOrder: doc.sortOrder } : {}),
     precioVenta,
+    ...(doc.imageUrl?.trim() ? { fotoUrl: doc.imageUrl.trim() } : {}),
     activo: visibleOnMenu,
     enCarta: visibleOnMenu,
     tieneEscandallo: recipeEnabled,

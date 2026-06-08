@@ -13191,9 +13191,44 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.28);
 }
 
+/* Zona de imagen: slot más alto y estrecho para que botellas verticales llenen el ancho con cover. */
 .carta-product-media {
-  max-width: 74px;
-  height: 50px;
+  flex-shrink: 0;
+  width: min(100%, 50px);
+  max-width: 50px;
+  height: 46px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #e5e7eb;
+}
+
+.carta-product-media__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+
+.carta-product-media__fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.carta-product-media__initial {
+  font-size: 20px;
+  font-weight: 800;
+  color: #333333;
+  line-height: 1;
+  user-select: none;
 }
 
 /* Tablet/desktop: panel comanda más ancho (~+2.5 cm aquí; +4 cm desde 1024px).
@@ -13208,7 +13243,11 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
 @media (min-width: 768px) {
   .carta-product-card { height: 120px; min-height: 72px; padding: 10px !important; gap: 4px; }
-  .carta-product-media { max-width: 82px; height: 56px; }
+  .carta-product-media {
+    width: min(100%, 54px);
+    max-width: 54px;
+    height: 52px;
+  }
 }
 
 @media (min-width: 768px) and (max-width: 899.98px) {
@@ -13227,7 +13266,11 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   }
   .carta-product-grid { grid-template-columns: repeat(6, 1fr); }
   .carta-product-card { height: 120px; min-height: 72px; padding: 10px !important; gap: 4px; }
-  .carta-product-media { max-width: 86px; height: 60px; }
+  .carta-product-media {
+    width: min(100%, 56px);
+    max-width: 56px;
+    height: 54px;
+  }
 }
 
 @media (min-width: 1280px) {
@@ -18085,43 +18128,23 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                                 : ""}
                                       </div>
                                     ) : null}
-                                    <div className="h-10 shrink-0 flex items-center justify-center w-full">
+                                    <div className="carta-product-media">
                                       {hasImg ? (
                                         <img
                                           src={product.imageUrl}
                                           alt=""
-                                          style={{
-                                            width: "100%",
-                                            height: "100%",
-                                            objectFit: "cover",
-                                            borderRadius: 12,
-                                            display: "block",
-                                            backgroundColor: "#e5e7eb",
-                                          }}
+                                          className="carta-product-media__img"
                                         />
                                       ) : (
                                         <div
+                                          className="carta-product-media__fallback"
                                           style={{
-                                            width: "100%",
-                                            height: "100%",
-                                            borderRadius: 12,
                                             backgroundColor: softBackgroundFromName(
                                               product.nombre,
                                             ),
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
                                           }}
                                         >
-                                          <span
-                                            style={{
-                                              fontSize: 20,
-                                              fontWeight: 800,
-                                              color: "#333333",
-                                              lineHeight: 1,
-                                              userSelect: "none",
-                                            }}
-                                          >
+                                          <span className="carta-product-media__initial">
                                             {(
                                               product.nombre.trim().charAt(0) || "?"
                                             ).toUpperCase()}

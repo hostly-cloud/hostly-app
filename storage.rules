@@ -54,5 +54,10 @@ service firebase.storage {
     match /restaurants/{restaurantId}/menu-imports/{draftId}/{fileName} {
       allow read, write: if sameRestaurant(restaurantId);
     }
+
+    // Imágenes de producto — catálogo central.
+    match /restaurants/{restaurantId}/products/{productId}/{fileName} {
+      allow read, write: if sameRestaurant(restaurantId);
+    }
   }
 }

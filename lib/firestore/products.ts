@@ -134,6 +134,10 @@ export type ProductDocument = {
   course?: number | null;
   /** Posición dentro de `categoryId` (menor = primero en carta/TPV). */
   sortOrder?: number;
+  /** URL pública de imagen de carta/TPV (Firebase Storage). */
+  imageUrl?: string;
+  /** Ruta Storage para borrado/reemplazo. */
+  imagePath?: string;
   inventory: ProductInventoryDocument;
   recipe: ProductRecipeDocument;
   createdAt?: number;
@@ -854,6 +858,16 @@ function mapCentralDocToProductDocument(
   const sortOrder =
     readProductSortOrder(data.sortOrder) ??
     readProductSortOrder(data.ordenEnCategoria);
+  const imageUrlRaw = data.imageUrl;
+  const imageUrl =
+    typeof imageUrlRaw === "string" && imageUrlRaw.trim() !== ""
+      ? imageUrlRaw.trim()
+      : undefined;
+  const imagePathRaw = data.imagePath;
+  const imagePath =
+    typeof imagePathRaw === "string" && imagePathRaw.trim() !== ""
+      ? imagePathRaw.trim()
+      : undefined;
 
   return {
     id: snap.id,
@@ -879,6 +893,8 @@ function mapCentralDocToProductDocument(
     ...(catalogCourse !== undefined ? { course: catalogCourse } : {}),
     ...(visibleOnMenu !== undefined ? { visibleOnMenu } : {}),
     ...(sortOrder !== undefined ? { sortOrder } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+    ...(imagePath ? { imagePath } : {}),
     inventory: normalizeProductInventory(inventoryRaw),
     recipe: {
       enabled: recipeRaw.enabled === true,
@@ -1409,6 +1425,8 @@ export {
   swapCentralProductSortOrderInCategory,
   updateCentralProduct,
   updateCentralProductRecipe,
+  uploadAndAttachCentralProductImage,
+  clearCentralProductImage,
   type CentralOperationalProductInput,
   type CentralProductPublicationPatch,
   type CentralProductRecipeInput,

@@ -53,6 +53,14 @@ function mapAdminProductDoc(docId: string, data: Record<string, unknown>): Produ
   const sortOrder =
     readProductSortOrder(data.sortOrder) ??
     readProductSortOrder(data.ordenEnCategoria);
+  const imageUrl =
+    typeof data.imageUrl === "string" && data.imageUrl.trim()
+      ? data.imageUrl.trim()
+      : undefined;
+  const imagePath =
+    typeof data.imagePath === "string" && data.imagePath.trim()
+      ? data.imagePath.trim()
+      : undefined;
 
   return {
     id: docId,
@@ -67,6 +75,8 @@ function mapAdminProductDoc(docId: string, data: Record<string, unknown>): Produ
     tipoVenta,
     ...(sortOrder !== undefined ? { sortOrder } : {}),
     ...(visibleOnMenu !== undefined ? { visibleOnMenu } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+    ...(imagePath ? { imagePath } : {}),
     inventory: {
       enabled: inventoryRaw.enabled === true,
       unit: "ud",

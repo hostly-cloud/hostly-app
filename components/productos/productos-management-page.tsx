@@ -9,6 +9,7 @@ import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form
 import { ConfigCartaWorkbench, ConfigBtnPrimary, ConfigBtnSecondary, ConfigCard } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
 import ModulePageShell from "@/components/module-page-shell";
 import { ProductosCartaDataView } from "@/components/productos/productos-carta-data-view";
+import { ProductosCartaNameThumb } from "@/components/productos/productos-table-cells";
 import {
   ConfigCartaCompactFilterRow,
   ConfigCartaStatusFilterSelect,
@@ -110,6 +111,7 @@ import {
   bulkUpdateCentralProductsDestination,
   bulkUpdateCentralProductsCategory,
   bulkUpdateCentralProductsFamily,
+  clearCentralProductImage,
   createCentralProduct,
   formatCentralCatalogWriteError,
   listenCentralProducts,
@@ -118,8 +120,10 @@ import {
   swapCentralProductSortOrderInCategory,
   updateCentralProduct,
   updateCentralProductRecipe,
+  uploadAndAttachCentralProductImage,
   type CentralOperationalProductInput,
 } from "@/lib/firestore/products";
+import { createStableImageFile } from "@/lib/firebase/product-image-storage";
 import {
   buildInventoryProductLookupMap,
   buildRecipeSourceFromDraftRows,
@@ -1265,6 +1269,17 @@ export default function ProductosManagementPage({
   const [draftPrecio, setDraftPrecio] = useState("");
   const [draftActivo, setDraftActivo] = useState(true);
   const [draftFoto, setDraftFoto] = useState("");
+  const [draftImagePreviewUrl, setDraftImagePreviewUrl] = useState<string | null>(
+    null,
+  );
+  const [draftPendingImageFile, setDraftPendingImageFile] = useState<File | null>(
+    null,
+  );
+  const [draftExistingImagePath, setDraftExistingImagePath] = useState<
+    string | undefined
+  >(undefined);
+  const [draftRemoveImage, setDraftRemoveImage] = useState(false);
+  const draftImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const [draftDesc, setDraftDesc] = useState("");
   const [draftOperationStationSelect, setDraftOperationStationSelect] =
     useState("default-kitchen");
@@ -2336,10 +2351,56 @@ export default function ProductosManagementPage({
     );
   }
 
+  const resetDraftImageState = useCallback(() => {
+    setDraftImagePreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setDraftPendingImageFile(null);
+    setDraftExistingImagePath(undefined);
+    setDraftRemoveImage(false);
+    if (draftImageFileInputRef.current) {
+      draftImageFileInputRef.current.value = "";
+    }
+  }, []);
+
   const closeForm = useCallback(() => {
+    resetDraftImageState();
     setFormOpen(false);
     setEditingId(null);
     setFormError(null);
+  }, [resetDraftImageState]);
+
+  const handleDraftImageFileChange = useCallback(async (file: File | null) => {
+    setDraftImagePreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
+    if (!file) {
+      setDraftPendingImageFile(null);
+      return;
+    }
+    try {
+      const stable = await createStableImageFile(file);
+      setDraftPendingImageFile(stable);
+      setDraftRemoveImage(false);
+      setDraftImagePreviewUrl(URL.createObjectURL(stable));
+      setFormError(null);
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "No se pudo leer la imagen");
+    }
+  }, []);
+
+  const handleRemoveDraftImage = useCallback(() => {
+    setDraftRemoveImage(true);
+    setDraftPendingImageFile(null);
+    setDraftImagePreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
+    if (draftImageFileInputRef.current) {
+      draftImageFileInputRef.current.value = "";
+    }
   }, []);
 
   useEffect(() => {
@@ -2377,6 +2438,7 @@ export default function ProductosManagementPage({
     setDraftPrecio("");
     setDraftActivo(true);
     setDraftFoto("");
+    resetDraftImageState();
     setDraftDesc("");
     setDraftOperationStationSelect("default-kitchen");
     setDraftCourse("");
@@ -2409,6 +2471,12 @@ export default function ProductosManagementPage({
     setDraftPrecio(String(p.precioVenta));
     setDraftActivo(p.activo);
     setDraftFoto(p.fotoUrl ?? "");
+    resetDraftImageState();
+    if (isCentralCatalog) {
+      const centralDoc = centralDocsById.get(p.id);
+      setDraftExistingImagePath(centralDoc?.imagePath);
+      setDraftImagePreviewUrl(centralDoc?.imageUrl?.trim() || null);
+    }
     setDraftDesc(p.descripcion ?? "");
     setDraftOperationStationSelect(
       operationStationSelectValueFromProduct({
@@ -2517,6 +2585,21 @@ export default function ProductosManagementPage({
           savedProductId,
           normalizedProductRecipeToWriteInput(recipeValidation.recipe),
         );
+        const prevImagePath = draftExistingImagePath;
+        if (draftRemoveImage && !draftPendingImageFile) {
+          await clearCentralProductImage(
+            restauranteId,
+            savedProductId,
+            prevImagePath,
+          );
+        } else if (draftPendingImageFile) {
+          await uploadAndAttachCentralProductImage(
+            restauranteId,
+            savedProductId,
+            draftPendingImageFile,
+            prevImagePath,
+          );
+        }
         setNotice("Guardado en catálogo central");
         closeForm();
         window.setTimeout(() => setNotice(null), 3200);
@@ -3363,16 +3446,76 @@ export default function ProductosManagementPage({
                     />
                   </label>
 
-                  <label className="hostly-carta-config-form-field">
-                    <span className="hostly-carta-config-form-label">{t("carta.fieldFoto")}</span>
-                    <input
-                      className={drawerInputClass}
-                      value={draftFoto}
-                      onChange={(e) => setDraftFoto(e.target.value)}
-                      placeholder="https://…"
-                    />
-                    <p className="hostly-carta-config-form-hint">{t("carta.fieldFotoHint")}</p>
-                  </label>
+                  {isCentralCatalog ? (
+                    <div className="hostly-product-form-drawer-image">
+                      <span className="hostly-carta-config-form-label">
+                        {t("carta.fieldFoto")}
+                      </span>
+                      {draftImagePreviewUrl && !draftRemoveImage ? (
+                        <img
+                          src={draftImagePreviewUrl}
+                          alt=""
+                          className="hostly-product-form-drawer-image__preview"
+                        />
+                      ) : (
+                        <div
+                          className="hostly-product-form-drawer-image__placeholder"
+                          aria-hidden
+                        >
+                          {t("carta.fieldFotoEmpty")}
+                        </div>
+                      )}
+                      <div className="hostly-product-form-drawer-image__actions">
+                        <input
+                          ref={draftImageFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hostly-product-form-drawer-image__file-input"
+                          disabled={drawerSyncing}
+                          onChange={(e) => {
+                            const selected = e.target.files?.[0] ?? null;
+                            void handleDraftImageFileChange(selected);
+                          }}
+                        />
+                        <ConfigBtnSecondary
+                          type="button"
+                          disabled={drawerSyncing}
+                          onClick={() => draftImageFileInputRef.current?.click()}
+                        >
+                          {draftImagePreviewUrl && !draftRemoveImage
+                            ? t("carta.fieldFotoChange")
+                            : t("carta.fieldFotoUpload")}
+                        </ConfigBtnSecondary>
+                        {draftImagePreviewUrl && !draftRemoveImage ? (
+                          <ConfigBtnSecondary
+                            type="button"
+                            disabled={drawerSyncing}
+                            onClick={handleRemoveDraftImage}
+                          >
+                            {t("carta.fieldFotoRemove")}
+                          </ConfigBtnSecondary>
+                        ) : null}
+                      </div>
+                      <p className="hostly-carta-config-form-hint">
+                        {t("carta.fieldFotoUploadHint")}
+                      </p>
+                    </div>
+                  ) : (
+                    <label className="hostly-carta-config-form-field">
+                      <span className="hostly-carta-config-form-label">
+                        {t("carta.fieldFoto")}
+                      </span>
+                      <input
+                        className={drawerInputClass}
+                        value={draftFoto}
+                        onChange={(e) => setDraftFoto(e.target.value)}
+                        placeholder="https://…"
+                      />
+                      <p className="hostly-carta-config-form-hint">
+                        {t("carta.fieldFotoHint")}
+                      </p>
+                    </label>
+                  )}
 
                   {isCentralCatalog ? (
                     <>
@@ -4500,38 +4643,37 @@ export default function ProductosManagementPage({
                                     </label>
                                     <div style={{ minWidth: 0, overflow: "hidden", width: "100%" }}>
                                       <div
+                                        className="hostly-productos-row-name-cell"
                                         style={{
-                                          display: "flex",
-                                          gap: iceVisual ? 8 : 6,
-                                          alignItems: "center",
-                                          minWidth: 0,
-                                          overflow: "hidden",
-                                          width: "100%",
                                           paddingTop: iceVisual ? 1 : 0,
                                         }}
                                         title={p.nombre}
                                       >
-                                        <span style={rowNombreStyleResolved}>{p.nombre}</span>
-                                        {p.origenAlta === "importacion_ia" ? (
-                                          <span
-                                            style={{
-                                              flexShrink: 0,
-                                              fontSize: iceVisual ? 7 : 9,
-                                              fontWeight: iceVisual ? 600 : 900,
-                                              letterSpacing: "0.08em",
-                                              textTransform: "uppercase",
-                                              padding: iceVisual ? "0px 4px" : "2px 6px",
-                                              borderRadius: iceVisual ? 4 : 999,
-                                              border: iceVisual
-                                                ? "1px solid rgba(148, 163, 184, 0.2)"
-                                                : "1px solid rgba(56,189,248,0.28)",
-                                              background: iceVisual ? "transparent" : "rgba(8,47,73,0.18)",
-                                              color: iceVisual ? "#94a3b8" : "#7dd3fc",
-                                            }}
-                                          >
-                                            IA
-                                          </span>
-                                        ) : null}
+                                        <ProductosCartaNameThumb p={p} />
+                                        <div className="hostly-productos-row-name-cell__stack">
+                                          <span style={rowNombreStyleResolved}>{p.nombre}</span>
+                                          {p.origenAlta === "importacion_ia" ? (
+                                            <span
+                                              style={{
+                                                flexShrink: 0,
+                                                alignSelf: "flex-start",
+                                                fontSize: iceVisual ? 7 : 9,
+                                                fontWeight: iceVisual ? 600 : 900,
+                                                letterSpacing: "0.08em",
+                                                textTransform: "uppercase",
+                                                padding: iceVisual ? "0px 4px" : "2px 6px",
+                                                borderRadius: iceVisual ? 4 : 999,
+                                                border: iceVisual
+                                                  ? "1px solid rgba(148, 163, 184, 0.2)"
+                                                  : "1px solid rgba(56,189,248,0.28)",
+                                                background: iceVisual ? "transparent" : "rgba(8,47,73,0.18)",
+                                                color: iceVisual ? "#94a3b8" : "#7dd3fc",
+                                              }}
+                                            >
+                                              IA
+                                            </span>
+                                          ) : null}
+                                        </div>
                                       </div>
                                     </div>
                                     <span style={rowTipoStyleResolved} title={labelTipoVenta(t, p.tipoVenta)}>
@@ -4606,38 +4748,37 @@ export default function ProductosManagementPage({
                                 </label>
                                 <div style={{ minWidth: 0, overflow: "hidden", width: "100%" }}>
                                   <div
+                                    className="hostly-productos-row-name-cell"
                                     style={{
-                                      display: "flex",
-                                      gap: iceVisual ? 8 : 6,
-                                      alignItems: "center",
-                                      minWidth: 0,
-                                      overflow: "hidden",
-                                      width: "100%",
                                       paddingTop: iceVisual ? 1 : 0,
                                     }}
                                     title={p.nombre}
                                   >
-                                    <span style={rowNombreStyleResolved}>{p.nombre}</span>
-                                    {p.origenAlta === "importacion_ia" ? (
-                                      <span
-                                        style={{
-                                          flexShrink: 0,
-                                          fontSize: iceVisual ? 7 : 9,
-                                          fontWeight: iceVisual ? 600 : 900,
-                                          letterSpacing: "0.08em",
-                                          textTransform: "uppercase",
-                                          padding: iceVisual ? "0px 4px" : "2px 6px",
-                                          borderRadius: iceVisual ? 4 : 999,
-                                          border: iceVisual
-                                            ? "1px solid rgba(148, 163, 184, 0.2)"
-                                            : "1px solid rgba(56,189,248,0.28)",
-                                          background: iceVisual ? "transparent" : "rgba(8,47,73,0.18)",
-                                          color: iceVisual ? "#94a3b8" : "#7dd3fc",
-                                        }}
-                                      >
-                                        IA
-                                      </span>
-                                    ) : null}
+                                    <ProductosCartaNameThumb p={p} />
+                                    <div className="hostly-productos-row-name-cell__stack">
+                                      <span style={rowNombreStyleResolved}>{p.nombre}</span>
+                                      {p.origenAlta === "importacion_ia" ? (
+                                        <span
+                                          style={{
+                                            flexShrink: 0,
+                                            alignSelf: "flex-start",
+                                            fontSize: iceVisual ? 7 : 9,
+                                            fontWeight: iceVisual ? 600 : 900,
+                                            letterSpacing: "0.08em",
+                                            textTransform: "uppercase",
+                                            padding: iceVisual ? "0px 4px" : "2px 6px",
+                                            borderRadius: iceVisual ? 4 : 999,
+                                            border: iceVisual
+                                              ? "1px solid rgba(148, 163, 184, 0.2)"
+                                              : "1px solid rgba(56,189,248,0.28)",
+                                            background: iceVisual ? "transparent" : "rgba(8,47,73,0.18)",
+                                            color: iceVisual ? "#94a3b8" : "#7dd3fc",
+                                          }}
+                                        >
+                                          IA
+                                        </span>
+                                      ) : null}
+                                    </div>
                                   </div>
                                 </div>
                                 <span style={rowTipoStyleResolved} title={labelTipoVenta(t, p.tipoVenta)}>
