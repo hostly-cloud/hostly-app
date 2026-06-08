@@ -590,6 +590,8 @@ type CartOrderLine = {
   displayName?: string;
   /** Coste de inventario estimado (snapshot al enviar comanda). */
   inventoryCost?: CartOrderLineInventoryCost;
+  /** `orderItems/{id}` creado al enviar comanda; enlace directo para cancelación/KDS. */
+  orderItemDocId?: string;
 };
 
 const CARTA_PRESET_EXTRAS: readonly CartOrderLineExtra[] = [];
@@ -1246,6 +1248,9 @@ function orderLinesToFirestoreItems(lines: CartOrderLine[]) {
       ...(line.inventoryCost
         ? { inventoryCost: inventoryCostSnapshotToFirestore(line.inventoryCost) }
         : {}),
+      ...(line.orderItemDocId?.trim()
+        ? { orderItemDocId: line.orderItemDocId.trim() }
+        : {}),
     };
   });
 }
@@ -1420,6 +1425,11 @@ function mapFirestoreOrderDocToCartLines(
       const inventoryCost = parseFirestoreLineInventoryCost(
         (it as { inventoryCost?: unknown }).inventoryCost,
       );
+      const orderItemDocIdRaw = (it as { orderItemDocId?: unknown }).orderItemDocId;
+      const orderItemDocId =
+        typeof orderItemDocIdRaw === "string" && orderItemDocIdRaw.trim()
+          ? orderItemDocIdRaw.trim()
+          : undefined;
       const stationFields = readStationFieldsFromFirestoreRecord(
         it as Record<string, unknown>,
       );
@@ -1490,6 +1500,7 @@ function mapFirestoreOrderDocToCartLines(
         ...(lineNoteFromDoc ? { lineNote: lineNoteFromDoc } : {}),
         ...(courseStored != null ? { course: courseStored } : {}),
         ...(inventoryCost ? { inventoryCost } : {}),
+        ...(orderItemDocId ? { orderItemDocId } : {}),
       };
     })
     .filter((row) => row.quantity > 0);
@@ -5186,7 +5197,7 @@ export function CartaPageContent({
         orderItemDocId?: unknown;
         orderId?: unknown;
       };
-      const orderItemDocId =
+      const orderItemDocIdFromLine =
         typeof lineAny.orderItemDocId === "string" &&
         lineAny.orderItemDocId.trim()
           ? lineAny.orderItemDocId.trim()
@@ -5247,6 +5258,11 @@ export function CartaPageContent({
         );
         orderCancellationPersisted = true;
 
+        const orderItemDocId =
+          orderItemDocIdFromLine ??
+          next.find((l) => l.id === line.id)?.orderItemDocId?.trim() ??
+          null;
+
         const orderItemPayload = {
           status: "cancelled",
           cancelledAt: nowMs,
@@ -5267,10 +5283,11 @@ export function CartaPageContent({
                 orderId: orderDocId,
               },
             );
-          } else {
+          } else if (restaurantId?.trim()) {
             const itemsSnap = await getDocs(
               query(
                 collection(db, "orderItems"),
+                where("restaurantId", "==", restaurantId.trim()),
                 where("orderId", "==", orderDocId),
               ),
             );
@@ -7536,6 +7553,13 @@ export function CartaPageContent({
         const now = Date.now();
         const sendIds = new Set(linesToSend.map((l) => l.id));
         const inventoryCostByLineId = new Map<string, CartOrderLineInventoryCost>();
+        const orderItemRefByLineId = new Map<
+          string,
+          ReturnType<typeof doc>
+        >();
+        for (const l of linesToSend) {
+          orderItemRefByLineId.set(l.id, doc(collection(db, "orderItems")));
+        }
 
         const nextOrder = order.map((l) => {
           if (l.status !== "pending" || !sendIds.has(l.id)) return l;
@@ -7552,11 +7576,13 @@ export function CartaPageContent({
                 })
               : undefined;
           if (inventoryCost) inventoryCostByLineId.set(l.id, inventoryCost);
+          const orderItemRef = orderItemRefByLineId.get(l.id);
           return {
             ...l,
             status: "sent" as const,
             sentAt: l.sentAt ?? now,
             ...(inventoryCost ? { inventoryCost } : {}),
+            ...(orderItemRef ? { orderItemDocId: orderItemRef.id } : {}),
           };
         });
 
@@ -7636,7 +7662,8 @@ export function CartaPageContent({
             productName: String(l.product.nombre ?? ""),
             fields: stationFields,
           });
-          const ref = doc(collection(db, "orderItems"));
+          const ref = orderItemRefByLineId.get(l.id);
+          if (!ref) return;
           const lCourse = normalizeComandaCourseForStorage(l.course);
           const extrasPayload = Array.isArray(l.extras)
             ? l.extras
