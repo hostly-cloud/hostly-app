@@ -36,9 +36,9 @@ export const en: MessageTree = {
     emptyCell: "-",
   },
   activeOperator: {
-    title: "Who is working?",
-    subtitle: "Select who is operating the POS on this device.",
-    lastOperator: "Last operator",
+    title: "Who is using this POS?",
+    subtitle: "Select the server before opening the table map.",
+    lastOperator: "Last",
     change: "Change",
   },
   cartaTpv: {
@@ -61,6 +61,9 @@ export const en: MessageTree = {
     mapTitle: "Table map",
     mapSubtitle: "Tap a table to open the POS for that table.",
     mapZonesAll: "All zones",
+    mapOperatorScopeAria: "Filter tables on the map",
+    mapOperatorScopeAll: "All",
+    mapOperatorScopeMine: "My tables",
     mapLibre: "Free",
     mapOcupada: "Busy",
     mapOccupiedMinutes: "{{minutes}} min",

@@ -5,10 +5,12 @@ import { useI18n } from "@/components/i18n-provider";
 
 type ActiveOperatorTopBarButtonProps = {
   className?: string;
+  onRequestOperatorChange?: () => void;
 };
 
 export function ActiveOperatorTopBarButton({
   className,
+  onRequestOperatorChange,
 }: ActiveOperatorTopBarButtonProps = {}) {
   const { activeOperator, requestOperatorChange } = useActiveOperator();
   const { t } = useI18n();
@@ -18,7 +20,7 @@ export function ActiveOperatorTopBarButton({
   return (
     <button
       type="button"
-      onClick={requestOperatorChange}
+      onClick={onRequestOperatorChange ?? requestOperatorChange}
       className={`hostly-tpv-active-operator-btn inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-[rgba(15,23,42,0.1)] bg-white px-3 py-2 text-sm font-semibold text-[var(--hostly-ink)] shadow-sm transition-colors hover:bg-[rgba(15,23,42,0.03)] touch-manipulation${className ? ` ${className}` : ""}`}
       aria-label={`${activeOperator.activeOperatorName} · ${t("activeOperator.change")}`}
     >

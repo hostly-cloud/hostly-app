@@ -146,6 +146,10 @@ export type Table = {
   waiterId?: string;
   /** Denormalizado para mapa / listas sin join. */
   waiterName?: string;
+  /** Primer operador TPV que abrió la mesa en el servicio actual (fase 1 «Mis mesas»). */
+  assignedOperatorId?: string;
+  assignedOperatorName?: string;
+  assignedAt?: number;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -368,6 +372,19 @@ function mapDocToTable(d: QueryDocumentSnapshot): Table {
       ? floorPlanIdRaw.trim()
       : undefined;
   const dinersCount = parseDinersCount(data);
+  const assignedOperatorIdRaw = data.assignedOperatorId;
+  const assignedOperatorId =
+    typeof assignedOperatorIdRaw === "string" &&
+    assignedOperatorIdRaw.trim() !== ""
+      ? assignedOperatorIdRaw.trim()
+      : undefined;
+  const assignedOperatorNameRaw = data.assignedOperatorName;
+  const assignedOperatorName =
+    typeof assignedOperatorNameRaw === "string" &&
+    assignedOperatorNameRaw.trim() !== ""
+      ? assignedOperatorNameRaw.trim()
+      : undefined;
+  const assignedAt = readTsMs(data, "assignedAt");
   return {
     id: idField,
     name,
@@ -384,6 +401,9 @@ function mapDocToTable(d: QueryDocumentSnapshot): Table {
     ...(dinersCount !== undefined ? { dinersCount } : {}),
     ...(waiterId !== undefined ? { waiterId } : {}),
     ...(waiterName !== undefined ? { waiterName } : {}),
+    ...(assignedOperatorId !== undefined ? { assignedOperatorId } : {}),
+    ...(assignedOperatorName !== undefined ? { assignedOperatorName } : {}),
+    ...(assignedAt !== undefined ? { assignedAt } : {}),
     x: parseFiniteNumber(data.x) ?? 0,
     y: parseFiniteNumber(data.y) ?? 0,
     ...(parseFiniteNumber(data.width) !== undefined

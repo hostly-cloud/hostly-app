@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { buildTpvOperatorPickerOptions } from "@/lib/tpv/active-operator-roster";
+import { clearOperacionTpvUrlParams } from "@/lib/tpv/clear-operacion-tpv-url";
 import {
   clearActiveOperatorSession,
   isActiveOperatorValidForRestaurant,
@@ -87,6 +88,7 @@ export function ActiveOperatorProvider({
   const selectOperator = useCallback(
     (option: TpvOperatorPickerOption) => {
       if (!restaurantIdTrimmed) return;
+      clearOperacionTpvUrlParams();
       const next: ActiveOperatorSession = {
         activeOperatorId: option.id,
         activeOperatorName: option.name,
@@ -104,6 +106,7 @@ export function ActiveOperatorProvider({
   );
 
   const requestOperatorChange = useCallback(() => {
+    clearOperacionTpvUrlParams();
     clearActiveOperatorSession();
     setActiveOperator(null);
     setPickerOptions(buildTpvOperatorPickerOptions());

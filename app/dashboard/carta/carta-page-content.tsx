@@ -55,6 +55,9 @@ import {
   COMANDA_PANEL_WIDTH_MAX,
   COMANDA_PANEL_WIDTH_MIN,
 } from "@/lib/tpv/comanda-panel-width-preference";
+import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignment";
+import type { ActiveOperatorSession } from "@/lib/tpv/active-operator-session";
+import { clearOperacionTpvUrlParams } from "@/lib/tpv/clear-operacion-tpv-url";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import {
   buildTpvInventoryProductsById,
@@ -98,6 +101,11 @@ import {
   type TableGroupOrdersMergedDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
+import {
+  assignTableOperatorOnFirstOpen,
+  clearTableOperatorAssignment,
+  tableOperatorAssignmentClearFields,
+} from "@/lib/firestore/table-operator-assignment";
 import { handlePayTableOrder } from "@/lib/firestore/pay-table-order";
 import {
   buildActivityMetadata,
@@ -144,6 +152,17 @@ import {
   shouldAutoReleaseLineOnComanda,
   type ComandaReleaseAction,
 } from "@/lib/carta/comanda-line-release";
+import {
+  readComandaLineCourseFromFirestoreRecord,
+  resolveComandaLineCourseNum,
+  resolveEffectiveComandaLineCourse,
+  resolveProductDefaultCourse,
+} from "@/lib/carta/comanda-line-course";
+import {
+  detectPendingMarchPassAlerts,
+  resolvePendingMarchPassMapHint,
+  type PendingMarchPassAlert,
+} from "@/lib/carta/pending-march-pass-alert";
 import { deriveLegacyStationFromOperationStation } from "@/lib/operacion/product-operation-station";
 import { mapStationToPreparationArea } from "@/lib/carta/map-station-to-preparation-area";
 import {
@@ -389,6 +408,20 @@ type RestaurantUserRow = {
 };
 
 const MAP_WAITER_FILTER_STORAGE_KEY = "hostly.carta.mapWaiterFilter";
+const MAP_MY_TABLES_SCOPE_STORAGE_KEY = "hostly.carta.mapMyTablesScope";
+const OPERATOR_CHANGE_NAV_RESET_KEY = "hostly.tpv.operatorNavReset";
+const TPV_OPERATOR_PICKER_POST_ACTION_DELAY_MS = 300;
+
+function readStoredMapMyTablesScope(): "all" | "mine" {
+  if (typeof window === "undefined") return "all";
+  try {
+    const v = localStorage.getItem(MAP_MY_TABLES_SCOPE_STORAGE_KEY);
+    if (v === "all" || v === "mine") return v;
+  } catch {
+    /* ignore */
+  }
+  return "all";
+}
 
 function readStoredMapWaiterFilter(): "all" | "me" | string {
   if (typeof window === "undefined") return "all";
@@ -610,72 +643,29 @@ function isComandaBebidaLine(line: CartOrderLine): boolean {
 }
 
 function comandaLineCourseNum(line: CartOrderLine): number {
-  return normalizeComandaCourseForStorage(line.course) ?? 1;
+  return resolveComandaLineCourseNum(line);
 }
 
-function getProductDefaultCourse(product: Product): number | undefined {
-  if ("course" in product && product.course != null) {
-    const explicitCourse = normalizeComandaCourseForStorage(product.course);
-    if (explicitCourse) return explicitCourse;
+function enrichCartLineCourseFromCatalog(
+  line: CartOrderLine,
+  catalogById: ReadonlyMap<string, { course?: number | null }>,
+): CartOrderLine {
+  if (normalizeComandaCourseForStorage(line.course) != null) return line;
+  const doc = catalogById.get(line.product.id);
+  if (!doc || doc.course === undefined) return line;
+  const enrichedProduct: Product = { ...line.product, course: doc.course };
+  const effective = resolveEffectiveComandaLineCourse({
+    course: line.course,
+    product: enrichedProduct,
+  });
+  if (effective == null) {
+    return { ...line, product: enrichedProduct };
   }
-
-  if (
-    isTpvDrinkProduct({
-      productFamilyType: product.productFamilyType,
-      categoryName: product.categoria,
-      categoria: product.categoria,
-      tipoVenta: product.tipoVenta,
-    })
-  ) {
-    return undefined;
-  }
-
-  const raw =
-    `${product.nombre ?? ""} ${product.categoria ?? ""} ${(product as unknown as { categoryName?: unknown }).categoryName ?? ""} ${(product as unknown as { category?: unknown }).category ?? ""} ${(product as unknown as { familia?: unknown }).familia ?? ""} ${(product as unknown as { family?: unknown }).family ?? ""}`
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-  if (
-    raw.includes("postre") ||
-    raw.includes("dessert") ||
-    raw.includes("tarta") ||
-    raw.includes("dulce")
-  ) {
-    return 4;
-  }
-
-  if (
-    raw.includes("pescado") ||
-    raw.includes("carne") ||
-    raw.includes("hamburgues") ||
-    raw.includes("principal") ||
-    raw.includes("segundo")
-  ) {
-    return 3;
-  }
-
-  if (
-    raw.includes("arroz") ||
-    raw.includes("paella") ||
-    raw.includes("primero")
-  ) {
-    return 2;
-  }
-
-  if (
-    raw.includes("entrante") ||
-    raw.includes("ensalada") ||
-    raw.includes("extra")
-  ) {
-    return 1;
-  }
-
-  return 1;
+  return { ...line, product: enrichedProduct, course: effective };
 }
 
 function lineCourseToPaseDraft(line: CartOrderLine): 0 | 1 | 2 | 3 | 4 {
-  const u = normalizeComandaCourseForStorage(line.course);
+  const u = resolveEffectiveComandaLineCourse(line);
   if (u == null) return 0;
   return u as 0 | 1 | 2 | 3 | 4;
 }
@@ -724,7 +714,7 @@ function getCocinaCardCourseLabel(course?: number): string {
 type CocinaCourseBucket = 0 | 1 | 2 | 3 | 4;
 
 function cocinaCourseBucket(line: CartOrderLine): CocinaCourseBucket {
-  const c = normalizeComandaCourseForStorage(line.course);
+  const c = resolveEffectiveComandaLineCourse(line);
   if (c === 1) return 1;
   if (c === 2) return 2;
   if (c === 3) return 3;
@@ -890,6 +880,52 @@ function sumCartOrderLinesTotal(lines: CartOrderLine[]): number {
     if (line.isComped) return acc;
     return acc + comandaLineTotalWithExtras(line);
   }, 0);
+}
+
+function isComandaAlreadyIssuedForLines(lines: CartOrderLine[]): boolean {
+  return lines.some((line) => {
+    const st = normalizeOrderLineStatus(line.status);
+    return st === "sent" || st === "prepared" || st === "served";
+  });
+}
+
+function tableOperatorAssignmentHintFromTable(
+  table: Table | null | undefined,
+): TableOperatorAssignment | null {
+  const id = table?.assignedOperatorId?.trim();
+  const name = table?.assignedOperatorName?.trim();
+  if (!id || !name) return null;
+  return {
+    assignedOperatorId: id,
+    assignedOperatorName: name,
+    ...(typeof table?.assignedAt === "number" && Number.isFinite(table.assignedAt)
+      ? { assignedAt: table.assignedAt }
+      : {}),
+  };
+}
+
+function resolveOperatorAssignmentForNewOrder(
+  tableId: string,
+  tables: readonly Table[],
+  activeOperator: ActiveOperatorSession | null,
+): Pick<
+  TableOperatorAssignment,
+  "assignedOperatorId" | "assignedOperatorName"
+> | null {
+  const fromTable = tableOperatorAssignmentHintFromTable(
+    tables.find((row) => row.id === tableId),
+  );
+  if (fromTable) {
+    return {
+      assignedOperatorId: fromTable.assignedOperatorId,
+      assignedOperatorName: fromTable.assignedOperatorName,
+    };
+  }
+  if (!activeOperator) return null;
+  return {
+    assignedOperatorId: activeOperator.activeOperatorId,
+    assignedOperatorName: activeOperator.activeOperatorName,
+  };
 }
 
 function countActiveComandaLines(lines: CartOrderLine[]): number {
@@ -1283,6 +1319,7 @@ function resolveHydratedCartProductId(
 function mapFirestoreOrderDocToCartLines(
   data: FirestoreOrderDocForCart,
   restaurantId: string,
+  catalogById?: ReadonlyMap<string, { course?: number | null }>,
 ): CartOrderLine[] | null {
   if (data.restaurantId !== restaurantId) return null;
   const rawItems: FirestoreHydrationItem[] = Array.isArray(data.items)
@@ -1358,9 +1395,11 @@ function mapFirestoreOrderDocToCartLines(
         Number((it as { precio?: unknown }).precio) ||
         Number((it as { price?: unknown }).price) ||
         0;
-      const courseStored = normalizeComandaCourseForStorage(
-        (it as { course?: unknown }).course,
+      const catalogDoc = catalogById?.get(productIdResolved);
+      const courseStoredFromItem = readComandaLineCourseFromFirestoreRecord(
+        it as Record<string, unknown>,
       );
+      let courseStored = normalizeComandaCourseForStorage(courseStoredFromItem);
       const inventoryCost = parseFirestoreLineInventoryCost(
         (it as { inventoryCost?: unknown }).inventoryCost,
       );
@@ -1378,6 +1417,9 @@ function mapFirestoreOrderDocToCartLines(
         nombre: name,
         precio: basePrecio,
         categoria: categoryLabel || "Sin categoría",
+        ...(catalogDoc?.course !== undefined
+          ? { course: catalogDoc.course }
+          : {}),
         ...(stationFields.preparationArea
           ? { preparationArea: stationFields.preparationArea }
           : {}),
@@ -1389,6 +1431,10 @@ function mapFirestoreOrderDocToCartLines(
           ? { operationStationName: opFields.operationStationName }
           : {}),
       };
+      if (courseStored == null) {
+        const fromCatalog = resolveProductDefaultCourse(baseProduct);
+        if (fromCatalog != null) courseStored = fromCatalog;
+      }
       return {
         id:
           typeof it.id === "string" && it.id.trim() !== ""
@@ -1677,6 +1723,7 @@ function buildTableAvailableClosePayload(closeMs: number) {
     dinersCount: 0,
     updatedAt: closeMs,
     closedAt: closeMs,
+    ...tableOperatorAssignmentClearFields(),
   };
 }
 
@@ -2073,6 +2120,8 @@ export function CartaPageContent({
   >("all");
   /** Filtro de camarero en mapa: todas, las del usuario actual, o id de usuario. */
   const [waiterFilter, setWaiterFilter] = useState<"all" | "me" | string>("all");
+  /** TPV operación: todas las mesas del plano o solo las del operador activo (+ libres). */
+  const [myTablesMapScope, setMyTablesMapScope] = useState<"all" | "mine">("all");
   /** Menú compacto de cambio de plano (TPV mapa); solo UX, misma `setSelectedTpvFloorPlanId`. */
   const [tpvFloorPlanMenuOpen, setTpvFloorPlanMenuOpen] = useState(false);
   const tpvFloorPlanMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2085,6 +2134,7 @@ export function CartaPageContent({
 
   useEffect(() => {
     setWaiterFilter(readStoredMapWaiterFilter());
+    setMyTablesMapScope(readStoredMapMyTablesScope());
   }, []);
 
   useEffect(() => {
@@ -2094,6 +2144,14 @@ export function CartaPageContent({
       /* ignore */
     }
   }, [waiterFilter]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MAP_MY_TABLES_SCOPE_STORAGE_KEY, myTablesMapScope);
+    } catch {
+      /* ignore */
+    }
+  }, [myTablesMapScope]);
 
   useEffect(() => {
     if (!tpvFloorPlanMenuOpen || !cartaHeaderMobile) return;
@@ -2700,6 +2758,13 @@ export function CartaPageContent({
           items,
           total: Number.isFinite(grandTotal) ? grandTotal : 0,
           existingOrderId: knownId,
+          operatorAssignment: knownId
+            ? null
+            : resolveOperatorAssignmentForNewOrder(
+                tid,
+                tablesList,
+                activeOperator,
+              ),
         });
         openDraftOrderIdByTableRef.current[tid] = orderId;
       } catch (e) {
@@ -2710,7 +2775,7 @@ export function CartaPageContent({
         });
       }
     },
-    [restaurantId, isFirebaseConfigured, tablesList],
+    [restaurantId, isFirebaseConfigured, tablesList, activeOperator],
   );
 
   const schedulePersistDraftOrderForTable = useCallback(
@@ -3084,6 +3149,46 @@ export function CartaPageContent({
     [restaurantId, isFirebaseConfigured, groupedTablesMapHandlers],
   );
 
+  /** Limpia navegación local de mesa (sin tocar Firestore ni caché de comandas). */
+  const resetTpvNavigationToMap = useCallback(() => {
+    userOpenedTableFromMapRef.current = null;
+    setTpvEntryMode("map");
+    suppressUrlTableSelectionRef.current = true;
+    setSelectedTableId(null);
+    setOrder([]);
+    sessionTableScopeRef.current = null;
+    setIsPaymentOpen(false);
+    if (embeddedInOperacion) {
+      try {
+        sessionStorage.setItem(OPERATOR_CHANGE_NAV_RESET_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+      clearOperacionTpvUrlParams();
+      router.replace("/dashboard/operacion/tpv");
+    }
+  }, [embeddedInOperacion, router]);
+
+  /** TPV compartido: tras acción operativa, volver al selector de operador activo. */
+  const returnToOperatorPickerAfterTpvAction = useCallback(() => {
+    if (!embeddedInOperacion) return;
+    resetTpvNavigationToMap();
+    requestOperatorChange();
+  }, [embeddedInOperacion, resetTpvNavigationToMap, requestOperatorChange]);
+
+  const completeOperationalActionWithOperatorPicker = useCallback(
+    async (actionSucceeded: boolean) => {
+      if (!actionSucceeded || !embeddedInOperacion) return;
+      await new Promise((r) =>
+        window.setTimeout(r, TPV_OPERATOR_PICKER_POST_ACTION_DELAY_MS),
+      );
+      returnToOperatorPickerAfterTpvAction();
+    },
+    [embeddedInOperacion, returnToOperatorPickerAfterTpvAction],
+  );
+
+  const handleRequestOperatorChange = returnToOperatorPickerAfterTpvAction;
+
   const finishPaymentAndReturnToMap = useCallback((clearedTableId: string | null) => {
     const memberIds = clearedTableId
       ? resolveGroupMemberIdsForTable(
@@ -3144,10 +3249,11 @@ export function CartaPageContent({
     window.setTimeout(() => {
       setClosingFeedback(null);
     }, 900);
-    const basePath = embeddedInOperacion
-      ? "/dashboard/operacion/tpv"
-      : "/dashboard/carta";
-    router.replace(basePath);
+    if (embeddedInOperacion) {
+      returnToOperatorPickerAfterTpvAction();
+    } else {
+      router.replace("/dashboard/carta");
+    }
     setIsInvoice(false);
     setInvoiceName("");
     setInvoiceTaxId("");
@@ -3166,6 +3272,7 @@ export function CartaPageContent({
     router,
     tablesList,
     clearLocalTableSessionState,
+    returnToOperatorPickerAfterTpvAction,
   ]);
 
   const autoCloseEmptyTableInProgressRef = useRef<string | null>(null);
@@ -3239,23 +3346,10 @@ export function CartaPageContent({
           }
           if (n > 0) await batch.commit();
 
-          await updateDoc(doc(db, "tables", tid), {
-            busy: false,
-            status: "available",
-            currentOrderId: null,
-            activeOrderId: null,
-            occupancyStartMs: null,
-            occupiedAt: null,
-            startedAt: null,
-            openedAt: null,
-            activeLineCount: 0,
-            priorityScore: 0,
-            total: 0,
-            guestCount: 0,
-            dinersCount: 0,
-            updatedAt: Date.now(),
-            closedAt: Date.now(),
-          });
+          await updateDoc(
+            doc(db, "tables", tid),
+            buildTableAvailableClosePayload(Date.now()),
+          );
         }
         finishPaymentAndReturnToMap(tid);
       } catch (error) {
@@ -4186,7 +4280,11 @@ export function CartaPageContent({
           }
           return;
         }
-        const mapped = mapFirestoreOrderDocToCartLines(data, restaurantId);
+        const mapped = mapFirestoreOrderDocToCartLines(
+          data,
+          restaurantId,
+          operationalCatalog.productDocumentsById,
+        );
         if (mapped == null) return;
         if (cancelled) return;
         setOrderDeepLinkNotice(null);
@@ -4199,7 +4297,12 @@ export function CartaPageContent({
     return () => {
       cancelled = true;
     };
-  }, [orderIdFromUrl, restaurantId, isFirebaseConfigured]);
+  }, [
+    orderIdFromUrl,
+    restaurantId,
+    isFirebaseConfigured,
+    operationalCatalog.productDocumentsById,
+  ]);
 
   useEffect(() => {
     if (orderIdFromUrl) setTpvEntryMode("tpv");
@@ -4405,6 +4508,23 @@ export function CartaPageContent({
   ]);
 
   useEffect(() => {
+    if (!embeddedInOperacion) return;
+    try {
+      if (sessionStorage.getItem(OPERATOR_CHANGE_NAV_RESET_KEY) !== "1") return;
+      sessionStorage.removeItem(OPERATOR_CHANGE_NAV_RESET_KEY);
+    } catch {
+      return;
+    }
+    suppressUrlTableSelectionRef.current = true;
+    userOpenedTableFromMapRef.current = null;
+    setSelectedTableId(null);
+    setOrder([]);
+    setTpvEntryMode("map");
+    sessionTableScopeRef.current = null;
+    clearOperacionTpvUrlParams();
+  }, [embeddedInOperacion]);
+
+  useEffect(() => {
     if (orderIdFromUrl) return;
     if (suppressUrlTableSelectionRef.current) {
       if (!tableIdFromUrl?.trim()) {
@@ -4517,7 +4637,11 @@ export function CartaPageContent({
           return;
         }
         const data = snapDoc.data() as FirestoreOrderDocForCart;
-        const mapped = mapFirestoreOrderDocToCartLines(data, restaurantId);
+        const mapped = mapFirestoreOrderDocToCartLines(
+          data,
+          restaurantId,
+          operationalCatalog.productDocumentsById,
+        );
         if (!mapped || mapped.length === 0) {
           if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrdersByTable((prev) => ({ ...prev, [tid]: prev[tid] ?? [] }));
@@ -4551,7 +4675,11 @@ export function CartaPageContent({
         console.error("[hydrateTableOrderFromFirestore]", e);
       }
     },
-    [restaurantId, isFirebaseConfigured],
+    [
+      restaurantId,
+      isFirebaseConfigured,
+      operationalCatalog.productDocumentsById,
+    ],
   );
 
   useEffect(() => {
@@ -4609,7 +4737,11 @@ export function CartaPageContent({
           return;
         }
         const data = snapDoc.data() as FirestoreOrderDocForCart;
-        const mapped = mapFirestoreOrderDocToCartLines(data, restaurantId);
+        const mapped = mapFirestoreOrderDocToCartLines(
+          data,
+          restaurantId,
+          operationalCatalog.productDocumentsById,
+        );
         if (!mapped || mapped.length === 0) {
           if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrder([]);
@@ -4753,7 +4885,7 @@ export function CartaPageContent({
         });
       }, 180);
 
-      const productCourse = getProductDefaultCourse(product);
+      const productCourse = resolveProductDefaultCourse(product);
       const modifierKey = cartLineModifiersMergeKey(
         modifierPayload?.selectedModifiers,
       );
@@ -5945,8 +6077,49 @@ export function CartaPageContent({
     groupedTablesMapHandlers,
   ]);
 
+  /** Operación TPV: mis mesas ocupadas del operador activo + todas las libres. */
+  const tablesVisibleForMapFilter = useMemo(() => {
+    if (!embeddedInOperacion || myTablesMapScope !== "mine") {
+      return tablesFilteredByWaiter;
+    }
+    const operatorId = activeOperator?.activeOperatorId?.trim();
+    if (!operatorId) return tablesFilteredByWaiter;
+
+    const assignmentByTableId = new Map<string, string | undefined>();
+    for (const row of tablesList) {
+      const id = String(row.id ?? "").trim();
+      if (!id) continue;
+      assignmentByTableId.set(id, row.assignedOperatorId?.trim());
+    }
+
+    return tablesFilteredByWaiter.filter((table) => {
+      const id = String(table.id ?? "").trim();
+      if (!id) return false;
+      const group = resolveJoinedTableGroupMapState(
+        id,
+        groupedTablesMapHandlers,
+        firestoreOccupiedTableIds,
+        ordersByTable,
+      );
+      if (!group.busy) return true;
+      const assignedId =
+        assignmentByTableId.get(group.serviceTableId) ??
+        table.assignedOperatorId?.trim();
+      return assignedId === operatorId;
+    });
+  }, [
+    embeddedInOperacion,
+    myTablesMapScope,
+    activeOperator?.activeOperatorId,
+    tablesFilteredByWaiter,
+    tablesList,
+    groupedTablesMapHandlers,
+    firestoreOccupiedTableIds,
+    ordersByTable,
+  ]);
+
   const enrichedTables = useMemo(() => {
-    const list = tablesFilteredByWaiter.filter((tbl) => String(tbl.id ?? "").trim() !== "");
+    const list = tablesVisibleForMapFilter.filter((tbl) => String(tbl.id ?? "").trim() !== "");
     return list.map((tbl) => {
       const tableId = String(tbl.id ?? "").trim();
       const group = resolveJoinedTableGroupMapState(
@@ -5964,11 +6137,33 @@ export function CartaPageContent({
       };
     });
   }, [
-    tablesFilteredByWaiter,
+    tablesVisibleForMapFilter,
     firestoreOccupiedTableIds,
     groupedTablesMapHandlers,
     ordersByTable,
   ]);
+
+  /** Mapa TPV: pase pendiente de marcha por mesa (p. ej. «Segundos»). */
+  const pendingMarchPassHintByTableId = useMemo(() => {
+    const hints: Record<string, string> = {};
+    for (const [tableId, lines] of Object.entries(ordersByTable)) {
+      const scopedLines =
+        operationalCatalog.source === "central"
+          ? lines.map((line) =>
+              enrichCartLineCourseFromCatalog(
+                line,
+                operationalCatalog.productDocumentsById,
+              ),
+            )
+          : lines;
+      const hint = resolvePendingMarchPassMapHint(
+        scopedLines,
+        isComandaAlreadyIssuedForLines(scopedLines),
+      );
+      if (hint) hints[tableId] = hint;
+    }
+    return hints;
+  }, [ordersByTable, operationalCatalog.source, operationalCatalog.productDocumentsById]);
 
   const tablesById = useMemo(() => {
     const map: Record<string, Table> = {};
@@ -6002,7 +6197,7 @@ export function CartaPageContent({
     [firestoreOccupiedTableIds, groupedTablesMapHandlers, ordersByTable],
   );
 
-  /** Resumen numérico de mesas visibles (respeta `tablesFilteredByWaiter`). Libres / ocupadas / reservadas
+  /** Resumen numérico de mesas visibles (respeta `tablesVisibleForMapFilter`). Libres / ocupadas / reservadas
    *  alinean con colores del mapa: ocupada = comanda Firestore o líneas en memoria; reservada = libre de comanda y
    *  con reserva del día asignada a la mesa. */
   const mapQuickSummary = useMemo(() => {
@@ -6012,7 +6207,7 @@ export function CartaPageContent({
     let busy = 0;
     let warning = 0;
     let critical = 0;
-    for (const t of tablesFilteredByWaiter) {
+    for (const t of tablesVisibleForMapFilter) {
       const id = String(t.id ?? "").trim();
       if (!id) continue;
       total += 1;
@@ -6038,7 +6233,7 @@ export function CartaPageContent({
     }
     return { total, free, reserved, busy, warning, critical };
   }, [
-    tablesFilteredByWaiter,
+    tablesVisibleForMapFilter,
     isTableOccupiedOnMap,
     reservedByTableId,
     orderOpenedAtByTable,
@@ -6609,6 +6804,32 @@ export function CartaPageContent({
       selectedTableIdRef.current = openId;
       setSelectedTableId(openId);
 
+      if (
+        activeOperator &&
+        restaurantId &&
+        isFirebaseConfigured &&
+        isAuthReady()
+      ) {
+        void assignTableOperatorOnFirstOpen({
+          db,
+          restaurantId,
+          tableId: openId,
+          operator: {
+            assignedOperatorId: activeOperator.activeOperatorId,
+            assignedOperatorName: activeOperator.activeOperatorName,
+          },
+          tableAssignmentHint: tableOperatorAssignmentHintFromTable(
+            tablesList.find((row) => row.id === openId),
+          ),
+        }).catch((error) => {
+          console.error("[assignTableOperatorOnFirstOpen]", {
+            tableId: openId,
+            restaurantId,
+            error,
+          });
+        });
+      }
+
       if (!orderIdFromUrl) {
         setOrder([]);
         userOpenedTableFromMapRef.current = openId;
@@ -6662,6 +6883,10 @@ export function CartaPageContent({
       groupedTablesMapHandlers,
       invalidateTableGroupOrderCache,
       hydrateTableOrderFromFirestore,
+      activeOperator,
+      restaurantId,
+      isFirebaseConfigured,
+      tablesList,
     ],
   );
 
@@ -6713,6 +6938,11 @@ export function CartaPageContent({
     setIsPayTableOrderSending(true);
     try {
       await handlePayTableOrder(selectedTableId, { db, restaurantId });
+      await clearTableOperatorAssignment({
+        db,
+        restaurantId,
+        tableId: selectedTableId,
+      });
       await updateDoc(doc(db, "tables", selectedTableId), {
         guestCount: 0,
         updatedAt: Date.now(),
@@ -6726,6 +6956,7 @@ export function CartaPageContent({
       });
       setGuestCount(0);
       groupedTablesMapHandlers?.separateTable?.(selectedTableId);
+      await completeOperationalActionWithOperatorPicker(true);
     } catch (e) {
       console.error("handlePayOrder", e);
     } finally {
@@ -6738,6 +6969,7 @@ export function CartaPageContent({
     isPayTableOrderSending,
     order.length,
     groupedTablesMapHandlers,
+    completeOperationalActionWithOperatorPicker,
   ]);
 
   const updateActiveOrderPaymentRequest = useCallback(
@@ -6912,7 +7144,11 @@ export function CartaPageContent({
           setOrder([]);
           setOrdersByTable((prev) => ({ ...prev, [tableId]: [] }));
         } else {
-          const mapped = mapFirestoreOrderDocToCartLines(data, restaurantId);
+          const mapped = mapFirestoreOrderDocToCartLines(
+            data,
+            restaurantId,
+            operationalCatalog.productDocumentsById,
+          );
           if (mapped) {
             setOrder(mapped);
             setOrdersByTable((prev) => ({ ...prev, [tableId]: mapped }));
@@ -7141,13 +7377,22 @@ export function CartaPageContent({
     return "#e8f5e9"; // verde suave
   };
 
-  const visibleOrderLines = useMemo(
-    () =>
-      order.filter(
-        (line) => normalizeOrderLineStatus(line.status) !== "cancelled",
+  const visibleOrderLines = useMemo(() => {
+    const active = order.filter(
+      (line) => normalizeOrderLineStatus(line.status) !== "cancelled",
+    );
+    if (operationalCatalog.source !== "central") return active;
+    return active.map((line) =>
+      enrichCartLineCourseFromCatalog(
+        line,
+        operationalCatalog.productDocumentsById,
       ),
-    [order],
-  );
+    );
+  }, [
+    order,
+    operationalCatalog.source,
+    operationalCatalog.productDocumentsById,
+  ]);
 
   const linesPending = useMemo(
     () =>
@@ -7160,13 +7405,30 @@ export function CartaPageContent({
 
   /** Al menos una línea ya enviada/preparada/servida: Comanda ya se pulsó en esta mesa. */
   const comandaAlreadyIssuedForTable = useMemo(
-    () =>
-      visibleOrderLines.some((line) => {
-        const st = normalizeOrderLineStatus(line.status);
-        return st === "sent" || st === "prepared" || st === "served";
-      }),
+    () => isComandaAlreadyIssuedForLines(visibleOrderLines),
     [visibleOrderLines],
   );
+
+  /** Pases posteriores listos para marchar: anteriores servidos y líneas pending. */
+  const pendingMarchPassAlerts = useMemo(
+    (): PendingMarchPassAlert[] =>
+      detectPendingMarchPassAlerts(
+        visibleOrderLines,
+        comandaAlreadyIssuedForTable,
+      ),
+    [visibleOrderLines, comandaAlreadyIssuedForTable],
+  );
+
+  const pendingMarchPassAlertsByAction = useMemo(() => {
+    const map = new Map<
+      PendingMarchPassAlert["action"],
+      PendingMarchPassAlert
+    >();
+    for (const alert of pendingMarchPassAlerts) {
+      map.set(alert.action, alert);
+    }
+    return map;
+  }, [pendingMarchPassAlerts]);
 
   const linesSent = useMemo(
     () =>
@@ -7226,8 +7488,7 @@ export function CartaPageContent({
       4: [],
     };
     const pushByCourse = (line: CartOrderLine) => {
-      const course = (normalizeComandaCourseForStorage(line.course) ??
-        1) as 1 | 2 | 3 | 4;
+      const course = resolveComandaLineCourseNum(line) as 1 | 2 | 3 | 4;
       buckets[course].push(line);
     };
     linesSent.forEach(pushByCourse);
@@ -7611,7 +7872,9 @@ export function CartaPageContent({
     if (!restaurantId || !isFirebaseConfigured) return false;
     if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
 
-    const linesToSend = order.filter((l) => isPendingMarchPrimeroLine(l));
+    const linesToSend = visibleOrderLines.filter((l) =>
+      isPendingMarchPrimeroLine(l),
+    );
     if (linesToSend.length === 0) return false;
 
     const ok = await releaseLinesToProduction(linesToSend, {
@@ -7619,6 +7882,7 @@ export function CartaPageContent({
     });
     if (ok) {
       showSentFeedback("Primeros marchados");
+      void completeOperationalActionWithOperatorPicker(true);
     }
     return ok;
   }, [
@@ -7626,9 +7890,10 @@ export function CartaPageContent({
     selectedTableId,
     restaurantId,
     isFirebaseConfigured,
-    order,
+    visibleOrderLines,
     connectivityStatus,
     releaseLinesToProduction,
+    completeOperationalActionWithOperatorPicker,
   ]);
 
   const handleMarchSegundos = useCallback(async (): Promise<boolean> => {
@@ -7637,7 +7902,9 @@ export function CartaPageContent({
     if (!restaurantId || !isFirebaseConfigured) return false;
     if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
 
-    const linesToSend = order.filter((l) => isPendingMarchSegundosLine(l));
+    const linesToSend = visibleOrderLines.filter((l) =>
+      isPendingMarchSegundosLine(l),
+    );
     if (linesToSend.length === 0) return false;
 
     const ok = await releaseLinesToProduction(linesToSend, {
@@ -7645,6 +7912,7 @@ export function CartaPageContent({
     });
     if (ok) {
       showSentFeedback("Segundos marchados");
+      void completeOperationalActionWithOperatorPicker(true);
     }
     return ok;
   }, [
@@ -7652,9 +7920,10 @@ export function CartaPageContent({
     selectedTableId,
     restaurantId,
     isFirebaseConfigured,
-    order,
+    visibleOrderLines,
     connectivityStatus,
     releaseLinesToProduction,
+    completeOperationalActionWithOperatorPicker,
   ]);
 
   const handleMarchPostres = useCallback(async (): Promise<boolean> => {
@@ -7663,7 +7932,9 @@ export function CartaPageContent({
     if (!restaurantId || !isFirebaseConfigured) return false;
     if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
 
-    const linesToSend = order.filter((l) => isPendingMarchPostresLine(l));
+    const linesToSend = visibleOrderLines.filter((l) =>
+      isPendingMarchPostresLine(l),
+    );
     if (linesToSend.length === 0) return false;
 
     const ok = await releaseLinesToProduction(linesToSend, {
@@ -7671,6 +7942,7 @@ export function CartaPageContent({
     });
     if (ok) {
       showSentFeedback("Postres marchados");
+      void completeOperationalActionWithOperatorPicker(true);
     }
     return ok;
   }, [
@@ -7678,9 +7950,10 @@ export function CartaPageContent({
     selectedTableId,
     restaurantId,
     isFirebaseConfigured,
-    order,
+    visibleOrderLines,
     connectivityStatus,
     releaseLinesToProduction,
+    completeOperationalActionWithOperatorPicker,
   ]);
 
   const closeMarchConfirmDialog = useCallback(() => {
@@ -7720,9 +7993,19 @@ export function CartaPageContent({
       }
       return;
     }
-    await new Promise((r) => window.setTimeout(r, 900));
-    handleBackToMap();
-  }, [handleComanda, handleBackToMap, order]);
+    if (embeddedInOperacion) {
+      await completeOperationalActionWithOperatorPicker(true);
+    } else {
+      await new Promise((r) => window.setTimeout(r, 900));
+      handleBackToMap();
+    }
+  }, [
+    handleComanda,
+    handleBackToMap,
+    order,
+    embeddedInOperacion,
+    completeOperationalActionWithOperatorPicker,
+  ]);
 
   const orderDocIsPaid = useMemo(() => {
     if (
@@ -7880,7 +8163,7 @@ export function CartaPageContent({
   );
 
   const tpvComandaCourseSummaryEl = useMemo(() => {
-    const activeLines = order.filter(isActiveComandaLineForOps);
+    const activeLines = visibleOrderLines;
     const entrantesLines = activeLines.filter(
       (line) => isComandaKitchenLine(line) && comandaLineCourseNum(line) === 1,
     );
@@ -7914,6 +8197,8 @@ export function CartaPageContent({
       count: number;
       tone: "entrantes" | "primero" | "segundo" | "postres" | "bebidas";
       action?: "primeros" | "segundos" | "postres";
+      /** Pase listo para marchar (pases anteriores servidos). */
+      pendingMarch?: boolean;
     };
 
     const segments: CoursePassChipSegment[] = [];
@@ -7927,13 +8212,26 @@ export function CartaPageContent({
       });
     }
 
+    const primeroAlert = pendingMarchPassAlertsByAction.get("primeros");
+    const segundosAlert = pendingMarchPassAlertsByAction.get("segundos");
+    const postresAlert = pendingMarchPassAlertsByAction.get("postres");
+
     if (primeroLines.length > 0) {
       segments.push({
         key: "primero",
         label: "Primeros",
-        count: primeroMarch > 0 ? primeroMarch : primeroLines.length,
+        count: primeroAlert
+          ? primeroAlert.count
+          : primeroMarch > 0
+            ? primeroMarch
+            : primeroLines.length,
         tone: "primero",
-        ...(primeroMarch > 0 ? { action: "primeros" as const } : {}),
+        ...(primeroAlert
+          ? {
+              action: "primeros" as const,
+              pendingMarch: true,
+            }
+          : {}),
       });
     }
 
@@ -7941,9 +8239,18 @@ export function CartaPageContent({
       segments.push({
         key: "segundo",
         label: "Segundos",
-        count: segundoMarch > 0 ? segundoMarch : segundoLines.length,
+        count: segundosAlert
+          ? segundosAlert.count
+          : segundoMarch > 0
+            ? segundoMarch
+            : segundoLines.length,
         tone: "segundo",
-        ...(segundoMarch > 0 ? { action: "segundos" as const } : {}),
+        ...(segundosAlert
+          ? {
+              action: "segundos" as const,
+              pendingMarch: true,
+            }
+          : {}),
       });
     }
 
@@ -7951,10 +8258,18 @@ export function CartaPageContent({
       segments.push({
         key: "postres",
         label: "Postres",
-        count:
-          postresPendingMarch > 0 ? postresPendingMarch : postresLines.length,
+        count: postresAlert
+          ? postresAlert.count
+          : postresPendingMarch > 0
+            ? postresPendingMarch
+            : postresLines.length,
         tone: "postres",
-        ...(postresPendingMarch > 0 ? { action: "postres" as const } : {}),
+        ...(postresAlert
+          ? {
+              action: "postres" as const,
+              pendingMarch: true,
+            }
+          : {}),
       });
     }
 
@@ -8002,7 +8317,7 @@ export function CartaPageContent({
                   : undefined;
           const chipClass = `carta-comanda-pass-chip carta-comanda-pass-chip--${segment.tone}${
             onMarch ? " is-action" : ""
-          }`;
+          }${segment.pendingMarch ? " is-pending-march" : ""}`;
           const chipBody = (
             <>
               <span className="carta-comanda-pass-chip__label">{segment.label}</span>
@@ -8037,7 +8352,7 @@ export function CartaPageContent({
         })}
       </div>
     );
-  }, [order, isComandaSending]);
+  }, [visibleOrderLines, isComandaSending, pendingMarchPassAlertsByAction]);
 
   /** Sin selector manual de pase: no hay “pase activo” para resaltar filas. */
   const activeCourseNum = -1;
@@ -8430,14 +8745,14 @@ export function CartaPageContent({
       lineNote: item.lineNote,
     });
     const lineInventoryCostLabel = tpvLineInventoryCostLabelByLineId.get(item.id);
-    const courseForBadge = normalizeComandaCourseForStorage(item.course);
+    const courseForBadge = resolveEffectiveComandaLineCourse(item);
     const isDrinkLine = isTpvDrinkProduct({
       productFamilyType: item.product.productFamilyType,
       categoryName: item.product.categoria,
       categoria: item.product.categoria,
       tipoVenta: item.product.tipoVenta,
     });
-    const coursePassChipLabel = comandaCoursePassChipLabel(item.course);
+    const coursePassChipLabel = comandaCoursePassChipLabel(courseForBadge);
     const lineSt = normalizeOrderLineStatus(item.status);
     const statusChipClickable = lineSt === "sent" || lineSt === "prepared";
     /* ¿Esta línea pertenece al pase activo? Sirve para resaltar
@@ -10709,6 +11024,34 @@ export function CartaPageContent({
   color: var(--hostly-accent);
 }
 
+.carta-my-tables-map-scope {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px 6px 2px;
+  box-sizing: border-box;
+}
+
+.carta-my-tables-map-scope .carta-table-map-zone-btn {
+  min-height: 24px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid var(--hostly-line);
+  color: var(--hostly-ink-muted);
+}
+
+.carta-my-tables-map-scope .carta-table-map-zone-btn--on {
+  border-color: var(--hostly-line-strong);
+  background: var(--hostly-accent-soft);
+  color: var(--hostly-accent);
+}
+
 .carta-map-toolbar {
   width: 100%;
   min-width: 0;
@@ -10949,26 +11292,64 @@ button.carta-comanda-pass-chip:disabled {
   color: #166534;
 }
 
-.carta-comanda-pass-chip--primero,
-.carta-comanda-pass-chip--segundo {
-  border-color: rgba(251, 146, 60, 0.38);
-  background: rgba(255, 247, 237, 0.96);
-  color: #c2410c;
+.carta-comanda-pass-chip--primero:not(.is-pending-march),
+.carta-comanda-pass-chip--segundo:not(.is-pending-march) {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(248, 250, 252, 0.95);
+  color: #334155;
 }
 
-button.carta-comanda-pass-chip--primero.is-action:hover:not(:disabled),
-button.carta-comanda-pass-chip--segundo.is-action:hover:not(:disabled) {
-  background: rgba(254, 215, 170, 0.98);
-}
-
-.carta-comanda-pass-chip--postres {
-  border-color: rgba(192, 132, 252, 0.38);
+.carta-comanda-pass-chip--postres:not(.is-pending-march) {
+  border-color: rgba(192, 132, 252, 0.28);
   background: rgba(250, 245, 255, 0.96);
   color: #7e22ce;
 }
 
-button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
-  background: rgba(237, 233, 254, 0.98);
+.carta-comanda-pass-chip.is-pending-march {
+  min-height: 28px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  border-width: 1.5px;
+  border-color: rgba(251, 146, 60, 0.62);
+  background: rgba(255, 237, 213, 0.98);
+  color: #9a3412;
+  box-shadow:
+    0 0 0 2px rgba(251, 146, 60, 0.18),
+    0 2px 8px rgba(251, 146, 60, 0.2);
+}
+
+.carta-comanda-pass-chip--postres.is-pending-march {
+  border-color: rgba(192, 132, 252, 0.55);
+  background: rgba(243, 232, 255, 0.98);
+  color: #7e22ce;
+  box-shadow:
+    0 0 0 2px rgba(192, 132, 252, 0.16),
+    0 2px 8px rgba(168, 85, 247, 0.16);
+}
+
+.carta-comanda-pass-chip.is-pending-march .carta-comanda-pass-chip__count {
+  min-width: 18px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(251, 146, 60, 0.28);
+  color: #9a3412;
+  line-height: 1.2;
+}
+
+.carta-comanda-pass-chip--postres.is-pending-march .carta-comanda-pass-chip__count {
+  background: rgba(192, 132, 252, 0.24);
+  color: #6b21a8;
+}
+
+button.carta-comanda-pass-chip.is-pending-march:hover:not(:disabled) {
+  background: rgba(254, 215, 170, 0.99);
+  border-color: rgba(249, 115, 22, 0.72);
+}
+
+button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
+  background: rgba(237, 233, 254, 0.99);
+  border-color: rgba(168, 85, 247, 0.55);
 }
 
 .carta-comanda-pass-chip--bebidas {
@@ -12964,6 +13345,12 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
     padding: 2px 7px !important;
   }
 
+  .carta-comanda-pass-chip.is-pending-march {
+    font-size: 10px !important;
+    min-height: 26px !important;
+    padding: 3px 10px !important;
+  }
+
   .carta-comensales-compact.carta-comensales--pill {
     display: grid !important;
     grid-template-columns: auto 1fr auto auto !important;
@@ -13183,6 +13570,11 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
   min-height: 20px !important;
   padding: 2px 6px !important;
   gap: 3px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-pass-chip.is-pending-march {
+  font-size: 9px !important;
+  min-height: 24px !important;
+  padding: 3px 9px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales-compact.carta-comensales--pill {
   height: 24px !important;
@@ -13915,6 +14307,40 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
                 </label>
               </div>
               ) : null}
+              {embeddedInOperacion && activeOperator ? (
+                <div
+                  className="carta-my-tables-map-scope"
+                  role="tablist"
+                  aria-label={t("cartaTpv.mapOperatorScopeAria")}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={myTablesMapScope === "all"}
+                    className={`carta-table-map-zone-btn${
+                      myTablesMapScope === "all"
+                        ? " carta-table-map-zone-btn--on"
+                        : ""
+                    }`}
+                    onClick={() => setMyTablesMapScope("all")}
+                  >
+                    {t("cartaTpv.mapOperatorScopeAll")}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={myTablesMapScope === "mine"}
+                    className={`carta-table-map-zone-btn${
+                      myTablesMapScope === "mine"
+                        ? " carta-table-map-zone-btn--on"
+                        : ""
+                    }`}
+                    onClick={() => setMyTablesMapScope("mine")}
+                  >
+                    {t("cartaTpv.mapOperatorScopeMine")}
+                  </button>
+                </div>
+              ) : null}
               <div
                 ref={mapRef}
                 className="carta-table-map-grid"
@@ -14185,6 +14611,10 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
                           readyToClose={group.memberIds.some((memberId) =>
                             salaReadyToCloseTableIds.has(memberId),
                           )}
+                          pendingMarchPassHint={
+                            pendingMarchPassHintByTableId[serviceTableId] ??
+                            null
+                          }
                           groupedBadgeText={groupedBadgeText}
                           mapJoinDragEnabled={Boolean(
                             groupedTablesMapHandlers?.joinTables && canJoinTables,
@@ -17270,7 +17700,10 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
                         <div className="min-w-0 flex-1" aria-hidden />
                       )}
                       {embeddedInOperacion && !showTableMap ? (
-                        <ActiveOperatorTopBarButton className="carta-products-operator-btn ml-auto shrink-0" />
+                        <ActiveOperatorTopBarButton
+                          className="carta-products-operator-btn ml-auto shrink-0"
+                          onRequestOperatorChange={handleRequestOperatorChange}
+                        />
                       ) : null}
                     </div>
                   {!showAuthSpinner &&

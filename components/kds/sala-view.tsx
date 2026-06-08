@@ -23,6 +23,10 @@ import {
   getMenuCourseLabel,
   readItemCourseFromRecord,
 } from "@/lib/carta/menu-course";
+import {
+  computeTablesReadyToClose,
+  resolveTableReadyToCloseKey,
+} from "@/lib/kds/table-ready-to-close";
 
 type SalaItem = {
   id: string;
@@ -476,6 +480,11 @@ export default function SalaView() {
   const [orders, setOrders] = useState<SalaOrder[]>([]);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [busyItemIds, setBusyItemIds] = useState<Record<string, boolean>>({});
+  const [completedTablesQueue, setCompletedTablesQueue] = useState<
+    Array<{ key: string; label: string }>
+  >([]);
+  const prevReadyTableKeysRef = useRef<Set<string>>(new Set());
+  const announcedReadyTableKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!authReady || !isFirebaseConfigured || !restaurantId) return;
@@ -606,6 +615,63 @@ export default function SalaView() {
     }
     return { normal, attention, critical };
   }, [groups]);
+
+  const tablesReadyToClose = useMemo(
+    () =>
+      computeTablesReadyToClose(orders, {
+        matchesOrder: (order) => matchesOrder(order as SalaOrder),
+      }),
+    [orders, matchesOrder],
+  );
+
+  useEffect(() => {
+    const detail = Array.from(tablesReadyToClose);
+    window.dispatchEvent(
+      new CustomEvent("tablesReadyToClose:update", { detail }),
+    );
+  }, [tablesReadyToClose]);
+
+  useEffect(() => {
+    const prevReady = prevReadyTableKeysRef.current;
+    const nextReady = tablesReadyToClose;
+
+    for (const tableKey of prevReady) {
+      if (!nextReady.has(tableKey)) {
+        announcedReadyTableKeysRef.current.delete(tableKey);
+      }
+    }
+
+    for (const tableKey of nextReady) {
+      if (prevReady.has(tableKey) || announcedReadyTableKeysRef.current.has(tableKey)) {
+        continue;
+      }
+      announcedReadyTableKeysRef.current.add(tableKey);
+      const order = orders.find(
+        (o) => resolveTableReadyToCloseKey(o) === tableKey,
+      );
+      const label =
+        order?.table?.trim() ||
+        (order?.tableId ? `Mesa ${order.tableId}` : tableKey);
+      setCompletedTablesQueue((queue) => [...queue, { key: tableKey, label }]);
+    }
+
+    prevReadyTableKeysRef.current = new Set(nextReady);
+  }, [tablesReadyToClose, orders]);
+
+  useEffect(() => {
+    if (completedTablesQueue.length === 0) return;
+    const timeout = window.setTimeout(() => {
+      setCompletedTablesQueue((prev) => prev.slice(1));
+    }, 2500);
+    return () => window.clearTimeout(timeout);
+  }, [completedTablesQueue]);
+
+  const completedTableLabel = completedTablesQueue[0]?.label ?? "";
+  const completedTableText = `${
+    completedTableLabel.toLowerCase().includes("mesa")
+      ? `${completedTableLabel} servida`
+      : `Mesa ${completedTableLabel} servida`
+  } · Lista para cerrar`;
 
   async function handleMarkServed(orderId: string, itemId: string) {
     if (!isFirebaseConfigured) return;
@@ -772,6 +838,18 @@ export default function SalaView() {
         busyItemIds={busyItemIds}
         onMarkServed={handleMarkServed}
       />
+      {completedTablesQueue.length > 0 ? (
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
+          <div
+            className="hostly-mobile-card--compact hostly-button-primary cursor-pointer rounded-full !px-4 !py-2 !text-[13px] !shadow-md"
+            onClick={() => {
+              setCompletedTablesQueue((prev) => prev.slice(1));
+            }}
+          >
+            {completedTableText}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -793,68 +871,6 @@ function SalaBoard({
   busyItemIds: Record<string, boolean>;
   onMarkServed: (orderId: string, itemId: string) => void;
 }) {
-  const [completedTablesQueue, setCompletedTablesQueue] = useState<
-    Array<{ key: string; label: string }>
-  >([]);
-  const [tablesReadyToClose, setTablesReadyToClose] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const prevTableKeysRef = useRef<Set<string> | null>(null);
-  const announcedCompletedTablesRef = useRef<Set<string>>(new Set());
-  const previousGroupsByKeyRef = useRef<Map<string, SalaTableGroup>>(new Map());
-
-  useEffect(() => {
-    const detail = Array.from(tablesReadyToClose);
-    window.dispatchEvent(
-      new CustomEvent("tablesReadyToClose:update", { detail }),
-    );
-  }, [tablesReadyToClose]);
-
-  useEffect(() => {
-    const currentKeys = new Set(groups.map((g) => g.tableKey));
-    for (const tableKey of currentKeys) {
-      announcedCompletedTablesRef.current.delete(tableKey);
-    }
-    const currentGroupsByKey = new Map(groups.map((g) => [g.tableKey, g]));
-    const prevKeys = prevTableKeysRef.current;
-    if (prevKeys !== null) {
-      for (const tableKey of prevKeys) {
-        if (!currentKeys.has(tableKey)) {
-          if (!announcedCompletedTablesRef.current.has(tableKey)) {
-            announcedCompletedTablesRef.current.add(tableKey);
-            const previousGroup = previousGroupsByKeyRef.current.get(tableKey);
-            const label = previousGroup?.tableLabel ?? tableKey;
-            setCompletedTablesQueue((prev) => [...prev, { key: tableKey, label }]);
-            setTablesReadyToClose((prev) => {
-              const next = new Set(prev);
-              next.add(tableKey);
-              return next;
-            });
-          }
-        }
-      }
-    }
-    prevTableKeysRef.current = currentKeys;
-    previousGroupsByKeyRef.current = currentGroupsByKey;
-  }, [groups]);
-
-  useEffect(() => {
-    if (completedTablesQueue.length === 0) return;
-
-    const timeout = setTimeout(() => {
-      setCompletedTablesQueue((prev) => prev.slice(1));
-    }, 2500);
-
-    return () => clearTimeout(timeout);
-  }, [completedTablesQueue]);
-
-  const completedTableLabel = completedTablesQueue[0]?.label ?? "";
-  const completedTableText = `${
-    completedTableLabel.toLowerCase().includes("mesa")
-      ? `${completedTableLabel} servida`
-      : `Mesa ${completedTableLabel} servida`
-  } · Lista para cerrar`;
-
   const sortedGroups = [...groups].sort((a, b) => {
     const aScore = getSalaGroupUrgencyScore(a.lines, nowMs);
     const bScore = getSalaGroupUrgencyScore(b.lines, nowMs);
@@ -1181,18 +1197,6 @@ function SalaBoard({
           </>
         )}
     </div>
-      {completedTablesQueue.length > 0 && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
-          <div
-            className="hostly-mobile-card--compact hostly-button-primary cursor-pointer rounded-full !px-4 !py-2 !text-[13px] !shadow-md"
-            onClick={() => {
-              setCompletedTablesQueue((prev) => prev.slice(1));
-            }}
-          >
-            {completedTableText}
-          </div>
-        </div>
-      )}
     </>
   );
 }

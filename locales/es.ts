@@ -36,9 +36,9 @@ export const es: MessageTree = {
     emptyCell: "-",
   },
   activeOperator: {
-    title: "¿Quién está trabajando?",
-    subtitle: "Selecciona quién atiende el TPV en este dispositivo.",
-    lastOperator: "Último operador",
+    title: "¿Quién usa este TPV?",
+    subtitle: "Selecciona el camarero antes de abrir el mapa.",
+    lastOperator: "Último",
     change: "Cambiar",
   },
   cartaTpv: {
@@ -61,6 +61,9 @@ export const es: MessageTree = {
     mapTitle: "Mapa de mesas",
     mapSubtitle: "Toca una mesa para abrir el TPV de esa mesa.",
     mapZonesAll: "Todas las zonas",
+    mapOperatorScopeAria: "Filtrar mesas del mapa",
+    mapOperatorScopeAll: "Todas",
+    mapOperatorScopeMine: "Mis mesas",
     mapLibre: "Libre",
     mapOcupada: "Ocupada",
     mapOccupiedMinutes: "{{minutes}} min",

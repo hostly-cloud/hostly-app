@@ -4,7 +4,9 @@ import {
   serverTimestamp,
   type Firestore,
 } from "firebase/firestore";
+import { tableOperatorAssignmentCreateFields } from "@/lib/firestore/table-operator-assignment";
 import { dbgAddDoc, dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
+import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignment";
 
 export type PersistOpenOrderForTableParams = {
   restaurantId: string;
@@ -15,6 +17,11 @@ export type PersistOpenOrderForTableParams = {
   total: number;
   /** Si existe, solo actualiza campos de borrador sin tocar `status` (p. ej. sigue `sent` tras Comanda). */
   existingOrderId: string | null;
+  /** Solo en alta nueva: primera asignación de operador TPV. */
+  operatorAssignment?: Pick<
+    TableOperatorAssignment,
+    "assignedOperatorId" | "assignedOperatorName"
+  > | null;
 };
 
 /**
@@ -32,6 +39,7 @@ export async function persistOpenOrderForTable(
     items,
     total,
     existingOrderId,
+    operatorAssignment,
   } = params;
   const safeTotal = Number.isFinite(total) ? total : 0;
   const tid = tableId.trim();
@@ -66,6 +74,7 @@ export async function persistOpenOrderForTable(
     updatedAt: serverTimestamp(),
     items,
     total: safeTotal,
+    ...tableOperatorAssignmentCreateFields(operatorAssignment),
   };
   const ref = await dbgAddDoc(collection(db, "orders"), createPayload, {
     label: "persistOpenOrderForTable:create",

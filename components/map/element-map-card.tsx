@@ -71,6 +71,8 @@ export type ElementMapCardProps = {
   reservationBadge?: { label: string; subLabel?: string } | null;
   reservationPressure?: { type: "upcoming" | "late"; time: string } | null;
   readyToClose?: boolean;
+  /** Pase de cocina pendiente de marchar (p. ej. «Segundos») cuando el anterior ya está servido. */
+  pendingMarchPassHint?: string | null;
   groupedBadgeText?: string | null;
   mapJoinDragEnabled?: boolean;
   onMapTableJoinDrop?: (draggedTableId: string, targetTableId: string) => void;
@@ -260,6 +262,7 @@ export const ElementCard = memo(
     reservationBadge,
     reservationPressure,
     readyToClose,
+    pendingMarchPassHint,
     groupedBadgeText,
     mapJoinDragEnabled = false,
     onMapTableJoinDrop,
@@ -1374,6 +1377,36 @@ export const ElementCard = memo(
             }}
           />
         ) : null}
+        {busy && pendingMarchPassHint ? (
+          <span
+            aria-hidden
+            data-hostly-march-pass-hint
+            style={{
+              position: "absolute",
+              bottom: reservasLiveFollowUpHint ? 18 : 4,
+              left: "50%",
+              transform: "translateX(-50%)",
+              maxWidth: "calc(100% - 8px)",
+              padding: "2px 6px",
+              borderRadius: 6,
+              fontSize: 9,
+              fontWeight: 800,
+              letterSpacing: "0.02em",
+              lineHeight: 1.2,
+              color: "#9a3412",
+              background: "rgba(255, 247, 237, 0.98)",
+              border: "1px solid rgba(251, 146, 60, 0.45)",
+              boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)",
+              pointerEvents: "none",
+              zIndex: 4,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {`${pendingMarchPassHint} ↗`}
+          </span>
+        ) : null}
         {busy && reservasLiveFollowUpHint ? (
           <span
             aria-hidden
@@ -1513,6 +1546,8 @@ export const ElementCard = memo(
     if ((pa?.type ?? "") !== (pb?.type ?? "")) return false;
     if ((pa?.time ?? "") !== (pb?.time ?? "")) return false;
     if (prev.readyToClose !== next.readyToClose) return false;
+    if ((prev.pendingMarchPassHint ?? "") !== (next.pendingMarchPassHint ?? ""))
+      return false;
     if ((prev.groupedBadgeText ?? "") !== (next.groupedBadgeText ?? ""))
       return false;
     if (prev.mapJoinDragEnabled !== next.mapJoinDragEnabled) return false;

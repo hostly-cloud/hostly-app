@@ -10,6 +10,7 @@ import {
   type OrderLineStation,
 } from "@/lib/kds/order-line-station";
 import { deriveLegacyStationFromOperationStation } from "@/lib/operacion/product-operation-station";
+import { resolveEffectiveComandaLineCourse } from "@/lib/carta/comanda-line-course";
 import type { Product } from "@/types/product";
 
 /** Línea mínima para políticas de liberación (Comanda / Marchar). */
@@ -87,26 +88,26 @@ export function shouldAutoReleaseLineOnComanda(line: ComandaReleaseLine): boolea
   if (dest === "bar" || dest === "cocktail") return true;
   if (dest === "none") return false;
 
-  const course = normalizeComandaCourseValue(line.course) ?? 1;
+  const course = resolveEffectiveComandaLineCourse(line) ?? 1;
   return course === 1;
 }
 
 /** Marchar primeros: course 2 (Primeros) pending. */
 export function isPendingMarchPrimeroLine(line: ComandaReleaseLine): boolean {
   if (line.status !== "pending") return false;
-  return normalizeComandaCourseValue(line.course) === 2;
+  return resolveEffectiveComandaLineCourse(line) === 2;
 }
 
 /** Marchar segundos: course 3 (Segundos) pending. */
 export function isPendingMarchSegundosLine(line: ComandaReleaseLine): boolean {
   if (line.status !== "pending") return false;
-  return normalizeComandaCourseValue(line.course) === 3;
+  return resolveEffectiveComandaLineCourse(line) === 3;
 }
 
 /** Marchar postres: course 4 pending. */
 export function isPendingMarchPostresLine(line: ComandaReleaseLine): boolean {
   if (line.status !== "pending") return false;
-  return normalizeComandaCourseValue(line.course) === 4;
+  return resolveEffectiveComandaLineCourse(line) === 4;
 }
 
 /** Pedido en borrador TPV (`orders.status === "open"`): pending no va a Cocina. */
@@ -143,6 +144,6 @@ export function isTpvComandaLineHeldForMarch(
   if (!comandaAlreadyIssued) return false;
   if (line.status !== "pending") return false;
   if (resolveComandaLineKdsDestination(line) !== "kitchen") return false;
-  const course = normalizeComandaCourseValue(line.course) ?? 1;
+  const course = resolveEffectiveComandaLineCourse(line) ?? 1;
   return course >= 2 && course <= 4;
 }
