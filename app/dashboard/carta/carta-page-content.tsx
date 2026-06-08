@@ -28,6 +28,7 @@ import {
 } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { useActiveOperator } from "@/components/tpv/active-operator-context";
+import { ActiveOperatorTopBarButton } from "@/components/tpv/active-operator-top-bar-button";
 import { HostlyBackButton } from "@/components/hostly/back-button";
 import { HostlyMiniIconButton } from "@/components/hostly/mini-icon-button";
 import {
@@ -1603,6 +1604,8 @@ export type CartaPageContentProps = {
     joinTables?: (mainTableId: string, secondaryTableId: string) => void;
     separateTable?: (tableId: string) => void;
   };
+  /** Solo layout embebido en Operación: ocultar barra superior del shell dentro de mesa. */
+  onEmbeddedOperacionChromeChange?: (state: { hideShellTopBar: boolean }) => void;
 };
 
 type JoinedTableGroupMapState = {
@@ -1681,6 +1684,7 @@ export function CartaPageContent({
   embeddedInOperacion = false,
   tablesReadyToClose,
   groupedTablesMapHandlers,
+  onEmbeddedOperacionChromeChange,
 }: CartaPageContentProps) {
   const router = useRouter();
   const { t } = useI18n();
@@ -6232,6 +6236,13 @@ export function CartaPageContent({
       selectedTableId,
     ],
   );
+
+  useEffect(() => {
+    if (!embeddedInOperacion || !onEmbeddedOperacionChromeChange) return;
+    onEmbeddedOperacionChromeChange({
+      hideShellTopBar: !showTableMap,
+    });
+  }, [embeddedInOperacion, showTableMap, onEmbeddedOperacionChromeChange]);
 
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
@@ -11117,19 +11128,20 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
   margin: 0;
 }
 
-/* Cabecera comanda: una sola banda — comensales | mesa · tiempo | volver al mapa. */
+/* Cabecera comanda: extremos operativos — mapa (izq.) | mesa centrada | comensales (der.). */
 .carta-comanda-head-compact-band {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
+  column-gap: 8px;
   width: 100%;
   min-width: 0;
   min-height: 34px;
 }
 
 .carta-comanda-head-guests {
-  flex: 0 0 auto;
+  grid-column: 3;
+  justify-self: end;
   min-width: 0;
 }
 
@@ -11150,13 +11162,15 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
 }
 
 .carta-comanda-head-mesa-line {
+  grid-column: 2;
+  justify-self: center;
   display: inline-flex;
   flex-wrap: nowrap;
   align-items: baseline;
   gap: 6px;
   min-width: 0;
-  flex: 1 1 auto;
-  justify-content: flex-start;
+  max-width: 100%;
+  justify-content: center;
 }
 
 .carta-comanda-head-mesa-line .carta-comanda-headline {
@@ -11169,8 +11183,10 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
 }
 
 .carta-comanda-head-compact-band .carta-tpv-to-map-btn--prominent {
-  margin-left: auto;
-  flex: 0 0 auto;
+  grid-column: 1;
+  justify-self: start;
+  margin-left: 0;
+  max-width: 100%;
 }
 
 .carta-comanda-head-sep {
@@ -11679,6 +11695,36 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
 .carta-layout-splitter:hover::after,
 .carta-layout-splitter[data-dragging="true"]::after {
   background: rgba(59, 130, 246, 0.7);
+}
+
+.carta-root[data-carta-embedded="true"] .carta-products-operator-btn {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  box-shadow: none;
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.carta-root[data-carta-embedded="true"] .carta-products-operator-btn__name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-menu-row {
+  flex-direction: row !important;
+  align-items: center !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-products-operator-btn {
+  min-height: 44px !important;
+  min-width: 44px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
 }
 
 /* Columna comanda (izquierda en escritorio; arriba en móvil). */
@@ -14246,28 +14292,20 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
                 }
               >
                 <div className="carta-comanda-head-compact-band w-full min-w-0">
-                  {viewMode === "normal" && selectedTableId ? (
-                    <div className="carta-comanda-head-guests">
-                      <div className="carta-comensales-compact carta-comensales--pill carta-comensales--head-band">
-                        <span className="carta-comensales-label">Comensales</span>
-                        <button
-                          type="button"
-                          onClick={() => void persistGuestCount(guestCount - 1)}
-                          disabled={guestCount <= 0}
-                          aria-label="Menos comensales"
-                        >
-                          -
-                        </button>
-                        <span className="carta-comensales-count">{guestCount}</span>
-                        <button
-                          type="button"
-                          onClick={() => void persistGuestCount(guestCount + 1)}
-                          aria-label="Más comensales"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
+                  {!orderIdFromUrl &&
+                  (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
+                    <button
+                      type="button"
+                      className="carta-tpv-to-map-btn carta-tpv-to-map-btn--prominent"
+                      onClick={handleBackToMap}
+                    >
+                      <span className="carta-tpv-to-map-btn__icon" aria-hidden>
+                        ←
+                      </span>
+                      <span className="carta-tpv-to-map-btn__label">
+                        {t("cartaTpv.mapNavVisible")}
+                      </span>
+                    </button>
                   ) : null}
                   <div className="carta-comanda-head-mesa-line">
                     <p
@@ -14311,20 +14349,28 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
                       </>
                     ) : null}
                   </div>
-                  {!orderIdFromUrl &&
-                  (tpvEntryMode === "tpv" || tpvEntryMode === "summary") ? (
-                    <button
-                      type="button"
-                      className="carta-tpv-to-map-btn carta-tpv-to-map-btn--prominent"
-                      onClick={handleBackToMap}
-                    >
-                      <span className="carta-tpv-to-map-btn__icon" aria-hidden>
-                        ←
-                      </span>
-                      <span className="carta-tpv-to-map-btn__label">
-                        {t("cartaTpv.mapNavVisible")}
-                      </span>
-                    </button>
+                  {viewMode === "normal" && selectedTableId ? (
+                    <div className="carta-comanda-head-guests">
+                      <div className="carta-comensales-compact carta-comensales--pill carta-comensales--head-band">
+                        <span className="carta-comensales-label">Comensales</span>
+                        <button
+                          type="button"
+                          onClick={() => void persistGuestCount(guestCount - 1)}
+                          disabled={guestCount <= 0}
+                          aria-label="Menos comensales"
+                        >
+                          -
+                        </button>
+                        <span className="carta-comensales-count">{guestCount}</span>
+                        <button
+                          type="button"
+                          onClick={() => void persistGuestCount(guestCount + 1)}
+                          aria-label="Más comensales"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
                 {((!orderDocIsPaid &&
@@ -17156,12 +17202,17 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
           >
             <div className="carta-mobile-products-scroll-shell">
               <div className="carta-main-fixed">
-              {!showAuthSpinner &&
-                !showProductsSpinner &&
-                !catalogLoadError &&
-                products.length > 0 && (
+              {((embeddedInOperacion && !showTableMap) ||
+                (!showAuthSpinner &&
+                  !showProductsSpinner &&
+                  !catalogLoadError &&
+                  products.length > 0)) && (
                   <>
-                    <div className="mb-1.5 flex w-full flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-2">
+                    <div className="carta-products-menu-row mb-1.5 flex w-full flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-2">
+                      {!showAuthSpinner &&
+                      !showProductsSpinner &&
+                      !catalogLoadError &&
+                      products.length > 0 ? (
                       <div
                         role="tablist"
                         aria-label={t("cartaTpv.menuGroupAria")}
@@ -17215,7 +17266,17 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
                         );
                       })}
                     </div>
+                      ) : (
+                        <div className="min-w-0 flex-1" aria-hidden />
+                      )}
+                      {embeddedInOperacion && !showTableMap ? (
+                        <ActiveOperatorTopBarButton className="carta-products-operator-btn ml-auto shrink-0" />
+                      ) : null}
                     </div>
+                  {!showAuthSpinner &&
+                  !showProductsSpinner &&
+                  !catalogLoadError &&
+                  products.length > 0 ? (
                   <div
                     className="carta-cats-wrap"
                     style={{
@@ -17257,6 +17318,7 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
                       );
                     })}
                   </div>
+                  ) : null}
                   </>
                 )}
 

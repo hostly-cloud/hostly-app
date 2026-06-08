@@ -70,6 +70,8 @@ export type OperacionModuleShellProps = {
   showFilterBar?: boolean;
   /** Contenido alineado a la derecha de la barra superior (p. ej. operador activo en TPV). */
   topBarEnd?: ReactNode;
+  /** Oculta la barra superior para ganar altura (p. ej. TPV dentro de mesa). */
+  hideTopBar?: boolean;
   children: ReactNode;
 };
 
@@ -77,6 +79,7 @@ export function OperacionModuleShell({
   title,
   showFilterBar,
   topBarEnd,
+  hideTopBar,
   children,
 }: OperacionModuleShellProps) {
   const moduleKey = title.trim().toLowerCase();
@@ -87,29 +90,31 @@ export function OperacionModuleShell({
       data-operation-module={moduleKey}
       style={shellStyle}
     >
-      <div className="hostly-operation-topbar" style={topBarStyle}>
-        <HostlyBackButton
-          href="/dashboard/operacion"
-          label="Volver a Operación"
-          ariaLabel="Volver a Operación"
-          tone="light"
-        />
-        {topBarEnd ? (
-          <div
-            className="hostly-operation-topbar-end"
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              alignItems: "center",
-              minWidth: 0,
-            }}
-          >
-            {topBarEnd}
-          </div>
-        ) : (
-          <span style={moduleLabelStyle}>{title}</span>
-        )}
-      </div>
+      {!hideTopBar ? (
+        <div className="hostly-operation-topbar" style={topBarStyle}>
+          <HostlyBackButton
+            href="/dashboard/operacion"
+            label="Volver a Operación"
+            ariaLabel="Volver a Operación"
+            tone="light"
+          />
+          {topBarEnd ? (
+            <div
+              className="hostly-operation-topbar-end"
+              style={{
+                marginLeft: "auto",
+                display: "flex",
+                alignItems: "center",
+                minWidth: 0,
+              }}
+            >
+              {topBarEnd}
+            </div>
+          ) : (
+            <span style={moduleLabelStyle}>{title}</span>
+          )}
+        </div>
+      ) : null}
 
       {showFilterBar ? (
         <div style={filterBarWrapStyle}>

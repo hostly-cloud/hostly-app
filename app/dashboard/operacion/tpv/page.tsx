@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CartaPageContent } from "@/app/dashboard/carta/carta-page-content";
 import { useAuth } from "@/components/auth/auth-context";
 import { ActiveOperatorProvider } from "@/components/tpv/active-operator-context";
 import { ActiveOperatorGate } from "@/components/tpv/active-operator-gate";
-import { ActiveOperatorTopBarButton } from "@/components/tpv/active-operator-top-bar-button";
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
 
@@ -15,6 +14,14 @@ export default function OperacionTpvPage() {
 
   const [tablesReadyToClose, setTablesReadyToClose] = useState<Set<string>>(
     () => new Set(),
+  );
+  const [hideShellTopBar, setHideShellTopBar] = useState(false);
+
+  const handleEmbeddedOperacionChromeChange = useCallback(
+    (state: { hideShellTopBar: boolean }) => {
+      setHideShellTopBar(state.hideShellTopBar);
+    },
+    [],
   );
 
   const { groupedTablesMapHandlers } = useTableGroups({
@@ -45,15 +52,13 @@ export default function OperacionTpvPage() {
 
   return (
     <ActiveOperatorProvider restaurantId={restaurantIdTrimmed}>
-      <OperacionModuleShell
-        title="TPV"
-        topBarEnd={<ActiveOperatorTopBarButton />}
-      >
+      <OperacionModuleShell title="TPV" hideTopBar={hideShellTopBar}>
         <ActiveOperatorGate>
           <CartaPageContent
             embeddedInOperacion
             tablesReadyToClose={tablesReadyToClose}
             groupedTablesMapHandlers={groupedTablesMapHandlers}
+            onEmbeddedOperacionChromeChange={handleEmbeddedOperacionChromeChange}
           />
         </ActiveOperatorGate>
       </OperacionModuleShell>
