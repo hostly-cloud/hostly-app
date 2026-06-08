@@ -78,18 +78,131 @@ export function resolveComandaLineKdsDestination(
   });
 }
 
-/**
- * Al pulsar Comanda: libera pending → sent (barra/cóctel siempre; cocina solo entrantes / sin pase).
- */
-export function shouldAutoReleaseLineOnComanda(line: ComandaReleaseLine): boolean {
-  if (line.status !== "pending") return false;
+function isPendingReleaseLine(line: ComandaReleaseLine): boolean {
+  return (line.status ?? "").trim().toLowerCase() === "pending";
+}
 
+function isPendingKitchenReleaseLine(line: ComandaReleaseLine): boolean {
+  if (!isPendingReleaseLine(line)) return false;
+  return resolveComandaLineKdsDestination(line) === "kitchen";
+}
+
+function isPendingDrinkReleaseLine(line: ComandaReleaseLine): boolean {
+  if (!isPendingReleaseLine(line)) return false;
   const dest = resolveComandaLineKdsDestination(line);
-  if (dest === "bar" || dest === "cocktail") return true;
-  if (dest === "none") return false;
+  return dest === "bar" || dest === "cocktail";
+}
 
-  const course = resolveEffectiveComandaLineCourse(line) ?? 1;
-  return course === 1;
+function isKitchenReleaseLine(line: ComandaReleaseLine): boolean {
+  return resolveComandaLineKdsDestination(line) === "kitchen";
+}
+
+function normalizeReleaseLineStatus(status: string | undefined): string {
+  return (status ?? "").trim().toLowerCase();
+}
+
+/** Cocina ya liberada a producción (Comanda o Marchar). */
+const KITCHEN_RELEASED_STATUSES = new Set([
+  "sent",
+  "preparing",
+  "prepared",
+  "ready",
+  "served",
+]);
+
+/**
+ * La mesa ya inició servicio de cocina: alguna línea cocina está enviada/marchada.
+ */
+export function hasKitchenPassAlreadyReleased(
+  lines: ReadonlyArray<ComandaReleaseLine>,
+): boolean {
+  for (const line of lines) {
+    if (!isKitchenReleaseLine(line)) continue;
+    const st = normalizeReleaseLineStatus(line.status);
+    if (st === "cancelled") continue;
+    if (KITCHEN_RELEASED_STATUSES.has(st)) return true;
+  }
+  return false;
+}
+
+/** Pase de cocina pending más bajo (1–4) en la mesa; null si no hay cocina pending. */
+export function resolveLowestPendingKitchenCourse(
+  lines: ReadonlyArray<ComandaReleaseLine>,
+): number | null {
+  let min: number | null = null;
+  for (const line of lines) {
+    if (!isPendingKitchenReleaseLine(line)) continue;
+    const course = resolveEffectiveComandaLineCourse(line) ?? 1;
+    if (min == null || course < min) min = course;
+  }
+  return min;
+}
+
+function resolveComandaReleaseLineId(
+  line: ComandaReleaseLine & { id?: string },
+): string {
+  return typeof line.id === "string" ? line.id.trim() : "";
+}
+
+/**
+ * Al pulsar Comanda:
+ * - Bebidas/cóctel pending: siempre.
+ * - Cocina sin servicio iniciado: primer pase pending más bajo (puede ser 1–4).
+ * - Cocina con servicio iniciado: solo entrantes (pase 1) pending; 2–4 → Marchar.
+ */
+export function selectLinesToReleaseOnComanda(
+  lines: ReadonlyArray<ComandaReleaseLine & { id?: string }>,
+): Array<ComandaReleaseLine & { id?: string }> {
+  const pending = lines.filter(isPendingReleaseLine);
+  if (pending.length === 0) return [];
+
+  const kitchenServiceStarted = hasKitchenPassAlreadyReleased(lines);
+  const lowestKitchenCourse = resolveLowestPendingKitchenCourse(pending);
+  const selected: Array<ComandaReleaseLine & { id?: string }> = [];
+
+  for (const line of pending) {
+    if (isPendingDrinkReleaseLine(line)) {
+      selected.push(line);
+      continue;
+    }
+    if (!isPendingKitchenReleaseLine(line)) continue;
+
+    const course = resolveEffectiveComandaLineCourse(line) ?? 1;
+
+    if (kitchenServiceStarted) {
+      if (course === 1) selected.push(line);
+      continue;
+    }
+
+    if (lowestKitchenCourse != null && course === lowestKitchenCourse) {
+      selected.push(line);
+    }
+  }
+
+  return selected;
+}
+
+export function hasLinesToReleaseOnComanda(
+  lines: ReadonlyArray<ComandaReleaseLine & { id?: string }>,
+): boolean {
+  return selectLinesToReleaseOnComanda(lines).length > 0;
+}
+
+/**
+ * @deprecated Preferir `selectLinesToReleaseOnComanda(allLines)` con el pedido completo.
+ * Con una sola línea en `allLines` equivale a “¿esta línea iría en Comanda?”.
+ */
+export function shouldAutoReleaseLineOnComanda(
+  line: ComandaReleaseLine & { id?: string },
+  allLines?: ReadonlyArray<ComandaReleaseLine & { id?: string }>,
+): boolean {
+  const pool = allLines ?? [line];
+  const lineId = resolveComandaReleaseLineId(line);
+  const selected = selectLinesToReleaseOnComanda(pool);
+  if (lineId) {
+    return selected.some((row) => resolveComandaReleaseLineId(row) === lineId);
+  }
+  return selected.includes(line);
 }
 
 /** Marchar primeros: course 2 (Primeros) pending. */

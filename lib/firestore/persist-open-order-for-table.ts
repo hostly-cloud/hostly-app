@@ -1,9 +1,14 @@
 import {
   collection,
   doc,
+  getDoc,
   serverTimestamp,
   type Firestore,
 } from "firebase/firestore";
+import {
+  computeBillableTotalFromPersistItems,
+  mergeOrderItemsForPersist,
+} from "@/lib/firestore/merge-order-items-for-persist";
 import { tableOperatorAssignmentCreateFields } from "@/lib/firestore/table-operator-assignment";
 import { dbgAddDoc, dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
 import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignment";
@@ -47,11 +52,28 @@ export async function persistOpenOrderForTable(
 
   if (existingOrderId?.trim()) {
     const id = existingOrderId.trim();
+    let mergedItems = items;
+    let mergedTotal = safeTotal;
+
+    try {
+      const snap = await getDoc(doc(db, "orders", id));
+      if (snap.exists()) {
+        const serverItems = (snap.data() as { items?: unknown }).items;
+        mergedItems = mergeOrderItemsForPersist(serverItems, items);
+        mergedTotal = computeBillableTotalFromPersistItems(mergedItems);
+      }
+    } catch (mergeReadErr) {
+      console.warn(
+        "[persistOpenOrderForTable] no se pudo leer order para merge; se usa payload local.",
+        mergeReadErr,
+      );
+    }
+
     await dbgUpdateDoc(
       doc(db, "orders", id),
       {
-        items,
-        total: safeTotal,
+        items: mergedItems,
+        total: mergedTotal,
         updatedAt: serverTimestamp(),
       },
       {

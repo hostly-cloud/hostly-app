@@ -149,9 +149,10 @@ import {
   isPendingMarchSegundosLine,
   isTpvComandaLineHeldForMarch,
   resolveComandaLineKdsDestination,
-  shouldAutoReleaseLineOnComanda,
+  selectLinesToReleaseOnComanda,
   type ComandaReleaseAction,
 } from "@/lib/carta/comanda-line-release";
+import { resolveComandaNoAutoReleaseFeedback } from "@/lib/carta/comanda-send-feedback";
 import {
   readComandaLineCourseFromFirestoreRecord,
   resolveComandaLineCourseNum,
@@ -7881,12 +7882,10 @@ export function CartaPageContent({
     if (order.length === 0) return false;
     if (!confirmCriticalActionIfUnstable(connectivityStatus)) return false;
 
-    const linesToSend = order.filter(
-      (l) => l.status === "pending" && shouldAutoReleaseLineOnComanda(l),
-    );
+    const linesToSend = selectLinesToReleaseOnComanda(visibleOrderLines);
     if (linesToSend.length === 0) {
       showSentFeedback(
-        "No hay entrantes ni bebidas pendientes. Usa Marchar primeros, segundos o postres.",
+        resolveComandaNoAutoReleaseFeedback(visibleOrderLines),
       );
       return false;
     }
@@ -7906,6 +7905,7 @@ export function CartaPageContent({
     isComandaSending,
     releaseLinesToProduction,
     connectivityStatus,
+    visibleOrderLines,
   ]);
 
   const handleMarchPrimeros = useCallback(async (): Promise<boolean> => {
@@ -8027,9 +8027,8 @@ export function CartaPageContent({
   const handleComandaAndExit = useCallback(async () => {
     const ok = await handleComanda();
     if (!ok) {
-      const hadReleasablePending = order.some(
-        (l) => l.status === "pending" && shouldAutoReleaseLineOnComanda(l),
-      );
+      const hadReleasablePending =
+        selectLinesToReleaseOnComanda(visibleOrderLines).length > 0;
       if (hadReleasablePending) {
         window.alert("No se pudo enviar la comanda. Inténtalo otra vez.");
       }
@@ -8044,7 +8043,7 @@ export function CartaPageContent({
   }, [
     handleComanda,
     handleBackToMap,
-    order,
+    visibleOrderLines,
     embeddedInOperacion,
     completeOperationalActionWithOperatorPicker,
   ]);
@@ -8443,11 +8442,8 @@ export function CartaPageContent({
   );
 
   const hasPendingComandaRelease = useMemo(
-    () =>
-      order.some(
-        (l) => l.status === "pending" && shouldAutoReleaseLineOnComanda(l),
-      ),
-    [order],
+    () => selectLinesToReleaseOnComanda(visibleOrderLines).length > 0,
+    [visibleOrderLines],
   );
 
   const tpvRushMode = useMemo(
