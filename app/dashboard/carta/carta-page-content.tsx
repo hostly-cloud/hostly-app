@@ -27,6 +27,7 @@ import {
   useState,
 } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import { useActiveOperator } from "@/components/tpv/active-operator-context";
 import { HostlyBackButton } from "@/components/hostly/back-button";
 import { HostlyMiniIconButton } from "@/components/hostly/mini-icon-button";
 import {
@@ -1684,6 +1685,7 @@ export function CartaPageContent({
     role,
     ready: authReady,
   } = useAuth();
+  const { activeOperator, requestOperatorChange } = useActiveOperator();
   const searchParams = useSearchParams();
   const orderIdFromUrl = searchParams.get("orderId");
   const lineIdFromUrl = searchParams.get("lineId")?.trim() ?? "";
@@ -1729,17 +1731,20 @@ export function CartaPageContent({
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  const waiterId =
+  const firebaseUserId =
     (user as { uid?: string; id?: string } | null | undefined)?.uid ||
     (user as { uid?: string; id?: string } | null | undefined)?.id ||
     null;
   const waiterEmail =
     (user as { email?: string } | null | undefined)?.email || null;
+  const waiterId = activeOperator?.activeOperatorId ?? firebaseUserId;
   const activityActorName =
+    activeOperator?.activeOperatorName ||
     (user as { displayName?: string } | null | undefined)?.displayName?.trim() ||
     waiterEmail ||
     undefined;
-  const activityActorRole = role ?? undefined;
+  const activityActorRole =
+    activeOperator?.activeOperatorRole || role || undefined;
 
   const { status: connectivityStatus } = useConnectivityStatus();
   const { can } = useHostlyCapabilities();
@@ -5023,8 +5028,7 @@ export function CartaPageContent({
       }
 
       const nowMs = Date.now();
-      const cancelledBy =
-        (user as { uid?: string } | null | undefined)?.uid?.trim() ?? null;
+      const cancelledBy = activeOperator?.activeOperatorId ?? firebaseUserId;
 
       setCancellingLineIds((prev) => new Set(prev).add(line.id));
       let orderCancellationPersisted = false;
@@ -13145,11 +13149,24 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
           title="TPV / Carta"
           subtitle={t("cartaTpv.viewTpv")}
           right={
-            <div
-              className="carta-mode-seg carta-mode-seg--compact carta-header-mode-tabs"
-              role="group"
-              aria-label="Modo"
-            >
+            <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                onClick={requestOperatorChange}
+                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-[rgba(15,23,42,0.1)] bg-white px-3 py-2 text-sm font-semibold text-[var(--hostly-ink)] shadow-sm transition-colors hover:bg-[rgba(15,23,42,0.03)]"
+                aria-label={`${activeOperator?.activeOperatorName ?? t("activeOperator.title")} · ${t("activeOperator.change")}`}
+              >
+                <span>{activeOperator?.activeOperatorName}</span>
+                <span className="text-[var(--hostly-ink-muted)]">·</span>
+                <span className="text-[var(--hostly-ink-muted)]">
+                  {t("activeOperator.change")}
+                </span>
+              </button>
+              <div
+                className="carta-mode-seg carta-mode-seg--compact carta-header-mode-tabs"
+                role="group"
+                aria-label="Modo"
+              >
               <button
                 type="button"
                 onClick={() => setViewMode("normal")}
@@ -13175,6 +13192,7 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
                 Barra
               </button>
             </div>
+            </div>
           }
           containerStyle={{
             paddingTop: 4,
@@ -13188,6 +13206,30 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
           embeddedInOperacion ? "" : " carta-page-main--below-header"
         }${showTableMap ? " carta-page-main--map" : ""}`}
       >
+      {embeddedInOperacion && activeOperator ? (
+        <div
+          className="carta-active-operator-bar"
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            padding: "8px 12px 0",
+            flexShrink: 0,
+          }}
+        >
+          <button
+            type="button"
+            onClick={requestOperatorChange}
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-[rgba(15,23,42,0.1)] bg-white px-3 py-2 text-sm font-semibold text-[var(--hostly-ink)] shadow-sm transition-colors hover:bg-[rgba(15,23,42,0.03)]"
+            aria-label={`${activeOperator.activeOperatorName} · ${t("activeOperator.change")}`}
+          >
+            <span>{activeOperator.activeOperatorName}</span>
+            <span className="text-[var(--hostly-ink-muted)]">·</span>
+            <span className="text-[var(--hostly-ink-muted)]">
+              {t("activeOperator.change")}
+            </span>
+          </button>
+        </div>
+      ) : null}
       {viewMode === "cocina" ? (
         <HostlyPageContainer
           wide

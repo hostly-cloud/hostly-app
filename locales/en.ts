@@ -35,6 +35,12 @@ export const en: MessageTree = {
     emDash: "—",
     emptyCell: "-",
   },
+  activeOperator: {
+    title: "Who is working?",
+    subtitle: "Select who is operating the POS on this device.",
+    lastOperator: "Last operator",
+    change: "Change",
+  },
   cartaTpv: {
     viewTpv: "TPV view",
     viewKitchen: "Kitchen view",
@@ -961,7 +967,7 @@ export const en: MessageTree = {
     productProfitabilityInsufficient: "Not enough data to calculate profitability.",
     productProfitabilityNeedPrice: "Enter a valid sale price to see margin and status.",
     productFormBlockAdvanced: "Advanced settings",
-    productFormBlockAdvancedHint: "Menu filters and fields inherited from the section.",
+    productFormBlockAdvancedHint: "Destination, course, format, active, menu details and costs.",
     fieldFormatDetected: "Detected format",
     fieldFormatManualPrompt:
       "This section is mixed. Choose whether you sell this as a dish or a drink.",

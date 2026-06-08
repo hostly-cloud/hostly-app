@@ -7,6 +7,7 @@ import {
   ConfigBtnSecondary,
   ConfigCard,
 } from "../_components/config-carta-workbench";
+import { ConfigModulePageHeader } from "../_components/config-module-page-header";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
   createOperationStation,
@@ -226,19 +227,11 @@ export default function ConfigEstacionesPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-      <header className="mx-auto mb-6 w-full max-w-[var(--hostly-config-content-max)] sm:mb-7">
-        <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-slate-400">
-          Operación · Configuración
-        </p>
-        <h1 className="mt-1 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
-          Estaciones operativas
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          Define dónde se preparan productos y a qué impresora o pantalla van.
-          El TPV y el KDS siguen usando la estación legacy del producto hasta la
-          siguiente fase.
-        </p>
-      </header>
+      <ConfigModulePageHeader
+        eyebrow="Operación · Configuración"
+        title="Estaciones operativas"
+        description="Define dónde se preparan productos y a qué impresora o pantalla van. El TPV y el KDS siguen usando la estación legacy del producto hasta la siguiente fase."
+      />
 
       <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
         {error ? (

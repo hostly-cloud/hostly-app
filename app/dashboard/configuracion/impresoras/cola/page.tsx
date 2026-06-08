@@ -10,6 +10,7 @@ import {
   ConfigBtnSecondary,
   ConfigCard,
 } from "../../_components/config-carta-workbench";
+import { ConfigModulePageHeader } from "../../_components/config-module-page-header";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
   KDS_OPERATION_STATION_FILTER_ALL,
@@ -266,25 +267,24 @@ export default function ConfigImpresorasColaPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-      <header className="mx-auto mb-6 w-full max-w-[var(--hostly-config-content-max)] sm:mb-7">
-        <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-slate-400">
-          Operación · Configuración · Impresoras
-        </p>
-        <div className="mt-1 flex flex-wrap items-center gap-3">
-          <h1 className="text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
-            Cola de impresión
-          </h1>
+      <ConfigModulePageHeader
+        eyebrow="Operación · Configuración · Impresoras"
+        title="Cola de impresión"
+        description={
+          <>
+            <span className="font-medium text-slate-800">Simulador.</span> No imprime
+            físicamente todavía. El worker automático marca jobs como impresos o
+            fallidos según la configuración (canal/impresora por estación).
+          </>
+        }
+      >
+        <p className="mt-2">
           <Link
             href="/dashboard/configuracion/impresoras"
             className="text-sm font-medium text-sky-700 hover:text-sky-800"
           >
-            ← Configuración
+            ← Impresoras
           </Link>
-        </div>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          <span className="font-medium text-slate-800">Simulador.</span> No imprime
-          físicamente todavía. El worker automático marca jobs como impresos o
-          fallidos según la configuración (canal/impresora por estación).
         </p>
         {stalePendingCount > 0 ? (
           <p className="mt-2 text-sm font-medium text-amber-800">
@@ -293,7 +293,7 @@ export default function ConfigImpresorasColaPage() {
             min sin imprimir.
           </p>
         ) : null}
-      </header>
+      </ConfigModulePageHeader>
 
       <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
         <ConfigCard>

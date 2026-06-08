@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { CategoryProductFamilySelect } from "@/components/carta/category-product-family-select";
+import { ProductFormDrawerCollapsibleSection } from "@/components/productos/product-form-drawer-section";
 import {
   ConfigBtnPrimary,
   ConfigBtnSecondary,
@@ -18,10 +19,11 @@ import {
 import {
   createCartaCategoriaApi,
   fetchCartaCategorias,
+  fetchCartaFamilias,
   patchCartaCategoriaApi,
 } from "@/lib/carta-categorias/api-client";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
-import type { CartaCategoria, CartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import type { CartaCategoria, CartaCategoriaTipo, CartaFamilia } from "@/lib/carta-categorias/types";
 import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import {
   ensureDefaultProductFamilies,
@@ -57,6 +59,7 @@ export default function ConfigCartaCategoriasPage() {
   });
 
   const [items, setItems] = useState<CartaCategoria[]>([]);
+  const [cartaFamilias, setCartaFamilias] = useState<CartaFamilia[]>([]);
   const [productFamilies, setProductFamilies] = useState<ProductFamilyDocument[]>([]);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroupDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +70,7 @@ export default function ConfigCartaCategoriasPage() {
   const [draftName, setDraftName] = useState("");
   const [draftType, setDraftType] = useState<CartaCategoriaTipo>("general");
   const [draftFamilyId, setDraftFamilyId] = useState("");
+  const [draftCartaMenuFamiliaId, setDraftCartaMenuFamiliaId] = useState("");
   const [draftActive, setDraftActive] = useState(true);
   const [draftOrder, setDraftOrder] = useState(0);
   const [draftModifierGroupIds, setDraftModifierGroupIds] = useState<string[]>([]);
@@ -75,17 +79,23 @@ export default function ConfigCartaCategoriasPage() {
   const refresh = useCallback(async () => {
     if (!restauranteId) {
       setItems([]);
+      setCartaFamilias([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const list = await fetchCartaCategorias(restauranteId);
+      const [list, familias] = await Promise.all([
+        fetchCartaCategorias(restauranteId),
+        fetchCartaFamilias(restauranteId),
+      ]);
       setItems(list);
+      setCartaFamilias(familias);
     } catch {
       setError("No se pudieron cargar las categorías. Revisa la conexión.");
       setItems([]);
+      setCartaFamilias([]);
     } finally {
       setLoading(false);
     }
@@ -163,6 +173,33 @@ export default function ConfigCartaCategoriasPage() {
     [items],
   );
 
+  const sortedMenuFamilias = useMemo(
+    () =>
+      [...cartaFamilias].sort(
+        (a, b) =>
+          a.sortOrder - b.sortOrder ||
+          a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
+      ),
+    [cartaFamilias],
+  );
+
+  const menuFamiliaSelectOptions = useMemo(() => {
+    const options = [...sortedMenuFamilias];
+    const selectedId = draftCartaMenuFamiliaId.trim();
+    if (selectedId && !options.some((f) => f.id === selectedId)) {
+      options.push({
+        id: selectedId,
+        restauranteId: restauranteId ?? "",
+        name: "Familia asignada (no disponible)",
+        sortOrder: 999_999,
+        isActive: false,
+        createdAt: "",
+        updatedAt: "",
+      });
+    }
+    return options;
+  }, [sortedMenuFamilias, draftCartaMenuFamiliaId, restauranteId]);
+
   const countsByCatId = useMemo(() => {
     if (!restauranteId) return new Map<string, number>();
     if (operationalCatalog.source === "central") {
@@ -182,6 +219,7 @@ export default function ConfigCartaCategoriasPage() {
     setDraftName("");
     setDraftType("general");
     setDraftFamilyId("");
+    setDraftCartaMenuFamiliaId("");
     setDraftActive(true);
     setDraftOrder(sorted.length);
     setDraftModifierGroupIds([]);
@@ -194,6 +232,7 @@ export default function ConfigCartaCategoriasPage() {
     setDraftName(c.name);
     setDraftType(c.type);
     setDraftFamilyId(productFamilySelectValueFromCategory(c));
+    setDraftCartaMenuFamiliaId(c.cartaFamiliaId?.trim() ?? "");
     setDraftActive(c.isActive);
     setDraftOrder(c.sortOrder);
     setDraftModifierGroupIds(c.modifierGroupIds ?? []);
@@ -221,6 +260,11 @@ export default function ConfigCartaCategoriasPage() {
     };
   }
 
+  function buildMenuFamilyPayload(): { cartaFamiliaId: string | null } {
+    const id = draftCartaMenuFamiliaId.trim();
+    return { cartaFamiliaId: id || null };
+  }
+
   async function savePanel() {
     const name = draftName.trim();
     if (!name) {
@@ -232,6 +276,7 @@ export default function ConfigCartaCategoriasPage() {
     setError(null);
     setNotice(null);
     const familyPayload = buildFamilyPayload();
+    const menuFamilyPayload = buildMenuFamilyPayload();
     const modifierGroupIds = sanitizeModifierGroupIdsForSave(
       draftModifierGroupIds,
       modifierGroups,
@@ -245,6 +290,7 @@ export default function ConfigCartaCategoriasPage() {
           sortOrder: draftOrder,
           modifierGroupIds,
           ...familyPayload,
+          ...menuFamilyPayload,
         });
         if (!res.ok) throw new Error(res.error);
       } else {
@@ -255,6 +301,7 @@ export default function ConfigCartaCategoriasPage() {
           sortOrder: draftOrder,
           modifierGroupIds,
           ...familyPayload,
+          ...menuFamilyPayload,
         });
         if (!res.ok) throw new Error(res.error);
       }
@@ -355,7 +402,27 @@ export default function ConfigCartaCategoriasPage() {
                 />
               </label>
               <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">¿Comida o bebida?</span>
+                <span className="hostly-carta-config-form-label">Bloque de carta</span>
+                <select
+                  className={inputClass}
+                  value={draftCartaMenuFamiliaId}
+                  onChange={(e) => setDraftCartaMenuFamiliaId(e.target.value)}
+                  disabled={saving}
+                >
+                  <option value="">Sin bloque de carta</option>
+                  {menuFamiliaSelectOptions.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                      {f.isActive === false ? " (inactiva)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="hostly-carta-config-form-hint">
+                  Agrupa categorías visibles dentro de bloques como Platos o Bebidas.
+                </p>
+              </label>
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Tipo</span>
                 <select
                   className={inputClass}
                   value={draftType}
@@ -368,26 +435,28 @@ export default function ConfigCartaCategoriasPage() {
                   <option value="drink">Bebida</option>
                   <option value="general">Mixto</option>
                 </select>
-                <p className="hostly-carta-config-form-hint">
-                  Clasifica la sección del menú. Distinto del formato del producto (plato, café, menú del día…).
-                </p>
               </label>
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Familia de producto</span>
-                <div>
-                  <CategoryProductFamilySelect
-                    restaurantId={restauranteId}
-                    value={draftFamilyId}
-                    onChange={setDraftFamilyId}
-                    disabled={saving}
-                  />
-                </div>
-                <p className="hostly-carta-config-form-hint">
-                  Opcional. Agrupa a nivel interno (informes, filtros). Distinto de la familia de menú, que ordena Platos y Bebidas en carta.
-                </p>
-              </label>
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Modificadores</span>
+              <ProductFormDrawerCollapsibleSection
+                key={editing?.id ?? "new"}
+                title="Configuración avanzada"
+                hint="Familia de producto, modificadores, orden y estado."
+              >
+                <label className="hostly-carta-config-form-field">
+                  <span className="hostly-carta-config-form-label">Familia de producto</span>
+                  <div>
+                    <CategoryProductFamilySelect
+                      restaurantId={restauranteId}
+                      value={draftFamilyId}
+                      onChange={setDraftFamilyId}
+                      disabled={saving}
+                    />
+                  </div>
+                  <p className="hostly-carta-config-form-hint">
+                    Opcional. Agrupa a nivel interno (informes, filtros). Distinto del bloque de carta, que ordena Platos y Bebidas en carta.
+                  </p>
+                </label>
+                <label className="hostly-carta-config-form-field">
+                  <span className="hostly-carta-config-form-label">Modificadores</span>
                 {activeModifierGroups.length === 0 ? (
                   <p className="hostly-carta-config-form-hint">
                     No hay grupos activos. Créalos en{" "}
@@ -459,6 +528,7 @@ export default function ConfigCartaCategoriasPage() {
                 />
                 <span className="hostly-carta-config-form-label">Categoría activa</span>
               </label>
+              </ProductFormDrawerCollapsibleSection>
             </div>
             <div className="hostly-carta-config-drawer__footer">
               <ConfigBtnPrimary

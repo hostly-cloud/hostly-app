@@ -35,6 +35,12 @@ export const es: MessageTree = {
     emDash: "—",
     emptyCell: "-",
   },
+  activeOperator: {
+    title: "¿Quién está trabajando?",
+    subtitle: "Selecciona quién atiende el TPV en este dispositivo.",
+    lastOperator: "Último operador",
+    change: "Cambiar",
+  },
   cartaTpv: {
     viewTpv: "Vista TPV",
     viewKitchen: "Vista Cocina",
@@ -962,7 +968,7 @@ export const es: MessageTree = {
     productProfitabilityNeedPrice:
       "Indica un precio de venta válido para ver el margen y el estado.",
     productFormBlockAdvanced: "Configuración avanzada",
-    productFormBlockAdvancedHint: "Filtros de carta y datos heredados de la sección.",
+    productFormBlockAdvancedHint: "Destino, pase, formato, activo, carta y costes.",
     fieldFormatDetected: "Formato detectado",
     fieldFormatManualPrompt:
       "Esta sección es mixta. Indica si vendes esto como plato o bebida.",

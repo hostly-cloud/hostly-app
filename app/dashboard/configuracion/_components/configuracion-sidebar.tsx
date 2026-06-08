@@ -3,70 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo } from "react";
+import {
+  CONFIG_NAV_GROUPS,
+  configPathnameMatches,
+} from "@/lib/configuracion/config-nav";
 
 type NavLeaf = { href: string; label: string };
 type NavGroup = { id: string; label: string; children: NavLeaf[] };
 type FooterLink = { href: string; label: string; outbound?: boolean };
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    id: "carta",
-    label: "Carta",
-    children: [
-      { href: "/dashboard/configuracion/carta/productos", label: "Productos" },
-      { href: "/dashboard/configuracion/carta/categorias", label: "Categorías" },
-      { href: "/dashboard/configuracion/carta/familias", label: "Familias" },
-      { href: "/dashboard/configuracion/carta/escandallos", label: "Escandallos" },
-      {
-        href: "/dashboard/configuracion/carta/importacion",
-        label: "IA / Importación",
-      },
-      { href: "/dashboard/configuracion/modificadores", label: "Modificadores" },
-    ],
-  },
-  {
-    id: "espacios",
-    label: "Espacios",
-    children: [
-      { href: "/dashboard/configuracion/espacios/mesas", label: "Mesas" },
-      { href: "/dashboard/configuracion/espacios/zonas", label: "Zonas" },
-    ],
-  },
-  {
-    id: "produccion",
-    label: "Producción",
-    children: [
-      { href: "/dashboard/configuracion/estaciones", label: "Estaciones" },
-      { href: "/dashboard/configuracion/impresoras", label: "Impresoras" },
-    ],
-  },
-  {
-    id: "catalogo",
-    label: "Catálogo",
-    children: [
-      {
-        href: "/dashboard/configuracion/familias-producto",
-        label: "Familias de producto",
-      },
-    ],
-  },
-  {
-    id: "equipo",
-    label: "Equipo",
-    children: [{ href: "/dashboard/configuracion/empleados", label: "Empleados" }],
-  },
-  {
-    id: "empresa",
-    label: "Empresa",
-    children: [
-      { href: "/dashboard/configuracion/empresa", label: "Empresa" },
-      {
-        href: "/dashboard/configuracion/integraciones",
-        label: "Integraciones",
-      },
-    ],
-  },
-];
+const NAV_GROUPS = CONFIG_NAV_GROUPS as NavGroup[];
 
 const FOOTER_LINKS: FooterLink[] = [
   { href: "/dashboard/operacion", label: "Ir a Operación →", outbound: true },
@@ -74,9 +20,7 @@ const FOOTER_LINKS: FooterLink[] = [
 ];
 
 function pathnameMatches(pathname: string, href: string) {
-  if (pathname === href) return true;
-  if (href !== "/" && pathname.startsWith(`${href}/`)) return true;
-  return false;
+  return configPathnameMatches(pathname, href);
 }
 
 function navLinkClass(active: boolean) {

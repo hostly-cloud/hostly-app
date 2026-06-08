@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ConfigModulePageHeader } from "./config-module-page-header";
 
 type ConfigSectionPlaceholderProps = {
   title: string;
@@ -17,16 +18,7 @@ export function ConfigSectionPlaceholder({
 }: ConfigSectionPlaceholderProps) {
   return (
     <div className="flex flex-1 flex-col min-h-0 px-5 py-8 sm:px-8 lg:px-10">
-      <header className="mb-8 max-w-2xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-          {title}
-        </h1>
-        {description ? (
-          <p className="mt-3 text-base leading-relaxed text-slate-600">
-            {description}
-          </p>
-        ) : null}
-      </header>
+      <ConfigModulePageHeader title={title} description={description} />
       {children ? (
         <div className="max-w-xl rounded-2xl bg-white/80 px-6 py-8 shadow-sm ring-1 ring-slate-200/80">
           {children}

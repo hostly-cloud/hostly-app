@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { CartaPageContent } from "@/app/dashboard/carta/carta-page-content";
 import { useAuth } from "@/components/auth/auth-context";
+import { ActiveOperatorProvider } from "@/components/tpv/active-operator-context";
+import { ActiveOperatorGate } from "@/components/tpv/active-operator-gate";
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
 
@@ -42,11 +44,15 @@ export default function OperacionTpvPage() {
 
   return (
     <OperacionModuleShell title="TPV">
-      <CartaPageContent
-        embeddedInOperacion
-        tablesReadyToClose={tablesReadyToClose}
-        groupedTablesMapHandlers={groupedTablesMapHandlers}
-      />
+      <ActiveOperatorProvider restaurantId={restaurantIdTrimmed}>
+        <ActiveOperatorGate>
+          <CartaPageContent
+            embeddedInOperacion
+            tablesReadyToClose={tablesReadyToClose}
+            groupedTablesMapHandlers={groupedTablesMapHandlers}
+          />
+        </ActiveOperatorGate>
+      </ActiveOperatorProvider>
     </OperacionModuleShell>
   );
 }

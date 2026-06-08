@@ -57,7 +57,6 @@ import {
   type ProductCatalogCourse,
 } from "@/lib/carta/menu-course";
 import {
-  ProductFormDrawerBlock,
   ProductFormDrawerCollapsibleSection,
 } from "@/components/productos/product-form-drawer-section";
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
@@ -282,6 +281,20 @@ const TIPO_VENTA_I18N: Record<TipoProductoVenta, string> = {
 
 function labelTipoVenta(t: (key: string) => string, tipo: TipoProductoVenta): string {
   return t(TIPO_VENTA_I18N[tipo]);
+}
+
+function defaultOperationStationSelectForTipoVenta(tipo: TipoProductoVenta): string {
+  return tipo === "bebida" ? "default-bar" : "default-kitchen";
+}
+
+function operationStationLabelFromSelect(
+  selectValue: string,
+  stations: readonly OperationStationDocument[],
+  tipoFallback: TipoProductoVenta,
+): string {
+  const resolved = resolveOperationStationFromSelectValue(selectValue, stations);
+  if (resolved?.name?.trim()) return resolved.name.trim();
+  return tipoFallback === "bebida" ? "Barra" : "Cocina";
 }
 
 function normalizeForSearch(s: string): string {
@@ -2126,14 +2139,44 @@ export default function ProductosManagementPage({
     [draftCategoriaCartaId, cartaCategorias],
   );
 
-  const draftInferredTipoVenta = useMemo(
-    () => inferTipoVentaFromCategory(draftSelectedCategory),
-    [draftSelectedCategory],
-  );
-
   const draftNeedsManualTipoVenta = useMemo(
     () => categoryRequiresManualTipoVenta(draftSelectedCategory),
     [draftSelectedCategory],
+  );
+
+  const draftFormMetaLine = useMemo(() => {
+    if (!draftSelectedCategory || draftNeedsManualTipoVenta) return null;
+    const stationLabel = operationStationLabelFromSelect(
+      draftOperationStationSelect,
+      operationStations,
+      draftTipo,
+    );
+    return `${labelTipoVenta(t, draftTipo)} · ${stationLabel}`;
+  }, [
+    draftSelectedCategory,
+    draftNeedsManualTipoVenta,
+    draftOperationStationSelect,
+    operationStations,
+    draftTipo,
+    t,
+  ]);
+
+  const applyCategorySelection = useCallback(
+    (id: string | null) => {
+      setDraftCategoriaCartaId(id);
+      if (!id) return;
+      const c = cartaCategorias.find((x) => x.id === id);
+      if (!c) return;
+      setDraftCartaMenuFamiliaId(
+        c.cartaFamiliaId?.trim() ? c.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
+      );
+      const inferred = inferTipoVentaFromCategory(c);
+      if (inferred) {
+        setDraftTipo(inferred);
+        setDraftOperationStationSelect(defaultOperationStationSelectForTipoVenta(inferred));
+      }
+    },
+    [cartaCategorias],
   );
 
   const draftProductFamilyLabel = useMemo(() => {
@@ -2512,9 +2555,15 @@ export default function ProductosManagementPage({
       setCartaCategorias(list);
       setCartaFamilias(fams);
       setModifierFamilies(mods);
-      setDraftCategoriaCartaId(res.item.id);
-      if (res.item.cartaFamiliaId?.trim()) {
-        setDraftCartaMenuFamiliaId(res.item.cartaFamiliaId.trim());
+      const newCat = list.find((c) => c.id === res.item.id) ?? res.item;
+      setDraftCategoriaCartaId(newCat.id);
+      setDraftCartaMenuFamiliaId(
+        newCat.cartaFamiliaId?.trim() ? newCat.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
+      );
+      const inferred = inferTipoVentaFromCategory(newCat);
+      if (inferred) {
+        setDraftTipo(inferred);
+        setDraftOperationStationSelect(defaultOperationStationSelectForTipoVenta(inferred));
       }
       setAddCategoryOpen(false);
       setAddCatName("");
@@ -3093,7 +3142,7 @@ export default function ProductosManagementPage({
 
             <div className="hostly-product-form-drawer__body">
               <div className="hostly-product-form-drawer__sections">
-                <ProductFormDrawerBlock title={t("carta.productFormBlockProduct")} hint={t("carta.productFormBlockProductHint")}>
+                <div className="hostly-product-form-drawer-block__fields">
                   <label className="hostly-carta-config-form-field">
                     <span className="hostly-carta-config-form-label">{t("carta.fieldNombre")}</span>
                     <input
@@ -3108,17 +3157,7 @@ export default function ProductosManagementPage({
                     t={t}
                     categorias={categoriasForForm}
                     selectedId={draftCategoriaCartaId}
-                    onSelectId={(id) => {
-                      setDraftCategoriaCartaId(id);
-                      if (!id) return;
-                      const c = cartaCategorias.find((x) => x.id === id);
-                      if (!c) return;
-                      setDraftCartaMenuFamiliaId(
-                        c.cartaFamiliaId?.trim() ? c.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
-                      );
-                      const inferred = inferTipoVentaFromCategory(c);
-                      if (inferred) setDraftTipo(inferred);
-                    }}
+                    onSelectId={applyCategorySelection}
                     onOpenAddCategory={() => {
                       setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
                       const fid = draftCartaMenuFamiliaId;
@@ -3129,37 +3168,10 @@ export default function ProductosManagementPage({
                     }}
                   />
 
-                  {draftSelectedCategory &&
-                  draftInferredTipoVenta &&
-                  !draftNeedsManualTipoVenta &&
-                  draftTipo === draftInferredTipoVenta ? (
+                  {draftFormMetaLine ? (
                     <p className="hostly-product-form-drawer-meta">
-                      {t("carta.fieldFormatDetected")}:{" "}
-                      <strong>{labelTipoVenta(t, draftInferredTipoVenta)}</strong>
+                      <strong>{draftFormMetaLine}</strong>
                     </p>
-                  ) : null}
-
-                  {draftSelectedCategory && draftNeedsManualTipoVenta ? (
-                    <div className="hostly-carta-config-form-field">
-                      <p className="hostly-carta-config-form-hint">{t("carta.fieldFormatManualPrompt")}</p>
-                      <div
-                        className="hostly-product-form-drawer-radio-group"
-                        role="radiogroup"
-                        aria-label={t("carta.fieldFormatManualPrompt")}
-                      >
-                        {TIPOS_PRODUCTO_VENTA.map((tipo) => (
-                          <label key={tipo} className="hostly-product-form-drawer-radio">
-                            <input
-                              type="radio"
-                              name="product-form-draft-tipo"
-                              checked={draftTipo === tipo}
-                              onChange={() => setDraftTipo(tipo)}
-                            />
-                            {labelTipoVenta(t, tipo)}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
                   ) : null}
 
                   <label className="hostly-carta-config-form-field">
@@ -3174,14 +3186,14 @@ export default function ProductosManagementPage({
                       onChange={(e) => setDraftPrecio(e.target.value)}
                     />
                   </label>
+                </div>
 
-                  <label className="hostly-product-form-drawer-checkbox">
-                    <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} />
-                    <span className="hostly-carta-config-form-label">{t("carta.fieldActivo")}</span>
-                  </label>
-                </ProductFormDrawerBlock>
-
-                <ProductFormDrawerBlock title={t("carta.productFormBlockOperation")} hint={t("carta.productFormBlockOperationHint")}>
+                <ProductFormDrawerCollapsibleSection
+                  key={editingId ?? "new"}
+                  title={t("carta.productFormBlockAdvanced")}
+                  hint={t("carta.productFormBlockAdvancedHint")}
+                  defaultOpen={false}
+                >
                   <label className="hostly-carta-config-form-field">
                     <span className="hostly-carta-config-form-label">{t("carta.fieldOperationStation")}</span>
                     <OperationStationProductSelect
@@ -3224,12 +3236,38 @@ export default function ProductosManagementPage({
                       <p className="hostly-carta-config-form-hint">{t("carta.fieldDefaultCourseHint")}</p>
                     </label>
                   ) : null}
-                </ProductFormDrawerBlock>
 
-                <ProductFormDrawerCollapsibleSection
-                  title={t("carta.productFormBlockExtra")}
-                  hint={t("carta.productFormBlockExtraHint")}
-                >
+                  {draftSelectedCategory && draftNeedsManualTipoVenta ? (
+                    <div className="hostly-carta-config-form-field">
+                      <p className="hostly-carta-config-form-hint">{t("carta.fieldFormatManualPrompt")}</p>
+                      <div
+                        className="hostly-product-form-drawer-radio-group"
+                        role="radiogroup"
+                        aria-label={t("carta.fieldFormatManualPrompt")}
+                      >
+                        {TIPOS_PRODUCTO_VENTA.map((tipo) => (
+                          <label key={tipo} className="hostly-product-form-drawer-radio">
+                            <input
+                              type="radio"
+                              name="product-form-draft-tipo"
+                              checked={draftTipo === tipo}
+                              onChange={() => {
+                                setDraftTipo(tipo);
+                                setDraftOperationStationSelect(defaultOperationStationSelectForTipoVenta(tipo));
+                              }}
+                            />
+                            {labelTipoVenta(t, tipo)}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <label className="hostly-product-form-drawer-checkbox">
+                    <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} />
+                    <span className="hostly-carta-config-form-label">{t("carta.fieldActivo")}</span>
+                  </label>
+
                   <label className="hostly-carta-config-form-field">
                     <span className="hostly-carta-config-form-label">{t("carta.fieldDescripcion")}</span>
                     <textarea
@@ -3250,55 +3288,45 @@ export default function ProductosManagementPage({
                     />
                     <p className="hostly-carta-config-form-hint">{t("carta.fieldFotoHint")}</p>
                   </label>
-                </ProductFormDrawerCollapsibleSection>
 
-                {isCentralCatalog ? (
-                  <ProductFormDrawerCollapsibleSection
-                    title={t("carta.productFormBlockCosts")}
-                    hint={t("carta.productFormBlockCostsHint")}
-                    defaultOpen={false}
-                  >
-                    {editingId && editingPlato ? (
-                      <p className="hostly-carta-config-form-hint">
-                        {t("carta.colEscandallo")}:{" "}
-                        <span
-                          className={
-                            editingHasEscandallo
-                              ? "hostly-carta-config-status-chip hostly-carta-config-status-chip--active"
-                              : "hostly-carta-config-status-chip hostly-carta-config-status-chip--inactive"
-                          }
-                        >
-                          {editingHasEscandallo ? t("carta.escSi") : t("carta.escNo")}
-                        </span>
-                      </p>
-                    ) : null}
-                    <ProductProfitabilityPanel
-                      recipeEnabled={draftRecipeEnabled}
-                      recipeRows={draftRecipeRows}
-                      saleProductId={editingId}
-                      salePrice={draftSalePriceForProfitability}
-                      productDocumentsById={centralDocsById}
-                    />
-                    <ProductRecipeEditorSection
-                      saleProductId={editingId}
-                      enabled={draftRecipeEnabled}
-                      onEnabledChange={setDraftRecipeEnabled}
-                      rows={draftRecipeRows}
-                      onRowsChange={setDraftRecipeRows}
-                      inventoryProducts={inventoryLookup}
-                      warnings={draftRecipeWarnings}
-                      disabled={drawerSyncing}
-                      labelStyle={labelStyle}
-                      inputStyle={inputStyle}
-                    />
-                  </ProductFormDrawerCollapsibleSection>
-                ) : null}
+                  {isCentralCatalog ? (
+                    <>
+                      {editingId && editingPlato ? (
+                        <p className="hostly-carta-config-form-hint">
+                          {t("carta.colEscandallo")}:{" "}
+                          <span
+                            className={
+                              editingHasEscandallo
+                                ? "hostly-carta-config-status-chip hostly-carta-config-status-chip--active"
+                                : "hostly-carta-config-status-chip hostly-carta-config-status-chip--inactive"
+                            }
+                          >
+                            {editingHasEscandallo ? t("carta.escSi") : t("carta.escNo")}
+                          </span>
+                        </p>
+                      ) : null}
+                      <ProductProfitabilityPanel
+                        recipeEnabled={draftRecipeEnabled}
+                        recipeRows={draftRecipeRows}
+                        saleProductId={editingId}
+                        salePrice={draftSalePriceForProfitability}
+                        productDocumentsById={centralDocsById}
+                      />
+                      <ProductRecipeEditorSection
+                        saleProductId={editingId}
+                        enabled={draftRecipeEnabled}
+                        onEnabledChange={setDraftRecipeEnabled}
+                        rows={draftRecipeRows}
+                        onRowsChange={setDraftRecipeRows}
+                        inventoryProducts={inventoryLookup}
+                        warnings={draftRecipeWarnings}
+                        disabled={drawerSyncing}
+                        labelStyle={labelStyle}
+                        inputStyle={inputStyle}
+                      />
+                    </>
+                  ) : null}
 
-                <ProductFormDrawerCollapsibleSection
-                  title={t("carta.productFormBlockAdvanced")}
-                  hint={t("carta.productFormBlockAdvancedHint")}
-                  defaultOpen={false}
-                >
                   <label className="hostly-carta-config-form-field">
                     <span className="hostly-carta-config-form-label">{t("carta.fieldCartaFamilia")}</span>
                     <select

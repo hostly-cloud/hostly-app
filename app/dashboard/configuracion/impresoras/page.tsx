@@ -8,6 +8,7 @@ import {
   ConfigBtnSecondary,
   ConfigCard,
 } from "../_components/config-carta-workbench";
+import { ConfigModulePageHeader } from "../_components/config-module-page-header";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
   PRINTER_CONFIG_DEFAULT_DISPLAY_NAMES,
@@ -131,18 +132,11 @@ export default function ConfigImpresorasPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-      <header className="mx-auto mb-6 w-full max-w-[var(--hostly-config-content-max)] sm:mb-7">
-        <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-slate-400">
-          Operación · Configuración
-        </p>
-        <h1 className="mt-1 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
-          Impresoras
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          Configura qué impresora recibirá cada estación. Al enviar comanda se
-          encolan tickets por estación; revisa el simulador en la cola (sin
-          hardware todavía).
-        </p>
+      <ConfigModulePageHeader
+        eyebrow="Operación · Configuración"
+        title="Impresoras"
+        description="Configura qué impresora recibirá cada estación. Al enviar comanda se encolan tickets por estación; revisa el simulador en la cola (sin hardware todavía)."
+      >
         <p className="mt-3 max-w-2xl rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-sm leading-relaxed text-amber-950">
           La configuración por Cocina/Barra/Coctelería se usa como fallback.
           Para varias barras usa{" "}
@@ -162,7 +156,7 @@ export default function ConfigImpresorasPage() {
             Ver cola de impresión (simulador) →
           </Link>
         </p>
-      </header>
+      </ConfigModulePageHeader>
 
       <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
         {loading ? (

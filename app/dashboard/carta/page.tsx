@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import { ActiveOperatorProvider } from "@/components/tpv/active-operator-context";
+import { ActiveOperatorGate } from "@/components/tpv/active-operator-gate";
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { CartaPageContent } from "./carta-page-content";
 
@@ -40,9 +42,13 @@ export default function CartaPage() {
   }, []);
 
   return (
-    <CartaPageContent
-      tablesReadyToClose={tablesReadyToClose}
-      groupedTablesMapHandlers={groupedTablesMapHandlers}
-    />
+    <ActiveOperatorProvider restaurantId={restaurantIdTrimmed}>
+      <ActiveOperatorGate>
+        <CartaPageContent
+          tablesReadyToClose={tablesReadyToClose}
+          groupedTablesMapHandlers={groupedTablesMapHandlers}
+        />
+      </ActiveOperatorGate>
+    </ActiveOperatorProvider>
   );
 }

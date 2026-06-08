@@ -109,7 +109,8 @@ export function ConfigCartaWorkbench({
       lockViewportFillParent={lockViewportFillParent}
       fitLaptopViewport={fitLaptopViewport}
       shellSurface="configLight"
-      hideBackLink
+      backHref="/dashboard"
+      backLabel="Dashboard"
       headerRight={
         headerActions ? (
           <div className="hostly-carta-config-header-actions">{headerActions}</div>

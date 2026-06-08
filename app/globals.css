@@ -3386,6 +3386,64 @@ body {
   color: var(--hostly-ink-strong);
 }
 
+/* Salida táctil al Dashboard integrada en cabecera de módulo (sin línea extra). */
+.hostly-config-module-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hostly-config-module-header__title-block {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.hostly-config-module-header__eyebrow {
+  margin: 0 0 2px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-faint);
+}
+
+.hostly-config-module-header__title {
+  margin: 0;
+  font-size: clamp(1.05rem, 1.8vw, 1.25rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-config-module-header__description {
+  margin: 8px 0 0;
+  max-width: 42rem;
+  padding-left: calc(44px + 10px);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-config-module-header > :not(.hostly-config-module-header__title-row):not(.hostly-config-module-header__description) {
+  padding-left: calc(44px + 10px);
+}
+
+[data-hostly-config-shell] .hostly-back-button--module.hostly-touch-nav-link.hostly-nav-aux {
+  min-height: 44px !important;
+  min-width: 44px !important;
+  padding: 8px 12px !important;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  .hostly-config-module-header__description,
+  .hostly-config-module-header > :not(.hostly-config-module-header__title-row):not(.hostly-config-module-header__description) {
+    padding-left: 0;
+  }
+}
+
 /* Tablas listado en Config (Categorías, Familias, etc.) + tono inventario premium */
 .hostly-config-table-head {
   border-bottom: 1px solid var(--hostly-table-divider-soft);
@@ -5583,7 +5641,7 @@ body {
 }
 
 .hostly-data-table--familias {
-  --hostly-data-table-columns: minmax(140px, 1fr) 72px 48px;
+  --hostly-data-table-columns: minmax(140px, 1fr) 72px minmax(120px, 1.2fr) 48px minmax(84px, 0.72fr);
 }
 
 .hostly-data-table-viewport--embedded.hostly-data-table-viewport--modificadores {
@@ -5622,7 +5680,7 @@ body {
   }
 
   .hostly-data-table--familias {
-    --hostly-data-table-columns: minmax(120px, 1fr) 72px;
+    --hostly-data-table-columns: minmax(120px, 1fr) 72px minmax(100px, 1fr) minmax(84px, 0.72fr);
   }
 
   .hostly-data-table--familias .hostly-data-table-col--order {

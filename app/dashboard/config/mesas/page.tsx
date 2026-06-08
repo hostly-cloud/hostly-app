@@ -4114,13 +4114,9 @@ export default function ConfigMesasPage({
       operationalFocus
       lockViewport
       lockViewportFillParent={lockViewportFillParent}
-      backLabel="Volver"
+      backLabel={configuracionMapEditorLayout ? "Dashboard" : "Volver"}
       shellSurface={configuracionMapEditorLayout ? "configLight" : "default"}
-      backHref={
-        configuracionMapEditorLayout
-          ? "/dashboard/configuracion/espacios/zonas"
-          : "/dashboard"
-      }
+      backHref="/dashboard"
       fitLaptopViewport={premiumSpatialEditor}
       denseWorkbench={premiumSpatialEditor}
       stretchContentWidth={premiumSpatialEditor}
