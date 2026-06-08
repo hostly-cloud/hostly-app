@@ -934,9 +934,6 @@ function countActiveComandaLines(lines: CartOrderLine[]): number {
   ).length;
 }
 
-/** Evita auto-cierre justo tras enviar comanda (hueco local ↔ snapshot Firestore). */
-const AUTO_CLOSE_AFTER_SEND_GRACE_MS = 12_000;
-
 /** Mesa sin líneas activas pero con sesión (comanda vacía/cancelada) → cerrar como al cobrar. */
 function tableEmptySessionWarrantsAutoClose(args: {
   lines: CartOrderLine[];
@@ -944,6 +941,7 @@ function tableEmptySessionWarrantsAutoClose(args: {
   openOrderIds: readonly string[];
   firestoreOccupied: boolean;
   draftOrderId: string | null;
+  tableHasOperationalSession: boolean;
 }): boolean {
   if (countActiveComandaLines(args.lines) > 0) return false;
   if (countActiveComandaLines(args.cachedTableLines ?? []) > 0) return false;
@@ -951,7 +949,26 @@ function tableEmptySessionWarrantsAutoClose(args: {
   if (args.openOrderIds.length > 0) return true;
   if (args.draftOrderId) return true;
   if (args.firestoreOccupied) return true;
+  if (args.tableHasOperationalSession) return true;
   return false;
+}
+
+function tableDocHasOperationalSession(
+  table: Table | undefined,
+): boolean {
+  if (!table) return false;
+  const row = table as Table & {
+    busy?: boolean;
+    activeOrderId?: unknown;
+    currentOrderId?: unknown;
+  };
+  if (row.busy) return true;
+  const activeOrderId =
+    typeof row.activeOrderId === "string" ? row.activeOrderId.trim() : "";
+  if (activeOrderId) return true;
+  const currentOrderId =
+    typeof row.currentOrderId === "string" ? row.currentOrderId.trim() : "";
+  return Boolean(currentOrderId);
 }
 
 function isOrderLineCancellable(line: CartOrderLine): boolean {
@@ -2475,7 +2492,6 @@ export function CartaPageContent({
   );
   /** `orders/{id}` reutilizado por mesa para borrador sincronizado con Firestore. */
   const openDraftOrderIdByTableRef = useRef<Record<string, string>>({});
-  const lastComandaSentAtByTableRef = useRef<Record<string, number>>({});
   /** En navegador los timers son `number`; evitar `NodeJS.Timeout` del merge de tipos. */
   const draftPersistDebounceByTableRef = useRef<
     Record<string, number | undefined>
@@ -3100,7 +3116,6 @@ export function CartaPageContent({
     if (ids.length === 0) return;
     for (const tid of ids) {
       delete openDraftOrderIdByTableRef.current[tid];
-      delete lastComandaSentAtByTableRef.current[tid];
       window.dispatchEvent(
         new CustomEvent("tablesReadyToClose:clear", { detail: tid }),
       );
@@ -3289,14 +3304,6 @@ export function CartaPageContent({
       if (countActiveComandaLines(cachedTableLines ?? []) > 0) return;
       if (autoCloseEmptyTableInProgressRef.current === tid) return;
 
-      const sentAt = lastComandaSentAtByTableRef.current[tid];
-      if (
-        sentAt != null &&
-        Date.now() - sentAt < AUTO_CLOSE_AFTER_SEND_GRACE_MS
-      ) {
-        return;
-      }
-
       autoCloseEmptyTableInProgressRef.current = tid;
       try {
         if (restaurantId && isFirebaseConfigured) {
@@ -3321,8 +3328,6 @@ export function CartaPageContent({
               return;
             }
           }
-          const itemsPayload =
-            lines.length > 0 ? orderLinesToFirestoreItems(lines) : [];
           const batch = new DbgWriteBatch(db, {
             label: "carta:autoCloseEmptyTable",
             collection: "orders",
@@ -3340,16 +3345,19 @@ export function CartaPageContent({
               updatedAt: serverTimestamp(),
               total: 0,
               paymentRequestedAt: null,
-              items: itemsPayload,
             });
             n++;
           }
           if (n > 0) await batch.commit();
 
-          await updateDoc(
-            doc(db, "tables", tid),
-            buildTableAvailableClosePayload(Date.now()),
+          const memberIds = resolveGroupMemberIdsForTable(
+            tid,
+            groupedTablesMapHandlers,
           );
+          const closePayload = buildTableAvailableClosePayload(Date.now());
+          for (const memberId of memberIds) {
+            await updateDoc(doc(db, "tables", memberId), closePayload);
+          }
         }
         finishPaymentAndReturnToMap(tid);
       } catch (error) {
@@ -3360,7 +3368,12 @@ export function CartaPageContent({
         }
       }
     },
-    [restaurantId, isFirebaseConfigured, finishPaymentAndReturnToMap],
+    [
+      restaurantId,
+      isFirebaseConfigured,
+      finishPaymentAndReturnToMap,
+      groupedTablesMapHandlers,
+    ],
   );
 
   const reloadSessionTableAmountPaidSum = useCallback(async () => {
@@ -4479,6 +4492,7 @@ export function CartaPageContent({
     const draftOrderId =
       openDraftOrderIdByTableRef.current[tableId]?.trim() || null;
     const cachedTableLines = ordersByTable[tableId];
+    const tableRow = tablesList.find((t) => t.id === tableId);
     if (
       !tableEmptySessionWarrantsAutoClose({
         lines: order,
@@ -4486,6 +4500,7 @@ export function CartaPageContent({
         openOrderIds: openOrderIdsForTable,
         firestoreOccupied: firestoreOccupiedTableIds.has(tableId),
         draftOrderId,
+        tableHasOperationalSession: tableDocHasOperationalSession(tableRow),
       })
     ) {
       return;
@@ -4500,6 +4515,7 @@ export function CartaPageContent({
     selectedTableId,
     openOrderIdsForTable,
     firestoreOccupiedTableIds,
+    tablesList,
     viewMode,
     isPaymentOpen,
     isComandaSending,
@@ -7516,7 +7532,6 @@ export function CartaPageContent({
         selectedTableId;
 
       setIsComandaSending(true);
-      lastComandaSentAtByTableRef.current[selectedTableId] = Date.now();
       try {
         const now = Date.now();
         const sendIds = new Set(linesToSend.map((l) => l.id));
