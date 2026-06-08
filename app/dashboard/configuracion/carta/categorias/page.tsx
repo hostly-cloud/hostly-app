@@ -459,25 +459,25 @@ export default function ConfigCartaCategoriasPage() {
                   <option value="general">Mixto</option>
                 </select>
               </label>
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Familia de producto</span>
+                <CategoryProductFamilySelect
+                  restaurantId={restauranteId}
+                  value={draftFamilyId}
+                  onChange={setDraftFamilyId}
+                  disabled={saving}
+                  className={inputClass}
+                />
+                <p className="hostly-carta-config-form-hint">
+                  La familia de producto sirve para filtros, informes y comportamiento operativo. Es
+                  distinta del bloque de carta.
+                </p>
+              </label>
               <ProductFormDrawerCollapsibleSection
                 key={editing?.id ?? "new"}
                 title="Configuración avanzada"
-                hint="Familia de producto, modificadores, orden y estado."
+                hint="Modificadores, orden y estado."
               >
-                <label className="hostly-carta-config-form-field">
-                  <span className="hostly-carta-config-form-label">Familia de producto</span>
-                  <div>
-                    <CategoryProductFamilySelect
-                      restaurantId={restauranteId}
-                      value={draftFamilyId}
-                      onChange={setDraftFamilyId}
-                      disabled={saving}
-                    />
-                  </div>
-                  <p className="hostly-carta-config-form-hint">
-                    Opcional. Agrupa a nivel interno (informes, filtros). Distinto del bloque de carta, que ordena Platos y Bebidas en carta.
-                  </p>
-                </label>
                 <label className="hostly-carta-config-form-field">
                   <span className="hostly-carta-config-form-label">Modificadores</span>
                 {activeModifierGroups.length === 0 ? (

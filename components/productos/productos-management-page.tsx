@@ -65,7 +65,10 @@ import {
   ProductFormDrawerCollapsibleSection,
 } from "@/components/productos/product-form-drawer-section";
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
-import { evaluateProductFormPreventiveValidation } from "@/lib/carta/product-form-preventive-validation";
+import {
+  evaluateProductFormPreventiveValidation,
+  getProductFormSubmitBlockingErrors,
+} from "@/lib/carta/product-form-preventive-validation";
 import { OperationStationProductSelect } from "@/components/operacion/operation-station-product-select";
 import {
   ensureDefaultOperationStations,
@@ -2632,8 +2635,11 @@ export default function ProductosManagementPage({
       return;
     }
 
-    if (draftPreventiveValidation.blockingErrors.length > 0) {
-      setFormError(draftPreventiveValidation.blockingErrors[0]!);
+    const preventiveBlockingErrors = getProductFormSubmitBlockingErrors(
+      draftPreventiveValidation,
+    );
+    if (preventiveBlockingErrors.length > 0) {
+      setFormError(preventiveBlockingErrors[0]!);
       return;
     }
 

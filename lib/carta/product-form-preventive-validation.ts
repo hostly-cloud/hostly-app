@@ -24,6 +24,19 @@ export type ProductFormPreventiveValidationResult = {
   warnings: string[];
 };
 
+/** Aviso informativo: activo sin familia; nunca bloquea guardado. */
+export const PRODUCT_FORM_ACTIVE_NO_FAMILY_WARNING =
+  "El producto activo no tiene familia de producto asignada (heredada de categoría).";
+
+/** Errores que sí impiden guardar (excluye avisos de familia). */
+export function getProductFormSubmitBlockingErrors(
+  result: ProductFormPreventiveValidationResult,
+): string[] {
+  return result.blockingErrors.filter(
+    (message) => message !== PRODUCT_FORM_ACTIVE_NO_FAMILY_WARNING,
+  );
+}
+
 function resolveCanonicalStationFromSelect(
   operationStationSelect: string,
   operationStations: readonly OperationStationDocument[],
@@ -103,9 +116,7 @@ export function evaluateProductFormPreventiveValidation(
   }
 
   if (input.active && !input.hasProductFamily) {
-    warnings.push(
-      "El producto activo no tiene familia de producto asignada (heredada de categoría).",
-    );
+    warnings.push(PRODUCT_FORM_ACTIVE_NO_FAMILY_WARNING);
   }
 
   if (
