@@ -20,6 +20,7 @@ import type { PlatoCarta, TipoProductoVenta } from "@/lib/platos-local";
 import {
   getPublicationFlags,
   ProductosCartaOperMicrochip,
+  ProductosCartaReorderControls,
   ProductosCartaRowActions,
   PRODUCTOS_CARTA_LEGACY_BLOCKED,
   productOperationalFieldsFromPlato,
@@ -164,6 +165,10 @@ export type ProductosCartaDataViewProps = {
   bulkDeleteDisabled?: boolean;
   bulkDeleteDisabledTitle?: string;
   compactBulkBar?: boolean;
+  reorderMode?: boolean;
+  reorderBusyId?: string | null;
+  onMoveProductUp?: (productId: string) => void;
+  onMoveProductDown?: (productId: string) => void;
 };
 
 function SelectionCheckbox({
@@ -224,19 +229,22 @@ function renderProductosCartaHeaderCells(args: {
   selectAllRef: RefObject<HTMLInputElement | null>;
   t: TranslateFn;
   toggleSelectAllDisplayed: () => void;
+  reorderMode?: boolean;
 }) {
-  const { allSelected, displayedCount, isLegacyReadOnly, selectAllRef, t, toggleSelectAllDisplayed } = args;
+  const { allSelected, displayedCount, isLegacyReadOnly, selectAllRef, t, toggleSelectAllDisplayed, reorderMode } = args;
   return (
     <>
-      <HostlyDataCell align="center" col="select">
-        <SelectionCheckbox
-          checked={allSelected}
-          disabled={displayedCount === 0 || isLegacyReadOnly}
-          onChange={toggleSelectAllDisplayed}
-          ariaLabel={t("productos.selectAllVisible")}
-          inputRef={selectAllRef}
-        />
-      </HostlyDataCell>
+      {reorderMode ? null : (
+        <HostlyDataCell align="center" col="select">
+          <SelectionCheckbox
+            checked={allSelected}
+            disabled={displayedCount === 0 || isLegacyReadOnly}
+            onChange={toggleSelectAllDisplayed}
+            ariaLabel={t("productos.selectAllVisible")}
+            inputRef={selectAllRef}
+          />
+        </HostlyDataCell>
+      )}
       <HostlyDataCell col="product">{t("carta.colNombre")}</HostlyDataCell>
       <HostlyDataCell col="tipo">
         <span title={t("carta.colTipoTitle")}>{t("carta.colTipo")}</span>
@@ -265,7 +273,7 @@ function renderProductosCartaHeaderCells(args: {
         </span>
       </HostlyDataCell>
       <HostlyDataCell align="end" col="actions">
-        {t("carta.colActions")}
+        {reorderMode ? t("productos.colOrder") : t("carta.colActions")}
       </HostlyDataCell>
     </>
   );
@@ -285,6 +293,12 @@ function renderProductRowCells(args: {
   activateProducto: (p: PlatoCarta) => void;
   goToEscandallo: (p: PlatoCarta) => void;
   deleteProducto: (p: PlatoCarta) => void;
+  reorderMode?: boolean;
+  reorderBusyId?: string | null;
+  rowIndex?: number;
+  rowCount?: number;
+  onMoveProductUp?: (productId: string) => void;
+  onMoveProductDown?: (productId: string) => void;
 }) {
   const {
     p,
@@ -300,6 +314,12 @@ function renderProductRowCells(args: {
     activateProducto,
     goToEscandallo,
     deleteProducto,
+    reorderMode,
+    reorderBusyId,
+    rowIndex = 0,
+    rowCount = 1,
+    onMoveProductUp,
+    onMoveProductDown,
   } = args;
   const tiene = tieneEscandalloForPlato(p, meta);
   const busyEsc = escNavId === p.id;
@@ -307,14 +327,16 @@ function renderProductRowCells(args: {
 
   return (
     <>
-      <HostlyDataCell align="center" col="select">
-        <SelectionCheckbox
-          checked={selected}
-          disabled={isLegacyReadOnly}
-          onChange={() => toggleRowSelected(p.id)}
-          ariaLabel={t("productos.selectRowAria", { name: p.nombre })}
-        />
-      </HostlyDataCell>
+      {reorderMode ? null : (
+        <HostlyDataCell align="center" col="select">
+          <SelectionCheckbox
+            checked={selected}
+            disabled={isLegacyReadOnly}
+            onChange={() => toggleRowSelected(p.id)}
+            ariaLabel={t("productos.selectRowAria", { name: p.nombre })}
+          />
+        </HostlyDataCell>
+      )}
       <HostlyDataCell col="product">
         <ProductPrimaryCell p={p} />
       </HostlyDataCell>
@@ -364,25 +386,53 @@ function renderProductRowCells(args: {
       </HostlyDataCell>
       <HostlyDataCell align="end" col="actions">
         <div className="hostly-data-table-actions-shell">
-          <ProductosCartaRowActions
-            p={p}
-            busyEsc={busyEsc}
-            t={t}
-            legacyReadOnly={isLegacyReadOnly}
-            onEdit={() => openEdit(p)}
-            onToggleCarta={() => toggleActivo(p)}
-            onActivateProduct={() => activateProducto(p)}
-            onEsc={() => void goToEscandallo(p)}
-            onDelete={() => deleteProducto(p)}
-          />
+          {reorderMode ? (
+            <ProductosCartaReorderControls
+              canMoveUp={rowIndex > 0}
+              canMoveDown={rowIndex < rowCount - 1}
+              busy={reorderBusyId === p.id}
+              t={t}
+              onMoveUp={() => onMoveProductUp?.(p.id)}
+              onMoveDown={() => onMoveProductDown?.(p.id)}
+            />
+          ) : (
+            <ProductosCartaRowActions
+              p={p}
+              busyEsc={busyEsc}
+              t={t}
+              legacyReadOnly={isLegacyReadOnly}
+              onEdit={() => openEdit(p)}
+              onToggleCarta={() => toggleActivo(p)}
+              onActivateProduct={() => activateProducto(p)}
+              onEsc={() => void goToEscandallo(p)}
+              onDelete={() => deleteProducto(p)}
+            />
+          )}
         </div>
       </HostlyDataCell>
     </>
   );
 }
 
-function MobileProductItem(props: ProductosCartaDataViewProps & { p: PlatoCarta }) {
-  const { p, meta, escNavId, t, locale, selectedIds, isLegacyReadOnly, toggleRowSelected } = props;
+function MobileProductItem(
+  props: ProductosCartaDataViewProps & { p: PlatoCarta; rowIndex?: number; rowCount?: number },
+) {
+  const {
+    p,
+    meta,
+    escNavId,
+    t,
+    locale,
+    selectedIds,
+    isLegacyReadOnly,
+    toggleRowSelected,
+    reorderMode,
+    reorderBusyId,
+    rowIndex = 0,
+    rowCount = 1,
+    onMoveProductUp,
+    onMoveProductDown,
+  } = props;
   const tiene = tieneEscandalloForPlato(p, meta);
   const busyEsc = escNavId === p.id;
   const selected = selectedIds.has(p.id);
@@ -390,14 +440,16 @@ function MobileProductItem(props: ProductosCartaDataViewProps & { p: PlatoCarta 
 
   return (
     <HostlyMobileListItem
-      selected={selected}
+      selected={reorderMode ? false : selected}
       leading={
-        <SelectionCheckbox
-          checked={selected}
-          disabled={isLegacyReadOnly}
-          onChange={() => toggleRowSelected(p.id)}
-          ariaLabel={t("productos.selectRowAria", { name: p.nombre })}
-        />
+        reorderMode ? null : (
+          <SelectionCheckbox
+            checked={selected}
+            disabled={isLegacyReadOnly}
+            onChange={() => toggleRowSelected(p.id)}
+            ariaLabel={t("productos.selectRowAria", { name: p.nombre })}
+          />
+        )
       }
       title={
         <span className="hostly-mobile-list-item__name" title={p.nombre}>
@@ -428,17 +480,28 @@ function MobileProductItem(props: ProductosCartaDataViewProps & { p: PlatoCarta 
         </>
       }
       actions={
-        <ProductosCartaRowActions
-          p={p}
-          busyEsc={busyEsc}
-          t={t}
-          legacyReadOnly={isLegacyReadOnly}
-          onEdit={() => props.openEdit(p)}
-          onToggleCarta={() => props.toggleActivo(p)}
-          onActivateProduct={() => props.activateProducto(p)}
-          onEsc={() => void props.goToEscandallo(p)}
-          onDelete={() => props.deleteProducto(p)}
-        />
+        reorderMode ? (
+          <ProductosCartaReorderControls
+            canMoveUp={rowIndex > 0}
+            canMoveDown={rowIndex < rowCount - 1}
+            busy={reorderBusyId === p.id}
+            t={t}
+            onMoveUp={() => onMoveProductUp?.(p.id)}
+            onMoveDown={() => onMoveProductDown?.(p.id)}
+          />
+        ) : (
+          <ProductosCartaRowActions
+            p={p}
+            busyEsc={busyEsc}
+            t={t}
+            legacyReadOnly={isLegacyReadOnly}
+            onEdit={() => props.openEdit(p)}
+            onToggleCarta={() => props.toggleActivo(p)}
+            onActivateProduct={() => props.activateProducto(p)}
+            onEsc={() => void props.goToEscandallo(p)}
+            onDelete={() => props.deleteProducto(p)}
+          />
+        )
       }
     />
   );
@@ -471,12 +534,20 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     bulkDeleteDisabled,
     bulkDeleteDisabledTitle,
     compactBulkBar = false,
+    reorderMode = false,
+    reorderBusyId = null,
+    onMoveProductUp,
+    onMoveProductDown,
   } = props;
 
   const allSelected = displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id));
+  const rowCount = displayed.length;
 
   return (
-    <div className="hostly-data-table-viewport">
+    <div
+      className={`hostly-data-table-viewport${reorderMode ? " hostly-data-table-viewport--reorder-mode" : ""}`}
+    >
+      {reorderMode ? null : (
       <ProductosSelectionBar
         count={selectedIds.size}
         variant={compactBulkBar ? "compact" : "default"}
@@ -498,8 +569,12 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
         bulkDeleteDisabledTitle={bulkDeleteDisabledTitle}
         t={t}
       />
+      )}
 
-      <HostlyDataTable variant="productos-carta" className="hostly-data-table--dense-config">
+      <HostlyDataTable
+        variant="productos-carta"
+        className={`hostly-data-table--dense-config${reorderMode ? " hostly-data-table--reorder-mode" : ""}`}
+      >
         <HostlyDataTableScroll>
           <HostlyDataTableHead>
             {renderProductosCartaHeaderCells({
@@ -509,6 +584,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
               selectAllRef,
               t,
               toggleSelectAllDisplayed,
+              reorderMode,
             })}
           </HostlyDataTableHead>
           <HostlyDataTableBody>
@@ -519,23 +595,27 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
                       <span className="hostly-data-table-group-bar__title">{g.categoria}</span>
                       <span className="hostly-data-table-group-bar__count">{g.items.length}</span>
                     </HostlyDataGroupBar>
-                    {g.items.map((p) => (
-                      <HostlyDataRow key={p.id} selected={selectedIds.has(p.id)}>
+                    {g.items.map((p, idx) => (
+                      <HostlyDataRow key={p.id} selected={!reorderMode && selectedIds.has(p.id)}>
                         {renderProductRowCells({
                           ...props,
                           p,
                           selected: selectedIds.has(p.id),
+                          rowIndex: idx,
+                          rowCount: g.items.length,
                         })}
                       </HostlyDataRow>
                     ))}
                   </div>
                 ))
-              : displayed.map((p) => (
-                  <HostlyDataRow key={p.id} selected={selectedIds.has(p.id)}>
+              : displayed.map((p, idx) => (
+                  <HostlyDataRow key={p.id} selected={!reorderMode && selectedIds.has(p.id)}>
                     {renderProductRowCells({
                       ...props,
                       p,
                       selected: selectedIds.has(p.id),
+                      rowIndex: idx,
+                      rowCount,
                     })}
                   </HostlyDataRow>
                 ))}
@@ -547,12 +627,26 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
         {viewMode === "grouped"
           ? groupedByCategoria.map((g, gi) => (
               <HostlyMobileListGroup key={`m-${g.sectionKey}-${gi}`} title={g.categoria} count={g.items.length}>
-                {g.items.map((p) => (
-                  <MobileProductItem key={p.id} {...props} p={p} />
+                {g.items.map((p, idx) => (
+                  <MobileProductItem
+                    key={p.id}
+                    {...props}
+                    p={p}
+                    rowIndex={idx}
+                    rowCount={g.items.length}
+                  />
                 ))}
               </HostlyMobileListGroup>
             ))
-          : displayed.map((p) => <MobileProductItem key={p.id} {...props} p={p} />)}
+          : displayed.map((p, idx) => (
+              <MobileProductItem
+                key={p.id}
+                {...props}
+                p={p}
+                rowIndex={idx}
+                rowCount={rowCount}
+              />
+            ))}
       </HostlyMobileList>
     </div>
   );

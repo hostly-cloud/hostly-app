@@ -5,7 +5,10 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  query,
   updateDoc,
+  where,
   writeBatch,
   type DocumentData,
 } from "firebase/firestore";
@@ -27,6 +30,7 @@ import {
   defaultInventory,
   defaultRecipe,
 } from "@/lib/firestore/central-catalog-defaults";
+import { readProductSortOrder } from "@/lib/carta/product-sort-order";
 import type { TipoProductoVenta } from "@/lib/platos-local";
 
 export type CentralOperationalProductInput = {
@@ -242,6 +246,38 @@ export function formatCentralCatalogWriteError(error: unknown): string {
   return "Error al guardar en el cat?logo central.";
 }
 
+async function resolveNextSortOrderForCategory(
+  restaurantId: string,
+  categoryId: string | null | undefined,
+): Promise<number> {
+  const rid = restaurantId.trim();
+  if (!rid) return 0;
+  const cid = categoryId?.trim() || null;
+  const coll = collection(db, "restaurants", rid, "products");
+  const snap = cid
+    ? await getDocs(query(coll, where("categoryId", "==", cid)))
+    : await getDocs(coll);
+
+  let max = -1;
+  for (const d of snap.docs) {
+    const data = d.data() as Record<string, unknown>;
+    const pcid =
+      typeof data.categoryId === "string" && data.categoryId.trim()
+        ? data.categoryId.trim()
+        : null;
+    if (cid) {
+      if (pcid !== cid) continue;
+    } else if (pcid) {
+      continue;
+    }
+    const so =
+      readProductSortOrder(data.sortOrder) ??
+      readProductSortOrder(data.ordenEnCategoria);
+    if (so != null) max = Math.max(max, so);
+  }
+  return max + 1;
+}
+
 /** Crea producto operativo en `restaurants/{restaurantId}/products`. */
 export async function createCentralProduct(
   restaurantId: string,
@@ -251,10 +287,12 @@ export async function createCentralProduct(
   if (!rid) throw new Error("MISSING_RESTAURANT_ID");
   const userId = requireAuthUid();
   const now = Date.now();
+  const sortOrder = await resolveNextSortOrderForCategory(rid, input.categoryId);
 
   const ref = await addDoc(collection(db, "restaurants", rid, "products"), {
     restaurantId: rid,
     ...buildOperationalPatch(input, now, userId),
+    sortOrder,
     inventory: defaultInventory(),
     recipe: defaultRecipe(),
     createdAt: now,
@@ -461,6 +499,43 @@ export async function bulkUpdateCentralProductsFamily(
   }
 
   return { updated: ids.length };
+}
+
+/**
+ * Intercambia la posición de un producto con el anterior/siguiente dentro de la misma categoría.
+ * Renumeración 0…n-1 en todos los ids de `orderedProductIds` tras el swap (orden estable en TPV).
+ */
+export async function swapCentralProductSortOrderInCategory(
+  restaurantId: string,
+  productId: string,
+  direction: "up" | "down",
+  orderedProductIds: readonly string[],
+): Promise<void> {
+  const rid = restaurantId.trim();
+  const pid = productId.trim();
+  if (!rid || !pid) throw new Error("MISSING_IDS");
+  const userId = requireAuthUid();
+  const now = Date.now();
+
+  const ids = orderedProductIds.map((id) => id.trim()).filter((id) => id.length > 0);
+  const index = ids.indexOf(pid);
+  if (index < 0) throw new Error("PRODUCT_NOT_IN_LIST");
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= ids.length) return;
+
+  const next = [...ids];
+  [next[index], next[swapIndex]] = [next[swapIndex]!, next[index]!];
+
+  const batch = writeBatch(db);
+  for (let sortOrder = 0; sortOrder < next.length; sortOrder += 1) {
+    const id = next[sortOrder]!;
+    batch.update(centralProductRef(rid, id), {
+      sortOrder,
+      updatedAt: now,
+      updatedBy: userId,
+    } as DocumentData);
+  }
+  await batch.commit();
 }
 
 /** Actualiza campos operativos sin pisar metadata de importaci?n/migraci?n. */

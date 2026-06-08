@@ -2,7 +2,12 @@ import type { DocumentReference, Firestore } from "firebase-admin/firestore";
 import { normalizeProductName } from "@/lib/carta/duplicate-detection";
 import { mapStationToPreparationArea } from "@/lib/carta/map-station-to-preparation-area";
 import { inferTipoVentaFromCartaText } from "@/lib/platos-local";
+import {
+  maxSortOrderInCategory,
+  readProductSortOrder,
+} from "@/lib/carta/product-sort-order";
 import type { ImportedMenuItem, ImportedMenuSection } from "@/lib/carta/imported-menu-types";
+import type { ProductDocument } from "@/lib/firestore/products";
 import type {
   MenuImportPublishItemResult,
   MenuImportPublishLogEntry,
@@ -42,6 +47,31 @@ export class PublishMenuImportDraftError extends Error {
 function flattenDraftItems(sections: ImportedMenuSection[], items: ImportedMenuItem[]): ImportedMenuItem[] {
   if (items.length > 0) return items;
   return sections.flatMap((s) => s.items);
+}
+
+function buildDraftItemOrderIndex(
+  sections: ImportedMenuSection[],
+  items: ImportedMenuItem[],
+): Map<string, number> {
+  const flat = flattenDraftItems(sections, items);
+  const order = new Map<string, number>();
+  flat.forEach((item, index) => order.set(item.id, index));
+  return order;
+}
+
+function buildMaxSortOrderByCategoryId(
+  catalog: ProductDocument[],
+): Map<string, number> {
+  const maxByCategory = new Map<string, number>();
+  for (const product of catalog) {
+    const categoryId = product.categoryId?.trim();
+    if (!categoryId) continue;
+    const so = readProductSortOrder(product.sortOrder);
+    if (so == null) continue;
+    const prev = maxByCategory.get(categoryId) ?? -1;
+    if (so > prev) maxByCategory.set(categoryId, so);
+  }
+  return maxByCategory;
 }
 
 function updateItemInCollections(
@@ -100,6 +130,7 @@ function buildProductDocument(args: {
   evaluation: ReturnType<typeof evaluateImportItemForPublish>;
   userId: string;
   now: number;
+  sortOrder: number;
 }): Record<string, unknown> {
   const category = args.evaluation.resolvedCategory!;
   const preparationArea = mapStationToPreparationArea(args.evaluation.productStation);
@@ -123,6 +154,7 @@ function buildProductDocument(args: {
     ...(args.item.description?.trim() ? { description: args.item.description.trim() } : {}),
     categoryId: category.id,
     categoryName: category.name,
+    sortOrder: args.sortOrder,
     ...familyFields,
     price: args.item.price,
     station: args.evaluation.productStation,
@@ -359,11 +391,29 @@ export async function publishMenuImportDraft(params: {
       names: pendingWrites.map((entry) => entry.item.name),
     });
 
-    for (let i = 0; i < pendingWrites.length; i += BATCH_CHUNK_SIZE) {
-      const chunk = pendingWrites.slice(i, i + BATCH_CHUNK_SIZE);
+    const draftItemOrder = buildDraftItemOrderIndex(sections, items);
+    const maxSortOrderByCategoryId = buildMaxSortOrderByCategoryId(catalog);
+    let uncategorizedSortCursor = maxSortOrderInCategory(catalog, null);
+    const orderedPendingWrites = [...pendingWrites].sort((a, b) => {
+      const ia = draftItemOrder.get(a.item.id) ?? Number.MAX_SAFE_INTEGER;
+      const ib = draftItemOrder.get(b.item.id) ?? Number.MAX_SAFE_INTEGER;
+      return ia - ib;
+    });
+
+    for (let i = 0; i < orderedPendingWrites.length; i += BATCH_CHUNK_SIZE) {
+      const chunk = orderedPendingWrites.slice(i, i + BATCH_CHUNK_SIZE);
       const batch = db.batch();
 
       for (const entry of chunk) {
+        const categoryId = entry.evaluation.resolvedCategory?.id?.trim();
+        const sortOrder = categoryId
+          ? (() => {
+              const next = (maxSortOrderByCategoryId.get(categoryId) ?? -1) + 1;
+              maxSortOrderByCategoryId.set(categoryId, next);
+              return next;
+            })()
+          : (uncategorizedSortCursor += 1);
+
         batch.set(
           entry.productRef,
           buildProductDocument({
@@ -373,6 +423,7 @@ export async function publishMenuImportDraft(params: {
             evaluation: entry.evaluation,
             userId,
             now,
+            sortOrder,
           }),
         );
       }

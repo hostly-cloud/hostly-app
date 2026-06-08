@@ -245,6 +245,47 @@ function IconTrash() {
   );
 }
 
+export function ProductosCartaReorderControls({
+  canMoveUp,
+  canMoveDown,
+  busy,
+  t,
+  onMoveUp,
+  onMoveDown,
+}: {
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  busy?: boolean;
+  t: TranslateFn;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  return (
+    <div className="hostly-productos-reorder-controls" role="group" aria-label={t("productos.orderModeRowAria")}>
+      <button
+        type="button"
+        className="hostly-productos-reorder-btn"
+        disabled={!canMoveUp || busy}
+        onClick={onMoveUp}
+        aria-label={t("productos.moveUp")}
+        title={t("productos.moveUp")}
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        className="hostly-productos-reorder-btn"
+        disabled={!canMoveDown || busy}
+        onClick={onMoveDown}
+        aria-label={t("productos.moveDown")}
+        title={t("productos.moveDown")}
+      >
+        ↓
+      </button>
+    </div>
+  );
+}
+
 export function ProductosCartaRowActions({
   p,
   busyEsc,

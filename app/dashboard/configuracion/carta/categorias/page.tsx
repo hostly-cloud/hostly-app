@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/components/i18n-provider";
 import { useAuth } from "@/components/auth/auth-context";
 import { CategoryProductFamilySelect } from "@/components/carta/category-product-family-select";
 import { ProductFormDrawerCollapsibleSection } from "@/components/productos/product-form-drawer-section";
@@ -49,6 +51,8 @@ import { CategoriasCartaDataView } from "@/components/carta/categorias-carta-dat
 const inputClass = "hostly-input hostly-carta-config-field-input";
 
 export default function ConfigCartaCategoriasPage() {
+  const { t } = useI18n();
+  const router = useRouter();
   const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
   const restauranteId = useMemo(
     () => resolveOperationalRestaurantId(profileRestaurantId),
@@ -57,6 +61,7 @@ export default function ConfigCartaCategoriasPage() {
   const operationalCatalog = useCentralProductsForCarta(restauranteId, {
     scope: "management",
   });
+  const isCentralCatalog = operationalCatalog.source === "central";
 
   const [items, setItems] = useState<CartaCategoria[]>([]);
   const [cartaFamilias, setCartaFamilias] = useState<CartaFamilia[]>([]);
@@ -316,6 +321,20 @@ export default function ConfigCartaCategoriasPage() {
     }
   }
 
+  const canOrderProductsInCategory = useCallback(
+    (c: CartaCategoria) => isCentralCatalog && (countsByCatId.get(c.id) ?? 0) > 0,
+    [isCentralCatalog, countsByCatId],
+  );
+
+  const openOrderProducts = useCallback(
+    (c: CartaCategoria) => {
+      router.push(
+        `/dashboard/configuracion/carta/categorias/${encodeURIComponent(c.id)}/ordenar`,
+      );
+    },
+    [router],
+  );
+
   async function toggleActive(c: CartaCategoria) {
     if (!restauranteId) return;
     const res = await patchCartaCategoriaApi(restauranteId, c.id, {
@@ -381,6 +400,10 @@ export default function ConfigCartaCategoriasPage() {
           modifierGroups={modifierGroups}
           onEdit={openEdit}
           onToggleActive={(c) => void toggleActive(c)}
+          onOrderProducts={openOrderProducts}
+          canOrderProducts={canOrderProductsInCategory}
+          orderProductsTitle={t("cartaCategories.orderProductsAction")}
+          orderProductsDisabledTitle={t("cartaCategories.orderProductsDisabledHint")}
           onCreateNew={openNew}
         />
       </ConfigCard>

@@ -1,3 +1,4 @@
+import { comparePlatoCarta } from "@/lib/carta/product-sort-order";
 import type { PlatoCarta } from "@/lib/platos-local";
 import type { CartaCategoria } from "./types";
 
@@ -14,12 +15,7 @@ function norm(s: string): string {
 }
 
 function sortPlatosInSection(rows: PlatoCarta[]): PlatoCarta[] {
-  return [...rows].sort((a, b) => {
-    const oa = typeof a.ordenEnCategoria === "number" && Number.isFinite(a.ordenEnCategoria) ? a.ordenEnCategoria : 1e9;
-    const ob = typeof b.ordenEnCategoria === "number" && Number.isFinite(b.ordenEnCategoria) ? b.ordenEnCategoria : 1e9;
-    if (oa !== ob) return oa - ob;
-    return a.nombre.localeCompare(b.nombre, undefined, { sensitivity: "base" });
-  });
+  return [...rows].sort(comparePlatoCarta);
 }
 
 /**

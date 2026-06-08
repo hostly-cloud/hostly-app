@@ -5,6 +5,7 @@ import { CartaPageContent } from "@/app/dashboard/carta/carta-page-content";
 import { useAuth } from "@/components/auth/auth-context";
 import { ActiveOperatorProvider } from "@/components/tpv/active-operator-context";
 import { ActiveOperatorGate } from "@/components/tpv/active-operator-gate";
+import { ActiveOperatorTopBarButton } from "@/components/tpv/active-operator-top-bar-button";
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
 
@@ -43,8 +44,11 @@ export default function OperacionTpvPage() {
   }, []);
 
   return (
-    <OperacionModuleShell title="TPV">
-      <ActiveOperatorProvider restaurantId={restaurantIdTrimmed}>
+    <ActiveOperatorProvider restaurantId={restaurantIdTrimmed}>
+      <OperacionModuleShell
+        title="TPV"
+        topBarEnd={<ActiveOperatorTopBarButton />}
+      >
         <ActiveOperatorGate>
           <CartaPageContent
             embeddedInOperacion
@@ -52,7 +56,7 @@ export default function OperacionTpvPage() {
             groupedTablesMapHandlers={groupedTablesMapHandlers}
           />
         </ActiveOperatorGate>
-      </ActiveOperatorProvider>
-    </OperacionModuleShell>
+      </OperacionModuleShell>
+    </ActiveOperatorProvider>
   );
 }

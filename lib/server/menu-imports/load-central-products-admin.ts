@@ -1,4 +1,8 @@
 import type { Firestore } from "firebase-admin/firestore";
+import {
+  compareProductDocuments,
+  readProductSortOrder,
+} from "@/lib/carta/product-sort-order";
 import type { ProductDocument } from "@/lib/firestore/products";
 
 function readFiniteNumber(value: unknown): number | null {
@@ -46,6 +50,9 @@ function mapAdminProductDoc(docId: string, data: Record<string, unknown>): Produ
     typeof data.tipoVenta === "string" && data.tipoVenta.trim()
       ? data.tipoVenta.trim()
       : null;
+  const sortOrder =
+    readProductSortOrder(data.sortOrder) ??
+    readProductSortOrder(data.ordenEnCategoria);
 
   return {
     id: docId,
@@ -58,6 +65,7 @@ function mapAdminProductDoc(docId: string, data: Record<string, unknown>): Produ
     station: stationRaw,
     type: typeof data.type === "string" ? data.type : null,
     tipoVenta,
+    ...(sortOrder !== undefined ? { sortOrder } : {}),
     ...(visibleOnMenu !== undefined ? { visibleOnMenu } : {}),
     inventory: {
       enabled: inventoryRaw.enabled === true,
@@ -89,7 +97,7 @@ export async function loadCentralProductsAdmin(
       const mapped = mapAdminProductDoc(d.id, d.data() as Record<string, unknown>);
       if (mapped) out.push(mapped);
     }
-    return out.sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+    return out.sort(compareProductDocuments);
   } catch {
     return [];
   }

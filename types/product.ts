@@ -16,6 +16,8 @@ export type Product = {
   /** Grupos de modificadores asignados directamente al producto. */
   modifierGroupIds?: string[];
   precio: number;
+  /** Posición dentro de `categoryId` (menor = primero en TPV). */
+  sortOrder?: number;
   /** Pase / curso del catálogo (1–4: entrante…postre). Opcional en datos legados. */
   course?: number | null;
   /** Área operativa donde se prepara el producto (p. ej. cocina, barra, cocteleria). */

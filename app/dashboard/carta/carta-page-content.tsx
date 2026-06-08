@@ -47,6 +47,13 @@ import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { paymentSaleAmount } from "@/lib/payments/paymentSaleAmount";
 import { MONEY_EPS, roundMoney } from "@/lib/payments/roundMoney";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { compareOperationalProducts } from "@/lib/carta/product-sort-order";
+import {
+  clampComandaPanelWidthPct,
+  COMANDA_PANEL_WIDTH_DEFAULT,
+  COMANDA_PANEL_WIDTH_MAX,
+  COMANDA_PANEL_WIDTH_MIN,
+} from "@/lib/tpv/comanda-panel-width-preference";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import {
   buildTpvInventoryProductsById,
@@ -1730,6 +1737,28 @@ export function CartaPageContent({
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+  const cartaLayoutRef = useRef<HTMLDivElement | null>(null);
+  const comandaSplitterPointerIdRef = useRef<number | null>(null);
+  const comandaSplitterPointerStartRef = useRef<{ x: number; y: number } | null>(
+    null,
+  );
+  const comandaSplitterDidDragRef = useRef(false);
+  const comandaSplitterLastTapAtRef = useRef(0);
+  const comandaSplitterWindowCleanupRef = useRef<(() => void) | null>(null);
+  const [comandaPanelWidthPct, setComandaPanelWidthPct] = useState(
+    COMANDA_PANEL_WIDTH_DEFAULT,
+  );
+  const [isComandaPanelResizing, setIsComandaPanelResizing] = useState(false);
+
+  useEffect(() => {
+    if (!isComandaPanelResizing) return;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    return () => {
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [isComandaPanelResizing]);
 
   const firebaseUserId =
     (user as { uid?: string; id?: string } | null | undefined)?.uid ||
@@ -5790,24 +5819,26 @@ export function CartaPageContent({
       (p) =>
         tpvMenuGroupForProduct(p) === menuGroup,
     );
-    if (!effectiveSelectedCategory) return inGroup;
-    return inGroup.filter(
-      (p) => (p.categoria || "Sin categoría") === effectiveSelectedCategory,
-    );
+    const scoped = !effectiveSelectedCategory
+      ? inGroup
+      : inGroup.filter(
+          (p) => (p.categoria || "Sin categoría") === effectiveSelectedCategory,
+        );
+    return [...scoped].sort(compareOperationalProducts);
   }, [products, menuGroup, effectiveSelectedCategory]);
 
-  const groupedProducts = useMemo(
-    () =>
-      filteredProducts.reduce<Record<string, Product[]>>((acc, product) => {
-        const cat = product.categoria || "Sin categoría";
-
-        if (!acc[cat]) acc[cat] = [];
-        acc[cat].push(product);
-
-        return acc;
-      }, {}),
-    [filteredProducts],
-  );
+  const groupedProducts = useMemo(() => {
+    const acc = filteredProducts.reduce<Record<string, Product[]>>((map, product) => {
+      const cat = product.categoria || "Sin categoría";
+      if (!map[cat]) map[cat] = [];
+      map[cat].push(product);
+      return map;
+    }, {});
+    for (const cat of Object.keys(acc)) {
+      acc[cat]!.sort(compareOperationalProducts);
+    }
+    return acc;
+  }, [filteredProducts]);
   const hasVisibleProductsForCurrentMenu = useMemo(
     () => Object.values(groupedProducts).some((items) => items.length > 0),
     [groupedProducts],
@@ -8119,6 +8150,154 @@ export function CartaPageContent({
 
   const showComandaAside =
     viewMode !== "normal" || Boolean(selectedTableId || orderIdFromUrl);
+
+  const showComandaPanelSplitter =
+    !cartaHeaderMobile && showComandaAside && !showTableMap;
+
+  const resetComandaPanelWidth = useCallback(() => {
+    setComandaPanelWidthPct(COMANDA_PANEL_WIDTH_DEFAULT);
+  }, []);
+
+  const resolveComandaPanelWidthFromPointer = useCallback(
+    (clientX: number) => {
+      const layout = cartaLayoutRef.current;
+      if (!layout) return null;
+      const rect = layout.getBoundingClientRect();
+      if (rect.width <= 0) return null;
+      return clampComandaPanelWidthPct(
+        ((clientX - rect.left) / rect.width) * 100,
+      );
+    },
+    [],
+  );
+
+  const teardownComandaSplitterDrag = useCallback(() => {
+    comandaSplitterWindowCleanupRef.current?.();
+    comandaSplitterWindowCleanupRef.current = null;
+    comandaSplitterPointerIdRef.current = null;
+    comandaSplitterPointerStartRef.current = null;
+    comandaSplitterDidDragRef.current = false;
+    setIsComandaPanelResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (showTableMap) {
+      teardownComandaSplitterDrag();
+      resetComandaPanelWidth();
+    }
+  }, [showTableMap, resetComandaPanelWidth, teardownComandaSplitterDrag]);
+
+  useEffect(
+    () => () => {
+      teardownComandaSplitterDrag();
+    },
+    [teardownComandaSplitterDrag],
+  );
+
+  const handleComandaSplitterPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!showComandaPanelSplitter) return;
+      if (e.button !== 0) return;
+
+      teardownComandaSplitterDrag();
+      e.preventDefault();
+      e.stopPropagation();
+
+      const splitterEl = e.currentTarget;
+      const pointerId = e.pointerId;
+      comandaSplitterPointerIdRef.current = pointerId;
+      comandaSplitterPointerStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+      };
+      comandaSplitterDidDragRef.current = false;
+      setIsComandaPanelResizing(true);
+
+      try {
+        splitterEl.setPointerCapture(pointerId);
+      } catch {
+        // ignore capture failures on unsupported targets
+      }
+
+      const onWindowPointerMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+
+        const start = comandaSplitterPointerStartRef.current;
+        if (
+          start &&
+          (Math.abs(ev.clientX - start.x) > 2 ||
+            Math.abs(ev.clientY - start.y) > 2)
+        ) {
+          comandaSplitterDidDragRef.current = true;
+        }
+
+        ev.preventDefault();
+        const next = resolveComandaPanelWidthFromPointer(ev.clientX);
+        if (next != null) setComandaPanelWidthPct(next);
+      };
+
+      const onWindowPointerEnd = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+
+        comandaSplitterWindowCleanupRef.current?.();
+        comandaSplitterWindowCleanupRef.current = null;
+
+        if (comandaSplitterDidDragRef.current) {
+          const finalPct = resolveComandaPanelWidthFromPointer(ev.clientX);
+          if (finalPct != null) setComandaPanelWidthPct(finalPct);
+        } else {
+          const now = Date.now();
+          if (now - comandaSplitterLastTapAtRef.current <= 320) {
+            resetComandaPanelWidth();
+            comandaSplitterLastTapAtRef.current = 0;
+          } else {
+            comandaSplitterLastTapAtRef.current = now;
+          }
+        }
+
+        try {
+          splitterEl.releasePointerCapture(pointerId);
+        } catch {
+          // ignore if capture was already released
+        }
+
+        comandaSplitterPointerIdRef.current = null;
+        comandaSplitterPointerStartRef.current = null;
+        comandaSplitterDidDragRef.current = false;
+        setIsComandaPanelResizing(false);
+      };
+
+      window.addEventListener("pointermove", onWindowPointerMove, {
+        passive: false,
+      });
+      window.addEventListener("pointerup", onWindowPointerEnd);
+      window.addEventListener("pointercancel", onWindowPointerEnd);
+
+      comandaSplitterWindowCleanupRef.current = () => {
+        window.removeEventListener("pointermove", onWindowPointerMove);
+        window.removeEventListener("pointerup", onWindowPointerEnd);
+        window.removeEventListener("pointercancel", onWindowPointerEnd);
+      };
+
+      const initialPct = resolveComandaPanelWidthFromPointer(e.clientX);
+      if (initialPct != null) setComandaPanelWidthPct(initialPct);
+    },
+    [
+      showComandaPanelSplitter,
+      teardownComandaSplitterDrag,
+      resolveComandaPanelWidthFromPointer,
+      resetComandaPanelWidth,
+    ],
+  );
+
+  const handleComandaSplitterDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      resetComandaPanelWidth();
+      comandaSplitterLastTapAtRef.current = 0;
+    },
+    [resetComandaPanelWidth],
+  );
 
   const activeEditingOrderId = useMemo(() => {
     if (orderIdFromUrl?.trim()) return orderIdFromUrl.trim();
@@ -11456,6 +11635,52 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
   height: 100%;
 }
 
+.carta-layout[data-carta-split-active="true"] {
+  gap: 0;
+}
+
+.carta-layout[data-carta-split-active="true"] .carta-aside,
+.carta-layout[data-carta-split-active="true"] .carta-comanda {
+  width: var(--carta-comanda-width, 40%) !important;
+  min-width: 0 !important;
+  max-width: 80%;
+  flex-shrink: 0;
+}
+
+.carta-layout-splitter {
+  flex: 0 0 12px;
+  width: 12px;
+  min-width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+  align-self: stretch;
+  position: relative;
+  z-index: 5;
+  user-select: none;
+  -webkit-user-select: none;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.carta-layout-splitter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.45);
+  transition: background-color 0.12s ease;
+  pointer-events: none;
+}
+
+.carta-layout-splitter:hover::after,
+.carta-layout-splitter[data-dragging="true"]::after {
+  background: rgba(59, 130, 246, 0.7);
+}
+
 /* Columna comanda (izquierda en escritorio; arriba en móvil). */
 .carta-aside,
 .carta-comanda {
@@ -13206,30 +13431,6 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
           embeddedInOperacion ? "" : " carta-page-main--below-header"
         }${showTableMap ? " carta-page-main--map" : ""}`}
       >
-      {embeddedInOperacion && activeOperator ? (
-        <div
-          className="carta-active-operator-bar"
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            padding: "8px 12px 0",
-            flexShrink: 0,
-          }}
-        >
-          <button
-            type="button"
-            onClick={requestOperatorChange}
-            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-[rgba(15,23,42,0.1)] bg-white px-3 py-2 text-sm font-semibold text-[var(--hostly-ink)] shadow-sm transition-colors hover:bg-[rgba(15,23,42,0.03)]"
-            aria-label={`${activeOperator.activeOperatorName} · ${t("activeOperator.change")}`}
-          >
-            <span>{activeOperator.activeOperatorName}</span>
-            <span className="text-[var(--hostly-ink-muted)]">·</span>
-            <span className="text-[var(--hostly-ink-muted)]">
-              {t("activeOperator.change")}
-            </span>
-          </button>
-        </div>
-      ) : null}
       {viewMode === "cocina" ? (
         <HostlyPageContainer
           wide
@@ -13986,7 +14187,20 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
               </div>
             </div>
           ) : (
-          <div className="carta-layout">
+          <div
+            ref={cartaLayoutRef}
+            className="carta-layout"
+            data-carta-split-active={
+              showComandaPanelSplitter ? "true" : undefined
+            }
+            style={
+              showComandaPanelSplitter
+                ? ({
+                    "--carta-comanda-width": `${comandaPanelWidthPct}%`,
+                  } as CSSProperties)
+                : undefined
+            }
+          >
         {showComandaAside ? (
         <aside
           className="carta-aside carta-comanda relative"
@@ -16903,6 +17117,20 @@ button.carta-comanda-pass-chip--postres.is-action:hover:not(:disabled) {
             </div>
           </div>
         )}
+        {showComandaPanelSplitter ? (
+          <div
+            className="carta-layout-splitter"
+            role="separator"
+            aria-orientation="vertical"
+            aria-valuenow={Math.round(comandaPanelWidthPct)}
+            aria-valuemin={COMANDA_PANEL_WIDTH_MIN}
+            aria-valuemax={COMANDA_PANEL_WIDTH_MAX}
+            aria-label="Redimensionar panel comanda"
+            data-dragging={isComandaPanelResizing ? "true" : undefined}
+            onPointerDown={handleComandaSplitterPointerDown}
+            onDoubleClick={handleComandaSplitterDoubleClick}
+          />
+        ) : null}
         {viewMode === "normal" && (
           <main
             className="carta-main carta-productos"

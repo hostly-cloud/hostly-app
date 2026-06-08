@@ -95,6 +95,7 @@ export function centralProductToPlatoCarta(
     ...(doc.productFamilyType ? { productFamilyType: doc.productFamilyType } : {}),
     ...(doc.modifierGroupIds?.length ? { modifierGroupIds: doc.modifierGroupIds } : {}),
     ...(doc.course !== undefined ? { course: doc.course } : {}),
+    ...(doc.sortOrder !== undefined ? { sortOrder: doc.sortOrder } : {}),
     precioVenta,
     activo: visibleOnMenu,
     enCarta: visibleOnMenu,
@@ -149,6 +150,7 @@ export function platoCartaToOperationalProduct(p: PlatoCarta): Product {
       : {}),
     ...(p.operationStationType ? { operationStationType: p.operationStationType } : {}),
     ...(course !== undefined ? { course } : {}),
+    ...(p.sortOrder !== undefined ? { sortOrder: p.sortOrder } : {}),
     imageUrl:
       typeof p.fotoUrl === "string" && p.fotoUrl.trim() !== ""
         ? p.fotoUrl.trim()

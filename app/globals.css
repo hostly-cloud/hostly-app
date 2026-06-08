@@ -3810,6 +3810,116 @@ body {
   color: var(--hostly-navy-deep);
 }
 
+.hostly-productos-carta-filter-chip--reorder.is-active {
+  background: color-mix(in srgb, var(--hostly-accent-soft) 72%, var(--hostly-surface-card-solid));
+  border-color: color-mix(in srgb, var(--hostly-accent) 40%, var(--hostly-table-divider-soft));
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-productos-carta-filter-chip--reorder:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.hostly-productos-reorder-hint {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hostly-ink-muted);
+  background: color-mix(in srgb, var(--hostly-accent-soft) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 22%, var(--hostly-table-divider-soft));
+  border-radius: 10px;
+}
+
+.hostly-productos-reorder-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hostly-productos-reorder-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-navy-deep);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-sizing: border-box;
+}
+
+.hostly-productos-reorder-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--hostly-accent) 35%, var(--hostly-table-divider-soft));
+  background: color-mix(in srgb, var(--hostly-accent-soft) 55%, var(--hostly-surface-card-solid));
+}
+
+.hostly-productos-reorder-btn:disabled {
+  opacity: 0.34;
+  cursor: not-allowed;
+}
+
+.hostly-data-table--reorder-mode .hostly-data-table-col--categoria,
+.hostly-data-table--reorder-mode .hostly-data-table-col--familia,
+.hostly-data-table--reorder-mode .hostly-data-table-col--pase,
+.hostly-data-table--reorder-mode .hostly-data-table-col--destino,
+.hostly-data-table--reorder-mode .hostly-data-table-col--carta,
+.hostly-data-table--reorder-mode .hostly-data-table-col--esc {
+  display: none;
+}
+
+.hostly-categoria-productos-orden-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hostly-categoria-productos-orden-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
+}
+
+.hostly-categoria-productos-orden-item__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.hostly-categoria-productos-orden-item__name {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--hostly-navy-deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostly-categoria-productos-orden-item__price {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hostly-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Config Carta → Productos (v2.14) — jerarquía simplificada */
 .hostly-productos-config-skin--simplified {
   gap: 8px;

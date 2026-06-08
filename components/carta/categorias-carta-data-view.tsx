@@ -41,6 +41,10 @@ export type CategoriasCartaDataViewProps = {
   modifierGroups: ModifierGroupDocument[];
   onEdit: (item: CartaCategoria) => void;
   onToggleActive: (item: CartaCategoria) => void;
+  onOrderProducts?: (item: CartaCategoria) => void;
+  canOrderProducts?: (item: CartaCategoria) => boolean;
+  orderProductsTitle?: string;
+  orderProductsDisabledTitle?: string;
   onCreateNew?: () => void;
 };
 
@@ -51,9 +55,29 @@ function renderCategoryCells(args: {
   modifierGroups: ModifierGroupDocument[];
   onEdit: (item: CartaCategoria) => void;
   onToggleActive: (item: CartaCategoria) => void;
+  onOrderProducts?: (item: CartaCategoria) => void;
+  canOrderProducts?: (item: CartaCategoria) => boolean;
+  orderProductsTitle?: string;
+  orderProductsDisabledTitle?: string;
 }) {
-  const { c, countsByCatId, productFamilies, modifierGroups, onEdit, onToggleActive } = args;
+  const {
+    c,
+    countsByCatId,
+    productFamilies,
+    modifierGroups,
+    onEdit,
+    onToggleActive,
+    onOrderProducts,
+    canOrderProducts,
+    orderProductsTitle,
+    orderProductsDisabledTitle,
+  } = args;
   const productCount = countsByCatId.get(c.id) ?? 0;
+  const orderAllowed = canOrderProducts?.(c) ?? false;
+  const orderTitle =
+    orderAllowed
+      ? orderProductsTitle ?? "Ordenar productos"
+      : orderProductsDisabledTitle ?? orderProductsTitle ?? "Ordenar productos";
   const familyLabel = resolveCategoryProductFamilyLabel(c, productFamilies);
   const modifierLabels = resolveEffectiveModifierGroupLabels(null, c, modifierGroups);
   const modifiersText = modifierLabels.length > 0 ? modifierLabels.join(", ") : "—";
@@ -99,6 +123,9 @@ function renderCategoryCells(args: {
           toggleTitle={c.isActive ? "Desactivar categoría" : "Activar categoría"}
           onEdit={() => onEdit(c)}
           onToggle={() => onToggleActive(c)}
+          orderProductsTitle={orderTitle}
+          onOrderProducts={onOrderProducts ? () => onOrderProducts(c) : undefined}
+          orderProductsDisabled={!orderAllowed}
         />
       </HostlyDataCell>
     </>
@@ -113,6 +140,10 @@ export function CategoriasCartaDataView({
   modifierGroups,
   onEdit,
   onToggleActive,
+  onOrderProducts,
+  canOrderProducts,
+  orderProductsTitle,
+  orderProductsDisabledTitle,
   onCreateNew,
 }: CategoriasCartaDataViewProps) {
   if (loading) {
@@ -192,6 +223,10 @@ export function CategoriasCartaDataView({
                   modifierGroups,
                   onEdit,
                   onToggleActive,
+                  onOrderProducts,
+                  canOrderProducts,
+                  orderProductsTitle,
+                  orderProductsDisabledTitle,
                 })}
               </HostlyDataRow>
             ))}
@@ -240,6 +275,13 @@ export function CategoriasCartaDataView({
                   toggleTitle={c.isActive ? "Desactivar categoría" : "Activar categoría"}
                   onEdit={() => onEdit(c)}
                   onToggle={() => onToggleActive(c)}
+                  orderProductsTitle={
+                    canOrderProducts?.(c)
+                      ? orderProductsTitle ?? "Ordenar productos"
+                      : orderProductsDisabledTitle ?? orderProductsTitle ?? "Ordenar productos"
+                  }
+                  onOrderProducts={onOrderProducts ? () => onOrderProducts(c) : undefined}
+                  orderProductsDisabled={!(canOrderProducts?.(c) ?? false)}
                 />
               }
             />

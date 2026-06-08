@@ -25,6 +25,10 @@ import {
 import { normalizeOperationalStationSelection } from "@/lib/carta/operational-station-options";
 import { isProductKind, type ProductKind } from "@/lib/carta/product-kind-options";
 import {
+  compareProductDocuments,
+  readProductSortOrder,
+} from "@/lib/carta/product-sort-order";
+import {
   buildProductStationPatchFromOperationStationType,
   buildProductStationPatchFromSelectValue,
 } from "@/lib/operacion/product-operation-station";
@@ -128,6 +132,8 @@ export type ProductDocument = {
   modifierGroupIds?: string[] | null;
   /** Pase por defecto TPV (1–4). `null` = sin pase; ausente = legacy. */
   course?: number | null;
+  /** Posición dentro de `categoryId` (menor = primero en carta/TPV). */
+  sortOrder?: number;
   inventory: ProductInventoryDocument;
   recipe: ProductRecipeDocument;
   createdAt?: number;
@@ -845,6 +851,9 @@ function mapCentralDocToProductDocument(
     : [];
 
   const catalogCourse = readProductCatalogCourseFromRecord(data);
+  const sortOrder =
+    readProductSortOrder(data.sortOrder) ??
+    readProductSortOrder(data.ordenEnCategoria);
 
   return {
     id: snap.id,
@@ -869,6 +878,7 @@ function mapCentralDocToProductDocument(
     ...(modifierGroupIds.length > 0 ? { modifierGroupIds } : {}),
     ...(catalogCourse !== undefined ? { course: catalogCourse } : {}),
     ...(visibleOnMenu !== undefined ? { visibleOnMenu } : {}),
+    ...(sortOrder !== undefined ? { sortOrder } : {}),
     inventory: normalizeProductInventory(inventoryRaw),
     recipe: {
       enabled: recipeRaw.enabled === true,
@@ -894,9 +904,7 @@ export function listenCentralProducts(
     query(centralProductsCollection(rid)),
     (snap) => {
       const list = snap.docs.map(mapCentralDocToProductDocument);
-      list.sort((a, b) =>
-        a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
-      );
+      list.sort(compareProductDocuments);
       onData(list);
     },
     (error) => {
@@ -916,9 +924,7 @@ export async function fetchCentralProductsOnce(
   try {
     const snap = await getDocs(query(centralProductsCollection(rid)));
     const list = snap.docs.map(mapCentralDocToProductDocument);
-    list.sort((a, b) =>
-      a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
-    );
+    list.sort(compareProductDocuments);
     return { docs: list, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "CENTRAL_PRODUCTS_FETCH_FAILED";
@@ -1400,6 +1406,7 @@ export {
   disableCentralProduct,
   formatCentralCatalogWriteError,
   setCentralProductPublication,
+  swapCentralProductSortOrderInCategory,
   updateCentralProduct,
   updateCentralProductRecipe,
   type CentralOperationalProductInput,

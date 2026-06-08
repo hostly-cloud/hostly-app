@@ -68,12 +68,15 @@ export type OperacionModuleShellProps = {
   title: string;
   /** Renderiza la `OperationFilterBar` justo debajo de la cabecera. */
   showFilterBar?: boolean;
+  /** Contenido alineado a la derecha de la barra superior (p. ej. operador activo en TPV). */
+  topBarEnd?: ReactNode;
   children: ReactNode;
 };
 
 export function OperacionModuleShell({
   title,
   showFilterBar,
+  topBarEnd,
   children,
 }: OperacionModuleShellProps) {
   const moduleKey = title.trim().toLowerCase();
@@ -91,7 +94,21 @@ export function OperacionModuleShell({
           ariaLabel="Volver a Operación"
           tone="light"
         />
-        <span style={moduleLabelStyle}>{title}</span>
+        {topBarEnd ? (
+          <div
+            className="hostly-operation-topbar-end"
+            style={{
+              marginLeft: "auto",
+              display: "flex",
+              alignItems: "center",
+              minWidth: 0,
+            }}
+          >
+            {topBarEnd}
+          </div>
+        ) : (
+          <span style={moduleLabelStyle}>{title}</span>
+        )}
       </div>
 
       {showFilterBar ? (
@@ -126,6 +143,26 @@ export function OperacionModuleShell({
           > span {
           opacity: 0.55;
           font-size: 10px;
+        }
+
+        .hostly-operation-shell[data-operation-module="tpv"]
+          .hostly-tpv-active-operator-btn {
+          min-height: 28px;
+          padding: 3px 10px;
+          border-radius: 10px;
+          font-size: 11px;
+          font-weight: 700;
+          border-color: rgba(148, 163, 184, 0.22);
+          background: rgba(255, 255, 255, 0.82);
+          box-shadow: none;
+        }
+
+        .hostly-operation-shell[data-operation-module="tpv"]
+          .hostly-tpv-active-operator-btn__name {
+          max-width: 140px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         @media (max-width: 767.98px) {
@@ -178,6 +215,19 @@ export function OperacionModuleShell({
             > span {
             font-size: 10px !important;
             letter-spacing: 0.04em !important;
+          }
+
+          .hostly-operation-shell[data-operation-module="tpv"]
+            .hostly-tpv-active-operator-btn {
+            min-height: 44px !important;
+            min-width: 44px !important;
+            padding: 6px 10px !important;
+            font-size: 12px !important;
+          }
+
+          .hostly-operation-shell[data-operation-module="tpv"]
+            .hostly-tpv-active-operator-btn__name {
+            max-width: 96px !important;
           }
 
           .hostly-operation-shell[data-operation-module="reservas"]

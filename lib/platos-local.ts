@@ -87,6 +87,8 @@ export type PlatoCarta = {
   cartaFamiliaId?: string;
   /** Orden dentro de la categoría en listados (menor = primero). */
   ordenEnCategoria?: number;
+  /** Posición en catálogo central (`sortOrder` en Firestore); preferir sobre `ordenEnCategoria`. */
+  sortOrder?: number;
   precioVenta: number;
   activo: boolean;
   fotoUrl?: string;
