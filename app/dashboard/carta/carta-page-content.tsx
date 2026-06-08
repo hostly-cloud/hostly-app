@@ -102,6 +102,10 @@ import {
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
 import {
+  cartLinesProductionSnapshotEqual,
+  mergeLocalLinesProductionFromServerItems,
+} from "@/lib/carta/sync-open-order-lines-from-server";
+import {
   assignTableOperatorOnFirstOpen,
   clearTableOperatorAssignment,
   tableOperatorAssignmentClearFields,
@@ -546,7 +550,13 @@ function computeOrderDocTotal(data: {
   return 0;
 }
 
-type OrderLineStatus = "pending" | "sent" | "prepared" | "served" | "cancelled";
+type OrderLineStatus =
+  | "pending"
+  | "sent"
+  | "preparing"
+  | "prepared"
+  | "served"
+  | "cancelled";
 
 type CartOrderLineExtra = { name: string; price: number };
 
@@ -760,15 +770,19 @@ function normalizeOrderLineStatus(raw: unknown): OrderLineStatus {
   if (
     raw === "pending" ||
     raw === "sent" ||
+    raw === "preparing" ||
     raw === "prepared" ||
     raw === "served" ||
     raw === "cancelled"
   )
     return raw;
-  if (raw === "preparing") return "sent";
   if (raw === "ready") return "prepared";
   if (raw === "new" || raw == null) return "pending";
   return "pending";
+}
+
+function isSentBucketOrderLineStatus(status: OrderLineStatus): boolean {
+  return status === "sent" || status === "preparing";
 }
 
 function getPendingItems(order: CartOrderLine[]): CartOrderLine[] {
@@ -1506,6 +1520,26 @@ function mapFirestoreOrderDocToCartLines(
     })
     .filter((row) => row.quantity > 0);
   return mapped;
+}
+
+function buildSyncedOrderLinesFromServerDoc(
+  localLines: CartOrderLine[],
+  data: FirestoreOrderDocForCart,
+  restaurantId: string,
+  catalogById?: ReadonlyMap<string, { course?: number | null }>,
+): CartOrderLine[] {
+  const serverMapped =
+    mapFirestoreOrderDocToCartLines(data, restaurantId, catalogById) ?? [];
+  const baseLocal = localLines.length > 0 ? localLines : serverMapped;
+  const mergedProduction = mergeLocalLinesProductionFromServerItems(
+    baseLocal,
+    data.items,
+    orderLinesToFirestoreItems,
+    normalizeOrderLineStatus,
+  );
+  const mergedIds = new Set(mergedProduction.map((line) => line.id));
+  const serverOnly = serverMapped.filter((line) => !mergedIds.has(line.id));
+  return [...mergedProduction, ...serverOnly];
 }
 
 type CartaMenuGroup = TpvMenuGroup;
@@ -2318,6 +2352,8 @@ export function CartaPageContent({
   >({});
   const ordersByTableRef = useRef(ordersByTable);
   ordersByTableRef.current = ordersByTable;
+  const orderRef = useRef(order);
+  orderRef.current = order;
   /** Mesas con order activa en Firestore (`orders.tableId` = `table.id`). */
   const [firestoreOccupiedTableIds, setFirestoreOccupiedTableIds] = useState<
     Set<string>
@@ -2432,6 +2468,10 @@ export function CartaPageContent({
   const [cancellingLineIds, setCancellingLineIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const isComandaSendingRef = useRef(isComandaSending);
+  isComandaSendingRef.current = isComandaSending;
+  const cancellingLineIdsRef = useRef(cancellingLineIds);
+  cancellingLineIdsRef.current = cancellingLineIds;
   const simplePaymentAmountInputRef = useRef<HTMLInputElement | null>(null);
   const [splitCount, setSplitCount] = useState(2);
   const [currentSplitIndex, setCurrentSplitIndex] = useState(1);
@@ -4492,6 +4532,123 @@ export function CartaPageContent({
     mergeTableIdForOpenOrders ?? null,
   ]);
 
+  /** Sync estados de producción (Cocina/Sala) → comanda TPV en mesa abierta. */
+  useEffect(() => {
+    if (!authReady || !user?.uid || !restaurantId?.trim() || !isFirebaseConfigured) {
+      return;
+    }
+    if (!isAuthReady()) return;
+
+    const activeOrderId = (() => {
+      const fromUrl = orderIdFromUrl?.trim();
+      if (fromUrl) return fromUrl;
+      const tid = selectedTableId?.trim();
+      if (!tid) return null;
+      const fromDraft = openDraftOrderIdByTableRef.current[tid]?.trim();
+      if (fromDraft) return fromDraft;
+      return openOrderIdsForTable[0]?.trim() ?? null;
+    })();
+
+    if (!activeOrderId) return;
+
+    const rid = restaurantId.trim();
+    const ref = doc(db, "orders", activeOrderId);
+    let cancelled = false;
+
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (cancelled) return;
+        if (!snap.exists()) return;
+        if (isComandaSendingRef.current) return;
+        if (cancellingLineIdsRef.current.size > 0) return;
+
+        const data = snap.data() as FirestoreOrderDocForCart;
+        if (data.restaurantId !== rid) return;
+
+        const statusNorm = String(
+          (data as { status?: string }).status ?? "",
+        )
+          .trim()
+          .toLowerCase();
+        if (statusNorm === "paid" || statusNorm === "closed") return;
+
+        const tableId = (
+          orderIdFromUrl
+            ? orderUrlTableId
+            : selectedTableIdRef.current
+        )?.trim() ?? null;
+
+        if (orderIdFromUrl) {
+          const localLines = orderRef.current;
+          const nextLines = buildSyncedOrderLinesFromServerDoc(
+            localLines,
+            data,
+            rid,
+            operationalCatalog.productDocumentsById,
+          );
+          setOrder((prev) =>
+            cartLinesProductionSnapshotEqual(prev, nextLines) &&
+            prev.length === nextLines.length
+              ? prev
+              : nextLines,
+          );
+          return;
+        }
+
+        if (!tableId) return;
+
+        openDraftOrderIdByTableRef.current[tableId] = activeOrderId;
+
+        const localTableLines = ordersByTableRef.current[tableId] ?? [];
+        const nextTableLines = buildSyncedOrderLinesFromServerDoc(
+          localTableLines,
+          data,
+          rid,
+          operationalCatalog.productDocumentsById,
+        );
+
+        setOrdersByTable((prev) => {
+          const cur = prev[tableId] ?? [];
+          if (
+            cartLinesProductionSnapshotEqual(cur, nextTableLines) &&
+            cur.length === nextTableLines.length
+          ) {
+            return prev;
+          }
+          return { ...prev, [tableId]: nextTableLines };
+        });
+
+        if (selectedTableIdRef.current === tableId) {
+          setOrder((prev) =>
+            cartLinesProductionSnapshotEqual(prev, nextTableLines) &&
+            prev.length === nextTableLines.length
+              ? prev
+              : nextTableLines,
+          );
+        }
+      },
+      (err) => {
+        console.error("[tpv:orderLinesRealtimeSync]", err);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [
+    authReady,
+    user?.uid ?? null,
+    restaurantId,
+    isFirebaseConfigured,
+    orderIdFromUrl,
+    selectedTableId,
+    openOrderIdsForTable,
+    orderUrlTableId,
+    operationalCatalog.productDocumentsById,
+  ]);
+
   useEffect(() => {
     if (viewMode !== "normal") return;
     if (isPaymentOpen || isComandaSending || cancellingLineIds.size > 0) return;
@@ -5131,7 +5288,7 @@ export function CartaPageContent({
           const st = normalizeOrderLineStatus(l.status);
           if (
             l.id === itemId &&
-            (st === "sent" || st === "prepared")
+            (st === "sent" || st === "preparing" || st === "prepared")
           ) {
             return { ...l, status: "served" as const, servedAt: Date.now() };
           }
@@ -7467,7 +7624,7 @@ export function CartaPageContent({
   const linesSent = useMemo(
     () =>
       visibleOrderLines
-        .filter((l) => normalizeOrderLineStatus(l.status) === "sent")
+        .filter((l) => isSentBucketOrderLineStatus(normalizeOrderLineStatus(l.status)))
         .slice()
         .sort((a, b) => {
           const d = comandaLineSortKey(a) - comandaLineSortKey(b);
@@ -8755,6 +8912,7 @@ export function CartaPageContent({
       | "Pendiente"
       | "Por marchar"
       | "Enviado"
+      | "Preparando"
       | "Preparado"
       | "Servido"
       | "Cancelado",
@@ -8792,7 +8950,8 @@ export function CartaPageContent({
     });
     const coursePassChipLabel = comandaCoursePassChipLabel(courseForBadge);
     const lineSt = normalizeOrderLineStatus(item.status);
-    const statusChipClickable = lineSt === "sent" || lineSt === "prepared";
+    const statusChipClickable =
+      isSentBucketOrderLineStatus(lineSt) || lineSt === "prepared";
     /* ¿Esta línea pertenece al pase activo? Sirve para resaltar
        sutilmente la fila y oscurecer su badge inline, ayudando al
        camarero a localizar visualmente las líneas del pase actual.
@@ -15113,6 +15272,9 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           >
                             {lines.map((line) => {
                               const st = normalizeOrderLineStatus(line.status);
+                              if (st === "preparing") {
+                                return renderComandaLine(line, "Preparando", {});
+                              }
                               if (st === "sent") {
                                 return renderComandaLine(line, "Enviado", {});
                               }
