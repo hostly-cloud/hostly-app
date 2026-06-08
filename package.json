@@ -6,7 +6,9 @@
     "dev": "next dev --webpack --hostname 0.0.0.0 --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "eval:menu-import": "tsx scripts/eval-menu-import-corpus.ts",
+    "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.6",
@@ -27,6 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
+    "tsx": "^4.20.3",
     "typescript": "^5"
   }
 }

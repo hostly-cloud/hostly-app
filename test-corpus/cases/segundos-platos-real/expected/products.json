@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "caseId": "segundos-platos-real",
+  "labeledAt": "2026-06-08",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Segundos platos", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Langostinos gratinados, servidos con salsa de chile verde",
+      "price": 33,
+      "sectionName": "Segundos platos",
+      "suggestedStation": "kitchen",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true, "requireStation": true }
+    },
+    {
+      "id": "p2",
+      "name": "Chuletas de cordero al crujiente de hierbas finas, con tzatziki",
+      "price": 29.5,
+      "sectionName": "Segundos platos",
+      "suggestedStation": "kitchen",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true, "requireStation": true }
+    },
+    {
+      "id": "p3",
+      "name": "Escalopines de cerdo al vino blanco",
+      "price": 17.5,
+      "sectionName": "Segundos platos",
+      "suggestedStation": "kitchen",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true, "requireStation": true }
+    },
+    {
+      "id": "p4",
+      "name": "Filete de dorada a la plancha",
+      "price": 18.9,
+      "sectionName": "Segundos platos",
+      "suggestedStation": "kitchen",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true, "requireStation": true }
+    },
+    {
+      "id": "p5",
+      "name": "Solomillo de ternera nacional a la parrilla con patatas fritas",
+      "price": 32,
+      "sectionName": "Segundos platos",
+      "suggestedStation": "kitchen",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true, "requireStation": true }
+    },
+    {
+      "id": "p6",
+      "name": "Muslo deshuesado de pollo feliz al estragón servido con patatas al horno y verduras",
+      "price": 22.5,
+      "sectionName": "Segundos platos",
+      "suggestedStation": "kitchen",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true, "requireStation": true }
+    },
+    {
+      "id": "p7",
+      "name": "Filete de lubina salvaje al horno",
+      "price": 32.5,
+      "sectionName": "Segundos platos",
+      "suggestedStation": "kitchen",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true, "requireStation": true }
+    },
+    {
+      "id": "p8",
+      "name": "Estofado de ternera al vino tinto servido con tagliatelle",
+      "price": 25.5,
+      "sectionName": "Segundos platos",
+      "suggestedStation": "kitchen",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true, "requireStation": true }
+    }
+  ],
+  "negativeSections": [
+    { "namePattern": "^Mit Champignonsauce", "reason": "descripción alemana, no categoría" },
+    { "namePattern": "^Con salsa de champiñones", "reason": "fragmento descriptivo, no categoría" },
+    { "namePattern": "^With mushroom sauce", "reason": "traducción inglesa, no categoría" }
+  ],
+  "negativeProducts": [
+    { "namePattern": "^Gratinados", "reason": "fragmento sin sujeto" },
+    { "namePattern": "^De cordero al crujiente", "reason": "fragmento sin sujeto" },
+    { "namePattern": "^Pork escalopes", "reason": "traducción inglesa como producto" },
+    { "namePattern": "^Baked fillet of seabream", "reason": "traducción inglesa como producto" },
+    { "namePattern": "^Con salsa de champiñones", "reason": "fragmento descriptivo" },
+    { "namePattern": "^Gebackenes wildes", "reason": "fragmento alemán" },
+    { "namePattern": "^Chops in herby", "reason": "traducción inglesa fragmentada" },
+    { "namePattern": "^Lamb chops", "reason": "traducción inglesa" },
+    { "namePattern": "^Gratinated King", "reason": "traducción inglesa" },
+    { "namePattern": "^Tartar de ternera servido$", "reason": "plato distinto / ruido OCR" }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}
+

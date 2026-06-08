@@ -16,6 +16,13 @@ import {
 import { getMenuImportDraftAdmin, updateMenuImportDraftAdmin } from "./menu-import-draft-admin";
 import { loadCentralProductsAdmin } from "./load-central-products-admin";
 import { loadHostlyCartaCategories } from "./load-hostly-carta-categories";
+import {
+  logPublishFlowCandidateEvaluation,
+  logPublishFlowCreated,
+  logPublishFlowDetected,
+  logPublishFlowPendingWrites,
+  logPublishFlowSelected,
+} from "./publish-flow-diagnostics";
 
 const PUBLISH_LOCK_MS = 2 * 60 * 1000;
 const BATCH_CHUNK_SIZE = 100;
@@ -240,12 +247,16 @@ export async function publishMenuImportDraft(params: {
         ? new Set(params.itemIds.map((id) => id.trim()).filter(Boolean))
         : null;
 
+    logPublishFlowDetected({ draftId, restaurantId, allItems });
+
     const candidates = allItems.filter((item) => {
       if (!item.selectedForPublish) return false;
       if (!item.name.trim()) return false;
       if (itemIdFilter && !itemIdFilter.has(item.id)) return false;
       return true;
     });
+
+    logPublishFlowSelected({ draftId, candidates });
 
     const [categories, catalog] = await Promise.all([
       loadHostlyCartaCategories(db, restaurantId),
@@ -310,12 +321,24 @@ export async function publishMenuImportDraft(params: {
         evaluation.action === "possible_duplicate" &&
         publishConfirmations.confirmDuplicates.has(item.id);
 
-      if (!canPublishEvaluation(evaluation, publishConfirmations)) {
+      const skipMessage = !canPublishEvaluation(evaluation, publishConfirmations)
+        ? publishSkipMessage(evaluation, publishConfirmations)
+        : undefined;
+
+      logPublishFlowCandidateEvaluation({
+        draftId,
+        item,
+        evaluation,
+        canPublish: !skipMessage,
+        skipMessage,
+      });
+
+      if (skipMessage) {
         skipped.push({
           itemId: item.id,
           itemName: item.name,
           outcome: "skipped",
-          message: publishSkipMessage(evaluation, publishConfirmations),
+          message: skipMessage,
         });
         continue;
       }
@@ -328,6 +351,13 @@ export async function publishMenuImportDraft(params: {
 
       pendingWrites.push({ item, evaluation, productRef, isConfirmedDuplicate });
     }
+
+    logPublishFlowPendingWrites({
+      draftId,
+      count: pendingWrites.length,
+      itemIds: pendingWrites.map((entry) => entry.item.id),
+      names: pendingWrites.map((entry) => entry.item.name),
+    });
 
     for (let i = 0; i < pendingWrites.length; i += BATCH_CHUNK_SIZE) {
       const chunk = pendingWrites.slice(i, i + BATCH_CHUNK_SIZE);
@@ -407,6 +437,24 @@ export async function publishMenuImportDraft(params: {
       publishInProgress: false,
       publishLogs: [...existingLogs, logEntry].slice(-20),
       updatedBy: userId,
+    });
+
+    logPublishFlowCreated({
+      draftId,
+      created: created.map((r) => ({
+        itemId: r.itemId,
+        itemName: r.itemName,
+        productId: r.productId ?? "",
+      })),
+      skipped: skipped.map((r) => ({
+        itemId: r.itemId,
+        itemName: r.itemName,
+        message: r.message,
+      })),
+      alreadyPublished: alreadyPublished.length,
+      errors: errors.length,
+      confirmReviews: [...publishConfirmations.confirmReviews],
+      confirmDuplicates: [...publishConfirmations.confirmDuplicates],
     });
 
     return {

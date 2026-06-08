@@ -12,10 +12,12 @@ import type { Firestore } from "firebase-admin/firestore";
 import {
   DUPLICATE_ACTION_THRESHOLD,
   evaluateImportItemForPublish,
+  hasImportCategoryHint,
 } from "./evaluate-import-item-for-publish";
 import { getMenuImportDraftAdmin } from "./menu-import-draft-admin";
 import { loadCentralProductsAdmin } from "./load-central-products-admin";
 import { loadHostlyCartaCategories } from "./load-hostly-carta-categories";
+import { logPublishFlowDetected, logPublishFlowSelected } from "./publish-flow-diagnostics";
 
 export class BuildPublishPreviewError extends Error {
   readonly code: string;
@@ -84,6 +86,8 @@ export async function buildMenuImportPublishPreview(params: {
   }
 
   const allItems = flattenDraftItems(draft.sections, draft.items);
+  logPublishFlowDetected({ draftId, restaurantId, allItems });
+
   const itemIdFilter =
     params.itemIds && params.itemIds.length > 0
       ? new Set(params.itemIds.map((id) => id.trim()).filter(Boolean))
@@ -95,6 +99,8 @@ export async function buildMenuImportPublishPreview(params: {
     if (itemIdFilter && !itemIdFilter.has(item.id)) return false;
     return true;
   });
+
+  logPublishFlowSelected({ draftId, candidates });
 
   const [categories, catalog] = await Promise.all([
     loadHostlyCartaCategories(db, restaurantId),
@@ -133,8 +139,8 @@ export async function buildMenuImportPublishPreview(params: {
       });
     }
 
-    if (!evaluation.resolvedCategory && item.suggestedCategory.trim()) {
-      const key = item.suggestedCategory.trim();
+    if (!evaluation.resolvedCategory && hasImportCategoryHint(item)) {
+      const key = item.suggestedCategory.trim() || item.sectionName.trim();
       if (!missingCategoryMap.has(key)) missingCategoryMap.set(key, new Set());
       missingCategoryMap.get(key)!.add(item.id);
     }
@@ -166,6 +172,7 @@ export async function buildMenuImportPublishPreview(params: {
       }),
       warnings: evaluation.warnings,
       confidence: evaluation.confidence,
+      selectedForPublish: item.selectedForPublish,
     });
   }
 

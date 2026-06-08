@@ -32,6 +32,8 @@ export function menuImportDocToUiDraft(doc: MenuImportDraftDocument): ImportedMe
     storagePath: doc.storagePath,
     sourceUrl: doc.sourceUrl,
     aiWarnings: doc.aiWarnings,
+    parserWarnings: doc.parserWarnings,
+    rawTextLength: typeof doc.rawText === "string" ? doc.rawText.length : undefined,
   };
 }
 

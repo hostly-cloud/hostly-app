@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "caseId": "orecchiette-identical-translations",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Pasta casera", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Orecchiette alla norma",
+      "price": 17.3,
+      "sectionName": "Pasta casera",
+      "match": {
+        "nameMode": "exact_normalized",
+        "priceTolerance": 0.05,
+        "requireSection": true
+      }
+    }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

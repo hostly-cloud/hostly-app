@@ -1,0 +1,9 @@
+{
+  "id": "bebida-cocktail-simple",
+  "title": "Cócteles — nombre+precio inline",
+  "tags": ["inline", "cocktails", "bebidas", "P0"],
+  "sourceType": "image",
+  "menuType": "cocktails",
+  "evaluatePhases": ["parser"],
+  "priority": "P0"
+}

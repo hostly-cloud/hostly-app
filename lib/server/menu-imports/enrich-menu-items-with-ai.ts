@@ -3,7 +3,13 @@ import type {
   ImportedMenuItem,
   ImportedMenuSuggestedStation,
 } from "@/lib/carta/imported-menu-types";
+import {
+  isProductNameSupportedByOcr,
+  normalizeForOcrMatch,
+} from "@/lib/server/menu-imports/validate-items-against-ocr";
 import type { MenuImportMenuType } from "@/lib/firestore/menu-import-drafts";
+import { resolveImportSelectedForPublish } from "./evaluate-import-item-for-publish";
+import { resolveImportedItemDestination } from "./resolve-imported-item-destination";
 
 const AI_TIMEOUT_MS = 25_000;
 const MAX_RAW_TEXT_FOR_AI = 8_000;
@@ -119,6 +125,13 @@ function truncateRawText(rawText: string): string {
   return `${t.slice(0, MAX_RAW_TEXT_FOR_AI)}\n\n[… texto truncado para IA …]`;
 }
 
+function namesAreEquivalentOcr(a: string, b: string): boolean {
+  const na = normalizeForOcrMatch(a);
+  const nb = normalizeForOcrMatch(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
 function buildPrompt(input: EnrichMenuItemsInput): string {
   const itemsForPrompt = input.items.slice(0, MAX_ITEMS_FOR_AI).map((item) => ({
     itemId: item.id,
@@ -132,15 +145,20 @@ function buildPrompt(input: EnrichMenuItemsInput): string {
   }));
 
   return [
-    "Eres un normalizador estructurado de cartas de restaurante para un TPV SaaS.",
-    "NO inventes productos, precios, descripciones largas ni moneda.",
-    "NO añadas items que no estén en parsedItems.",
-    "Solo normaliza nombres menores (mayúsculas, tildes, espacios) sin cambiar el producto.",
-    "Elige suggestedCategory preferentemente de knownCategories; si ninguna encaja, usa la más cercana existente o la del parser.",
-    "suggestedStation debe ser kitchen | bar | cocktail | none.",
-    "duplicateOfItemId: id de otro item del mismo listado si es duplicado probable, o cadena vacía.",
-    "confidenceAdjusted: 0-100 según claridad; baja si ambiguo.",
-    "warnings: avisos cortos por item (duplicado, categoría dudosa, etc.).",
+    "Eres un asistente de estructuración de cartas para un TPV SaaS.",
+    "FASE 1 ya está hecha: parsedItems vienen de OCR/heurística. Tu trabajo es FASE 2 — enriquecer SIN renombrar.",
+    "",
+    "REGLAS ESTRICTAS (OCR fiel):",
+    "- NO inventes productos, precios ni descripciones.",
+    "- NO añadas items que no estén en parsedItems.",
+    "- normalizedName DEBE ser idéntico al name del parsedItem salvo corrección mínima de OCR (espacios/tildes).",
+    "- NO traduzcas, NO reformules, NO embellezcas nombres comerciales (italiano/español tal cual).",
+    "- NO completes palabras ilegibles: baja confidenceAdjusted y avisa en warnings.",
+    "- Si el nombre es dudoso, confidenceAdjusted < 65 y warning 'nombre_dudoso'.",
+    "",
+    "Puedes ajustar suggestedCategory y suggestedStation usando knownCategories y rawText.",
+    "duplicateOfItemId: id de otro item duplicado probable, o cadena vacía.",
+    "confidenceAdjusted: 0-100 según claridad del OCR para ese item.",
     "",
     `menuType: ${input.menuType}`,
     `knownCategories: ${JSON.stringify(input.knownCategories.slice(0, 40))}`,
@@ -149,7 +167,7 @@ function buildPrompt(input: EnrichMenuItemsInput): string {
     "parsedItems:",
     JSON.stringify(itemsForPrompt),
     "",
-    "rawText (OCR, referencia):",
+    "rawText (OCR, referencia obligatoria — no inventes fuera de aquí):",
     truncateRawText(input.rawText),
   ].join("\n");
 }
@@ -180,6 +198,7 @@ function mergeEnrichmentRow(
   item: ImportedMenuItem,
   row: AiEnrichmentRow,
   validIds: Set<string>,
+  rawText: string,
 ): ImportedMenuItem {
   const duplicateOf =
     row.duplicateOfItemId.trim() && row.duplicateOfItemId !== item.id && validIds.has(row.duplicateOfItemId)
@@ -187,22 +206,38 @@ function mergeEnrichmentRow(
       : undefined;
 
   const normalizedName = row.normalizedName.trim();
-  const name =
-    normalizedName.length >= 2 && normalizedName.length <= 120 ? normalizedName : item.name;
+  const name = item.name;
+  const renameRejected =
+    normalizedName.length >= 2 &&
+    normalizedName !== item.name &&
+    !namesAreEquivalentOcr(normalizedName, item.name);
 
   const aiConfidence = clampConfidence(row.confidenceAdjusted);
   const aiWarnings = row.warnings.map((w) => w.trim()).filter(Boolean).slice(0, 6);
+  if (renameRejected) {
+    aiWarnings.unshift("nombre_ia_rechazado");
+  }
   const needsReview =
     item.needsReview ||
     aiConfidence < 75 ||
     aiWarnings.length > 0 ||
-    duplicateOf != null;
+    duplicateOf != null ||
+    renameRejected ||
+    !isProductNameSupportedByOcr(name, rawText);
+
+  const aiCategory = row.suggestedCategory.trim() || item.suggestedCategory;
+  const aiStation = STATIONS.includes(row.suggestedStation) ? row.suggestedStation : item.suggestedStation;
 
   return {
     ...item,
     name,
-    suggestedCategory: row.suggestedCategory.trim() || item.suggestedCategory,
-    suggestedStation: STATIONS.includes(row.suggestedStation) ? row.suggestedStation : item.suggestedStation,
+    suggestedCategory: aiCategory,
+    suggestedStation: resolveImportedItemDestination({
+      name,
+      sectionName: item.sectionName,
+      suggestedCategory: aiCategory,
+      fallbackStation: aiStation,
+    }),
     confidence: aiConfidence,
     inferredAttributes: parseAttributes(row.inferredAttributes),
     duplicateOf,
@@ -210,7 +245,7 @@ function mergeEnrichmentRow(
     aiConfidence,
     aiEnriched: true,
     needsReview,
-    selectedForPublish: needsReview ? false : item.selectedForPublish,
+    selectedForPublish: resolveImportSelectedForPublish(item, needsReview, renameRejected),
   };
 }
 
@@ -359,7 +394,7 @@ export async function enrichMenuItemsWithAI(input: EnrichMenuItemsInput): Promis
     const enrichedItems = input.items.map((item) => {
       const row = byId.get(item.id);
       if (!row) return item;
-      return mergeEnrichmentRow(item, row, validIds);
+      return mergeEnrichmentRow(item, row, validIds, input.rawText);
     });
 
     const aiWarnings = [...payload.globalWarnings];

@@ -6,13 +6,25 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
+import { ConfigCartaWorkbench, ConfigBtnPrimary, ConfigBtnSecondary, ConfigCard } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
 import ModulePageShell from "@/components/module-page-shell";
 import { ProductosCartaDataView } from "@/components/productos/productos-carta-data-view";
+import {
+  ConfigCartaCompactFilterRow,
+  ConfigCartaStatusFilterSelect,
+  type ConfigCartaListFilterId,
+} from "@/components/productos/productos-config-carta-compact-controls";
 import { ProductosBulkAssignCourseModal } from "@/components/productos/productos-bulk-assign-course-modal";
 import { ProductosBulkAssignDestinationModal } from "@/components/productos/productos-bulk-assign-destination-modal";
 import { ProductosBulkAssignCategoryModal } from "@/components/productos/productos-bulk-assign-category-modal";
 import { ProductosBulkAssignFamilyModal } from "@/components/productos/productos-bulk-assign-family-modal";
 import { ProductosBulkDeleteModal } from "@/components/productos/productos-bulk-delete-modal";
+import {
+  computeBulkCategoryInitialSelectValue,
+  computeBulkCourseInitialSelectValue,
+  computeBulkDestinationInitialSelectValue,
+  computeBulkFamilyInitialSelectValue,
+} from "@/components/productos/productos-bulk-initial-values";
 import { ProductosSelectionBar } from "@/components/productos/productos-selection-bar";
 import { useProductosSelection } from "@/components/productos/use-productos-selection";
 import { HostlyKpiCard, HostlySection, HostlySectionHeader, HostlySurface, hostlySegmentTabClassName, HostlySegmentedControl } from "@/components/ui/hostly";
@@ -75,7 +87,6 @@ import {
   fetchModifierFamiliesForRestaurante,
   type ModifierFamilyRow,
 } from "@/lib/modificadores/default-modifier-family";
-import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { useAuth } from "@/components/auth/auth-context";
 import { fireAndForgetSyncCatalogoCategoria } from "@/lib/hostly/sync-catalogo-venta-categoria";
 import { OPER_PRIMARY_COUNT_META, OPER_PRIMARY_SECTION_TITLE } from "@/lib/hostly/tpv-oper-title";
@@ -368,6 +379,9 @@ const labelStyle: CSSProperties = {
   color: "#94a3b8",
   marginBottom: 8,
 };
+
+const drawerInputClass = "hostly-input hostly-carta-config-field-input";
+const drawerInputProminentClass = `${drawerInputClass} hostly-product-form-drawer-input--prominent`;
 
 /** Ancho útil del módulo: más protagonismo sin tocar sidebar de configuración. */
 const PRODUCTOS_SHELL_MAX_WIDTH = 1520;
@@ -1168,7 +1182,7 @@ export default function ProductosManagementPage({
   dashboardListIceVisual = false,
 }: ProductosManagementPageProps = {}) {
   const { t, locale } = useI18n();
-  const { restaurantId: profileRestaurantId } = useAuth();
+  const { restaurantId: profileRestaurantId, profileReady } = useAuth();
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const emb = Boolean(embedConfigVisual);
@@ -1186,12 +1200,16 @@ export default function ProductosManagementPage({
     : rowGridGroupBar;
   const productosTableMinInnerWidthPx =
     iceVisual && configCartaProductosChrome ? PRODUCTOS_TABLE_MIN_WIDTH_EMBED_ICONS_PX : PRODUCTOS_TABLE_MIN_WIDTH_PX;
-  const operationalRestaurantId = useMemo(
-    () => resolveOperationalRestaurantId(profileRestaurantId),
-    [profileRestaurantId],
-  );
-  const operationalCatalog = useCentralProductsForCarta(operationalRestaurantId, {
+  /** Tenant Firestore/API: solo `restaurantId` del perfil autenticado (sin localStorage/"default"). */
+  const tenantRestaurantId = useMemo(() => {
+    if (!profileReady) return null;
+    const rid = profileRestaurantId?.trim();
+    return rid || null;
+  }, [profileReady, profileRestaurantId]);
+  const operationalRestaurantId = tenantRestaurantId ?? "";
+  const operationalCatalog = useCentralProductsForCarta(tenantRestaurantId, {
     scope: "management",
+    requireAuthenticatedTenant: true,
   });
   const isCentralCatalog = operationalCatalog.source === "central";
   const isLegacyCatalog =
@@ -1279,15 +1297,16 @@ export default function ProductosManagementPage({
   );
 
   useEffect(() => {
-    void bootstrapPlatosFromEscandallosIfEmpty(operationalRestaurantId);
-  }, [operationalRestaurantId]);
+    if (!tenantRestaurantId) return;
+    void bootstrapPlatosFromEscandallosIfEmpty(tenantRestaurantId);
+  }, [tenantRestaurantId]);
 
   useEffect(() => {
-    const rid = operationalRestaurantId.trim();
-    if (!rid || !isCentralCatalog) {
+    if (!profileReady || !tenantRestaurantId || !isCentralCatalog) {
       setOperationStations([]);
       return;
     }
+    const rid = tenantRestaurantId;
     let defaultsEnsured = false;
     const unsub = listenOperationStations(
       rid,
@@ -1303,14 +1322,14 @@ export default function ProductosManagementPage({
       (e) => console.error("listenOperationStations", e),
     );
     return () => unsub();
-  }, [operationalRestaurantId, isCentralCatalog]);
+  }, [profileReady, tenantRestaurantId, isCentralCatalog]);
 
   useEffect(() => {
-    const rid = operationalRestaurantId.trim();
-    if (!rid || !isCentralCatalog) {
+    if (!profileReady || !tenantRestaurantId || !isCentralCatalog) {
       setProductFamilies([]);
       return;
     }
+    const rid = tenantRestaurantId;
     let defaultsEnsured = false;
     const unsub = listenProductFamilies(
       rid,
@@ -1326,14 +1345,14 @@ export default function ProductosManagementPage({
       (e) => console.error("listenProductFamilies", e),
     );
     return () => unsub();
-  }, [operationalRestaurantId, isCentralCatalog]);
+  }, [profileReady, tenantRestaurantId, isCentralCatalog]);
 
   useEffect(() => {
-    const rid = operationalRestaurantId.trim();
-    if (!rid || !isCentralCatalog) {
+    if (!profileReady || !tenantRestaurantId || !isCentralCatalog) {
       setCentralDocsById(new Map());
       return;
     }
+    const rid = tenantRestaurantId;
     return listenCentralProducts(
       rid,
       (docs) => {
@@ -1341,14 +1360,14 @@ export default function ProductosManagementPage({
       },
       (e) => console.error("listenCentralProducts(recipe)", e),
     );
-  }, [operationalRestaurantId, isCentralCatalog]);
+  }, [profileReady, tenantRestaurantId, isCentralCatalog]);
 
   useEffect(() => {
-    const rid = operationalRestaurantId.trim();
-    if (!rid || !isCentralCatalog || !formOpen) {
+    if (!profileReady || !tenantRestaurantId || !isCentralCatalog || !formOpen) {
       setInventoryLookup([]);
       return;
     }
+    const rid = tenantRestaurantId;
     return listenProductsForInventory(
       rid,
       (docs) => {
@@ -1356,7 +1375,7 @@ export default function ProductosManagementPage({
       },
       (e) => console.error("listenProductsForInventory(recipe)", e),
     );
-  }, [operationalRestaurantId, isCentralCatalog, formOpen]);
+  }, [profileReady, tenantRestaurantId, isCentralCatalog, formOpen]);
 
   useEffect(() => {
     if (!configCartaProductosChrome || configListFilterInitRef.current) return;
@@ -1365,9 +1384,14 @@ export default function ProductosManagementPage({
   }, [configCartaProductosChrome]);
 
   useEffect(() => {
-    if (operationalCatalog.loading) return;
+    if (!profileReady || operationalCatalog.loading) return;
     queueMicrotask(() => {
       const pendingRemoved = pendingRemovedProductIdsRef.current;
+      if (operationalCatalog.tenantUnavailable) {
+        setItems([]);
+        setHydrated(true);
+        return;
+      }
       for (const id of [...pendingRemoved]) {
         if (!operationalCatalog.platos.some((p) => p.id === id)) {
           pendingRemoved.delete(id);
@@ -1378,16 +1402,22 @@ export default function ProductosManagementPage({
       );
       setHydrated(true);
     });
-  }, [operationalCatalog.loading, operationalCatalog.platos]);
+  }, [
+    operationalCatalog.loading,
+    operationalCatalog.platos,
+    operationalCatalog.tenantUnavailable,
+    profileReady,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (operationalCatalog.source === "central") return;
+    if (!tenantRestaurantId) return;
     let alive = true;
     const onChange = () => {
       queueMicrotask(() => {
         if (!alive) return;
-        setItems(loadPlatos(operationalRestaurantId));
+        setItems(loadPlatos(tenantRestaurantId));
       });
     };
     window.addEventListener(PLATOS_CHANGED_EVENT, onChange);
@@ -1395,23 +1425,29 @@ export default function ProductosManagementPage({
       alive = false;
       window.removeEventListener(PLATOS_CHANGED_EVENT, onChange);
     };
-  }, [operationalCatalog.source, operationalRestaurantId]);
+  }, [operationalCatalog.source, tenantRestaurantId]);
 
   useEffect(() => {
-    if (!operationalRestaurantId) {
+    if (!profileReady || !tenantRestaurantId) {
       setModifierGroups([]);
       return;
     }
     return listenModifierGroups(
-      operationalRestaurantId,
+      tenantRestaurantId,
       setModifierGroups,
       console.error,
     );
-  }, [operationalRestaurantId]);
+  }, [profileReady, tenantRestaurantId]);
 
   useEffect(() => {
+    if (!profileReady || !tenantRestaurantId) {
+      setCartaCategorias([]);
+      setCartaFamilias([]);
+      setModifierFamilies([]);
+      return;
+    }
     let cancelled = false;
-    const rid = operationalRestaurantId;
+    const rid = tenantRestaurantId;
     void Promise.all([
       fetchCartaCategorias(rid),
       fetchCartaFamilias(rid),
@@ -1428,12 +1464,13 @@ export default function ProductosManagementPage({
     return () => {
       cancelled = true;
     };
-  }, [operationalRestaurantId]);
+  }, [profileReady, tenantRestaurantId]);
 
   useEffect(() => {
+    if (!profileReady || !tenantRestaurantId) return;
     let alive = true;
     const onCat = () => {
-      const rid = operationalRestaurantId;
+      const rid = tenantRestaurantId;
       void Promise.all([
         fetchCartaCategorias(rid),
         fetchCartaFamilias(rid),
@@ -1453,7 +1490,7 @@ export default function ProductosManagementPage({
       alive = false;
       window.removeEventListener(CARTA_CATEGORIAS_CHANGED_EVENT, onCat);
     };
-  }, [operationalRestaurantId]);
+  }, [profileReady, tenantRestaurantId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1671,6 +1708,31 @@ export default function ProductosManagementPage({
   const bulkDeleteDisabledTitle = bulkAssignPassDisabled
     ? bulkAssignPassDisabledTitle
     : t("productos.bulkDeleteCentralOnly");
+
+  const bulkSelectedProducts = useMemo(
+    () => items.filter((p) => selectedIds.has(p.id)),
+    [items, selectedIds],
+  );
+
+  const bulkInitialCourseSelectValue = useMemo(
+    () => computeBulkCourseInitialSelectValue(bulkSelectedProducts, centralDocsById),
+    [bulkSelectedProducts, centralDocsById],
+  );
+
+  const bulkInitialDestinationSelectValue = useMemo(
+    () => computeBulkDestinationInitialSelectValue(bulkSelectedProducts, centralDocsById),
+    [bulkSelectedProducts, centralDocsById],
+  );
+
+  const bulkInitialCategorySelectValue = useMemo(
+    () => computeBulkCategoryInitialSelectValue(bulkSelectedProducts, centralDocsById),
+    [bulkSelectedProducts, centralDocsById],
+  );
+
+  const bulkInitialFamilySelectValue = useMemo(
+    () => computeBulkFamilyInitialSelectValue(bulkSelectedProducts, centralDocsById),
+    [bulkSelectedProducts, centralDocsById],
+  );
 
   const applyCentralDeleteOutcomeToUi = useCallback(
     (p: PlatoCarta, outcome: "deleted" | "deactivated") => {
@@ -2613,7 +2675,7 @@ export default function ProductosManagementPage({
   ] as const;
   const CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS = ["conEscandallo", "sinEscandallo"] as const;
 
-  function renderCatalogFoodDrinkSegment(): ReactNode {
+  function renderCatalogFoodDrinkSegment(inline = false): ReactNode {
     const specs: ReadonlyArray<{
       id: CatalogFoodDrinkSegment;
       label: string;
@@ -2625,7 +2687,13 @@ export default function ProductosManagementPage({
     ];
 
     return (
-      <div className="hostly-productos-carta-food-drink-segment">
+      <div
+        className={
+          inline
+            ? "hostly-productos-carta-food-drink-segment hostly-productos-carta-food-drink-segment--inline"
+            : "hostly-productos-carta-food-drink-segment"
+        }
+      >
         <HostlySegmentedControl
           aria-label={t("productos.catalogSegmentAria")}
           className="min-w-0 w-full"
@@ -2888,62 +2956,60 @@ export default function ProductosManagementPage({
     );
   }
 
-  /** Barra fija Activos/Inactivos/Todos/En carta/Fuera — reutiliza listFilter (config carta productos). */
-  function renderConfigCartaStatusFilterBar(): ReactNode {
-    const specs = [
-      { id: "activos" as const, label: `Activos (${configStatusFilterCounts.activos})` },
-      { id: "inactivos" as const, label: `Inactivos (${configStatusFilterCounts.inactivos})` },
-      { id: "todos" as const, label: `Todos (${configStatusFilterCounts.total})` },
-      { id: "enCarta" as const, label: `${t("productos.pubEnCarta")} (${configStatusFilterCounts.enCarta})` },
-      {
-        id: "fueraCarta" as const,
-        label: `${t("productos.pubFueraCarta")} (${configStatusFilterCounts.fueraCarta})`,
-      },
-    ];
+  /** Selector compacto Activos/Inactivos/Todos/En carta/Fuera — reutiliza listFilter. */
+  function renderConfigCartaStatusFilterSelect(): ReactNode {
     return (
-      <div
-        className="hostly-productos-carta-status-filter-bar"
-        style={{
-          flexShrink: 0,
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 6,
-          padding: "5px 8px",
-          borderBottom: "1px solid var(--hostly-line)",
-          background: "var(--hostly-surface-card-solid)",
-          minWidth: 0,
-          boxSizing: "border-box",
-        }}
-        role="group"
-        aria-label="Filtrar por estado del producto y publicación en carta"
-      >
-        {specs.map((f) => {
-          const active = listFilter === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setListFilter(f.id)}
-              aria-pressed={active}
-              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--status${active ? " is-active" : ""}`}
-              style={{
-                padding: "4px 10px",
-                fontSize: 11,
-                fontWeight: active ? 700 : 650,
-                minHeight: 28,
-                lineHeight: 1.15,
-              }}
-            >
-              {f.label}
-            </button>
-          );
-        })}
+      <ConfigCartaStatusFilterSelect
+        value={listFilter}
+        counts={configStatusFilterCounts}
+        onChange={(id: ConfigCartaListFilterId) => setListFilter(id)}
+        t={t}
+      />
+    );
+  }
+
+  function renderConfigCartaHeaderActions(): ReactNode {
+    return (
+      <div className="hostly-productos-carta-header-inline-actions">
+        <button
+          type="button"
+          disabled={isLegacyReadOnly}
+          title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
+          onClick={openCreate}
+          className="hostly-button-primary hostly-button-compact hostly-productos-carta-header-inline-actions__btn whitespace-nowrap"
+          style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
+        >
+          {t("carta.ctaNew")}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            router.push("/dashboard/configuracion/carta/importacion");
+          }}
+          className="hostly-button-secondary hostly-button-compact hostly-productos-carta-header-inline-actions__btn whitespace-nowrap"
+        >
+          Importar carta IA
+        </button>
       </div>
     );
   }
 
-  if (!hydrated) {
+  if (!profileReady || !hydrated) {
+    if (configCartaProductosChrome) {
+      return (
+        <ConfigCartaWorkbench
+          title={t("productos.title")}
+          description={t("productos.subtitle")}
+          lockViewport
+          lockViewportFillParent={lockViewportFillParent}
+          headerActions={renderConfigCartaHeaderActions()}
+        >
+          <p style={{ color: "#64748b", fontSize: 13 }}>{t("common.preparingData")}</p>
+        </ConfigCartaWorkbench>
+      );
+    }
     return (
       <ModulePageShell
         title={t("productos.title")}
@@ -2961,55 +3027,84 @@ export default function ProductosManagementPage({
       </ModulePageShell>
     );
   }
+
+  if (operationalCatalog.tenantUnavailable) {
+    if (configCartaProductosChrome) {
+      return (
+        <ConfigCartaWorkbench
+          title={t("productos.title")}
+          description={t("productos.subtitle")}
+          lockViewport
+          lockViewportFillParent={lockViewportFillParent}
+          headerActions={renderConfigCartaHeaderActions()}
+        >
+          <p style={{ color: "#64748b", fontSize: 13 }}>
+            No hay un restaurante asignado a tu usuario. Contacta con el administrador para vincular tu cuenta.
+          </p>
+        </ConfigCartaWorkbench>
+      );
+    }
+    return (
+      <ModulePageShell
+        title={t("productos.title")}
+        subtitle={t("productos.loadingSubtitle")}
+        maxWidth={PRODUCTOS_SHELL_MAX_WIDTH}
+        compactLayout
+        operationalFocus
+        denseWorkbench
+        lockViewport
+        lockViewportFillParent={lockViewportFillParent}
+        shellSurface={iceVisual ? "configLight" : "default"}
+        denseInventoryHeader={emb}
+      >
+        <p style={{ color: iceVisual ? "#64748b" : "#94a3b8", fontSize: 13 }}>
+          No hay un restaurante asignado a tu usuario. Contacta con el administrador para vincular tu cuenta.
+        </p>
+      </ModulePageShell>
+    );
+  }
+
   const sharedProductModals = (
     <>
       {formOpen ? (
         <div
+          className="hostly-product-form-drawer-backdrop"
           role="dialog"
           aria-modal="true"
           aria-label={editingId ? t("carta.editProduct") : t("carta.newProduct")}
-          style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end", background: "rgba(2, 6, 23, 0.62)", backdropFilter: "blur(6px)" }}
           onMouseDown={(e) => {
             if (e.currentTarget === e.target) closeForm();
           }}
         >
-          <aside
-            style={{
-              height: "100%",
-              width: "min(520px, 92vw)",
-              background: "linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(2, 6, 23, 0.98) 100%)",
-              borderLeft: "1px solid rgba(148, 163, 184, 0.16)",
-              boxShadow: "-16px 0 48px rgba(0,0,0,0.45)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(148, 163, 184, 0.14)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ minWidth: 0, flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em" }}>{editingId ? t("carta.editProduct") : t("carta.newProduct")}</div>
-                  <div style={{ marginTop: 4, fontSize: 12, color: "#94a3b8" }}>
-                    {editingId ? t("carta.productFormEditHint") : t("carta.productFormNewHint")}
-                  </div>
-                </div>
-                <button type="button" onClick={closeForm} style={{ border: "1px solid #334155", background: "rgba(15, 23, 42, 0.55)", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontWeight: 800, cursor: "pointer", minHeight: 44 }}>
-                  {t("common.cancel")}
-                </button>
+          <aside className="hostly-product-form-drawer" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="hostly-product-form-drawer__header">
+              <div className="hostly-product-form-drawer__header-text">
+                <h2 className="hostly-product-form-drawer__title">
+                  {editingId ? t("carta.editProduct") : t("carta.newProduct")}
+                </h2>
+                <p className="hostly-product-form-drawer__subtitle">
+                  {editingId ? t("carta.productFormEditHint") : t("carta.productFormNewHint")}
+                </p>
               </div>
+              <ConfigBtnSecondary type="button" onClick={closeForm}>
+                {t("common.cancel")}
+              </ConfigBtnSecondary>
             </div>
 
-            <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "14px 16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
+            <div className="hostly-product-form-drawer__body">
+              <div className="hostly-product-form-drawer__sections">
                 <ProductFormDrawerBlock title={t("carta.productFormBlockProduct")} hint={t("carta.productFormBlockProductHint")}>
-                  <div>
-                    <label style={labelStyle}>{t("carta.fieldNombre")}</label>
-                    <input ref={nombreInputRef} value={draftNombre} onChange={(e) => setDraftNombre(e.target.value)} style={{ ...inputStyle, fontSize: 17, padding: "14px 14px" }} />
-                  </div>
+                  <label className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">{t("carta.fieldNombre")}</span>
+                    <input
+                      ref={nombreInputRef}
+                      className={drawerInputProminentClass}
+                      value={draftNombre}
+                      onChange={(e) => setDraftNombre(e.target.value)}
+                    />
+                  </label>
 
                   <CategoriaCartaFormField
-                    labelStyle={labelStyle}
-                    inputStyle={{ ...inputStyle, fontSize: 16, padding: "14px 14px" }}
                     t={t}
                     categorias={categoriasForForm}
                     selectedId={draftCategoriaCartaId}
@@ -3038,44 +3133,27 @@ export default function ProductosManagementPage({
                   draftInferredTipoVenta &&
                   !draftNeedsManualTipoVenta &&
                   draftTipo === draftInferredTipoVenta ? (
-                    <p style={{ margin: 0, fontSize: 13, color: "#94a3b8", lineHeight: 1.4 }}>
+                    <p className="hostly-product-form-drawer-meta">
                       {t("carta.fieldFormatDetected")}:{" "}
-                      <span style={{ fontWeight: 700, color: "#e2e8f0" }}>
-                        {labelTipoVenta(t, draftInferredTipoVenta)}
-                      </span>
+                      <strong>{labelTipoVenta(t, draftInferredTipoVenta)}</strong>
                     </p>
                   ) : null}
 
                   {draftSelectedCategory && draftNeedsManualTipoVenta ? (
-                    <div>
-                      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>
-                        {t("carta.fieldFormatManualPrompt")}
-                      </p>
+                    <div className="hostly-carta-config-form-field">
+                      <p className="hostly-carta-config-form-hint">{t("carta.fieldFormatManualPrompt")}</p>
                       <div
+                        className="hostly-product-form-drawer-radio-group"
                         role="radiogroup"
                         aria-label={t("carta.fieldFormatManualPrompt")}
-                        style={{ display: "flex", flexDirection: "column", gap: 8 }}
                       >
                         {TIPOS_PRODUCTO_VENTA.map((tipo) => (
-                          <label
-                            key={tipo}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                              cursor: "pointer",
-                              fontSize: 15,
-                              fontWeight: 600,
-                              color: "#e2e8f0",
-                              userSelect: "none",
-                            }}
-                          >
+                          <label key={tipo} className="hostly-product-form-drawer-radio">
                             <input
                               type="radio"
                               name="product-form-draft-tipo"
                               checked={draftTipo === tipo}
                               onChange={() => setDraftTipo(tipo)}
-                              style={{ width: 18, height: 18, accentColor: "#3b82f6" }}
                             />
                             {labelTipoVenta(t, tipo)}
                           </label>
@@ -3084,80 +3162,58 @@ export default function ProductosManagementPage({
                     </div>
                   ) : null}
 
-                  <div>
-                    <label style={labelStyle}>{t("carta.fieldPrecio")}</label>
-                    <input type="number" inputMode="decimal" step="any" min={0} value={draftPrecio} onChange={(e) => setDraftPrecio(e.target.value)} style={{ ...inputStyle, ...tabularFigures, fontSize: 17, padding: "14px 14px" }} />
-                  </div>
+                  <label className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">{t("carta.fieldPrecio")}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      min={0}
+                      className={`${drawerInputProminentClass} tabular-nums`}
+                      value={draftPrecio}
+                      onChange={(e) => setDraftPrecio(e.target.value)}
+                    />
+                  </label>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 2 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#e2e8f0", userSelect: "none" }}>
-                      <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} style={{ width: 24, height: 24, accentColor: "#22c55e" }} />
-                      {t("carta.fieldActivo")}
-                    </label>
-                  </div>
+                  <label className="hostly-product-form-drawer-checkbox">
+                    <input type="checkbox" checked={draftActivo} onChange={(e) => setDraftActivo(e.target.checked)} />
+                    <span className="hostly-carta-config-form-label">{t("carta.fieldActivo")}</span>
+                  </label>
                 </ProductFormDrawerBlock>
 
                 <ProductFormDrawerBlock title={t("carta.productFormBlockOperation")} hint={t("carta.productFormBlockOperationHint")}>
-                  <div>
-                    <label style={labelStyle}>{t("carta.fieldOperationStation")}</label>
+                  <label className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">{t("carta.fieldOperationStation")}</span>
                     <OperationStationProductSelect
                       restaurantId={operationalRestaurantId}
                       value={draftOperationStationSelect}
                       onChange={setDraftOperationStationSelect}
                       disabled={drawerSyncing}
-                      style={{
-                        ...inputStyle,
-                        fontSize: 16,
-                        padding: "14px 14px",
-                        minHeight: 52,
-                        cursor: drawerSyncing ? "not-allowed" : "pointer",
-                      }}
+                      className={drawerInputClass}
                     />
                     {isLegacyOperationStationSelectValue(draftOperationStationSelect) ? (
-                      <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
-                        {t("carta.fieldOperationStationLegacyHint")}
-                      </p>
+                      <p className="hostly-carta-config-form-hint">{t("carta.fieldOperationStationLegacyHint")}</p>
                     ) : null}
-                  </div>
+                  </label>
 
                   {isCentralCatalog && draftSkipsMenuCourse ? (
-                    <div>
-                      <label style={labelStyle}>{t("carta.fieldDefaultCourse")}</label>
-                      <div
-                        style={{
-                          ...inputStyle,
-                          fontSize: 16,
-                          padding: "14px 14px",
-                          minHeight: 52,
-                          display: "flex",
-                          alignItems: "center",
-                          color: "#94a3b8",
-                          opacity: 0.92,
-                        }}
-                        aria-readonly
-                      >
+                    <label className="hostly-carta-config-form-field">
+                      <span className="hostly-carta-config-form-label">{t("carta.fieldDefaultCourse")}</span>
+                      <div className={`${drawerInputClass} hostly-product-form-drawer-readonly`} aria-readonly>
                         {t("carta.productFormCourseLockedLabel")}
                       </div>
-                      <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
-                        {t("carta.productFormCourseNotApplicable")}
-                      </p>
-                    </div>
+                      <p className="hostly-carta-config-form-hint">{t("carta.productFormCourseNotApplicable")}</p>
+                    </label>
                   ) : null}
 
                   {isCentralCatalog && !draftSkipsMenuCourse ? (
-                    <div>
-                      <label style={labelStyle}>{t("carta.fieldDefaultCourse")}</label>
+                    <label className="hostly-carta-config-form-field">
+                      <span className="hostly-carta-config-form-label">{t("carta.fieldDefaultCourse")}</span>
                       <select
+                        className={drawerInputClass}
                         value={draftCourse}
                         onChange={(e) => setDraftCourse(e.target.value)}
                         disabled={drawerSyncing}
-                        style={{
-                          ...inputStyle,
-                          fontSize: 16,
-                          padding: "14px 14px",
-                          minHeight: 52,
-                          cursor: drawerSyncing ? "not-allowed" : "pointer",
-                        }}
                       >
                         <option value="">Sin pase</option>
                         <option value="1">Entrante</option>
@@ -3165,10 +3221,8 @@ export default function ProductosManagementPage({
                         <option value="3">Segundo</option>
                         <option value="4">Postre</option>
                       </select>
-                      <p style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
-                        {t("carta.fieldDefaultCourseHint")}
-                      </p>
-                    </div>
+                      <p className="hostly-carta-config-form-hint">{t("carta.fieldDefaultCourseHint")}</p>
+                    </label>
                   ) : null}
                 </ProductFormDrawerBlock>
 
@@ -3176,18 +3230,26 @@ export default function ProductosManagementPage({
                   title={t("carta.productFormBlockExtra")}
                   hint={t("carta.productFormBlockExtraHint")}
                 >
-                  <div>
-                    <label style={labelStyle}>{t("carta.fieldDescripcion")}</label>
-                    <textarea value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 90, padding: "14px 14px", fontSize: 15 }} />
-                  </div>
+                  <label className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">{t("carta.fieldDescripcion")}</span>
+                    <textarea
+                      className={`${drawerInputClass} hostly-product-form-drawer-textarea`}
+                      value={draftDesc}
+                      onChange={(e) => setDraftDesc(e.target.value)}
+                      rows={3}
+                    />
+                  </label>
 
-                  <div>
-                    <label style={labelStyle}>{t("carta.fieldFoto")}</label>
-                    <input value={draftFoto} onChange={(e) => setDraftFoto(e.target.value)} style={{ ...inputStyle, padding: "14px 14px" }} placeholder="https://…" />
-                    <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>
-                      {t("carta.fieldFotoHint")}
-                    </p>
-                  </div>
+                  <label className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">{t("carta.fieldFoto")}</span>
+                    <input
+                      className={drawerInputClass}
+                      value={draftFoto}
+                      onChange={(e) => setDraftFoto(e.target.value)}
+                      placeholder="https://…"
+                    />
+                    <p className="hostly-carta-config-form-hint">{t("carta.fieldFotoHint")}</p>
+                  </label>
                 </ProductFormDrawerCollapsibleSection>
 
                 {isCentralCatalog ? (
@@ -3197,9 +3259,15 @@ export default function ProductosManagementPage({
                     defaultOpen={false}
                   >
                     {editingId && editingPlato ? (
-                      <p style={{ margin: 0, fontSize: 12, color: "#94a3b8" }}>
+                      <p className="hostly-carta-config-form-hint">
                         {t("carta.colEscandallo")}:{" "}
-                        <span style={{ color: editingHasEscandallo ? "#86efac" : "#fbbf24", fontWeight: 800 }}>
+                        <span
+                          className={
+                            editingHasEscandallo
+                              ? "hostly-carta-config-status-chip hostly-carta-config-status-chip--active"
+                              : "hostly-carta-config-status-chip hostly-carta-config-status-chip--inactive"
+                          }
+                        >
                           {editingHasEscandallo ? t("carta.escSi") : t("carta.escNo")}
                         </span>
                       </p>
@@ -3231,9 +3299,10 @@ export default function ProductosManagementPage({
                   hint={t("carta.productFormBlockAdvancedHint")}
                   defaultOpen={false}
                 >
-                  <div>
-                    <label style={labelStyle}>{t("carta.fieldCartaFamilia")}</label>
+                  <label className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">{t("carta.fieldCartaFamilia")}</span>
                     <select
+                      className={drawerInputClass}
                       value={draftCartaMenuFamiliaId === null ? "" : draftCartaMenuFamiliaId}
                       onChange={(e) => {
                         const v = e.target.value;
@@ -3245,7 +3314,6 @@ export default function ProductosManagementPage({
                           return allowed.some((x) => x.id === cur) ? cur : null;
                         });
                       }}
-                      style={{ ...inputStyle, fontSize: 16, padding: "14px 14px", minHeight: 52, cursor: "pointer" }}
                     >
                       <option value="">{t("carta.familiaFilterAll")}</option>
                       <option value={CARTA_MENU_FAMILIA_FILTER_UNASSIGNED}>{t("carta.familiaFilterUnassigned")}</option>
@@ -3258,41 +3326,38 @@ export default function ProductosManagementPage({
                           </option>
                         ))}
                     </select>
-                    <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>{t("carta.fieldCartaFamiliaHint")}</p>
-                  </div>
+                    <p className="hostly-carta-config-form-hint">{t("carta.fieldCartaFamiliaHint")}</p>
+                  </label>
 
-                  <p style={{ margin: 0, fontSize: 12, color: "#94a3b8" }}>
-                    {t("carta.fieldProductFamilyInherited")}:{" "}
-                    <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
-                      {draftProductFamilyLabel}
-                    </span>
+                  <p className="hostly-product-form-drawer-meta">
+                    {t("carta.fieldProductFamilyInherited")}: <strong>{draftProductFamilyLabel}</strong>
                   </p>
-                  <p style={{ margin: 0, fontSize: 11, color: "#64748b", lineHeight: 1.35 }}>
-                    {t("carta.fieldProductFamilyInheritedHint")}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#94a3b8" }}>
-                    {t("carta.fieldModifiersInherited")}:{" "}
-                    <span style={{ fontWeight: 600, color: "#e2e8f0" }}>
-                      {draftEffectiveModifierLabel}
-                    </span>
+                  <p className="hostly-carta-config-form-hint">{t("carta.fieldProductFamilyInheritedHint")}</p>
+                  <p className="hostly-product-form-drawer-meta">
+                    {t("carta.fieldModifiersInherited")}: <strong>{draftEffectiveModifierLabel}</strong>
                   </p>
                 </ProductFormDrawerCollapsibleSection>
 
                 {formError ? (
-                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(248, 113, 113, 0.12)", border: "1px solid rgba(248, 113, 113, 0.35)", color: "#fecaca", fontSize: 13, lineHeight: 1.35 }}>
+                  <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
                     {formError}
                   </div>
                 ) : null}
               </div>
             </div>
 
-            <div style={{ flexShrink: 0, padding: "12px 16px", borderTop: "1px solid rgba(148, 163, 184, 0.14)", background: "rgba(2, 6, 23, 0.9)", display: "flex", gap: 10 }}>
-              <button type="button" onClick={() => void submitForm()} disabled={drawerSyncing} style={{ flex: 1, border: "none", background: drawerSyncing ? "rgba(59, 130, 246, 0.5)" : "#3b82f6", color: "#fff", padding: "14px 18px", borderRadius: 12, fontWeight: 800, cursor: drawerSyncing ? "not-allowed" : "pointer", fontSize: 16, minHeight: 54 }}>
+            <div className="hostly-product-form-drawer__footer">
+              <ConfigBtnPrimary
+                type="button"
+                className="hostly-product-form-drawer__footer-primary"
+                disabled={drawerSyncing}
+                onClick={() => void submitForm()}
+              >
                 {drawerSyncing ? t("common.preparing") : t("common.save")}
-              </button>
-              <button type="button" onClick={closeForm} style={{ border: "1px solid #475569", background: "transparent", color: "#e2e8f0", padding: "14px 18px", borderRadius: 12, fontWeight: 800, cursor: "pointer", fontSize: 16, minHeight: 54 }}>
+              </ConfigBtnPrimary>
+              <ConfigBtnSecondary type="button" onClick={closeForm}>
                 {t("common.cancel")}
-              </button>
+              </ConfigBtnSecondary>
             </div>
           </aside>
         </div>
@@ -3300,97 +3365,57 @@ export default function ProductosManagementPage({
 
       {addCategoryOpen ? (
         <div
+          className="hostly-carta-config-drawer-backdrop hostly-carta-config-drawer-backdrop--elevated"
           role="dialog"
           aria-modal="true"
           aria-label={t("cartaCategories.quickAddTitle")}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 55,
-            background: "rgba(2, 6, 23, 0.65)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) setAddCategoryOpen(false);
           }}
         >
-          <div
-            style={{
-              width: "min(400px, 100%)",
-              borderRadius: 14,
-              border: "1px solid #334155",
-              background: "#0f172a",
-              padding: 20,
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#f8fafc" }}>{t("cartaCategories.quickAddTitle")}</h2>
-            <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
-              <div>
-                <label style={labelStyle}>{t("cartaCategories.name")}</label>
-                <input value={addCatName} onChange={(e) => setAddCatName(e.target.value)} style={{ ...inputStyle, fontSize: 16, padding: "12px 14px" }} />
-              </div>
-              <div>
-                <label style={labelStyle}>{t("cartaCategories.typeField")}</label>
+          <ConfigCard className="hostly-carta-config-drawer">
+            <h2 className="hostly-carta-config-drawer__title">{t("cartaCategories.quickAddTitle")}</h2>
+            <div className="hostly-carta-config-form hostly-carta-config-drawer__body">
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">{t("cartaCategories.name")}</span>
+                <input
+                  className={drawerInputClass}
+                  value={addCatName}
+                  onChange={(e) => setAddCatName(e.target.value)}
+                />
+              </label>
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">{t("cartaCategories.typeField")}</span>
                 <select
+                  className={drawerInputClass}
                   value={addCatType}
                   onChange={(e) => {
                     const v = e.target.value;
                     setAddCatType(isCartaCategoriaTipo(v) ? v : "general");
                   }}
-                  style={{ ...inputStyle, fontSize: 16, padding: "12px 14px", minHeight: 48, cursor: "pointer" }}
                 >
                   <option value="food">{t("cartaCategories.type.food")}</option>
                   <option value="drink">{t("cartaCategories.type.drink")}</option>
                   <option value="general">{t("cartaCategories.type.general")}</option>
                 </select>
-              </div>
+              </label>
             </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button
-                type="button"
-                disabled={addCatSaving}
-                onClick={() => void saveQuickCategory()}
-                style={{
-                  flex: 1,
-                  minHeight: 48,
-                  borderRadius: 10,
-                  border: "none",
-                  background: addCatSaving ? "#475569" : "#22c55e",
-                  color: "#fff",
-                  fontWeight: 800,
-                  cursor: addCatSaving ? "not-allowed" : "pointer",
-                }}
-              >
+            <div className="hostly-carta-config-drawer__footer">
+              <ConfigBtnPrimary type="button" disabled={addCatSaving} onClick={() => void saveQuickCategory()}>
                 {t("common.save")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddCategoryOpen(false)}
-                style={{
-                  flex: 1,
-                  minHeight: 48,
-                  borderRadius: 10,
-                  border: "1px solid #475569",
-                  background: "transparent",
-                  color: "#e2e8f0",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
+              </ConfigBtnPrimary>
+              <ConfigBtnSecondary type="button" onClick={() => setAddCategoryOpen(false)}>
                 {t("common.cancel")}
-              </button>
+              </ConfigBtnSecondary>
             </div>
-          </div>
+          </ConfigCard>
         </div>
       ) : null}
       <ProductosBulkAssignCourseModal
         open={bulkAssignCourseOpen}
         count={selectedIds.size}
         saving={bulkAssignCourseSaving}
+        initialSelectValue={bulkInitialCourseSelectValue}
         onClose={() => {
           if (!bulkAssignCourseSaving) setBulkAssignCourseOpen(false);
         }}
@@ -3401,6 +3426,7 @@ export default function ProductosManagementPage({
         open={bulkAssignDestinationOpen}
         count={selectedIds.size}
         saving={bulkAssignDestinationSaving}
+        initialSelectValue={bulkInitialDestinationSelectValue}
         onClose={() => {
           if (!bulkAssignDestinationSaving) setBulkAssignDestinationOpen(false);
         }}
@@ -3412,6 +3438,7 @@ export default function ProductosManagementPage({
         count={selectedIds.size}
         saving={bulkAssignCategorySaving}
         categorias={cartaCategorias}
+        initialSelectValue={bulkInitialCategorySelectValue}
         onClose={() => {
           if (!bulkAssignCategorySaving) setBulkAssignCategoryOpen(false);
         }}
@@ -3425,6 +3452,7 @@ export default function ProductosManagementPage({
         count={selectedIds.size}
         saving={bulkAssignFamilySaving}
         families={productFamilies}
+        initialSelectValue={bulkInitialFamilySelectValue}
         onClose={() => {
           if (!bulkAssignFamilySaving) setBulkAssignFamilyOpen(false);
         }}
@@ -3448,44 +3476,12 @@ export default function ProductosManagementPage({
     return (
       <>
         <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
-        <ModulePageShell
+        <ConfigCartaWorkbench
           title={t("productos.title")}
-          subtitle="Gestiona tu carta y catálogo de venta."
-          maxWidth={PRODUCTOS_SHELL_MAX_WIDTH}
-          compactLayout
-          operationalFocus
-          denseWorkbench
+          description={t("productos.subtitle")}
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
-          shellSurface="configLight"
-          denseInventoryHeader={emb}
-          headerBelow={
-            <div className="hostly-productos-carta-page-head">
-              <div className="hostly-productos-carta-hero-actions">
-                <button
-                  type="button"
-                  disabled={isLegacyReadOnly}
-                  title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
-                  onClick={openCreate}
-                  className="hostly-button-primary hostly-button-compact hostly-productos-carta-hero-cta whitespace-nowrap"
-                  style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
-                >
-                  {t("carta.ctaNew")}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    router.push("/dashboard/configuracion/carta/importacion");
-                  }}
-                  className="hostly-button-secondary hostly-button-compact hostly-productos-carta-hero-cta whitespace-nowrap"
-                >
-                  Importar carta IA
-                </button>
-              </div>
-            </div>
-          }
+          headerActions={renderConfigCartaHeaderActions()}
         >
           <HostlySection
             stack="sm"
@@ -3493,33 +3489,12 @@ export default function ProductosManagementPage({
             style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0 }}
           >
             {notice ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  padding: "5px 8px",
-                  borderRadius: 8,
-                  background: "rgba(220, 252, 231, 0.85)",
-                  border: "1px solid rgba(34, 197, 94, 0.35)",
-                  color: "#166534",
-                  fontSize: 11,
-                  lineHeight: 1.32,
-                }}
-              >
+              <p className="hostly-carta-config-alert hostly-carta-config-alert--success" role="status">
                 {notice}
-              </div>
+              </p>
             ) : null}
             {formError && !formOpen ? (
-              <div
-                style={{
-                  flexShrink: 0,
-                  padding: "5px 8px",
-                  borderRadius: 8,
-                  background: "rgba(254, 242, 242, 0.95)",
-                  border: "1px solid rgba(248, 113, 113, 0.4)",
-                  color: "#b91c1c",
-                  fontSize: 11,
-                }}
-              >
+              <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
                 {formError}
               </div>
             ) : null}
@@ -3544,8 +3519,10 @@ export default function ProductosManagementPage({
               {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
               </button>
               </div>
-              {renderCatalogFoodDrinkSegment()}
-              {renderConfigCartaStatusFilterBar()}
+              <ConfigCartaCompactFilterRow>
+                {renderCatalogFoodDrinkSegment(true)}
+                {renderConfigCartaStatusFilterSelect()}
+              </ConfigCartaCompactFilterRow>
               {configCartaAdvancedOpen ? (
               <div
               id="hostly-productos-carta-advanced-panel"
@@ -3657,6 +3634,7 @@ export default function ProductosManagementPage({
               onBulkDelete={() => setBulkDeleteOpen(true)}
               bulkDeleteDisabled={bulkDeleteDisabled}
               bulkDeleteDisabledTitle={bulkDeleteDisabledTitle}
+              compactBulkBar
               />
               )}
               </div>
@@ -3664,7 +3642,7 @@ export default function ProductosManagementPage({
             </ProductosTableChrome>
           </HostlySection>
           {sharedProductModals}
-        </ModulePageShell>
+        </ConfigCartaWorkbench>
       </>
     );
   }

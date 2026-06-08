@@ -16,6 +16,8 @@ export const LOW_CONFIDENCE_THRESHOLD = 75;
 export const BLOCK_CONFIDENCE_THRESHOLD = 55;
 export const PUBLISH_MIN_CONFIDENCE = 40;
 export const DUPLICATE_ACTION_THRESHOLD = 0.88;
+/** Umbral mínimo para auto-seleccionar bloques multilingüe (needsReview puede seguir true). */
+export const MULTILINGUAL_AUTO_SELECT_MIN_CONFIDENCE = 70;
 
 export type ItemPublishEvaluation = {
   itemId: string;
@@ -57,6 +59,24 @@ export function resolveImportCategory(
   });
 }
 
+/**
+ * Resuelve categoría Hostly para un ítem importado.
+ * Prioridad: suggestedCategory (IA/parser) → sectionName (cabecera OCR) si la primera no matchea.
+ */
+export function resolveImportCategoryForItem(
+  item: Pick<ImportedMenuItem, "suggestedCategory" | "sectionName">,
+  categories: CartaCategoria[],
+): CartaCategoria | undefined {
+  const fromSuggested = resolveImportCategory(item.suggestedCategory, categories);
+  if (fromSuggested) return fromSuggested;
+
+  const sectionName = item.sectionName.trim();
+  const suggestedCategory = item.suggestedCategory.trim();
+  if (!sectionName || sectionName === suggestedCategory) return undefined;
+
+  return resolveImportCategory(item.sectionName, categories);
+}
+
 export function itemConfidence(item: ImportedMenuItem): number {
   return item.aiConfidence ?? item.confidence;
 }
@@ -70,6 +90,69 @@ function isSuspiciousPrice(price: number | undefined): string | null {
 
 export function isValidPublishPrice(price: number | undefined): boolean {
   return typeof price === "number" && Number.isFinite(price) && price > 0;
+}
+
+export function hasImportCategoryHint(
+  item: Pick<ImportedMenuItem, "suggestedCategory" | "sectionName">,
+): boolean {
+  return Boolean(item.suggestedCategory.trim() || item.sectionName.trim());
+}
+
+/** Bloqueo duro: no auto-seleccionar ni publicar. */
+export function isCriticalImportPublishBlock(
+  item: Pick<
+    ImportedMenuItem,
+    "name" | "price" | "confidence" | "aiConfidence" | "duplicateOf"
+  >,
+): boolean {
+  if (!item.name.trim()) return true;
+  if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(item.name.trim())) return true;
+  if (!isValidPublishPrice(item.price)) return true;
+  const conf = item.aiConfidence ?? item.confidence;
+  if (conf < BLOCK_CONFIDENCE_THRESHOLD) return true;
+  if (item.duplicateOf) return true;
+  return false;
+}
+
+/** Auto-selección por defecto para ítems del parser visual (needsReview sigue true). */
+export function shouldAutoSelectVisualImportItem(
+  item: Pick<
+    ImportedMenuItem,
+    "name" | "price" | "confidence" | "aiConfidence" | "duplicateOf" | "suggestedCategory" | "sectionName"
+  >,
+): boolean {
+  if (isCriticalImportPublishBlock(item)) return false;
+  if (!hasImportCategoryHint(item)) return false;
+  return true;
+}
+
+/** Auto-selección para bloques multilingüe V1/V2: nombre, precio y categoría válidos; confianza ≥ 70. */
+export function shouldAutoSelectMultilingualImportItem(
+  item: Pick<
+    ImportedMenuItem,
+    "name" | "price" | "confidence" | "aiConfidence" | "duplicateOf" | "suggestedCategory" | "sectionName"
+  >,
+): boolean {
+  if (!item.name.trim()) return false;
+  if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(item.name.trim())) return false;
+  if (!isValidPublishPrice(item.price)) return false;
+  if (!hasImportCategoryHint(item)) return false;
+  const conf = item.aiConfidence ?? item.confidence;
+  if (conf < MULTILINGUAL_AUTO_SELECT_MIN_CONFIDENCE) return false;
+  if (item.duplicateOf) return false;
+  return true;
+}
+
+/** Tras enriquecimiento IA: conservar selección visual si no hay bloqueo crítico. */
+export function resolveImportSelectedForPublish(
+  item: ImportedMenuItem,
+  needsReview: boolean,
+  extraCritical = false,
+): boolean {
+  if (extraCritical || isCriticalImportPublishBlock(item)) return false;
+  if (!hasImportCategoryHint(item)) return false;
+  if (item.selectedForPublish) return true;
+  return !needsReview;
 }
 
 function collectItemWarnings(
@@ -87,7 +170,7 @@ function collectItemWarnings(
   const priceWarning = isSuspiciousPrice(item.price);
   if (priceWarning) warnings.push(priceWarning);
 
-  if (item.suggestedCategory.trim() && !resolvedCategory) {
+  if (hasImportCategoryHint(item) && !resolvedCategory) {
     warnings.push("Categoría no encontrada en Hostly");
   }
   if (item.suggestedStation === "none") {
@@ -139,7 +222,7 @@ export function evaluateImportItemForPublish(args: {
   confirmDuplicates?: Set<string>;
 }): ItemPublishEvaluation {
   const confirmDuplicates = args.confirmDuplicates ?? new Set<string>();
-  const resolvedCategory = resolveImportCategory(args.item.suggestedCategory, args.categories);
+  const resolvedCategory = resolveImportCategoryForItem(args.item, args.categories);
   const warnings = collectItemWarnings(args.item, resolvedCategory);
   const previewBlocks = previewBlockReasons(args.item, warnings);
 
@@ -196,6 +279,14 @@ export type PublishConfirmationSets = {
   confirmReviews: Set<string>;
 };
 
+export function isReviewConfirmedForPublish(
+  evaluation: ItemPublishEvaluation,
+  confirmations: PublishConfirmationSets,
+): boolean {
+  if (confirmations.confirmReviews.has(evaluation.itemId)) return true;
+  return evaluation.item.selectedForPublish === true;
+}
+
 export function canPublishEvaluation(
   evaluation: ItemPublishEvaluation,
   confirmations: PublishConfirmationSets,
@@ -208,7 +299,7 @@ export function canPublishEvaluation(
   ) {
     return true;
   }
-  if (evaluation.action === "review" && confirmations.confirmReviews.has(evaluation.itemId)) {
+  if (evaluation.action === "review" && isReviewConfirmedForPublish(evaluation, confirmations)) {
     return true;
   }
   return false;
@@ -221,7 +312,7 @@ export function publishSkipMessage(
   if (evaluation.publishBlockReasons.length > 0) {
     return evaluation.publishBlockReasons.join("; ");
   }
-  if (evaluation.action === "review" && !confirmations.confirmReviews.has(evaluation.itemId)) {
+  if (evaluation.action === "review" && !isReviewConfirmedForPublish(evaluation, confirmations)) {
     return "Revisión humana sin confirmar";
   }
   if (

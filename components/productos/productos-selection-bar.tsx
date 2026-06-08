@@ -2,9 +2,12 @@
 
 import { HostlyTableBulkBar } from "@/components/ui/hostly/data-table";
 import type { TranslateFn } from "@/lib/i18n";
+import { ProductosCompactBulkActionsMenu, type BulkMenuItem } from "./productos-config-carta-compact-controls";
 
 export type ProductosSelectionBarProps = {
   count: number;
+  /** Barra compacta con menú Acciones (Config → Carta → Productos). */
+  variant?: "default" | "compact";
   onClear: () => void;
   onAssignPass?: () => void;
   assignPassDisabled?: boolean;
@@ -26,6 +29,7 @@ export type ProductosSelectionBarProps = {
 
 export function ProductosSelectionBar({
   count,
+  variant = "default",
   onClear,
   onAssignPass,
   assignPassDisabled = false,
@@ -45,6 +49,75 @@ export function ProductosSelectionBar({
   t,
 }: ProductosSelectionBarProps) {
   if (count <= 0) return null;
+
+  if (variant === "compact") {
+    const menuItems: BulkMenuItem[] = [
+      onAssignPass
+        ? {
+            key: "pass",
+            label: t("productos.bulkAssignPass"),
+            onClick: onAssignPass,
+            disabled: assignPassDisabled,
+            disabledTitle: assignPassDisabledTitle,
+          }
+        : null,
+      onAssignDestination
+        ? {
+            key: "destination",
+            label: t("productos.bulkAssignDestination"),
+            onClick: onAssignDestination,
+            disabled: assignDestinationDisabled,
+            disabledTitle: assignDestinationDisabledTitle,
+          }
+        : null,
+      onAssignCategory
+        ? {
+            key: "category",
+            label: t("productos.bulkAssignCategory"),
+            onClick: onAssignCategory,
+            disabled: assignCategoryDisabled,
+            disabledTitle: assignCategoryDisabledTitle,
+          }
+        : null,
+      onAssignFamily
+        ? {
+            key: "family",
+            label: t("productos.bulkAssignFamily"),
+            onClick: onAssignFamily,
+            disabled: assignFamilyDisabled,
+            disabledTitle: assignFamilyDisabledTitle,
+          }
+        : null,
+      onBulkDelete
+        ? {
+            key: "delete",
+            label: t("productos.bulkDelete"),
+            onClick: onBulkDelete,
+            disabled: bulkDeleteDisabled,
+            disabledTitle: bulkDeleteDisabledTitle,
+            tone: "danger",
+          }
+        : null,
+    ].filter((item): item is BulkMenuItem => item != null);
+
+    return (
+      <HostlyTableBulkBar className="hostly-data-table-bulk-bar--compact-config">
+        <span className="hostly-data-table-bulk-bar__label">
+          {t("productos.selectedProductsCount", { count: String(count) })}
+        </span>
+        <div className="hostly-data-table-bulk-bar__actions hostly-data-table-bulk-bar__actions--compact">
+          <ProductosCompactBulkActionsMenu items={menuItems} />
+          <button
+            type="button"
+            className="hostly-button-ghost hostly-button-compact hostly-data-table-bulk-bar__btn hostly-data-table-bulk-bar__btn--clear"
+            onClick={onClear}
+          >
+            {t("productos.clearSelection")}
+          </button>
+        </div>
+      </HostlyTableBulkBar>
+    );
+  }
 
   return (
     <HostlyTableBulkBar>

@@ -9,6 +9,7 @@ export type MenuImportPipelineStep =
   | "ocr_raw"
   | "ocr_cleaned"
   | "parser"
+  | "ai_import_v2_shadow"
   | "ai_enrichment"
   | "ocr_validation"
   | "draft_save"

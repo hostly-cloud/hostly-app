@@ -3,6 +3,7 @@ import { inferTipoVentaFromCartaText, parseTipoVentaLoose, type TipoProductoVent
 import { MIN_PDF_TEXT_CHARS } from "@/lib/server/menu-imports/menu-import-limits";
 import {
   filterItemsByOcrSource,
+  isProductNameSupportedByOcr,
   logOcrValidationDiagnostics,
   MIN_OCR_SOURCE_TEXT_LENGTH,
 } from "@/lib/server/menu-imports/validate-items-against-ocr";
@@ -15,6 +16,9 @@ type MenuDetectedItem = {
   precio: number | null;
   confianza?: number;
   tipoVenta: TipoProductoVenta;
+  needsReview?: boolean;
+  rawText?: string;
+  sourceLine?: string;
 };
 
 const NO_PRODUCTS_MESSAGE =
@@ -74,14 +78,42 @@ function normalizeItem(raw: unknown): MenuDetectedItem | null {
   const categoriaNorm = categoria || "General";
   const tipoVenta: TipoProductoVenta =
     parseTipoVentaLoose(r.tipoVenta) ?? inferTipoVentaFromCartaText(categoriaNorm, nombre);
+  const confianzaRaw = r.confianza;
+  let confianza: number | undefined;
+  if (typeof confianzaRaw === "number" && Number.isFinite(confianzaRaw)) {
+    confianza = confianzaRaw > 1 ? confianzaRaw / 100 : confianzaRaw;
+    confianza = Math.max(0, Math.min(1, confianza));
+  }
+  const rawText = typeof r.rawText === "string" ? r.rawText.trim() : "";
+  const sourceLine = typeof r.sourceLine === "string" ? r.sourceLine.trim() : "";
+  const needsReview = r.needsReview === true;
   return {
     nombre,
     categoria: categoriaNorm,
     descripcion: descripcion || "",
     precio: precioOk,
-    confianza: typeof r.confianza === "number" && Number.isFinite(r.confianza) ? r.confianza : undefined,
+    confianza,
     tipoVenta,
+    ...(rawText ? { rawText } : {}),
+    ...(sourceLine ? { sourceLine } : {}),
+    ...(needsReview ? { needsReview: true } : {}),
   };
+}
+
+function applyOcrFidelityFlags(items: MenuDetectedItem[], ocrSourceText: string): MenuDetectedItem[] {
+  return items.map((item) => {
+    const supported = isProductNameSupportedByOcr(item.nombre, ocrSourceText);
+    const lowConfidence = item.confianza != null && item.confianza < 0.65;
+    const needsReview = item.needsReview === true || !supported || lowConfidence || item.precio == null;
+    const confianza =
+      item.confianza ??
+      (supported ? (item.precio != null ? 0.72 : 0.55) : 0.35);
+    return {
+      ...item,
+      confianza,
+      ...(needsReview ? { needsReview: true } : {}),
+    };
+  });
 }
 
 async function extractOcrTextFromBuffer(buffer: Buffer, type: string): Promise<string> {
@@ -104,34 +136,42 @@ async function callOpenAiVisionExtract(args: { dataUrl: string; ocrReference: st
   const ocrSnippet = args.ocrReference.trim().slice(0, 6000);
 
   const prompt = [
-    "Analiza esta imagen de una carta o menú de restaurante.",
+    "Transcribe y estructura esta carta de restaurante en DOS FASES dentro de un único JSON.",
     "",
-    "Extrae únicamente productos reales de venta que aparezcan en la carta.",
-    "Para cada producto devuelve:",
-    "- nombre",
-    "- categoria",
-    "- descripcion",
-    "- precio",
-    '- tipoVenta: exactamente "plato" o "bebida" (tipo principal de producto).',
+    "FASE 1 — TRANSCRIPCIÓN FIEL (OCR)",
+    "- Copia el texto visible de la carta línea a línea, sin interpretar.",
+    "- No traduzcas, no corrijas nombres comerciales, no embellezcas.",
+    "- No inventes líneas que no se vean.",
+    "- Mantén nombres italianos/españoles tal cual (Spaghetti, Tagliatelle, Ravioli…).",
+    "- Si una línea es ilegible, inclúyela con [ilegible] en transcription.lines.",
     "",
-    "Clasificación tipoVenta:",
-    '- plato: comida (entrantes, primeros, segundos, pastas, arroces, carnes, pescados, postres como plato, menús de comida, tapas, etc.).',
-    "- bebida: refrescos, vinos, sangrías, cavas, cervezas, cócteles, agua, zumos, cafés y cualquier bebida.",
+    "FASE 2 — ESTRUCTURACIÓN",
+    "- Convierte SOLO líneas de la transcripción en productos de venta.",
+    "- Cada items[].nombre DEBE existir literalmente en transcription.lines o en el OCR de referencia.",
+    "- NO inventes productos. NO uses platos típicos si no están en la carta.",
+    "- NO reformules nombres: copia el nombre comercial tal como aparece.",
+    "- NO conviertas descripciones/ingredientes en nombre de producto.",
+    "- Separa nombre (título del plato) y descripcion (texto secundario bajo el nombre).",
+    "- categoria: sección visible (ej. Pastas, Pizzas). Si no hay sección clara, la más cercana del OCR.",
+    "- precio: número o null si no es legible.",
+    '- tipoVenta: "plato" o "bebida".',
+    "- confianza: 0.0–1.0 (baja si dudas).",
+    "- needsReview: true si nombre o precio dudosos/ilegibles.",
+    "- sourceLine: línea exacta de transcription.lines usada.",
+    "- rawText: fragmento OCR/imagen usado para ese producto.",
     "",
-    "REGLAS ESTRICTAS:",
-    "- NO inventes productos.",
-    "- NO uses platos típicos ni ejemplos si no están en la carta.",
-    "- NO incluyas textos como: IVA incluido, menú del día, suplemento terraza, notas legales, horarios, teléfonos.",
-    "- Si un producto no tiene precio claro, devuelve precio: null",
-    '- Si no hay descripción, devuelve descripcion: ""',
-    "- Si no puedes identificar productos claros, devuelve items: []",
-    "- Devuelve SOLO JSON válido, sin texto extra.",
+    "PROHIBIDO:",
+    "- IVA, menú del día, suplementos, notas legales, horarios, teléfonos.",
+    "- Repetir el mismo producto.",
+    "- Mezclar dos productos en uno.",
     "",
-    "Texto OCR de referencia (solo productos que puedas relacionar con este texto):",
+    "Texto OCR de referencia:",
     ocrSnippet || "(sin texto OCR)",
     "",
-    "Formato exacto esperado:",
-    '{ "items": [ { "nombre": "Pizza Carbonara", "categoria": "Pizzas", "descripcion": "Mozzarella, bacon, huevo y parmesano", "precio": 12.9, "tipoVenta": "plato" } ] }',
+    "Formato JSON exacto:",
+    '{ "transcription": { "lines": ["PASTAS", "Spaghetti carbonara 14,50", "Tagliatelle al ragú 15,00"] }, "items": [ { "nombre": "Spaghetti carbonara", "categoria": "Pastas", "descripcion": "", "precio": 14.5, "tipoVenta": "plato", "confianza": 0.92, "needsReview": false, "sourceLine": "Spaghetti carbonara 14,50", "rawText": "Spaghetti carbonara 14,50" } ] }',
+    "",
+    "Devuelve SOLO JSON válido, sin texto extra.",
   ].join("\n");
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -175,8 +215,11 @@ async function callOpenAiVisionExtract(args: { dataUrl: string; ocrReference: st
     throw new Error("OPENAI_CONTENT_MISSING");
   }
 
-  const obj = extractJsonObject(content);
-  const itemsRaw = (obj as { items?: unknown })?.items;
+  const obj = extractJsonObject(content) as {
+    items?: unknown;
+    transcription?: { lines?: unknown };
+  } | null;
+  const itemsRaw = obj?.items;
   if (!Array.isArray(itemsRaw)) {
     console.error("[ai/import-menu] invalid items", content.slice(0, 2000));
     return [];
@@ -187,7 +230,7 @@ async function callOpenAiVisionExtract(args: { dataUrl: string; ocrReference: st
     const it = normalizeItem(r);
     if (it) out.push(it);
   }
-  return out;
+  return applyOcrFidelityFlags(out, args.ocrReference);
 }
 
 export async function POST(req: Request) {

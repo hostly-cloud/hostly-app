@@ -163,6 +163,7 @@ export type ProductosCartaDataViewProps = {
   onBulkDelete?: () => void;
   bulkDeleteDisabled?: boolean;
   bulkDeleteDisabledTitle?: string;
+  compactBulkBar?: boolean;
 };
 
 function SelectionCheckbox({
@@ -469,6 +470,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     onBulkDelete,
     bulkDeleteDisabled,
     bulkDeleteDisabledTitle,
+    compactBulkBar = false,
   } = props;
 
   const allSelected = displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id));
@@ -477,6 +479,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     <div className="hostly-data-table-viewport">
       <ProductosSelectionBar
         count={selectedIds.size}
+        variant={compactBulkBar ? "compact" : "default"}
         onClear={clearSelection}
         onAssignPass={onAssignPass}
         assignPassDisabled={assignPassDisabled}

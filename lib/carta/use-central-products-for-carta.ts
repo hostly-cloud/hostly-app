@@ -22,6 +22,15 @@ export type OperationalCatalogSource =
 
 export type CentralCatalogScope = "tpv_menu" | "management";
 
+export type UseCentralProductsForCartaOptions = {
+  scope?: CentralCatalogScope;
+  /**
+   * No suscribir a `restaurants/{id}/products` hasta auth + perfil + restaurantId del perfil.
+   * Evita listeners con fallback localStorage/"default" que disparan permission-denied.
+   */
+  requireAuthenticatedTenant?: boolean;
+};
+
 export type UseCentralProductsForCartaResult = {
   products: Product[];
   platos: PlatoCarta[];
@@ -31,6 +40,8 @@ export type UseCentralProductsForCartaResult = {
   catalogDevWarning: string | null;
   /** Snapshot central indexado por id (misma escucha que `products`). */
   productDocumentsById: ReadonlyMap<string, ProductDocument>;
+  /** Perfil resuelto pero sin `restaurantId` (solo con `requireAuthenticatedTenant`). */
+  tenantUnavailable: boolean;
 };
 
 function loadLegacyPlatos(restaurantId: string, scope: CentralCatalogScope): PlatoCarta[] {
@@ -87,11 +98,16 @@ function mapToResult(
  */
 export function useCentralProductsForCarta(
   restaurantId: string | null | undefined,
-  options?: { scope?: CentralCatalogScope },
+  options?: UseCentralProductsForCartaOptions,
 ): UseCentralProductsForCartaResult {
   const scope = options?.scope ?? "tpv_menu";
-  const { ready: authReady } = useAuth();
+  const requireAuthenticatedTenant = options?.requireAuthenticatedTenant === true;
+  const { ready: authReady, profileReady } = useAuth();
   const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+  const awaitingProfileTenant =
+    requireAuthenticatedTenant && (!authReady || !profileReady);
+  const tenantUnavailable =
+    requireAuthenticatedTenant && authReady && profileReady && rid.length === 0;
 
   const [loading, setLoading] = useState(true);
   const [platos, setPlatos] = useState<PlatoCarta[]>([]);
@@ -150,6 +166,10 @@ export function useCentralProductsForCarta(
 
   useEffect(() => {
     if (!rid) {
+      if (awaitingProfileTenant) {
+        setLoading(true);
+        return;
+      }
       setLoading(false);
       setPlatos([]);
       setProducts([]);
@@ -175,15 +195,23 @@ export function useCentralProductsForCarta(
     return () => {
       cancelled = true;
     };
-  }, [applyCentralDocs, rid]);
+  }, [applyCentralDocs, awaitingProfileTenant, rid]);
 
   useEffect(() => {
+    if (awaitingProfileTenant) {
+      setLoading(true);
+      return;
+    }
     if (!rid) {
       setLoading(false);
       return;
     }
     if (!authReady) return;
     if (!isAuthReady() || !isFirebaseConfigured) {
+      if (requireAuthenticatedTenant) {
+        setLoading(false);
+        return;
+      }
       applyCatalog(loadLegacyPlatos(rid, scope), "legacy_local");
       return;
     }
@@ -208,6 +236,10 @@ export function useCentralProductsForCarta(
       () => {
         if (!rid) return;
         listenFailedRef.current = true;
+        if (requireAuthenticatedTenant) {
+          setLoading(false);
+          return;
+        }
         applyCatalog(loadLegacyPlatos(rid, scope), "legacy_fallback");
       },
     );
@@ -215,7 +247,14 @@ export function useCentralProductsForCarta(
     return () => {
       unsub();
     };
-  }, [applyCatalog, applyCentralDocs, authReady, rid]);
+  }, [
+    applyCatalog,
+    applyCentralDocs,
+    authReady,
+    awaitingProfileTenant,
+    requireAuthenticatedTenant,
+    rid,
+  ]);
 
   useEffect(() => {
     if (!rid || !hasCentralSnapshotRef.current || listenFailedRef.current) return;
@@ -246,6 +285,7 @@ export function useCentralProductsForCarta(
       usingLegacyFallback,
       catalogDevWarning,
       productDocumentsById,
+      tenantUnavailable,
     };
   }, [
     catalogDevWarning,
@@ -254,6 +294,7 @@ export function useCentralProductsForCarta(
     platos,
     products,
     source,
+    tenantUnavailable,
     usingLegacyFallback,
   ]);
 }

@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "phase": "parser-only",
+  "generatedAt": "2026-06-08T00:27:01.666Z",
+  "corpusTitle": "Hostly Menu Import — Parser regression corpus",
+  "summary": {
+    "expected": 40,
+    "detected": 40,
+    "tp": 40,
+    "fp": 0,
+    "fn": 0,
+    "recall": 1,
+    "precision": 1,
+    "casesTotal": 10,
+    "casesPassed": 10
+  },
+  "cases": [
+    {
+      "caseId": "pasta-casera-multilingual",
+      "title": "Pasta casera trilingüe",
+      "passed": true,
+      "metrics": {
+        "expected": 8,
+        "detected": 8,
+        "tp": 8,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "croquetas-inline-monolingue",
+      "title": "Croquetas nombre+precio inline",
+      "passed": true,
+      "metrics": {
+        "expected": 1,
+        "detected": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "orecchiette-identical-translations",
+      "title": "Orecchiette con traducciones idénticas",
+      "passed": true,
+      "metrics": {
+        "expected": 1,
+        "detected": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "pizza-trilingue",
+      "title": "Pizza gourmet trilingüe",
+      "passed": true,
+      "metrics": {
+        "expected": 2,
+        "detected": 2,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "pasta-risotti-previa",
+      "title": "Pasta e Risotti — carbonara + risotto porcini",
+      "passed": true,
+      "metrics": {
+        "expected": 2,
+        "detected": 2,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "carta-columnar-precios-derecha",
+      "title": "Carta columnar — nombres izquierda, precios derecha",
+      "passed": true,
+      "metrics": {
+        "expected": 3,
+        "detected": 3,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "bebida-cocktail-simple",
+      "title": "Cócteles — nombre+precio inline",
+      "passed": true,
+      "metrics": {
+        "expected": 3,
+        "detected": 3,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "vinos-con-varios-precios",
+      "title": "Vinos tintos — botella y copa/botella mismo vino",
+      "passed": true,
+      "metrics": {
+        "expected": 4,
+        "detected": 4,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "segundos-platos-trilingue-visual",
+      "title": "Segundos platos trilingüe — layout visual",
+      "passed": true,
+      "metrics": {
+        "expected": 8,
+        "detected": 8,
+        "tp": 8,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    },
+    {
+      "caseId": "segundos-platos-real",
+      "title": "Segundos platos trilingüe — OCR/layout real (1000121326.jpg)",
+      "passed": true,
+      "metrics": {
+        "expected": 8,
+        "detected": 8,
+        "tp": 8,
+        "fp": 0,
+        "fn": 0,
+        "recall": 1,
+        "precision": 1
+      },
+      "pendingNames": 0
+    }
+  ]
+}

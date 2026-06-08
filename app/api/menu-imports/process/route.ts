@@ -7,6 +7,7 @@ import {
   ProcessMenuImportDraftError,
   processMenuImportDraft,
 } from "@/lib/server/menu-imports/process-menu-import-draft";
+import { isMenuImportDebugReportEnabled } from "@/lib/carta/menu-import-debug-report-types";
 
 function jsonError(status: number, error: string, details?: string) {
   return NextResponse.json({ ok: false, error, details: details ?? null }, { status });
@@ -42,11 +43,11 @@ export async function POST(req: Request) {
       status: result.status,
       alreadyProcessed: result.alreadyProcessed,
       itemCount: result.itemCount,
-      ...(process.env.NODE_ENV !== "production"
-        ? {
-            _devPipelineHint:
-              "Trazabilidad completa en terminal del servidor: [Hostly][MenuImport Pipeline]",
-          }
+      ...(result.operationalWarnings?.length
+        ? { operationalWarnings: result.operationalWarnings }
+        : {}),
+      ...(isMenuImportDebugReportEnabled() && result.debugReport
+        ? { debugReport: result.debugReport }
         : {}),
     });
   } catch (e) {

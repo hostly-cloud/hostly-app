@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "caseId": "pasta-casera-multilingual",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Pasta casera", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Ñoquis con tomates cherry, mozzarella de búfala y albahaca",
+      "price": 18.8,
+      "sectionName": "Pasta casera",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p2",
+      "name": "Ravioli de setas porcini y ricotta, servido con mantequilla y salvia",
+      "price": 20.5,
+      "sectionName": "Pasta casera",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p3",
+      "name": "Ravioli de ricotta y trufa fresca",
+      "price": 26,
+      "sectionName": "Pasta casera",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p4",
+      "name": "Ravioli de salmón ahumado con puerros y mascarpone con salsa de gambas",
+      "price": 23,
+      "sectionName": "Pasta casera",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p5",
+      "name": "Lasaña boloñesa",
+      "price": 19.9,
+      "sectionName": "Pasta casera",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p6",
+      "name": "Canelones de ricotta y espinacas con salsa Aurora",
+      "price": 17.5,
+      "sectionName": "Pasta casera",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p7",
+      "name": "Tagliatelle fresca con setas mixtas, nata y trufa fresca",
+      "price": 22.9,
+      "sectionName": "Pasta casera",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p8",
+      "name": "Orecchiette alla norma",
+      "price": 17.3,
+      "sectionName": "Pasta casera",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    }
+  ],
+  "negativeProducts": [
+    { "namePattern": "^Ricotta$", "reason": "fragment_orphan" },
+    { "namePattern": "Ravioli mit Ricotta", "reason": "german_translation" },
+    { "namePattern": "Frische Tagliatelle", "reason": "german_translation" },
+    { "namePattern": "^Pasta casera$", "reason": "section_header" }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

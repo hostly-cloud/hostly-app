@@ -1,0 +1,11 @@
+{
+  "id": "segundos-platos-real",
+  "title": "Segundos platos trilingüe — OCR/layout real (1000121326.jpg)",
+  "tags": ["multilingual", "visual", "real-ocr", "P0"],
+  "sourceType": "image",
+  "menuType": "food",
+  "evaluatePhases": ["parser", "visual"],
+  "priority": "P0",
+  "ocrPageWidth": 2268,
+  "ocrPageHeight": 4032
+}

@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/hostly";
 import { ConfigCartaWorkbench } from "../../../_components/config-carta-workbench";
 import { ImportMenuRecentList } from "./import-menu-recent-list";
+import { ImportMenuDebugPanel } from "./import-menu-debug-panel";
+import { ImportMenuOperationalWarnings } from "./import-menu-operational-warnings";
+import { ImportMenuReviewItemRow } from "./import-menu-review-item-row";
 import {
   MissingCategoriesWizard,
   buildMissingCategoryRows,
@@ -28,6 +31,12 @@ import type {
 import { requestMenuImportCreateCategories } from "@/lib/carta/request-menu-import-create-categories";
 import { requestMenuImportPublishPreview } from "@/lib/carta/request-menu-import-publish-preview";
 import { requestMenuImportPublish } from "@/lib/carta/request-menu-import-publish";
+import {
+  logClientPublishDraftState,
+  logClientPublishRequest,
+  logClientPublishResponse,
+  logClientPublishPreview,
+} from "@/lib/carta/publish-flow-client-diagnostics";
 import { requestMenuImportProcess } from "@/lib/carta/request-menu-import-process";
 import {
   flattenSectionsToItems,
@@ -63,6 +72,12 @@ import {
 import { fetchCentralProductsOnce } from "@/lib/firestore/products";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { uploadMenuImportFile } from "@/lib/storage/menu-import-files";
+import type { MenuImportDebugReport } from "@/lib/carta/menu-import-debug-report-types";
+import {
+  buildMenuImportOperationalWarnings,
+  mergeMenuImportOperationalWarnings,
+} from "@/lib/carta/build-menu-import-operational-warnings";
+import type { MenuImportOperationalWarning } from "@/lib/carta/menu-import-operational-warnings-types";
 
 type InputMethod = ImportedMenuSourceType;
 
@@ -130,7 +145,12 @@ function isPreviewRowPublishable(
   if (!hasValidPrice || !hasCategory) return false;
   if (row.action === "create") return true;
   if (row.action === "possible_duplicate" && confirmDuplicates.has(row.itemId)) return true;
-  if (row.action === "review" && confirmReviews.has(row.itemId)) return true;
+  if (
+    row.action === "review" &&
+    (confirmReviews.has(row.itemId) || row.selectedForPublish === true)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -152,7 +172,7 @@ function previewRowNonPublishReason(
   if (!row.name.trim()) reasons.push("Nombre vacío");
   if (typeof row.price !== "number" || row.price <= 0) reasons.push("Precio inválido");
   if (!row.resolvedCategoryId) reasons.push("Categoría no creada");
-  if (row.action === "review" && !confirmReviews.has(row.itemId)) {
+  if (row.action === "review" && !confirmReviews.has(row.itemId) && row.selectedForPublish !== true) {
     reasons.push("Revisión humana pendiente");
   }
   if (row.action === "possible_duplicate" && !confirmDuplicates.has(row.itemId)) {
@@ -164,84 +184,6 @@ function previewRowNonPublishReason(
     }
   }
   return reasons.length > 0 ? reasons.join(" · ") : "No apto para publicación";
-}
-
-type ItemPublishDisplayState = {
-  primaryLabel: string | null;
-  primaryTone: string;
-  detailMessage?: string;
-  locked: boolean;
-  suppressReviewChips: boolean;
-};
-
-function resolveItemPublishDisplayState(
-  item: ImportedMenuItem,
-  postPublish?: MenuImportPublishItemResult | null,
-): ItemPublishDisplayState {
-  if (item.publishStatus === "published") {
-    return {
-      primaryLabel: "Publicado",
-      primaryTone: "border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-900",
-      locked: true,
-      suppressReviewChips: true,
-    };
-  }
-  if (item.publishStatus === "error") {
-    return {
-      primaryLabel: "Error",
-      primaryTone: "border-rose-200/80 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-900",
-      locked: true,
-      suppressReviewChips: true,
-    };
-  }
-  if (item.publishStatus === "skipped") {
-    return {
-      primaryLabel: "Omitido",
-      primaryTone: "border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900",
-      locked: true,
-      suppressReviewChips: true,
-    };
-  }
-
-  if (postPublish) {
-    if (
-      postPublish.outcome === "created" ||
-      postPublish.outcome === "confirmed_duplicate" ||
-      postPublish.outcome === "already_published"
-    ) {
-      return {
-        primaryLabel: "Publicado",
-        primaryTone: "border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-900",
-        locked: true,
-        suppressReviewChips: true,
-      };
-    }
-    if (postPublish.outcome === "skipped") {
-      return {
-        primaryLabel: "Omitido",
-        primaryTone: "border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900",
-        detailMessage: postPublish.message,
-        locked: true,
-        suppressReviewChips: false,
-      };
-    }
-    if (postPublish.outcome === "error") {
-      return {
-        primaryLabel: "Error",
-        primaryTone: "border-rose-200/80 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-900",
-        detailMessage: postPublish.message,
-        locked: true,
-        suppressReviewChips: true,
-      };
-    }
-  }
-
-  return {
-    primaryLabel: null,
-    primaryTone: "",
-    locked: false,
-    suppressReviewChips: false,
-  };
 }
 
 function buildPostPublishByItemId(
@@ -387,6 +329,11 @@ function PublishPreviewPanel({
                       Crear igualmente
                     </label>
                   ) : row.action === "review" ? (
+                    row.selectedForPublish ? (
+                      <span className="text-[10px] font-medium text-emerald-800">
+                        Marcado en revisión
+                      </span>
+                    ) : (
                     <label className="flex items-center gap-1.5 text-[10px] text-[var(--hostly-ink-muted)]">
                       <input
                         type="checkbox"
@@ -396,6 +343,7 @@ function PublishPreviewPanel({
                       />
                       Confirmar revisión
                     </label>
+                    )
                   ) : (
                     <span className="text-[10px] text-[var(--hostly-ink-soft)]">—</span>
                   )}
@@ -513,12 +461,6 @@ function PublishResultPanel({ result }: { result: MenuImportPublishResult }) {
       ) : null}
     </HostlySurface>
   );
-}
-
-function confidenceTone(confidence: number): { label: string; className: string } {
-  if (confidence >= 85) return { label: "Alta", className: "bg-emerald-50 text-emerald-800 border-emerald-200/80" };
-  if (confidence >= 65) return { label: "Media", className: "bg-amber-50 text-amber-900 border-amber-200/80" };
-  return { label: "Baja", className: "bg-rose-50 text-rose-900 border-rose-200/80" };
 }
 
 function flattenItems(sections: ImportedMenuSection[]): ImportedMenuItem[] {
@@ -807,157 +749,6 @@ function UploadStep({
   );
 }
 
-type ReviewItemRowProps = {
-  item: ImportedMenuItem;
-  onChange: (patch: Partial<ImportedMenuItem>) => void;
-  postPublish?: MenuImportPublishItemResult | null;
-};
-
-function ReviewItemRow({ item, onChange, postPublish = null }: ReviewItemRowProps) {
-  const displayConfidence = item.aiConfidence ?? item.confidence;
-  const tone = confidenceTone(displayConfidence);
-  const publishState = resolveItemPublishDisplayState(item, postPublish);
-
-  return (
-    <HostlySurface
-      variant="flat"
-      className={hostlyCx(
-        "p-3 sm:p-4",
-        publishState.primaryLabel === "Publicado" &&
-          "border-emerald-200/80 bg-emerald-50/35",
-        publishState.primaryLabel === "Omitido" &&
-          "border-amber-200/80 bg-amber-50/30",
-        publishState.primaryLabel === "Error" && "border-rose-200/80 bg-rose-50/35",
-      )}
-    >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
-        <label className="flex shrink-0 items-start gap-2 pt-1">
-          <input
-            type="checkbox"
-            checked={item.selectedForPublish}
-            disabled={publishState.locked}
-            onChange={(e) => onChange({ selectedForPublish: e.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-[var(--hostly-line-strong)] disabled:opacity-50"
-          />
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hostly-ink-soft)]">
-            {publishState.locked ? "Publicado" : "Publicar"}
-          </span>
-        </label>
-
-        <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="sm:col-span-2 xl:col-span-1">
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--hostly-ink-soft)]">
-              Producto
-            </label>
-            <input
-              type="text"
-              value={item.name}
-              onChange={(e) => onChange({ name: e.target.value })}
-              className="hostly-input w-full py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--hostly-ink-soft)]">
-              Precio (€)
-            </label>
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              value={item.price ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                onChange({ price: v === "" ? undefined : Number(v) });
-              }}
-              className="hostly-input w-full py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--hostly-ink-soft)]">
-              Categoría sugerida
-            </label>
-            <input
-              type="text"
-              value={item.suggestedCategory}
-              onChange={(e) => onChange({ suggestedCategory: e.target.value })}
-              className="hostly-input w-full py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--hostly-ink-soft)]">
-              Estación sugerida
-            </label>
-            <select
-              value={item.suggestedStation}
-              onChange={(e) => onChange({ suggestedStation: e.target.value as ImportedMenuSuggestedStation })}
-              className="hostly-select w-full py-2 text-sm"
-            >
-              {IMPORTED_MENU_STATION_OPTIONS.map((st) => (
-                <option key={st} value={st}>
-                  {IMPORTED_MENU_STATION_LABELS[st]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-row flex-wrap items-center gap-2 lg:flex-col lg:items-end">
-          <span
-            className={hostlyCx(
-              "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-              tone.className,
-            )}
-            title={`Confianza ${displayConfidence}%`}
-          >
-            {tone.label} · {displayConfidence}%
-          </span>
-          {item.aiEnriched ? (
-            <span className="hostly-chip border-violet-200/80 bg-violet-50 px-2 py-0.5 text-[10px] text-violet-900">
-              IA
-            </span>
-          ) : null}
-          {publishState.primaryLabel ? (
-            <span className={hostlyCx("hostly-chip", publishState.primaryTone)}>
-              {publishState.primaryLabel}
-            </span>
-          ) : null}
-          {!publishState.suppressReviewChips && item.needsReview ? (
-            <span className="hostly-chip px-2 py-0.5 text-[10px]">Revisar</span>
-          ) : null}
-          {!publishState.suppressReviewChips && item.duplicateOf ? (
-            <span className="hostly-chip border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900">
-              Posible duplicado
-            </span>
-          ) : null}
-          {item.publishStatus === "published" && item.publishedProductId ? (
-            <span className="hostly-chip border-sky-200/80 bg-sky-50 px-2 py-0.5 text-[10px] text-sky-900">
-              Visible en TPV
-            </span>
-          ) : null}
-        </div>
-      </div>
-      {publishState.detailMessage ? (
-        <p className="mt-2 text-[10px] font-medium text-amber-950">
-          Motivo: {publishState.detailMessage}
-        </p>
-      ) : null}
-      {item.aiWarnings && item.aiWarnings.length > 0 ? (
-        <ul className="mt-2 space-y-0.5 text-[10px] text-[var(--hostly-ink-soft)]">
-          {item.aiWarnings.map((w) => (
-            <li key={w}>· {w}</li>
-          ))}
-        </ul>
-      ) : null}
-      {item.description ? (
-        <p className="mt-2 text-[11px] text-[var(--hostly-ink-muted)]">{item.description}</p>
-      ) : null}
-      {item.rawText ? (
-        <p className="mt-1 text-[10px] italic text-[var(--hostly-ink-soft)]">Texto detectado: «{item.rawText}»</p>
-      ) : null}
-    </HostlySurface>
-  );
-}
-
 type ReviewStepProps = {
   draft: ImportedMenuDraft;
   onDraftChange: (draft: ImportedMenuDraft) => void;
@@ -989,6 +780,10 @@ type ReviewStepProps = {
   createCategoriesError?: string | null;
   createCategoriesResult?: CreateMenuImportCategoriesResult | null;
   categoryOutcomes?: CategoryOutcomeMap;
+  pipelineDebugReport?: MenuImportDebugReport | null;
+  manualProductCount?: number | null;
+  onManualProductCountChange?: (value: number | null) => void;
+  operationalWarnings?: MenuImportOperationalWarning[];
 };
 
 function ReviewStep({
@@ -1022,6 +817,10 @@ function ReviewStep({
   createCategoriesError,
   createCategoriesResult,
   categoryOutcomes,
+  pipelineDebugReport,
+  manualProductCount,
+  onManualProductCountChange,
+  operationalWarnings = [],
 }: ReviewStepProps) {
   const items = useMemo(() => flattenItems(draft.sections), [draft.sections]);
   const selectedCount = items.filter((i) => i.selectedForPublish).length;
@@ -1073,6 +872,41 @@ function ReviewStep({
         <HostlySurface variant="flat" className="border-amber-200/90 bg-amber-50/90 p-4">
           <p className="text-sm font-medium text-amber-950">{flowError}</p>
         </HostlySurface>
+      ) : null}
+
+      {!isAnalyzing && !isFailed && operationalWarnings.length > 0 ? (
+        <ImportMenuOperationalWarnings warnings={operationalWarnings} />
+      ) : null}
+
+      {pipelineDebugReport ? (
+        <div className="space-y-2">
+          {onManualProductCountChange ? (
+            <HostlySurface variant="flat" className="border-orange-200/80 bg-orange-50/50 p-3">
+              <label className="flex flex-wrap items-center gap-2 text-xs text-orange-950">
+                <span className="font-semibold">Conteo manual (dev):</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-20 rounded border border-orange-200 bg-white px-2 py-1 text-sm"
+                  placeholder="N"
+                  value={manualProductCount ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    onManualProductCountChange(raw === "" ? null : Number(raw));
+                  }}
+                />
+                <span className="text-[10px] text-orange-900/80">
+                  Productos visibles en la carta real (p. ej. página de pastas)
+                </span>
+              </label>
+            </HostlySurface>
+          ) : null}
+          <ImportMenuDebugPanel
+            report={pipelineDebugReport}
+            sourceImageUrl={draft.sourceUrl}
+            manualProductCount={manualProductCount}
+          />
+        </div>
       ) : null}
 
       {draft.status === "published" || draft.status === "partially_published" ? (
@@ -1188,9 +1022,9 @@ function ReviewStep({
           {draft.sections.map((section) => (
             <HostlySection key={section.id} stack="sm">
               <HostlySectionHeader title={section.name} titleVariant="section" description={`${section.items.length} productos`} />
-              <div className="grid gap-2">
+              <div className="flex flex-col gap-1.5">
                 {section.items.map((item) => (
-                  <ReviewItemRow
+                  <ImportMenuReviewItemRow
                     key={item.id}
                     item={item}
                     postPublish={postPublishByItemId.get(item.id) ?? null}
@@ -1343,6 +1177,11 @@ export function ImportMenuPageContent() {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<MenuImportPublishResult | null>(null);
   const [categoryRows, setCategoryRows] = useState<MissingCategoryDraftRow[]>([]);
+  const [pipelineDebugReport, setPipelineDebugReport] = useState<MenuImportDebugReport | null>(null);
+  const [processOperationalWarnings, setProcessOperationalWarnings] = useState<
+    MenuImportOperationalWarning[]
+  >([]);
+  const [manualProductCount, setManualProductCount] = useState<number | null>(null);
   const [categoryWizardDismissed, setCategoryWizardDismissed] = useState(false);
   const [createCategoriesLoading, setCreateCategoriesLoading] = useState(false);
   const [createCategoriesError, setCreateCategoriesError] = useState<string | null>(null);
@@ -1415,6 +1254,14 @@ export function ImportMenuPageContent() {
     }
     setPreview(result.preview);
     setPreviewError(null);
+    logClientPublishPreview({
+      draftId,
+      preview: result.preview,
+      publishableCount: result.preview.createProducts.filter(
+        (row) => row.action === "create" && row.resolvedCategoryId != null && typeof row.price === "number" && row.price > 0,
+      ).length,
+      confirmReviews: [],
+    });
     return true;
   }, []);
 
@@ -1686,6 +1533,7 @@ export function ImportMenuPageContent() {
     setReprocessing(true);
     setFlowError(null);
     setSaveError(null);
+    setProcessOperationalWarnings([]);
     setPreview(null);
     setPreviewError(null);
     setPublishResult(null);
@@ -1714,6 +1562,10 @@ export function ImportMenuPageContent() {
             : detail,
         );
       }
+      if (processResult.debugReport) {
+        setPipelineDebugReport(processResult.debugReport);
+      }
+      setProcessOperationalWarnings(processResult.operationalWarnings ?? []);
       const persisted = await getMenuImportDraft(scope.restaurantId, activeDraftId);
       if (!persisted) {
         throw new Error("El borrador se procesó pero no se pudo recargar.");
@@ -1725,6 +1577,7 @@ export function ImportMenuPageContent() {
     } catch (e) {
       const message = e instanceof Error ? e.message : "Error al analizar la carta.";
       setFlowError(message);
+      setProcessOperationalWarnings([]);
       try {
         const failedDoc = await getMenuImportDraft(scope.restaurantId, activeDraftId);
         if (failedDoc) {
@@ -1769,6 +1622,7 @@ export function ImportMenuPageContent() {
     setAnalyzing(true);
     setFlowError(null);
     setSaveError(null);
+    setProcessOperationalWarnings([]);
 
     let draftId: string | null = null;
     try {
@@ -1831,6 +1685,10 @@ export function ImportMenuPageContent() {
             : detail,
         );
       }
+      if (processResult.debugReport) {
+        setPipelineDebugReport(processResult.debugReport);
+      }
+      setProcessOperationalWarnings(processResult.operationalWarnings ?? []);
 
       const persisted = await getMenuImportDraft(scope.restaurantId, draftId);
       if (!persisted) {
@@ -1841,6 +1699,7 @@ export function ImportMenuPageContent() {
     } catch (e) {
       const message = e instanceof Error ? e.message : "Error al analizar la carta.";
       setFlowError(message);
+      setProcessOperationalWarnings([]);
       if (draftId && scope.restaurantId) {
         try {
           const failedDoc = await getMenuImportDraft(scope.restaurantId, draftId);
@@ -1890,7 +1749,32 @@ export function ImportMenuPageContent() {
     setCategoryOutcomes({});
     setCategoryWizardDismissed(false);
     setCategoryRows([]);
+    setPipelineDebugReport(null);
+    setManualProductCount(null);
+    setProcessOperationalWarnings([]);
   }, []);
+
+  const unresolvedCategoryItemCount = useMemo(() => {
+    if (!preview?.missingCategories?.length) return 0;
+    const itemIds = new Set<string>();
+    for (const row of preview.missingCategories) {
+      for (const itemId of row.itemIds) itemIds.add(itemId);
+    }
+    return itemIds.size;
+  }, [preview?.missingCategories]);
+
+  const operationalWarnings = useMemo(() => {
+    if (!draft) return [];
+    const items = flattenSectionsToItems(draft.sections);
+    const fromDraft = buildMenuImportOperationalWarnings({
+      sourceType: draft.sourceType,
+      parserWarnings: draft.parserWarnings,
+      rawTextLength: draft.rawTextLength,
+      itemCount: items.length,
+      unresolvedCategoryItemCount,
+    });
+    return mergeMenuImportOperationalWarnings(processOperationalWarnings, fromDraft);
+  }, [draft, processOperationalWarnings, unresolvedCategoryItemCount]);
 
   const previewBlockedItemIds = useMemo(
     () => new Set(preview?.blockedItems.map((item) => item.itemId) ?? []),
@@ -1960,6 +1844,20 @@ export function ImportMenuPageContent() {
     setPublishLoading(true);
     setPublishError(null);
 
+    const draftItems = flattenSectionsToItems(draft?.sections ?? []);
+    logClientPublishDraftState({
+      draftId: activeDraftId,
+      items: draftItems,
+      confirmReviews: [...confirmReviews],
+      confirmDuplicates: [...confirmDuplicates],
+    });
+    logClientPublishRequest({
+      draftId: activeDraftId,
+      confirmReviews: [...confirmReviews],
+      confirmDuplicates: [...confirmDuplicates],
+      publishableCount,
+    });
+
     try {
       const result = await requestMenuImportPublish(activeDraftId, {
         confirmDuplicates: [...confirmDuplicates],
@@ -1971,6 +1869,7 @@ export function ImportMenuPageContent() {
       }
 
       let publishResult = result.result;
+      logClientPublishResponse({ draftId: activeDraftId, result: publishResult });
       setPublishResult(publishResult);
 
       const doc = await getMenuImportDraft(scope.restaurantId, activeDraftId);
@@ -1991,6 +1890,7 @@ export function ImportMenuPageContent() {
     publishLoading,
     publishableCount,
     scope.restaurantId,
+    draft,
   ]);
 
   const mainPanel =
@@ -2044,6 +1944,10 @@ export function ImportMenuPageContent() {
         createCategoriesError={createCategoriesError}
         createCategoriesResult={createCategoriesResult}
         categoryOutcomes={categoryOutcomes}
+        pipelineDebugReport={pipelineDebugReport}
+        manualProductCount={manualProductCount}
+        onManualProductCountChange={setManualProductCount}
+        operationalWarnings={operationalWarnings}
       />
     ) : (
       <HostlySection stack="md">

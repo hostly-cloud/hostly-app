@@ -1,0 +1,11 @@
+{
+  "id": "segundos-platos-trilingue-visual",
+  "title": "Segundos platos trilingüe — layout visual",
+  "tags": ["multilingual", "visual", "P0"],
+  "sourceType": "image",
+  "menuType": "food",
+  "evaluatePhases": ["parser", "visual"],
+  "priority": "P0",
+  "ocrPageWidth": 600,
+  "ocrPageHeight": 2400
+}

@@ -72,6 +72,10 @@ export type ImportedMenuDraft = {
   storagePath?: string;
   sourceUrl?: string;
   aiWarnings?: string[];
+  /** Warnings del parser/OCR guardados en el borrador (solo lectura UI). */
+  parserWarnings?: string[];
+  /** Longitud del texto OCR almacenado (sin exponer rawText completo). */
+  rawTextLength?: number;
 };
 
 export const IMPORTED_MENU_CARTA_TYPE_LABELS: Record<ImportedMenuCartaType, string> = {

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "caseId": "pasta-risotti-previa",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Pastas", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Spaghetti carbonara",
+      "price": 14.5,
+      "sectionName": "Pastas",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p2",
+      "name": "Risotto cremoso con setas porcini y parmesano",
+      "price": 18,
+      "sectionName": "Pastas",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

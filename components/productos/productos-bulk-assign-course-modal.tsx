@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { TranslateFn } from "@/lib/i18n";
+import {
+  BULK_SELECT_MIXED_VALUE,
+  isBulkSelectMixedValue,
+} from "./productos-bulk-initial-values";
 
 const COURSE_SELECT_OPTIONS = [
   { value: "", labelKey: "productos.bulkAssignPassNone" },
@@ -15,6 +19,7 @@ export type ProductosBulkAssignCourseModalProps = {
   open: boolean;
   count: number;
   saving: boolean;
+  initialSelectValue: string;
   onClose: () => void;
   onConfirm: (courseSelectValue: string) => void;
   t: TranslateFn;
@@ -24,6 +29,7 @@ export function ProductosBulkAssignCourseModal({
   open,
   count,
   saving,
+  initialSelectValue,
   onClose,
   onConfirm,
   t,
@@ -31,10 +37,13 @@ export function ProductosBulkAssignCourseModal({
   const [courseValue, setCourseValue] = useState("");
 
   useEffect(() => {
-    if (open) setCourseValue("");
-  }, [open]);
+    if (open) setCourseValue(initialSelectValue);
+  }, [open, initialSelectValue]);
 
   if (!open) return null;
+
+  const showMixedOption =
+    isBulkSelectMixedValue(initialSelectValue) || isBulkSelectMixedValue(courseValue);
 
   return (
     <div
@@ -67,6 +76,9 @@ export function ProductosBulkAssignCourseModal({
           disabled={saving}
           onChange={(e) => setCourseValue(e.target.value)}
         >
+          {showMixedOption ? (
+            <option value={BULK_SELECT_MIXED_VALUE}>{t("productos.bulkEditMixedValues")}</option>
+          ) : null}
           {COURSE_SELECT_OPTIONS.map((opt) => (
             <option key={opt.value || "none"} value={opt.value}>
               {t(opt.labelKey)}
@@ -85,7 +97,7 @@ export function ProductosBulkAssignCourseModal({
           <button
             type="button"
             className="hostly-button-primary hostly-button-compact"
-            disabled={saving || count < 1}
+            disabled={saving || count < 1 || isBulkSelectMixedValue(courseValue)}
             onClick={() => onConfirm(courseValue)}
           >
             {saving ? t("common.saving") : t("productos.bulkAssignPassApply")}

@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import type { BulkCatalogKdsDestination } from "@/lib/firestore/central-catalog-write";
 import type { TranslateFn } from "@/lib/i18n";
+import {
+  BULK_SELECT_MIXED_VALUE,
+  isBulkSelectMixedValue,
+} from "./productos-bulk-initial-values";
 
 const DESTINATION_OPTIONS: ReadonlyArray<{
   value: BulkCatalogKdsDestination;
@@ -17,6 +21,7 @@ export type ProductosBulkAssignDestinationModalProps = {
   open: boolean;
   count: number;
   saving: boolean;
+  initialSelectValue: BulkCatalogKdsDestination | typeof BULK_SELECT_MIXED_VALUE;
   onClose: () => void;
   onConfirm: (destination: BulkCatalogKdsDestination) => void;
   t: TranslateFn;
@@ -26,17 +31,23 @@ export function ProductosBulkAssignDestinationModal({
   open,
   count,
   saving,
+  initialSelectValue,
   onClose,
   onConfirm,
   t,
 }: ProductosBulkAssignDestinationModalProps) {
-  const [destination, setDestination] = useState<BulkCatalogKdsDestination>("kitchen");
+  const [destination, setDestination] = useState<
+    BulkCatalogKdsDestination | typeof BULK_SELECT_MIXED_VALUE
+  >("kitchen");
 
   useEffect(() => {
-    if (open) setDestination("kitchen");
-  }, [open]);
+    if (open) setDestination(initialSelectValue);
+  }, [open, initialSelectValue]);
 
   if (!open) return null;
+
+  const showMixedOption =
+    isBulkSelectMixedValue(initialSelectValue) || isBulkSelectMixedValue(destination);
 
   return (
     <div
@@ -77,9 +88,12 @@ export function ProductosBulkAssignDestinationModal({
           value={destination}
           disabled={saving}
           onChange={(e) =>
-            setDestination(e.target.value as BulkCatalogKdsDestination)
+            setDestination(e.target.value as BulkCatalogKdsDestination | typeof BULK_SELECT_MIXED_VALUE)
           }
         >
+          {showMixedOption ? (
+            <option value={BULK_SELECT_MIXED_VALUE}>{t("productos.bulkEditMixedValues")}</option>
+          ) : null}
           {DESTINATION_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {t(opt.labelKey)}
@@ -98,8 +112,8 @@ export function ProductosBulkAssignDestinationModal({
           <button
             type="button"
             className="hostly-button-primary hostly-button-compact"
-            disabled={saving || count < 1}
-            onClick={() => onConfirm(destination)}
+            disabled={saving || count < 1 || isBulkSelectMixedValue(destination)}
+            onClick={() => onConfirm(destination as BulkCatalogKdsDestination)}
           >
             {saving ? t("common.saving") : t("productos.bulkAssignDestinationApply")}
           </button>

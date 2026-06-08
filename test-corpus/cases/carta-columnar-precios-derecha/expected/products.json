@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "caseId": "carta-columnar-precios-derecha",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Principales", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Entrecot a la brasa",
+      "price": 24.5,
+      "sectionName": "Principales",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p2",
+      "name": "Lubina al horno",
+      "price": 19.9,
+      "sectionName": "Principales",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p3",
+      "name": "Solomillo ibérico",
+      "price": 28,
+      "sectionName": "Principales",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

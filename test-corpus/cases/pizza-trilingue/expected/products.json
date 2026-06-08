@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "caseId": "pizza-trilingue",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Pizze gourmet", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Margherita con bufala",
+      "price": 14.5,
+      "sectionName": "Pizze gourmet",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p2",
+      "name": "Diavola picante",
+      "price": 15,
+      "sectionName": "Pizze gourmet",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    }
+  ],
+  "negativeProducts": [
+    { "namePattern": "^Margherita with", "reason": "english_translation" },
+    { "namePattern": "^Spicy Diavola$", "reason": "english_translation" }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

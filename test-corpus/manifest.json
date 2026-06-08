@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "title": "Hostly Menu Import — Parser regression corpus",
+  "cases": [
+    "pasta-casera-multilingual",
+    "croquetas-inline-monolingue",
+    "orecchiette-identical-translations",
+    "pizza-trilingue",
+    "pasta-risotti-previa",
+    "carta-columnar-precios-derecha",
+    "bebida-cocktail-simple",
+    "vinos-con-varios-precios",
+    "segundos-platos-trilingue-visual",
+    "segundos-platos-real"
+  ]
+}

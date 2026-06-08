@@ -2,13 +2,12 @@
 
 import type { ReactNode } from "react";
 import ModulePageShell from "@/components/module-page-shell";
-import { ConfigCartaRouteTabs } from "./config-carta-route-tabs";
 
 type ConfigCartaWorkbenchProps = {
   title: string;
   description: string;
   children?: ReactNode;
-  /** Acciones alineadas a la derecha de las tabs (p. ej. importar / nuevo). */
+  /** Acciones alineadas a la derecha del título (p. ej. importar / nuevo). */
   headerActions?: ReactNode;
   lockViewport?: boolean;
   lockViewportFillParent?: boolean;
@@ -111,13 +110,10 @@ export function ConfigCartaWorkbench({
       fitLaptopViewport={fitLaptopViewport}
       shellSurface="configLight"
       hideBackLink
-      headerBelow={
-        <div className="hostly-carta-config-header-below">
-          <ConfigCartaRouteTabs />
-          {headerActions ? (
-            <div className="hostly-carta-config-header-actions">{headerActions}</div>
-          ) : null}
-        </div>
+      headerRight={
+        headerActions ? (
+          <div className="hostly-carta-config-header-actions">{headerActions}</div>
+        ) : undefined
       }
     >
       <div className="hostly-carta-config-stack">{children}</div>

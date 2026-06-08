@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "caseId": "croquetas-inline-monolingue",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Entrantes", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Croquetas",
+      "price": 12.5,
+      "sectionName": "Entrantes",
+      "match": {
+        "nameMode": "exact_normalized",
+        "priceTolerance": 0.05,
+        "requireSection": true
+      }
+    }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

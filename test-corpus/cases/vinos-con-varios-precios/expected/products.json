@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "caseId": "vinos-con-varios-precios",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Vinos tintos", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Rioja Crianza",
+      "price": 18,
+      "sectionName": "Vinos tintos",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p2",
+      "name": "Ribera Reserva",
+      "price": 22,
+      "sectionName": "Vinos tintos",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p3",
+      "name": "Syrah copa",
+      "price": 4.5,
+      "sectionName": "Vinos tintos",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p4",
+      "name": "Syrah botella",
+      "price": 16,
+      "sectionName": "Vinos tintos",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

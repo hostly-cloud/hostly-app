@@ -1,0 +1,1519 @@
+{
+  "pageWidth": 2268,
+  "pageHeight": 4032,
+  "lines": [
+    {
+      "lineIndex": 0,
+      "text": "Segundos platos - Main courses - Hauptgerichte",
+      "box": {
+        "minX": 477,
+        "minY": 661,
+        "maxX": 1754,
+        "maxY": 758,
+        "centerX": 1115.5,
+        "centerY": 709.5,
+        "width": 1277,
+        "height": 97
+      },
+      "blockIndex": 0,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 1,
+      "text": "33,00",
+      "box": {
+        "minX": 1737,
+        "minY": 873,
+        "maxX": 1829,
+        "maxY": 901,
+        "centerX": 1783,
+        "centerY": 887,
+        "width": 92,
+        "height": 28
+      },
+      "blockIndex": 1,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 2,
+      "text": "gratinados , servidos con salsa de chile verde",
+      "box": {
+        "minX": 503,
+        "minY": 875,
+        "maxX": 1242,
+        "maxY": 936,
+        "centerX": 872.5,
+        "centerY": 905.5,
+        "width": 739,
+        "height": 61
+      },
+      "blockIndex": 2,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 3,
+      "text": "Langostinos",
+      "box": {
+        "minX": 301,
+        "minY": 900,
+        "maxX": 494,
+        "maxY": 943,
+        "centerX": 397.5,
+        "centerY": 921.5,
+        "width": 193,
+        "height": 43
+      },
+      "blockIndex": 2,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 4,
+      "text": "King prawns served with a green chilli sauce",
+      "box": {
+        "minX": 488,
+        "minY": 933,
+        "maxX": 1216,
+        "maxY": 989,
+        "centerX": 852,
+        "centerY": 961,
+        "width": 728,
+        "height": 56
+      },
+      "blockIndex": 2,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 5,
+      "text": "Gratinated",
+      "box": {
+        "minX": 300,
+        "minY": 953,
+        "maxX": 478,
+        "maxY": 994,
+        "centerX": 389,
+        "centerY": 973.5,
+        "width": 178,
+        "height": 41
+      },
+      "blockIndex": 2,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 6,
+      "text": "Riesengarnelen serviert mit grüner Chili Sauce",
+      "box": {
+        "minX": 490,
+        "minY": 985,
+        "maxX": 1258,
+        "maxY": 1040,
+        "centerX": 874,
+        "centerY": 1012.5,
+        "width": 768,
+        "height": 55
+      },
+      "blockIndex": 2,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 7,
+      "text": "Gratinierte",
+      "box": {
+        "minX": 301,
+        "minY": 1007,
+        "maxX": 480,
+        "maxY": 1045,
+        "centerX": 390.5,
+        "centerY": 1026,
+        "width": 179,
+        "height": 38
+      },
+      "blockIndex": 2,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 8,
+      "text": "de cordero al crujiente de hierbas finas , con tzatziki",
+      "box": {
+        "minX": 451,
+        "minY": 1081,
+        "maxX": 1311,
+        "maxY": 1135,
+        "centerX": 881,
+        "centerY": 1108,
+        "width": 860,
+        "height": 54
+      },
+      "blockIndex": 3,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 9,
+      "text": "Chuletas",
+      "box": {
+        "minX": 298,
+        "minY": 1103,
+        "maxX": 441,
+        "maxY": 1139,
+        "centerX": 369.5,
+        "centerY": 1121,
+        "width": 143,
+        "height": 36
+      },
+      "blockIndex": 3,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 10,
+      "text": "chops in herby breadcrumbs served with tzatziki",
+      "box": {
+        "minX": 396,
+        "minY": 1135,
+        "maxX": 1198,
+        "maxY": 1192,
+        "centerX": 797,
+        "centerY": 1163.5,
+        "width": 802,
+        "height": 57
+      },
+      "blockIndex": 3,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 11,
+      "text": "Lamb",
+      "box": {
+        "minX": 297,
+        "minY": 1157,
+        "maxX": 390,
+        "maxY": 1195,
+        "centerX": 343.5,
+        "centerY": 1176,
+        "width": 93,
+        "height": 38
+      },
+      "blockIndex": 3,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 12,
+      "text": "Lammkoteletts in Kräuterpanade , serviert mit Tzatziki",
+      "box": {
+        "minX": 298,
+        "minY": 1190,
+        "maxX": 1192,
+        "maxY": 1245,
+        "centerX": 745,
+        "centerY": 1217.5,
+        "width": 894,
+        "height": 55
+      },
+      "blockIndex": 3,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 13,
+      "text": "29,50",
+      "box": {
+        "minX": 1742,
+        "minY": 1076,
+        "maxX": 1834,
+        "maxY": 1105,
+        "centerX": 1788,
+        "centerY": 1090.5,
+        "width": 92,
+        "height": 29
+      },
+      "blockIndex": 4,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 14,
+      "text": "Steak Tartar serviert mit Pommes frites",
+      "box": {
+        "minX": 280,
+        "minY": 2200,
+        "maxX": 952,
+        "maxY": 2235,
+        "centerX": 616,
+        "centerY": 2217.5,
+        "width": 672,
+        "height": 35
+      },
+      "blockIndex": 5,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 15,
+      "text": "Muslo deshuesado de pollo feliz al estragon servido con patatas al horno y verduras",
+      "box": {
+        "minX": 282,
+        "minY": 2303,
+        "maxX": 1677,
+        "maxY": 2340,
+        "centerX": 979.5,
+        "centerY": 2321.5,
+        "width": 1395,
+        "height": 37
+      },
+      "blockIndex": 6,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 16,
+      "text": "Freerange boneless chicken leg with tarragon served with baked potatoes and vegetables",
+      "box": {
+        "minX": 282,
+        "minY": 2354,
+        "maxX": 1763,
+        "maxY": 2397,
+        "centerX": 1022.5,
+        "centerY": 2375.5,
+        "width": 1481,
+        "height": 43
+      },
+      "blockIndex": 6,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 17,
+      "text": "Freiland - Hähnchenschenkel ohne Knochen mit Estragon serviert mit Bratkartoffeln und Gemüse",
+      "box": {
+        "minX": 283,
+        "minY": 2411,
+        "maxX": 1883,
+        "maxY": 2451,
+        "centerX": 1083,
+        "centerY": 2431,
+        "width": 1600,
+        "height": 40
+      },
+      "blockIndex": 6,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 18,
+      "text": "Escalopines de cerdo al vino blanco",
+      "box": {
+        "minX": 296,
+        "minY": 1292,
+        "maxX": 886,
+        "maxY": 1341,
+        "centerX": 591,
+        "centerY": 1316.5,
+        "width": 590,
+        "height": 49
+      },
+      "blockIndex": 7,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 19,
+      "text": "Pork escalopes in white wine sauce",
+      "box": {
+        "minX": 294,
+        "minY": 1347,
+        "maxX": 877,
+        "maxY": 1391,
+        "centerX": 585.5,
+        "centerY": 1369,
+        "width": 583,
+        "height": 44
+      },
+      "blockIndex": 7,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 20,
+      "text": "Schweineschnitzelchen in Weisswein Sauce",
+      "box": {
+        "minX": 292,
+        "minY": 1397,
+        "maxX": 1018,
+        "maxY": 1440,
+        "centerX": 655,
+        "centerY": 1418.5,
+        "width": 726,
+        "height": 43
+      },
+      "blockIndex": 7,
+      "paragraphIndex": 2,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 21,
+      "text": "Filete de dorada a la plancha",
+      "box": {
+        "minX": 291,
+        "minY": 1512,
+        "maxX": 775,
+        "maxY": 1544,
+        "centerX": 533,
+        "centerY": 1528,
+        "width": 484,
+        "height": 32
+      },
+      "blockIndex": 8,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 22,
+      "text": "Baked fillet of seabream",
+      "box": {
+        "minX": 291,
+        "minY": 1563,
+        "maxX": 692,
+        "maxY": 1597,
+        "centerX": 491.5,
+        "centerY": 1580,
+        "width": 401,
+        "height": 34
+      },
+      "blockIndex": 8,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 23,
+      "text": "Gebackenes Goldbrassenfilet",
+      "box": {
+        "minX": 289,
+        "minY": 1615,
+        "maxX": 782,
+        "maxY": 1648,
+        "centerX": 535.5,
+        "centerY": 1631.5,
+        "width": 493,
+        "height": 33
+      },
+      "blockIndex": 8,
+      "paragraphIndex": 2,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 24,
+      "text": "Solomillo de ternera nacional a la parilla con patatas fritas",
+      "box": {
+        "minX": 285,
+        "minY": 1717,
+        "maxX": 1271,
+        "maxY": 1759,
+        "centerX": 778,
+        "centerY": 1738,
+        "width": 986,
+        "height": 42
+      },
+      "blockIndex": 9,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 25,
+      "text": "Con salsa de champiñones // con parmesano y trufa fresca",
+      "box": {
+        "minX": 331,
+        "minY": 1770,
+        "maxX": 1371,
+        "maxY": 1814,
+        "centerX": 851,
+        "centerY": 1792,
+        "width": 1040,
+        "height": 44
+      },
+      "blockIndex": 9,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 26,
+      "text": "Grilled National beef fillet with french fries",
+      "box": {
+        "minX": 284,
+        "minY": 1828,
+        "maxX": 1005,
+        "maxY": 1866,
+        "centerX": 644.5,
+        "centerY": 1847,
+        "width": 721,
+        "height": 38
+      },
+      "blockIndex": 9,
+      "paragraphIndex": 2,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 27,
+      "text": "With mushroom sauce // with parmesan and fresh truffel",
+      "box": {
+        "minX": 331,
+        "minY": 1878,
+        "maxX": 1307,
+        "maxY": 1920,
+        "centerX": 819,
+        "centerY": 1899,
+        "width": 976,
+        "height": 42
+      },
+      "blockIndex": 9,
+      "paragraphIndex": 3,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 28,
+      "text": "Gegrilltes Rinderfilet vom heimischen Rind mit Pommes frites",
+      "box": {
+        "minX": 283,
+        "minY": 1929,
+        "maxX": 1332,
+        "maxY": 1975,
+        "centerX": 807.5,
+        "centerY": 1952,
+        "width": 1049,
+        "height": 46
+      },
+      "blockIndex": 9,
+      "paragraphIndex": 3,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 29,
+      "text": "Mit Champignonsauce // mit Parmesan und frischem Trüffel",
+      "box": {
+        "minX": 376,
+        "minY": 1981,
+        "maxX": 1417,
+        "maxY": 2030,
+        "centerX": 896.5,
+        "centerY": 2005.5,
+        "width": 1041,
+        "height": 49
+      },
+      "blockIndex": 9,
+      "paragraphIndex": 4,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 30,
+      "text": "Tartar de ternera servido con patatas fritas",
+      "box": {
+        "minX": 281,
+        "minY": 2090,
+        "maxX": 1016,
+        "maxY": 2130,
+        "centerX": 648.5,
+        "centerY": 2110,
+        "width": 735,
+        "height": 40
+      },
+      "blockIndex": 10,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 31,
+      "text": "Steak tartar served with french fries",
+      "box": {
+        "minX": 281,
+        "minY": 2148,
+        "maxX": 894,
+        "maxY": 2182,
+        "centerX": 587.5,
+        "centerY": 2165,
+        "width": 613,
+        "height": 34
+      },
+      "blockIndex": 10,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 32,
+      "text": "17,50",
+      "box": {
+        "minX": 1747,
+        "minY": 1281,
+        "maxX": 1838,
+        "maxY": 1311,
+        "centerX": 1792.5,
+        "centerY": 1296,
+        "width": 91,
+        "height": 30
+      },
+      "blockIndex": 11,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 33,
+      "text": "18,90",
+      "box": {
+        "minX": 1751,
+        "minY": 1496,
+        "maxX": 1842,
+        "maxY": 1524,
+        "centerX": 1796.5,
+        "centerY": 1510,
+        "width": 91,
+        "height": 28
+      },
+      "blockIndex": 12,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 34,
+      "text": "32,00",
+      "box": {
+        "minX": 1754,
+        "minY": 1712,
+        "maxX": 1846,
+        "maxY": 1741,
+        "centerX": 1800,
+        "centerY": 1726.5,
+        "width": 92,
+        "height": 29
+      },
+      "blockIndex": 13,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 35,
+      "text": "34,50 // 42",
+      "box": {
+        "minX": 1754,
+        "minY": 1766,
+        "maxX": 1947,
+        "maxY": 1797,
+        "centerX": 1850.5,
+        "centerY": 1781.5,
+        "width": 193,
+        "height": 31
+      },
+      "blockIndex": 14,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 36,
+      "text": "ajo - m",
+      "box": {
+        "minX": 2219,
+        "minY": 1656,
+        "maxX": 2267,
+        "maxY": 1695,
+        "centerX": 2243,
+        "centerY": 1675.5,
+        "width": 48,
+        "height": 39
+      },
+      "blockIndex": 15,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 37,
+      "text": "Pan de ajo",
+      "box": {
+        "minX": 2142,
+        "minY": 1673,
+        "maxX": 2221,
+        "maxY": 1723,
+        "centerX": 2181.5,
+        "centerY": 1698,
+        "width": 79,
+        "height": 50
+      },
+      "blockIndex": 15,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 38,
+      "text": "pinza to",
+      "box": {
+        "minX": 2191,
+        "minY": 1712,
+        "maxX": 2267,
+        "maxY": 1761,
+        "centerX": 2229,
+        "centerY": 1736.5,
+        "width": 76,
+        "height": 49
+      },
+      "blockIndex": 15,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 39,
+      "text": "Pan de",
+      "box": {
+        "minX": 2146,
+        "minY": 1735,
+        "maxX": 2204,
+        "maxY": 1777,
+        "centerX": 2175,
+        "centerY": 1756,
+        "width": 58,
+        "height": 42
+      },
+      "blockIndex": 15,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 40,
+      "text": "Mari tomo",
+      "box": {
+        "minX": 2147,
+        "minY": 1784,
+        "maxX": 2267,
+        "maxY": 1841,
+        "centerX": 2207,
+        "centerY": 1812.5,
+        "width": 120,
+        "height": 57
+      },
+      "blockIndex": 15,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 41,
+      "text": "Margherita to",
+      "box": {
+        "minX": 2149,
+        "minY": 1856,
+        "maxX": 2267,
+        "maxY": 1913,
+        "centerX": 2208,
+        "centerY": 1884.5,
+        "width": 118,
+        "height": 57
+      },
+      "blockIndex": 15,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 42,
+      "text": "Marerita Ver",
+      "box": {
+        "minX": 2153,
+        "minY": 1927,
+        "maxX": 2267,
+        "maxY": 1974,
+        "centerX": 2210,
+        "centerY": 1950.5,
+        "width": 114,
+        "height": 47
+      },
+      "blockIndex": 15,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 43,
+      "text": "toma",
+      "box": {
+        "minX": 2215,
+        "minY": 670,
+        "maxX": 2267,
+        "maxY": 728,
+        "centerX": 2241,
+        "centerY": 699,
+        "width": 52,
+        "height": 58
+      },
+      "blockIndex": 16,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 44,
+      "text": "trio",
+      "box": {
+        "minX": 2181,
+        "minY": 724,
+        "maxX": 2224,
+        "maxY": 770,
+        "centerX": 2202.5,
+        "centerY": 747,
+        "width": 43,
+        "height": 46
+      },
+      "blockIndex": 16,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 45,
+      "text": "teen",
+      "box": {
+        "minX": 2150,
+        "minY": 757,
+        "maxX": 2196,
+        "maxY": 808,
+        "centerX": 2173,
+        "centerY": 782.5,
+        "width": 46,
+        "height": 51
+      },
+      "blockIndex": 16,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 46,
+      "text": "- lo",
+      "box": {
+        "minX": 2234,
+        "minY": 737,
+        "maxX": 2267,
+        "maxY": 776,
+        "centerX": 2250.5,
+        "centerY": 756.5,
+        "width": 33,
+        "height": 39
+      },
+      "blockIndex": 17,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 47,
+      "text": "mozzarella",
+      "box": {
+        "minX": 2162,
+        "minY": 757,
+        "maxX": 2254,
+        "maxY": 860,
+        "centerX": 2208,
+        "centerY": 808.5,
+        "width": 92,
+        "height": 103
+      },
+      "blockIndex": 17,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 48,
+      "text": "- mo",
+      "box": {
+        "minX": 2211,
+        "minY": 822,
+        "maxX": 2262,
+        "maxY": 876,
+        "centerX": 2236.5,
+        "centerY": 849,
+        "width": 51,
+        "height": 54
+      },
+      "blockIndex": 18,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 49,
+      "text": "tomate",
+      "box": {
+        "minX": 2164,
+        "minY": 860,
+        "maxX": 2228,
+        "maxY": 928,
+        "centerX": 2196,
+        "centerY": 894,
+        "width": 64,
+        "height": 68
+      },
+      "blockIndex": 18,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 50,
+      "text": "\" mozzare",
+      "box": {
+        "minX": 2190,
+        "minY": 886,
+        "maxX": 2267,
+        "maxY": 968,
+        "centerX": 2228.5,
+        "centerY": 927,
+        "width": 77,
+        "height": 82
+      },
+      "blockIndex": 19,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 51,
+      "text": "Burrato",
+      "box": {
+        "minX": 2137,
+        "minY": 955,
+        "maxX": 2203,
+        "maxY": 1022,
+        "centerX": 2170,
+        "centerY": 988.5,
+        "width": 66,
+        "height": 67
+      },
+      "blockIndex": 19,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 52,
+      "text": "salchicha",
+      "box": {
+        "minX": 2185,
+        "minY": 958,
+        "maxX": 2267,
+        "maxY": 1041,
+        "centerX": 2226,
+        "centerY": 999.5,
+        "width": 82,
+        "height": 83
+      },
+      "blockIndex": 20,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 53,
+      "text": "arlotte",
+      "box": {
+        "minX": 2137,
+        "minY": 1028,
+        "maxX": 2199,
+        "maxY": 1089,
+        "centerX": 2168,
+        "centerY": 1058.5,
+        "width": 62,
+        "height": 61
+      },
+      "blockIndex": 20,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 54,
+      "text": "mozare",
+      "box": {
+        "minX": 2197,
+        "minY": 1033,
+        "maxX": 2267,
+        "maxY": 1102,
+        "centerX": 2232,
+        "centerY": 1067.5,
+        "width": 70,
+        "height": 69
+      },
+      "blockIndex": 21,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 55,
+      "text": "La Payesa",
+      "box": {
+        "minX": 2126,
+        "minY": 1093,
+        "maxX": 2205,
+        "maxY": 1169,
+        "centerX": 2165.5,
+        "centerY": 1131,
+        "width": 79,
+        "height": 76
+      },
+      "blockIndex": 21,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 56,
+      "text": "mozzar",
+      "box": {
+        "minX": 2204,
+        "minY": 1103,
+        "maxX": 2267,
+        "maxY": 1167,
+        "centerX": 2235.5,
+        "centerY": 1135,
+        "width": 63,
+        "height": 64
+      },
+      "blockIndex": 21,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 57,
+      "text": "Barbarella mozmarella",
+      "box": {
+        "minX": 2125,
+        "minY": 1154,
+        "maxX": 2267,
+        "maxY": 1252,
+        "centerX": 2196,
+        "centerY": 1203,
+        "width": 142,
+        "height": 98
+      },
+      "blockIndex": 21,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 58,
+      "text": "Porcini mozzarel",
+      "box": {
+        "minX": 2129,
+        "minY": 1235,
+        "maxX": 2267,
+        "maxY": 1313,
+        "centerX": 2198,
+        "centerY": 1274,
+        "width": 138,
+        "height": 78
+      },
+      "blockIndex": 21,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 59,
+      "text": "Tartufo romat",
+      "box": {
+        "minX": 2130,
+        "minY": 1296,
+        "maxX": 2267,
+        "maxY": 1360,
+        "centerX": 2198.5,
+        "centerY": 1328,
+        "width": 137,
+        "height": 64
+      },
+      "blockIndex": 21,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 60,
+      "text": "Alcachofas",
+      "box": {
+        "minX": 2130,
+        "minY": 1339,
+        "maxX": 2221,
+        "maxY": 1413,
+        "centerX": 2175.5,
+        "centerY": 1376,
+        "width": 91,
+        "height": 74
+      },
+      "blockIndex": 21,
+      "paragraphIndex": 1,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 61,
+      "text": "maggi * 4",
+      "box": {
+        "minX": 2186,
+        "minY": 1994,
+        "maxX": 2267,
+        "maxY": 2042,
+        "centerX": 2226.5,
+        "centerY": 2018,
+        "width": 81,
+        "height": 48
+      },
+      "blockIndex": 22,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 62,
+      "text": "Sana * tom",
+      "box": {
+        "minX": 2155,
+        "minY": 2062,
+        "maxX": 2262,
+        "maxY": 2095,
+        "centerX": 2208.5,
+        "centerY": 2078.5,
+        "width": 107,
+        "height": 33
+      },
+      "blockIndex": 22,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 63,
+      "text": "20,00 *",
+      "box": {
+        "minX": 1762,
+        "minY": 2087,
+        "maxX": 1868,
+        "maxY": 2115,
+        "centerX": 1815,
+        "centerY": 2101,
+        "width": 106,
+        "height": 28
+      },
+      "blockIndex": 23,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 64,
+      "text": "vola tom",
+      "box": {
+        "minX": 2181,
+        "minY": 2136,
+        "maxX": 2260,
+        "maxY": 2163,
+        "centerX": 2220.5,
+        "centerY": 2149.5,
+        "width": 79,
+        "height": 27
+      },
+      "blockIndex": 24,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 65,
+      "text": "Prosciutto Co",
+      "box": {
+        "minX": 2159,
+        "minY": 2203,
+        "maxX": 2266,
+        "maxY": 2233,
+        "centerX": 2212.5,
+        "centerY": 2218,
+        "width": 107,
+        "height": 30
+      },
+      "blockIndex": 24,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 66,
+      "text": "egetariana",
+      "box": {
+        "minX": 2172,
+        "minY": 2272,
+        "maxX": 2262,
+        "maxY": 2308,
+        "centerX": 2217,
+        "centerY": 2290,
+        "width": 90,
+        "height": 36
+      },
+      "blockIndex": 25,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 67,
+      "text": "22,50",
+      "box": {
+        "minX": 1764,
+        "minY": 2298,
+        "maxX": 1858,
+        "maxY": 2327,
+        "centerX": 1811,
+        "centerY": 2312.5,
+        "width": 94,
+        "height": 29
+      },
+      "blockIndex": 26,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 68,
+      "text": "apricciosa",
+      "box": {
+        "minX": 2173,
+        "minY": 2341,
+        "maxX": 2258,
+        "maxY": 2375,
+        "centerX": 2215.5,
+        "centerY": 2358,
+        "width": 85,
+        "height": 34
+      },
+      "blockIndex": 27,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 69,
+      "text": "Estaciones",
+      "box": {
+        "minX": 2177,
+        "minY": 2408,
+        "maxX": 2267,
+        "maxY": 2447,
+        "centerX": 2222,
+        "centerY": 2427.5,
+        "width": 90,
+        "height": 39
+      },
+      "blockIndex": 28,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 70,
+      "text": "Calzone to",
+      "box": {
+        "minX": 2168,
+        "minY": 2472,
+        "maxX": 2267,
+        "maxY": 2518,
+        "centerX": 2217.5,
+        "centerY": 2495,
+        "width": 99,
+        "height": 46
+      },
+      "blockIndex": 28,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 71,
+      "text": "32,50",
+      "box": {
+        "minX": 1770,
+        "minY": 2522,
+        "maxX": 1863,
+        "maxY": 2554,
+        "centerX": 1816.5,
+        "centerY": 2538,
+        "width": 93,
+        "height": 32
+      },
+      "blockIndex": 29,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 72,
+      "text": "Calzone Fa",
+      "box": {
+        "minX": 2170,
+        "minY": 2540,
+        "maxX": 2267,
+        "maxY": 2587,
+        "centerX": 2218.5,
+        "centerY": 2563.5,
+        "width": 97,
+        "height": 47
+      },
+      "blockIndex": 30,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 73,
+      "text": "Calzone Ve",
+      "box": {
+        "minX": 2173,
+        "minY": 2608,
+        "maxX": 2267,
+        "maxY": 2657,
+        "centerX": 2220,
+        "centerY": 2632.5,
+        "width": 94,
+        "height": 49
+      },
+      "blockIndex": 31,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 74,
+      "text": "Baked wild sea bass fillet",
+      "box": {
+        "minX": 281,
+        "minY": 2578,
+        "maxX": 706,
+        "maxY": 2616,
+        "centerX": 493.5,
+        "centerY": 2597,
+        "width": 425,
+        "height": 38
+      },
+      "blockIndex": 32,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 75,
+      "text": "Filete de lubina salvaje al horno",
+      "box": {
+        "minX": 281,
+        "minY": 2527,
+        "maxX": 821,
+        "maxY": 2560,
+        "centerX": 551,
+        "centerY": 2543.5,
+        "width": 540,
+        "height": 33
+      },
+      "blockIndex": 33,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 76,
+      "text": "Disco Vol",
+      "box": {
+        "minX": 2174,
+        "minY": 2677,
+        "maxX": 2264,
+        "maxY": 2725,
+        "centerX": 2219,
+        "centerY": 2701,
+        "width": 90,
+        "height": 48
+      },
+      "blockIndex": 34,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 77,
+      "text": "Parma *",
+      "box": {
+        "minX": 2177,
+        "minY": 2743,
+        "maxX": 2257,
+        "maxY": 2790,
+        "centerX": 2217,
+        "centerY": 2766.5,
+        "width": 80,
+        "height": 47
+      },
+      "blockIndex": 35,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 78,
+      "text": "t",
+      "box": {
+        "minX": 2252,
+        "minY": 2768,
+        "maxX": 2267,
+        "maxY": 2795,
+        "centerX": 2259.5,
+        "centerY": 2781.5,
+        "width": 15,
+        "height": 27
+      },
+      "blockIndex": 35,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 79,
+      "text": "25,50",
+      "box": {
+        "minX": 1774,
+        "minY": 2747,
+        "maxX": 1869,
+        "maxY": 2777,
+        "centerX": 1821.5,
+        "centerY": 2762,
+        "width": 95,
+        "height": 30
+      },
+      "blockIndex": 36,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 80,
+      "text": "Gebackenes wildes",
+      "box": {
+        "minX": 280,
+        "minY": 2638,
+        "maxX": 605,
+        "maxY": 2666,
+        "centerX": 442.5,
+        "centerY": 2652,
+        "width": 325,
+        "height": 28
+      },
+      "blockIndex": 37,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 81,
+      "text": "Tonno e",
+      "box": {
+        "minX": 2180,
+        "minY": 2812,
+        "maxX": 2265,
+        "maxY": 2866,
+        "centerX": 2222.5,
+        "centerY": 2839,
+        "width": 85,
+        "height": 54
+      },
+      "blockIndex": 38,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 82,
+      "text": "Beef Bourguignon served with tagliatelle",
+      "box": {
+        "minX": 278,
+        "minY": 2806,
+        "maxX": 978,
+        "maxY": 2840,
+        "centerX": 628,
+        "centerY": 2823,
+        "width": 700,
+        "height": 34
+      },
+      "blockIndex": 39,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 83,
+      "text": "Estofado de ternera al vino tinto servido con tagliatelle",
+      "box": {
+        "minX": 279,
+        "minY": 2746,
+        "maxX": 1230,
+        "maxY": 2784,
+        "centerX": 754.5,
+        "centerY": 2765,
+        "width": 951,
+        "height": 38
+      },
+      "blockIndex": 40,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 84,
+      "text": "Frutti di",
+      "box": {
+        "minX": 2184,
+        "minY": 2882,
+        "maxX": 2267,
+        "maxY": 2934,
+        "centerX": 2225.5,
+        "centerY": 2908,
+        "width": 83,
+        "height": 52
+      },
+      "blockIndex": 41,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 85,
+      "text": "Boeuf Bourguignon - Rindereintopf serviert mit tagliatelle",
+      "box": {
+        "minX": 277,
+        "minY": 2863,
+        "maxX": 1275,
+        "maxY": 2899,
+        "centerX": 776,
+        "centerY": 2881,
+        "width": 998,
+        "height": 36
+      },
+      "blockIndex": 42,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 86,
+      "text": "Jacluska",
+      "box": {
+        "minX": 2186,
+        "minY": 2950,
+        "maxX": 2267,
+        "maxY": 3007,
+        "centerX": 2226.5,
+        "centerY": 2978.5,
+        "width": 81,
+        "height": 57
+      },
+      "blockIndex": 43,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 87,
+      "text": "La Parn",
+      "box": {
+        "minX": 2192,
+        "minY": 3019,
+        "maxX": 2267,
+        "maxY": 3077,
+        "centerX": 2229.5,
+        "centerY": 3048,
+        "width": 75,
+        "height": 58
+      },
+      "blockIndex": 44,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    },
+    {
+      "lineIndex": 88,
+      "text": "La Veg",
+      "box": {
+        "minX": 2196,
+        "minY": 3088,
+        "maxX": 2267,
+        "maxY": 3149,
+        "centerX": 2231.5,
+        "centerY": 3118.5,
+        "width": 71,
+        "height": 61
+      },
+      "blockIndex": 45,
+      "paragraphIndex": 0,
+      "pageIndex": 0
+    }
+  ]
+}

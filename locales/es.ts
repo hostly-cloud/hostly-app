@@ -221,6 +221,7 @@ export const es: MessageTree = {
     bulkAssignPassApply: "Aplicar",
     bulkAssignPassSuccess: "Pase actualizado en {{count}} productos.",
     bulkAssignPassCentralOnly: "Disponible solo con catálogo central activo.",
+    bulkEditMixedValues: "Valores distintos",
     bulkAssignDestination: "Asignar destino",
     bulkAssignDestinationTitle: "Asignar destino",
     bulkAssignDestinationHint: "Se aplicará a {{count}} productos seleccionados.",

@@ -1,0 +1,9 @@
+{
+  "id": "croquetas-inline-monolingue",
+  "title": "Croquetas nombre+precio inline",
+  "tags": ["inline", "monolingual", "P0"],
+  "sourceType": "image",
+  "menuType": "food",
+  "evaluatePhases": ["parser"],
+  "priority": "P0"
+}

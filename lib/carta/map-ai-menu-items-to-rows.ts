@@ -14,6 +14,9 @@ export type AiMenuDetectedItem = {
   precio: number | null;
   confianza?: number;
   tipoVenta?: TipoProductoVenta;
+  needsReview?: boolean;
+  rawText?: string;
+  sourceLine?: string;
 };
 
 export function mapAiMenuItemsToExtractedRows(
@@ -31,10 +34,21 @@ export function mapAiMenuItemsToExtractedRows(
       catalog,
       candidate: { nombre, categoria, precio: candidatePrecio },
     });
-    const needsReview = dup.length > 0 || it.precio == null;
+    const lowConfidence =
+      typeof it.confianza === "number" ? it.confianza < 0.65 : false;
+    const flaggedReview = it.needsReview === true || lowConfidence;
+    const needsReview = dup.length > 0 || it.precio == null || flaggedReview;
+    const issues: ExtractedMenuRow["issues"] = [];
+    if (dup.length) issues.push("duplicate");
+    if (it.precio == null) issues.push("price_suspicious");
+    const iaNotes = [
+      ...((it.descripcion ?? "").trim() ? [(it.descripcion ?? "").trim()] : []),
+      ...(it.sourceLine?.trim() ? [`Línea: ${it.sourceLine.trim()}`] : []),
+      ...(flaggedReview && !dup.length && it.precio != null ? ["Revisar nombre OCR"] : []),
+    ];
     return {
       tempId: `ai-${Date.now()}-${idx}-${Math.random().toString(16).slice(2, 6)}`,
-      selected: true,
+      selected: !needsReview,
       action: needsReview ? "pending_review" : "create_new",
       targetPlatoId: dup[0]?.platoId ?? null,
       potentialDuplicates: dup.map((d) => ({ platoId: d.platoId, score: d.score, reasons: d.reasons })),
@@ -43,10 +57,10 @@ export function mapAiMenuItemsToExtractedRows(
       precio: Number.isFinite(precio) ? Math.round(precio * 100) / 100 : NaN,
       tipoVenta:
         parseTipoVentaLoose(it.tipoVenta) ?? inferTipoVentaFromCartaText(categoria, nombre),
-      issues: dup.length ? (["duplicate"] as ExtractedMenuRow["issues"]) : undefined,
-      categoryLowConfidence: typeof it.confianza === "number" ? it.confianza < 0.55 : false,
+      issues: issues.length > 0 ? issues : undefined,
+      categoryLowConfidence: lowConfidence,
       familia: "",
-      iaNotes: (it.descripcion ?? "").trim() ? [(it.descripcion ?? "").trim()] : undefined,
+      iaNotes: iaNotes.length > 0 ? iaNotes : undefined,
       disponible: true,
     };
   });

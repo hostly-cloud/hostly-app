@@ -8,12 +8,17 @@ import {
   type ProductFamilyDocument,
 } from "@/lib/carta/product-family-types";
 import type { TranslateFn } from "@/lib/i18n";
+import {
+  BULK_SELECT_MIXED_VALUE,
+  isBulkSelectMixedValue,
+} from "./productos-bulk-initial-values";
 
 export type ProductosBulkAssignFamilyModalProps = {
   open: boolean;
   count: number;
   saving: boolean;
   families: readonly ProductFamilyDocument[];
+  initialSelectValue: string;
   onClose: () => void;
   onConfirm: (familyId: string | null) => void;
   t: TranslateFn;
@@ -24,6 +29,7 @@ export function ProductosBulkAssignFamilyModal({
   count,
   saving,
   families,
+  initialSelectValue,
   onClose,
   onConfirm,
   t,
@@ -33,10 +39,13 @@ export function ProductosBulkAssignFamilyModal({
   const sorted = useMemo(() => sortProductFamilies([...families]), [families]);
 
   useEffect(() => {
-    if (open) setFamilyId(CATEGORY_PRODUCT_FAMILY_NONE);
-  }, [open]);
+    if (open) setFamilyId(initialSelectValue);
+  }, [open, initialSelectValue]);
 
   if (!open) return null;
+
+  const showMixedOption =
+    isBulkSelectMixedValue(initialSelectValue) || isBulkSelectMixedValue(familyId);
 
   return (
     <div
@@ -75,6 +84,9 @@ export function ProductosBulkAssignFamilyModal({
           disabled={saving}
           onChange={(e) => setFamilyId(e.target.value)}
         >
+          {showMixedOption ? (
+            <option value={BULK_SELECT_MIXED_VALUE}>{t("productos.bulkEditMixedValues")}</option>
+          ) : null}
           <option value={CATEGORY_PRODUCT_FAMILY_NONE}>
             {t("modifiersMvp.noFamilyShort")}
           </option>
@@ -97,7 +109,7 @@ export function ProductosBulkAssignFamilyModal({
           <button
             type="button"
             className="hostly-button-primary hostly-button-compact"
-            disabled={saving || count < 1}
+            disabled={saving || count < 1 || isBulkSelectMixedValue(familyId)}
             onClick={() => {
               if (familyId === CATEGORY_PRODUCT_FAMILY_NONE) {
                 onConfirm(null);

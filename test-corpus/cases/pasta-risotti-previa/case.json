@@ -1,0 +1,10 @@
+{
+  "id": "pasta-risotti-previa",
+  "title": "Pasta e Risotti — carbonara + risotto porcini",
+  "tags": ["multilingual", "pasta", "risotti", "P0"],
+  "sourceType": "image",
+  "menuType": "food",
+  "evaluatePhases": ["parser"],
+  "priority": "P0",
+  "evaluationNotes": "Regresión de carta combinada pasta/risotti. Nombre risotto largo evita clasificación como cabecera."
+}

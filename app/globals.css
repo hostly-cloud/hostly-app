@@ -4168,6 +4168,147 @@ body {
   padding: 4px 10px;
 }
 
+.hostly-productos-carta-header-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hostly-productos-carta-header-inline-actions__btn {
+  min-height: 32px !important;
+  padding: 5px 12px !important;
+  font-size: 12px !important;
+}
+
+.hostly-productos-carta-compact-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: color-mix(in srgb, var(--hostly-surface-card-solid) 88%, var(--hostly-surface-page-soft));
+  flex-shrink: 0;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.hostly-productos-carta-food-drink-segment--inline {
+  flex: 1 1 280px;
+  min-width: 0;
+  padding: 0;
+  border-bottom: none;
+  background: transparent;
+}
+
+.hostly-productos-carta-food-drink-segment--inline .hostly-tab--unified {
+  min-height: 28px;
+  padding: 3px 9px;
+}
+
+.hostly-productos-carta-status-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.hostly-productos-carta-status-filter__prefix {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hostly-ink-muted);
+  white-space: nowrap;
+}
+
+.hostly-productos-carta-status-filter__select {
+  min-width: 148px;
+  max-width: 220px;
+}
+
+.hostly-data-table-bulk-bar--compact-config {
+  min-height: 36px;
+  padding: 4px 10px;
+  gap: 8px;
+}
+
+.hostly-data-table-bulk-bar__actions--compact {
+  margin-left: auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.hostly-data-table-bulk-bar__btn--clear {
+  font-size: 11px !important;
+  min-height: 28px !important;
+  padding: 4px 8px !important;
+}
+
+.hostly-productos-bulk-actions-menu {
+  position: relative;
+}
+
+.hostly-productos-bulk-actions-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px !important;
+}
+
+.hostly-productos-bulk-actions-menu__caret {
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.72;
+}
+
+.hostly-productos-bulk-actions-menu__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 188px;
+  padding: 4px;
+  border-radius: var(--hostly-radius-sm, 8px);
+  border: 1px solid var(--hostly-line);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.hostly-productos-bulk-actions-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--hostly-navy-deep);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.hostly-productos-bulk-actions-menu__item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--hostly-accent-soft) 42%, white);
+}
+
+.hostly-productos-bulk-actions-menu__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hostly-productos-bulk-actions-menu__item--danger {
+  color: #b91c1c;
+}
+
+.hostly-productos-bulk-actions-menu__item--danger:hover:not(:disabled) {
+  background: rgba(254, 242, 242, 0.95);
+}
+
 .hostly-productos-carta-advanced-toggle--toolbar {
   text-decoration: none;
   padding: 6px 10px;
@@ -4509,6 +4650,14 @@ body {
   min-height: 0;
 }
 
+/* Config Carta → Productos: stack llena viewport bajo tabs (lockViewport). */
+.hostly-carta-config-stack:has(> .hostly-productos-config-skin--simplified) {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
 .hostly-carta-config-actions-row {
   display: flex;
   flex-wrap: wrap;
@@ -4722,6 +4871,232 @@ body {
   margin-top: var(--hostly-op-gap-sm);
   padding-top: var(--hostly-op-gap-sm);
   border-top: 1px solid var(--hostly-table-divider-faint);
+}
+
+.hostly-carta-config-drawer-backdrop--elevated {
+  z-index: 55;
+}
+
+/* Product form drawer — right rail, Carta Config light chrome */
+.hostly-product-form-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  background: color-mix(in srgb, var(--hostly-navy-deep) 42%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.hostly-product-form-drawer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: min(520px, 92vw);
+  min-width: 0;
+  border-left: 1px solid var(--hostly-config-card-border);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: -8px 0 32px color-mix(in srgb, var(--hostly-navy-deep) 10%, transparent);
+}
+
+.hostly-product-form-drawer__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+  padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+}
+
+.hostly-product-form-drawer__header-text {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.hostly-product-form-drawer__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-product-form-drawer__subtitle {
+  margin: var(--hostly-op-gap-xs) 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-product-form-drawer__body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+}
+
+.hostly-product-form-drawer__sections {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--hostly-op-gap-sm);
+  min-width: 0;
+}
+
+.hostly-product-form-drawer__footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  gap: var(--hostly-op-gap-xs);
+  margin-top: 0;
+  padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+  border-top: 1px solid var(--hostly-table-divider-faint);
+  background: var(--hostly-surface-card-solid);
+}
+
+.hostly-product-form-drawer__footer-primary {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.hostly-product-form-drawer-block {
+  border-radius: var(--hostly-config-radius);
+  border: 1px solid var(--hostly-table-divider-faint);
+  background: color-mix(in srgb, var(--hostly-ice-50) 38%, var(--hostly-surface-card-solid));
+  padding: var(--hostly-op-gap-sm);
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.hostly-product-form-drawer-block__fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--hostly-op-gap-sm);
+  margin-top: var(--hostly-op-gap-sm);
+  min-width: 0;
+}
+
+.hostly-product-form-drawer-collapsible__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.hostly-product-form-drawer-collapsible__toggle .hostly-carta-config-section-title {
+  display: block;
+}
+
+.hostly-product-form-drawer-collapsible__toggle .hostly-carta-config-form-hint {
+  display: block;
+  margin-top: var(--hostly-op-gap-xs);
+}
+
+.hostly-product-form-drawer-collapsible__chevron {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-product-form-drawer-input--prominent {
+  font-size: 15px;
+  font-weight: 600;
+  padding-top: calc(var(--hostly-op-gap-xs) + 2px);
+  padding-bottom: calc(var(--hostly-op-gap-xs) + 2px);
+}
+
+.hostly-product-form-drawer-textarea {
+  resize: vertical;
+  min-height: 5.5rem;
+}
+
+.hostly-product-form-drawer-readonly {
+  display: flex;
+  align-items: center;
+  min-height: var(--hostly-op-button-compact-min-h);
+  color: var(--hostly-ink-muted);
+  opacity: 0.92;
+}
+
+.hostly-product-form-drawer-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  padding-top: 2px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hostly-product-form-drawer-checkbox input {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--hostly-accent);
+}
+
+.hostly-product-form-drawer-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-xs);
+}
+
+.hostly-product-form-drawer-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hostly-ink-strong);
+  user-select: none;
+}
+
+.hostly-product-form-drawer-radio input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--hostly-accent);
+}
+
+.hostly-product-form-drawer-meta {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-product-form-drawer-meta strong {
+  font-weight: 700;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-product-form-drawer-categoria-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hostly-op-gap-xs);
+  align-items: stretch;
+  margin-top: var(--hostly-op-gap-xs);
+}
+
+.hostly-product-form-drawer-categoria-row select {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.hostly-product-form-drawer-categoria-add {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .hostly-carta-config-section-title {
@@ -6858,6 +7233,37 @@ body {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
+  }
+
+  .hostly-productos-carta-header-inline-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .hostly-productos-carta-header-inline-actions__btn {
+    flex: 1 1 auto;
+    min-height: 40px !important;
+    justify-content: center;
+  }
+
+  .hostly-productos-carta-compact-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .hostly-productos-carta-food-drink-segment--inline {
+    flex-basis: auto;
+  }
+
+  .hostly-productos-carta-status-filter {
+    width: 100%;
+  }
+
+  .hostly-productos-carta-status-filter__select {
+    flex: 1 1 auto;
+    max-width: none;
+    width: 100%;
   }
 
   .hostly-productos-carta-action,

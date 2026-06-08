@@ -23,6 +23,15 @@ import {
   normalizeMenuImportOcrText,
   parseMenuText,
 } from "./parse-menu-text";
+import {
+  buildMenuImportDebugReport,
+  type MenuImportDebugReport,
+} from "./menu-import-debug-report";
+import { isMenuImportDebugReportEnabled } from "@/lib/carta/menu-import-debug-report-types";
+import type { MenuImportOperationalWarning } from "@/lib/carta/menu-import-operational-warnings-types";
+import { buildMenuImportOperationalWarningsForDraft } from "./build-menu-import-operational-warnings";
+import { runAiImportV2Shadow } from "./ai-import-v2/run-ai-import-v2-shadow";
+import type { AiImportV2ShadowReport } from "./ai-import-v2/types";
 
 const ANALYZING_STALE_MS = 2 * 60 * 1000;
 
@@ -43,6 +52,12 @@ export type ProcessMenuImportDraftResult = {
   status: MenuImportDraftDocument["status"];
   alreadyProcessed: boolean;
   itemCount: number;
+  /** Solo desarrollo: trazabilidad OCR → parser → IA → validación. */
+  debugReport?: MenuImportDebugReport;
+  /** Avisos operativos para la UI (no persistidos en Firestore). */
+  operationalWarnings?: MenuImportOperationalWarning[];
+  /** Shadow IA V2 (no afecta draft; solo observación). */
+  aiImportV2Shadow?: AiImportV2ShadowReport;
 };
 
 /**
@@ -165,8 +180,51 @@ export async function processMenuImportDraft(params: {
     const parsed = parseMenuText(extracted.rawText, {
       sourceType: draft.sourceType,
       menuType: draft.menuType,
+      ocrLayoutLines: extracted.ocrLayoutLines,
+      ocrPageWidth: extracted.ocrPageWidth,
+      ocrPageHeight: extracted.ocrPageHeight,
     });
     trace.parser(parsed.items, parsed.warnings);
+    if (parsed.diagnostics && isMenuImportDebugReportEnabled()) {
+      trace.step("parser", {
+        lineAuditCount: parsed.diagnostics.lineEvents.length,
+        unparsedPendingNames: parsed.diagnostics.unparsedPendingNames.slice(0, 12),
+      });
+    }
+
+    const aiImportV2Shadow = await runAiImportV2Shadow({
+      rawText: extracted.rawText,
+      parserItems: parsed.items,
+      menuType: draft.menuType,
+      sourceType: draft.sourceType,
+      storagePath: draft.storagePath,
+      originalFileName: draft.originalFileName,
+      ocrLayoutLines: extracted.ocrLayoutLines,
+    }).catch((shadowErr) => {
+      const message = shadowErr instanceof Error ? shadowErr.message : "AI_IMPORT_V2_SHADOW_FAILED";
+      console.warn("[Hostly][AI Import V2 Shadow] outer catch (non-blocking)", { error: message });
+      return {
+        enabled: true as const,
+        model: process.env.HOSTLY_AI_IMPORT_V2_MODEL?.trim() || "gpt-4o-mini",
+        usedVision: false,
+        durationMs: 0,
+        extraction: null,
+        validation: null,
+        comparison: null,
+        error: message,
+      };
+    });
+
+    if (aiImportV2Shadow) {
+      trace.step("ai_import_v2_shadow", {
+        model: aiImportV2Shadow.model,
+        usedVision: aiImportV2Shadow.usedVision,
+        error: aiImportV2Shadow.error ?? null,
+        parserDetected: aiImportV2Shadow.comparison?.parserDetected ?? parsed.items.length,
+        v2Accepted: aiImportV2Shadow.comparison?.v2Accepted ?? 0,
+        matchedBoth: aiImportV2Shadow.comparison?.matchedBoth ?? 0,
+      });
+    }
 
     const parserWarnings = [...extracted.warnings, ...parsed.warnings];
     const knownCategories = await loadHostlyCategoryNames(db, restaurantId);
@@ -213,6 +271,47 @@ export async function processMenuImportDraft(params: {
       "process-menu-import-draft",
     );
 
+    const debugReport = isMenuImportDebugReportEnabled()
+      ? buildMenuImportDebugReport({
+          fileName: draft.originalFileName ?? null,
+          sourceType: draft.sourceType,
+          inputMetadata: extracted.inputMetadata,
+          ocrLayoutExtractionMeta: extracted.ocrLayoutExtractionMeta,
+          rawOcrText: extracted.rawText,
+          cleanedOcrText: cleanedText,
+          parserWarnings,
+          aiWarnings: enriched.aiWarnings,
+          parseDiagnostics: parsed.diagnostics,
+          parsedItems: parsed.items,
+          enrichedItems: enriched.items,
+          ocrValidationAccepted: finalItems,
+          ocrValidationRejected: ocrValidated.rejected,
+          rawOcrTextForValidation: extracted.rawText,
+          aiImportV2Shadow,
+        })
+      : undefined;
+
+    if (debugReport && isMenuImportDebugReportEnabled()) {
+      console.info("[Hostly][MenuImport Debug] visual_parser_gate", {
+        textItemsCount: debugReport.textItemsCount,
+        visualItemsCount: debugReport.visualItemsCount,
+        layoutLinesCount: debugReport.layoutLinesCount,
+        visualBlocksCount: debugReport.visualBlocksCount,
+        recoveredVisualBlocksCount: debugReport.recoveredVisualBlocksCount,
+        selectedParserMode: debugReport.selectedParserMode,
+        visualParserGateReason: debugReport.visualParserGateReason,
+        visualCandidateRejectedReason: debugReport.visualCandidateRejectedReason,
+        ocrPageWidth: debugReport.ocrPageWidth,
+        ocrMethod: debugReport.inputMetadata?.ocrMethod,
+      });
+      console.info("[Hostly][MenuImport Debug] phase_counts", debugReport.counts);
+      console.info("[Hostly][MenuImport Debug] rejected", debugReport.rejected.slice(0, 20));
+      console.info(
+        "[Hostly][MenuImport Debug] likely_unparsed_lines",
+        debugReport.likelyUnparsedOcrLines.slice(0, 20),
+      );
+    }
+
     if (finalItems.length === 0) {
       trace.pipelineError("ocr_validation", new Error("NO_PRODUCTS_DETECTED"));
       throw new ProcessMenuImportDraftError(
@@ -233,6 +332,18 @@ export async function processMenuImportDraft(params: {
     if (!enriched.enriched && aiWarnings.length > 0) {
       parserWarnings.push(...aiWarnings);
     }
+
+    const operationalWarnings = await buildMenuImportOperationalWarningsForDraft({
+      db,
+      restaurantId,
+      sourceType: draft.sourceType,
+      storagePath: draft.storagePath,
+      ocrMethod: extracted.inputMetadata?.ocrMethod,
+      parserWarnings,
+      rawTextLength: extracted.rawText.length,
+      items: finalItems,
+      parseDiagnostics: parsed.diagnostics,
+    });
 
     currentStep = "draft_save";
     trace.draftSave({
@@ -264,6 +375,9 @@ export async function processMenuImportDraft(params: {
       status: "ready",
       alreadyProcessed: false,
       itemCount: finalItems.length,
+      debugReport,
+      operationalWarnings,
+      ...(aiImportV2Shadow ? { aiImportV2Shadow } : {}),
     };
   } catch (e) {
     trace.pipelineError(currentStep, e);

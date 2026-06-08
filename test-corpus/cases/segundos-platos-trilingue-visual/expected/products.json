@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "caseId": "segundos-platos-trilingue-visual",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Segundos platos", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Langostinos gratinados, servidos con salsa de chile verde",
+      "price": 33,
+      "sectionName": "Segundos platos",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": false }
+    },
+    {
+      "id": "p2",
+      "name": "Chuletas de cordero al crujiente de hierbas finas, con tzatziki",
+      "price": 29.5,
+      "sectionName": "Segundos platos",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": false }
+    },
+    {
+      "id": "p3",
+      "name": "Escalopes de cerdo al vino blanco",
+      "price": 17.5,
+      "sectionName": "Segundos platos",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": false }
+    },
+    {
+      "id": "p4",
+      "name": "Filete de dorada a la plancha",
+      "price": 18.9,
+      "sectionName": "Segundos platos",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": false }
+    },
+    {
+      "id": "p5",
+      "name": "Solomillo de ternera nacional a la parrilla con patatas fritas",
+      "price": 32,
+      "sectionName": "Segundos platos",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": false }
+    },
+    {
+      "id": "p6",
+      "name": "Muslo deshuesado de pollo feliz al estragón servido con patatas al horno y verduras",
+      "price": 22.5,
+      "sectionName": "Segundos platos",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": false }
+    },
+    {
+      "id": "p7",
+      "name": "Filete de lubina salvaje al horno",
+      "price": 32.5,
+      "sectionName": "Segundos platos",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": false }
+    },
+    {
+      "id": "p8",
+      "name": "Estofado de ternera al vino tinto servido con tagliatelle",
+      "price": 25.5,
+      "sectionName": "Segundos platos",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": false }
+    }
+  ],
+  "negativeProducts": [
+    { "namePattern": "^Gratinados, servidos", "reason": "fragmento sin sujeto" },
+    { "namePattern": "^De cordero al crujiente", "reason": "fragmento sin sujeto" },
+    { "namePattern": "^Pork escalopes", "reason": "traducción inglesa como producto" },
+    { "namePattern": "^Baked fillet of seabream", "reason": "traducción inglesa como producto" },
+    { "namePattern": "^Con salsa de champiñones", "reason": "fragmento descriptivo" },
+    { "namePattern": "^Gebackenes wildes", "reason": "fragmento alemán" },
+    { "namePattern": "^Lamb chops", "reason": "traducción inglesa" },
+    { "namePattern": "^Grilled gilthead", "reason": "traducción inglesa" },
+    { "namePattern": "^Garnelen gratiniert", "reason": "traducción alemana" },
+    { "namePattern": "^National beef sirloin", "reason": "traducción inglesa" },
+    { "namePattern": "^Boneless happy chicken", "reason": "traducción inglesa" },
+    { "namePattern": "^Wild seabass", "reason": "traducción inglesa" },
+    { "namePattern": "^Beef stew", "reason": "traducción inglesa" }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

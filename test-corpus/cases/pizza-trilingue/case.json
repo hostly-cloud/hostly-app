@@ -1,0 +1,10 @@
+{
+  "id": "pizza-trilingue",
+  "title": "Pizza gourmet trilingüe",
+  "tags": ["multilingual", "pizza", "P0"],
+  "sourceType": "image",
+  "menuType": "food",
+  "evaluatePhases": ["parser"],
+  "priority": "P0",
+  "evaluationNotes": "Cabecera trilingüe + bloques ES/EN/DE + precio huérfano."
+}

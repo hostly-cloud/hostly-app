@@ -16,6 +16,8 @@ export type PublishPreviewCreateProduct = {
   badges: PublishPreviewBadge[];
   warnings: string[];
   confidence: number;
+  /** Refleja el borrador: evita doble confirmación en preview si ya está marcado en revisión. */
+  selectedForPublish: boolean;
 };
 
 export type PublishPreviewPossibleDuplicate = {

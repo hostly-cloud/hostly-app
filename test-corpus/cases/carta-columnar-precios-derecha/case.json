@@ -1,0 +1,10 @@
+{
+  "id": "carta-columnar-precios-derecha",
+  "title": "Carta columnar — nombres izquierda, precios derecha",
+  "tags": ["columnar", "orphan-price", "P1"],
+  "sourceType": "image",
+  "menuType": "food",
+  "evaluatePhases": ["parser"],
+  "priority": "P1",
+  "evaluationNotes": "Regresión: 3 nombres + bloque de 3 precios consecutivos (emparejamiento FIFO)."
+}

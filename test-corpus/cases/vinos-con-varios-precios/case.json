@@ -1,0 +1,10 @@
+{
+  "id": "vinos-con-varios-precios",
+  "title": "Vinos tintos — botella y copa/botella mismo vino",
+  "tags": ["vinos", "inline", "multi-price", "P1"],
+  "sourceType": "image",
+  "menuType": "wine",
+  "evaluatePhases": ["parser"],
+  "priority": "P1",
+  "evaluationNotes": "Regresión: vinos con Reserva en nombre + copa/botella mismo vino."
+}

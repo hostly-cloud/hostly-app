@@ -1,6 +1,20 @@
 import { ImageAnnotatorClient } from "@google-cloud/vision";
 import { isMenuImportPipelineDiagnosticsEnabled } from "./menu-import-pipeline-diagnostics";
 import { MAX_VISION_PDF_PAGES, OCR_TIMEOUT_MS } from "./menu-import-limits";
+import type { OcrLayoutLine } from "./menu-import-ocr-layout-types";
+import {
+  extractLayoutLinesFromVisionAnnotation,
+  type OcrLayoutExtractionMeta,
+  type VisionFullTextAnnotation,
+} from "./vision-ocr-layout";
+
+export type VisionOcrLayoutResult = {
+  text: string;
+  lines: OcrLayoutLine[];
+  pageWidth: number;
+  pageHeight: number;
+  extractionMeta: OcrLayoutExtractionMeta;
+};
 
 let visionClient: ImageAnnotatorClient | null | undefined;
 
@@ -29,7 +43,7 @@ function joinVisionText(fullTextAnnotation: { text?: string | null } | null | un
   return (fullTextAnnotation?.text ?? "").trim();
 }
 
-export async function ocrImageBuffer(buffer: Buffer): Promise<string> {
+export async function ocrImageBufferWithLayout(buffer: Buffer): Promise<VisionOcrLayoutResult> {
   const client = getVisionClient();
   if (!client) {
     const message = "Google Vision API no disponible (revisa credenciales Admin y API habilitada)";
@@ -46,7 +60,8 @@ export async function ocrImageBuffer(buffer: Buffer): Promise<string> {
       "image",
     );
 
-    const text = joinVisionText(result.fullTextAnnotation);
+    const annotation = result.fullTextAnnotation as VisionFullTextAnnotation | null | undefined;
+    const text = joinVisionText(annotation);
     if (!text) {
       const message = "OCR no detectó texto en la imagen";
       if (isMenuImportPipelineDiagnosticsEnabled()) {
@@ -55,13 +70,27 @@ export async function ocrImageBuffer(buffer: Buffer): Promise<string> {
       throw new Error(message);
     }
 
+    const layout = extractLayoutLinesFromVisionAnnotation(annotation);
+
     if (isMenuImportPipelineDiagnosticsEnabled()) {
       console.info("[Hostly][MenuImport Pipeline] vision_image_ocr_ok", {
         textLength: text.length,
+        layoutLines: layout.lines.length,
+        pageWidth: layout.pageWidth,
+        extractionMethod: layout.extractionMeta.method,
+        visionBlockCount: layout.extractionMeta.visionBlockCount,
+        visionParagraphCount: layout.extractionMeta.visionParagraphCount,
         preview: text.slice(0, 200),
       });
     }
-    return text;
+
+    return {
+      text,
+      lines: layout.lines,
+      pageWidth: layout.pageWidth,
+      pageHeight: layout.pageHeight,
+      extractionMeta: layout.extractionMeta,
+    };
   } catch (e) {
     if (isMenuImportPipelineDiagnosticsEnabled()) {
       console.error("[Hostly][MenuImport Pipeline] vision_image_ocr_error", {
@@ -71,6 +100,11 @@ export async function ocrImageBuffer(buffer: Buffer): Promise<string> {
     }
     throw e;
   }
+}
+
+export async function ocrImageBuffer(buffer: Buffer): Promise<string> {
+  const result = await ocrImageBufferWithLayout(buffer);
+  return result.text;
 }
 
 export async function ocrPdfBuffer(buffer: Buffer): Promise<{ text: string; warnings: string[] }> {

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "caseId": "bebida-cocktail-simple",
+  "labeledAt": "2026-06-07",
+  "labeledBy": "hostly-eval",
+  "sections": [{ "name": "Cócteles", "order": 0 }],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Gin Tonic premium",
+      "price": 11.5,
+      "sectionName": "Cócteles",
+      "match": { "nameMode": "normalized_contains", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p2",
+      "name": "Mojito",
+      "price": 9.5,
+      "sectionName": "Cócteles",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    },
+    {
+      "id": "p3",
+      "name": "Negroni",
+      "price": 10.5,
+      "sectionName": "Cócteles",
+      "match": { "nameMode": "exact_normalized", "priceTolerance": 0.05, "requireSection": true }
+    }
+  ],
+  "globalExpectations": {
+    "maxPendingNames": 0,
+    "maxFalsePositives": 0,
+    "minRecall": 1,
+    "minPrecision": 1
+  }
+}

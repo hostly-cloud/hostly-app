@@ -1,0 +1,29 @@
+name: Menu import eval
+
+on:
+  pull_request:
+    paths:
+      - "lib/server/menu-imports/**"
+      - "lib/menu-import-eval/**"
+      - "scripts/eval-menu-import-corpus.ts"
+      - "test-corpus/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/menu-import-eval.yml"
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run menu import corpus eval
+        run: npm run eval:menu-import

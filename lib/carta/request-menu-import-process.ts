@@ -1,4 +1,6 @@
 import { auth } from "@/lib/firebase/client";
+import type { MenuImportDebugReport } from "@/lib/carta/menu-import-debug-report-types";
+import type { MenuImportOperationalWarning } from "@/lib/carta/menu-import-operational-warnings-types";
 
 export type RequestMenuImportProcessResult =
   | {
@@ -7,6 +9,8 @@ export type RequestMenuImportProcessResult =
       status: string;
       alreadyProcessed: boolean;
       itemCount: number;
+      debugReport?: MenuImportDebugReport;
+      operationalWarnings?: MenuImportOperationalWarning[];
     }
   | {
       ok: false;
@@ -45,6 +49,8 @@ export async function requestMenuImportProcess(draftId: string): Promise<Request
         status?: string;
         alreadyProcessed?: boolean;
         itemCount?: number;
+        debugReport?: MenuImportDebugReport;
+        operationalWarnings?: MenuImportOperationalWarning[];
       }
     | null;
 
@@ -63,5 +69,9 @@ export async function requestMenuImportProcess(draftId: string): Promise<Request
     status: payload.status ?? "ready",
     alreadyProcessed: payload.alreadyProcessed === true,
     itemCount: typeof payload.itemCount === "number" ? payload.itemCount : 0,
+    debugReport: payload.debugReport,
+    operationalWarnings: Array.isArray(payload.operationalWarnings)
+      ? payload.operationalWarnings
+      : undefined,
   };
 }

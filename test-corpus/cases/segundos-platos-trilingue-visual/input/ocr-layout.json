@@ -1,0 +1,468 @@
+{
+  "pageWidth": 600,
+  "pageHeight": 2400,
+  "lines": [
+    {
+      "lineIndex": 0,
+      "text": "Segundos platos - Main courses - Hauptgerichte",
+      "box": {
+        "minX": 42,
+        "maxX": 318,
+        "minY": 51,
+        "maxY": 69,
+        "centerX": 180,
+        "centerY": 60,
+        "width": 276,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 1,
+      "text": "Langostinos gratinados, servidos con salsa de chile verde",
+      "box": {
+        "minX": 9,
+        "maxX": 351,
+        "minY": 121,
+        "maxY": 139,
+        "centerX": 180,
+        "centerY": 130,
+        "width": 342,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 2,
+      "text": "Prawns au gratin, served with green chilli sauce",
+      "box": {
+        "minX": 36,
+        "maxX": 324,
+        "minY": 143,
+        "maxY": 161,
+        "centerX": 180,
+        "centerY": 152,
+        "width": 288,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 3,
+      "text": "Garnelen gratiniert, serviert mit gruener Chilisauce",
+      "box": {
+        "minX": 24,
+        "maxX": 336,
+        "minY": 165,
+        "maxY": 183,
+        "centerX": 180,
+        "centerY": 174,
+        "width": 312,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 4,
+      "text": "33,00",
+      "box": {
+        "minX": 420,
+        "maxX": 540,
+        "minY": 143,
+        "maxY": 161,
+        "centerX": 480,
+        "centerY": 152,
+        "width": 120,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 5,
+      "text": "Chuletas de cordero al crujiente de hierbas finas, con tzatziki",
+      "box": {
+        "minX": -9,
+        "maxX": 369,
+        "minY": 209,
+        "maxY": 227,
+        "centerX": 180,
+        "centerY": 218,
+        "width": 378,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 6,
+      "text": "Lamb chops with fine herb crust, with tzatziki",
+      "box": {
+        "minX": 42,
+        "maxX": 318,
+        "minY": 231,
+        "maxY": 249,
+        "centerX": 180,
+        "centerY": 240,
+        "width": 276,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 7,
+      "text": "Lammkoteletts mit feiner Kraeuterkruste, mit Tzatziki",
+      "box": {
+        "minX": 21,
+        "maxX": 339,
+        "minY": 253,
+        "maxY": 271,
+        "centerX": 180,
+        "centerY": 262,
+        "width": 318,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 8,
+      "text": "29,50",
+      "box": {
+        "minX": 420,
+        "maxX": 540,
+        "minY": 231,
+        "maxY": 249,
+        "centerX": 480,
+        "centerY": 240,
+        "width": 120,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 9,
+      "text": "Escalopes de cerdo al vino blanco",
+      "box": {
+        "minX": 81,
+        "maxX": 279,
+        "minY": 297,
+        "maxY": 315,
+        "centerX": 180,
+        "centerY": 306,
+        "width": 198,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 10,
+      "text": "Pork escalopes in white wine sauce",
+      "box": {
+        "minX": 78,
+        "maxX": 282,
+        "minY": 319,
+        "maxY": 337,
+        "centerX": 180,
+        "centerY": 328,
+        "width": 204,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 11,
+      "text": "Schweinekoteletts in Weissweinsauce",
+      "box": {
+        "minX": 75,
+        "maxX": 285,
+        "minY": 341,
+        "maxY": 359,
+        "centerX": 180,
+        "centerY": 350,
+        "width": 210,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 12,
+      "text": "17,50",
+      "box": {
+        "minX": 420,
+        "maxX": 540,
+        "minY": 319,
+        "maxY": 337,
+        "centerX": 480,
+        "centerY": 328,
+        "width": 120,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 13,
+      "text": "Filete de dorada a la plancha",
+      "box": {
+        "minX": 93,
+        "maxX": 267,
+        "minY": 385,
+        "maxY": 403,
+        "centerX": 180,
+        "centerY": 394,
+        "width": 174,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 14,
+      "text": "Grilled gilthead fillet",
+      "box": {
+        "minX": 111,
+        "maxX": 249,
+        "minY": 407,
+        "maxY": 425,
+        "centerX": 180,
+        "centerY": 416,
+        "width": 138,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 15,
+      "text": "Doradenfilet vom Grill",
+      "box": {
+        "minX": 114,
+        "maxX": 246,
+        "minY": 429,
+        "maxY": 447,
+        "centerX": 180,
+        "centerY": 438,
+        "width": 132,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 16,
+      "text": "18,90",
+      "box": {
+        "minX": 420,
+        "maxX": 540,
+        "minY": 407,
+        "maxY": 425,
+        "centerX": 480,
+        "centerY": 416,
+        "width": 120,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 17,
+      "text": "Solomillo de ternera nacional a la parrilla con patatas fritas",
+      "box": {
+        "minX": -6,
+        "maxX": 366,
+        "minY": 473,
+        "maxY": 491,
+        "centerX": 180,
+        "centerY": 482,
+        "width": 372,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 18,
+      "text": "National beef sirloin on the grill with fries",
+      "box": {
+        "minX": 45,
+        "maxX": 315,
+        "minY": 495,
+        "maxY": 513,
+        "centerX": 180,
+        "centerY": 504,
+        "width": 270,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 19,
+      "text": "Rinderfilet vom Grill mit Pommes",
+      "box": {
+        "minX": 84,
+        "maxX": 276,
+        "minY": 517,
+        "maxY": 535,
+        "centerX": 180,
+        "centerY": 526,
+        "width": 192,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 20,
+      "text": "32,00",
+      "box": {
+        "minX": 420,
+        "maxX": 540,
+        "minY": 495,
+        "maxY": 513,
+        "centerX": 480,
+        "centerY": 504,
+        "width": 120,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 21,
+      "text": "Muslo deshuesado de pollo feliz al estragon servido con patatas al horno y verduras",
+      "box": {
+        "minX": -69,
+        "maxX": 429,
+        "minY": 561,
+        "maxY": 579,
+        "centerX": 180,
+        "centerY": 570,
+        "width": 498,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 22,
+      "text": "Boneless happy chicken thigh with tarragon served with roast potatoes and vegetables",
+      "box": {
+        "minX": -72,
+        "maxX": 432,
+        "minY": 583,
+        "maxY": 601,
+        "centerX": 180,
+        "centerY": 592,
+        "width": 504,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 23,
+      "text": "Entbeintes Haehnchenschenkel mit Estragon",
+      "box": {
+        "minX": 57,
+        "maxX": 303,
+        "minY": 605,
+        "maxY": 623,
+        "centerX": 180,
+        "centerY": 614,
+        "width": 246,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 24,
+      "text": "22,50",
+      "box": {
+        "minX": 420,
+        "maxX": 540,
+        "minY": 583,
+        "maxY": 601,
+        "centerX": 480,
+        "centerY": 592,
+        "width": 120,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 25,
+      "text": "Filete de lubina salvaje al horno",
+      "box": {
+        "minX": 81,
+        "maxX": 279,
+        "minY": 649,
+        "maxY": 667,
+        "centerX": 180,
+        "centerY": 658,
+        "width": 198,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 26,
+      "text": "Wild seabass fillet baked in the oven",
+      "box": {
+        "minX": 69,
+        "maxX": 291,
+        "minY": 671,
+        "maxY": 689,
+        "centerX": 180,
+        "centerY": 680,
+        "width": 222,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 27,
+      "text": "Wildes Wolfsbarschfilet aus dem Ofen",
+      "box": {
+        "minX": 72,
+        "maxX": 288,
+        "minY": 693,
+        "maxY": 711,
+        "centerX": 180,
+        "centerY": 702,
+        "width": 216,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 28,
+      "text": "32,50",
+      "box": {
+        "minX": 420,
+        "maxX": 540,
+        "minY": 671,
+        "maxY": 689,
+        "centerX": 480,
+        "centerY": 680,
+        "width": 120,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 29,
+      "text": "Estofado de ternera al vino tinto servido con tagliatelle",
+      "box": {
+        "minX": 9,
+        "maxX": 351,
+        "minY": 737,
+        "maxY": 755,
+        "centerX": 180,
+        "centerY": 746,
+        "width": 342,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 30,
+      "text": "Beef stew in red wine served with tagliatelle",
+      "box": {
+        "minX": 45,
+        "maxX": 315,
+        "minY": 759,
+        "maxY": 777,
+        "centerX": 180,
+        "centerY": 768,
+        "width": 270,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 31,
+      "text": "Rindergulasch mit Rotwein und Tagliatelle",
+      "box": {
+        "minX": 57,
+        "maxX": 303,
+        "minY": 781,
+        "maxY": 799,
+        "centerX": 180,
+        "centerY": 790,
+        "width": 246,
+        "height": 18
+      }
+    },
+    {
+      "lineIndex": 32,
+      "text": "25,50",
+      "box": {
+        "minX": 420,
+        "maxX": 540,
+        "minY": 759,
+        "maxY": 777,
+        "centerX": 480,
+        "centerY": 768,
+        "width": 120,
+        "height": 18
+      }
+    }
+  ]
+}

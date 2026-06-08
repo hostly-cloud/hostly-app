@@ -1,0 +1,9 @@
+{
+  "id": "orecchiette-identical-translations",
+  "title": "Orecchiette con traducciones idénticas",
+  "tags": ["multilingual", "identical-translations", "P0"],
+  "sourceType": "image",
+  "menuType": "food",
+  "evaluatePhases": ["parser"],
+  "priority": "P0"
+}

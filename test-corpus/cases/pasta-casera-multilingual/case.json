@@ -1,0 +1,9 @@
+{
+  "id": "pasta-casera-multilingual",
+  "title": "Pasta casera trilingüe",
+  "tags": ["multilingual", "v2", "P0"],
+  "sourceType": "image",
+  "menuType": "food",
+  "evaluatePhases": ["parser"],
+  "priority": "P0"
+}

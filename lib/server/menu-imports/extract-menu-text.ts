@@ -5,13 +5,17 @@ import {
   fetchRemoteMenuContent,
   htmlToVisibleText,
 } from "./fetch-remote-menu-url";
+import type { MenuImportInputMetadata } from "@/lib/carta/menu-import-debug-report-types";
+import { isMenuImportDebugReportEnabled } from "@/lib/carta/menu-import-debug-report-types";
 import { isMenuImportPipelineDiagnosticsEnabled } from "./menu-import-pipeline-diagnostics";
 import { MIN_PDF_TEXT_CHARS } from "./menu-import-limits";
 import {
   extractPdfEmbeddedText,
-  ocrImageBuffer,
+  ocrImageBufferWithLayout,
   ocrPdfBuffer,
 } from "./vision-ocr";
+import type { OcrLayoutLine } from "./menu-import-ocr-layout-types";
+import type { OcrLayoutExtractionMeta } from "./vision-ocr-layout";
 
 export type ExtractMenuTextInput = {
   sourceType: ImportedMenuSourceType;
@@ -24,6 +28,12 @@ export type ExtractMenuTextInput = {
 export type ExtractMenuTextResult = {
   rawText: string;
   warnings: string[];
+  inputMetadata?: MenuImportInputMetadata;
+  /** Líneas OCR con bounding boxes (solo imágenes vía Vision). */
+  ocrLayoutLines?: OcrLayoutLine[];
+  ocrPageWidth?: number;
+  ocrPageHeight?: number;
+  ocrLayoutExtractionMeta?: OcrLayoutExtractionMeta;
 };
 
 function isPdfContent(contentType: string, buffer: Buffer, fileName?: string): boolean {
@@ -37,16 +47,18 @@ function isImageContent(contentType: string, fileName?: string): boolean {
   return Boolean(fileName && /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i.test(fileName));
 }
 
-async function extractFromPdfBuffer(buffer: Buffer): Promise<{ rawText: string; warnings: string[] }> {
+async function extractFromPdfBuffer(
+  buffer: Buffer,
+): Promise<{ rawText: string; warnings: string[]; ocrMethod: MenuImportInputMetadata["ocrMethod"] }> {
   const warnings: string[] = [];
   const embedded = await extractPdfEmbeddedText(buffer);
   if (embedded.length >= MIN_PDF_TEXT_CHARS) {
     warnings.push("PDF con capa de texto detectada (sin OCR)");
-    return { rawText: embedded, warnings };
+    return { rawText: embedded, warnings, ocrMethod: "pdf_embedded" };
   }
 
   const ocr = await ocrPdfBuffer(buffer);
-  return { rawText: ocr.text, warnings: [...warnings, ...ocr.warnings] };
+  return { rawText: ocr.text, warnings: [...warnings, ...ocr.warnings], ocrMethod: "vision_pdf" };
 }
 
 async function extractFromStorageFile(input: ExtractMenuTextInput): Promise<ExtractMenuTextResult> {
@@ -67,9 +79,24 @@ async function extractFromStorageFile(input: ExtractMenuTextInput): Promise<Extr
     });
   }
 
+  const collectMeta = isMenuImportDebugReportEnabled();
+
   if (isPdfContent(downloaded.contentType, downloaded.buffer, input.originalFileName)) {
     const pdf = await extractFromPdfBuffer(downloaded.buffer);
-    return { rawText: pdf.rawText, warnings: [...warnings, ...pdf.warnings] };
+    return {
+      rawText: pdf.rawText,
+      warnings: [...warnings, ...pdf.warnings],
+      ...(collectMeta
+        ? {
+            inputMetadata: {
+              bytes: downloaded.buffer.length,
+              contentType: downloaded.contentType,
+              ocrMethod: pdf.ocrMethod,
+              storagePath,
+            },
+          }
+        : {}),
+    };
   }
 
   if (isImageContent(downloaded.contentType, input.originalFileName)) {
@@ -79,9 +106,26 @@ async function extractFromStorageFile(input: ExtractMenuTextInput): Promise<Extr
         bytes: downloaded.buffer.length,
       });
     }
-    const text = await ocrImageBuffer(downloaded.buffer);
+    const ocr = await ocrImageBufferWithLayout(downloaded.buffer);
     warnings.push("OCR de imagen vía Google Vision");
-    return { rawText: text, warnings };
+    return {
+      rawText: ocr.text,
+      warnings,
+      ocrLayoutLines: ocr.lines,
+      ocrPageWidth: ocr.pageWidth,
+      ocrPageHeight: ocr.pageHeight,
+      ocrLayoutExtractionMeta: ocr.extractionMeta,
+      ...(collectMeta
+        ? {
+            inputMetadata: {
+              bytes: downloaded.buffer.length,
+              contentType: downloaded.contentType,
+              ocrMethod: "vision_image" as const,
+              storagePath,
+            },
+          }
+        : {}),
+    };
   }
 
   throw new Error("Tipo de archivo no soportado para OCR (usa imagen o PDF)");
@@ -93,7 +137,19 @@ async function extractFromQrUrl(sourceUrl: string): Promise<ExtractMenuTextResul
 
   if (isPdfContent(remote.contentType, remote.buffer)) {
     const pdf = await extractFromPdfBuffer(remote.buffer);
-    return { rawText: pdf.rawText, warnings: [...warnings, ...pdf.warnings] };
+    return {
+      rawText: pdf.rawText,
+      warnings: [...warnings, ...pdf.warnings],
+      ...(isMenuImportDebugReportEnabled()
+        ? {
+            inputMetadata: {
+              bytes: remote.buffer.length,
+              contentType: remote.contentType,
+              ocrMethod: pdf.ocrMethod,
+            },
+          }
+        : {}),
+    };
   }
 
   const html = remote.buffer.toString("utf8");
@@ -102,7 +158,19 @@ async function extractFromQrUrl(sourceUrl: string): Promise<ExtractMenuTextResul
     throw new Error("La página del menú QR no contiene texto visible suficiente");
   }
   warnings.push("Texto extraído de HTML (sin ejecutar JavaScript)");
-  return { rawText: visible, warnings };
+  return {
+    rawText: visible,
+    warnings,
+    ...(isMenuImportDebugReportEnabled()
+      ? {
+          inputMetadata: {
+            bytes: remote.buffer.length,
+            contentType: remote.contentType,
+            ocrMethod: "url_html" as const,
+          },
+        }
+      : {}),
+  };
 }
 
 /**
