@@ -64,7 +64,6 @@ import {
   type ProductCatalogCourse,
 } from "@/lib/carta/menu-course";
 import {
-  ProductFormDrawerCollapsibleSection,
 } from "@/components/productos/product-form-drawer-section";
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
 import {
@@ -83,7 +82,6 @@ import {
 } from "@/lib/firestore/product-families";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
-import { resolveEffectiveModifierGroupLabels } from "@/lib/modifiers/effective-product-modifiers";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
 import {
   buildProductStationPatchFromSelectValue,
@@ -145,6 +143,10 @@ import {
 import type { InventoryProductLookup } from "@/lib/recipes/product-recipe-types";
 import type { RecipeIngredientDraftRow } from "@/components/productos/product-recipe-editor-section";
 import { parseNullableNumber } from "@/components/carta/escandallos/escandallo-display-utils";
+import {
+  ProductFormCommercialInfoModal,
+  ProductFormCommercialInfoSummaryCard,
+} from "@/components/productos/product-form-commercial-info-modal";
 import {
   ProductFormEscandalloModal,
   ProductFormEscandalloSummaryCard,
@@ -1333,6 +1335,7 @@ export default function ProductosManagementPage({
   const [draftRecipeEnabled, setDraftRecipeEnabled] = useState(false);
   const [draftRecipeRows, setDraftRecipeRows] = useState<RecipeIngredientDraftRow[]>([]);
   const [escandalloModalOpen, setEscandalloModalOpen] = useState(false);
+  const [commercialInfoModalOpen, setCommercialInfoModalOpen] = useState(false);
   const [inventoryLookup, setInventoryLookup] = useState<InventoryProductLookup[]>([]);
   const [centralDocsById, setCentralDocsById] = useState(
     () => new Map<string, ProductDocument>(),
@@ -2342,18 +2345,6 @@ export default function ProductosManagementPage({
     return { destination, family };
   }, [draftPreventiveValidation.warnings]);
 
-  const draftEffectiveModifierLabel = useMemo(() => {
-    const cat = draftCategoriaCartaId
-      ? cartaCategorias.find((c) => c.id === draftCategoriaCartaId)
-      : undefined;
-    const labels = resolveEffectiveModifierGroupLabels(
-      editingPlato,
-      cat,
-      modifierGroups,
-    );
-    return labels.length > 0 ? labels.join(", ") : "Ninguno";
-  }, [draftCategoriaCartaId, cartaCategorias, editingPlato, modifierGroups]);
-
   const inventoryLookupMap = useMemo(
     () => buildInventoryProductLookupMap(inventoryLookup),
     [inventoryLookup],
@@ -2380,6 +2371,21 @@ export default function ProductosManagementPage({
     () => parseNullableNumber(draftPrecio.trim() === "" ? "" : draftPrecio.replace(",", ".")),
     [draftPrecio],
   );
+
+  const draftCommercialHasImage = useMemo(() => {
+    if (isCentralCatalog) {
+      return Boolean(draftImagePreviewUrl && !draftRemoveImage);
+    }
+    return Boolean(draftFoto.trim());
+  }, [isCentralCatalog, draftImagePreviewUrl, draftRemoveImage, draftFoto]);
+
+  const draftCommercialImagePreviewUrl = useMemo(() => {
+    if (isCentralCatalog) {
+      return draftImagePreviewUrl && !draftRemoveImage ? draftImagePreviewUrl : null;
+    }
+    const url = draftFoto.trim();
+    return url || null;
+  }, [isCentralCatalog, draftImagePreviewUrl, draftRemoveImage, draftFoto]);
 
   function applyRecipeDraftFromDocument(
     recipe: ProductDocument["recipe"] | undefined,
@@ -2417,6 +2423,7 @@ export default function ProductosManagementPage({
   const closeForm = useCallback(() => {
     resetDraftImageState();
     setEscandalloModalOpen(false);
+    setCommercialInfoModalOpen(false);
     setFormOpen(false);
     setEditingId(null);
     setFormError(null);
@@ -3595,88 +3602,15 @@ export default function ProductosManagementPage({
                     )}
                   </div>
                 </div>
-              </section>
 
-              <div className="hostly-product-form-drawer__body-scroll">
-                <div className="hostly-product-form-drawer__sections">
-                  <ProductFormDrawerCollapsibleSection
-                    key={`${editingId ?? "new"}-extra`}
-                    title={t("carta.productFormBlockExtra")}
-                    hint={t("carta.productFormBlockExtraHint")}
-                    defaultOpen={false}
-                    className="hostly-product-form-drawer-optional"
-                  >
-                    <label className="hostly-carta-config-form-field">
-                      <span className="hostly-carta-config-form-label">{t("carta.fieldDescripcion")}</span>
-                      <textarea
-                        className={`${drawerInputClass} hostly-product-form-drawer-textarea`}
-                        value={draftDesc}
-                        onChange={(e) => setDraftDesc(e.target.value)}
-                        rows={3}
-                      />
-                    </label>
-
-                    {isCentralCatalog ? (
-                      <div className="hostly-product-form-drawer-image">
-                        <span className="hostly-carta-config-form-label">{t("carta.fieldFoto")}</span>
-                        {draftImagePreviewUrl && !draftRemoveImage ? (
-                          <img
-                            src={draftImagePreviewUrl}
-                            alt=""
-                            className="hostly-product-form-drawer-image__preview"
-                          />
-                        ) : (
-                          <div className="hostly-product-form-drawer-image__placeholder" aria-hidden>
-                            {t("carta.fieldFotoEmpty")}
-                          </div>
-                        )}
-                        <div className="hostly-product-form-drawer-image__actions">
-                          <input
-                            ref={draftImageFileInputRef}
-                            type="file"
-                            accept="image/*"
-                            className="hostly-product-form-drawer-image__file-input"
-                            disabled={drawerSyncing}
-                            onChange={(e) => {
-                              const selected = e.target.files?.[0] ?? null;
-                              void handleDraftImageFileChange(selected);
-                            }}
-                          />
-                          <ConfigBtnSecondary
-                            type="button"
-                            disabled={drawerSyncing}
-                            onClick={() => draftImageFileInputRef.current?.click()}
-                          >
-                            {draftImagePreviewUrl && !draftRemoveImage
-                              ? t("carta.fieldFotoChange")
-                              : t("carta.fieldFotoUpload")}
-                          </ConfigBtnSecondary>
-                          {draftImagePreviewUrl && !draftRemoveImage ? (
-                            <ConfigBtnSecondary
-                              type="button"
-                              disabled={drawerSyncing}
-                              onClick={handleRemoveDraftImage}
-                            >
-                              {t("carta.fieldFotoRemove")}
-                            </ConfigBtnSecondary>
-                          ) : null}
-                        </div>
-                        <p className="hostly-carta-config-form-hint">{t("carta.fieldFotoUploadHint")}</p>
-                      </div>
-                    ) : (
-                      <label className="hostly-carta-config-form-field">
-                        <span className="hostly-carta-config-form-label">{t("carta.fieldFoto")}</span>
-                        <input
-                          className={drawerInputClass}
-                          value={draftFoto}
-                          onChange={(e) => setDraftFoto(e.target.value)}
-                          placeholder="https://…"
-                        />
-                        <p className="hostly-carta-config-form-hint">{t("carta.fieldFotoHint")}</p>
-                      </label>
-                    )}
-                  </ProductFormDrawerCollapsibleSection>
-
+                <div className="hostly-product-form-drawer-primary__cards">
+                  <ProductFormCommercialInfoSummaryCard
+                    description={draftDesc}
+                    hasImage={draftCommercialHasImage}
+                    imagePreviewUrl={draftCommercialImagePreviewUrl}
+                    disabled={drawerSyncing}
+                    onEdit={() => setCommercialInfoModalOpen(true)}
+                  />
                   {isCentralCatalog ? (
                     <ProductFormEscandalloSummaryCard
                       recipeEnabled={draftRecipeEnabled}
@@ -3688,18 +3622,17 @@ export default function ProductosManagementPage({
                       onEdit={() => setEscandalloModalOpen(true)}
                     />
                   ) : null}
-
-                  <p className="hostly-product-form-drawer-meta">
-                    {t("carta.fieldModifiersInherited")}: <strong>{draftEffectiveModifierLabel}</strong>
-                  </p>
-
-                  {formError ? (
-                    <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
-                      {formError}
-                    </div>
-                  ) : null}
                 </div>
-              </div>
+              </section>
+
+              {formError ? (
+                <div
+                  className="hostly-carta-config-alert hostly-carta-config-alert--error hostly-product-form-drawer__inline-error"
+                  role="alert"
+                >
+                  {formError}
+                </div>
+              ) : null}
             </div>
 
             <div className="hostly-product-form-drawer__footer">
@@ -3717,6 +3650,27 @@ export default function ProductosManagementPage({
             </div>
           </aside>
         </div>
+      ) : null}
+
+      {formOpen ? (
+        <ProductFormCommercialInfoModal
+          open={commercialInfoModalOpen}
+          productName={draftNombre}
+          isCentralCatalog={isCentralCatalog}
+          description={draftDesc}
+          onDescriptionChange={setDraftDesc}
+          fotoUrl={draftFoto}
+          onFotoUrlChange={setDraftFoto}
+          imagePreviewUrl={draftImagePreviewUrl}
+          imageFileInputRef={draftImageFileInputRef}
+          onImageFileChange={handleDraftImageFileChange}
+          onRemoveImage={handleRemoveDraftImage}
+          showImagePreview={Boolean(draftImagePreviewUrl && !draftRemoveImage)}
+          disabled={drawerSyncing}
+          drawerInputClass={drawerInputClass}
+          t={t}
+          onClose={() => setCommercialInfoModalOpen(false)}
+        />
       ) : null}
 
       {isCentralCatalog && formOpen ? (

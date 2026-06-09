@@ -5107,7 +5107,8 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 16px 20px 0;
 }
 
@@ -5130,7 +5131,259 @@ body {
   flex-shrink: 0;
   min-width: 0;
   padding-bottom: 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--hostly-ice-100, #f1f5f9) 70%, #e2e8f0);
+}
+
+.hostly-product-form-drawer-primary__cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--hostly-ice-100, #f1f5f9) 70%, #e2e8f0);
+}
+
+.hostly-product-commercial-summary__body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.hostly-product-commercial-summary__description {
+  margin: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #475569;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hostly-product-commercial-summary__image {
+  flex-shrink: 0;
+}
+
+.hostly-product-commercial-summary__thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.hostly-product-commercial-summary__image-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 48px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px dashed #e2e8f0;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-align: center;
+  background: #f8fafc;
+}
+
+.hostly-product-commercial-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--hostly-navy-deep, #0f172a) 38%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.hostly-product-commercial-modal {
+  display: flex;
+  flex-direction: column;
+  width: clamp(720px, 46vw, 900px);
+  max-width: 96vw;
+  max-height: min(90vh, 820px);
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 24px 64px color-mix(in srgb, var(--hostly-navy-deep, #0f172a) 14%, transparent);
+  overflow: hidden;
+}
+
+.hostly-product-commercial-modal__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e8eef4;
+  background: color-mix(in srgb, var(--hostly-ice-50, #f8fafc) 50%, #ffffff);
+}
+
+.hostly-product-commercial-modal__header-text {
+  min-width: 0;
+}
+
+.hostly-product-commercial-modal__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.hostly-product-commercial-modal__subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.hostly-product-commercial-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hostly-product-commercial-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hostly-product-commercial-modal__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+  color: #64748b;
+}
+
+.hostly-product-commercial-modal__textarea,
+.hostly-product-commercial-modal__input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.hostly-product-commercial-modal__textarea {
+  min-height: 132px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.hostly-product-commercial-modal__input {
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.hostly-product-commercial-modal__textarea:focus-visible,
+.hostly-product-commercial-modal__input:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--hostly-accent, #0ea5e9) 55%, #7dd3fc);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hostly-accent, #0ea5e9) 12%, transparent);
+}
+
+.hostly-product-commercial-modal__image-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hostly-product-commercial-modal__image-preview {
+  width: 160px;
+  height: 160px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.hostly-product-commercial-modal__image-placeholder {
+  width: 160px;
+  height: 160px;
+  border-radius: 12px;
+  border: 1px dashed #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: #f8fafc;
+  text-align: center;
+  padding: 8px;
+}
+
+.hostly-product-commercial-modal__image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.hostly-product-commercial-modal__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hostly-product-commercial-modal__hint {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.hostly-product-commercial-modal__footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid #e8eef4;
+  background: #ffffff;
+}
+
+@media (max-width: 760px) {
+  .hostly-product-commercial-modal {
+    width: 96vw;
+    max-height: 94vh;
+  }
+}
+
+.hostly-product-form-drawer__inline-error {
+  flex-shrink: 0;
+  margin: 0 20px 12px;
 }
 
 .hostly-product-form-drawer-primary__grid {
@@ -5435,6 +5688,10 @@ body {
   }
 
   .hostly-product-form-drawer-primary__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hostly-product-form-drawer-primary__cards {
     grid-template-columns: 1fr;
   }
 
