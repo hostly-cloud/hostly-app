@@ -24,17 +24,21 @@ export function ProductFormDrawerCollapsibleSection({
   title,
   hint,
   defaultOpen = false,
+  className,
   children,
 }: {
   title: string;
   hint?: string;
   defaultOpen?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className="hostly-product-form-drawer-block">
+    <section
+      className={["hostly-product-form-drawer-block", className].filter(Boolean).join(" ")}
+    >
       <button
         type="button"
         className="hostly-product-form-drawer-collapsible__toggle"

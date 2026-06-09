@@ -26,7 +26,7 @@ export type ProductFormPreventiveValidationResult = {
 
 /** Aviso informativo: activo sin familia; nunca bloquea guardado. */
 export const PRODUCT_FORM_ACTIVE_NO_FAMILY_WARNING =
-  "El producto activo no tiene familia de producto asignada (heredada de categoría).";
+  "El producto activo no tiene familia de producto asignada.";
 
 /** Errores que sí impiden guardar (excluye avisos de familia). */
 export function getProductFormSubmitBlockingErrors(

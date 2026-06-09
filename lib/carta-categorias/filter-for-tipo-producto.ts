@@ -59,7 +59,7 @@ export function cartaCategoriasForMenuFamiliaFiltro(
   if (familiaFiltroId === CARTA_MENU_FAMILIA_FILTER_UNASSIGNED) {
     return categorias.filter((c) => !c.cartaFamiliaId?.trim());
   }
-  return categorias.filter((c) => c.cartaFamiliaId === familiaFiltroId);
+  return categorias.filter((c) => (c.cartaFamiliaId?.trim() ?? "") === familiaFiltroId);
 }
 
 /**
@@ -78,5 +78,5 @@ export function cartaCategoriasForTipoYFamiliaFiltro(
   if (familiaFiltroId === CARTA_MENU_FAMILIA_FILTER_UNASSIGNED) {
     return base.filter((c) => !c.cartaFamiliaId?.trim());
   }
-  return base.filter((c) => c.cartaFamiliaId === familiaFiltroId);
+  return base.filter((c) => (c.cartaFamiliaId?.trim() ?? "") === familiaFiltroId);
 }
