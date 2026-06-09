@@ -35,6 +35,10 @@ import {
   defaultInventory,
   defaultRecipe,
 } from "@/lib/firestore/central-catalog-defaults";
+import {
+  normalizeProductCompositionType,
+  type ProductCompositionType,
+} from "@/lib/carta/product-composition-type";
 import { readProductSortOrder } from "@/lib/carta/product-sort-order";
 import type { TipoProductoVenta } from "@/lib/platos-local";
 
@@ -52,6 +56,8 @@ export type CentralOperationalProductInput = {
   productFamilyName?: string | null;
   productFamilyType?: ProductFamilyType | null;
   tipoVenta: TipoProductoVenta | string;
+  /** `simple` | `composed`; omitir en lectura → `simple`. */
+  productCompositionType?: ProductCompositionType;
   active?: boolean;
   visibleOnMenu?: boolean;
   description?: string;
@@ -177,6 +183,9 @@ function buildOperationalPatch(
     price: input.price,
     ...fields,
     tipoVenta: input.tipoVenta,
+    productCompositionType: normalizeProductCompositionType(
+      input.productCompositionType,
+    ),
     visibleOnMenu: input.visibleOnMenu !== false,
     active: input.active !== false,
     updatedAt: now,
@@ -228,6 +237,11 @@ function buildPartialOperationalPatch(
   }
   if (typeof input.tipoVenta === "string") {
     patch.tipoVenta = input.tipoVenta;
+  }
+  if (input.productCompositionType !== undefined) {
+    patch.productCompositionType = normalizeProductCompositionType(
+      input.productCompositionType,
+    );
   }
   if (input.visibleOnMenu !== undefined) {
     patch.visibleOnMenu = input.visibleOnMenu !== false;

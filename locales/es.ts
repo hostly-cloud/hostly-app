@@ -917,6 +917,14 @@ export const es: MessageTree = {
     fieldTipo: "Formato del artículo",
     fieldTipoHint:
       "Ej.: plato, bebida, café o menú del día. Debe encajar con la sección del menú que elijas.",
+    fieldProductCompositionType: "Tipo de producto",
+    fieldProductCompositionSimple: "Simple",
+    fieldProductCompositionComposed: "Compuesto",
+    fieldProductCompositionSimpleHelp: "producto individual.",
+    fieldProductCompositionSimpleExamples: "Ejemplos: Coca-Cola, Agua, Pizza, Vino.",
+    fieldProductCompositionComposedHelp: "se sirve usando otros productos.",
+    fieldProductCompositionComposedExamples:
+      "Ejemplos: Gin Tonic, Mojito, Cuba Libre, Sangría.",
     fieldCategoria: "Sección del menú",
     fieldCategoriaHint:
       "Ej.: Pizzas, Vinos tintos, Cafetería. Es la categoría visible en carta; no es un artículo de inventario.",

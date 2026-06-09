@@ -23,6 +23,10 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { normalizeOperationalStationSelection } from "@/lib/carta/operational-station-options";
+import {
+  normalizeProductCompositionType,
+  type ProductCompositionType,
+} from "@/lib/carta/product-composition-type";
 import { isProductKind, type ProductKind } from "@/lib/carta/product-kind-options";
 import {
   compareProductDocuments,
@@ -121,6 +125,8 @@ export type ProductDocument = {
   type: string | null;
   /** `plato` | `bebida` en catálogo central. */
   tipoVenta?: string | null;
+  /** `simple` | `composed`; ausente en documentos antiguos → tratar como `simple`. */
+  productCompositionType?: ProductCompositionType | null;
   /** Clasificación inventario: bebida / comida / otro (distinto de tipoVenta y estación). */
   productKind?: ProductKind | null;
   /** Denormalizado desde categoría de carta (`productFamilies`). */
@@ -814,6 +820,9 @@ function mapCentralDocToProductDocument(
     typeof data.tipoVenta === "string" && data.tipoVenta.trim() !== ""
       ? data.tipoVenta.trim()
       : null;
+  const productCompositionType = normalizeProductCompositionType(
+    data.productCompositionType,
+  );
   const productKindRaw = data.productKind;
   const productKind = isProductKind(productKindRaw) ? productKindRaw : null;
   const productFamilyId =
@@ -885,6 +894,7 @@ function mapCentralDocToProductDocument(
       : {}),
     type,
     tipoVenta,
+    productCompositionType,
     ...(productKind ? { productKind } : {}),
     ...(productFamilyId ? { productFamilyId } : {}),
     ...(productFamilyName ? { productFamilyName } : {}),

@@ -918,6 +918,14 @@ export const en: MessageTree = {
     fieldTipo: "Item format",
     fieldTipoHint:
       "e.g. dish, drink, coffee, or set menu. Must match the menu section you pick.",
+    fieldProductCompositionType: "Product type",
+    fieldProductCompositionSimple: "Simple",
+    fieldProductCompositionComposed: "Composed",
+    fieldProductCompositionSimpleHelp: "a single sellable item.",
+    fieldProductCompositionSimpleExamples: "Examples: Coca-Cola, Water, Pizza, Wine.",
+    fieldProductCompositionComposedHelp: "served using other products.",
+    fieldProductCompositionComposedExamples:
+      "Examples: Gin & Tonic, Mojito, Cuba Libre, Sangria.",
     fieldCategoria: "Menu section",
     fieldCategoriaHint:
       "e.g. Pizzas, Red wines, Coffee bar. The category shown on the menu; not a stock item.",

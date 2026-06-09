@@ -40,7 +40,7 @@ import { buildCartaGroupedSections } from "@/lib/carta-categorias/grouping";
 import { comparePlatoCarta } from "@/lib/carta/product-sort-order";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
 import {
-  cartaCategoriasForMenuFamiliaFiltro,
+  cartaCategoriasForProductForm,
   categoryRequiresManualTipoVenta,
   defaultCartaCategoriaTipoForTipoProducto,
   inferTipoVentaFromCategory,
@@ -64,7 +64,11 @@ import {
   type ProductCatalogCourse,
 } from "@/lib/carta/menu-course";
 import {
-} from "@/components/productos/product-form-drawer-section";
+  DEFAULT_PRODUCT_COMPOSITION_TYPE,
+  PRODUCT_COMPOSITION_TYPE_VALUES,
+  normalizeProductCompositionType,
+  type ProductCompositionType,
+} from "@/lib/carta/product-composition-type";
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
 import {
   evaluateProductFormPreventiveValidation,
@@ -573,6 +577,7 @@ function buildCentralInputFromDraft(args: {
   operationStations: readonly OperationStationDocument[];
   cartaCategorias: readonly CartaCategoria[];
   draftTipo: TipoProductoVenta;
+  draftProductCompositionType: ProductCompositionType;
   categoria: string;
   categoriaCartaIdPatch?: string;
   precioVenta: number;
@@ -595,6 +600,9 @@ function buildCentralInputFromDraft(args: {
     categoryId,
     price: args.precioVenta,
     tipoVenta: args.draftTipo,
+    productCompositionType: normalizeProductCompositionType(
+      args.draftProductCompositionType,
+    ),
     visibleOnMenu: args.draftActivo,
     active: args.existingIsActive !== false,
     course: productCatalogCourseFromSelectValue(args.draftCourse),
@@ -1280,6 +1288,8 @@ export default function ProductosManagementPage({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNombre, setDraftNombre] = useState("");
   const [draftTipo, setDraftTipo] = useState<TipoProductoVenta>("plato");
+  const [draftProductCompositionType, setDraftProductCompositionType] =
+    useState<ProductCompositionType>(DEFAULT_PRODUCT_COMPOSITION_TYPE);
   const [cartaCategorias, setCartaCategorias] = useState<CartaCategoria[]>([]);
   const [productFamilies, setProductFamilies] = useState<ProductFamilyDocument[]>([]);
   const [cartaFamilias, setCartaFamilias] = useState<CartaFamilia[]>([]);
@@ -2255,18 +2265,16 @@ export default function ProductosManagementPage({
     setDraftCourse("");
   }, [formOpen, draftSkipsMenuCourse]);
 
-  const categoriasForForm = useMemo(() => {
-    // Solo filtro de bloque de carta: el tipo de venta se infiere al elegir categoría.
-    // Filtrar también por draftTipo dejaba la lista vacía al crear (p. ej. plato + Ginebras).
-    const base = cartaCategoriasForMenuFamiliaFiltro(
-      cartaCategorias,
-      draftCartaMenuFamiliaId,
-    );
-    if (!draftCategoriaCartaId) return base;
-    if (base.some((c) => c.id === draftCategoriaCartaId)) return base;
-    const current = cartaCategorias.find((c) => c.id === draftCategoriaCartaId);
-    return current ? [...base, current] : base;
-  }, [cartaCategorias, draftCartaMenuFamiliaId, draftCategoriaCartaId]);
+  const categoriasForForm = useMemo(
+    () =>
+      cartaCategoriasForProductForm(
+        cartaCategorias,
+        draftTipo,
+        draftCartaMenuFamiliaId,
+        { currentCategoryId: draftCategoriaCartaId },
+      ),
+    [cartaCategorias, draftTipo, draftCartaMenuFamiliaId, draftCategoriaCartaId],
+  );
 
   const draftSelectedCategory = useMemo(
     () =>
@@ -2491,6 +2499,7 @@ export default function ProductosManagementPage({
     setEditingId(null);
     setDraftNombre("");
     setDraftTipo("plato");
+    setDraftProductCompositionType(DEFAULT_PRODUCT_COMPOSITION_TYPE);
     setDraftCategoriaCartaId(null);
     setDraftCartaMenuFamiliaId(null);
     setDraftPrecio("");
@@ -2560,6 +2569,9 @@ export default function ProductosManagementPage({
     }
     if (isCentralCatalog) {
       const centralDoc = centralDocsById.get(p.id);
+      setDraftProductCompositionType(
+        normalizeProductCompositionType(centralDoc?.productCompositionType),
+      );
       setDraftCourse(
         productCatalogCourseSelectValue(
           centralDoc?.course !== undefined ? centralDoc.course : undefined,
@@ -2567,6 +2579,7 @@ export default function ProductosManagementPage({
       );
       applyRecipeDraftFromDocument(centralDoc?.recipe);
     } else {
+      setDraftProductCompositionType(DEFAULT_PRODUCT_COMPOSITION_TYPE);
       setDraftCourse("");
       setDraftRecipeEnabled(false);
       setDraftRecipeRows([]);
@@ -2646,6 +2659,7 @@ export default function ProductosManagementPage({
           operationStations,
           cartaCategorias,
           draftTipo,
+          draftProductCompositionType,
           categoria,
           categoriaCartaIdPatch,
           precioVenta,
@@ -3417,9 +3431,11 @@ export default function ProductosManagementPage({
                         setDraftCartaMenuFamiliaId(nextFilter);
                         setDraftCategoriaCartaId((cur) => {
                           if (!cur) return null;
-                          const allowed = cartaCategoriasForMenuFamiliaFiltro(
+                          const allowed = cartaCategoriasForProductForm(
                             cartaCategorias,
+                            draftTipo,
                             nextFilter,
+                            { currentCategoryId: cur },
                           );
                           return allowed.some((x) => x.id === cur) ? cur : null;
                         });
@@ -3601,6 +3617,47 @@ export default function ProductosManagementPage({
                       </label>
                     )}
                   </div>
+
+                  {isCentralCatalog ? (
+                    <div className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__full hostly-product-form-drawer-grid__cell--composition">
+                      <span className="hostly-carta-config-form-label">
+                        {t("carta.fieldProductCompositionType")}
+                      </span>
+                      <div
+                        className="hostly-product-form-drawer-radio-group hostly-product-form-drawer-radio-group--inline"
+                        role="radiogroup"
+                        aria-label={t("carta.fieldProductCompositionType")}
+                      >
+                        {PRODUCT_COMPOSITION_TYPE_VALUES.map((compositionType) => (
+                          <label
+                            key={compositionType}
+                            className="hostly-product-form-drawer-radio"
+                          >
+                            <input
+                              type="radio"
+                              name="product-form-draft-composition-type"
+                              checked={draftProductCompositionType === compositionType}
+                              onChange={() => setDraftProductCompositionType(compositionType)}
+                              disabled={drawerSyncing}
+                            />
+                            {compositionType === "simple"
+                              ? t("carta.fieldProductCompositionSimple")
+                              : t("carta.fieldProductCompositionComposed")}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                        <strong>{t("carta.fieldProductCompositionSimple")}:</strong>{" "}
+                        {t("carta.fieldProductCompositionSimpleHelp")}{" "}
+                        {t("carta.fieldProductCompositionSimpleExamples")}
+                      </p>
+                      <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                        <strong>{t("carta.fieldProductCompositionComposed")}:</strong>{" "}
+                        {t("carta.fieldProductCompositionComposedHelp")}{" "}
+                        {t("carta.fieldProductCompositionComposedExamples")}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="hostly-product-form-drawer-primary__cards">

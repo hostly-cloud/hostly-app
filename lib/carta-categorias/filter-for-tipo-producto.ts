@@ -80,3 +80,48 @@ export function cartaCategoriasForTipoYFamiliaFiltro(
   }
   return base.filter((c) => (c.cartaFamiliaId?.trim() ?? "") === familiaFiltroId);
 }
+
+function appendCurrentCategoryIfMissing(
+  list: CartaCategoria[],
+  all: readonly CartaCategoria[],
+  currentCategoryId: string | null,
+): CartaCategoria[] {
+  if (!currentCategoryId || list.some((c) => c.id === currentCategoryId)) return list;
+  const current = all.find((c) => c.id === currentCategoryId);
+  return current ? [...list, current] : list;
+}
+
+/**
+ * Categorías para el selector del drawer de producto.
+ * - Compatible con `tipo` (food/drink + `general`).
+ * - Solo activas, salvo la categoría ya asignada al producto.
+ * - Filtro de bloque: en bloque concreto incluye también categorías sin `cartaFamiliaId`.
+ */
+export function cartaCategoriasForProductForm(
+  categorias: readonly CartaCategoria[],
+  tipo: TipoProductoVenta,
+  familiaFiltroId: string | null,
+  options?: { currentCategoryId?: string | null },
+): CartaCategoria[] {
+  const currentCategoryId = options?.currentCategoryId?.trim() || null;
+  let base = cartaCategoriasForTipoProducto([...categorias], tipo);
+  base = base.filter((c) => c.isActive !== false || c.id === currentCategoryId);
+
+  if (familiaFiltroId == null) {
+    return appendCurrentCategoryIfMissing(base, categorias, currentCategoryId);
+  }
+  if (familiaFiltroId === CARTA_MENU_FAMILIA_FILTER_UNASSIGNED) {
+    const filtered = base.filter(
+      (c) => !c.cartaFamiliaId?.trim() || c.id === currentCategoryId,
+    );
+    return appendCurrentCategoryIfMissing(filtered, categorias, currentCategoryId);
+  }
+
+  const familiaTrim = familiaFiltroId.trim();
+  const filtered = base.filter((c) => {
+    const assignedFamilia = c.cartaFamiliaId?.trim() ?? "";
+    if (!assignedFamilia) return true;
+    return assignedFamilia === familiaTrim;
+  });
+  return appendCurrentCategoryIfMissing(filtered, categorias, currentCategoryId);
+}

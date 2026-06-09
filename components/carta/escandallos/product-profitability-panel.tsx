@@ -21,14 +21,38 @@ export type ProductProfitabilityPanelProps = {
   saleProductId: string | null;
   salePrice: number | null;
   productDocumentsById: ReadonlyMap<string, ProductDocument>;
+  /** `sheet` = modal Escandallo (tema claro). Por defecto `embedded`. */
+  appearance?: "embedded" | "sheet";
 };
 
-const shellStyle = {
-  padding: "12px 12px 14px",
-  borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.18)",
-  background: "rgba(2, 6, 23, 0.45)",
-} as const;
+function shellStyleFor(appearance: "embedded" | "sheet") {
+  if (appearance === "sheet") {
+    return {
+      padding: "14px 16px",
+      borderRadius: 12,
+      border: "1px solid #e2e8f0",
+      background: "#f8fafc",
+    } as const;
+  }
+  return {
+    padding: "12px 12px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(148, 163, 184, 0.18)",
+    background: "rgba(2, 6, 23, 0.45)",
+  } as const;
+}
+
+function titleColorFor(appearance: "embedded" | "sheet") {
+  return appearance === "sheet" ? "#0f172a" : "#e2e8f0";
+}
+
+function mutedTextColorFor(appearance: "embedded" | "sheet") {
+  return appearance === "sheet" ? "#64748b" : "#94a3b8";
+}
+
+function strongTextColorFor(appearance: "embedded" | "sheet") {
+  return appearance === "sheet" ? "#0f172a" : "#f8fafc";
+}
 
 function ProfitabilityKpiStrip({
   serviceCost,
@@ -37,6 +61,7 @@ function ProfitabilityKpiStrip({
   estimatedServings,
   showMargin,
   labels,
+  appearance = "embedded",
 }: {
   serviceCost: number;
   salePrice: number | null;
@@ -49,6 +74,7 @@ function ProfitabilityKpiStrip({
     margin: string;
     estimatedCups: string;
   };
+  appearance?: "embedded" | "sheet";
 }) {
   return (
     <>
@@ -91,9 +117,9 @@ function ProfitabilityKpiStrip({
         ) : null}
       </div>
       {estimatedServings != null && salePrice != null ? (
-        <p style={{ margin: "10px 0 0", fontSize: 12, color: "#cbd5e1", lineHeight: 1.45 }}>
-          <span style={{ color: "#94a3b8" }}>{labels.estimatedCups}: </span>
-          <strong style={{ color: "#f8fafc" }}>{estimatedServings}</strong>
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: mutedTextColorFor(appearance), lineHeight: 1.45 }}>
+          <span style={{ color: mutedTextColorFor(appearance) }}>{labels.estimatedCups}: </span>
+          <strong style={{ color: strongTextColorFor(appearance) }}>{estimatedServings}</strong>
         </p>
       ) : null}
     </>
@@ -106,8 +132,12 @@ export function ProductProfitabilityPanel({
   saleProductId,
   salePrice,
   productDocumentsById,
+  appearance = "embedded",
 }: ProductProfitabilityPanelProps) {
   const { t } = useI18n();
+  const shellStyle = shellStyleFor(appearance);
+  const titleColor = titleColorFor(appearance);
+  const mutedText = mutedTextColorFor(appearance);
 
   const profitability = useMemo(
     () =>
@@ -131,10 +161,10 @@ export function ProductProfitabilityPanel({
   if (!profitability.hasServiceCost) {
     return (
       <div className="hostly-product-profitability" style={shellStyle}>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#e2e8f0" }}>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: titleColor }}>
           {t("carta.productProfitabilityTitle")}
         </h4>
-        <p style={{ margin: "8px 0 0", fontSize: 12, color: "#94a3b8", lineHeight: 1.45 }}>
+        <p style={{ margin: "8px 0 0", fontSize: 12, color: mutedText, lineHeight: 1.45 }}>
           {t("carta.productProfitabilityInsufficient")}
         </p>
       </div>
@@ -146,7 +176,7 @@ export function ProductProfitabilityPanel({
   if (!profitability.sufficient) {
     return (
       <div className="hostly-product-profitability" style={shellStyle}>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#e2e8f0" }}>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: titleColor }}>
           {t("carta.productProfitabilityTitle")}
         </h4>
         <ProfitabilityKpiStrip
@@ -156,8 +186,9 @@ export function ProductProfitabilityPanel({
           estimatedServings={profitability.estimatedServings}
           showMargin={false}
           labels={labels}
+          appearance={appearance}
         />
-        <p style={{ margin: "10px 0 0", fontSize: 12, color: "#94a3b8", lineHeight: 1.45 }}>
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: mutedText, lineHeight: 1.45 }}>
           {t("carta.productProfitabilityNeedPrice")}
         </p>
       </div>
@@ -167,7 +198,7 @@ export function ProductProfitabilityPanel({
   return (
     <div className="hostly-product-profitability" style={shellStyle}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#e2e8f0" }}>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: titleColor }}>
           {t("carta.productProfitabilityTitle")}
         </h4>
         <EscandalloMarginStatusBadge tier={profitability.marginTier} />
@@ -180,6 +211,7 @@ export function ProductProfitabilityPanel({
         estimatedServings={profitability.estimatedServings}
         showMargin
         labels={labels}
+        appearance={appearance}
       />
     </div>
   );

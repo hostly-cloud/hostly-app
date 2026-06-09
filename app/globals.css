@@ -5075,7 +5075,7 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--hostly-op-gap-sm);
-  padding: 14px 20px;
+  padding: 10px 16px;
   border-bottom: 1px solid color-mix(in srgb, var(--hostly-ice-100, #f1f5f9) 65%, #e2e8f0);
   background: color-mix(in srgb, var(--hostly-ice-50, #f8fafc) 40%, #ffffff);
 }
@@ -5095,10 +5095,10 @@ body {
 }
 
 .hostly-product-form-drawer__subtitle {
-  margin: 4px 0 0;
-  font-size: 12px;
+  margin: 2px 0 0;
+  font-size: 11px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--hostly-ink-muted);
 }
 
@@ -5109,7 +5109,7 @@ body {
   flex-direction: column;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 20px 0;
+  padding: 10px 16px 0;
 }
 
 .hostly-product-form-drawer__body-scroll {
@@ -5130,16 +5130,57 @@ body {
 .hostly-product-form-drawer-primary {
   flex-shrink: 0;
   min-width: 0;
-  padding-bottom: 14px;
+  padding-bottom: 8px;
 }
 
 .hostly-product-form-drawer-primary__cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 16px;
-  margin-top: 14px;
-  padding-top: 14px;
+  gap: 8px 12px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid color-mix(in srgb, var(--hostly-ice-100, #f1f5f9) 70%, #e2e8f0);
+}
+
+.hostly-product-form-drawer-primary__cards .hostly-product-escandallo-summary {
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.hostly-product-form-drawer-primary__cards .hostly-product-escandallo-summary__status {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.hostly-product-form-drawer-primary__cards .hostly-product-escandallo-summary__metrics {
+  gap: 8px 14px;
+  margin-top: 6px;
+}
+
+.hostly-product-form-drawer-primary__cards .hostly-product-escandallo-summary__metric {
+  font-size: 12px;
+}
+
+.hostly-product-form-drawer-primary__cards .hostly-product-escandallo-summary__metric-label {
+  font-size: 10px;
+}
+
+.hostly-product-form-drawer-primary__cards .hostly-product-commercial-summary__body {
+  margin-top: 6px;
+  gap: 8px;
+}
+
+.hostly-product-form-drawer-primary__cards .hostly-product-commercial-summary__description {
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-line-clamp: 1;
+}
+
+.hostly-product-form-drawer-primary__cards .hostly-product-commercial-summary__thumb,
+.hostly-product-form-drawer-primary__cards .hostly-product-commercial-summary__image-empty {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
 }
 
 .hostly-product-commercial-summary__body {
@@ -5389,7 +5430,7 @@ body {
 .hostly-product-form-drawer-primary__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 16px;
+  gap: 7px 12px;
   min-width: 0;
 }
 
@@ -5404,7 +5445,7 @@ body {
 .hostly-product-form-drawer-grid__cell--status {
   display: flex;
   align-items: flex-end;
-  padding-bottom: 2px;
+  padding-bottom: 0;
 }
 
 .hostly-product-form-drawer-grid__cell--tipo {
@@ -5412,10 +5453,16 @@ body {
 }
 
 .hostly-product-form-drawer-primary .hostly-carta-config-form-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 650;
   letter-spacing: 0.02em;
   color: #64748b;
+}
+
+.hostly-product-form-drawer-primary .hostly-carta-config-form-field .hostly-carta-config-form-label + select.hostly-input,
+.hostly-product-form-drawer-primary .hostly-carta-config-form-field .hostly-carta-config-form-label + div,
+.hostly-product-form-drawer-primary .hostly-carta-config-form-field .hostly-carta-config-form-label + input.hostly-input {
+  margin-top: 3px;
 }
 
 .hostly-product-form-drawer-primary .hostly-carta-config-form-hint:not(.hostly-product-form-drawer-primary__hint) {
@@ -5423,13 +5470,24 @@ body {
 }
 
 .hostly-product-form-drawer-primary__hint {
-  margin-top: 4px;
-  font-size: 10px;
-  line-height: 1.35;
+  margin-top: 2px;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.hostly-product-form-drawer-grid__cell--composition .hostly-product-form-drawer-primary__hint {
+  margin-top: 1px;
+}
+
+.hostly-product-form-drawer-grid__cell--composition .hostly-product-form-drawer-primary__hint + .hostly-product-form-drawer-primary__hint {
+  margin-top: 0;
 }
 
 .hostly-product-form-drawer-primary .hostly-input,
 .hostly-product-form-drawer-primary .hostly-carta-config-field-input {
+  min-height: 34px;
+  padding: 5px 9px;
+  font-size: 13px;
   border-color: #e2e8f0;
   background: #ffffff;
   box-shadow: 0 1px 0 color-mix(in srgb, #f8fafc 80%, transparent);
@@ -5478,7 +5536,7 @@ body {
   align-items: stretch;
   gap: var(--hostly-op-gap-xs);
   margin-top: 0;
-  padding: 14px 20px;
+  padding: 10px 16px;
   border-top: 1px solid color-mix(in srgb, var(--hostly-ice-100, #f1f5f9) 65%, #e2e8f0);
   background: #ffffff;
 }
@@ -5630,25 +5688,35 @@ body {
 .hostly-product-form-drawer-radio-group--inline {
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 10px 14px;
-  margin-top: 6px;
+  gap: 8px 12px;
+  margin-top: 3px;
 }
 
 .hostly-product-form-drawer-radio {
   display: flex;
   align-items: center;
-  gap: var(--hostly-op-gap-xs);
+  gap: 5px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--hostly-ink-strong);
   user-select: none;
 }
 
 .hostly-product-form-drawer-radio input {
-  width: 1rem;
-  height: 1rem;
+  width: 0.9rem;
+  height: 0.9rem;
   accent-color: var(--hostly-accent);
+}
+
+.hostly-product-form-drawer-primary .hostly-product-form-drawer-checkbox {
+  gap: 6px;
+  font-size: 12px;
+}
+
+.hostly-product-form-drawer-primary .hostly-product-form-drawer-checkbox input {
+  width: 0.9rem;
+  height: 0.9rem;
 }
 
 .hostly-product-form-drawer-meta {
@@ -5669,7 +5737,22 @@ body {
   flex-wrap: nowrap;
   gap: var(--hostly-op-gap-xs);
   align-items: stretch;
-  margin-top: 6px;
+  margin-top: 3px;
+}
+
+.hostly-product-form-drawer-primary .hostly-product-form-field-warning {
+  margin-top: 4px;
+  padding: 4px 6px;
+}
+
+.hostly-product-form-drawer-primary .hostly-product-form-field-warning__line {
+  font-size: 10px;
+}
+
+@media (min-width: 961px) {
+  .hostly-product-form-drawer__body {
+    overflow-y: auto;
+  }
 }
 
 .hostly-product-form-drawer-categoria-row select {
@@ -5777,9 +5860,9 @@ body {
 .hostly-product-escandallo-modal {
   display: flex;
   flex-direction: column;
-  width: clamp(900px, 52vw, 1100px);
+  width: clamp(1000px, 54vw, 1150px);
   max-width: 96vw;
-  max-height: min(92vh, 920px);
+  max-height: 90vh;
   border-radius: 14px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -5818,22 +5901,292 @@ body {
 }
 
 .hostly-product-escandallo-modal__body {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hostly-product-escandallo-modal__section {
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.hostly-product-escandallo-modal__section--recipe {
+  flex: 1 1 auto;
+  min-height: 280px;
+}
+
+.hostly-product-escandallo-modal__body .hostly-product-profitability {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hostly-product-escandallo-modal__body .hostly-product-recipe-editor {
+  min-height: 240px;
+}
+
+/* Recipe editor — compact hospitality sheet (Escandallo modal) */
+.hostly-product-recipe-editor--sheet {
+  border: 1px solid #e8eef4;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__header-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__header-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #334155;
+  flex-shrink: 0;
+  max-width: 148px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__list-heading {
+  margin: 0 0 2px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #e8eef4;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__row {
   display: grid;
-  gap: 16px;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef2f6;
+  background: #ffffff;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__row:last-child {
+  border-bottom: none;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__row--invalid {
+  background: #fffbfb;
+  border-bottom-color: #fecaca;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__row-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__row-name--pending {
+  font-weight: 600;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 0;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__field-label {
+  display: block;
+  margin: 0 0 3px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: #64748b;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__control {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #dbe3ec;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 13px;
+  color: #0f172a;
+  box-sizing: border-box;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__control:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__control:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(88px, 108px);
+  gap: 8px;
+  align-items: end;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__remove {
+  flex-shrink: 0;
+  border: 1px solid #e8eef4;
+  background: #ffffff;
+  color: #64748b;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__remove:hover:not(:disabled) {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__remove:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__add {
+  margin-top: 2px;
+  border: none;
+  background: transparent;
+  color: #0369a1;
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__add:hover:not(:disabled) {
+  color: #0284c7;
+  text-decoration: underline;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__empty {
+  padding: 12px 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__empty-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: #334155;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__empty-body {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__self-ref {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #b91c1c;
+  line-height: 1.35;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__warning {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.hostly-product-recipe-editor--sheet .hostly-product-recipe-editor__hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
 }
 
 .hostly-product-escandallo-modal__footer {
   flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 14px 20px;
   border-top: 1px solid #e8eef4;
   background: #ffffff;
+}
+
+.hostly-product-escandallo-modal__footer-hint {
+  margin: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #64748b;
 }
 
 @media (max-width: 960px) {

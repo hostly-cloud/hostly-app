@@ -19,6 +19,25 @@ import {
 } from "@/components/productos/product-recipe-editor-section";
 import type { InventoryProductLookup } from "@/lib/recipes/product-recipe-types";
 
+const ESCANDALLO_SHEET_LABEL_STYLE: CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 650,
+  color: "#64748b",
+  marginBottom: 6,
+};
+
+const ESCANDALLO_SHEET_INPUT_STYLE: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid #e2e8f0",
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
+  fontSize: 14,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
 export type ProductFormEscandalloSummaryCardProps = {
   recipeEnabled: boolean;
   recipeRows: readonly ProductProfitabilityDraftRow[];
@@ -119,8 +138,6 @@ export function ProductFormEscandalloModal({
   inventoryProducts,
   recipeWarnings,
   disabled = false,
-  labelStyle,
-  inputStyle,
   onClose,
   doneLabel = "Listo",
 }: ProductFormEscandalloModalProps) {
@@ -168,28 +185,38 @@ export function ProductFormEscandalloModal({
         </div>
 
         <div className="hostly-product-escandallo-modal__body">
-          <ProductProfitabilityPanel
-            recipeEnabled={recipeEnabled}
-            recipeRows={recipeRows}
-            saleProductId={saleProductId}
-            salePrice={salePrice}
-            productDocumentsById={productDocumentsById}
-          />
-          <ProductRecipeEditorSection
-            saleProductId={saleProductId}
-            enabled={recipeEnabled}
-            onEnabledChange={onRecipeEnabledChange}
-            rows={recipeRows}
-            onRowsChange={onRecipeRowsChange}
-            inventoryProducts={inventoryProducts}
-            warnings={recipeWarnings}
-            disabled={disabled}
-            labelStyle={labelStyle}
-            inputStyle={inputStyle}
-          />
+          <section className="hostly-product-escandallo-modal__section">
+            <ProductProfitabilityPanel
+              recipeEnabled={recipeEnabled}
+              recipeRows={recipeRows}
+              saleProductId={saleProductId}
+              salePrice={salePrice}
+              productDocumentsById={productDocumentsById}
+              appearance="sheet"
+            />
+          </section>
+
+          <section className="hostly-product-escandallo-modal__section hostly-product-escandallo-modal__section--recipe">
+            <ProductRecipeEditorSection
+              saleProductId={saleProductId}
+              enabled={recipeEnabled}
+              onEnabledChange={onRecipeEnabledChange}
+              rows={recipeRows}
+              onRowsChange={onRecipeRowsChange}
+              inventoryProducts={inventoryProducts}
+              warnings={recipeWarnings}
+              disabled={disabled}
+              labelStyle={ESCANDALLO_SHEET_LABEL_STYLE}
+              inputStyle={ESCANDALLO_SHEET_INPUT_STYLE}
+              appearance="sheet"
+            />
+          </section>
         </div>
 
         <div className="hostly-product-escandallo-modal__footer">
+          <p className="hostly-product-escandallo-modal__footer-hint">
+            Los cambios del escandallo se guardan cuando guardas el producto.
+          </p>
           <ConfigBtnPrimary type="button" disabled={disabled} onClick={onClose}>
             {doneLabel}
           </ConfigBtnPrimary>
