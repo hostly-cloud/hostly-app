@@ -298,7 +298,13 @@ service cloud.firestore {
 
     // RESTAURANTS (doc del restaurante + subcolecciones distintas de products/)
     match /restaurants/{restaurantId} {
-      allow read, write: if sameRestaurant(restaurantId);
+      // Primer restaurante en registro owner: aún no existe users/{uid} ni usuarios/{uid}.
+      allow create: if isAuth()
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && !exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && request.resource.data.keys().hasOnly(['name', 'createdAt']);
+
+      allow read, update, delete: if sameRestaurant(restaurantId);
 
       // Config operacional / sensible por docId.
       // tableGroups: join/separar mesas (manager+). floorPlanLayouts/printers: settings (owner/admin).

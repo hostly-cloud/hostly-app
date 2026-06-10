@@ -8,12 +8,10 @@ import {
   type User,
 } from "firebase/auth";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   serverTimestamp,
-  setDoc,
   writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
@@ -104,17 +102,22 @@ export async function register(
       }
     }
 
-    const restaurantRef = await addDoc(collection(db, "restaurants"), {
-      name: restaurantName?.trim() || "Mi restaurante",
-      createdAt: Date.now(),
-    });
-
-    await setDoc(userRef, {
+    const restaurantNameFinal = restaurantName?.trim() || "Mi restaurante";
+    const restaurantRef = doc(collection(db, "restaurants"));
+    const profile = {
       email: user.email ?? trimmed,
       restaurantId: restaurantRef.id,
-      restaurantName: restaurantName?.trim() || "Mi restaurante",
-      role: "owner",
+      restaurantName: restaurantNameFinal,
+      role: "owner" as const,
+    };
+    const batch = writeBatch(db);
+    batch.set(restaurantRef, {
+      name: restaurantNameFinal,
+      createdAt: Date.now(),
     });
+    batch.set(userRef, profile);
+    batch.set(doc(db, "usuarios", user.uid), profile);
+    await batch.commit();
     console.log("[AUTH] register profile + restaurant committed", user.uid);
     return user;
   } catch (e) {
