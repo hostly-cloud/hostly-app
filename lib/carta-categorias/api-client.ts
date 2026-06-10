@@ -1,6 +1,10 @@
 "use client";
 
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import {
+  normalizeCategoryOperationalBehavior,
+  type CategoryOperationalBehavior,
+} from "./category-operational-behavior";
 import type { CartaCategoria, CartaCategoriaTipo, CartaFamilia } from "./types";
 import { isCartaCategoriaTipo } from "./types";
 import {
@@ -184,6 +188,7 @@ export async function createCartaCategoriaApi(
     productFamilyName?: string | null;
     productFamilyType?: ProductFamilyType | null;
     modifierGroupIds?: string[] | null;
+    categoryOperationalBehavior?: CategoryOperationalBehavior;
     isActive?: boolean;
     sortOrder?: number;
   },
@@ -193,6 +198,9 @@ export async function createCartaCategoriaApi(
   const pfId =
     typeof input.productFamilyId === "string" ? input.productFamilyId.trim() : "";
   const modifierGroupIds = normalizeModifierGroupIds(input.modifierGroupIds);
+  const categoryOperationalBehavior = normalizeCategoryOperationalBehavior(
+    input.categoryOperationalBehavior,
+  );
   const res = await fetch("/api/carta-categorias", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -205,6 +213,7 @@ export async function createCartaCategoriaApi(
       productFamilyName: input.productFamilyName?.trim() || null,
       productFamilyType: input.productFamilyType ?? null,
       modifierGroupIds: normalizeModifierGroupIds(input.modifierGroupIds),
+      categoryOperationalBehavior,
       isActive: input.isActive !== false,
       sortOrder: input.sortOrder,
     }),
@@ -234,6 +243,7 @@ export async function createCartaCategoriaApi(
           }
         : {}),
       ...(modifierGroupIds.length > 0 ? { modifierGroupIds } : {}),
+      categoryOperationalBehavior,
       sortOrder,
       isActive: input.isActive !== false,
       createdAt: now,
@@ -261,6 +271,7 @@ export async function patchCartaCategoriaApi(
     productFamilyName: string | null;
     productFamilyType: ProductFamilyType | null;
     modifierGroupIds?: string[] | null;
+    categoryOperationalBehavior?: CategoryOperationalBehavior;
     sortOrder: number;
     isActive: boolean;
   }>,
@@ -317,6 +328,11 @@ export async function patchCartaCategoriaApi(
       const ids = normalizeModifierGroupIds(patch.modifierGroupIds);
       if (ids.length > 0) item.modifierGroupIds = ids;
       else delete item.modifierGroupIds;
+    }
+    if ("categoryOperationalBehavior" in patch) {
+      item.categoryOperationalBehavior = normalizeCategoryOperationalBehavior(
+        patch.categoryOperationalBehavior,
+      );
     }
     const next = [...list];
     next[idx] = item;

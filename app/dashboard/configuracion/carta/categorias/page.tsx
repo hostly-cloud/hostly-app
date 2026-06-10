@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/i18n-provider";
 import { useAuth } from "@/components/auth/auth-context";
 import { CategoryProductFamilySelect } from "@/components/carta/category-product-family-select";
-import { ProductFormDrawerCollapsibleSection } from "@/components/productos/product-form-drawer-section";
 import {
   ConfigBtnPrimary,
   ConfigBtnSecondary,
@@ -18,13 +17,25 @@ import {
   productFamilySelectValueFromCategory,
   resolveProductFamilyFromSelectValue,
 } from "@/lib/carta/category-product-family";
+import { CartaDeleteChoiceModal } from "@/components/carta/carta-delete-choice-modal";
 import {
   createCartaCategoriaApi,
+  deleteCartaCategoriaApi,
   fetchCartaCategorias,
   fetchCartaFamilias,
   patchCartaCategoriaApi,
+  reorderCartaCategoriasApi,
 } from "@/lib/carta-categorias/api-client";
+import { detachPlatosFromCategory } from "@/lib/carta-categorias/platos-category-sync";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
+import {
+  categoryOperationalBehaviorsForType,
+  coerceCategoryOperationalBehaviorForType,
+  DEFAULT_CATEGORY_OPERATIONAL_BEHAVIOR,
+  getCategoryOperationalBehaviorLabel,
+  normalizeCategoryOperationalBehavior,
+  type CategoryOperationalBehavior,
+} from "@/lib/carta-categorias/category-operational-behavior";
 import type { CartaCategoria, CartaCategoriaTipo, CartaFamilia } from "@/lib/carta-categorias/types";
 import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import {
@@ -35,23 +46,37 @@ import {
   ensureDefaultDrinkModifierGroups,
   listenModifierGroups,
 } from "@/lib/firestore/modifier-groups";
-import {
-  resolveEffectiveModifierGroupLabels,
-  sanitizeModifierGroupIdsForSave,
-} from "@/lib/modifiers/effective-product-modifiers";
+import { sanitizeModifierGroupIdsForSave } from "@/lib/modifiers/effective-product-modifiers";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import { countProductsByCategoryIdFromCentral, countProductsByCategoryIdFromPlatos } from "@/lib/carta/catalog-category-counts";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { LegacyCatalogPendingNotice } from "@/components/carta/legacy-catalog-pending-notice";
-import { loadPlatos } from "@/lib/platos-local";
+import { loadPlatos, PLATOS_CHANGED_EVENT } from "@/lib/platos-local";
 import { CategoriasCartaDataView } from "@/components/carta/categorias-carta-data-view";
 
 const inputClass = "hostly-input hostly-carta-config-field-input";
 
+function operationalBehaviorHelpKey(
+  behavior: CategoryOperationalBehavior,
+  categoryType: CartaCategoriaTipo,
+): string {
+  if (behavior === "composed_recipe" && categoryType === "food") {
+    return "cartaCategories.operationalBehaviorHelpComposedRecipeFood";
+  }
+  const keys: Record<CategoryOperationalBehavior, string> = {
+    simple: "cartaCategories.operationalBehaviorHelpSimple",
+    combo_base: "cartaCategories.operationalBehaviorHelpComboBase",
+    mixer: "cartaCategories.operationalBehaviorHelpMixer",
+    composed_recipe: "cartaCategories.operationalBehaviorHelpComposedRecipe",
+  };
+  return keys[behavior];
+}
+
 export default function ConfigCartaCategoriasPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const behaviorLocale = locale === "en" ? "en" : "es";
   const router = useRouter();
   const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
   const restauranteId = useMemo(
@@ -77,9 +102,21 @@ export default function ConfigCartaCategoriasPage() {
   const [draftFamilyId, setDraftFamilyId] = useState("");
   const [draftCartaMenuFamiliaId, setDraftCartaMenuFamiliaId] = useState("");
   const [draftActive, setDraftActive] = useState(true);
-  const [draftOrder, setDraftOrder] = useState(0);
   const [draftModifierGroupIds, setDraftModifierGroupIds] = useState<string[]>([]);
+  const [reorderBusyId, setReorderBusyId] = useState<string | null>(null);
+  const [deleteChoiceCategory, setDeleteChoiceCategory] = useState<CartaCategoria | null>(null);
+  const [deleteChoiceBusy, setDeleteChoiceBusy] = useState(false);
+  const [draftOperationalBehavior, setDraftOperationalBehavior] =
+    useState<CategoryOperationalBehavior>(DEFAULT_CATEGORY_OPERATIONAL_BEHAVIOR);
   const [saving, setSaving] = useState(false);
+
+  const behaviorOptionsForDraftType = useMemo(() => {
+    const base = [...categoryOperationalBehaviorsForType(draftType)];
+    if (!base.includes(draftOperationalBehavior)) {
+      base.push(draftOperationalBehavior);
+    }
+    return base;
+  }, [draftType, draftOperationalBehavior]);
 
   const refresh = useCallback(async () => {
     if (!restauranteId) {
@@ -226,8 +263,8 @@ export default function ConfigCartaCategoriasPage() {
     setDraftFamilyId("");
     setDraftCartaMenuFamiliaId("");
     setDraftActive(true);
-    setDraftOrder(sorted.length);
     setDraftModifierGroupIds([]);
+    setDraftOperationalBehavior(DEFAULT_CATEGORY_OPERATIONAL_BEHAVIOR);
     setPanelOpen(true);
     setError(null);
   }
@@ -239,8 +276,8 @@ export default function ConfigCartaCategoriasPage() {
     setDraftFamilyId(productFamilySelectValueFromCategory(c));
     setDraftCartaMenuFamiliaId(c.cartaFamiliaId?.trim() ?? "");
     setDraftActive(c.isActive);
-    setDraftOrder(c.sortOrder);
     setDraftModifierGroupIds(c.modifierGroupIds ?? []);
+    setDraftOperationalBehavior(normalizeCategoryOperationalBehavior(c.categoryOperationalBehavior));
     setPanelOpen(true);
     setError(null);
   }
@@ -270,6 +307,12 @@ export default function ConfigCartaCategoriasPage() {
     return { cartaFamiliaId: id || null };
   }
 
+  function resolveSortOrderForSave(): number {
+    if (editing) return editing.sortOrder;
+    const max = sorted.reduce((m, c) => Math.max(m, c.sortOrder), -1);
+    return max + 1;
+  }
+
   async function savePanel() {
     const name = draftName.trim();
     if (!name) {
@@ -292,8 +335,9 @@ export default function ConfigCartaCategoriasPage() {
           name,
           type: draftType,
           isActive: draftActive,
-          sortOrder: draftOrder,
+          sortOrder: resolveSortOrderForSave(),
           modifierGroupIds,
+          categoryOperationalBehavior: draftOperationalBehavior,
           ...familyPayload,
           ...menuFamilyPayload,
         });
@@ -303,8 +347,9 @@ export default function ConfigCartaCategoriasPage() {
           name,
           type: draftType,
           isActive: draftActive,
-          sortOrder: draftOrder,
+          sortOrder: resolveSortOrderForSave(),
           modifierGroupIds,
+          categoryOperationalBehavior: draftOperationalBehavior,
           ...familyPayload,
           ...menuFamilyPayload,
         });
@@ -335,6 +380,54 @@ export default function ConfigCartaCategoriasPage() {
     [router],
   );
 
+  const reorderCategories = useCallback(
+    async (orderedIds: string[]) => {
+      if (!restauranteId) return;
+      const currentIds = sorted.map((c) => c.id);
+      if (orderedIds.join("|") === currentIds.join("|")) return;
+      setReorderBusyId(orderedIds[0] ?? null);
+      setError(null);
+      try {
+        const res = await reorderCartaCategoriasApi(restauranteId, orderedIds);
+        if (!res.ok) throw new Error(res.error);
+        await refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No se pudo cambiar el orden.");
+      } finally {
+        setReorderBusyId(null);
+      }
+    },
+    [restauranteId, sorted, refresh],
+  );
+
+  const moveCategory = useCallback(
+    async (categoryId: string, direction: "up" | "down") => {
+      if (!restauranteId) return;
+      const idx = sorted.findIndex((c) => c.id === categoryId);
+      if (idx < 0) return;
+      const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= sorted.length) return;
+      const current = sorted[idx]!;
+      const target = sorted[targetIdx]!;
+      setReorderBusyId(categoryId);
+      setError(null);
+      try {
+        const [resA, resB] = await Promise.all([
+          patchCartaCategoriaApi(restauranteId, current.id, { sortOrder: target.sortOrder }),
+          patchCartaCategoriaApi(restauranteId, target.id, { sortOrder: current.sortOrder }),
+        ]);
+        if (!resA.ok) throw new Error(resA.error);
+        if (!resB.ok) throw new Error(resB.error);
+        await refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No se pudo cambiar el orden.");
+      } finally {
+        setReorderBusyId(null);
+      }
+    },
+    [restauranteId, sorted, refresh],
+  );
+
   async function toggleActive(c: CartaCategoria) {
     if (!restauranteId) return;
     const res = await patchCartaCategoriaApi(restauranteId, c.id, {
@@ -346,6 +439,60 @@ export default function ConfigCartaCategoriasPage() {
     }
     await refresh();
   }
+
+  const closeCategoryDeleteChoice = useCallback(() => {
+    if (!deleteChoiceBusy) setDeleteChoiceCategory(null);
+  }, [deleteChoiceBusy]);
+
+  const deactivateCategoryChoice = useCallback(async () => {
+    if (!restauranteId || !deleteChoiceCategory || deleteChoiceCategory.isActive === false) {
+      setDeleteChoiceCategory(null);
+      return;
+    }
+    setDeleteChoiceBusy(true);
+    setError(null);
+    try {
+      const res = await patchCartaCategoriaApi(restauranteId, deleteChoiceCategory.id, {
+        isActive: false,
+      });
+      if (!res.ok) throw new Error(res.error);
+      await refresh();
+      setDeleteChoiceCategory(null);
+      setNotice("Categoría desactivada.");
+      window.setTimeout(() => setNotice(null), 2800);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo desactivar la categoría.");
+    } finally {
+      setDeleteChoiceBusy(false);
+    }
+  }, [restauranteId, deleteChoiceCategory, refresh]);
+
+  const deleteCategoryPermanently = useCallback(async () => {
+    if (!restauranteId || !deleteChoiceCategory) return;
+    const category = deleteChoiceCategory;
+    setDeleteChoiceBusy(true);
+    setError(null);
+    try {
+      detachPlatosFromCategory(restauranteId, category.id);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(PLATOS_CHANGED_EVENT));
+      }
+      const res = await deleteCartaCategoriaApi(restauranteId, category.id);
+      if (!res.ok) throw new Error(res.error);
+      if (panelOpen && editing?.id === category.id) {
+        setPanelOpen(false);
+        setEditing(null);
+      }
+      await refresh();
+      setDeleteChoiceCategory(null);
+      setNotice("Categoría eliminada. Los productos asociados quedaron sin categoría.");
+      window.setTimeout(() => setNotice(null), 3200);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo eliminar la categoría.");
+    } finally {
+      setDeleteChoiceBusy(false);
+    }
+  }, [restauranteId, deleteChoiceCategory, panelOpen, editing, refresh]);
 
   return (
     <ConfigCartaWorkbench
@@ -400,160 +547,158 @@ export default function ConfigCartaCategoriasPage() {
           modifierGroups={modifierGroups}
           onEdit={openEdit}
           onToggleActive={(c) => void toggleActive(c)}
+          onDelete={(c) => setDeleteChoiceCategory(c)}
           onOrderProducts={openOrderProducts}
           canOrderProducts={canOrderProductsInCategory}
           orderProductsTitle={t("cartaCategories.orderProductsAction")}
           orderProductsDisabledTitle={t("cartaCategories.orderProductsDisabledHint")}
           onCreateNew={openNew}
+          onMoveCategoryUp={(c) => void moveCategory(c.id, "up")}
+          onMoveCategoryDown={(c) => void moveCategory(c.id, "down")}
+          onReorderCategories={(orderedIds) => void reorderCategories(orderedIds)}
+          reorderBusyId={reorderBusyId}
         />
       </ConfigCard>
 
       {panelOpen ? (
         <div className="hostly-carta-config-drawer-backdrop" role="dialog" aria-modal="true">
-          <ConfigCard className="hostly-carta-config-drawer">
-            <h2 className="hostly-carta-config-drawer__title">
+          <ConfigCard className="hostly-carta-config-drawer hostly-carta-category-form-drawer">
+            <h2 className="hostly-carta-category-form-drawer__title">
               {editing ? "Editar categoría" : "Nueva categoría"}
             </h2>
-            <div className="hostly-carta-config-form hostly-carta-config-drawer__body">
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Nombre</span>
-                <input
-                  className={inputClass}
-                  value={draftName}
-                  onChange={(e) => setDraftName(e.target.value)}
-                  placeholder="Ginebras"
-                />
-              </label>
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Bloque de carta</span>
-                <select
-                  className={inputClass}
-                  value={draftCartaMenuFamiliaId}
-                  onChange={(e) => setDraftCartaMenuFamiliaId(e.target.value)}
-                  disabled={saving}
-                >
-                  <option value="">Sin bloque de carta</option>
-                  {menuFamiliaSelectOptions.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                      {f.isActive === false ? " (inactiva)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <p className="hostly-carta-config-form-hint">
-                  Agrupa categorías visibles dentro de bloques como Platos o Bebidas.
-                </p>
-              </label>
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Tipo</span>
-                <select
-                  className={inputClass}
-                  value={draftType}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (isCartaCategoriaTipo(v)) setDraftType(v);
-                  }}
-                >
-                  <option value="food">Comida</option>
-                  <option value="drink">Bebida</option>
-                  <option value="general">Mixto</option>
-                </select>
-              </label>
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Familia de producto</span>
-                <CategoryProductFamilySelect
-                  restaurantId={restauranteId}
-                  value={draftFamilyId}
-                  onChange={setDraftFamilyId}
-                  disabled={saving}
-                  className={inputClass}
-                />
-                <p className="hostly-carta-config-form-hint">
-                  La familia de producto sirve para filtros, informes y comportamiento operativo. Es
-                  distinta del bloque de carta.
-                </p>
-              </label>
-              <ProductFormDrawerCollapsibleSection
-                key={editing?.id ?? "new"}
-                title="Configuración avanzada"
-                hint="Modificadores, orden y estado."
-              >
+            <div className="hostly-carta-category-form-drawer__body">
+              <div className="hostly-carta-category-form-grid">
+                <label className="hostly-carta-config-form-field hostly-carta-category-form-grid__full">
+                  <span className="hostly-carta-config-form-label">Nombre</span>
+                  <input
+                    className={inputClass}
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    placeholder="Ginebras"
+                  />
+                </label>
                 <label className="hostly-carta-config-form-field">
-                  <span className="hostly-carta-config-form-label">Modificadores</span>
-                {activeModifierGroups.length === 0 ? (
-                  <p className="hostly-carta-config-form-hint">
-                    No hay grupos activos. Créalos en{" "}
-                    <Link href="/dashboard/configuracion/modificadores" className="hostly-carta-config-text-link">
-                      Configuración → Modificadores
-                    </Link>
-                    .
-                  </p>
-                ) : (
-                  <div className="hostly-productos-carta-filter-chips">
-                    {activeModifierGroups.map((group) => {
-                      const selected = draftModifierGroupIds.includes(group.id);
-                      return (
-                        <label
-                          key={group.id}
-                          className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${selected ? " is-active" : ""}`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="sr-only"
-                            checked={selected}
-                            onChange={() => {
-                              setDraftModifierGroupIds((prev) =>
-                                prev.includes(group.id)
-                                  ? prev.filter((id) => id !== group.id)
-                                  : [...prev, group.id],
-                              );
-                            }}
-                          />
-                          {group.name}
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-                {draftModifierGroupIds.length > 0 ? (
-                  <div className="hostly-productos-carta-filter-chips hostly-carta-config-form-chips">
-                    {resolveEffectiveModifierGroupLabels(
-                      null,
-                      { modifierGroupIds: draftModifierGroupIds },
-                      modifierGroups,
-                    ).map((label) => (
-                      <span key={label} className="hostly-carta-config-status-chip hostly-carta-config-status-chip--inactive">
-                        {label}
-                      </span>
+                  <span className="hostly-carta-config-form-label">Bloque de carta</span>
+                  <select
+                    className={inputClass}
+                    value={draftCartaMenuFamiliaId}
+                    onChange={(e) => setDraftCartaMenuFamiliaId(e.target.value)}
+                    disabled={saving}
+                    title={t("cartaCategories.formMenuBlockShortHint")}
+                  >
+                    <option value="">Sin bloque de carta</option>
+                    {menuFamiliaSelectOptions.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                        {f.isActive === false ? " (inactiva)" : ""}
+                      </option>
                     ))}
-                  </div>
-                ) : null}
-                <p className="hostly-carta-config-form-hint">
-                  Formatos y mixers para productos de esta sección (p. ej. chupito, copa + tónica). Los productos los heredan al asignar la categoría.
-                </p>
-              </label>
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Orden</span>
-                <input
-                  type="number"
-                  className={inputClass}
-                  value={draftOrder}
-                  onChange={(e) =>
-                    setDraftOrder(Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)
-                  }
-                />
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={draftActive}
-                  onChange={(e) => setDraftActive(e.target.checked)}
-                />
-                <span className="hostly-carta-config-form-label">Categoría activa</span>
-              </label>
-              </ProductFormDrawerCollapsibleSection>
+                  </select>
+                </label>
+                <label className="hostly-carta-config-form-field">
+                  <span className="hostly-carta-config-form-label">Tipo</span>
+                  <select
+                    className={inputClass}
+                    value={draftType}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!isCartaCategoriaTipo(v)) return;
+                      setDraftType(v);
+                      setDraftOperationalBehavior((prev) =>
+                        coerceCategoryOperationalBehaviorForType(prev, v),
+                      );
+                    }}
+                  >
+                    <option value="food">Comida</option>
+                    <option value="drink">Bebida</option>
+                    <option value="general">Mixto</option>
+                  </select>
+                </label>
+                <label className="hostly-carta-config-form-field">
+                  <span className="hostly-carta-config-form-label">
+                    {t("cartaCategories.operationalBehaviorField")}
+                  </span>
+                  <select
+                    className={inputClass}
+                    value={draftOperationalBehavior}
+                    disabled={saving}
+                    title={t(operationalBehaviorHelpKey(draftOperationalBehavior, draftType))}
+                    onChange={(e) =>
+                      setDraftOperationalBehavior(
+                        normalizeCategoryOperationalBehavior(e.target.value),
+                      )
+                    }
+                  >
+                    {behaviorOptionsForDraftType.map((behavior) => (
+                      <option key={behavior} value={behavior}>
+                        {getCategoryOperationalBehaviorLabel(behavior, behaviorLocale)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="hostly-carta-category-form-drawer__hint">
+                    {t(operationalBehaviorHelpKey(draftOperationalBehavior, draftType))}
+                  </p>
+                </label>
+                <label className="hostly-carta-config-form-field">
+                  <span className="hostly-carta-config-form-label">Familia de producto</span>
+                  <CategoryProductFamilySelect
+                    restaurantId={restauranteId}
+                    value={draftFamilyId}
+                    onChange={setDraftFamilyId}
+                    disabled={saving}
+                    className={inputClass}
+                  />
+                </label>
+                <div className="hostly-carta-config-form-field hostly-carta-category-form-grid__modifiers">
+                  <span className="hostly-carta-config-form-label">Modificadores</span>
+                  {activeModifierGroups.length === 0 ? (
+                    <p className="hostly-carta-category-form-drawer__hint">
+                      Sin grupos activos.{" "}
+                      <Link href="/dashboard/configuracion/modificadores" className="hostly-carta-config-text-link">
+                        Crear modificadores
+                      </Link>
+                    </p>
+                  ) : (
+                    <div className="hostly-carta-category-form-drawer__chips">
+                      {activeModifierGroups.map((group) => {
+                        const selected = draftModifierGroupIds.includes(group.id);
+                        return (
+                          <label
+                            key={group.id}
+                            className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${selected ? " is-active" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={selected}
+                              disabled={saving}
+                              onChange={() => {
+                                setDraftModifierGroupIds((prev) =>
+                                  prev.includes(group.id)
+                                    ? prev.filter((id) => id !== group.id)
+                                    : [...prev, group.id],
+                                );
+                              }}
+                            />
+                            {group.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <label className="hostly-carta-config-form-checkbox hostly-carta-category-form-grid__status">
+                  <input
+                    type="checkbox"
+                    checked={draftActive}
+                    disabled={saving}
+                    onChange={(e) => setDraftActive(e.target.checked)}
+                  />
+                  <span className="hostly-carta-config-form-label">{t("cartaCategories.formActiveLabel")}</span>
+                </label>
+              </div>
             </div>
-            <div className="hostly-carta-config-drawer__footer">
+            <div className="hostly-carta-category-form-drawer__footer">
               <ConfigBtnPrimary
                 type="button"
                 disabled={saving}
@@ -581,6 +726,20 @@ export default function ConfigCartaCategoriasPage() {
           </ConfigCard>
         </div>
       ) : null}
+
+      <CartaDeleteChoiceModal
+        open={deleteChoiceCategory != null}
+        title={t("cartaCategories.deleteChoiceTitle")}
+        message={t("cartaCategories.deleteChoiceMessage")}
+        deactivateLabel={t("cartaCategories.deactivateChoice")}
+        deletePermanentLabel={t("cartaCategories.deletePermanentChoice")}
+        deletePermanentHint={t("cartaCategories.deletePermanentHint")}
+        cancelLabel={t("common.cancel")}
+        busy={deleteChoiceBusy}
+        onCancel={closeCategoryDeleteChoice}
+        onDeactivate={() => void deactivateCategoryChoice()}
+        onDeletePermanent={() => void deleteCategoryPermanently()}
+      />
 
       <p className="hostly-carta-config-section-body">
         Las categorías viven en{" "}

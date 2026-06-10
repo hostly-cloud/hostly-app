@@ -149,6 +149,16 @@ export function ProductosCompactBulkActionsMenu({
   );
 }
 
-export function ConfigCartaCompactFilterRow({ children }: { children: ReactNode }) {
-  return <div className="hostly-productos-carta-compact-filters">{children}</div>;
+export function ConfigCartaCompactFilterRow({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={["hostly-productos-carta-compact-filters", className].filter(Boolean).join(" ")}>
+      {children}
+    </div>
+  );
 }

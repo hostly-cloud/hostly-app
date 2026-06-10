@@ -1,11 +1,13 @@
 import { loadPlatos, savePlatos, type PlatoCarta } from "@/lib/platos-local";
 import type { CartaCategoria } from "./types";
 
-/** Tras borrar categoría: quita vínculo en productos locales (mantiene texto categoria por si el usuario quiere reasignar). */
+/** Tras borrar categoría: quita vínculo y nombre de categoría en productos locales. */
 export function detachPlatosFromCategory(restauranteId: string, categoryId: string): void {
   const platos = loadPlatos(restauranteId);
   const next = platos.map((p) =>
-    p.categoriaCartaId === categoryId ? { ...p, categoriaCartaId: undefined, updatedAt: new Date().toISOString() } : p,
+    p.categoriaCartaId === categoryId
+      ? { ...p, categoriaCartaId: undefined, categoria: "", updatedAt: new Date().toISOString() }
+      : p,
   );
   savePlatos(restauranteId, next);
 }

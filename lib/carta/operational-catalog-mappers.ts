@@ -46,7 +46,7 @@ function resolveCategoryName(
   if (cid && categoryNameById?.has(cid)) {
     return categoryNameById.get(cid)!.trim() || "General";
   }
-  return "General";
+  return "";
 }
 
 export function centralProductToPlatoCarta(

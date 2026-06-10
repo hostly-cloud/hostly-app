@@ -533,6 +533,31 @@ export async function bulkUpdateCentralProductsFamily(
   return { updated: ids.length };
 }
 
+/** Renumera `sortOrder` 0…n-1 para los ids dados dentro de la categoría (orden estable en TPV). */
+export async function reorderCentralProductsInCategory(
+  restaurantId: string,
+  orderedProductIds: readonly string[],
+): Promise<void> {
+  const rid = restaurantId.trim();
+  if (!rid) throw new Error("MISSING_RESTAURANT_ID");
+  const userId = requireAuthUid();
+  const now = Date.now();
+
+  const ids = orderedProductIds.map((id) => id.trim()).filter((id) => id.length > 0);
+  if (ids.length === 0) return;
+
+  const batch = writeBatch(db);
+  for (let sortOrder = 0; sortOrder < ids.length; sortOrder += 1) {
+    const id = ids[sortOrder]!;
+    batch.update(centralProductRef(rid, id), {
+      sortOrder,
+      updatedAt: now,
+      updatedBy: userId,
+    } as DocumentData);
+  }
+  await batch.commit();
+}
+
 /**
  * Intercambia la posición de un producto con el anterior/siguiente dentro de la misma categoría.
  * Renumeración 0…n-1 en todos los ids de `orderedProductIds` tras el swap (orden estable en TPV).
@@ -543,11 +568,8 @@ export async function swapCentralProductSortOrderInCategory(
   direction: "up" | "down",
   orderedProductIds: readonly string[],
 ): Promise<void> {
-  const rid = restaurantId.trim();
   const pid = productId.trim();
-  if (!rid || !pid) throw new Error("MISSING_IDS");
-  const userId = requireAuthUid();
-  const now = Date.now();
+  if (!pid) throw new Error("MISSING_IDS");
 
   const ids = orderedProductIds.map((id) => id.trim()).filter((id) => id.length > 0);
   const index = ids.indexOf(pid);
@@ -557,17 +579,7 @@ export async function swapCentralProductSortOrderInCategory(
 
   const next = [...ids];
   [next[index], next[swapIndex]] = [next[swapIndex]!, next[index]!];
-
-  const batch = writeBatch(db);
-  for (let sortOrder = 0; sortOrder < next.length; sortOrder += 1) {
-    const id = next[sortOrder]!;
-    batch.update(centralProductRef(rid, id), {
-      sortOrder,
-      updatedAt: now,
-      updatedBy: userId,
-    } as DocumentData);
-  }
-  await batch.commit();
+  await reorderCentralProductsInCategory(restaurantId, next);
 }
 
 /** Actualiza campos operativos sin pisar metadata de importaci?n/migraci?n. */

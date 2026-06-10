@@ -6,6 +6,7 @@ import { readCategoryProductFamilyType } from "@/lib/carta/category-product-fami
 import type { CartaCategoria, CartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import { isProductFamilyType } from "@/lib/carta/product-family-types";
+import { normalizeCategoryOperationalBehavior } from "@/lib/carta-categorias/category-operational-behavior";
 import { slugifyCartaCategoria } from "@/lib/carta-categorias/slug";
 import { normalizeModifierGroupIds } from "@/lib/modifiers/modifier-group-ids";
 
@@ -27,12 +28,16 @@ function docToCategory(restauranteId: string, id: string, d: DocumentData): Cart
     typeof d.productFamilyName === "string" ? d.productFamilyName.trim() : "";
   const pfType = readCategoryProductFamilyType(d.productFamilyType);
   const modifierGroupIds = readModifierGroupIds(d);
+  const categoryOperationalBehavior = normalizeCategoryOperationalBehavior(
+    d.categoryOperationalBehavior,
+  );
   return {
     id,
     restauranteId,
     name: typeof d.name === "string" ? d.name : "",
     slug: typeof d.slug === "string" ? d.slug : "",
     type,
+    categoryOperationalBehavior,
     ...(fid ? { cartaFamiliaId: fid } : {}),
     ...(pfId ? { productFamilyId: pfId } : {}),
     ...(pfName ? { productFamilyName: pfName } : {}),
@@ -76,6 +81,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     productFamilyName: string | null;
     productFamilyType: string | null;
     modifierGroupIds: string[] | null;
+    categoryOperationalBehavior: string;
     sortOrder: number;
     isActive: boolean;
   }> = body.patch ?? {};
@@ -152,6 +158,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       update.modifierGroupIds = ids.length > 0 ? ids : FieldValue.delete();
     }
   }
+  if ("categoryOperationalBehavior" in patch) {
+    update.categoryOperationalBehavior = normalizeCategoryOperationalBehavior(
+      patch.categoryOperationalBehavior,
+    );
+  }
 
   await ref.update(update);
   const next = await ref.get();
@@ -176,6 +187,20 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   const snap = await ref.get();
   if (!snap.exists) return badRequest("NOT_FOUND", 404);
 
-  await ref.delete();
+  const productsColl = db.collection("restaurants").doc(restauranteId).collection("products");
+  const linkedProducts = await productsColl.where("categoryId", "==", catId).get();
+  const now = Date.now();
+  const batch = db.batch();
+
+  for (const productDoc of linkedProducts.docs) {
+    batch.update(productDoc.ref, {
+      categoryId: FieldValue.delete(),
+      categoryName: FieldValue.delete(),
+      updatedAt: now,
+    });
+  }
+  batch.delete(ref);
+  await batch.commit();
+
   return NextResponse.json({ ok: true });
 }

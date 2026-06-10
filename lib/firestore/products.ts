@@ -1431,6 +1431,7 @@ export {
   deleteCentralProductPermanently,
   disableCentralProduct,
   formatCentralCatalogWriteError,
+  reorderCentralProductsInCategory,
   setCentralProductPublication,
   swapCentralProductSortOrderInCategory,
   updateCentralProduct,

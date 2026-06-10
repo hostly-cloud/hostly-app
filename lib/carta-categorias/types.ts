@@ -1,4 +1,5 @@
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import type { CategoryOperationalBehavior } from "./category-operational-behavior";
 
 export type CartaCategoriaTipo = "food" | "drink" | "general";
 
@@ -22,6 +23,11 @@ export type CartaCategoria = {
   name: string;
   slug: string;
   type: CartaCategoriaTipo;
+  /**
+   * Comportamiento operativo por defecto de la categoría.
+   * Ausente en documentos antiguos → tratar como `simple`.
+   */
+  categoryOperationalBehavior?: CategoryOperationalBehavior;
   /** Familia de carta a la que pertenece esta categoría (una sola). */
   cartaFamiliaId?: string;
   /** Familia de producto (`productFamilies`): bebidas / comida / otros. */

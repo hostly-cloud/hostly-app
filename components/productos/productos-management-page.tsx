@@ -25,6 +25,7 @@ import { ProductosBulkAssignCourseModal } from "@/components/productos/productos
 import { ProductosBulkAssignDestinationModal } from "@/components/productos/productos-bulk-assign-destination-modal";
 import { ProductosBulkAssignCategoryModal } from "@/components/productos/productos-bulk-assign-category-modal";
 import { ProductosBulkAssignFamilyModal } from "@/components/productos/productos-bulk-assign-family-modal";
+import { CartaDeleteChoiceModal } from "@/components/carta/carta-delete-choice-modal";
 import { ProductosBulkDeleteModal } from "@/components/productos/productos-bulk-delete-modal";
 import {
   computeBulkCategoryInitialSelectValue,
@@ -125,10 +126,13 @@ import {
   bulkUpdateCentralProductsFamily,
   clearCentralProductImage,
   createCentralProduct,
+  deleteCentralProductPermanently,
+  disableCentralProduct,
   formatCentralCatalogWriteError,
   listenCentralProducts,
   listenProductsForInventory,
   setCentralProductPublication,
+  reorderCentralProductsInCategory,
   swapCentralProductSortOrderInCategory,
   updateCentralProduct,
   updateCentralProductRecipe,
@@ -245,11 +249,13 @@ const PRODUCTOS_TABLE_SECTION_DARK_STYLE: CSSProperties = {
 function ProductosTableChrome({
   iceVisual,
   embedFlatChrome,
+  className,
   children,
 }: {
   iceVisual: boolean;
   /** Menos “tarjeta sobre tarjeta” en Config → Carta → Productos */
   embedFlatChrome?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   if (iceVisual) {
@@ -257,7 +263,12 @@ function ProductosTableChrome({
       return (
         <HostlySurface
           variant="flat"
-          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none"
+          className={[
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none",
+            className,
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
           {children}
         </HostlySurface>
@@ -1360,6 +1371,8 @@ export default function ProductosManagementPage({
   const [bulkAssignFamilySaving, setBulkAssignFamilySaving] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteSaving, setBulkDeleteSaving] = useState(false);
+  const [deleteChoiceProduct, setDeleteChoiceProduct] = useState<PlatoCarta | null>(null);
+  const [deleteChoiceBusy, setDeleteChoiceBusy] = useState(false);
 
   const persist = useCallback(
     (_next: PlatoCarta[]) => {
@@ -1727,6 +1740,16 @@ export default function ProductosManagementPage({
     categoryTab !== "__all__" &&
     categoryTab !== "__uncat__";
 
+  const activeReorderCategoryLabel = useMemo(() => {
+    if (categoryTab === "__all__" || categoryTab === "__uncat__") return "";
+    return tabOptions.find((tab) => tab.id === categoryTab)?.label ?? "";
+  }, [categoryTab, tabOptions]);
+
+  const exitReorderMode = useCallback(() => {
+    setReorderMode(false);
+    setReorderBusyId(null);
+  }, []);
+
   useEffect(() => {
     setReorderMode(false);
     setReorderBusyId(null);
@@ -1744,6 +1767,7 @@ export default function ProductosManagementPage({
     setReorderMode((prev) => {
       if (prev) return false;
       setListSearch("");
+      setConfigCartaAdvancedOpen(false);
       clearSelection();
       setViewMode("list");
       return true;
@@ -1789,6 +1813,29 @@ export default function ProductosManagementPage({
       void moveProductInCategory(productId, "down");
     },
     [moveProductInCategory],
+  );
+
+  const reorderProductsInCategory = useCallback(
+    async (orderedIds: string[]) => {
+      if (!operationalRestaurantId || reorderBusyId || !canUseProductReorder) return;
+      const currentIds = tabFilteredSorted.map((p) => p.id);
+      if (orderedIds.join("|") === currentIds.join("|")) return;
+      setReorderBusyId(orderedIds[0] ?? null);
+      try {
+        await reorderCentralProductsInCategory(operationalRestaurantId, orderedIds);
+      } catch (e) {
+        setNotice(formatCentralCatalogWriteError(e));
+        window.setTimeout(() => setNotice(null), 4200);
+      } finally {
+        setReorderBusyId(null);
+      }
+    },
+    [
+      operationalRestaurantId,
+      reorderBusyId,
+      canUseProductReorder,
+      tabFilteredSorted,
+    ],
   );
 
   const displayed = useMemo(() => {
@@ -2920,64 +2967,116 @@ export default function ProductosManagementPage({
     }
   }
 
-  async function deleteProducto(p: PlatoCarta) {
+  function deleteProducto(p: PlatoCarta) {
     if (isLegacyReadOnly) return;
-    const restauranteId = operationalRestaurantId;
-
-    if (isCentralCatalog) {
-      const decision = await resolveCartaProductDeleteAction({
-        p,
-        meta,
-        centralDoc: centralDocsById.get(p.id),
-        restaurantId: restauranteId,
-        tieneEscandallo: tieneEscandalloForPlato,
-      });
-
-      if (decision.action === "delete") {
-        const confirmMessage =
-          decision.reason === "disposable_test"
-            ? `¿Eliminar definitivamente "${p.nombre}"? Es un producto de prueba sin histórico.`
-            : `¿Eliminar definitivamente "${p.nombre}"? No tiene ventas ni escandallo asociado.`;
-        const ok = window.confirm(confirmMessage);
-        if (!ok) return;
-      } else {
-        const ok = window.confirm(
-          `"${p.nombre}" tiene histórico o dependencias y no se puede eliminar.\n\n¿Desactivarlo para ocultarlo de la carta?`,
-        );
-        if (!ok) return;
-      }
-
-      try {
-        const outcome = await applyResolvedCartaCentralProductDelete(
-          restauranteId,
-          p.id,
-          decision,
-        );
-        applyCentralDeleteOutcomeToUi(p, outcome);
-        setNotice(
-          outcome === "deleted"
-            ? "Producto eliminado."
-            : "Producto desactivado para conservar el histórico.",
-        );
-      } catch (e) {
-        setFormError(formatCentralCatalogWriteError(e));
-      }
-      window.setTimeout(() => setNotice(null), 2200);
-      return;
-    }
-
-    const ok = window.confirm(`¿Borrar "${p.nombre}" del catálogo? Esta acción no se puede deshacer.`);
-    if (!ok) return;
-    const next = items.filter((x) => x.id !== p.id);
-    persist(next);
-    if (editingId === p.id) {
-      setFormOpen(false);
-      setEditingId(null);
-      setFormError(null);
-    }
-    setNotice("Producto borrado.");
-    window.setTimeout(() => setNotice(null), 2200);
+    setDeleteChoiceProduct(p);
   }
+
+  const closeProductDeleteChoice = useCallback(() => {
+    if (!deleteChoiceBusy) setDeleteChoiceProduct(null);
+  }, [deleteChoiceBusy]);
+
+  const deactivateProductChoice = useCallback(async () => {
+    const p = deleteChoiceProduct;
+    if (!p || isLegacyReadOnly) return;
+    const restauranteId = operationalRestaurantId;
+    setDeleteChoiceBusy(true);
+    setFormError(null);
+    try {
+      if (isCentralCatalog) {
+        await disableCentralProduct(restauranteId, p.id);
+        applyCentralDeleteOutcomeToUi(p, "deactivated");
+        setNotice("Producto desactivado.");
+      } else {
+        const now = new Date().toISOString();
+        const next = items.map((x) =>
+          x.id === p.id
+            ? ({
+                ...x,
+                activo: false,
+                enCarta: false,
+                isActive: false,
+                updatedAt: now,
+              } as PlatoCarta & { enCarta?: boolean; isActive?: boolean })
+            : x,
+        );
+        persist(next);
+        setItems(next);
+        if (editingId === p.id) {
+          setFormOpen(false);
+          setEditingId(null);
+        }
+        setNotice("Producto desactivado.");
+      }
+      setDeleteChoiceProduct(null);
+      window.setTimeout(() => setNotice(null), 2200);
+    } catch (e) {
+      setFormError(
+        isCentralCatalog
+          ? formatCentralCatalogWriteError(e)
+          : e instanceof Error
+            ? e.message
+            : "No se pudo desactivar el producto.",
+      );
+    } finally {
+      setDeleteChoiceBusy(false);
+    }
+  }, [
+    deleteChoiceProduct,
+    isLegacyReadOnly,
+    operationalRestaurantId,
+    isCentralCatalog,
+    applyCentralDeleteOutcomeToUi,
+    items,
+    persist,
+    editingId,
+  ]);
+
+  const deleteProductPermanently = useCallback(async () => {
+    const p = deleteChoiceProduct;
+    if (!p || isLegacyReadOnly) return;
+    const restauranteId = operationalRestaurantId;
+    setDeleteChoiceBusy(true);
+    setFormError(null);
+    try {
+      if (isCentralCatalog) {
+        await deleteCentralProductPermanently(restauranteId, p.id);
+        applyCentralDeleteOutcomeToUi(p, "deleted");
+        setNotice("Producto eliminado definitivamente.");
+      } else {
+        const next = items.filter((x) => x.id !== p.id);
+        persist(next);
+        setItems(next);
+        if (editingId === p.id) {
+          setFormOpen(false);
+          setEditingId(null);
+          setFormError(null);
+        }
+        setNotice("Producto eliminado definitivamente.");
+      }
+      setDeleteChoiceProduct(null);
+      window.setTimeout(() => setNotice(null), 2200);
+    } catch (e) {
+      setFormError(
+        isCentralCatalog
+          ? formatCentralCatalogWriteError(e)
+          : e instanceof Error
+            ? e.message
+            : "No se pudo eliminar el producto.",
+      );
+    } finally {
+      setDeleteChoiceBusy(false);
+    }
+  }, [
+    deleteChoiceProduct,
+    isLegacyReadOnly,
+    operationalRestaurantId,
+    isCentralCatalog,
+    applyCentralDeleteOutcomeToUi,
+    items,
+    persist,
+    editingId,
+  ]);
 
   const iceToolbarFilterSpecs = [
     { id: "todos" as const, label: t("carta.filterAll") },
@@ -3856,8 +3955,106 @@ export default function ProductosManagementPage({
         onConfirm={() => void confirmBulkDelete()}
         t={t}
       />
+      <CartaDeleteChoiceModal
+        open={deleteChoiceProduct != null}
+        title={t("productos.deleteChoiceTitle")}
+        message={t("productos.deleteChoiceMessage")}
+        deactivateLabel={t("productos.deactivateChoice")}
+        deletePermanentLabel={t("productos.deletePermanentChoice")}
+        deletePermanentHint={t("productos.deletePermanentHint")}
+        cancelLabel={t("common.cancel")}
+        busy={deleteChoiceBusy}
+        onCancel={closeProductDeleteChoice}
+        onDeactivate={() => void deactivateProductChoice()}
+        onDeletePermanent={() => void deleteProductPermanently()}
+      />
     </>
   );
+
+  if (configCartaProductosChrome && reorderMode) {
+    return (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
+        <div className="hostly-reorder-mode-shell flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col">
+          <ModulePageShell
+            title=""
+            maxWidth={1280}
+            compactLayout
+            operationalFocus
+            denseWorkbench
+            lockViewport
+            lockViewportFillParent={lockViewportFillParent}
+            shellSurface="configLight"
+            hideBackLink
+            hideLogoutButton
+          >
+            <div
+              className="hostly-reorder-mode flex min-h-0 flex-1 flex-col"
+              role="region"
+              aria-label={t("productos.orderModeTitle")}
+            >
+              <header className="hostly-reorder-mode__header">
+                <button type="button" className="hostly-reorder-mode__back" onClick={exitReorderMode}>
+                  <span aria-hidden>←</span> {t("productos.orderModeExit")}
+                </button>
+                <h1 className="hostly-reorder-mode__title">{t("productos.orderModeTitle")}</h1>
+                {activeReorderCategoryLabel ? (
+                  <p className="hostly-reorder-mode__category">
+                    {t("productos.orderModeCategoryLabel", { name: activeReorderCategoryLabel })}
+                  </p>
+                ) : null}
+                <p className="hostly-reorder-mode__hint">{t("productos.orderModeDragHint")}</p>
+              </header>
+              <div className="hostly-reorder-mode__body flex min-h-0 flex-1 flex-col">
+                {formError && !formOpen ? (
+                  <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
+                    {formError}
+                  </div>
+                ) : null}
+                {items.length === 0 ? (
+                  <div className="hostly-productos-carta-empty">
+                    <p className="hostly-productos-carta-empty__title">{t("carta.emptyTitle")}</p>
+                    <p className="hostly-productos-carta-empty__body">{t("carta.emptyBody")}</p>
+                  </div>
+                ) : tabFilteredSorted.length === 0 ? (
+                  <div className="hostly-productos-carta-muted-empty">{t("stock.filterEmpty")}</div>
+                ) : (
+                  <ProductosCartaDataView
+                    displayed={tabFilteredSorted}
+                    groupedByCategoria={groupedByCategoria}
+                    viewMode="list"
+                    selectedIds={selectedIds}
+                    selectAllRef={selectAllRef}
+                    isLegacyReadOnly={isLegacyReadOnly}
+                    meta={meta}
+                    escNavId={escNavId}
+                    locale={locale as Locale}
+                    t={t}
+                    toggleRowSelected={toggleRowSelected}
+                    toggleSelectAllDisplayed={toggleSelectAllDisplayed}
+                    openEdit={openEdit}
+                    toggleActivo={toggleActivo}
+                    activateProducto={activateProducto}
+                    goToEscandallo={goToEscandallo}
+                    deleteProducto={deleteProducto}
+                    clearSelection={clearSelection}
+                    reorderMode
+                    reorderBusyId={reorderBusyId}
+                    onReorderProducts={(orderedIds) => void reorderProductsInCategory(orderedIds)}
+                    reorderFocusLayout
+                    activeCategoryLabel={activeReorderCategoryLabel}
+                  />
+                )}
+              </div>
+            </div>
+          </ModulePageShell>
+          </div>
+        </div>
+        {sharedProductModals}
+      </>
+    );
+  }
 
   if (configCartaProductosChrome) {
     return (
@@ -3894,20 +4091,8 @@ export default function ProductosManagementPage({
               onChange={(e) => setListSearch(e.target.value)}
               placeholder="Buscar producto..."
               aria-label="Buscar producto"
-              disabled={reorderMode}
-              className="hostly-productos-carta-search hostly-productos-carta-search--prominent"
+              className="hostly-productos-carta-search hostly-productos-carta-search--prominent hostly-productos-carta-search--field"
               />
-              <button
-              type="button"
-              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--reorder${reorderMode ? " is-active" : ""}`}
-              aria-pressed={reorderMode}
-              aria-label={t("productos.orderModeAria")}
-              title={canUseProductReorder ? (reorderMode ? t("productos.orderModeActiveHint") : t("productos.orderModeAria")) : t("productos.orderModeDisabledHint")}
-              disabled={!canUseProductReorder}
-              onClick={toggleReorderMode}
-              >
-              {reorderMode ? t("productos.orderModeDone") : t("productos.orderMode")}
-              </button>
               <button
               type="button"
               className="hostly-productos-carta-advanced-toggle hostly-productos-carta-advanced-toggle--toolbar"
@@ -3918,15 +4103,51 @@ export default function ProductosManagementPage({
               {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
               </button>
               </div>
-              <ConfigCartaCompactFilterRow>
-                {renderCatalogFoodDrinkSegment(true)}
-                {renderConfigCartaStatusFilterSelect()}
-              </ConfigCartaCompactFilterRow>
-              {reorderMode ? (
-              <p className="hostly-productos-reorder-hint" role="status">
-              {t("productos.orderModeActiveHint")}
-              </p>
-              ) : null}
+              <div className="hostly-productos-carta-controls-stack hostly-productos-carta-controls-stack--dense">
+                <ConfigCartaCompactFilterRow className="hostly-productos-carta-compact-filters--ops-row">
+                  <div className="hostly-productos-carta-ops-group">
+                    {renderConfigCartaStatusFilterSelect()}
+                    {canUseProductReorder ? (
+                      <button
+                        type="button"
+                        className="hostly-productos-carta-action hostly-productos-carta-action--secondary hostly-productos-carta-action--compact hostly-productos-carta-action--ops"
+                        aria-label={t("productos.orderModeCtaAria", { category: activeReorderCategoryLabel })}
+                        onClick={toggleReorderMode}
+                      >
+                        {t("productos.orderModeCta")}
+                      </button>
+                    ) : null}
+                  </div>
+                  {!canUseProductReorder ? (
+                    <p className="hostly-productos-reorder-hint hostly-productos-reorder-hint--inline" role="status">
+                      {t("productos.orderModeDisabledHint")}
+                    </p>
+                  ) : null}
+                </ConfigCartaCompactFilterRow>
+                <div
+                  className="hostly-productos-carta-category-rail hostly-productos-carta-category-rail--protagonist hostly-productos-carta-category-rail--premium"
+                  aria-label={t("cartaCategories.title")}
+                  role="tablist"
+                >
+                  {tabOptions
+                    .filter((tab) => tab.id !== "__all__")
+                    .map((tab) => {
+                      const active = categoryTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          onClick={() => setCategoryTab(tab.id)}
+                          aria-selected={active}
+                          className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category hostly-productos-carta-filter-chip--rail hostly-productos-carta-filter-chip--rail-premium${active ? " is-active" : ""}`}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
               {configCartaAdvancedOpen ? (
               <div
               id="hostly-productos-carta-advanced-panel"
@@ -3946,30 +4167,6 @@ export default function ProductosManagementPage({
               <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
               <div className="hostly-productos-carta-filter-chips">
               {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
-              </div>
-              </div>
-              <div className="hostly-productos-carta-advanced-section">
-              <span className="hostly-productos-carta-advanced-section__label">Categorías de carta</span>
-              <div
-              className="hostly-productos-carta-category-tabs hostly-productos-carta-category-tabs--secondary"
-              aria-label="Pestañas de categoría"
-              >
-              {tabOptions
-              .filter((tab) => tab.id !== "__all__")
-              .map((tab) => {
-              const active = categoryTab === tab.id;
-              return (
-              <button
-              key={tab.id}
-              type="button"
-              onClick={() => setCategoryTab(tab.id)}
-              aria-pressed={active}
-              className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${active ? " is-active" : ""}`}
-              >
-              {tab.label}
-              </button>
-              );
-              })}
               </div>
               </div>
               <div className="hostly-productos-carta-advanced-section">
@@ -4007,7 +4204,7 @@ export default function ProductosManagementPage({
               <ProductosCartaDataView
               displayed={displayed}
               groupedByCategoria={groupedByCategoria}
-              viewMode={reorderMode ? "list" : viewMode}
+              viewMode={viewMode}
               selectedIds={selectedIds}
               selectAllRef={selectAllRef}
               isLegacyReadOnly={isLegacyReadOnly}
@@ -4039,10 +4236,7 @@ export default function ProductosManagementPage({
               bulkDeleteDisabled={bulkDeleteDisabled}
               bulkDeleteDisabledTitle={bulkDeleteDisabledTitle}
               compactBulkBar
-              reorderMode={reorderMode}
-              reorderBusyId={reorderBusyId}
-              onMoveProductUp={handleMoveProductUp}
-              onMoveProductDown={handleMoveProductDown}
+              activeCategoryLabel={activeReorderCategoryLabel}
               />
               )}
               </div>

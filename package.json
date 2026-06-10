@@ -11,6 +11,9 @@
     "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@google-cloud/vision": "^5.3.6",
     "firebase": "^12.12.0",
     "firebase-admin": "^13.7.0",

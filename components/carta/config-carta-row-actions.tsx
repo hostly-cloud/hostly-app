@@ -52,6 +52,14 @@ function IconOrderProducts() {
   );
 }
 
+function IconDelete() {
+  return (
+    <RowGlyph>
+      <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+    </RowGlyph>
+  );
+}
+
 export function ConfigCartaEditToggleActions({
   isActive,
   editTitle,
@@ -62,6 +70,8 @@ export function ConfigCartaEditToggleActions({
   orderProductsTitle,
   onOrderProducts,
   orderProductsDisabled,
+  deleteTitle,
+  onDelete,
 }: {
   isActive: boolean;
   editTitle: string;
@@ -72,6 +82,8 @@ export function ConfigCartaEditToggleActions({
   orderProductsTitle?: string;
   onOrderProducts?: () => void;
   orderProductsDisabled?: boolean;
+  deleteTitle?: string;
+  onDelete?: () => void;
 }) {
   const orderDisabled = orderProductsDisabled || !onOrderProducts;
   return (
@@ -115,6 +127,21 @@ export function ConfigCartaEditToggleActions({
       >
         {isActive ? <IconToggleActive /> : <IconToggleInactive />}
       </HostlyRowActionButton>
+      {onDelete ? (
+        <HostlyRowActionButton
+          variant="icon"
+          tone="danger"
+          disabled={disabled}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!disabled) onDelete();
+          }}
+          title={deleteTitle}
+          aria-label={deleteTitle}
+        >
+          <IconDelete />
+        </HostlyRowActionButton>
+      ) : null}
     </HostlyRowActions>
   );
 }

@@ -6,6 +6,7 @@ import { readCategoryProductFamilyType } from "@/lib/carta/category-product-fami
 import type { CartaCategoria, CartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import { normalizeCategoryOperationalBehavior } from "@/lib/carta-categorias/category-operational-behavior";
 import { slugifyCartaCategoria } from "@/lib/carta-categorias/slug";
 import { normalizeModifierGroupIds } from "@/lib/modifiers/modifier-group-ids";
 
@@ -17,6 +18,7 @@ type FirestoreCatDoc = {
   name: string;
   slug: string;
   type: CartaCategoriaTipo;
+  categoryOperationalBehavior?: string;
   cartaFamiliaId?: string;
   productFamilyId?: string;
   productFamilyName?: string;
@@ -53,12 +55,16 @@ function docToCategory(restauranteId: string, id: string, d: DocumentData): Cart
   const type = isCartaCategoriaTipo(d.type) ? d.type : "general";
   const fid = typeof d.cartaFamiliaId === "string" ? d.cartaFamiliaId.trim() : "";
   const modifierGroupIds = readModifierGroupIds(d);
+  const categoryOperationalBehavior = normalizeCategoryOperationalBehavior(
+    d.categoryOperationalBehavior,
+  );
   return {
     id,
     restauranteId,
     name: typeof d.name === "string" ? d.name : "",
     slug: typeof d.slug === "string" ? d.slug : "",
     type,
+    categoryOperationalBehavior,
     ...(fid ? { cartaFamiliaId: fid } : {}),
     ...readProductFamilyFields(d),
     ...(modifierGroupIds ? { modifierGroupIds } : {}),
@@ -100,6 +106,7 @@ export async function POST(req: Request) {
         productFamilyName?: string | null;
         productFamilyType?: string | null;
         modifierGroupIds?: string[] | null;
+        categoryOperationalBehavior?: string;
         isActive?: boolean;
         sortOrder?: number;
       }
@@ -122,6 +129,9 @@ export async function POST(req: Request) {
     typeof body.productFamilyName === "string" ? body.productFamilyName.trim() : "";
   const pfType = readCategoryProductFamilyType(body.productFamilyType);
   const modifierGroupIds = normalizeModifierGroupIds(body.modifierGroupIds);
+  const categoryOperationalBehavior = normalizeCategoryOperationalBehavior(
+    body.categoryOperationalBehavior,
+  );
   const now = new Date().toISOString();
   const coll = db.collection("restaurantes").doc(restauranteId).collection("cartaCategorias");
 
@@ -139,6 +149,7 @@ export async function POST(req: Request) {
     name,
     slug,
     type,
+    categoryOperationalBehavior,
     ...(famRaw ? { cartaFamiliaId: famRaw } : {}),
     ...(pfId ? { productFamilyId: pfId } : {}),
     ...(pfName ? { productFamilyName: pfName } : {}),

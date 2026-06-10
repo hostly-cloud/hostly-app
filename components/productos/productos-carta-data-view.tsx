@@ -24,9 +24,18 @@ import {
   ProductosCartaReorderControls,
   ProductosCartaRowActions,
   PRODUCTOS_CARTA_LEGACY_BLOCKED,
+  formatProductosCartaSectionCellDisplay,
   productOperationalFieldsFromPlato,
 } from "./productos-table-cells";
 import { ProductosSelectionBar } from "./productos-selection-bar";
+import {
+  ProductosCartaDragHandle,
+  ProductosCartaSortableDesktopRow,
+  ProductosCartaSortableDragHandle,
+  ProductosCartaSortableFocusItem,
+  ProductosCartaSortableMobileItem,
+  ProductosCartaSortableRoot,
+} from "./productos-carta-sortable";
 
 const TIPO_VENTA_I18N: Record<TipoProductoVenta, string> = {
   plato: "carta.tipoPlato",
@@ -170,6 +179,11 @@ export type ProductosCartaDataViewProps = {
   reorderBusyId?: string | null;
   onMoveProductUp?: (productId: string) => void;
   onMoveProductDown?: (productId: string) => void;
+  onReorderProducts?: (orderedIds: string[]) => void;
+  /** Lista mínima (handle + nombre + precio) para modo ordenar enfocado. */
+  reorderFocusLayout?: boolean;
+  /** Etiqueta de categoría activa (concreta); vacío en vista general o sin categorizar. */
+  activeCategoryLabel?: string;
 };
 
 function SelectionCheckbox({
@@ -200,10 +214,11 @@ function SelectionCheckbox({
   );
 }
 
-function ProductPrimaryCell({ p }: { p: PlatoCarta }) {
+function ProductPrimaryCell({ p, showDragHandle }: { p: PlatoCarta; showDragHandle?: boolean }) {
   const ops = productOperationalFieldsFromPlato(p);
   return (
-    <div className="hostly-data-table-primary hostly-data-table-primary--with-thumb">
+    <div className="hostly-data-table-primary hostly-data-table-primary--with-thumb hostly-productos-carta-name-cell">
+      {showDragHandle ? <ProductosCartaSortableDragHandle /> : null}
       <ProductosCartaNameThumb p={p} />
       <div className="hostly-data-table-primary__stack">
         <span className="hostly-data-table-primary__name" title={p.nombre}>
@@ -303,6 +318,8 @@ function renderProductRowCells(args: {
   rowCount?: number;
   onMoveProductUp?: (productId: string) => void;
   onMoveProductDown?: (productId: string) => void;
+  showDragHandle?: boolean;
+  activeCategoryLabel?: string;
 }) {
   const {
     p,
@@ -324,10 +341,17 @@ function renderProductRowCells(args: {
     rowCount = 1,
     onMoveProductUp,
     onMoveProductDown,
+    showDragHandle,
+    activeCategoryLabel,
   } = args;
   const tiene = tieneEscandalloForPlato(p, meta);
   const busyEsc = escNavId === p.id;
   const ops = productOperationalFieldsFromPlato(p);
+  const sectionCell = formatProductosCartaSectionCellDisplay(
+    p.categoria,
+    activeCategoryLabel,
+    t("cartaCategories.filterUncat"),
+  );
 
   return (
     <>
@@ -342,7 +366,7 @@ function renderProductRowCells(args: {
         </HostlyDataCell>
       )}
       <HostlyDataCell col="product">
-        <ProductPrimaryCell p={p} />
+        <ProductPrimaryCell p={p} showDragHandle={showDragHandle} />
       </HostlyDataCell>
       <HostlyDataCell col="tipo">
         <HostlyStatusBadge
@@ -356,8 +380,17 @@ function renderProductRowCells(args: {
         </HostlyStatusBadge>
       </HostlyDataCell>
       <HostlyDataCell col="categoria">
-        <span className="hostly-data-table-secondary" title={p.categoria}>
-          {p.categoria}
+        <span
+          className={[
+            "hostly-data-table-secondary",
+            sectionCell.isRedundant ? "hostly-data-table-secondary--muted" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          title={sectionCell.title}
+          aria-label={sectionCell.isRedundant ? sectionCell.title : undefined}
+        >
+          {sectionCell.display}
         </span>
       </HostlyDataCell>
       <HostlyDataCell col="familia">
@@ -391,14 +424,16 @@ function renderProductRowCells(args: {
       <HostlyDataCell align="end" col="actions">
         <div className="hostly-data-table-actions-shell">
           {reorderMode ? (
-            <ProductosCartaReorderControls
-              canMoveUp={rowIndex > 0}
-              canMoveDown={rowIndex < rowCount - 1}
-              busy={reorderBusyId === p.id}
-              t={t}
-              onMoveUp={() => onMoveProductUp?.(p.id)}
-              onMoveDown={() => onMoveProductDown?.(p.id)}
-            />
+            <div className="hostly-productos-carta-order-actions">
+              <ProductosCartaReorderControls
+                canMoveUp={rowIndex > 0}
+                canMoveDown={rowIndex < rowCount - 1}
+                busy={reorderBusyId === p.id}
+                t={t}
+                onMoveUp={() => onMoveProductUp?.(p.id)}
+                onMoveDown={() => onMoveProductDown?.(p.id)}
+              />
+            </div>
           ) : (
             <ProductosCartaRowActions
               p={p}
@@ -419,7 +454,12 @@ function renderProductRowCells(args: {
 }
 
 function MobileProductItem(
-  props: ProductosCartaDataViewProps & { p: PlatoCarta; rowIndex?: number; rowCount?: number },
+  props: ProductosCartaDataViewProps & {
+    p: PlatoCarta;
+    rowIndex?: number;
+    rowCount?: number;
+    showDragHandle?: boolean;
+  },
 ) {
   const {
     p,
@@ -436,6 +476,7 @@ function MobileProductItem(
     rowCount = 1,
     onMoveProductUp,
     onMoveProductDown,
+    showDragHandle = false,
   } = props;
   const tiene = tieneEscandalloForPlato(p, meta);
   const busyEsc = escNavId === p.id;
@@ -446,7 +487,9 @@ function MobileProductItem(
     <HostlyMobileListItem
       selected={reorderMode ? false : selected}
       leading={
-        reorderMode ? null : (
+        showDragHandle ? (
+          <ProductosCartaSortableDragHandle />
+        ) : reorderMode ? null : (
           <SelectionCheckbox
             checked={selected}
             disabled={isLegacyReadOnly}
@@ -485,14 +528,16 @@ function MobileProductItem(
       }
       actions={
         reorderMode ? (
-          <ProductosCartaReorderControls
-            canMoveUp={rowIndex > 0}
-            canMoveDown={rowIndex < rowCount - 1}
-            busy={reorderBusyId === p.id}
-            t={t}
-            onMoveUp={() => onMoveProductUp?.(p.id)}
-            onMoveDown={() => onMoveProductDown?.(p.id)}
-          />
+          <div className="hostly-productos-carta-order-actions">
+            <ProductosCartaReorderControls
+              canMoveUp={rowIndex > 0}
+              canMoveDown={rowIndex < rowCount - 1}
+              busy={reorderBusyId === p.id}
+              t={t}
+              onMoveUp={() => onMoveProductUp?.(p.id)}
+              onMoveDown={() => onMoveProductDown?.(p.id)}
+            />
+          </div>
         ) : (
           <ProductosCartaRowActions
             p={p}
@@ -542,10 +587,181 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     reorderBusyId = null,
     onMoveProductUp,
     onMoveProductDown,
+    onReorderProducts,
+    reorderFocusLayout = false,
+    locale,
   } = props;
 
   const allSelected = displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id));
   const rowCount = displayed.length;
+  const sortableReorderEnabled = reorderMode && viewMode === "list" && Boolean(onReorderProducts);
+  const dragHandleLabel = t("productos.dragHandleAria");
+
+  const renderDragPreview = (p: PlatoCarta) => (
+    <div
+      className={
+        reorderFocusLayout
+          ? "hostly-reorder-mode__drag-preview"
+          : "hostly-productos-carta-drag-preview"
+      }
+    >
+      <ProductosCartaDragHandle disabled label={dragHandleLabel} />
+      {reorderFocusLayout ? null : <ProductosCartaNameThumb p={p} />}
+      <span
+        className={
+          reorderFocusLayout
+            ? "hostly-reorder-mode__item-name"
+            : "hostly-productos-carta-drag-preview__name"
+        }
+      >
+        {p.nombre}
+      </span>
+    </div>
+  );
+
+  const renderFocusRow = (p: PlatoCarta, showDragHandle: boolean) => {
+    const content = (
+      <>
+        {showDragHandle ? <ProductosCartaSortableDragHandle /> : null}
+        <span className="hostly-reorder-mode__item-name" title={p.nombre}>
+          {p.nombre}
+        </span>
+      </>
+    );
+    if (showDragHandle) {
+      return (
+        <ProductosCartaSortableFocusItem key={p.id} item={p}>
+          {content}
+        </ProductosCartaSortableFocusItem>
+      );
+    }
+    return (
+      <div key={p.id} className="hostly-reorder-mode__item">
+        {content}
+      </div>
+    );
+  };
+
+  const focusListContent = (localItems: PlatoCarta[], withDrag: boolean) => (
+    <div className="hostly-reorder-mode__list" role="list">
+      {localItems.map((p) => renderFocusRow(p, withDrag))}
+    </div>
+  );
+
+  const renderDesktopRow = (p: PlatoCarta, idx: number, count: number, showDragHandle: boolean) => {
+    const cells = renderProductRowCells({
+      ...props,
+      p,
+      selected: selectedIds.has(p.id),
+      rowIndex: idx,
+      rowCount: count,
+      showDragHandle,
+    });
+    if (showDragHandle) {
+      return (
+        <ProductosCartaSortableDesktopRow key={p.id} item={p}>
+          {cells}
+        </ProductosCartaSortableDesktopRow>
+      );
+    }
+    return (
+      <HostlyDataRow key={p.id} selected={!reorderMode && selectedIds.has(p.id)}>
+        {cells}
+      </HostlyDataRow>
+    );
+  };
+
+  const renderMobileRow = (p: PlatoCarta, idx: number, count: number, showDragHandle: boolean) => {
+    const item = (
+      <MobileProductItem
+        {...props}
+        p={p}
+        rowIndex={idx}
+        rowCount={count}
+        showDragHandle={showDragHandle}
+      />
+    );
+    if (showDragHandle) {
+      return (
+        <ProductosCartaSortableMobileItem key={p.id} item={p}>
+          {item}
+        </ProductosCartaSortableMobileItem>
+      );
+    }
+    return <div key={p.id}>{item}</div>;
+  };
+
+  const tableBodyContent =
+    viewMode === "grouped"
+      ? groupedByCategoria.map((g, gi) => (
+          <div key={`${g.sectionKey}-${gi}`} className="hostly-data-table-group">
+            <HostlyDataGroupBar first={gi === 0}>
+              <span className="hostly-data-table-group-bar__title">{g.categoria}</span>
+              <span className="hostly-data-table-group-bar__count">{g.items.length}</span>
+            </HostlyDataGroupBar>
+            {g.items.map((p, idx) => renderDesktopRow(p, idx, g.items.length, false))}
+          </div>
+        ))
+      : displayed.map((p, idx) => renderDesktopRow(p, idx, rowCount, false));
+
+  const mobileListContent =
+    viewMode === "grouped"
+      ? groupedByCategoria.map((g, gi) => (
+          <HostlyMobileListGroup key={`m-${g.sectionKey}-${gi}`} title={g.categoria} count={g.items.length}>
+            {g.items.map((p, idx) => renderMobileRow(p, idx, g.items.length, false))}
+          </HostlyMobileListGroup>
+        ))
+      : displayed.map((p, idx) => renderMobileRow(p, idx, rowCount, false));
+
+  const listContent = (localItems: PlatoCarta[], isMobile: boolean, withDrag: boolean) => (
+    <>
+      <HostlyDataTable
+        variant="productos-carta"
+        className={`hostly-data-table--dense-config${reorderMode ? " hostly-data-table--reorder-mode" : ""}`}
+      >
+        <HostlyDataTableScroll>
+          <HostlyDataTableHead>
+            {renderProductosCartaHeaderCells({
+              allSelected,
+              displayedCount: localItems.length,
+              isLegacyReadOnly,
+              selectAllRef,
+              t,
+              toggleSelectAllDisplayed,
+              reorderMode,
+            })}
+          </HostlyDataTableHead>
+          <HostlyDataTableBody>
+            {!isMobile
+              ? localItems.map((p, idx) => renderDesktopRow(p, idx, localItems.length, withDrag))
+              : null}
+          </HostlyDataTableBody>
+        </HostlyDataTableScroll>
+      </HostlyDataTable>
+
+      <HostlyMobileList>
+        {isMobile
+          ? localItems.map((p, idx) => renderMobileRow(p, idx, localItems.length, withDrag))
+          : localItems.map((p, idx) => renderMobileRow(p, idx, localItems.length, false))}
+      </HostlyMobileList>
+    </>
+  );
+
+  if (reorderFocusLayout && sortableReorderEnabled) {
+    return (
+      <div className="hostly-reorder-mode__viewport flex min-h-0 flex-1 flex-col">
+        <ProductosCartaSortableRoot
+          items={displayed}
+          disabled={Boolean(reorderBusyId)}
+          dragHandleLabel={dragHandleLabel}
+          onReorder={onReorderProducts!}
+          renderDragPreview={renderDragPreview}
+        >
+          {({ localItems }) => focusListContent(localItems, true)}
+        </ProductosCartaSortableRoot>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -575,83 +791,40 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
       />
       )}
 
-      <HostlyDataTable
-        variant="productos-carta"
-        className={`hostly-data-table--dense-config${reorderMode ? " hostly-data-table--reorder-mode" : ""}`}
-      >
-        <HostlyDataTableScroll>
-          <HostlyDataTableHead>
-            {renderProductosCartaHeaderCells({
-              allSelected,
-              displayedCount: displayed.length,
-              isLegacyReadOnly,
-              selectAllRef,
-              t,
-              toggleSelectAllDisplayed,
-              reorderMode,
-            })}
-          </HostlyDataTableHead>
-          <HostlyDataTableBody>
-            {viewMode === "grouped"
-              ? groupedByCategoria.map((g, gi) => (
-                  <div key={`${g.sectionKey}-${gi}`} className="hostly-data-table-group">
-                    <HostlyDataGroupBar first={gi === 0}>
-                      <span className="hostly-data-table-group-bar__title">{g.categoria}</span>
-                      <span className="hostly-data-table-group-bar__count">{g.items.length}</span>
-                    </HostlyDataGroupBar>
-                    {g.items.map((p, idx) => (
-                      <HostlyDataRow key={p.id} selected={!reorderMode && selectedIds.has(p.id)}>
-                        {renderProductRowCells({
-                          ...props,
-                          p,
-                          selected: selectedIds.has(p.id),
-                          rowIndex: idx,
-                          rowCount: g.items.length,
-                        })}
-                      </HostlyDataRow>
-                    ))}
-                  </div>
-                ))
-              : displayed.map((p, idx) => (
-                  <HostlyDataRow key={p.id} selected={!reorderMode && selectedIds.has(p.id)}>
-                    {renderProductRowCells({
-                      ...props,
-                      p,
-                      selected: selectedIds.has(p.id),
-                      rowIndex: idx,
-                      rowCount,
-                    })}
-                  </HostlyDataRow>
-                ))}
-          </HostlyDataTableBody>
-        </HostlyDataTableScroll>
-      </HostlyDataTable>
-
-      <HostlyMobileList>
-        {viewMode === "grouped"
-          ? groupedByCategoria.map((g, gi) => (
-              <HostlyMobileListGroup key={`m-${g.sectionKey}-${gi}`} title={g.categoria} count={g.items.length}>
-                {g.items.map((p, idx) => (
-                  <MobileProductItem
-                    key={p.id}
-                    {...props}
-                    p={p}
-                    rowIndex={idx}
-                    rowCount={g.items.length}
-                  />
-                ))}
-              </HostlyMobileListGroup>
-            ))
-          : displayed.map((p, idx) => (
-              <MobileProductItem
-                key={p.id}
-                {...props}
-                p={p}
-                rowIndex={idx}
-                rowCount={rowCount}
-              />
-            ))}
-      </HostlyMobileList>
+      {sortableReorderEnabled ? (
+        <ProductosCartaSortableRoot
+          items={displayed}
+          disabled={Boolean(reorderBusyId)}
+          dragHandleLabel={dragHandleLabel}
+          onReorder={onReorderProducts!}
+          renderDragPreview={renderDragPreview}
+        >
+          {({ localItems, isMobile }) => listContent(localItems, isMobile, true)}
+        </ProductosCartaSortableRoot>
+      ) : (
+        <>
+          <HostlyDataTable
+            variant="productos-carta"
+            className={`hostly-data-table--dense-config${reorderMode ? " hostly-data-table--reorder-mode" : ""}`}
+          >
+            <HostlyDataTableScroll>
+              <HostlyDataTableHead>
+                {renderProductosCartaHeaderCells({
+                  allSelected,
+                  displayedCount: displayed.length,
+                  isLegacyReadOnly,
+                  selectAllRef,
+                  t,
+                  toggleSelectAllDisplayed,
+                  reorderMode,
+                })}
+              </HostlyDataTableHead>
+              <HostlyDataTableBody>{tableBodyContent}</HostlyDataTableBody>
+            </HostlyDataTableScroll>
+          </HostlyDataTable>
+          <HostlyMobileList>{mobileListContent}</HostlyMobileList>
+        </>
+      )}
     </div>
   );
 }

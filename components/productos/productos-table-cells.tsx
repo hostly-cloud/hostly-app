@@ -108,6 +108,20 @@ export function productCatalogCourseChipShort(
   return "S/P";
 }
 
+/** Presentación celda SECCIÓN: oculta etiqueta redundante si coincide con la categoría activa. */
+export function formatProductosCartaSectionCellDisplay(
+  categoria: string | undefined | null,
+  activeCategoryLabel: string | undefined,
+  uncategorizedLabel: string,
+): { display: string; title: string; isRedundant: boolean } {
+  const sectionLabel = categoria?.trim() ? categoria.trim() : uncategorizedLabel;
+  const active = activeCategoryLabel?.trim() ?? "";
+  if (active && categoria?.trim() && categoria.trim() === active) {
+    return { display: "—", title: sectionLabel, isRedundant: true };
+  }
+  return { display: sectionLabel, title: sectionLabel, isRedundant: false };
+}
+
 export function productOperationalFieldsFromPlato(p: PlatoCarta): {
   familyShort: string;
   familyFull: string;

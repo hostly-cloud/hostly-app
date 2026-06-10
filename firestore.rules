@@ -281,6 +281,9 @@ service cloud.firestore {
       allow update: if sameRestaurant(restaurantId)
         && (!productUpdateTouchesInventory() || canManageInventory());
 
+      // Borrado definitivo: gestión de carta (manager+). Desactivar usa update (active/visibleOnMenu).
+      allow delete: if sameRestaurant(restaurantId) && isManagerOrAbove();
+
       // Movimientos de stock por producto: append-only + capability inventario.
       match /stockMovements/{movementId} {
         allow read: if sameRestaurant(restaurantId);
