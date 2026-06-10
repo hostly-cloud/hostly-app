@@ -22,20 +22,21 @@ import {
   countOrganizedProductsFromPlatos,
 } from "@/lib/carta/catalog-category-counts";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
-import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { loadPlatos } from "@/lib/platos-local";
 import { FamiliasCartaDataView } from "@/components/carta/familias-carta-data-view";
 
 const inputClass = "hostly-input hostly-carta-config-field-input";
 
 export default function ConfigCartaFamiliasPage() {
-  const { restaurantId: profileRestaurantId } = useAuth();
+  const { restaurantId: profileRestaurantId, profileReady } = useAuth();
   const restauranteId = useMemo(
-    () => resolveOperationalRestaurantId(profileRestaurantId),
-    [profileRestaurantId],
+    () => resolveAuthenticatedRestaurantId(profileReady, profileRestaurantId),
+    [profileReady, profileRestaurantId],
   );
   const operationalCatalog = useCentralProductsForCarta(restauranteId, {
     scope: "management",
+    requireAuthenticatedTenant: true,
   });
   const [items, setItems] = useState<CartaFamilia[]>([]);
   const [categorias, setCategorias] = useState<CartaCategoria[]>([]);

@@ -17,7 +17,7 @@ import {
   formatCentralCatalogWriteError,
   swapCentralProductSortOrderInCategory,
 } from "@/lib/firestore/products";
-import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { useAuth } from "@/components/auth/auth-context";
 import type { PlatoCarta } from "@/lib/platos-local";
 
@@ -43,10 +43,10 @@ export type CategoriaProductosOrdenViewProps = {
 
 export function CategoriaProductosOrdenView({ categoriaId }: CategoriaProductosOrdenViewProps) {
   const { t, locale } = useI18n();
-  const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
+  const { restaurantId: profileRestaurantId, profileReady } = useAuth();
   const restauranteId = useMemo(
-    () => resolveOperationalRestaurantId(profileRestaurantId),
-    [profileRestaurantId],
+    () => resolveAuthenticatedRestaurantId(profileReady, profileRestaurantId),
+    [profileReady, profileRestaurantId],
   );
   const operationalCatalog = useCentralProductsForCarta(restauranteId, {
     scope: "management",
@@ -63,7 +63,7 @@ export function CategoriaProductosOrdenView({ categoriaId }: CategoriaProductosO
   const cid = categoriaId.trim();
 
   useEffect(() => {
-    if (!authReady || !restauranteId || !cid) {
+    if (!profileReady || !restauranteId || !cid) {
       setCategory(null);
       setCategoryLoading(false);
       return;
@@ -81,7 +81,7 @@ export function CategoriaProductosOrdenView({ categoriaId }: CategoriaProductosO
     return () => {
       cancelled = true;
     };
-  }, [authReady, restauranteId, cid, t]);
+  }, [profileReady, restauranteId, cid, t]);
 
   const sortedProducts = useMemo(() => {
     if (!category) return [];

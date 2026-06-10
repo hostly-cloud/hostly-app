@@ -62,11 +62,16 @@ export async function register(
   console.log("[AUTH] register start", trimmed);
   let createdUser: User | undefined;
   try {
-    const pendingInvite = await getPendingInviteByEmail(trimmed);
     const cred = await createUserWithEmailAndPassword(auth, trimmed, password);
     createdUser = cred.user;
     const user = createdUser;
     console.log("[AUTH] register auth user created", user.uid);
+    await user.getIdToken(true);
+    const pendingInvite = await getPendingInviteByEmail(trimmed);
+    console.log(
+      "[AUTH] register invite checked",
+      pendingInvite ? pendingInvite.id : "none",
+    );
     if (pendingInvite) {
       const profile = {
         uid: user.uid,

@@ -33,14 +33,20 @@ function emitCartaDataChanged(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(CARTA_CATEGORIAS_CHANGED_EVENT));
 }
 
+function trimRestauranteId(restauranteId: string): string {
+  return typeof restauranteId === "string" ? restauranteId.trim() : "";
+}
+
 export async function fetchCartaFamilias(restauranteId: string): Promise<CartaFamilia[]> {
-  const res = await fetch(`/api/carta-familias?restauranteId=${encodeURIComponent(restauranteId)}`);
+  const rid = trimRestauranteId(restauranteId);
+  if (!rid) return [];
+  const res = await fetch(`/api/carta-familias?restauranteId=${encodeURIComponent(rid)}`);
   const data = await parseJson<{ ok?: boolean; items?: CartaFamilia[]; error?: string }>(res);
   if (res.status === 501 || data?.error === "FIRESTORE_NOT_CONFIGURED") {
-    return loadCartaFamiliasLocal(restauranteId);
+    return loadCartaFamiliasLocal(rid);
   }
   if (!res.ok || !data?.ok || !Array.isArray(data.items)) {
-    return loadCartaFamiliasLocal(restauranteId);
+    return loadCartaFamiliasLocal(rid);
   }
   return data.items;
 }
@@ -167,13 +173,15 @@ async function parseJson<T>(res: Response): Promise<T | null> {
 }
 
 export async function fetchCartaCategorias(restauranteId: string): Promise<CartaCategoria[]> {
-  const res = await fetch(`/api/carta-categorias?restauranteId=${encodeURIComponent(restauranteId)}`);
+  const rid = trimRestauranteId(restauranteId);
+  if (!rid) return [];
+  const res = await fetch(`/api/carta-categorias?restauranteId=${encodeURIComponent(rid)}`);
   const data = await parseJson<{ ok?: boolean; items?: CartaCategoria[]; error?: string }>(res);
   if (res.status === 501 || data?.error === "FIRESTORE_NOT_CONFIGURED") {
-    return loadCartaCategoriasLocal(restauranteId);
+    return loadCartaCategoriasLocal(rid);
   }
   if (!res.ok || !data?.ok || !Array.isArray(data.items)) {
-    return loadCartaCategoriasLocal(restauranteId);
+    return loadCartaCategoriasLocal(rid);
   }
   return data.items;
 }

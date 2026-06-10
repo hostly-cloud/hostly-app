@@ -48,7 +48,7 @@ import {
 } from "@/lib/firestore/modifier-groups";
 import { sanitizeModifierGroupIdsForSave } from "@/lib/modifiers/effective-product-modifiers";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
-import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import { countProductsByCategoryIdFromCentral, countProductsByCategoryIdFromPlatos } from "@/lib/carta/catalog-category-counts";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
@@ -78,13 +78,14 @@ export default function ConfigCartaCategoriasPage() {
   const { t, locale } = useI18n();
   const behaviorLocale = locale === "en" ? "en" : "es";
   const router = useRouter();
-  const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
+  const { restaurantId: profileRestaurantId, profileReady } = useAuth();
   const restauranteId = useMemo(
-    () => resolveOperationalRestaurantId(profileRestaurantId),
-    [profileRestaurantId],
+    () => resolveAuthenticatedRestaurantId(profileReady, profileRestaurantId),
+    [profileReady, profileRestaurantId],
   );
   const operationalCatalog = useCentralProductsForCarta(restauranteId, {
     scope: "management",
+    requireAuthenticatedTenant: true,
   });
   const isCentralCatalog = operationalCatalog.source === "central";
 
@@ -154,7 +155,7 @@ export default function ConfigCartaCategoriasPage() {
   }, [refresh]);
 
   useEffect(() => {
-    if (!authReady || !restauranteId) {
+    if (!profileReady || !restauranteId) {
       setProductFamilies([]);
       return;
     }
@@ -171,10 +172,10 @@ export default function ConfigCartaCategoriasPage() {
       console.error,
     );
     return () => unsub();
-  }, [authReady, restauranteId]);
+  }, [profileReady, restauranteId]);
 
   useEffect(() => {
-    if (!authReady || !restauranteId) {
+    if (!profileReady || !restauranteId) {
       setModifierGroups([]);
       return;
     }
@@ -191,7 +192,7 @@ export default function ConfigCartaCategoriasPage() {
       console.error,
     );
     return () => unsub();
-  }, [authReady, restauranteId]);
+  }, [profileReady, restauranteId]);
 
   const activeModifierGroups = useMemo(
     () =>

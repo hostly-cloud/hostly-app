@@ -21,7 +21,9 @@ const BASE_MODIFIER_FAMILIES: { block: ModifierFamilyBlock; nombre: string }[] =
 ];
 
 async function loadModifierFamiliesFromApi(restauranteId: string): Promise<{ ok: boolean; items: ModifierFamilyRow[] }> {
-  const res = await fetch(`/api/modifiers/families?restauranteId=${encodeURIComponent(restauranteId)}`);
+  const rid = typeof restauranteId === "string" ? restauranteId.trim() : "";
+  if (!rid) return { ok: false, items: [] };
+  const res = await fetch(`/api/modifiers/families?restauranteId=${encodeURIComponent(rid)}`);
   const j = (await res.json().catch(() => ({}))) as { items?: unknown };
   if (!res.ok) return { ok: false, items: [] };
   const items = Array.isArray(j.items) ? (j.items as ModifierFamilyRow[]) : [];

@@ -17,6 +17,20 @@ export function resolveOperationalRestaurantId(
   return fromProfile || getBrowserRestauranteId();
 }
 
+/**
+ * Tenant operativo solo desde perfil autenticado (mismo criterio que Productos).
+ * Devuelve null hasta `profileReady` y un `restaurantId` válido en el perfil.
+ */
+export function resolveAuthenticatedRestaurantId(
+  profileReady: boolean,
+  profileRestaurantId?: string | null,
+): string | null {
+  if (!profileReady) return null;
+  const rid =
+    typeof profileRestaurantId === "string" ? profileRestaurantId.trim() : "";
+  return rid || null;
+}
+
 /** ID de restaurante en el navegador (localStorage → env público → default). */
 export function getBrowserRestauranteId(): string {
   if (typeof window === "undefined") {
