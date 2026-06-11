@@ -54,6 +54,7 @@ import { countProductsByCategoryIdFromCentral, countProductsByCategoryIdFromPlat
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { LegacyCatalogPendingNotice } from "@/components/carta/legacy-catalog-pending-notice";
 import { loadPlatos, PLATOS_CHANGED_EVENT } from "@/lib/platos-local";
+import { CartaCatalogHierarchyHelp } from "@/components/carta/carta-catalog-hierarchy-help";
 import { CategoriasCartaDataView } from "@/components/carta/categorias-carta-data-view";
 
 const inputClass = "hostly-input hostly-carta-config-field-input";
@@ -233,7 +234,7 @@ export default function ConfigCartaCategoriasPage() {
       options.push({
         id: selectedId,
         restauranteId: restauranteId ?? "",
-        name: "Familia asignada (no disponible)",
+        name: "Familia de menú asignada (no disponible)",
         sortOrder: 999_999,
         isActive: false,
         createdAt: "",
@@ -317,7 +318,7 @@ export default function ConfigCartaCategoriasPage() {
   async function savePanel() {
     const name = draftName.trim();
     if (!name) {
-      setError("Indica un nombre para la categoría.");
+      setError("Indica un nombre para la categoría de carta.");
       return;
     }
     if (!restauranteId) return;
@@ -358,7 +359,7 @@ export default function ConfigCartaCategoriasPage() {
       }
       await refresh();
       setPanelOpen(false);
-      setNotice("Categoría guardada.");
+      setNotice("Categoría de carta guardada.");
       window.setTimeout(() => setNotice(null), 2800);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo guardar.");
@@ -459,10 +460,10 @@ export default function ConfigCartaCategoriasPage() {
       if (!res.ok) throw new Error(res.error);
       await refresh();
       setDeleteChoiceCategory(null);
-      setNotice("Categoría desactivada.");
+      setNotice("Categoría de carta desactivada.");
       window.setTimeout(() => setNotice(null), 2800);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo desactivar la categoría.");
+      setError(e instanceof Error ? e.message : "No se pudo desactivar la categoría de carta.");
     } finally {
       setDeleteChoiceBusy(false);
     }
@@ -486,10 +487,10 @@ export default function ConfigCartaCategoriasPage() {
       }
       await refresh();
       setDeleteChoiceCategory(null);
-      setNotice("Categoría eliminada. Los productos asociados quedaron sin categoría.");
+      setNotice("Categoría de carta eliminada. Los productos asociados quedaron sin categoría de carta.");
       window.setTimeout(() => setNotice(null), 3200);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo eliminar la categoría.");
+      setError(e instanceof Error ? e.message : "No se pudo eliminar la categoría de carta.");
     } finally {
       setDeleteChoiceBusy(false);
     }
@@ -498,11 +499,24 @@ export default function ConfigCartaCategoriasPage() {
   return (
     <ConfigCartaWorkbench
       title="Categorías de carta"
-      description="Crea las secciones de tu carta (Pizzas, Vinos, Cafés…) y, si quieres, asígnalas a una familia de producto para filtros e informes."
+      description="Son las secciones visibles que verá el personal en el TPV."
     >
+      <ConfigCard compact className="hostly-carta-config-card--muted hostly-carta-familia-concept">
+        <p className="hostly-carta-config-section-body">
+          Ejemplos: <strong>Pizze Classico</strong>, <strong>Pizze Speciali</strong>,{" "}
+          <strong>Cervezas nacionales</strong>, <strong>Cervezas importación</strong>. Los productos
+          se organizan dentro de categorías de carta.
+        </p>
+        <p className="hostly-carta-config-form-hint hostly-carta-familia-concept__hint">
+          Cada categoría puede pertenecer a una <strong>familia de menú</strong> (p. ej. Pizzas) para
+          compartir estación y pase. La familia de producto es otro concepto (filtros e informes).
+        </p>
+        <CartaCatalogHierarchyHelp focus="category" />
+      </ConfigCard>
+
       <div className="hostly-carta-config-actions-row">
         <ConfigBtnPrimary type="button" disabled={!restauranteId} onClick={openNew}>
-          Nueva categoría
+          Nueva categoría de carta
         </ConfigBtnPrimary>
         <ConfigBtnSecondary disabled={loading || !restauranteId} onClick={() => void refresh()}>
           Recargar
@@ -565,7 +579,7 @@ export default function ConfigCartaCategoriasPage() {
         <div className="hostly-carta-config-drawer-backdrop" role="dialog" aria-modal="true">
           <ConfigCard className="hostly-carta-config-drawer hostly-carta-category-form-drawer">
             <h2 className="hostly-carta-category-form-drawer__title">
-              {editing ? "Editar categoría" : "Nueva categoría"}
+              {editing ? "Editar categoría de carta" : "Nueva categoría de carta"}
             </h2>
             <div className="hostly-carta-category-form-drawer__body">
               <div className="hostly-carta-category-form-grid">
@@ -579,15 +593,17 @@ export default function ConfigCartaCategoriasPage() {
                   />
                 </label>
                 <label className="hostly-carta-config-form-field">
-                  <span className="hostly-carta-config-form-label">Bloque de carta</span>
+                  <span className="hostly-carta-config-form-label">
+                    {t("cartaCategories.categoryBelongsToFamily")}
+                  </span>
                   <select
                     className={inputClass}
                     value={draftCartaMenuFamiliaId}
                     onChange={(e) => setDraftCartaMenuFamiliaId(e.target.value)}
                     disabled={saving}
-                    title={t("cartaCategories.formMenuBlockShortHint")}
+                    title={t("cartaCategories.menuFamiliesHint")}
                   >
-                    <option value="">Sin bloque de carta</option>
+                    <option value="">{t("cartaCategories.noMenuFamily")}</option>
                     {menuFamiliaSelectOptions.map((f) => (
                       <option key={f.id} value={f.id}>
                         {f.name}

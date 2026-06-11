@@ -319,7 +319,7 @@ export const es: MessageTree = {
   cartaCategories: {
     title: "Categorías de carta",
     subtitle: "Crea, ordena y activa secciones de tu carta. Cada restaurante tiene su propia lista.",
-    manageLink: "Categorías",
+    manageLink: "Categorías de carta",
     backCarta: "← Volver a carta",
     newCategory: "+ Nueva categoría",
     loading: "Cargando categorías…",
@@ -329,8 +329,8 @@ export const es: MessageTree = {
     saveError: "No se pudo guardar.",
     loadError: "No se pudieron cargar las categorías (modo local).",
     errorName: "Indica un nombre.",
-    panelTitle: "Nueva categoría",
-    editTitle: "Editar categoría",
+    panelTitle: "Nueva categoría de carta",
+    editTitle: "Editar categoría de carta",
     name: "Nombre",
     typeField: "¿Comida o bebida?",
     typeFieldHint:
@@ -352,7 +352,7 @@ export const es: MessageTree = {
     formMenuBlockShortHint: "Ej. Platos o Bebidas en carta.",
     formActiveLabel: "Visible en carta",
     pageDescription:
-      "Crea las secciones de tu carta (Pizzas, Vinos, Cafés…) y, si quieres, asígnalas a una familia de producto para filtros e informes.",
+      "Son las secciones visibles que verá el personal en el TPV. Ejemplos: Pizze Classico, Cervezas nacionales.",
     formProductFamilyHint:
       "Opcional. Agrupa a nivel interno (informes, filtros). Distinto de la familia de menú, que ordena Platos y Bebidas en carta.",
     formModifiersHint:
@@ -380,7 +380,7 @@ export const es: MessageTree = {
     orderProductsAction: "Ordenar productos",
     orderProductsTitle: "Orden de productos",
     orderProductsDisabledHint: "Requiere catálogo central y al menos un producto en la categoría",
-    backCategories: "← Categorías",
+    backCategories: "← Categorías de carta",
     orderProductsLoading: "Cargando productos…",
     orderProductsEmptyTitle: "Sin productos en esta categoría",
     orderProductsEmptyBody: "Añade productos en Productos y asígnalos a esta categoría.",
@@ -412,10 +412,10 @@ export const es: MessageTree = {
     orderLabel: "Orden",
     menuFamiliesTitle: "Familias de menú",
     menuFamiliesHint:
-      "Bloques grandes del menú. Agrupan secciones (p. ej. «Platos» → Entrantes, Segundos…; «Bebidas» → Vinos, Cervezas…).",
+      "Bloque operativo del menú (Pizzas, Entrantes, Refrescos…). Agrupa categorías de carta que comparten estación y pase.",
     newMenuFamily: "+ Nueva familia",
     menuFamilyName: "Nombre de familia",
-    menuFamilyColumn: "Familia",
+    menuFamilyColumn: "Familia de menú",
     categoryBelongsToFamily: "Familia de menú",
     noMenuFamily: "— Sin familia de menú —",
     createMenuFamily: "Crear",

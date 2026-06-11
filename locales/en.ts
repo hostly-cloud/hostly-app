@@ -319,7 +319,7 @@ export const en: MessageTree = {
   cartaCategories: {
     title: "Menu categories",
     subtitle: "Create, order, and show or hide sections on your menu. Each restaurant has its own list.",
-    manageLink: "Categories",
+    manageLink: "Menu categories",
     backCarta: "← Back to menu",
     newCategory: "+ New category",
     loading: "Loading categories…",
@@ -329,8 +329,8 @@ export const en: MessageTree = {
     saveError: "Could not save.",
     loadError: "Could not load categories (local mode).",
     errorName: "Enter a name.",
-    panelTitle: "New category",
-    editTitle: "Edit category",
+    panelTitle: "New menu category",
+    editTitle: "Edit menu category",
     name: "Name",
     typeField: "Food or drink?",
     typeFieldHint:
@@ -352,7 +352,7 @@ export const en: MessageTree = {
     formMenuBlockShortHint: "E.g. Food or Drinks on the menu.",
     formActiveLabel: "Visible on menu",
     pageDescription:
-      "Create menu sections (Pizzas, Wines, Coffee…) and optionally assign a product family for filters and reports.",
+      "Sections staff see on the POS. Examples: Classic Pizzas, Domestic beers.",
     formProductFamilyHint:
       "Optional. Internal grouping (reports, filters). Different from menu family, which orders Food and Drinks on the menu.",
     formModifiersHint:
@@ -380,7 +380,7 @@ export const en: MessageTree = {
     orderProductsAction: "Reorder products",
     orderProductsTitle: "Product order",
     orderProductsDisabledHint: "Requires central catalog and at least one product in the category",
-    backCategories: "← Categories",
+    backCategories: "← Menu categories",
     orderProductsLoading: "Loading products…",
     orderProductsEmptyTitle: "No products in this category",
     orderProductsEmptyBody: "Add products in Products and assign them to this category.",
@@ -412,10 +412,10 @@ export const en: MessageTree = {
     orderLabel: "Order",
     menuFamiliesTitle: "Menu families",
     menuFamiliesHint:
-      "Large menu blocks. Group sections (e.g. «Food» → Starters, Mains…; «Drinks» → Wine, Beer…).",
+      "Operational menu block (Pizzas, Starters, Soft drinks…). Groups menu categories that share station and course.",
     newMenuFamily: "+ New family",
     menuFamilyName: "Family name",
-    menuFamilyColumn: "Family",
+    menuFamilyColumn: "Menu family",
     categoryBelongsToFamily: "Menu family",
     noMenuFamily: "— No menu family —",
     createMenuFamily: "Create",

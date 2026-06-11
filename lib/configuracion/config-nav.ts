@@ -3,29 +3,6 @@ export type ConfigNavGroup = { id: string; label: string; children: ConfigNavLea
 
 export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
   {
-    id: "carta",
-    label: "Carta",
-    children: [
-      { href: "/dashboard/configuracion/carta/productos", label: "Productos" },
-      { href: "/dashboard/configuracion/carta/categorias", label: "Categorías" },
-      { href: "/dashboard/configuracion/carta/familias", label: "Familias" },
-      { href: "/dashboard/configuracion/carta/escandallos", label: "Escandallos" },
-      {
-        href: "/dashboard/configuracion/carta/importacion",
-        label: "IA / Importación",
-      },
-      { href: "/dashboard/configuracion/modificadores", label: "Modificadores" },
-    ],
-  },
-  {
-    id: "espacios",
-    label: "Espacios",
-    children: [
-      { href: "/dashboard/configuracion/espacios/mesas", label: "Mesas" },
-      { href: "/dashboard/configuracion/espacios/zonas", label: "Zonas" },
-    ],
-  },
-  {
     id: "produccion",
     label: "Producción",
     children: [
@@ -36,6 +13,35 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
   {
     id: "catalogo",
     label: "Catálogo",
+    children: [
+      { href: "/dashboard/configuracion/carta/familias", label: "Familias de menú" },
+      { href: "/dashboard/configuracion/carta/categorias", label: "Categorías de carta" },
+      { href: "/dashboard/configuracion/carta/productos", label: "Productos" },
+      { href: "/dashboard/configuracion/modificadores", label: "Modificadores" },
+      { href: "/dashboard/configuracion/carta/escandallos", label: "Escandallos" },
+    ],
+  },
+  {
+    id: "importacion",
+    label: "Importación",
+    children: [
+      {
+        href: "/dashboard/configuracion/carta/importacion",
+        label: "IA / Importación",
+      },
+    ],
+  },
+  {
+    id: "espacios",
+    label: "Espacios",
+    children: [
+      { href: "/dashboard/configuracion/espacios/zonas", label: "Zonas" },
+      { href: "/dashboard/configuracion/espacios/mesas", label: "Mesas" },
+    ],
+  },
+  {
+    id: "otros",
+    label: "Otros",
     children: [
       {
         href: "/dashboard/configuracion/familias-producto",

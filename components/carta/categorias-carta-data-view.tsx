@@ -185,8 +185,8 @@ function renderCategoryCells(args: {
       <HostlyDataCell align="end" col="actions">
         <ConfigCartaEditToggleActions
           isActive={c.isActive}
-          editTitle="Editar categoría"
-          toggleTitle={c.isActive ? "Desactivar categoría" : "Activar categoría"}
+          editTitle="Editar categoría de carta"
+          toggleTitle={c.isActive ? "Desactivar categoría de carta" : "Activar categoría de carta"}
           onEdit={() => onEdit(c)}
           onToggle={() => onToggleActive(c)}
           orderProductsTitle={orderTitle}
@@ -236,14 +236,14 @@ export function CategoriasCartaDataView({
     return (
       <div className="hostly-data-table-viewport hostly-data-table-viewport--embedded">
         <div className="hostly-carta-config-empty hostly-carta-config-empty--inset hostly-carta-config-empty--compact">
-          <p className="hostly-carta-config-empty__title">Aún no hay categorías registradas</p>
+          <p className="hostly-carta-config-empty__title">Aún no hay categorías de carta</p>
           <p className="hostly-carta-config-empty__body">
-            Crea la primera con el botón superior o importa una carta con IA.
+            Crea la primera sección visible del TPV (p. ej. Pizze Classico) o importa una carta con IA.
           </p>
           <div className="hostly-carta-config-empty__actions">
             {onCreateNew ? (
               <button type="button" onClick={onCreateNew} className="hostly-button-primary hostly-button-compact">
-                Nueva categoría
+                Nueva categoría de carta
               </button>
             ) : null}
             <Link href="/dashboard/configuracion/carta/importacion" className="hostly-button-secondary hostly-button-compact">
@@ -306,8 +306,8 @@ export function CategoriasCartaDataView({
         actions={
           <ConfigCartaEditToggleActions
             isActive={c.isActive}
-            editTitle="Editar categoría"
-            toggleTitle={c.isActive ? "Desactivar categoría" : "Activar categoría"}
+            editTitle="Editar categoría de carta"
+            toggleTitle={c.isActive ? "Desactivar categoría de carta" : "Activar categoría de carta"}
             onEdit={() => onEdit(c)}
             onToggle={() => onToggleActive(c)}
             orderProductsTitle={
