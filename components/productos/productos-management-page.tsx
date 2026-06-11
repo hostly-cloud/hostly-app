@@ -45,7 +45,6 @@ import {
   cartaCategoriasForProductForm,
   categoryRequiresManualTipoVenta,
   defaultCartaCategoriaTipoForTipoProducto,
-  inferTipoVentaFromCategory,
   isCartaCategoriaCompatibleWithTipoProducto,
 } from "@/lib/carta-categorias/filter-for-tipo-producto";
 import {
@@ -2357,13 +2356,10 @@ export default function ProductosManagementPage({
       setDraftCartaMenuFamiliaId(
         c.cartaFamiliaId?.trim() ? c.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
       );
-      const inferred = inferTipoVentaFromCategory(c);
-      if (inferred) {
-        setDraftTipo(inferred);
-        setDraftOperationStationSelect(defaultOperationStationSelectForTipoVenta(inferred));
-      }
       const familyPatch = buildProductFamilyPatchFromCategoryId(id, cartaCategorias);
-      if (familyPatch.productFamilyId && !familyPatch.clearProductFamily) {
+      if (familyPatch.clearProductFamily) {
+        setDraftProductFamilyId(CATEGORY_PRODUCT_FAMILY_NONE);
+      } else if (familyPatch.productFamilyId) {
         setDraftProductFamilyId(familyPatch.productFamilyId);
       }
     },
@@ -2883,10 +2879,11 @@ export default function ProductosManagementPage({
       setDraftCartaMenuFamiliaId(
         newCat.cartaFamiliaId?.trim() ? newCat.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
       );
-      const inferred = inferTipoVentaFromCategory(newCat);
-      if (inferred) {
-        setDraftTipo(inferred);
-        setDraftOperationStationSelect(defaultOperationStationSelectForTipoVenta(inferred));
+      const familyPatch = buildProductFamilyPatchFromCategoryId(newCat.id, list);
+      if (familyPatch.clearProductFamily) {
+        setDraftProductFamilyId(CATEGORY_PRODUCT_FAMILY_NONE);
+      } else if (familyPatch.productFamilyId) {
+        setDraftProductFamilyId(familyPatch.productFamilyId);
       }
       setAddCategoryOpen(false);
       setAddCatName("");
