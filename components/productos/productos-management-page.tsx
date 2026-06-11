@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
+import { ProductCatalogHierarchyContext } from "@/components/productos/product-catalog-hierarchy-context";
 import { ProductMenuFamilyInheritedHintCard } from "@/components/productos/product-menu-family-inherited-hint-card";
 import { CategoryProductFamilySelect } from "@/components/carta/category-product-family-select";
 import {
@@ -160,6 +161,7 @@ import {
   ProductFormEscandalloModal,
   ProductFormEscandalloSummaryCard,
 } from "@/components/productos/product-form-escandallo-modal";
+import { ProductFormDrawerZone, ProductFormDrawerSubgroup } from "@/components/productos/product-form-drawer-section";
 import type { ProductDocument } from "@/lib/firestore/products";
 import {
   PLATOS_CHANGED_EVENT,
@@ -2342,6 +2344,39 @@ export default function ProductosManagementPage({
     [draftSelectedCategory, cartaFamilias, operationStations],
   );
 
+  const draftCatalogHierarchyContext = useMemo(() => {
+    const categoryName = draftSelectedCategory?.name?.trim() || null;
+    if (!categoryName) return { menuFamilyName: null, categoryName: null };
+
+    let menuFamilyName: string | null = null;
+    const selectedFamiliaId = draftCartaMenuFamiliaId?.trim();
+    if (
+      selectedFamiliaId &&
+      selectedFamiliaId !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED
+    ) {
+      menuFamilyName = cartaFamilias.find((f) => f.id === selectedFamiliaId)?.name ?? null;
+    }
+    if (!menuFamilyName) {
+      const linkedId = draftSelectedCategory?.cartaFamiliaId?.trim();
+      if (linkedId) {
+        menuFamilyName = cartaFamilias.find((f) => f.id === linkedId)?.name ?? null;
+      }
+    }
+    if (
+      draftMenuFamilyInheritedHint.status === "inherited" &&
+      !menuFamilyName
+    ) {
+      menuFamilyName = draftMenuFamilyInheritedHint.menuFamilyName;
+    }
+
+    return { menuFamilyName, categoryName };
+  }, [
+    draftSelectedCategory,
+    draftCartaMenuFamiliaId,
+    cartaFamilias,
+    draftMenuFamilyInheritedHint,
+  ]);
+
   const draftNeedsManualTipoVenta = useMemo(
     () => categoryRequiresManualTipoVenta(draftSelectedCategory),
     [draftSelectedCategory],
@@ -3517,256 +3552,305 @@ export default function ProductosManagementPage({
                 className="hostly-product-form-drawer-primary"
                 aria-label={t("carta.productFormBlockProduct")}
               >
-                <div className="hostly-product-form-drawer-primary__grid">
-                  <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__full">
-                    <span className="hostly-carta-config-form-label">{t("carta.fieldNombre")}</span>
-                    <input
-                      ref={nombreInputRef}
-                      className={drawerInputProminentClass}
-                      value={draftNombre}
-                      onChange={(e) => setDraftNombre(e.target.value)}
-                    />
-                  </label>
-
-                  <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
-                    <span className="hostly-carta-config-form-label">{t("carta.fieldCartaFamilia")}</span>
-                    <select
-                      className={drawerInputClass}
-                      value={draftCartaMenuFamiliaId === null ? "" : draftCartaMenuFamiliaId}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        const nextFilter = v === "" ? null : v;
-                        setDraftCartaMenuFamiliaId(nextFilter);
-                        setDraftCategoriaCartaId((cur) => {
-                          if (!cur) return null;
-                          const allowed = cartaCategoriasForProductForm(
-                            cartaCategorias,
-                            draftTipo,
-                            nextFilter,
-                            { currentCategoryId: cur },
-                          );
-                          return allowed.some((x) => x.id === cur) ? cur : null;
-                        });
-                      }}
-                    >
-                      <option value="">{t("carta.familiaFilterAll")}</option>
-                      <option value={CARTA_MENU_FAMILIA_FILTER_UNASSIGNED}>
-                        {t("carta.familiaFilterUnassigned")}
-                      </option>
-                      {[...cartaFamilias]
-                        .filter((f) => f.isActive !== false)
-                        .sort(
-                          (a, b) =>
-                            a.sortOrder - b.sortOrder ||
-                            a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-                        )
-                        .map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-
-                  <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--categoria">
-                    <CategoriaCartaFormField
-                      t={t}
-                      categorias={categoriasForForm}
-                      selectedId={draftCategoriaCartaId}
-                      onSelectId={applyCategorySelection}
-                      onOpenAddCategory={() => {
-                        setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
-                        const fid = draftCartaMenuFamiliaId;
-                        setAddCatCartaFamiliaId(
-                          fid && fid !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED ? fid : undefined,
-                        );
-                        setAddCategoryOpen(true);
-                      }}
-                    />
-                    <ProductMenuFamilyInheritedHintCard view={draftMenuFamilyInheritedHint} t={t} />
-                  </div>
-
-                  <label
-                    className={`hostly-carta-config-form-field hostly-product-form-drawer-grid__cell${!isCentralCatalog ? " hostly-product-form-drawer-grid__full" : ""}`}
+                <div className="hostly-product-form-drawer-zones">
+                  <ProductFormDrawerZone
+                    title={t("carta.productFormBlockCarta")}
+                    description={t("carta.productFormBlockCartaHint")}
                   >
-                    <span className="hostly-carta-config-form-label">{t("carta.fieldOperationStation")}</span>
-                    <OperationStationProductSelect
-                      restaurantId={operationalRestaurantId}
-                      value={draftOperationStationSelect}
-                      onChange={setDraftOperationStationSelect}
-                      disabled={drawerSyncing}
-                      className={drawerInputClass}
-                    />
-                    {isLegacyOperationStationSelectValue(draftOperationStationSelect) ? (
-                      <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
-                        {t("carta.fieldOperationStationLegacyHint")}
-                      </p>
-                    ) : null}
-                    {preventiveFieldWarnings.destination.length > 0 ? (
-                      <div className="hostly-product-form-field-warning" role="status">
-                        {preventiveFieldWarnings.destination.map((message) => (
-                          <p key={message} className="hostly-product-form-field-warning__line">
-                            {message}
-                          </p>
-                        ))}
-                      </div>
-                    ) : null}
-                  </label>
-
-                  {isCentralCatalog ? (
-                    draftSkipsMenuCourse ? (
-                      <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
-                        <span className="hostly-carta-config-form-label">{t("carta.fieldDefaultCourse")}</span>
-                        <div
-                          className={`${drawerInputClass} hostly-product-form-drawer-readonly`}
-                          aria-readonly
-                        >
-                          {t("carta.productFormCourseLockedLabel")}
-                        </div>
-                      </label>
-                    ) : (
-                      <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
-                        <span className="hostly-carta-config-form-label">{t("carta.fieldDefaultCourse")}</span>
+                    <div className="hostly-product-form-catalog-hierarchy hostly-product-form-catalog-hierarchy--embedded">
+                      <label className="hostly-carta-config-form-field hostly-product-form-catalog-hierarchy__parent">
+                        <span className="hostly-carta-config-form-label">{t("carta.fieldCartaFamilia")}</span>
                         <select
                           className={drawerInputClass}
-                          value={draftCourse}
-                          onChange={(e) => setDraftCourse(e.target.value)}
-                          disabled={drawerSyncing}
+                          value={draftCartaMenuFamiliaId === null ? "" : draftCartaMenuFamiliaId}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            const nextFilter = v === "" ? null : v;
+                            setDraftCartaMenuFamiliaId(nextFilter);
+                            setDraftCategoriaCartaId((cur) => {
+                              if (!cur) return null;
+                              const allowed = cartaCategoriasForProductForm(
+                                cartaCategorias,
+                                draftTipo,
+                                nextFilter,
+                                { currentCategoryId: cur },
+                              );
+                              return allowed.some((x) => x.id === cur) ? cur : null;
+                            });
+                          }}
                         >
-                          <option value="">Sin pase</option>
-                          <option value="1">Entrante</option>
-                          <option value="2">Primero</option>
-                          <option value="3">Segundo</option>
-                          <option value="4">Postre</option>
+                          <option value="">{t("carta.familiaFilterAll")}</option>
+                          <option value={CARTA_MENU_FAMILIA_FILTER_UNASSIGNED}>
+                            {t("carta.familiaFilterUnassigned")}
+                          </option>
+                          {[...cartaFamilias]
+                            .filter((f) => f.isActive !== false)
+                            .sort(
+                              (a, b) =>
+                                a.sortOrder - b.sortOrder ||
+                                a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+                            )
+                            .map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name}
+                              </option>
+                            ))}
                         </select>
+                        <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                          {t("carta.fieldCartaFamiliaHint")}
+                        </p>
                       </label>
-                    )
-                  ) : null}
 
-                  <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
-                    <span className="hostly-carta-config-form-label">Familia de producto</span>
-                    <CategoryProductFamilySelect
-                      restaurantId={operationalRestaurantId}
-                      value={draftProductFamilyId}
-                      onChange={setDraftProductFamilyId}
-                      disabled={drawerSyncing}
-                      className={drawerInputClass}
-                    />
-                    {preventiveFieldWarnings.family.length > 0 ? (
-                      <div className="hostly-product-form-field-warning" role="status">
-                        {preventiveFieldWarnings.family.map((message) => (
-                          <p key={message} className="hostly-product-form-field-warning__line">
-                            {message}
-                          </p>
-                        ))}
-                      </div>
-                    ) : null}
-                  </label>
-
-                  <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
-                    <span className="hostly-carta-config-form-label">{t("carta.fieldPrecio")}</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      min={0}
-                      className={`${drawerInputProminentClass} tabular-nums`}
-                      value={draftPrecio}
-                      onChange={(e) => setDraftPrecio(e.target.value)}
-                    />
-                  </label>
-
-                  <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--status">
-                    <label className="hostly-product-form-drawer-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={draftActivo}
-                        onChange={(e) => setDraftActivo(e.target.checked)}
+                      <ProductCatalogHierarchyContext
+                        menuFamilyName={draftCatalogHierarchyContext.menuFamilyName}
+                        categoryName={draftCatalogHierarchyContext.categoryName}
                       />
-                      <span className="hostly-carta-config-form-label">{t("carta.fieldActivo")}</span>
-                    </label>
-                  </div>
 
-                  <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--tipo">
-                    {draftNeedsManualTipoVenta ? (
-                      <div className="hostly-carta-config-form-field">
-                        <span className="hostly-carta-config-form-label">{t("carta.fieldTipo")}</span>
-                        <div
-                          className="hostly-product-form-drawer-radio-group hostly-product-form-drawer-radio-group--inline"
-                          role="radiogroup"
-                          aria-label={t("carta.fieldFormatManualPrompt")}
-                        >
-                          {TIPOS_PRODUCTO_VENTA.map((tipo) => (
-                            <label key={tipo} className="hostly-product-form-drawer-radio">
-                              <input
-                                type="radio"
-                                name="product-form-draft-tipo"
-                                checked={draftTipo === tipo}
-                                onChange={() => {
-                                  setDraftTipo(tipo);
-                                  setDraftOperationStationSelect(
-                                    defaultOperationStationSelectForTipoVenta(tipo),
-                                  );
-                                }}
-                              />
-                              {labelTipoVenta(t, tipo)}
-                            </label>
-                          ))}
-                        </div>
+                      <div className="hostly-product-form-catalog-hierarchy__child">
+                        <CategoriaCartaFormField
+                          t={t}
+                          categorias={categoriasForForm}
+                          selectedId={draftCategoriaCartaId}
+                          onSelectId={applyCategorySelection}
+                          hintClassName="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint"
+                          onOpenAddCategory={() => {
+                            setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
+                            const fid = draftCartaMenuFamiliaId;
+                            setAddCatCartaFamiliaId(
+                              fid && fid !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED ? fid : undefined,
+                            );
+                            setAddCategoryOpen(true);
+                          }}
+                        />
                       </div>
-                    ) : (
-                      <label className="hostly-carta-config-form-field">
-                        <span className="hostly-carta-config-form-label">{t("carta.fieldTipo")}</span>
-                        <div
-                          className={`${drawerInputClass} hostly-product-form-drawer-readonly`}
-                          aria-readonly
-                        >
-                          {labelTipoVenta(t, draftTipo)}
-                        </div>
-                      </label>
-                    )}
-                  </div>
-
-                  {isCentralCatalog ? (
-                    <div className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__full hostly-product-form-drawer-grid__cell--composition">
-                      <span className="hostly-carta-config-form-label">
-                        {t("carta.fieldProductCompositionType")}
-                      </span>
-                      <div
-                        className="hostly-product-form-drawer-radio-group hostly-product-form-drawer-radio-group--inline"
-                        role="radiogroup"
-                        aria-label={t("carta.fieldProductCompositionType")}
-                      >
-                        {PRODUCT_COMPOSITION_TYPE_VALUES.map((compositionType) => (
-                          <label
-                            key={compositionType}
-                            className="hostly-product-form-drawer-radio"
-                          >
-                            <input
-                              type="radio"
-                              name="product-form-draft-composition-type"
-                              checked={draftProductCompositionType === compositionType}
-                              onChange={() => setDraftProductCompositionType(compositionType)}
-                              disabled={drawerSyncing}
-                            />
-                            {compositionType === "simple"
-                              ? t("carta.fieldProductCompositionSimple")
-                              : t("carta.fieldProductCompositionComposed")}
-                          </label>
-                        ))}
-                      </div>
-                      <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
-                        <strong>{t("carta.fieldProductCompositionSimple")}:</strong>{" "}
-                        {t("carta.fieldProductCompositionSimpleHelp")}{" "}
-                        {t("carta.fieldProductCompositionSimpleExamples")}
-                      </p>
-                      <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
-                        <strong>{t("carta.fieldProductCompositionComposed")}:</strong>{" "}
-                        {t("carta.fieldProductCompositionComposedHelp")}{" "}
-                        {t("carta.fieldProductCompositionComposedExamples")}
-                      </p>
                     </div>
-                  ) : null}
+                  </ProductFormDrawerZone>
+
+                  <ProductFormDrawerZone
+                    title={t("carta.productFormBlockProduction")}
+                    description={t("carta.productFormBlockProductionHint")}
+                  >
+                    <div className="hostly-product-form-drawer-primary__grid">
+                      <label
+                        className={`hostly-carta-config-form-field hostly-product-form-drawer-grid__cell${!isCentralCatalog ? " hostly-product-form-drawer-grid__full" : ""}`}
+                      >
+                        <span className="hostly-carta-config-form-label">{t("carta.fieldOperationStation")}</span>
+                        <OperationStationProductSelect
+                          restaurantId={operationalRestaurantId}
+                          value={draftOperationStationSelect}
+                          onChange={setDraftOperationStationSelect}
+                          disabled={drawerSyncing}
+                          className={drawerInputClass}
+                        />
+                        {isLegacyOperationStationSelectValue(draftOperationStationSelect) ? (
+                          <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                            {t("carta.fieldOperationStationLegacyHint")}
+                          </p>
+                        ) : null}
+                        {preventiveFieldWarnings.destination.length > 0 ? (
+                          <div className="hostly-product-form-field-warning" role="status">
+                            {preventiveFieldWarnings.destination.map((message) => (
+                              <p key={message} className="hostly-product-form-field-warning__line">
+                                {message}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                      </label>
+
+                      {isCentralCatalog ? (
+                        draftSkipsMenuCourse ? (
+                          <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
+                            <span className="hostly-carta-config-form-label">{t("carta.fieldDefaultCourse")}</span>
+                            <div
+                              className={`${drawerInputClass} hostly-product-form-drawer-readonly`}
+                              aria-readonly
+                            >
+                              {t("carta.productFormCourseLockedLabel")}
+                            </div>
+                          </label>
+                        ) : (
+                          <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
+                            <span className="hostly-carta-config-form-label">{t("carta.fieldDefaultCourse")}</span>
+                            <select
+                              className={drawerInputClass}
+                              value={draftCourse}
+                              onChange={(e) => setDraftCourse(e.target.value)}
+                              disabled={drawerSyncing}
+                            >
+                              <option value="">Sin pase</option>
+                              <option value="1">Entrante</option>
+                              <option value="2">Primero</option>
+                              <option value="3">Segundo</option>
+                              <option value="4">Postre</option>
+                            </select>
+                          </label>
+                        )
+                      ) : null}
+                    </div>
+                    <ProductMenuFamilyInheritedHintCard view={draftMenuFamilyInheritedHint} t={t} />
+                  </ProductFormDrawerZone>
+
+                  <ProductFormDrawerZone
+                    title={t("carta.productFormBlockProduct")}
+                    description={t("carta.productFormBlockProductHint")}
+                  >
+                    <ProductFormDrawerSubgroup
+                      title={t("carta.productFormSubgroupCommercial")}
+                      description={t("carta.productFormSubgroupCommercialHint")}
+                    >
+                      <div className="hostly-product-form-drawer-primary__grid">
+                        <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__full">
+                          <span className="hostly-carta-config-form-label">{t("carta.fieldNombre")}</span>
+                          <input
+                            ref={nombreInputRef}
+                            className={drawerInputProminentClass}
+                            value={draftNombre}
+                            onChange={(e) => setDraftNombre(e.target.value)}
+                          />
+                        </label>
+
+                        <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
+                          <span className="hostly-carta-config-form-label">{t("carta.fieldPrecio")}</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            min={0}
+                            className={`${drawerInputProminentClass} tabular-nums`}
+                            value={draftPrecio}
+                            onChange={(e) => setDraftPrecio(e.target.value)}
+                          />
+                        </label>
+                      </div>
+                    </ProductFormDrawerSubgroup>
+
+                    <ProductFormDrawerSubgroup
+                      title={t("carta.productFormSubgroupClassification")}
+                      description={t("carta.productFormSubgroupClassificationHint")}
+                    >
+                      <div className="hostly-product-form-drawer-primary__grid">
+                        <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
+                          <span className="hostly-carta-config-form-label">Familia de producto</span>
+                          <CategoryProductFamilySelect
+                            restaurantId={operationalRestaurantId}
+                            value={draftProductFamilyId}
+                            onChange={setDraftProductFamilyId}
+                            disabled={drawerSyncing}
+                            className={drawerInputClass}
+                          />
+                          {preventiveFieldWarnings.family.length > 0 ? (
+                            <div className="hostly-product-form-field-warning" role="status">
+                              {preventiveFieldWarnings.family.map((message) => (
+                                <p key={message} className="hostly-product-form-field-warning__line">
+                                  {message}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
+                        </label>
+
+                        <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--tipo">
+                          {draftNeedsManualTipoVenta ? (
+                            <div className="hostly-carta-config-form-field">
+                              <span className="hostly-carta-config-form-label">{t("carta.fieldTipo")}</span>
+                              <div
+                                className="hostly-product-form-drawer-radio-group hostly-product-form-drawer-radio-group--inline"
+                                role="radiogroup"
+                                aria-label={t("carta.fieldFormatManualPrompt")}
+                              >
+                                {TIPOS_PRODUCTO_VENTA.map((tipo) => (
+                                  <label key={tipo} className="hostly-product-form-drawer-radio">
+                                    <input
+                                      type="radio"
+                                      name="product-form-draft-tipo"
+                                      checked={draftTipo === tipo}
+                                      onChange={() => {
+                                        setDraftTipo(tipo);
+                                        setDraftOperationStationSelect(
+                                          defaultOperationStationSelectForTipoVenta(tipo),
+                                        );
+                                      }}
+                                    />
+                                    {labelTipoVenta(t, tipo)}
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <label className="hostly-carta-config-form-field">
+                              <span className="hostly-carta-config-form-label">{t("carta.fieldTipo")}</span>
+                              <div
+                                className={`${drawerInputClass} hostly-product-form-drawer-readonly`}
+                                aria-readonly
+                              >
+                                {labelTipoVenta(t, draftTipo)}
+                              </div>
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </ProductFormDrawerSubgroup>
+
+                    <ProductFormDrawerSubgroup
+                      title={t("carta.productFormSubgroupBehavior")}
+                      description={t("carta.productFormSubgroupBehaviorHint")}
+                    >
+                      <div className="hostly-product-form-drawer-primary__grid">
+                        {isCentralCatalog ? (
+                          <div className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__full hostly-product-form-drawer-grid__cell--composition">
+                            <span className="hostly-carta-config-form-label">
+                              {t("carta.fieldProductCompositionType")}
+                            </span>
+                            <div
+                              className="hostly-product-form-drawer-radio-group hostly-product-form-drawer-radio-group--inline"
+                              role="radiogroup"
+                              aria-label={t("carta.fieldProductCompositionType")}
+                            >
+                              {PRODUCT_COMPOSITION_TYPE_VALUES.map((compositionType) => (
+                                <label
+                                  key={compositionType}
+                                  className="hostly-product-form-drawer-radio"
+                                >
+                                  <input
+                                    type="radio"
+                                    name="product-form-draft-composition-type"
+                                    checked={draftProductCompositionType === compositionType}
+                                    onChange={() => setDraftProductCompositionType(compositionType)}
+                                    disabled={drawerSyncing}
+                                  />
+                                  {compositionType === "simple"
+                                    ? t("carta.fieldProductCompositionSimple")
+                                    : t("carta.fieldProductCompositionComposed")}
+                                </label>
+                              ))}
+                            </div>
+                            <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                              <strong>{t("carta.fieldProductCompositionSimple")}:</strong>{" "}
+                              {t("carta.fieldProductCompositionSimpleHelp")}{" "}
+                              {t("carta.fieldProductCompositionSimpleExamples")}
+                            </p>
+                            <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                              <strong>{t("carta.fieldProductCompositionComposed")}:</strong>{" "}
+                              {t("carta.fieldProductCompositionComposedHelp")}{" "}
+                              {t("carta.fieldProductCompositionComposedExamples")}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--status">
+                          <label className="hostly-product-form-drawer-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={draftActivo}
+                              onChange={(e) => setDraftActivo(e.target.checked)}
+                            />
+                            <span className="hostly-carta-config-form-label">{t("carta.fieldActivo")}</span>
+                          </label>
+                        </div>
+                      </div>
+                    </ProductFormDrawerSubgroup>
+                  </ProductFormDrawerZone>
                 </div>
 
                 <div className="hostly-product-form-drawer-primary__cards">

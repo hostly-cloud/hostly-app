@@ -20,6 +20,56 @@ export function ProductFormDrawerBlock({
   );
 }
 
+/** Bloque visual del drawer de producto (Carta / Producción / Producto). Solo presentación. */
+export function ProductFormDrawerZone({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={["hostly-product-form-drawer-zone", className].filter(Boolean).join(" ")}
+    >
+      <header className="hostly-product-form-drawer-zone__header">
+        <h3 className="hostly-product-form-drawer-zone__title">{title}</h3>
+        {description ? (
+          <p className="hostly-product-form-drawer-zone__description">{description}</p>
+        ) : null}
+      </header>
+      <div className="hostly-product-form-drawer-zone__body">{children}</div>
+    </section>
+  );
+}
+
+/** Subgrupo visual dentro de un bloque del drawer (solo presentación). */
+export function ProductFormDrawerSubgroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="hostly-product-form-drawer-subgroup">
+      <header className="hostly-product-form-drawer-subgroup__header">
+        <h4 className="hostly-product-form-drawer-subgroup__title">{title}</h4>
+        {description ? (
+          <p className="hostly-product-form-drawer-subgroup__description">{description}</p>
+        ) : null}
+      </header>
+      <div className="hostly-product-form-drawer-subgroup__fields">{children}</div>
+    </div>
+  );
+}
+
 export function ProductFormDrawerCollapsibleSection({
   title,
   hint,
