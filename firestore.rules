@@ -357,6 +357,17 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Estaciones de producción (Configuración → Producción; sin cablear a KDS/TPV aún).
+      match /productionStations/{stationId} {
+        allow read: if sameRestaurant(restaurantId);
+        allow create: if sameRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow update: if sameRestaurant(restaurantId)
+          && resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if false;
+      }
+
       // Familias de producto (bebidas / comida / otros — agrupación de categorías).
       match /productFamilies/{familyId} {
         allow read: if sameRestaurant(restaurantId);
