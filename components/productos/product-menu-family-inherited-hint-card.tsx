@@ -35,23 +35,63 @@ export function ProductMenuFamilyInheritedHintCard({
       className="hostly-product-menu-family-inherited-hint"
       aria-label={t("carta.productMenuFamilyInheritedTitle")}
     >
-      <p className="hostly-product-menu-family-inherited-hint__title">
+      <p className="hostly-product-menu-family-inherited-hint__eyebrow">
         {t("carta.productMenuFamilyInheritedTitle")}
       </p>
-      <dl className="hostly-product-menu-family-inherited-hint__rows">
-        <div className="hostly-product-menu-family-inherited-hint__row">
-          <dt>{t("carta.productMenuFamilyInheritedMenuFamily")}</dt>
-          <dd>{view.menuFamilyName}</dd>
+
+      <div className="hostly-product-menu-family-inherited-hint__flow">
+        <div className="hostly-product-menu-family-inherited-hint__step">
+          <span className="hostly-product-menu-family-inherited-hint__step-label">
+            {t("carta.productMenuFamilyInheritedMenuFamily")}
+          </span>
+          <span className="hostly-product-menu-family-inherited-hint__step-value">
+            {view.menuFamilyName}
+          </span>
         </div>
-        <div className="hostly-product-menu-family-inherited-hint__row">
-          <dt>{t("carta.productMenuFamilyInheritedStation")}</dt>
-          <dd>{stationLabel}</dd>
+
+        <div
+          className="hostly-product-menu-family-inherited-hint__arrow"
+          aria-hidden="true"
+        >
+          ↓
         </div>
-        <div className="hostly-product-menu-family-inherited-hint__row">
-          <dt>{t("carta.productMenuFamilyInheritedPass")}</dt>
-          <dd>{passLabel}</dd>
+
+        <div className="hostly-product-menu-family-inherited-hint__step">
+          <span className="hostly-product-menu-family-inherited-hint__step-label">
+            {t("carta.productMenuFamilyInheritedCategory")}
+          </span>
+          <span className="hostly-product-menu-family-inherited-hint__step-value">
+            {view.categoryName}
+          </span>
         </div>
-      </dl>
+
+        <div
+          className="hostly-product-menu-family-inherited-hint__arrow"
+          aria-hidden="true"
+        >
+          ↓
+        </div>
+
+        <div className="hostly-product-menu-family-inherited-hint__outcome">
+          <p className="hostly-product-menu-family-inherited-hint__outcome-line">
+            <span className="hostly-product-menu-family-inherited-hint__outcome-label">
+              {t("carta.productMenuFamilyInheritedStation")}
+            </span>
+            <span className="hostly-product-menu-family-inherited-hint__outcome-value">
+              {stationLabel}
+            </span>
+          </p>
+          <p className="hostly-product-menu-family-inherited-hint__outcome-line">
+            <span className="hostly-product-menu-family-inherited-hint__outcome-label">
+              {t("carta.productMenuFamilyInheritedPass")}
+            </span>
+            <span className="hostly-product-menu-family-inherited-hint__outcome-value">
+              {passLabel}
+            </span>
+          </p>
+        </div>
+      </div>
+
       <p className="hostly-product-menu-family-inherited-hint__disclaimer">
         {t("carta.productMenuFamilyInheritedDisclaimer")}
       </p>

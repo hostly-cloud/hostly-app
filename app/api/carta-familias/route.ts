@@ -1,6 +1,13 @@
-import type { DocumentData } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { getHostlyFirestore } from "@/lib/firebase/admin";
+import {
+  applyCartaFamiliaProductionStationPatchToUpdate,
+  cartaFamiliaFromFirestoreDoc,
+  cartaFamiliaOperationalPatchFromBody,
+  DEFAULT_CARTA_FAMILIA_OPERATIVA,
+  normalizeCartaFamiliaOperativa,
+} from "@/lib/carta-categorias/familia-operational-config";
+import type { ProductionStationType } from "@/lib/produccion/production-station-types";
 import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
 import type { CartaFamilia } from "@/lib/carta-categorias/types";
 
@@ -14,19 +21,18 @@ type FirestoreFamDoc = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  familyType: CartaFamilia["familyType"];
+  suggestedDestination: CartaFamilia["suggestedDestination"];
+  defaultPass: CartaFamilia["defaultPass"];
+  trabajaPorPases: boolean;
+  description?: string;
+  requierePreparacion: boolean;
+  marchable: boolean;
+  agruparLineas: boolean;
+  productionStationId?: string;
+  productionStationName?: string;
+  productionStationType?: ProductionStationType;
 };
-
-function docToFamilia(restauranteId: string, id: string, d: DocumentData): CartaFamilia {
-  return {
-    id,
-    restauranteId,
-    name: typeof d.name === "string" ? d.name : "",
-    sortOrder: typeof d.sortOrder === "number" && Number.isFinite(d.sortOrder) ? d.sortOrder : 0,
-    isActive: d.isActive !== false,
-    createdAt: typeof d.createdAt === "string" ? d.createdAt : "",
-    updatedAt: typeof d.updatedAt === "string" ? d.updatedAt : "",
-  };
-}
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -44,17 +50,17 @@ export async function GET(req: Request) {
     .orderBy("sortOrder", "asc")
     .get();
 
-  const items: CartaFamilia[] = snap.docs.map((doc) => docToFamilia(restauranteId, doc.id, doc.data()));
+  const items: CartaFamilia[] = snap.docs.map((doc) =>
+    cartaFamiliaFromFirestoreDoc(restauranteId, doc.id, doc.data() as Record<string, unknown>),
+  );
   return NextResponse.json({ ok: true, items });
 }
 
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as
-    | { restauranteId?: string; name?: string; isActive?: boolean; sortOrder?: number }
-    | null;
+  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return badRequest("INVALID_JSON");
-  const restauranteId = (body.restauranteId ?? "").trim();
-  const name = (body.name ?? "").trim();
+  const restauranteId = (typeof body.restauranteId === "string" ? body.restauranteId : "").trim();
+  const name = (typeof body.name === "string" ? body.name : "").trim();
   if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
   if (!name) return badRequest("MISSING_NAME");
   assertServerRestauranteAllowed(restauranteId);
@@ -63,12 +69,19 @@ export async function POST(req: Request) {
   if (!db) return NextResponse.json({ ok: false, error: "FIRESTORE_NOT_CONFIGURED" }, { status: 501 });
 
   const coll = db.collection("restaurantes").doc(restauranteId).collection("cartaFamilias");
-  let sortOrder = typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder) ? body.sortOrder : -1;
+  let sortOrder =
+    typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder) ? body.sortOrder : -1;
   if (sortOrder < 0) {
     const agg = await coll.orderBy("sortOrder", "desc").limit(1).get();
     const top = agg.docs[0]?.data()?.sortOrder;
     sortOrder = (typeof top === "number" && Number.isFinite(top) ? top : -1) + 1;
   }
+
+  const operationalPatch = cartaFamiliaOperationalPatchFromBody(body);
+  const operativa = normalizeCartaFamiliaOperativa({
+    ...DEFAULT_CARTA_FAMILIA_OPERATIVA,
+    ...operationalPatch,
+  });
 
   const now = new Date().toISOString();
   const ref = coll.doc();
@@ -79,8 +92,27 @@ export async function POST(req: Request) {
     isActive: body.isActive !== false,
     createdAt: now,
     updatedAt: now,
+    familyType: operativa.familyType,
+    suggestedDestination: operativa.suggestedDestination,
+    defaultPass: operativa.defaultPass,
+    trabajaPorPases: operativa.trabajaPorPases,
+    ...(operativa.description ? { description: operativa.description } : {}),
+    requierePreparacion: operativa.requierePreparacion,
+    marchable: operativa.marchable,
+    agruparLineas: operativa.agruparLineas,
   };
+  const productionUpdate: Record<string, unknown> = {};
+  applyCartaFamiliaProductionStationPatchToUpdate(operationalPatch, productionUpdate, null);
+  if (typeof productionUpdate.productionStationId === "string") {
+    payload.productionStationId = productionUpdate.productionStationId;
+    if (typeof productionUpdate.productionStationName === "string") {
+      payload.productionStationName = productionUpdate.productionStationName;
+    }
+    if (typeof productionUpdate.productionStationType === "string") {
+      payload.productionStationType = productionUpdate.productionStationType as ProductionStationType;
+    }
+  }
   await ref.set(payload);
-  const item = docToFamilia(restauranteId, id, payload);
+  const item = cartaFamiliaFromFirestoreDoc(restauranteId, id, payload);
   return NextResponse.json({ ok: true, item });
 }

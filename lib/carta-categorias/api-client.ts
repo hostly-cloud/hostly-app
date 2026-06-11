@@ -5,8 +5,86 @@ import {
   normalizeCategoryOperationalBehavior,
   type CategoryOperationalBehavior,
 } from "./category-operational-behavior";
+import type { CartaFamiliaOperationalPatch } from "./familia-operational-config";
+import { normalizeCartaFamiliaOperativa } from "./familia-operational-config";
 import type { CartaCategoria, CartaCategoriaTipo, CartaFamilia } from "./types";
 import { isCartaCategoriaTipo } from "./types";
+
+export type CartaFamiliaWriteInput = {
+  name: string;
+  isActive?: boolean;
+  sortOrder?: number;
+} & CartaFamiliaOperationalPatch;
+
+function applyOperationalFieldsToFamilia(
+  item: CartaFamilia,
+  operativa: CartaFamiliaOperationalPatch,
+): CartaFamilia {
+  const resolved = normalizeCartaFamiliaOperativa({ ...item, ...operativa });
+  const next: CartaFamilia = {
+    ...item,
+    familyType: resolved.familyType,
+    suggestedDestination: resolved.suggestedDestination,
+    defaultPass: resolved.defaultPass,
+    trabajaPorPases: resolved.trabajaPorPases,
+    requierePreparacion: resolved.requierePreparacion,
+    marchable: resolved.marchable,
+    agruparLineas: resolved.agruparLineas,
+  };
+  if (resolved.description) next.description = resolved.description;
+  else delete next.description;
+
+  if ("productionStationId" in operativa) {
+    const id =
+      typeof operativa.productionStationId === "string"
+        ? operativa.productionStationId.trim()
+        : "";
+    if (id) next.productionStationId = id;
+    else delete next.productionStationId;
+  }
+  if ("productionStationName" in operativa) {
+    const name =
+      typeof operativa.productionStationName === "string"
+        ? operativa.productionStationName.trim()
+        : "";
+    if (name) next.productionStationName = name;
+    else delete next.productionStationName;
+  }
+  if ("productionStationType" in operativa) {
+    if (operativa.productionStationType) {
+      next.productionStationType = operativa.productionStationType;
+    } else {
+      delete next.productionStationType;
+    }
+  }
+
+  return next;
+}
+
+function productionStationFieldsFromInput(
+  input: CartaFamiliaWriteInput,
+): Pick<
+  CartaFamiliaOperationalPatch,
+  "productionStationId" | "productionStationName" | "productionStationType" | "suggestedDestination"
+> {
+  const fields: Pick<
+    CartaFamiliaOperationalPatch,
+    "productionStationId" | "productionStationName" | "productionStationType" | "suggestedDestination"
+  > = {};
+  if ("productionStationId" in input) {
+    fields.productionStationId = input.productionStationId ?? null;
+  }
+  if ("productionStationName" in input) {
+    fields.productionStationName = input.productionStationName ?? null;
+  }
+  if ("productionStationType" in input) {
+    fields.productionStationType = input.productionStationType ?? null;
+  }
+  if ("suggestedDestination" in input) {
+    fields.suggestedDestination = input.suggestedDestination;
+  }
+  return fields;
+}
 import {
   loadCartaFamiliasLocal,
   saveCartaFamiliasLocal,
@@ -53,8 +131,9 @@ export async function fetchCartaFamilias(restauranteId: string): Promise<CartaFa
 
 export async function createCartaFamiliaApi(
   restauranteId: string,
-  input: { name: string; isActive?: boolean; sortOrder?: number },
+  input: CartaFamiliaWriteInput,
 ): Promise<{ ok: true; item: CartaFamilia } | { ok: false; error: string }> {
+  const operativa = normalizeCartaFamiliaOperativa(input);
   const res = await fetch("/api/carta-familias", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -63,6 +142,15 @@ export async function createCartaFamiliaApi(
       name: input.name,
       isActive: input.isActive !== false,
       sortOrder: input.sortOrder,
+      familyType: operativa.familyType,
+      suggestedDestination: operativa.suggestedDestination,
+      defaultPass: operativa.defaultPass,
+      trabajaPorPases: operativa.trabajaPorPases,
+      description: operativa.description ?? null,
+      requierePreparacion: operativa.requierePreparacion,
+      marchable: operativa.marchable,
+      agruparLineas: operativa.agruparLineas,
+      ...productionStationFieldsFromInput(input),
     }),
   });
   const data = await parseJson<{ ok?: boolean; item?: CartaFamilia; error?: string }>(res);
@@ -74,15 +162,18 @@ export async function createCartaFamiliaApi(
       typeof input.sortOrder === "number" && Number.isFinite(input.sortOrder)
         ? input.sortOrder
         : list.reduce((m, f) => Math.max(m, f.sortOrder), -1) + 1;
-    const item: CartaFamilia = {
-      id,
-      restauranteId,
-      name: input.name.trim(),
-      sortOrder,
-      isActive: input.isActive !== false,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const item = applyOperationalFieldsToFamilia(
+      {
+        id,
+        restauranteId,
+        name: input.name.trim(),
+        sortOrder,
+        isActive: input.isActive !== false,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { ...operativa, ...productionStationFieldsFromInput(input) },
+    );
     saveCartaFamiliasLocal(restauranteId, [...list, item].sort((a, b) => a.sortOrder - b.sortOrder));
     emitCartaDataChanged();
     return { ok: true, item };
@@ -97,7 +188,7 @@ export async function createCartaFamiliaApi(
 export async function patchCartaFamiliaApi(
   restauranteId: string,
   id: string,
-  patch: Partial<{ name: string; sortOrder: number; isActive: boolean }>,
+  patch: Partial<CartaFamiliaWriteInput>,
 ): Promise<{ ok: true; item: CartaFamilia } | { ok: false; error: string }> {
   const res = await fetch(`/api/carta-familias/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -112,13 +203,19 @@ export async function patchCartaFamiliaApi(
     const now = new Date().toISOString();
     const cur = list[idx];
     const nextName = patch.name != null ? patch.name.trim() : cur.name;
-    const item: CartaFamilia = {
-      ...cur,
-      name: nextName || cur.name,
-      sortOrder: patch.sortOrder != null && Number.isFinite(patch.sortOrder) ? patch.sortOrder : cur.sortOrder,
-      isActive: patch.isActive != null ? Boolean(patch.isActive) : cur.isActive,
-      updatedAt: now,
-    };
+    const item = applyOperationalFieldsToFamilia(
+      {
+        ...cur,
+        name: nextName || cur.name,
+        sortOrder:
+          patch.sortOrder != null && Number.isFinite(patch.sortOrder)
+            ? patch.sortOrder
+            : cur.sortOrder,
+        isActive: patch.isActive != null ? Boolean(patch.isActive) : cur.isActive,
+        updatedAt: now,
+      },
+      patch,
+    );
     const next = [...list];
     next[idx] = item;
     saveCartaFamiliasLocal(restauranteId, next.sort((a, b) => a.sortOrder - b.sortOrder));

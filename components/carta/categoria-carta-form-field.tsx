@@ -11,12 +11,14 @@ export function CategoriaCartaFormField({
   selectedId,
   onSelectId,
   onOpenAddCategory,
+  hintClassName = "hostly-carta-config-form-hint",
 }: {
   t: (key: string) => string;
   categorias: CartaCategoria[];
   selectedId: string | null;
   onSelectId: (id: string | null) => void;
   onOpenAddCategory: () => void;
+  hintClassName?: string;
 }) {
   const sorted = useMemo(
     () =>
@@ -55,7 +57,7 @@ export function CategoriaCartaFormField({
           {t("cartaCategories.addFromForm")}
         </button>
       </div>
-      <p className="hostly-carta-config-form-hint">{t("carta.fieldCategoriaHint")}</p>
+      <p className={hintClassName}>{t("carta.fieldCategoriaHint")}</p>
     </div>
   );
 }

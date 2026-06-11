@@ -7857,7 +7857,7 @@ export function CartaPageContent({
             createdAt: now,
             updatedAt: now,
             categoryName: l.product.categoria ?? undefined,
-            course: lCourse ?? 1,
+            ...(lCourse != null ? { course: lCourse } : {}),
             extras: extrasPayload,
             ...(selectedModifiersPayload.length > 0
               ? {

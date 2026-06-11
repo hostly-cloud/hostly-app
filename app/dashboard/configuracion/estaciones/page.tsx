@@ -8,43 +8,50 @@ import {
   ConfigCard,
 } from "../_components/config-carta-workbench";
 import { ConfigModulePageHeader } from "../_components/config-module-page-header";
+import { ProductionStationsDataView } from "@/components/produccion/production-stations-data-view";
+import {
+  createProductionStation,
+  listenProductionStations,
+  setProductionStationActive,
+  updateProductionStation,
+} from "@/lib/firestore/production-stations";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
-  createOperationStation,
-  disableOperationStation,
-  enableOperationStation,
-  ensureDefaultOperationStations,
-  listenOperationStations,
-  moveOperationStationOrder,
-  updateOperationStation,
-} from "@/lib/firestore/operation-stations";
-import {
-  OPERATION_STATION_TYPE_LABELS,
-  OPERATION_STATION_TYPES,
-  type OperationStationDocument,
-  type OperationStationInput,
-  type OperationStationType,
-} from "@/lib/operacion/operation-station-types";
+  DEFAULT_PRODUCTION_STATION_COLOR,
+  PRODUCTION_STATION_COLOR_PRESETS,
+  PRODUCTION_STATION_TYPES,
+  PRODUCTION_STATION_TYPE_LABELS,
+  normalizeProductionStationColor,
+  type ProductionStationDocument,
+  type ProductionStationType,
+} from "@/lib/produccion/production-station-types";
 
-type StationDraft = {
+const inputClass = "hostly-input hostly-carta-config-field-input";
+
+type StationFormDraft = {
   name: string;
-  type: OperationStationType;
+  type: ProductionStationType;
+  color: string;
   active: boolean;
-  printerChannel: string;
-  printerName: string;
 };
 
-function stationToDraft(station: OperationStationDocument): StationDraft {
+const DEFAULT_DRAFT: StationFormDraft = {
+  name: "",
+  type: "cocina",
+  color: DEFAULT_PRODUCTION_STATION_COLOR,
+  active: true,
+};
+
+function stationToDraft(station: ProductionStationDocument): StationFormDraft {
   return {
     name: station.name,
     type: station.type,
+    color: station.color,
     active: station.active,
-    printerChannel: station.printerChannel ?? "",
-    printerName: station.printerName ?? "",
   };
 }
 
-function formatOperationStationError(error: unknown): string {
+function formatStationError(error: unknown): string {
   if (error instanceof Error) {
     if (error.message === "DUPLICATE_STATION_NAME") {
       return "Ya existe una estación con ese nombre.";
@@ -54,9 +61,6 @@ function formatOperationStationError(error: unknown): string {
   return "No se pudo guardar la estación.";
 }
 
-const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20";
-
 export default function ConfigEstacionesPage() {
   const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
   const restaurantId = useMemo(
@@ -64,384 +68,277 @@ export default function ConfigEstacionesPage() {
     [profileRestaurantId],
   );
 
-  const [stations, setStations] = useState<OperationStationDocument[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, StationDraft>>({});
+  const [items, setItems] = useState<ProductionStationDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [ensuringDefaults, setEnsuringDefaults] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<OperationStationType>("bar");
-
-  const syncDrafts = useCallback((list: OperationStationDocument[]) => {
-    const next: Record<string, StationDraft> = {};
-    for (const s of list) {
-      next[s.id] = stationToDraft(s);
-    }
-    setDrafts(next);
-  }, []);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [editing, setEditing] = useState<ProductionStationDocument | null>(null);
+  const [draft, setDraft] = useState<StationFormDraft>(DEFAULT_DRAFT);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!authReady || !restaurantId) {
       setLoading(false);
-      setStations([]);
-      setDrafts({});
+      setItems([]);
       return;
     }
 
     setLoading(true);
     setError(null);
-    let defaultsEnsured = false;
 
-    const unsub = listenOperationStations(
+    const unsub = listenProductionStations(
       restaurantId,
       (list) => {
-        setStations(list);
-        syncDrafts(list);
+        setItems(list);
         setLoading(false);
-        if (!defaultsEnsured && list.length === 0) {
-          defaultsEnsured = true;
-          setEnsuringDefaults(true);
-          void ensureDefaultOperationStations(restaurantId)
-            .catch((e) => {
-              console.error("ensureDefaultOperationStations", e);
-              setError(formatOperationStationError(e));
-            })
-            .finally(() => setEnsuringDefaults(false));
-        }
       },
-      (e) => {
-        console.error("listenOperationStations", e);
-        setError("No se pudo cargar las estaciones operativas.");
-        setStations([]);
-        setDrafts({});
+      () => {
+        setError("No se pudieron cargar las estaciones.");
+        setItems([]);
         setLoading(false);
       },
     );
 
     return () => unsub();
-  }, [authReady, restaurantId, syncDrafts]);
+  }, [authReady, restaurantId]);
 
-  const patchDraft = useCallback(
-    (id: string, patch: Partial<StationDraft>) => {
-      setDrafts((prev) => ({
-        ...prev,
-        [id]: { ...prev[id]!, ...patch },
-      }));
-    },
-    [],
-  );
+  function openNew() {
+    setEditing(null);
+    setDraft({ ...DEFAULT_DRAFT });
+    setPanelOpen(true);
+    setError(null);
+  }
 
-  const handleCreate = useCallback(async () => {
+  function openEdit(station: ProductionStationDocument) {
+    setEditing(station);
+    setDraft(stationToDraft(station));
+    setPanelOpen(true);
+    setError(null);
+  }
+
+  const savePanel = useCallback(async () => {
     if (!restaurantId) return;
-    const name = newName.trim();
+    const name = draft.name.trim();
     if (!name) {
       setError("Indica un nombre para la estación.");
       return;
     }
-    setCreating(true);
+
+    setSaving(true);
     setError(null);
     setNotice(null);
+
     try {
-      await createOperationStation(restaurantId, {
-        name,
-        type: newType,
-        active: true,
-      });
-      setNewName("");
-      setNewType("bar");
-      setNotice(`Estación «${name}» creada.`);
+      if (editing) {
+        await updateProductionStation(restaurantId, editing.id, {
+          name,
+          type: draft.type,
+          color: draft.color,
+          active: draft.active,
+        });
+      } else {
+        await createProductionStation(restaurantId, {
+          name,
+          type: draft.type,
+          color: draft.color,
+          active: draft.active,
+        });
+      }
+      setPanelOpen(false);
+      setNotice("Estación guardada.");
       window.setTimeout(() => setNotice(null), 2800);
     } catch (e) {
-      setError(formatOperationStationError(e));
+      setError(formatStationError(e));
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
-  }, [newName, newType, restaurantId]);
+  }, [draft, editing, restaurantId]);
 
-  const handleSave = useCallback(
-    async (station: OperationStationDocument) => {
+  const toggleActive = useCallback(
+    async (station: ProductionStationDocument) => {
       if (!restaurantId) return;
-      const draft = drafts[station.id];
-      if (!draft) return;
-      setSavingId(station.id);
-      setError(null);
-      setNotice(null);
-      try {
-        const input: Partial<OperationStationInput> = {
-          name: draft.name.trim(),
-          type: draft.type,
-          active: draft.active,
-          printerChannel: draft.printerChannel.trim(),
-          printerName: draft.printerName.trim(),
-        };
-        await updateOperationStation(restaurantId, station.id, input);
-        setNotice("Cambios guardados.");
-        window.setTimeout(() => setNotice(null), 2800);
-      } catch (e) {
-        setError(formatOperationStationError(e));
-      } finally {
-        setSavingId(null);
-      }
-    },
-    [drafts, restaurantId],
-  );
-
-  const handleToggleActive = useCallback(
-    async (station: OperationStationDocument) => {
-      if (!restaurantId) return;
-      setSavingId(station.id);
       setError(null);
       try {
-        if (station.active) {
-          await disableOperationStation(restaurantId, station.id);
-        } else {
-          await enableOperationStation(restaurantId, station.id);
+        await setProductionStationActive(restaurantId, station.id, !station.active);
+        if (editing?.id === station.id) {
+          setDraft((prev) => ({ ...prev, active: !station.active }));
+          setEditing({ ...station, active: !station.active });
         }
       } catch (e) {
-        setError(formatOperationStationError(e));
-      } finally {
-        setSavingId(null);
+        setError(formatStationError(e));
       }
     },
-    [restaurantId],
+    [editing, restaurantId],
   );
 
-  const handleMove = useCallback(
-    async (stationId: string, direction: "up" | "down") => {
-      if (!restaurantId) return;
-      setSavingId(stationId);
-      setError(null);
-      try {
-        await moveOperationStationOrder(restaurantId, stationId, direction);
-      } catch (e) {
-        setError(formatOperationStationError(e));
-      } finally {
-        setSavingId(null);
-      }
-    },
-    [restaurantId],
-  );
+  const activeCount = items.filter((s) => s.active).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
       <ConfigModulePageHeader
-        eyebrow="Operación · Configuración"
-        title="Estaciones operativas"
-        description="Define dónde se preparan productos y a qué impresora o pantalla van. El TPV y el KDS siguen usando la estación legacy del producto hasta la siguiente fase."
+        eyebrow="Producción"
+        title="Estaciones"
+        description="Define dónde se prepara cada producto: cocina, barra, coctelería u otras zonas."
       />
 
       <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
-        {error ? (
-          <p className="text-sm text-rose-700" role="alert">
-            {error}
+        <ConfigCard compact className="hostly-carta-config-card--muted hostly-carta-familia-concept">
+          <p className="hostly-carta-config-section-body">
+            Las estaciones son los puntos de producción del restaurante. Más adelante los productos y
+            familias podrán asignarse a una estación concreta.
           </p>
+          <p className="hostly-carta-config-form-hint hostly-carta-familia-concept__hint">
+            Esta configuración aún no afecta al TPV ni a las pantallas de cocina.
+          </p>
+        </ConfigCard>
+
+        <div className="hostly-carta-config-actions-row">
+          <ConfigBtnPrimary type="button" disabled={!authReady || !restaurantId} onClick={openNew}>
+            Nueva estación
+          </ConfigBtnPrimary>
+        </div>
+
+        {!restaurantId ? (
+          <div className="hostly-carta-config-alert hostly-carta-config-alert--warning">
+            Selecciona un restaurante para gestionar estaciones.
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
+            {error}
+          </div>
         ) : null}
         {notice ? (
-          <p className="text-sm text-emerald-800" role="status">
+          <p className="hostly-carta-config-alert hostly-carta-config-alert--success" role="status">
             {notice}
           </p>
         ) : null}
 
-        <ConfigCard>
-          <h2 className="text-sm font-semibold text-slate-900">Nueva estación</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Ej.: Barra 2, Barra terraza, Piscina, Food truck.
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">
-            <label className="block">
-              <span className="text-xs font-medium text-slate-600">Nombre</span>
-              <input
-                className={`${inputClass} mt-1`}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Barra terraza"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-slate-600">Tipo</span>
-              <select
-                className={`${inputClass} mt-1`}
-                value={newType}
-                onChange={(e) =>
-                  setNewType(e.target.value as OperationStationType)
-                }
-              >
-                {OPERATION_STATION_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {OPERATION_STATION_TYPE_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <ConfigBtnPrimary
-              type="button"
-              disabled={creating || !authReady}
-              onClick={() => void handleCreate()}
-            >
-              {creating ? "Creando…" : "Crear estación"}
-            </ConfigBtnPrimary>
+        {restaurantId && !loading ? (
+          <div className="hostly-carta-config-kpi-strip hostly-carta-config-kpi-strip--dense">
+            <div className="hostly-carta-config-kpi-pill">
+              <span className="hostly-carta-config-kpi-pill__label">Estaciones activas</span>
+              <span className="hostly-carta-config-kpi-pill__value">{activeCount}</span>
+            </div>
+            <div className="hostly-carta-config-kpi-pill">
+              <span className="hostly-carta-config-kpi-pill__label">Total</span>
+              <span className="hostly-carta-config-kpi-pill__value">{items.length}</span>
+            </div>
           </div>
-        </ConfigCard>
+        ) : null}
 
-        {loading || ensuringDefaults ? (
-          <ConfigCard>
-            <p className="text-sm text-slate-600">Cargando estaciones…</p>
-          </ConfigCard>
-        ) : stations.length === 0 ? (
-          <ConfigCard>
-            <p className="text-sm text-slate-600">
-              No hay estaciones. Se crearán las predeterminadas al conectar.
-            </p>
-          </ConfigCard>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {stations.map((station, index) => {
-              const draft = drafts[station.id] ?? stationToDraft(station);
-              const busy = savingId === station.id;
-              const dirty =
-                draft.name !== station.name ||
-                draft.type !== station.type ||
-                draft.active !== station.active ||
-                draft.printerChannel !== (station.printerChannel ?? "") ||
-                draft.printerName !== (station.printerName ?? "");
-              return (
-                <li key={station.id}>
-                  <ConfigCard>
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 flex-1 grid gap-3 sm:grid-cols-2">
-                        <label className="block sm:col-span-2">
-                          <span className="text-xs font-medium text-slate-600">
-                            Nombre
-                          </span>
-                          <input
-                            className={`${inputClass} mt-1`}
-                            value={draft.name}
-                            onChange={(e) =>
-                              patchDraft(station.id, { name: e.target.value })
-                            }
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="text-xs font-medium text-slate-600">
-                            Tipo
-                          </span>
-                          <select
-                            className={`${inputClass} mt-1`}
-                            value={draft.type}
-                            onChange={(e) =>
-                              patchDraft(station.id, {
-                                type: e.target.value as OperationStationType,
-                              })
-                            }
-                          >
-                            {OPERATION_STATION_TYPES.map((t) => (
-                              <option key={t} value={t}>
-                                {OPERATION_STATION_TYPE_LABELS[t]}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="flex items-center gap-2 pt-6">
-                          <input
-                            type="checkbox"
-                            checked={draft.active}
-                            onChange={(e) =>
-                              patchDraft(station.id, {
-                                active: e.target.checked,
-                              })
-                            }
-                          />
-                          <span className="text-sm text-slate-700">Activa</span>
-                        </label>
-                        <div className="block sm:col-span-2">
-                          <p className="text-xs font-medium text-slate-600">
-                            Impresora de esta estación
-                          </p>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                            Esta impresora se usará para los productos enviados a
-                            esta estación. Si dejas canal o nombre vacíos, se
-                            usará la configuración legacy de Cocina/Barra/Coctelería
-                            según el tipo de producto.
-                          </p>
-                        </div>
-                        <label className="block sm:col-span-1">
-                          <span className="text-xs font-medium text-slate-600">
-                            Canal / identificador
-                          </span>
-                          <input
-                            className={`${inputClass} mt-1`}
-                            value={draft.printerChannel}
-                            placeholder="Ej. barra-1"
-                            onChange={(e) =>
-                              patchDraft(station.id, {
-                                printerChannel: e.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="block sm:col-span-1">
-                          <span className="text-xs font-medium text-slate-600">
-                            Nombre impresora
-                          </span>
-                          <input
-                            className={`${inputClass} mt-1`}
-                            value={draft.printerName}
-                            placeholder="Ej. EPSON-BARRA-1"
-                            onChange={(e) =>
-                              patchDraft(station.id, {
-                                printerName: e.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-                      <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col lg:items-stretch">
-                        <div className="flex gap-1">
-                          <ConfigBtnSecondary
-                            type="button"
-                            disabled={busy || index === 0}
-                            onClick={() => void handleMove(station.id, "up")}
-                          >
-                            ↑
-                          </ConfigBtnSecondary>
-                          <ConfigBtnSecondary
-                            type="button"
-                            disabled={busy || index === stations.length - 1}
-                            onClick={() => void handleMove(station.id, "down")}
-                          >
-                            ↓
-                          </ConfigBtnSecondary>
-                        </div>
-                        <ConfigBtnPrimary
-                          type="button"
-                          disabled={busy || !dirty}
-                          onClick={() => void handleSave(station)}
-                        >
-                          {busy ? "Guardando…" : "Guardar"}
-                        </ConfigBtnPrimary>
-                        <ConfigBtnSecondary
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void handleToggleActive(station)}
-                        >
-                          {station.active ? "Desactivar" : "Activar"}
-                        </ConfigBtnSecondary>
-                      </div>
-                    </div>
-                    <p className="mt-3 font-mono text-[10px] text-slate-400">
-                      {station.id} · orden {station.sortOrder}
-                      {!station.active ? " · inactiva" : ""}
-                    </p>
-                  </ConfigCard>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <ConfigCard flush>
+          <ProductionStationsDataView
+            items={items}
+            loading={loading}
+            onEdit={openEdit}
+            onToggleActive={(s) => void toggleActive(s)}
+            onCreateNew={openNew}
+          />
+        </ConfigCard>
       </div>
+
+      {panelOpen ? (
+        <div className="hostly-carta-config-drawer-backdrop" role="dialog" aria-modal="true">
+          <ConfigCard className="hostly-carta-config-drawer hostly-production-station-drawer">
+            <h2 className="hostly-carta-config-drawer__title">
+              {editing ? "Editar estación" : "Nueva estación"}
+            </h2>
+            <div className="hostly-carta-config-form hostly-carta-config-drawer__body">
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Nombre</span>
+                <input
+                  className={inputClass}
+                  value={draft.name}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Cocina, Barra Piscina, Pizzería…"
+                  disabled={saving}
+                />
+              </label>
+
+              <label className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Tipo</span>
+                <select
+                  className={inputClass}
+                  value={draft.type}
+                  disabled={saving}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      type: e.target.value as ProductionStationType,
+                    }))
+                  }
+                >
+                  {PRODUCTION_STATION_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {PRODUCTION_STATION_TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="hostly-carta-config-form-field">
+                <span className="hostly-carta-config-form-label">Color</span>
+                <div className="hostly-production-station-color-picker" role="radiogroup" aria-label="Color de estación">
+                  {PRODUCTION_STATION_COLOR_PRESETS.map((preset) => {
+                    const selected =
+                      normalizeProductionStationColor(draft.color).toLowerCase() ===
+                      preset.value.toLowerCase();
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        aria-label={preset.label}
+                        title={preset.label}
+                        disabled={saving}
+                        className={`hostly-production-station-color-picker__btn${selected ? " is-selected" : ""}`}
+                        style={{ backgroundColor: preset.value }}
+                        onClick={() =>
+                          setDraft((prev) => ({ ...prev, color: preset.value }))
+                        }
+                      />
+                    );
+                  })}
+                </div>
+                <p className="hostly-carta-config-form-hint">
+                  Se usará en listados y pantallas de producción.
+                </p>
+              </div>
+
+              <label className="hostly-carta-config-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.active}
+                  disabled={saving}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, active: e.target.checked }))}
+                />
+                <span className="hostly-carta-config-form-label">Estación activa</span>
+              </label>
+            </div>
+            <div className="hostly-carta-config-drawer__footer">
+              <ConfigBtnPrimary type="button" disabled={saving} onClick={() => void savePanel()}>
+                {saving ? "Guardando…" : "Guardar estación"}
+              </ConfigBtnPrimary>
+              {editing ? (
+                <ConfigBtnSecondary
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void toggleActive(editing)}
+                >
+                  {editing.active ? "Desactivar" : "Activar"}
+                </ConfigBtnSecondary>
+              ) : null}
+              <ConfigBtnSecondary type="button" disabled={saving} onClick={() => setPanelOpen(false)}>
+                Cancelar
+              </ConfigBtnSecondary>
+            </div>
+          </ConfigCard>
+        </div>
+      ) : null}
     </div>
   );
 }

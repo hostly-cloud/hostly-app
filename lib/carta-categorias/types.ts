@@ -1,5 +1,7 @@
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import type { ProductionStationType } from "@/lib/produccion/production-station-types";
 import type { CategoryOperationalBehavior } from "./category-operational-behavior";
+import type { CartaFamiliaDestino, CartaFamiliaPase } from "./familia-operational-config";
 
 export type CartaCategoriaTipo = "food" | "drink" | "general";
 
@@ -15,6 +17,28 @@ export type CartaFamilia = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Tipo operativo: comida, bebida o mixto (`general`). Ausente en legado → `general`. */
+  familyType?: CartaCategoriaTipo;
+  /** Destino / estación sugerida para productos de esta familia (legado; se sincroniza al guardar estación). */
+  suggestedDestination?: CartaFamiliaDestino;
+  /** Estación de producción configurable (`productionStations/{id}`). */
+  productionStationId?: string;
+  /** Nombre denormalizado para listados sin join. */
+  productionStationName?: string;
+  /** Tipo denormalizado de la estación asignada. */
+  productionStationType?: ProductionStationType;
+  /** Pase por defecto sugerido. */
+  defaultPass?: CartaFamiliaPase;
+  /** Si la familia usa pases de servicio (entrante, primero…). */
+  trabajaPorPases?: boolean;
+  /** Nota interna opcional para el encargado. */
+  description?: string;
+  /** Si los productos suelen requerir preparación en cocina/barra. */
+  requierePreparacion?: boolean;
+  /** Si las líneas suelen poder marcharse por pase. */
+  marchable?: boolean;
+  /** Si conviene agrupar líneas iguales al enviar. */
+  agruparLineas?: boolean;
 };
 
 export type CartaCategoria = {

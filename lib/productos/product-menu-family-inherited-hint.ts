@@ -12,6 +12,7 @@ export type ProductMenuFamilyInheritedHintView =
   | {
       status: "inherited";
       menuFamilyName: string;
+      categoryName: string;
       suggestedStation: string;
       suggestedPass: string;
     };
@@ -62,6 +63,7 @@ export function buildProductMenuFamilyInheritedHintView(
   return {
     status: "inherited",
     menuFamilyName: family.name,
+    categoryName: selectedCategory.name.trim() || selectedCategory.name,
     suggestedStation,
     suggestedPass,
   };
