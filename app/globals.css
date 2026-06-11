@@ -5629,6 +5629,67 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   color: var(--hostly-text-muted, #94a3b8);
 }
 
+.hostly-product-menu-family-inherited-hint {
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: color-mix(in srgb, #f0f9ff 72%, #ffffff);
+}
+
+.hostly-product-menu-family-inherited-hint__title {
+  margin: 0 0 0.35rem;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--hostly-ink-strong, #1e293b);
+  letter-spacing: -0.01em;
+}
+
+.hostly-product-menu-family-inherited-hint__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.hostly-product-menu-family-inherited-hint__row {
+  display: grid;
+  grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+  gap: 0.35rem;
+  align-items: baseline;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.hostly-product-menu-family-inherited-hint__row dt {
+  margin: 0;
+  font-weight: 520;
+  color: var(--hostly-ink-muted, #64748b);
+}
+
+.hostly-product-menu-family-inherited-hint__row dd {
+  margin: 0;
+  font-weight: 620;
+  color: var(--hostly-ink-strong, #1e293b);
+}
+
+.hostly-product-menu-family-inherited-hint__disclaimer {
+  margin: 0.4rem 0 0;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--hostly-ink-soft, #94a3b8);
+}
+
+.hostly-product-menu-family-inherited-hint__empty {
+  margin: 0.45rem 0 0;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--hostly-ink-soft, #94a3b8);
+}
+
 .hostly-carta-familia-list-wrap {
   padding: var(--hostly-op-gap-sm);
 }

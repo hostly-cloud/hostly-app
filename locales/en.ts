@@ -960,6 +960,15 @@ export const en: MessageTree = {
     fieldCategoria: "Menu section",
     fieldCategoriaHint:
       "e.g. Pizzas, Red wines, Coffee bar. The category shown on the menu; not a stock item.",
+    productMenuFamilyInheritedTitle: "Settings inherited from menu family",
+    productMenuFamilyInheritedMenuFamily: "Menu family",
+    productMenuFamilyInheritedStation: "Suggested station",
+    productMenuFamilyInheritedPass: "Suggested course",
+    productMenuFamilyInheritedDisclaimer:
+      "These values are not applied automatically to the POS yet. They guide how you configure the product.",
+    productMenuFamilyInheritedNoFamily: "This menu category has no menu family assigned.",
+    productMenuFamilyInheritedNoStation: "No suggested station",
+    productMenuFamilyInheritedNoPass: "No courses",
     fieldCartaFamilia: "Filter by menu family",
     fieldCartaFamiliaHint:
       "Only narrows the section list. Does not save data on the product. e.g. Food or Drinks blocks.",

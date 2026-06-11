@@ -959,6 +959,16 @@ export const es: MessageTree = {
     fieldCategoria: "Sección del menú",
     fieldCategoriaHint:
       "Ej.: Pizzas, Vinos tintos, Cafetería. Es la categoría visible en carta; no es un artículo de inventario.",
+    productMenuFamilyInheritedTitle: "Configuración heredada de la familia de menú",
+    productMenuFamilyInheritedMenuFamily: "Familia de menú",
+    productMenuFamilyInheritedStation: "Estación sugerida",
+    productMenuFamilyInheritedPass: "Pase sugerido",
+    productMenuFamilyInheritedDisclaimer:
+      "Estos valores todavía no se aplican automáticamente al TPV. Sirven como guía para configurar el producto.",
+    productMenuFamilyInheritedNoFamily:
+      "Esta categoría de carta no tiene familia de menú asignada.",
+    productMenuFamilyInheritedNoStation: "Sin estación sugerida",
+    productMenuFamilyInheritedNoPass: "Sin pases",
     fieldCartaFamilia: "Filtrar por familia de menú",
     fieldCartaFamiliaHint:
       "Solo reduce la lista al elegir sección. No guarda un dato en el producto. Ej.: Platos o Bebidas.",

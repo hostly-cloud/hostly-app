@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
+import { ProductMenuFamilyInheritedHintCard } from "@/components/productos/product-menu-family-inherited-hint-card";
 import { CategoryProductFamilySelect } from "@/components/carta/category-product-family-select";
 import {
   buildCategoryProductFamilyFields,
@@ -76,6 +77,7 @@ import {
   getProductFormSubmitBlockingErrors,
   PRODUCT_FORM_ACTIVE_NO_FAMILY_WARNING,
 } from "@/lib/carta/product-form-preventive-validation";
+import { buildProductMenuFamilyInheritedHintView } from "@/lib/productos/product-menu-family-inherited-hint";
 import { OperationStationProductSelect } from "@/components/operacion/operation-station-product-select";
 import {
   ensureDefaultOperationStations,
@@ -2331,6 +2333,16 @@ export default function ProductosManagementPage({
     [draftCategoriaCartaId, cartaCategorias],
   );
 
+  const draftMenuFamilyInheritedHint = useMemo(
+    () =>
+      buildProductMenuFamilyInheritedHintView({
+        selectedCategory: draftSelectedCategory,
+        cartaFamilias,
+        operationStations,
+      }),
+    [draftSelectedCategory, cartaFamilias, operationStations],
+  );
+
   const draftNeedsManualTipoVenta = useMemo(
     () => categoryRequiresManualTipoVenta(draftSelectedCategory),
     [draftSelectedCategory],
@@ -3559,7 +3571,7 @@ export default function ProductosManagementPage({
                     </select>
                   </label>
 
-                  <div className="hostly-product-form-drawer-grid__cell">
+                  <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--categoria">
                     <CategoriaCartaFormField
                       t={t}
                       categorias={categoriasForForm}
@@ -3574,6 +3586,7 @@ export default function ProductosManagementPage({
                         setAddCategoryOpen(true);
                       }}
                     />
+                    <ProductMenuFamilyInheritedHintCard view={draftMenuFamilyInheritedHint} t={t} />
                   </div>
 
                   <label
