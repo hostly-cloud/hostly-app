@@ -5406,6 +5406,175 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
     flex: 1 1 0;
     min-height: 0;
   }
+
+  /* Config Carta → Productos (v2.21) — cabecera móvil ultracompacta; listado protagonista */
+  [data-hostly-config-shell]:has(.hostly-productos-config-skin--simplified) .hostly-config-mobile-header {
+    height: 40px;
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  [data-hostly-config-shell]:has(.hostly-productos-config-skin--simplified) .hostly-config-mobile-header__menu-btn {
+    min-height: 36px;
+    min-width: 36px;
+    padding: 0 8px;
+    font-size: 13px;
+  }
+
+  [data-hostly-config-shell]:has(.hostly-productos-config-skin--simplified) .hostly-config-mobile-header__title {
+    font-size: 13px;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) {
+    padding-top: 4px !important;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-mobile-page-header.hostly-page-header--mobile,
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-page-header--mobile.hostly-mobile-page-header {
+    padding-top: 3px !important;
+    padding-bottom: 3px !important;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-mobile-page-header-inner {
+    gap: 3px;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-mobile-page-header-top {
+    gap: 5px;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-page-title--module-mobile {
+    font-size: clamp(15px, 4vw, 17px) !important;
+    line-height: 1.04 !important;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-page-subtitle--module-mobile {
+    margin-top: 1px !important;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-mobile-page-header-nav .hostly-back-button--module.hostly-touch-nav-link {
+    min-height: 34px !important;
+    padding: 3px 7px !important;
+    font-size: 11px !important;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-mobile-page-actions .hostly-language-switch {
+    gap: 3px;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-mobile-page-actions .hostly-language-switch__button {
+    min-width: 1.5rem;
+    min-height: 32px;
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-module-header-actions {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-actions {
+    width: auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-productos-carta-header-inline-actions {
+    width: auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-actions .hostly-button-compact,
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) .hostly-productos-carta-header-inline-actions__btn {
+    flex: 0 1 auto;
+    min-height: 34px !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+
+  [data-hostly-touch]
+    main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified)
+    .hostly-carta-config-header-actions
+    .hostly-button-compact,
+  [data-hostly-touch]
+    main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified)
+    .hostly-productos-carta-header-inline-actions__btn {
+    min-height: 34px !important;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-productos-config-skin--simplified) > .hostly-container.hostly-module-content--mobile {
+    margin-top: 3px !important;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-toolbar--config-primary,
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-toolbar--radical.hostly-productos-carta-toolbar--config-primary {
+    padding: 1px 8px 1px;
+    gap: 5px;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-search--field,
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-search--prominent.hostly-productos-carta-search--field {
+    min-height: 34px;
+    padding: 3px 10px 3px 30px;
+    font-size: 16px;
+    background-size: 13px;
+    background-position: 9px center;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-advanced-toggle--toolbar {
+    min-height: 34px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-controls-stack--dense .hostly-productos-carta-compact-filters--ops-row {
+    padding: 1px 8px 0;
+    gap: 5px;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-ops-group {
+    gap: 5px;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-ops-group .hostly-productos-carta-status-filter__select {
+    min-height: 34px;
+    padding: 2px 24px 2px 9px;
+    font-size: 12px;
+    min-width: 100px;
+    max-width: 140px;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-action--compact.hostly-productos-carta-action--ops {
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-controls-stack--dense .hostly-productos-carta-category-rail--premium {
+    gap: 5px;
+    padding: 0 8px 2px;
+  }
+
+  .hostly-productos-config-skin--simplified
+    .hostly-productos-carta-category-rail--premium
+    .hostly-productos-carta-filter-chip--rail-premium {
+    min-height: 28px;
+    height: 28px;
+    padding: 0 11px;
+    font-size: 10.5px;
+  }
+
+  .hostly-productos-config-skin--simplified.hostly-stack-sm {
+    gap: 0;
+  }
 }
 
 .hostly-carta-config-actions-row {
