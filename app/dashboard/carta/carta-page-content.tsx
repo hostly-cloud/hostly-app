@@ -1527,10 +1527,13 @@ function buildSyncedOrderLinesFromServerDoc(
   data: FirestoreOrderDocForCart,
   restaurantId: string,
   catalogById?: ReadonlyMap<string, { course?: number | null }>,
+  opts?: { localDraftAuthoritative?: boolean },
 ): CartOrderLine[] {
   const serverMapped =
     mapFirestoreOrderDocToCartLines(data, restaurantId, catalogById) ?? [];
-  const baseLocal = localLines.length > 0 ? localLines : serverMapped;
+  const useLocalBase =
+    opts?.localDraftAuthoritative === true || localLines.length > 0;
+  const baseLocal = useLocalBase ? localLines : serverMapped;
   const mergedProduction = mergeLocalLinesProductionFromServerItems(
     baseLocal,
     data.items,
@@ -1538,7 +1541,16 @@ function buildSyncedOrderLinesFromServerDoc(
     normalizeOrderLineStatus,
   );
   const mergedIds = new Set(mergedProduction.map((line) => line.id));
-  const serverOnly = serverMapped.filter((line) => !mergedIds.has(line.id));
+  const serverOnly = serverMapped.filter((line) => {
+    if (mergedIds.has(line.id)) return false;
+    if (
+      normalizeOrderLineStatus(line.status) === "pending" &&
+      useLocalBase
+    ) {
+      return false;
+    }
+    return true;
+  });
   return [...mergedProduction, ...serverOnly];
 }
 
@@ -2878,7 +2890,23 @@ export function CartaPageContent({
         const cur = prev[selectedTableId] || [];
         const nextOrder = updater(cur);
         if (restaurantId && selectedTableId && isFirebaseConfigured) {
-          schedulePersistDraftOrderForTable(selectedTableId, nextOrder);
+          const activeLineCount = (lines: CartOrderLine[]) =>
+            lines.filter(
+              (l) => normalizeOrderLineStatus(l.status) !== "cancelled",
+            ).length;
+          const unitCount = (lines: CartOrderLine[]) =>
+            lines.reduce((acc, l) => {
+              if (normalizeOrderLineStatus(l.status) === "cancelled") return acc;
+              return acc + (Number(l.quantity) || 0);
+            }, 0);
+          const isShrink =
+            activeLineCount(nextOrder) < activeLineCount(cur) ||
+            unitCount(nextOrder) < unitCount(cur);
+          if (isShrink) {
+            void flushPersistDraftOrderForTable(selectedTableId, nextOrder);
+          } else {
+            schedulePersistDraftOrderForTable(selectedTableId, nextOrder);
+          }
         }
         return { ...prev, [selectedTableId]: nextOrder };
       });
@@ -2891,6 +2919,7 @@ export function CartaPageContent({
       restaurantId,
       isFirebaseConfigured,
       schedulePersistDraftOrderForTable,
+      flushPersistDraftOrderForTable,
     ],
   );
 
@@ -4586,6 +4615,7 @@ export function CartaPageContent({
             data,
             rid,
             operationalCatalog.productDocumentsById,
+            { localDraftAuthoritative: true },
           );
           setOrder((prev) =>
             cartLinesProductionSnapshotEqual(prev, nextLines) &&
@@ -4601,11 +4631,16 @@ export function CartaPageContent({
         openDraftOrderIdByTableRef.current[tableId] = activeOrderId;
 
         const localTableLines = ordersByTableRef.current[tableId] ?? [];
+        const hasLocalDraft = Object.prototype.hasOwnProperty.call(
+          ordersByTableRef.current,
+          tableId,
+        );
         const nextTableLines = buildSyncedOrderLinesFromServerDoc(
           localTableLines,
           data,
           rid,
           operationalCatalog.productDocumentsById,
+          { localDraftAuthoritative: hasLocalDraft },
         );
 
         setOrdersByTable((prev) => {
@@ -9006,7 +9041,7 @@ export function CartaPageContent({
         lineId={item.id}
         enabled={item.status !== "cancelled" && viewMode === "normal"}
         onSwipeLeft={() => {
-          if (item.status === "pending" && !heldForMarch) {
+          if (item.status === "pending") {
             handleRemoveLine(item.id);
           }
         }}
@@ -9107,7 +9142,7 @@ export function CartaPageContent({
                 {lineNoteTrimmed ? (
                   <div className="carta-comanda-line-meta-note">{lineNoteTrimmed}</div>
                 ) : null}
-                {item.status !== "pending" || heldForMarch ? (
+                {item.status !== "pending" ? (
                   <span
                     className="carta-comanda-qty-inline"
                     style={{
@@ -9257,7 +9292,7 @@ export function CartaPageContent({
               <div className="carta-comanda-line-cost-hint">{lineInventoryCostLabel}</div>
             ) : null}
           </div>
-          {item.status === "pending" && !heldForMarch ? (
+          {item.status === "pending" ? (
             <div className="carta-comanda-qty-controls ml-auto">
               <button
                 type="button"
@@ -9303,34 +9338,6 @@ export function CartaPageContent({
                 aria-label="Eliminar línea"
               >
                 ×
-              </button>
-            </div>
-          ) : item.status === "pending" && heldForMarch ? (
-            <div className="ml-auto flex items-center gap-1">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const el = e.currentTarget;
-                  const r = el.getBoundingClientRect();
-                  setComandaLineActionsAnchorRect({
-                    top: r.top,
-                    left: r.left,
-                    right: r.right,
-                    bottom: r.bottom,
-                    width: r.width,
-                    height: r.height,
-                  });
-                  setComandaLineActionsTargetId(item.id);
-                  setComandaLineActionsOpen(true);
-                }}
-                className="h-6 px-2 flex items-center justify-center rounded bg-gray-100 text-xs font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-200"
-                style={{ position: "relative", zIndex: 3 }}
-                title="Acciones"
-                aria-label="Acciones"
-              >
-                ⋯
               </button>
             </div>
           ) : item.status !== "cancelled" ? (

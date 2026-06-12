@@ -106,7 +106,8 @@ function mergeLineForPersist(
 /**
  * Fusiona ítems locales con `orders.items` en Firestore antes de persistir borrador.
  * - Líneas nuevas en local (p. ej. bebida pending) se añaden.
- * - Líneas solo en servidor (p. ej. split KDS) se conservan.
+ * - Líneas solo en servidor con estado de producción (sent+) se conservan.
+ * - Líneas pending solo en servidor omitidas en local se tratan como borradas.
  * - Por `id`, gana el estado de producción más avanzado.
  */
 export function mergeOrderItemsForPersist(
@@ -135,6 +136,9 @@ export function mergeOrderItemsForPersist(
   for (const row of serverArr) {
     const id = resolvePersistOrderLineId(row);
     if (id && !localIds.has(id)) {
+      // Borrador TPV: una línea pending omitida en local fue eliminada a propósito.
+      // Solo conservamos en servidor líneas que ya salieron del bucket draft.
+      if (normalizeProductionLineStatus(row.status) === "pending") continue;
       merged.push({ ...row });
     }
   }
