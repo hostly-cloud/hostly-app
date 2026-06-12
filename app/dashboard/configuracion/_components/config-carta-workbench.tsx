@@ -5,7 +5,7 @@ import ModulePageShell from "@/components/module-page-shell";
 
 type ConfigCartaWorkbenchProps = {
   title: string;
-  description: string;
+  description?: string;
   children?: ReactNode;
   /** Acciones alineadas a la derecha del título (p. ej. importar / nuevo). */
   headerActions?: ReactNode;

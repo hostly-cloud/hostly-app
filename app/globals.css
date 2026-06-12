@@ -5385,6 +5385,29 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   gap: 0;
 }
 
+/* Config Carta → Productos (móvil): cadena flex bajo lockViewportFillParent */
+@media (max-width: 767px) {
+  .hostly-productos-config-skin--simplified.hostly-stack-sm {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host--config-table {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-data-table-viewport {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .hostly-productos-config-skin--simplified .hostly-productos-carta-list-host .hostly-mobile-list-shell {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+}
+
 .hostly-carta-config-actions-row {
   display: flex;
   flex-wrap: wrap;
@@ -5546,6 +5569,81 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 
 .hostly-carta-familia-concept__hint {
   margin-top: var(--hostly-op-gap-sm);
+}
+
+.hostly-carta-concept-collapsible {
+  min-width: 0;
+}
+
+.hostly-carta-concept-collapsible__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+  width: 100%;
+  padding: var(--hostly-op-gap-xs) var(--hostly-op-gap-sm);
+  border-radius: var(--hostly-config-radius);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: color-mix(in srgb, var(--hostly-ice-50) 42%, var(--hostly-surface-card-solid));
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-carta-concept-collapsible__trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--hostly-brand, #0ea5e9) 50%, transparent);
+  outline-offset: 2px;
+}
+
+.hostly-carta-concept-collapsible__trigger-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.hostly-carta-concept-collapsible__icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.hostly-carta-concept-collapsible__chevron {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-carta-concept-collapsible__panel {
+  margin-top: var(--hostly-op-gap-xs);
+}
+
+.hostly-carta-concept-collapsible__panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.hostly-carta-concept-collapsible__description {
+  margin: 0 0 var(--hostly-op-gap-sm);
+}
+
+.hostly-carta-concept-collapsible__panel-inner .hostly-carta-hierarchy-help {
+  margin-top: var(--hostly-op-gap-sm);
+}
+
+@media (max-width: 767px) {
+  .hostly-carta-config-stack:has(> .hostly-carta-concept-collapsible) {
+    gap: calc(var(--hostly-op-gap-xs) + 2px);
+  }
+
+  .hostly-carta-config-stack:has(> .hostly-carta-concept-collapsible) > .hostly-carta-config-actions-row {
+    margin-top: 0;
+  }
 }
 
 .hostly-carta-hierarchy-help {

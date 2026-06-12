@@ -54,7 +54,7 @@ import { countProductsByCategoryIdFromCentral, countProductsByCategoryIdFromPlat
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { LegacyCatalogPendingNotice } from "@/components/carta/legacy-catalog-pending-notice";
 import { loadPlatos, PLATOS_CHANGED_EVENT } from "@/lib/platos-local";
-import { CartaCatalogHierarchyHelp } from "@/components/carta/carta-catalog-hierarchy-help";
+import { CartaCatalogConceptCollapsible } from "@/components/carta/carta-catalog-concept-collapsible";
 import { CategoriasCartaDataView } from "@/components/carta/categorias-carta-data-view";
 
 const inputClass = "hostly-input hostly-carta-config-field-input";
@@ -497,11 +497,11 @@ export default function ConfigCartaCategoriasPage() {
   }, [restauranteId, deleteChoiceCategory, panelOpen, editing, refresh]);
 
   return (
-    <ConfigCartaWorkbench
-      title="Categorías de carta"
-      description="Son las secciones visibles que verá el personal en el TPV."
-    >
-      <ConfigCard compact className="hostly-carta-config-card--muted hostly-carta-familia-concept">
+    <ConfigCartaWorkbench title="Categorías de carta">
+      <CartaCatalogConceptCollapsible
+        focus="category"
+        description="Son las secciones visibles que verá el personal en el TPV."
+      >
         <p className="hostly-carta-config-section-body">
           Ejemplos: <strong>Pizze Classico</strong>, <strong>Pizze Speciali</strong>,{" "}
           <strong>Cervezas nacionales</strong>, <strong>Cervezas importación</strong>. Los productos
@@ -511,8 +511,7 @@ export default function ConfigCartaCategoriasPage() {
           Cada categoría puede pertenecer a una <strong>familia de menú</strong> (p. ej. Pizzas) para
           compartir estación y pase. La familia de producto es otro concepto (filtros e informes).
         </p>
-        <CartaCatalogHierarchyHelp focus="category" />
-      </ConfigCard>
+      </CartaCatalogConceptCollapsible>
 
       <div className="hostly-carta-config-actions-row">
         <ConfigBtnPrimary type="button" disabled={!restauranteId} onClick={openNew}>

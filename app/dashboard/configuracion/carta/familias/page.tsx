@@ -43,7 +43,7 @@ import {
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { loadPlatos } from "@/lib/platos-local";
-import { CartaCatalogHierarchyHelp } from "@/components/carta/carta-catalog-hierarchy-help";
+import { CartaCatalogConceptCollapsible } from "@/components/carta/carta-catalog-concept-collapsible";
 import { FamiliasCartaDataView } from "@/components/carta/familias-carta-data-view";
 
 const inputClass = "hostly-input hostly-carta-config-field-input";
@@ -296,11 +296,11 @@ export default function ConfigCartaFamiliasPage() {
   ]);
 
   return (
-    <ConfigCartaWorkbench
-      title="Familias de menú"
-      description="Agrupa categorías que comparten comportamiento operativo."
-    >
-      <ConfigCard compact className="hostly-carta-config-card--muted hostly-carta-familia-concept">
+    <ConfigCartaWorkbench title="Familias de menú">
+      <CartaCatalogConceptCollapsible
+        focus="menu-family"
+        description="Agrupa categorías que comparten comportamiento operativo."
+      >
         <p className="hostly-carta-config-section-body">
           Ejemplos: <strong>Pizzas</strong>, <strong>Entrantes</strong>, <strong>Refrescos</strong>,{" "}
           <strong>Cócteles</strong>. Las familias de menú permiten definir estación de producción,
@@ -310,8 +310,7 @@ export default function ConfigCartaFamiliasPage() {
           No son las pestañas del TPV: eso son las <strong>categorías de carta</strong>. Aquí configuras
           el bloque operativo al que pertenecen.
         </p>
-        <CartaCatalogHierarchyHelp focus="menu-family" />
-      </ConfigCard>
+      </CartaCatalogConceptCollapsible>
 
       <div className="hostly-carta-config-actions-row">
         <ConfigBtnPrimary type="button" disabled={!restauranteId} onClick={openNew}>

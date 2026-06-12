@@ -85,7 +85,7 @@ export default function ModulePageShell({
   }, []);
 
   const resolvedBack = backLabel ?? t("common.backToDashboard");
-  const effectiveLockViewport = Boolean(lockViewport && !isMobile);
+  const effectiveLockViewport = Boolean(lockViewport && (!isMobile || lockViewportFillParent));
   const laptopFit = Boolean(effectiveLockViewport && fitLaptopViewport && compactLayout && operationalFocus);
   const lockFill = Boolean(effectiveLockViewport && lockViewportFillParent);
   const pad =
@@ -227,7 +227,15 @@ export default function ModulePageShell({
         paddingRight: 0,
         fontFamily: "Arial, sans-serif",
         ...(isMobile
-          ? {}
+          ? effectiveLockViewport && lockFill
+            ? {
+                flex: "1 1 0",
+                minHeight: 0,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+              }
+            : {}
           : {
               paddingBottom: pad,
               minHeight: effectiveLockViewport ? (lockFill ? 0 : "100dvh") : "100vh",
@@ -354,17 +362,17 @@ export default function ModulePageShell({
                   ? 12
                   : 14
               : 24,
-          ...(isMobile
-            ? {}
-            : {
-                flexGrow: effectiveLockViewport ? 1 : undefined,
-                flexShrink: effectiveLockViewport ? 1 : undefined,
-                flexBasis: effectiveLockViewport ? 0 : undefined,
-                minHeight: effectiveLockViewport ? 0 : undefined,
-                overflow: effectiveLockViewport ? "hidden" : undefined,
-                display: effectiveLockViewport ? "flex" : undefined,
-                flexDirection: effectiveLockViewport ? "column" : undefined,
-              }),
+          ...(effectiveLockViewport
+            ? {
+                flexGrow: 1,
+                flexShrink: 1,
+                flexBasis: 0,
+                minHeight: 0,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+              }
+            : {}),
         }}
       >
         {children}
