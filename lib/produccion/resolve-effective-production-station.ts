@@ -19,6 +19,14 @@ export type ResolvedProductionStationSource =
   | "station_legacy"
   | "default";
 
+/**
+ * Resolución efectiva de estación de producción (sin I/O).
+ *
+ * Fase 2.3a — contrato futuro (no consumido en runtime TPV/KDS todavía):
+ * `operationStationId` / `operationStationName` se rellenan solo cuando la fuente
+ * es `operation_legacy` (estación operativa explícita en catálogo/línea).
+ * No se persisten en Firestore ni sustituyen a `opFields` legacy.
+ */
 export type ResolvedProductionStation = {
   productionStationId: string | null;
   productionStationName: string | null;
@@ -27,6 +35,9 @@ export type ResolvedProductionStation = {
   source: ResolvedProductionStationSource;
   printerName?: string | null;
   printerChannel?: string | null;
+  /** Fase 2.3a+: identidad operativa cuando source === operation_legacy. */
+  operationStationId?: string;
+  operationStationName?: string;
 };
 
 export type ResolveEffectiveProductionStationLineInput = {
@@ -189,6 +200,16 @@ function printerFieldsFromOperationStation(
   };
 }
 
+/** Identidad operativa para contrato 2.3a+; solo cuando hay estación operativa resuelta. */
+function operationStationIdentityFromDocument(
+  operationStation: OperationStationDocument,
+): Pick<ResolvedProductionStation, "operationStationId" | "operationStationName"> {
+  return {
+    operationStationId: operationStation.id,
+    operationStationName: operationStation.name.trim(),
+  };
+}
+
 function resolvedFromProductionStation(
   station: ProductionStationDocument,
   source: ResolvedProductionStationSource,
@@ -332,12 +353,17 @@ export function resolveEffectiveProductionStation(
         input.productionStations,
       );
       const printerOverride = printerFieldsFromOperationStation(operationStation);
+      const operationIdentity =
+        operationStationIdentityFromDocument(operationStation);
       if (mapped) {
-        return resolvedFromProductionStation(
-          mapped,
-          "operation_legacy",
-          printerOverride,
-        );
+        return {
+          ...resolvedFromProductionStation(
+            mapped,
+            "operation_legacy",
+            printerOverride,
+          ),
+          ...operationIdentity,
+        };
       }
       return {
         productionStationId: null,
@@ -346,6 +372,7 @@ export function resolveEffectiveProductionStation(
         legacyBucket: resolveLegacyBucket(operationStation.type),
         source: "operation_legacy",
         ...printerOverride,
+        ...operationIdentity,
       };
     }
   }

@@ -1,12 +1,32 @@
 /**
- * Fase 1 / 2.0 / 2.1 — origen operativo unificado para TPV y `orders.items[]`.
+ * Origen operativo unificado para TPV y `orders.items[]` (Fase 1 → 2.3a).
  *
- * Fase 1: resolver con catálogos vacíos (solo trace).
- * Fase 2.0 shadow: catálogos reales en comparación; legacy autoridad.
- * Fase 2.1: `station` / `preparationArea` salen del resolver si resolución válida;
- * `operationStationId` / `operationStationName` siguen legacy.
+ * ## Autoridad actual (runtime)
  *
- * Rollback: `USE_RESOLVER_AS_AUTHORITY = false` → comportamiento Fase 2.0.
+ * | Campo | Autoridad | Uso |
+ * |-------|-----------|-----|
+ * | `station` / `preparationArea` | **Resolver** (Fase 2.1, `USE_RESOLVER_AS_AUTHORITY`) | Bucket KDS: cocina / barra / coctelería |
+ * | `operationStationId` / `operationStationName` | **Legacy** (producto → línea → Firestore) | Subestación: filtro fino KDS, badge TPV, impresora |
+ * | `course` | Legacy (`resolveProductDefaultCourse`) | Comanda / Marchar |
+ *
+ * KDS tablero (Cocina/Barra/Coctelería) **no** enruta por `operationStationId`.
+ *
+ * ## Fase 2.3a (este archivo)
+ *
+ * - Documentación y guardas **solo development**.
+ * - Sin cambio de persistencia ni routing.
+ *
+ * ## Criterios futura migración `operationStationId` → resolver (Fase 2.3b+)
+ *
+ * Activar solo cuando se cumpla **todo**:
+ * 1. Tenant con **varias** estaciones operativas activas del mismo tipo (p. ej. 2+ cocinas).
+ * 2. `ResolvedProductionStation.operationStationId` proyectado con reglas explícitas
+ *    (operation_legacy, default-* por bucket, o mapa production → operation).
+ * 3. QA con impresión activa (`printerConfig.enabled`) y filtro fino KDS.
+ * 4. Catálogo sin conflictos bucket(station) vs bucket(operationStationId).
+ * 5. Rollback: flag dedicado (no reutilizar `USE_RESOLVER_AS_AUTHORITY`).
+ *
+ * Rollback Fase 2.1 bucket: `USE_RESOLVER_AS_AUTHORITY = false`.
  */
 
 import {
@@ -27,6 +47,7 @@ import {
   type OrderLineStationFields,
 } from "@/lib/kds/order-line-station";
 import { resolveKdsDestination, type KdsDestination } from "@/lib/kds/kds-destination";
+import { deriveLegacyStationFromOperationStation } from "@/lib/operacion/product-operation-station";
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
 import type { ResolveEffectiveProductionStationFamilyInput } from "@/lib/produccion/resolve-effective-production-station";
@@ -263,6 +284,60 @@ function warnResolverAuthorityFallback(args: {
   );
 }
 
+function legacyBucketFromOperationStationId(
+  operationStationId: string | undefined,
+  operationStations: readonly OperationStationDocument[] | undefined,
+): LegacyBucket | null {
+  const id = operationStationId?.trim();
+  if (!id || !operationStations?.length) return null;
+  const found = operationStations.find((s) => s.id === id);
+  if (!found) return null;
+  const legacyStation = deriveLegacyStationFromOperationStation(found);
+  if (legacyStation === "kitchen" || legacyStation === "bar" || legacyStation === "cocktail") {
+    return legacyStation;
+  }
+  if (legacyStation === "none") return "none";
+  return null;
+}
+
+/** Fase 2.3a — solo development: bucket legacy vs estación operativa legacy. */
+function warnDevOperationStationBucketMismatch(args: {
+  context: "product" | "cart_line";
+  productId: string;
+  stationFields: OrderLineStationFields;
+  opFields: OrderLineOperationStationFields;
+  operationStations: readonly OperationStationDocument[] | undefined;
+}): void {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const stationBucket = legacyBucketFromStationFields(args.stationFields);
+  if (stationBucket === "none") return;
+
+  const opId = args.opFields.operationStationId?.trim();
+  if (!opId) return;
+
+  const opBucket = legacyBucketFromOperationStationId(
+    opId,
+    args.operationStations,
+  );
+  if (!opBucket || opBucket === "none") return;
+  if (stationBucket === opBucket) return;
+
+  console.warn(
+    "[Hostly operational Fase 2.3a] bucket(station/preparationArea) ≠ bucket(operationStationId); opFields siguen legacy.",
+    {
+      context: args.context,
+      productId: args.productId,
+      station: args.stationFields.station ?? null,
+      preparationArea: args.stationFields.preparationArea ?? null,
+      stationBucket,
+      operationStationId: opId,
+      operationStationName: args.opFields.operationStationName ?? null,
+      operationStationBucket: opBucket,
+    },
+  );
+}
+
 function pickAuthoritativeStationFields(args: {
   context: "product" | "cart_line";
   productId: string;
@@ -337,6 +412,14 @@ function resolveOperationalLineFieldsPhase1(args: {
     productId: args.productId,
     legacyBucket,
     trace: phase1Trace,
+  });
+
+  warnDevOperationStationBucketMismatch({
+    context: args.context,
+    productId: args.productId,
+    stationFields: authoritativeStationFields,
+    opFields: args.opFields,
+    operationStations: shadow?.operationStations,
   });
 
   return {

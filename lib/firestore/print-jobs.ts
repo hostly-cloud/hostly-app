@@ -15,6 +15,7 @@ import { auth, db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { resolveKdsDestination } from "@/lib/kds/kds-destination";
 import {
+  readStationFieldsFromFirestoreRecord,
   resolveOperationStationFieldsForCartLine,
   resolveStationFieldsForCartLine,
   type OrderLinePreparationArea,
@@ -139,13 +140,20 @@ function authUidOrUndefined(): string | undefined {
 }
 
 function cartLineToKdsRoutableItem(line: ComandaLineForPrintJob) {
-  const fields = resolveStationFieldsForCartLine(line);
+  const materialized = readStationFieldsFromFirestoreRecord({
+    station: line.station,
+    preparationArea: line.preparationArea,
+  });
+  const fields =
+    materialized.station || materialized.preparationArea
+      ? materialized
+      : resolveStationFieldsForCartLine(line);
   return {
     nombre: line.product.nombre,
     name: line.product.nombre,
     categoria: line.product.categoria,
-    station: fields.station ?? line.station,
-    preparationArea: fields.preparationArea ?? line.preparationArea,
+    station: fields.station,
+    preparationArea: fields.preparationArea,
   };
 }
 

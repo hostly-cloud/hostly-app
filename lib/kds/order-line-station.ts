@@ -198,6 +198,27 @@ export function stationFieldsToFirestorePayload(
   return patch;
 }
 
+/**
+ * TPV UI secundaria: prioriza station/preparationArea materializados en la línea;
+ * si faltan, resuelve desde producto; default cocina (compat. legacy).
+ */
+export function resolveDisplayPreparationAreaForCartLine(line: {
+  station?: unknown;
+  preparationArea?: unknown;
+  product: Product;
+}): OrderLinePreparationArea | "cocina" | "barra" | "cocteleria" {
+  const fromLine = readStationFieldsFromFirestoreRecord({
+    station: line.station,
+    preparationArea: line.preparationArea,
+  });
+  if (fromLine.preparationArea) return fromLine.preparationArea;
+
+  const fromProduct = resolveStationFieldsFromProduct(line.product);
+  if (fromProduct.preparationArea) return fromProduct.preparationArea;
+
+  return "cocina";
+}
+
 /** Solo development: línea enviada sin station ni preparationArea. */
 export function warnDevIfSentLineMissingStation(args: {
   lineId: string;

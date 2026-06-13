@@ -153,6 +153,7 @@ import {
   isPendingMarchSegundosLine,
   isTpvComandaLineHeldForMarch,
   resolveComandaLineKdsDestination,
+  resolveComandaLineStationFields,
   selectLinesToReleaseOnComanda,
   type ComandaReleaseAction,
 } from "@/lib/carta/comanda-line-release";
@@ -172,15 +173,13 @@ import {
   resolvePendingMarchPassMapHint,
   type PendingMarchPassAlert,
 } from "@/lib/carta/pending-march-pass-alert";
-import { deriveLegacyStationFromOperationStation } from "@/lib/operacion/product-operation-station";
-import { mapStationToPreparationArea } from "@/lib/carta/map-station-to-preparation-area";
 import {
   readOperationStationFieldsFromFirestoreRecord,
   readStationFieldsFromFirestoreRecord,
   operationStationFieldsToFirestorePayload,
+  resolveDisplayPreparationAreaForCartLine,
   resolveOperationStationFieldsForCartLine,
   resolveOperationStationFieldsFromProduct,
-  resolveStationFieldsForCartLine,
   resolveStationFieldsFromProduct,
   stationFieldsToFirestorePayload,
   warnDevIfSentLineMissingStation,
@@ -354,36 +353,6 @@ const COMANDA_DESTINATION_LABEL: Record<KdsDestination, string> = {
   cocktail: "Coctelería",
   none: "—",
 };
-
-/** Estación canónica desde producto/línea; si falta, deriva del tipo operativo configurado. */
-function resolveComandaLineStationFields(
-  line: CartOrderLine,
-): ReturnType<typeof resolveStationFieldsForCartLine> {
-  const fields = resolveStationFieldsForCartLine(line);
-  if (fields.station || fields.preparationArea) return fields;
-
-  const opType = line.product.operationStationType;
-  if (!opType) return fields;
-
-  const legacy = deriveLegacyStationFromOperationStation({ type: opType });
-  if (legacy !== "kitchen" && legacy !== "bar" && legacy !== "cocktail") {
-    return fields;
-  }
-
-  const station = legacy as OrderLineStation;
-  const preparationAreaRaw = mapStationToPreparationArea(station);
-  const preparationArea =
-    preparationAreaRaw === "cocina" ||
-    preparationAreaRaw === "barra" ||
-    preparationAreaRaw === "cocteleria"
-      ? (preparationAreaRaw as OrderLinePreparationArea)
-      : undefined;
-
-  return {
-    station,
-    ...(preparationArea ? { preparationArea } : {}),
-  };
-}
 
 /** Badge de destino en comanda TPV: prioriza estación configurada del producto/línea. */
 function resolveComandaLineDestinationBadge(line: CartOrderLine): {
@@ -7938,7 +7907,14 @@ export function CartaPageContent({
           orderId: persistedOrderRef.id,
         });
         linesToSend.forEach((l) => {
-          const stationFields = resolveStationFieldsForCartLine(l);
+          const shadowCatalog = buildProductResolverParityContextFromProduct(
+            l.product,
+            operationalShadowCatalogSources,
+          );
+          const { stationFields } = resolveOperationalLineFieldsForCartLine(
+            l,
+            shadowCatalog,
+          );
           const opFields = resolveOperationStationFieldsForCartLine(l);
           warnDevIfSentLineMissingStation({
             lineId: l.id,
@@ -8143,6 +8119,7 @@ export function CartaPageContent({
       operationalCatalog.source,
       activityActorName,
       activityActorRole,
+      operationalShadowCatalogSources,
     ],
   );
 
@@ -8685,9 +8662,7 @@ export function CartaPageContent({
     return order
       .filter((it) => it.status === "sent")
       .filter(
-        (it) =>
-          ((it.product as Product & { preparationArea?: string }).preparationArea ||
-            "cocina") === "cocina",
+        (it) => resolveDisplayPreparationAreaForCartLine(it) === "cocina",
       )
       .slice()
       .sort((a, b) => {
@@ -15215,8 +15190,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                       .filter(
                         (item) =>
                           item.status !== "served" &&
-                          ((item.product as Product & { preparationArea?: string })
-                            .preparationArea || "cocina") === area,
+                          resolveDisplayPreparationAreaForCartLine(item) === area,
                       )
                       .sort((a, b) => {
                         const getPriority = (item: CartOrderLine) => {

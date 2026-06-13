@@ -34,7 +34,7 @@ export function normalizeComandaCourseValue(raw: unknown): number | undefined {
   return Math.min(4, Math.max(1, Math.floor(n)));
 }
 
-function resolveComandaLineStationFields(
+export function resolveComandaLineStationFields(
   line: ComandaReleaseLine,
 ): ReturnType<typeof resolveStationFieldsForCartLine> {
   const fields = resolveStationFieldsForCartLine(line);
