@@ -47,7 +47,12 @@ import {
   listenModifierGroups,
 } from "@/lib/firestore/modifier-groups";
 import { sanitizeModifierGroupIdsForSave } from "@/lib/modifiers/effective-product-modifiers";
-import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
+import {
+  DEFAULT_DRINK_FORMAT_GROUP_ID,
+  DEFAULT_DRINK_MIXER_GROUP_ID,
+  type ModifierGroupDocument,
+} from "@/lib/modifiers/modifier-types";
+import { shouldSuggestDrinkFormatMixerCategory } from "@/lib/modifiers/suggest-drink-format-mixer-category";
 import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import { countProductsByCategoryIdFromCentral, countProductsByCategoryIdFromPlatos } from "@/lib/carta/catalog-category-counts";
@@ -206,6 +211,33 @@ export default function ConfigCartaCategoriasPage() {
         ),
     [modifierGroups],
   );
+
+  const showDrinkFormatMixerSuggestion = useMemo(
+    () =>
+      shouldSuggestDrinkFormatMixerCategory({
+        name: draftName,
+        type: draftType,
+        modifierGroupIds: draftModifierGroupIds,
+      }),
+    [draftName, draftType, draftModifierGroupIds],
+  );
+
+  const drinkFormatMixerDefaultGroupsAvailable = useMemo(() => {
+    const activeIds = new Set(activeModifierGroups.map((group) => group.id));
+    return (
+      activeIds.has(DEFAULT_DRINK_FORMAT_GROUP_ID) &&
+      activeIds.has(DEFAULT_DRINK_MIXER_GROUP_ID)
+    );
+  }, [activeModifierGroups]);
+
+  const applyDrinkFormatMixerSuggestion = useCallback(() => {
+    setDraftModifierGroupIds((prev) => {
+      const next = new Set(prev);
+      next.add(DEFAULT_DRINK_FORMAT_GROUP_ID);
+      next.add(DEFAULT_DRINK_MIXER_GROUP_ID);
+      return [...next];
+    });
+  }, []);
 
   const sorted = useMemo(
     () =>
@@ -667,6 +699,33 @@ export default function ConfigCartaCategoriasPage() {
                 </label>
                 <div className="hostly-carta-config-form-field hostly-carta-category-form-grid__modifiers">
                   <span className="hostly-carta-config-form-label">Modificadores</span>
+                  {showDrinkFormatMixerSuggestion ? (
+                    <div
+                      className="hostly-carta-category-form-drawer__hint"
+                      style={{
+                        marginBottom: "0.75rem",
+                        padding: "0.75rem 0.875rem",
+                        border: "1px solid var(--hostly-border-subtle, rgba(0, 0, 0, 0.12))",
+                        borderRadius: "0.5rem",
+                        background: "var(--hostly-surface-muted, rgba(0, 0, 0, 0.03))",
+                      }}
+                    >
+                      <p style={{ margin: 0, fontWeight: 600 }}>💡 Sugerencia Hostly</p>
+                      <p style={{ margin: "0.35rem 0 0" }}>Esta categoría parece un destilado.</p>
+                      <p style={{ margin: "0.35rem 0 0" }}>Puedes añadir:</p>
+                      <ul style={{ margin: "0.35rem 0 0.75rem", paddingLeft: "1.25rem" }}>
+                        <li>✓ Formato bebida</li>
+                        <li>✓ Mixer</li>
+                      </ul>
+                      <ConfigBtnSecondary
+                        type="button"
+                        disabled={saving || !drinkFormatMixerDefaultGroupsAvailable}
+                        onClick={applyDrinkFormatMixerSuggestion}
+                      >
+                        Aplicar sugerencia
+                      </ConfigBtnSecondary>
+                    </div>
+                  ) : null}
                   {activeModifierGroups.length === 0 ? (
                     <p className="hostly-carta-category-form-drawer__hint">
                       Sin grupos activos.{" "}
