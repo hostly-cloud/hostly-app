@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   HostlyDataCell,
   HostlyDataRow,
@@ -17,9 +18,14 @@ import {
 import { ConfigBtnPrimary } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
 import {
   EscandalloMarginStatusBadge,
+  EscandalloRecipeStateBadge,
   HostlyCostBadge,
   HostlyMarginBadge,
 } from "./escandallo-badges";
+import {
+  escandalloRecipeQuickActionLabel,
+  type EscandalloVisualState,
+} from "./escandallo-row-visual-state";
 import {
   computeMarginPercent,
   formatMoney2,
@@ -42,6 +48,14 @@ function IconRecipe() {
   );
 }
 
+function openRecipeFromRow(
+  router: ReturnType<typeof useRouter>,
+  recipeHref: (id: string | number) => string,
+  productId: string | number,
+) {
+  router.push(recipeHref(productId));
+}
+
 export type EscandallosCartaDataViewProps = {
   items: EscandalloListRow[];
   drafts: EscandalloDraftById;
@@ -49,6 +63,7 @@ export type EscandallosCartaDataViewProps = {
   listStats: EscandalloListStats;
   loading?: boolean;
   recipeHref: (id: string | number) => string;
+  recipeLinkTitle?: string;
   onUpdateDraft: (id: string | number, field: "coste_total" | "precio_venta", value: string) => void;
   onSave: (id: string | number) => void;
   emptyTitle?: string;
@@ -57,6 +72,8 @@ export type EscandallosCartaDataViewProps = {
   emptyCtaLabel?: string;
   noResultsLabel?: string;
   showFilteredEmpty?: boolean;
+  /** Mapa id → estado visual de escandallo (Config → Carta → Escandallos). */
+  visualStateById?: Readonly<Record<string, EscandalloVisualState>>;
 };
 
 export function EscandallosCartaDataView({
@@ -66,6 +83,7 @@ export function EscandallosCartaDataView({
   listStats,
   loading = false,
   recipeHref,
+  recipeLinkTitle = "Editar escandallo en la ficha del producto",
   onUpdateDraft,
   onSave,
   emptyTitle = "Sin escandallos vinculados",
@@ -74,7 +92,11 @@ export function EscandallosCartaDataView({
   emptyCtaLabel = "Ir a Productos",
   noResultsLabel = "Ningún resultado con estos filtros.",
   showFilteredEmpty = false,
+  visualStateById,
 }: EscandallosCartaDataViewProps) {
+  const router = useRouter();
+  const showEscandalloState = visualStateById != null;
+
   if (loading) {
     return (
       <div className="hostly-data-table-viewport hostly-data-table-viewport--embedded hostly-data-table-viewport--escandallos">
@@ -126,8 +148,13 @@ export function EscandallosCartaDataView({
             <HostlyDataCell align="end" col="margin">
               Margen
             </HostlyDataCell>
+            {showEscandalloState ? (
+              <HostlyDataCell align="center" col="escandallo">
+                Escandallo
+              </HostlyDataCell>
+            ) : null}
             <HostlyDataCell align="center" col="status">
-              Estado
+              Margen
             </HostlyDataCell>
             <HostlyDataCell align="end" col="actions">
               Acciones
@@ -144,6 +171,7 @@ export function EscandallosCartaDataView({
               const busy = Boolean(savingById[key]);
               const isBest = listStats.bestKey === key;
               const isWorst = listStats.worstKey === key;
+              const escandalloState = visualStateById?.[key];
 
               return (
                 <HostlyDataRow key={key}>
@@ -152,7 +180,7 @@ export function EscandallosCartaDataView({
                       <Link
                         href={recipeHref(item.id)}
                         className="hostly-data-table-primary__name hostly-data-table-primary__link"
-                        title={item.nombre_plato ?? undefined}
+                        title={recipeLinkTitle}
                       >
                         {item.nombre_plato?.trim() || "—"}
                       </Link>
@@ -207,22 +235,45 @@ export function EscandallosCartaDataView({
                       emphasize
                     />
                   </HostlyDataCell>
+                  {showEscandalloState ? (
+                    <HostlyDataCell align="center" col="escandallo">
+                      {escandalloState ? (
+                        <EscandalloRecipeStateBadge state={escandalloState} />
+                      ) : (
+                        <HostlyStatusBadge tone="muted">—</HostlyStatusBadge>
+                      )}
+                    </HostlyDataCell>
+                  ) : null}
                   <HostlyDataCell align="center" col="status">
                     <EscandalloMarginStatusBadge tier={marginTier} />
                   </HostlyDataCell>
                   <HostlyDataCell align="end" col="actions">
                     <HostlyRowActions>
-                      <HostlyRowActionButton
-                        variant="icon"
-                        title="Abrir receta"
-                        aria-label="Abrir receta"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.location.href = recipeHref(item.id);
-                        }}
-                      >
-                        <IconRecipe />
-                      </HostlyRowActionButton>
+                      {escandalloState ? (
+                        <HostlyRowActionButton
+                          variant="text"
+                          title={recipeLinkTitle}
+                          aria-label={escandalloRecipeQuickActionLabel(escandalloState)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openRecipeFromRow(router, recipeHref, item.id);
+                          }}
+                        >
+                          {escandalloRecipeQuickActionLabel(escandalloState)}
+                        </HostlyRowActionButton>
+                      ) : (
+                        <HostlyRowActionButton
+                          variant="icon"
+                          title={recipeLinkTitle}
+                          aria-label={recipeLinkTitle}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openRecipeFromRow(router, recipeHref, item.id);
+                          }}
+                        >
+                          <IconRecipe />
+                        </HostlyRowActionButton>
+                      )}
                       <HostlyRowActionButton
                         variant="text"
                         tone="success"
@@ -252,6 +303,7 @@ export function EscandallosCartaDataView({
           const marginPct = computeMarginPercent(costeN, ventaN);
           const marginTier = marginHealthCategory(marginPct);
           const busy = Boolean(savingById[key]);
+          const escandalloState = visualStateById?.[key];
 
           return (
             <HostlyMobileListItem
@@ -263,6 +315,12 @@ export function EscandallosCartaDataView({
               }
               meta={
                 <>
+                  {escandalloState ? <EscandalloRecipeStateBadge state={escandalloState} /> : null}
+                  {escandalloState ? (
+                    <span className="hostly-mobile-list-item__dot" aria-hidden>
+                      ·
+                    </span>
+                  ) : null}
                   <HostlyCostBadge value={formatMoney2(costeN)} />
                   <span className="hostly-mobile-list-item__dot" aria-hidden>
                     ·
@@ -281,9 +339,19 @@ export function EscandallosCartaDataView({
                   <ConfigBtnPrimary type="button" disabled={busy} onClick={() => onSave(item.id)}>
                     {busy ? "Guardando…" : "Guardar"}
                   </ConfigBtnPrimary>
-                  <Link href={recipeHref(item.id)} className="hostly-button-secondary hostly-button-compact">
-                    Receta
-                  </Link>
+                  <button
+                    type="button"
+                    className="hostly-button-secondary hostly-button-compact"
+                    title={recipeLinkTitle}
+                    aria-label={
+                      escandalloState
+                        ? escandalloRecipeQuickActionLabel(escandalloState)
+                        : recipeLinkTitle
+                    }
+                    onClick={() => openRecipeFromRow(router, recipeHref, item.id)}
+                  >
+                    {escandalloState ? escandalloRecipeQuickActionLabel(escandalloState) : "Receta"}
+                  </button>
                 </div>
               }
             >

@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode, SVGProps } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
 import { ProductCatalogHierarchyContext } from "@/components/productos/product-catalog-hierarchy-context";
@@ -1463,6 +1463,8 @@ export default function ProductosManagementPage({
   const { restaurantId: profileRestaurantId, profileReady } = useAuth();
   const router = useRouter();
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
+  const recipeDeepLinkHandledRef = useRef<string | null>(null);
   const emb = Boolean(embedConfigVisual);
   const iceVisual = emb || Boolean(dashboardListIceVisual);
   /** Solo /dashboard/configuracion/carta/productos — ruta explícita, no depender solo del prop */
@@ -2929,6 +2931,55 @@ export default function ProductosManagementPage({
     return () => window.clearTimeout(scrollTimer);
   }, [formOpen, editFocus, editingId]);
 
+  useEffect(() => {
+    if (!formOpen || editFocus !== "recipe" || !isCentralCatalog) return;
+    const openTimer = window.setTimeout(() => {
+      setEscandalloModalOpen(true);
+    }, 80);
+    return () => window.clearTimeout(openTimer);
+  }, [formOpen, editFocus, isCentralCatalog, editingId]);
+
+  useEffect(() => {
+    if (!isConfigCartaProductosRoute || !hydrated || operationalCatalog.loading) return;
+
+    const productId = searchParams.get("productId")?.trim() ?? "";
+    const focus = searchParams.get("focus")?.trim() ?? "";
+    if (!productId || focus !== "recipe") return;
+
+    const linkKey = `${productId}:${focus}`;
+    if (recipeDeepLinkHandledRef.current === linkKey) return;
+
+    if (isLegacyReadOnly) {
+      recipeDeepLinkHandledRef.current = linkKey;
+      router.replace(pathname, { scroll: false });
+      return;
+    }
+
+    const plato = items.find((x) => x.id === productId);
+    if (!plato) {
+      if (operationalCatalog.source !== null && items.length > 0) {
+        recipeDeepLinkHandledRef.current = linkKey;
+        setFormError("No se encontró el producto para editar el escandallo.");
+        router.replace(pathname, { scroll: false });
+      }
+      return;
+    }
+
+    recipeDeepLinkHandledRef.current = linkKey;
+    openEdit(plato, { focus: "recipe" });
+    router.replace(pathname, { scroll: false });
+  }, [
+    hydrated,
+    isConfigCartaProductosRoute,
+    isLegacyReadOnly,
+    items,
+    operationalCatalog.loading,
+    operationalCatalog.source,
+    pathname,
+    router,
+    searchParams,
+  ]);
+
   const metricNum: CSSProperties = {
     ...tabularFigures,
     fontSize: 19,
@@ -3368,6 +3419,12 @@ export default function ProductosManagementPage({
   async function goToEscandallo(p: PlatoCarta) {
     if (!p.activo) return;
     setFormError(null);
+
+    if (isCentralCatalog) {
+      openEdit(p, { focus: "recipe" });
+      return;
+    }
+
     setEscNavId(p.id);
     try {
       const restauranteId = operationalRestaurantId;

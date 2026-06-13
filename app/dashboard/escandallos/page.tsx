@@ -26,6 +26,11 @@ import {
 } from "@/lib/platos-escandallo-bridge";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { syncPlatoPrecioFromEscandalloSave } from "@/lib/platos-local";
+import {
+  buildEscandalloRecipeEditHref,
+  escandalloRecipeEditNavModeFromCatalogSource,
+  escandalloRecipeLinkTitle,
+} from "@/lib/carta/escandallo-product-edit-nav";
 
 function formatMoney2OrDash(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "";
@@ -62,6 +67,15 @@ export default function EscandallosPage() {
   const [tierFilter, setTierFilter] = useState<EscandalloToolbarTier>("all");
   const [catalogSource, setCatalogSource] = useState<EscandalloCatalogSource>("legacy_local");
   const [legacyPendingCount, setLegacyPendingCount] = useState(0);
+
+  const recipeEditNavMode = useMemo(
+    () => escandalloRecipeEditNavModeFromCatalogSource(catalogSource),
+    [catalogSource],
+  );
+  const recipeEditLinkTitle = useMemo(
+    () => escandalloRecipeLinkTitle(recipeEditNavMode),
+    [recipeEditNavMode],
+  );
 
   const cargar = useCallback(async () => {
     if (!restauranteId) {
@@ -288,7 +302,8 @@ export default function EscandallosPage() {
           listStats={listStats}
           loading={loading || (operationalCatalog.loading && items.length === 0)}
           showFilteredEmpty={items.length > 0 && filteredSortedItems.length === 0}
-          recipeHref={(id) => `/dashboard/escandallos/${encodeURIComponent(String(id))}`}
+          recipeHref={(id) => buildEscandalloRecipeEditHref(id, recipeEditNavMode)}
+          recipeLinkTitle={recipeEditLinkTitle}
           onUpdateDraft={updateDraft}
           onSave={(id) => void guardarFila(id)}
           emptyTitle={t("escandallos.listEmptyTitle")}

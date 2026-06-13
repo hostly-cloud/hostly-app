@@ -16,6 +16,10 @@ import {
   type EscandalloDraftById,
   type EscandalloListRow,
 } from "@/components/carta/escandallos/escandallo-display-utils";
+import {
+  computeEscandalloVisualState,
+  computeEscandalloVisualStateCounts,
+} from "@/components/carta/escandallos/escandallo-row-visual-state";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { updateCentralProduct } from "@/lib/firestore/products";
 import {
@@ -25,6 +29,11 @@ import {
 } from "@/lib/platos-escandallo-bridge";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { syncPlatoPrecioFromEscandalloSave } from "@/lib/platos-local";
+import {
+  buildEscandalloRecipeEditHref,
+  escandalloRecipeEditNavModeFromCatalogSource,
+  escandalloRecipeLinkTitle,
+} from "@/lib/carta/escandallo-product-edit-nav";
 
 function formatMoney2OrDash(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "";
@@ -61,17 +70,45 @@ export default function ConfigCartaEscandallosPage() {
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<EscandalloToolbarTier>("all");
 
-  const platosStats = useMemo(() => {
-    let con = 0;
-    let sin = 0;
+  const productDocumentsById = operationalCatalog.productDocumentsById;
+
+  const visualStateById = useMemo(() => {
+    const isLegacyCatalog = (operationalCatalog.source ?? catalogSource) !== "central";
+    const map: Record<string, ReturnType<typeof computeEscandalloVisualState>> = {};
     for (const row of items) {
+      const key = String(row.id);
+      const doc = productDocumentsById.get(key);
       const draft = getDraftForItem(row, drafts);
-      const coste = parseNullableNumber(draft.coste_total);
-      if (coste != null) con += 1;
-      else sin += 1;
+      const rowCoste = parseNullableNumber(draft.coste_total);
+      const salePrice =
+        typeof doc?.price === "number" && Number.isFinite(doc.price)
+          ? doc.price
+          : parseNullableNumber(draft.precio_venta);
+      map[key] = computeEscandalloVisualState({
+        recipe: doc?.recipe,
+        saleProductId: key,
+        salePrice,
+        productDocumentsById,
+        legacyFallback: isLegacyCatalog,
+        rowCoste,
+      });
     }
-    return { activos: items.length, con, sin };
-  }, [items, drafts]);
+    return map;
+  }, [catalogSource, drafts, items, operationalCatalog.source, productDocumentsById]);
+
+  const escandalloStateStats = useMemo(
+    () => computeEscandalloVisualStateCounts(Object.values(visualStateById)),
+    [visualStateById],
+  );
+
+  const recipeEditNavMode = useMemo(
+    () => escandalloRecipeEditNavModeFromCatalogSource(catalogSource),
+    [catalogSource],
+  );
+  const recipeEditLinkTitle = useMemo(
+    () => escandalloRecipeLinkTitle(recipeEditNavMode),
+    [recipeEditNavMode],
+  );
 
   const cargar = useCallback(async () => {
     if (!restauranteId) {
@@ -289,13 +326,21 @@ export default function ConfigCartaEscandallosPage() {
 
       {restauranteId ? (
         <div className="hostly-carta-config-kpi-strip hostly-carta-config-kpi-strip--dense">
+          <div className="hostly-carta-config-kpi-pill">
+            <span className="hostly-carta-config-kpi-pill__label">Productos activos</span>
+            <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.activos}</span>
+          </div>
           <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--success">
-            <span className="hostly-carta-config-kpi-pill__label">Con receta</span>
-            <span className="hostly-carta-config-kpi-pill__value">{platosStats.con}</span>
+            <span className="hostly-carta-config-kpi-pill__label">Operativos</span>
+            <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.operativos}</span>
           </div>
           <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--warning">
-            <span className="hostly-carta-config-kpi-pill__label">Sin receta</span>
-            <span className="hostly-carta-config-kpi-pill__value">{platosStats.sin}</span>
+            <span className="hostly-carta-config-kpi-pill__label">Incompletos</span>
+            <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.incompletos}</span>
+          </div>
+          <div className="hostly-carta-config-kpi-pill">
+            <span className="hostly-carta-config-kpi-pill__label">Sin escandallo</span>
+            <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.sinEscandallo}</span>
           </div>
           <div className="hostly-carta-config-kpi-pill">
             <span className="hostly-carta-config-kpi-pill__label">Margen bajo</span>
@@ -315,6 +360,13 @@ export default function ConfigCartaEscandallosPage() {
               </span>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {restauranteId ? (
+        <div className="hostly-carta-config-alert hostly-carta-config-alert--info">
+          Esta vista muestra todos los productos activos para revisar su rentabilidad. El escandallo se
+          edita desde la ficha del producto (icono de receta → Configuración → Carta → Productos).
         </div>
       ) : null}
 
@@ -338,9 +390,11 @@ export default function ConfigCartaEscandallosPage() {
           listStats={listStats}
           loading={loading || (operationalCatalog.loading && items.length === 0)}
           showFilteredEmpty={items.length > 0 && filteredItems.length === 0}
-          recipeHref={(id) => `/dashboard/escandallos/${encodeURIComponent(String(id))}`}
+          recipeHref={(id) => buildEscandalloRecipeEditHref(id, recipeEditNavMode)}
+          recipeLinkTitle={recipeEditLinkTitle}
           onUpdateDraft={updateDraft}
           onSave={(id) => void guardarFila(id)}
+          visualStateById={visualStateById}
         />
       </ConfigCard>
 

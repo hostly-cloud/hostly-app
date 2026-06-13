@@ -2,6 +2,11 @@ import { HostlyStatusBadge } from "@/components/ui/hostly/data-table";
 import { hostlyCx } from "@/components/ui/hostly/hostly-cx";
 import type { MarginHealth } from "./escandallo-display-utils";
 import { formatMarginDisplay, marginHealthLabel, marginHealthTone } from "./escandallo-display-utils";
+import {
+  escandalloVisualStateLabel,
+  escandalloVisualStateTone,
+  type EscandalloVisualState,
+} from "./escandallo-row-visual-state";
 
 export function HostlyCostBadge({
   value,
@@ -50,6 +55,15 @@ export function HostlyMarginBadge({
     >
       {display}
     </span>
+  );
+}
+
+export function EscandalloRecipeStateBadge({ state }: { state: EscandalloVisualState }) {
+  const label = escandalloVisualStateLabel(state);
+  return (
+    <HostlyStatusBadge tone={escandalloVisualStateTone(state)} aria-label={label}>
+      {label}
+    </HostlyStatusBadge>
   );
 }
 
