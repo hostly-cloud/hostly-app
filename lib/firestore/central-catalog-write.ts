@@ -40,6 +40,7 @@ import {
   type ProductCompositionType,
 } from "@/lib/carta/product-composition-type";
 import { readProductSortOrder } from "@/lib/carta/product-sort-order";
+import { normalizeModifierGroupIds } from "@/lib/modifiers/modifier-group-ids";
 import type { TipoProductoVenta } from "@/lib/platos-local";
 
 export type CentralOperationalProductInput = {
@@ -65,6 +66,8 @@ export type CentralOperationalProductInput = {
   course?: number | null;
   imageUrl?: string;
   imagePath?: string;
+  /** Grupos de modificadores asignados directamente al producto. */
+  modifierGroupIds?: string[] | null;
 };
 
 export type CentralProductPublicationPatch = {
@@ -164,6 +167,15 @@ function resolveProductFamilyFieldsForSave(
   return {};
 }
 
+function resolveModifierGroupIdsFieldsForSave(
+  modifierGroupIds: string[] | null | undefined,
+): Record<string, unknown> {
+  if (modifierGroupIds === undefined) return {};
+  const ids = normalizeModifierGroupIds(modifierGroupIds);
+  if (ids.length === 0) return { modifierGroupIds: deleteField() };
+  return { modifierGroupIds: ids };
+}
+
 function buildOperationalPatch(
   input: CentralOperationalProductInput,
   now: number,
@@ -194,6 +206,12 @@ function buildOperationalPatch(
     ...(input.course !== undefined ? { course: input.course } : {}),
     ...(input.imageUrl?.trim() && input.imagePath?.trim()
       ? { imageUrl: input.imageUrl.trim(), imagePath: input.imagePath.trim() }
+      : {}),
+    ...(input.modifierGroupIds !== undefined && input.modifierGroupIds !== null
+      ? (() => {
+          const ids = normalizeModifierGroupIds(input.modifierGroupIds);
+          return ids.length > 0 ? { modifierGroupIds: ids } : {};
+        })()
       : {}),
   };
 }
@@ -263,6 +281,9 @@ function buildPartialOperationalPatch(
       patch.imageUrl = imageUrl;
       patch.imagePath = imagePath;
     }
+  }
+  if (input.modifierGroupIds !== undefined) {
+    Object.assign(patch, resolveModifierGroupIdsFieldsForSave(input.modifierGroupIds));
   }
   return patch;
 }

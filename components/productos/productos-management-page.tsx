@@ -102,6 +102,7 @@ import {
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
+import { sanitizeModifierGroupIdsForSave } from "@/lib/modifiers/effective-product-modifiers";
 import {
   buildProductStationPatchFromSelectValue,
   isLegacyOperationStationSelectValue,
@@ -809,6 +810,7 @@ function buildCentralInputFromDraft(args: {
   productFamilySelect: string;
   productFamilies: readonly ProductFamilyDocument[];
   existingIsActive?: boolean;
+  modifierGroupIds?: string[] | null;
 }): CentralOperationalProductInput {
   const categoryId = args.categoriaCartaIdPatch ?? null;
   const familyFirestore = resolveProductFamilyFirestoreFromDraft({
@@ -830,6 +832,7 @@ function buildCentralInputFromDraft(args: {
     course: productCatalogCourseFromSelectValue(args.draftCourse),
     ...(args.draftDesc.trim() ? { description: args.draftDesc.trim() } : {}),
     ...familyFirestore,
+    ...(args.modifierGroupIds !== undefined ? { modifierGroupIds: args.modifierGroupIds } : {}),
   };
 
   const resolved = resolveOperationStationFromSelectValue(
@@ -1550,6 +1553,7 @@ export default function ProductosManagementPage({
   const [draftProductFamilyId, setDraftProductFamilyId] = useState(
     CATEGORY_PRODUCT_FAMILY_NONE,
   );
+  const [draftModifierGroupIds, setDraftModifierGroupIds] = useState<string[]>([]);
   const [operationStations, setOperationStations] = useState<
     OperationStationDocument[]
   >([]);
@@ -2605,12 +2609,70 @@ export default function ProductosManagementPage({
     [cartaCategorias, draftTipo, draftCartaMenuFamiliaId, draftCategoriaCartaId],
   );
 
+  const activeModifierGroups = useMemo(
+    () =>
+      modifierGroups
+        .filter((g) => g.active)
+        .sort(
+          (a, b) =>
+            a.sortOrder - b.sortOrder ||
+            a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
+        ),
+    [modifierGroups],
+  );
+
   const draftSelectedCategory = useMemo(
     () =>
       draftCategoriaCartaId
         ? cartaCategorias.find((c) => c.id === draftCategoriaCartaId)
         : undefined,
     [draftCategoriaCartaId, cartaCategorias],
+  );
+
+  const inheritedModifierGroupIds = useMemo(
+    () =>
+      sanitizeModifierGroupIdsForSave(
+        draftSelectedCategory?.modifierGroupIds ?? [],
+        modifierGroups,
+      ),
+    [draftSelectedCategory, modifierGroups],
+  );
+
+  const inheritedModifierGroupIdSet = useMemo(
+    () => new Set(inheritedModifierGroupIds),
+    [inheritedModifierGroupIds],
+  );
+
+  const inheritedModifierGroups = useMemo(
+    () =>
+      activeModifierGroups.filter((group) =>
+        inheritedModifierGroupIdSet.has(group.id),
+      ),
+    [activeModifierGroups, inheritedModifierGroupIdSet],
+  );
+
+  const ownSelectableModifierGroups = useMemo(
+    () =>
+      activeModifierGroups.filter(
+        (group) => !inheritedModifierGroupIdSet.has(group.id),
+      ),
+    [activeModifierGroups, inheritedModifierGroupIdSet],
+  );
+
+  const toggleProductOwnModifierGroup = useCallback(
+    (groupId: string) => {
+      setDraftModifierGroupIds((prev) => {
+        const preservedInherited = prev.filter((id) =>
+          inheritedModifierGroupIdSet.has(id),
+        );
+        const own = prev.filter((id) => !inheritedModifierGroupIdSet.has(id));
+        const nextOwn = own.includes(groupId)
+          ? own.filter((id) => id !== groupId)
+          : [...own, groupId];
+        return [...preservedInherited, ...nextOwn];
+      });
+    },
+    [inheritedModifierGroupIdSet],
   );
 
   const draftMenuFamilyInheritedHint = useMemo(
@@ -2892,6 +2954,7 @@ export default function ProductosManagementPage({
     setDraftOperationStationSelect("default-kitchen");
     setDraftCourse("");
     setDraftProductFamilyId(CATEGORY_PRODUCT_FAMILY_NONE);
+    setDraftModifierGroupIds([]);
     setDraftRecipeEnabled(false);
     setDraftRecipeRows([]);
     setFormError(null);
@@ -2968,6 +3031,10 @@ export default function ProductosManagementPage({
       setDraftRecipeEnabled(false);
       setDraftRecipeRows([]);
     }
+    const centralDocForModifiers = isCentralCatalog ? centralDocsById.get(p.id) : undefined;
+    setDraftModifierGroupIds(
+      centralDocForModifiers?.modifierGroupIds ?? p.modifierGroupIds ?? [],
+    );
     setFormError(null);
     setFormOpen(true);
   }
@@ -3012,6 +3079,19 @@ export default function ProductosManagementPage({
       setFormError(t("carta.errorCategoriaTipo"));
       return;
     }
+    const inheritedIdsForSave = selectedCat
+      ? sanitizeModifierGroupIdsForSave(
+          selectedCat.modifierGroupIds ?? [],
+          modifierGroups,
+        )
+      : [];
+    const inheritedIdSetForSave = new Set(inheritedIdsForSave);
+    const sanitizedModifierGroupIds = sanitizeModifierGroupIdsForSave(
+      draftModifierGroupIds,
+      modifierGroups,
+    ).filter((id) => !inheritedIdSetForSave.has(id));
+    const modifierGroupIdsForSave =
+      sanitizedModifierGroupIds.length > 0 ? sanitizedModifierGroupIds : null;
     const categoria = selectedCat ? selectedCat.name : "";
     const categoriaCartaIdPatch = selectedCat ? selectedCat.id : undefined;
     const cartaFamiliaIdPatch = selectedCat?.cartaFamiliaId?.trim() || undefined;
@@ -3053,6 +3133,7 @@ export default function ProductosManagementPage({
           productFamilySelect: draftProductFamilyId,
           productFamilies,
           existingIsActive: existingFlags?.isActive,
+          modifierGroupIds: modifierGroupIdsForSave,
         });
         let savedProductId = editingId?.trim() ?? "";
         if (editingId) {
@@ -3126,6 +3207,11 @@ export default function ProductosManagementPage({
           cartaMenuFamiliaName: menuFamName,
           modifierFamilies,
         });
+        if (sanitizedModifierGroupIds.length > 0) {
+          patched.modifierGroupIds = sanitizedModifierGroupIds;
+        } else {
+          delete patched.modifierGroupIds;
+        }
         return patched;
       });
       persist(next);
@@ -3161,6 +3247,9 @@ export default function ProductosManagementPage({
         cartaMenuFamiliaName: menuFamName,
         modifierFamilies,
       });
+      if (sanitizedModifierGroupIds.length > 0) {
+        nuevo.modifierGroupIds = sanitizedModifierGroupIds;
+      }
       const nextLocal = [...items, nuevo];
       persist(nextLocal);
       setNotice(t("carta.noticeAdded"));
@@ -4104,6 +4193,107 @@ export default function ProductosManagementPage({
                           )}
                         </div>
                       </div>
+                    </ProductFormDrawerSubgroup>
+
+                    <ProductFormDrawerSubgroup
+                      title="Modificadores"
+                      description="Los de categoría se aplican automáticamente; los propios solo afectan a este producto."
+                    >
+                      {activeModifierGroups.length === 0 ? (
+                        <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                          Sin grupos activos.{" "}
+                          <Link
+                            href="/dashboard/configuracion/modificadores"
+                            className="hostly-carta-config-text-link"
+                          >
+                            Crear modificadores
+                          </Link>
+                        </p>
+                      ) : (
+                        <div
+                          className="hostly-carta-config-form-field"
+                          style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}
+                        >
+                          <div className="hostly-carta-config-form-field">
+                            <span className="hostly-carta-config-form-label">
+                              Modificadores heredados de la categoría
+                            </span>
+                            <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                              Estos modificadores vienen de la categoría del producto.
+                              {draftSelectedCategory?.name
+                                ? ` (${draftSelectedCategory.name})`
+                                : ""}
+                            </p>
+                            {inheritedModifierGroups.length === 0 ? (
+                              <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                                {draftSelectedCategory
+                                  ? "La categoría no tiene modificadores asignados."
+                                  : "Asigna una categoría para ver modificadores heredados."}
+                              </p>
+                            ) : (
+                              <div
+                                className="hostly-carta-category-form-drawer__chips"
+                                aria-readonly
+                              >
+                                {inheritedModifierGroups.map((group) => (
+                                  <span
+                                    key={group.id}
+                                    className="hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category is-active"
+                                    aria-disabled="true"
+                                    style={{
+                                      opacity: 0.72,
+                                      cursor: "default",
+                                      pointerEvents: "none",
+                                      filter: "saturate(0.82)",
+                                    }}
+                                  >
+                                    {group.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="hostly-carta-config-form-field">
+                            <span className="hostly-carta-config-form-label">
+                              Modificadores propios del producto
+                            </span>
+                            <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                              Estos modificadores solo se aplican a este producto.
+                            </p>
+                            {ownSelectableModifierGroups.length === 0 ? (
+                              <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
+                                No hay grupos adicionales disponibles fuera de la categoría.
+                              </p>
+                            ) : (
+                              <div className="hostly-carta-category-form-drawer__chips">
+                                {ownSelectableModifierGroups.map((group) => {
+                                  const selected = draftModifierGroupIds.includes(
+                                    group.id,
+                                  );
+                                  return (
+                                    <label
+                                      key={group.id}
+                                      className={`hostly-productos-carta-filter-chip hostly-productos-carta-filter-chip--category${selected ? " is-active" : ""}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={selected}
+                                        disabled={drawerSyncing}
+                                        onChange={() =>
+                                          toggleProductOwnModifierGroup(group.id)
+                                        }
+                                      />
+                                      {group.name}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </ProductFormDrawerSubgroup>
 
                     <ProductFormDrawerSubgroup
