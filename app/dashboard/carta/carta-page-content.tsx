@@ -164,6 +164,10 @@ import {
   resolveProductDefaultCourse,
 } from "@/lib/carta/comanda-line-course";
 import {
+  resolveOperationalLineFieldsForCartLine,
+  resolveOperationalLineFieldsFromProduct,
+} from "@/lib/carta/operational-line-fields-phase1";
+import {
   detectPendingMarchPassAlerts,
   resolvePendingMarchPassMapHint,
   type PendingMarchPassAlert,
@@ -196,9 +200,17 @@ import {
   createStockReversalMovementsForModifierConsumption,
   createStockReversalMovementsForRecipeConsumption,
 } from "@/lib/firestore/stock-movements";
-import { fetchCartaCategorias } from "@/lib/carta-categorias/api-client";
-import type { CartaCategoria } from "@/lib/carta-categorias/types";
+import { fetchCartaCategorias, fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
+import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
 import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
+import { listenOperationStations } from "@/lib/firestore/operation-stations";
+import { listProductionStations } from "@/lib/firestore/production-stations";
+import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
+import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
+import {
+  buildProductResolverParityContextFromProduct,
+  type ProductResolverParityCatalogSources,
+} from "@/lib/productos/product-operational-routing-audit";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
 import {
   buildCartLineDisplayName,
@@ -1198,10 +1210,21 @@ function enrichProductWithStationFields(
   };
 }
 
-function orderLinesToFirestoreItems(lines: CartOrderLine[]) {
+function orderLinesToFirestoreItems(
+  lines: CartOrderLine[],
+  shadowCatalogSources?: ProductResolverParityCatalogSources,
+) {
   return lines.map((line) => {
-    const stationFields = resolveStationFieldsForCartLine(line);
-    const opFields = resolveOperationStationFieldsForCartLine(line);
+    const shadowCatalog = shadowCatalogSources
+      ? buildProductResolverParityContextFromProduct(
+          line.product,
+          shadowCatalogSources,
+        )
+      : undefined;
+    const { stationFields, opFields } = resolveOperationalLineFieldsForCartLine(
+      line,
+      shadowCatalog,
+    );
     const baseUnit = Number(line.product.precio) || 0;
     const quantity = Number(line.quantity) || 0;
     const extras = Array.isArray(line.extras)
@@ -1948,6 +1971,43 @@ export function CartaPageContent({
 
   useEffect(() => {
     const rid = operationalRestaurantId?.trim();
+    if (!rid || !authReady) {
+      setCartaFamilias([]);
+      setProductionStations([]);
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([fetchCartaFamilias(rid), listProductionStations(rid)]).then(
+      ([fams, prodStations]) => {
+        if (cancelled) return;
+        setCartaFamilias(fams);
+        setProductionStations(prodStations);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [operationalRestaurantId, authReady]);
+
+  useEffect(() => {
+    const rid = operationalRestaurantId?.trim();
+    if (!rid || !authReady || !isFirebaseConfigured) {
+      setOperationStations([]);
+      return;
+    }
+    const unsub = listenOperationStations(
+      rid,
+      setOperationStations,
+      (err) => {
+        console.warn("[Hostly TPV] operationStations listener", err);
+        setOperationStations([]);
+      },
+    );
+    return () => unsub();
+  }, [operationalRestaurantId, authReady, isFirebaseConfigured]);
+
+  useEffect(() => {
+    const rid = operationalRestaurantId?.trim();
     if (!rid || !authReady || !isFirebaseConfigured) {
       setModifierGroups([]);
       return;
@@ -2530,9 +2590,34 @@ export function CartaPageContent({
     null,
   );
   const [cartaCategories, setCartaCategories] = useState<CartaCategoria[]>([]);
+  const [cartaFamilias, setCartaFamilias] = useState<CartaFamilia[]>([]);
+  /** Fase 2.0 shadow: fetch único (misma estrategia que Config → Productos). */
+  const [productionStations, setProductionStations] = useState<
+    ProductionStationDocument[]
+  >([]);
+  const [operationStations, setOperationStations] = useState<
+    OperationStationDocument[]
+  >([]);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroupDocument[]>(
     [],
   );
+
+  const operationalShadowCatalogSources = useMemo(
+    (): ProductResolverParityCatalogSources => ({
+      operationStations,
+      productionStations,
+      cartaCategorias: cartaCategories,
+      cartaFamilias,
+    }),
+    [operationStations, productionStations, cartaCategories, cartaFamilias],
+  );
+
+  const serializeOrderLinesToFirestoreItems = useCallback(
+    (lines: CartOrderLine[]) =>
+      orderLinesToFirestoreItems(lines, operationalShadowCatalogSources),
+    [operationalShadowCatalogSources],
+  );
+
   const [modifierModalProduct, setModifierModalProduct] = useState<Product | null>(
     null,
   );
@@ -2817,7 +2902,7 @@ export function CartaPageContent({
       try {
         const tableLabel =
           tablesList.find((t) => t.id === tid)?.name?.trim() || tid;
-        const items = orderLinesToFirestoreItems(lines) as Record<
+        const items = serializeOrderLinesToFirestoreItems(lines) as Record<
           string,
           unknown
         >[];
@@ -5149,8 +5234,14 @@ export function CartaPageContent({
         }
 
         const pendingStatus: OrderLineStatus = "pending";
-        const stationFields = resolveStationFieldsFromProduct(product);
-        const opFields = resolveOperationStationFieldsFromProduct(product);
+        const shadowCatalog = buildProductResolverParityContextFromProduct(
+          product,
+          operationalShadowCatalogSources,
+        );
+        const { stationFields, opFields } = resolveOperationalLineFieldsFromProduct(
+          product,
+          shadowCatalog,
+        );
         const selectedModifiers = modifierPayload?.selectedModifiers;
         const modifierTotal = modifierPayload?.modifierTotal;
         const displayName = modifierPayload?.displayName?.trim();
@@ -5180,7 +5271,7 @@ export function CartaPageContent({
         return [...prev, newLine];
       });
     },
-    [updateCurrentTableOrder],
+    [updateCurrentTableOrder, operationalShadowCatalogSources],
   );
 
   const handleProductAddRequest = useCallback(
@@ -5241,7 +5332,7 @@ export function CartaPageContent({
       });
       if (orderIdFromUrl && isFirebaseConfigured) {
         try {
-          const payloadItems = orderLinesToFirestoreItems(next);
+          const payloadItems = serializeOrderLinesToFirestoreItems(next);
           await dbgUpdateDoc(
             doc(db, "orders", orderIdFromUrl),
             {
@@ -5289,7 +5380,7 @@ export function CartaPageContent({
     });
     if (!didSend || !orderIdFromUrl || !isFirebaseConfigured) return;
     try {
-      const payloadItems = orderLinesToFirestoreItems(next);
+      const payloadItems = serializeOrderLinesToFirestoreItems(next);
       await dbgUpdateDoc(
         doc(db, "orders", orderIdFromUrl),
         {
@@ -5342,7 +5433,7 @@ export function CartaPageContent({
           await dbgUpdateDoc(
             doc(db, "orders", orderDocId),
             {
-            items: orderLinesToFirestoreItems(next),
+            items: serializeOrderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
           },
             {
@@ -5436,7 +5527,7 @@ export function CartaPageContent({
         await dbgUpdateDoc(
           doc(db, "orders", orderDocId),
           {
-            items: orderLinesToFirestoreItems(next),
+            items: serializeOrderLinesToFirestoreItems(next),
             total: billableTotal,
             cancelledLineIds: arrayUnion(line.id),
             updatedAt: serverTimestamp(),
@@ -5715,7 +5806,7 @@ export function CartaPageContent({
         await dbgUpdateDoc(
           doc(db, "orders", orderIdFromUrl),
           {
-            items: orderLinesToFirestoreItems(next),
+            items: serializeOrderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
             ...(shouldCancelPersisted
               ? { cancelledLineIds: arrayUnion(itemId) }
@@ -5863,7 +5954,7 @@ export function CartaPageContent({
           await dbgUpdateDoc(
             doc(db, "orders", orderDocId),
             {
-              items: orderLinesToFirestoreItems(next),
+              items: serializeOrderLinesToFirestoreItems(next),
               updatedAt: serverTimestamp(),
               ...(shouldCancelPersisted
                 ? { cancelledLineIds: arrayUnion(selectedLine.id) }
@@ -5957,7 +6048,7 @@ export function CartaPageContent({
           await dbgUpdateDoc(
             doc(db, "orders", orderId),
             {
-            items: orderLinesToFirestoreItems(next),
+            items: serializeOrderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
           },
             {
@@ -6008,7 +6099,7 @@ export function CartaPageContent({
           await dbgUpdateDoc(
             doc(db, "orders", orderIdFromUrl),
             {
-            items: orderLinesToFirestoreItems(next),
+            items: serializeOrderLinesToFirestoreItems(next),
             updatedAt: serverTimestamp(),
           },
             {
@@ -7781,7 +7872,7 @@ export function CartaPageContent({
 
         updateCurrentTableOrder(() => nextOrder);
 
-        const items = orderLinesToFirestoreItems(nextOrder);
+        const items = serializeOrderLinesToFirestoreItems(nextOrder);
         const grandTotal = sumCartOrderLinesTotal(nextOrder);
 
         const draftOrderId =

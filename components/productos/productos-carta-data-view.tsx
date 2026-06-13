@@ -15,15 +15,24 @@ import {
   HostlyStatusBadge,
 } from "@/components/ui/hostly/data-table";
 import type { Locale, TranslateFn } from "@/lib/i18n";
+import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
+import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
+import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
 import type { EscandalloMetaMap } from "@/lib/platos-escandallo-bridge";
+import type {
+  ProductResolverParitySummary,
+  ResolverParityFilterId,
+} from "@/lib/productos/product-operational-routing-audit";
 import type { PlatoCarta, TipoProductoVenta } from "@/lib/platos-local";
 import {
   getPublicationFlags,
   ProductosCartaNameThumb,
   ProductosCartaOperMicrochip,
+  ProductosCartaRoutingAuditCell,
   ProductosCartaReorderControls,
   ProductosCartaRowActions,
   PRODUCTOS_CARTA_LEGACY_BLOCKED,
+  type OpenProductEditFn,
   formatProductosCartaSectionCellDisplay,
   productOperationalFieldsFromPlato,
 } from "./productos-table-cells";
@@ -153,7 +162,7 @@ export type ProductosCartaDataViewProps = {
   t: TranslateFn;
   toggleRowSelected: (id: string) => void;
   toggleSelectAllDisplayed: () => void;
-  openEdit: (p: PlatoCarta) => void;
+  openEdit: OpenProductEditFn;
   toggleActivo: (p: PlatoCarta) => void;
   activateProducto: (p: PlatoCarta) => void;
   goToEscandallo: (p: PlatoCarta) => void;
@@ -184,7 +193,170 @@ export type ProductosCartaDataViewProps = {
   reorderFocusLayout?: boolean;
   /** Etiqueta de categoría activa (concreta); vacío en vista general o sin categorizar. */
   activeCategoryLabel?: string;
+  /** Estaciones operativas del tenant (auditoría de coherencia routing). */
+  operationStations?: readonly OperationStationDocument[];
+  /** Estaciones de producción (paridad resolver; fetch único, sin listener). */
+  productionStations?: readonly ProductionStationDocument[];
+  /** Categorías de carta (resolver familia menú por categoría). */
+  cartaCategorias?: readonly CartaCategoria[];
+  /** Familias de menú (`cartaFamilias`; estación producción heredada). */
+  cartaFamilias?: readonly CartaFamilia[];
 };
+
+type ResolverParitySummaryPillTone = "neutral" | "ok" | "warn" | "danger";
+
+function ResolverParitySummaryPill({
+  label,
+  value,
+  tone = "neutral",
+  filterId,
+  activeFilter,
+  onFilterChange,
+}: {
+  label: string;
+  value: number;
+  tone?: ResolverParitySummaryPillTone;
+  filterId: ResolverParityFilterId;
+  activeFilter: ResolverParityFilterId;
+  onFilterChange: (filter: ResolverParityFilterId) => void;
+}) {
+  const isActive = activeFilter === filterId;
+  return (
+    <button
+      type="button"
+      className={[
+        "hostly-productos-resolver-parity-pill",
+        "hostly-productos-resolver-parity-pill--clickable",
+        tone !== "neutral" ? `hostly-productos-resolver-parity-pill--${tone}` : "",
+        isActive ? "hostly-productos-resolver-parity-pill--active" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      aria-pressed={isActive}
+      onClick={() => onFilterChange(filterId)}
+    >
+      <span className="hostly-productos-resolver-parity-pill__label">{label}</span>
+      <span className="hostly-productos-resolver-parity-pill__value">{value}</span>
+    </button>
+  );
+}
+
+function resolverParityFilterStatusKey(
+  filter: ResolverParityFilterId,
+): string | null {
+  switch (filter) {
+    case "all":
+      return null;
+    case "ok":
+      return "productos.resolverParityFilterStatusOk";
+    case "divergences":
+      return "productos.resolverParityFilterStatusDivergences";
+    case "missingStation":
+      return "productos.resolverParityFilterStatusMissingStation";
+    case "heuristic":
+      return "productos.resolverParityFilterStatusHeuristic";
+    case "missingOperationStation":
+      return "productos.resolverParityFilterStatusNoOpStation";
+    default:
+      return null;
+  }
+}
+
+/** Resumen compacto de paridad legacy vs resolver (solo lectura, Config → Carta → Productos). */
+export function ProductosResolverParitySummaryStrip({
+  summary,
+  loading,
+  activeFilter,
+  onFilterChange,
+  filteredCount,
+  t,
+}: {
+  summary: ProductResolverParitySummary;
+  loading?: boolean;
+  activeFilter: ResolverParityFilterId;
+  onFilterChange: (filter: ResolverParityFilterId) => void;
+  filteredCount: number;
+  t: TranslateFn;
+}) {
+  if (loading) {
+    return (
+      <div className="hostly-productos-resolver-parity-strip" role="status">
+        <span className="hostly-productos-resolver-parity-strip__loading">
+          {t("productos.resolverParitySummaryLoading")}
+        </span>
+      </div>
+    );
+  }
+
+  const missingStation = summary.byIssue.FALTA_STATION;
+  const heuristic = summary.byIssue.FALLBACK_HEURISTICO;
+  const noOpStation = summary.byIssue.SIN_OPERATION_STATION;
+  const statusKey = resolverParityFilterStatusKey(activeFilter);
+
+  return (
+    <div
+      className="hostly-productos-resolver-parity-strip"
+      role="region"
+      aria-label={t("productos.resolverParitySummaryAria")}
+    >
+      <span className="hostly-productos-resolver-parity-strip__title">
+        {t("productos.resolverParitySummaryTitle")}
+      </span>
+      <ResolverParitySummaryPill
+        label={t("productos.resolverParitySummaryTotal")}
+        value={summary.total}
+        filterId="all"
+        activeFilter={activeFilter}
+        onFilterChange={onFilterChange}
+      />
+      <ResolverParitySummaryPill
+        label={t("productos.resolverParitySummaryOk")}
+        value={summary.ok}
+        tone="ok"
+        filterId="ok"
+        activeFilter={activeFilter}
+        onFilterChange={onFilterChange}
+      />
+      <ResolverParitySummaryPill
+        label={t("productos.resolverParitySummaryDivergence")}
+        value={summary.withDivergence}
+        tone={summary.withDivergence > 0 ? "danger" : "neutral"}
+        filterId="divergences"
+        activeFilter={activeFilter}
+        onFilterChange={onFilterChange}
+      />
+      <ResolverParitySummaryPill
+        label={t("productos.resolverParitySummaryMissingStation")}
+        value={missingStation}
+        tone={missingStation > 0 ? "warn" : "neutral"}
+        filterId="missingStation"
+        activeFilter={activeFilter}
+        onFilterChange={onFilterChange}
+      />
+      <ResolverParitySummaryPill
+        label={t("productos.resolverParitySummaryHeuristic")}
+        value={heuristic}
+        tone={heuristic > 0 ? "warn" : "neutral"}
+        filterId="heuristic"
+        activeFilter={activeFilter}
+        onFilterChange={onFilterChange}
+      />
+      <ResolverParitySummaryPill
+        label={t("productos.resolverParitySummaryNoOpStation")}
+        value={noOpStation}
+        tone={noOpStation > 0 ? "warn" : "neutral"}
+        filterId="missingOperationStation"
+        activeFilter={activeFilter}
+        onFilterChange={onFilterChange}
+      />
+      {statusKey ? (
+        <span className="hostly-productos-resolver-parity-strip__status" role="status">
+          {t(statusKey, { count: filteredCount })}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 function SelectionCheckbox({
   checked,
@@ -214,7 +386,29 @@ function SelectionCheckbox({
   );
 }
 
-function ProductPrimaryCell({ p, showDragHandle }: { p: PlatoCarta; showDragHandle?: boolean }) {
+function ProductPrimaryCell({
+  p,
+  showDragHandle,
+  t,
+  operationStations,
+  productionStations,
+  cartaCategorias,
+  cartaFamilias,
+  onCorrect,
+  correctDisabled,
+  correctDisabledTitle,
+}: {
+  p: PlatoCarta;
+  showDragHandle?: boolean;
+  t: TranslateFn;
+  operationStations?: readonly OperationStationDocument[];
+  productionStations?: readonly ProductionStationDocument[];
+  cartaCategorias?: readonly CartaCategoria[];
+  cartaFamilias?: readonly CartaFamilia[];
+  onCorrect?: OpenProductEditFn;
+  correctDisabled?: boolean;
+  correctDisabledTitle?: string;
+}) {
   const ops = productOperationalFieldsFromPlato(p);
   return (
     <div className="hostly-data-table-primary hostly-data-table-primary--with-thumb hostly-productos-carta-name-cell">
@@ -230,10 +424,23 @@ function ProductPrimaryCell({ p, showDragHandle }: { p: PlatoCarta; showDragHand
           </HostlyStatusBadge>
         ) : null}
         <span
-          className="hostly-data-table-primary__meta hostly-data-table-col--tablet-only"
+          className="hostly-data-table-primary__meta hostly-data-table-col--tablet-only hostly-productos-carta-tablet-meta"
           title={ops.tabletMeta}
         >
-          {ops.tabletMeta}
+          <span className="hostly-productos-carta-tablet-meta__text">{ops.tabletMeta}</span>
+          <ProductosCartaRoutingAuditCell
+            p={p}
+            t={t}
+            operationStations={operationStations}
+            productionStations={productionStations}
+            cartaCategorias={cartaCategorias}
+            cartaFamilias={cartaFamilias}
+            showRecommendationHint
+            onCorrect={onCorrect}
+            correctDisabled={correctDisabled}
+            correctDisabledTitle={correctDisabledTitle}
+            className="hostly-productos-carta-tablet-meta__routing"
+          />
         </span>
       </div>
     </div>
@@ -280,6 +487,9 @@ function renderProductosCartaHeaderCells(args: {
       <HostlyDataCell align="center" col="destino">
         <span title={t("productos.colDestinoTitle")}>{t("productos.colDestino")}</span>
       </HostlyDataCell>
+      <HostlyDataCell align="center" col="routing">
+        <span title={t("productos.colRoutingAuditTitle")}>{t("productos.colRoutingAudit")}</span>
+      </HostlyDataCell>
       <HostlyDataCell align="end" col="price">
         {t("carta.colPrecio")}
       </HostlyDataCell>
@@ -307,7 +517,7 @@ function renderProductRowCells(args: {
   selected: boolean;
   isLegacyReadOnly: boolean;
   toggleRowSelected: (id: string) => void;
-  openEdit: (p: PlatoCarta) => void;
+  openEdit: OpenProductEditFn;
   toggleActivo: (p: PlatoCarta) => void;
   activateProducto: (p: PlatoCarta) => void;
   goToEscandallo: (p: PlatoCarta) => void;
@@ -320,6 +530,10 @@ function renderProductRowCells(args: {
   onMoveProductDown?: (productId: string) => void;
   showDragHandle?: boolean;
   activeCategoryLabel?: string;
+  operationStations?: readonly OperationStationDocument[];
+  productionStations?: readonly ProductionStationDocument[];
+  cartaCategorias?: readonly CartaCategoria[];
+  cartaFamilias?: readonly CartaFamilia[];
 }) {
   const {
     p,
@@ -343,6 +557,10 @@ function renderProductRowCells(args: {
     onMoveProductDown,
     showDragHandle,
     activeCategoryLabel,
+    operationStations,
+    productionStations,
+    cartaCategorias,
+    cartaFamilias,
   } = args;
   const tiene = tieneEscandalloForPlato(p, meta);
   const busyEsc = escNavId === p.id;
@@ -366,7 +584,18 @@ function renderProductRowCells(args: {
         </HostlyDataCell>
       )}
       <HostlyDataCell col="product">
-        <ProductPrimaryCell p={p} showDragHandle={showDragHandle} />
+        <ProductPrimaryCell
+          p={p}
+          showDragHandle={showDragHandle}
+          t={t}
+          operationStations={operationStations}
+          productionStations={productionStations}
+          cartaCategorias={cartaCategorias}
+          cartaFamilias={cartaFamilias}
+          onCorrect={openEdit}
+          correctDisabled={isLegacyReadOnly}
+          correctDisabledTitle={isLegacyReadOnly ? PRODUCTOS_CARTA_LEGACY_BLOCKED : undefined}
+        />
       </HostlyDataCell>
       <HostlyDataCell col="tipo">
         <HostlyStatusBadge
@@ -410,6 +639,19 @@ function renderProductRowCells(args: {
           label={ops.destinationShort}
           title={ops.destinationFull}
           className="hostly-data-table-microchip--dest"
+        />
+      </HostlyDataCell>
+      <HostlyDataCell align="center" col="routing">
+        <ProductosCartaRoutingAuditCell
+          p={p}
+          t={t}
+          operationStations={operationStations}
+          productionStations={productionStations}
+          cartaCategorias={cartaCategorias}
+          cartaFamilias={cartaFamilias}
+          onCorrect={openEdit}
+          correctDisabled={isLegacyReadOnly}
+          correctDisabledTitle={isLegacyReadOnly ? PRODUCTOS_CARTA_LEGACY_BLOCKED : undefined}
         />
       </HostlyDataCell>
       <HostlyDataCell align="end" col="price">
@@ -515,6 +757,24 @@ function MobileProductItem(
             ·
           </span>
           <span title={ops.tabletMeta}>{ops.tabletMeta}</span>
+          <span className="hostly-mobile-list-item__dot" aria-hidden>
+            ·
+          </span>
+          <ProductosCartaRoutingAuditCell
+            p={p}
+            t={t}
+            operationStations={props.operationStations}
+            productionStations={props.productionStations}
+            cartaCategorias={props.cartaCategorias}
+            cartaFamilias={props.cartaFamilias}
+            showRecommendationHint
+            onCorrect={props.openEdit}
+            correctDisabled={props.isLegacyReadOnly}
+            correctDisabledTitle={
+              props.isLegacyReadOnly ? PRODUCTOS_CARTA_LEGACY_BLOCKED : undefined
+            }
+            className="hostly-mobile-list-item__routing-audit"
+          />
         </>
       }
       aside={

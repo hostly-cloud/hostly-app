@@ -3871,6 +3871,7 @@ body {
 .hostly-data-table--reorder-mode .hostly-data-table-col--familia,
 .hostly-data-table--reorder-mode .hostly-data-table-col--pase,
 .hostly-data-table--reorder-mode .hostly-data-table-col--destino,
+.hostly-data-table--reorder-mode .hostly-data-table-col--routing,
 .hostly-data-table--reorder-mode .hostly-data-table-col--carta,
 .hostly-data-table--reorder-mode .hostly-data-table-col--esc {
   display: none;
@@ -8155,6 +8156,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   --hostly-dt-dense-meta-sm: 54px;
   --hostly-dt-dense-meta-family: minmax(58px, 78px);
   --hostly-dt-dense-meta-oper: 38px;
+  --hostly-dt-dense-meta-routing: minmax(72px, 88px);
   --hostly-dt-dense-price: 86px;
   --hostly-dt-dense-status: 72px;
   --hostly-dt-dense-actions: 114px;
@@ -8166,6 +8168,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
     var(--hostly-dt-dense-meta-family)
     var(--hostly-dt-dense-meta-oper)
     var(--hostly-dt-dense-meta-oper)
+    var(--hostly-dt-dense-meta-routing)
     var(--hostly-dt-dense-price)
     var(--hostly-dt-dense-status)
     var(--hostly-dt-dense-status)
@@ -8211,20 +8214,27 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   overflow: hidden;
 }
 
-.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--price {
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--routing {
   grid-column: 8;
+  min-width: 0;
+  max-width: var(--hostly-dt-dense-meta-routing);
+  overflow: hidden;
 }
 
-.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--carta {
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--price {
   grid-column: 9;
 }
 
-.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--esc {
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--carta {
   grid-column: 10;
 }
 
-.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--actions {
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--esc {
   grid-column: 11;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--actions {
+  grid-column: 12;
 }
 
 .hostly-data-table-microchip--oper.hostly-data-table-microchip {
@@ -8238,6 +8248,43 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-microchip--oper.hostly-data-table-microchip {
   padding: 1px 5px;
+}
+
+.hostly-data-table-microchip--routing-audit.hostly-data-table-microchip {
+  min-width: 0;
+  max-width: 100%;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.hostly-data-table-microchip--routing-audit-ok.hostly-data-table-microchip {
+  background: rgba(59, 130, 246, 0.14) !important;
+  color: #1d4ed8 !important;
+  border: 1px solid rgba(59, 130, 246, 0.28) !important;
+}
+
+.hostly-productos-carta-tablet-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.hostly-productos-carta-tablet-meta__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hostly-mobile-list-item__routing-audit.hostly-data-table-microchip {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-start: 2px;
 }
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--familia .hostly-data-table-secondary {
@@ -8268,7 +8315,8 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--categoria,
   .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--familia,
   .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--pase,
-  .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--destino {
+  .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--destino,
+  .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--routing {
     display: none;
   }
 

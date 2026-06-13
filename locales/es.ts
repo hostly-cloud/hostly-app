@@ -199,6 +199,91 @@ export const es: MessageTree = {
     colPaseTitle: "Pase del servicio: entrante, primero, segundo o postre.",
     colDestino: "Dest.",
     colDestinoTitle: "Dónde se prepara el pedido: cocina, barra o coctelería.",
+    colRoutingAudit: "Routing",
+    colRoutingAuditTitle:
+      "Coherencia operativa del destino KDS según station, estación operativa y heurísticas.",
+    routingAuditOk: "✓ Correcto",
+    routingAuditOkTitle:
+      "Routing coherente. El KDS enviaría a {{destination}} con los datos actuales.",
+    routingAuditNoDestination: "⚠ Sin destino",
+    routingAuditNoDestinationTitle:
+      "Sin station, estación operativa ni señales de categoría. El KDS usaría cocina por defecto.",
+    routingAuditLegacy: "⚠ Legacy",
+    routingAuditLegacyTitle:
+      "Tiene station/preparationArea pero falta estación operativa (operationStationId). KDS iría a {{destination}}.",
+    routingAuditIncomplete: "⚠ Incompleto",
+    routingAuditIncompleteTitle:
+      "Estación operativa asignada sin station/preparationArea. El KDS ignorará operationStationId y usaría heurística → {{destination}}.",
+    routingAuditConflict: "⚠ Conflicto",
+    routingAuditConflictTitle:
+      "station/preparationArea y estación operativa apuntan a buckets distintos. Gana station → {{destination}} en KDS.",
+    routingAuditHeuristic: "⚠ Heurística",
+    routingAuditHeuristicTitle:
+      "Sin station/preparationArea; el KDS decidiría por categoría o nombre → {{destination}}.",
+    resolverParityOkTitle:
+      "Paridad resolver: coincide con legacy (resolveEffectiveProductionStation).",
+    resolverParityBucketTitle:
+      "Paridad resolver: bucket distinto (legacy {{legacyDestination}}/{{legacyBucket}} vs resolver {{resolverDestination}}/{{resolverBucket}}, source {{resolverSource}}).",
+    resolverParityStationTitle:
+      "Paridad resolver: station distinta (legacy vs resolver {{resolverSource}}).",
+    resolverParityPrepAreaTitle:
+      "Paridad resolver: preparationArea distinta (legacy vs resolver {{resolverSource}}).",
+    resolverParityMissingStationTitle:
+      "Paridad resolver: producto sin station/preparationArea en legacy.",
+    resolverParityHeuristicTitle:
+      "Paridad resolver: legacy depende de heurística KDS hasta activar catálogos.",
+    resolverParityNoOpStationTitle:
+      "Paridad resolver: sin operationStationId en producto.",
+    resolverParityRecommendLabel: "Acción recomendada",
+    resolverParityRecommendOkTitle: "Routing coherente",
+    resolverParityRecommendOkDescription:
+      "El producto está alineado entre legacy y resolver. No requiere cambios.",
+    resolverParityRecommendMissingStationTitle: "Falta destino de producción",
+    resolverParityRecommendMissingStationDescription:
+      "Asigna una estación o destino de producción al producto.",
+    resolverParityRecommendHeuristicTitle: "Depende de heurística",
+    resolverParityRecommendHeuristicDescription:
+      "Este producto se enruta por nombre o categoría. Conviene asignar estación explícita.",
+    resolverParityRecommendNoOpStationTitle: "Sin estación operativa",
+    resolverParityRecommendNoOpStationDescription:
+      "Asigna una estación operativa para mejorar filtros e impresión.",
+    resolverParityRecommendBucketTitle: "Destino distinto",
+    resolverParityRecommendBucketDescription:
+      "Legacy y resolver no coinciden. Revisa estación, familia de menú y estación de producción.",
+    resolverParityRecommendStationTitle: "Estación distinta",
+    resolverParityRecommendStationDescription:
+      "El campo station del producto no coincide con el resolver. Revisa destino y familia de menú.",
+    resolverParityRecommendPrepAreaTitle: "Área de preparación distinta",
+    resolverParityRecommendPrepAreaDescription:
+      "El preparationArea no coincide con el resolver. Revisa destino y familia de menú.",
+    routingCorrectLabel: "Corregir",
+    routingCorrectTitle: "Abrir editor del producto para corregir routing",
+    routingCorrectAria: "Corregir routing de {{name}}",
+    routingEditFocusHint:
+      "Revisa el destino de producción, la estación operativa y el pase si aplica. También comprueba la familia de menú y la categoría.",
+    resolverParityCatalogHint:
+      "Catálogos reales: {{opCount}} est. operativas, {{prodCount}} est. producción, familia menú vinculada: {{familyLinked}}.",
+    resolverParityCatalogEmpty:
+      "Paridad resolver: sin catálogos de estaciones cargados (solo heurística).",
+    resolverParitySummaryTitle: "Paridad routing",
+    resolverParitySummaryAria: "Resumen de paridad legacy vs resolver de routing operativo",
+    resolverParitySummaryLoading: "Auditoría cargando catálogos…",
+    resolverParitySummaryTotal: "Total",
+    resolverParitySummaryOk: "OK",
+    resolverParitySummaryDivergence: "Divergencias",
+    resolverParitySummaryMissingStation: "Sin station",
+    resolverParitySummaryHeuristic: "Heurística",
+    resolverParitySummaryNoOpStation: "Sin est. op.",
+    resolverParityFilterEmpty:
+      "Ningún producto coincide con este filtro de paridad. Pulsa Total para ver todos.",
+    resolverParityFilterStatusOk: "Mostrando {{count}} productos OK",
+    resolverParityFilterStatusDivergences: "Mostrando {{count}} productos con divergencias",
+    resolverParityFilterStatusMissingStation:
+      "Mostrando {{count}} productos sin station/preparationArea",
+    resolverParityFilterStatusHeuristic:
+      "Mostrando {{count}} productos con fallback heurístico",
+    resolverParityFilterStatusNoOpStation:
+      "Mostrando {{count}} productos sin estación operativa",
     colEscandallo: "Escandallo",
     pubEnCarta: "En carta",
     pubFueraCarta: "Fuera de carta",

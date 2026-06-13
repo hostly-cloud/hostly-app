@@ -7,10 +7,58 @@ import {
   type ProductCatalogCourse,
 } from "@/lib/carta/menu-course";
 import { resolveKdsDestination, type KdsDestination } from "@/lib/kds/kds-destination";
+import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
+import { presentProductOperationalRoutingAudit, presentProductResolverParityAudit, getProductResolverParityRecommendation } from "@/lib/productos/product-operational-routing-audit-labels";
+import {
+  auditProductOperationalRouting,
+  auditProductResolverParity,
+  buildProductResolverParityContextForPlato,
+  resolveCartaFamiliaParityInputForPlato,
+  type ProductResolverParityAudit,
+  type ProductResolverParityCatalogSources,
+  type ProductResolverParityIssue,
+} from "@/lib/productos/product-operational-routing-audit";
+import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
+import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
 import type { PlatoCarta } from "@/lib/platos-local";
 import type { TranslateFn } from "@/lib/i18n";
 
+export type ProductEditFocus = "routing";
+
+export type ProductEditOptions = {
+  focus?: ProductEditFocus;
+};
+
+export type OpenProductEditFn = (p: PlatoCarta, options?: ProductEditOptions) => void;
+
 export const PRODUCTOS_CARTA_LEGACY_BLOCKED = "Migra el catálogo para editar productos.";
+
+const CORRECTABLE_ROUTING_PARITY_ISSUES = new Set<ProductResolverParityIssue>([
+  "DIVERGENCIA_BUCKET",
+  "DIVERGENCIA_STATION",
+  "DIVERGENCIA_PREPARATION_AREA",
+  "FALTA_STATION",
+  "FALLBACK_HEURISTICO",
+  "SIN_OPERATION_STATION",
+]);
+
+export function productHasCorrectableRoutingParityIssue(
+  parity: ProductResolverParityAudit,
+): boolean {
+  return parity.issues.some(
+    (issue) => issue !== "OK" && CORRECTABLE_ROUTING_PARITY_ISSUES.has(issue),
+  );
+}
+
+function computeProductResolverParityAudit(
+  p: PlatoCarta,
+  sources: ProductResolverParityCatalogSources,
+): ProductResolverParityAudit {
+  return auditProductResolverParity(
+    p,
+    buildProductResolverParityContextForPlato(p, sources),
+  );
+}
 
 /** URL de imagen operativa del producto (catálogo central → `fotoUrl`). */
 export function productImageUrlFromPlato(p: PlatoCarta): string | undefined {
@@ -194,6 +242,208 @@ export function ProductosCartaOperMicrochip({
     >
       {label}
     </HostlyStatusBadge>
+  );
+}
+
+export function ProductosCartaRoutingAuditChip({
+  p,
+  t,
+  operationStations,
+  productionStations,
+  cartaCategorias,
+  cartaFamilias,
+  className,
+  showRecommendationHint,
+  parityAudit,
+}: {
+  p: PlatoCarta;
+  t: TranslateFn;
+  operationStations?: readonly OperationStationDocument[];
+  productionStations?: readonly ProductionStationDocument[];
+  cartaCategorias?: readonly CartaCategoria[];
+  cartaFamilias?: readonly CartaFamilia[];
+  className?: string;
+  /** Muestra título de acción recomendada junto al chip (tablet/mobile). */
+  showRecommendationHint?: boolean;
+  /** Evita recalcular paridad si ya se obtuvo en la celda padre. */
+  parityAudit?: ProductResolverParityAudit;
+}) {
+  const paritySources: ProductResolverParityCatalogSources = {
+    operationStations,
+    productionStations,
+    cartaCategorias,
+    cartaFamilias,
+  };
+  const audit = auditProductOperationalRouting(p, operationStations);
+  const parity = parityAudit ?? computeProductResolverParityAudit(p, paritySources);
+  const { shortLabel, title, tone } = presentProductOperationalRoutingAudit(audit, t);
+  const catalogHint =
+    (operationStations?.length ?? 0) > 0 ||
+    (productionStations?.length ?? 0) > 0 ||
+    (cartaCategorias?.length ?? 0) > 0
+      ? t("productos.resolverParityCatalogHint", {
+          opCount: operationStations?.length ?? 0,
+          prodCount: productionStations?.length ?? 0,
+          familyLinked: resolveCartaFamiliaParityInputForPlato(
+            p,
+            cartaCategorias ?? [],
+            cartaFamilias ?? [],
+          )
+            ? t("onboarding.yes")
+            : t("onboarding.no"),
+        })
+      : t("productos.resolverParityCatalogEmpty");
+  const fullTitle = presentProductResolverParityAudit(
+    parity,
+    t,
+    title,
+    catalogHint,
+  );
+  const recommendation = getProductResolverParityRecommendation(parity, t);
+  const hostlyTone =
+    tone === "ok" ? "success" : tone === "danger" ? "danger" : ("warning" as const);
+  const hintToneColor =
+    recommendation.severity === "danger"
+      ? "#b91c1c"
+      : recommendation.severity === "warning"
+        ? "#b45309"
+        : recommendation.severity === "info"
+          ? "#0369a1"
+          : "#64748b";
+  return (
+    <span
+      className="hostly-productos-routing-audit-chip-wrap"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        flexWrap: "wrap",
+        minWidth: 0,
+        maxWidth: "100%",
+      }}
+    >
+      <HostlyStatusBadge
+        tone={hostlyTone}
+        dot={false}
+        title={fullTitle}
+        aria-label={fullTitle}
+        className={[
+          "hostly-data-table-microchip",
+          "hostly-data-table-microchip--routing-audit",
+          tone === "ok" ? "hostly-data-table-microchip--routing-audit-ok" : "",
+          className,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {shortLabel}
+      </HostlyStatusBadge>
+      {showRecommendationHint && recommendation.severity !== "ok" ? (
+        <span
+          className="hostly-productos-routing-recommendation-hint"
+          title={recommendation.description}
+          style={{
+            color: hintToneColor,
+            fontSize: 10,
+            fontWeight: 600,
+            lineHeight: 1.2,
+            maxWidth: 160,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {recommendation.title}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** Chip routing + acceso compacto a edición cuando hay issue corregible. */
+export function ProductosCartaRoutingAuditCell({
+  p,
+  t,
+  operationStations,
+  productionStations,
+  cartaCategorias,
+  cartaFamilias,
+  className,
+  showRecommendationHint,
+  onCorrect,
+  correctDisabled,
+  correctDisabledTitle,
+}: {
+  p: PlatoCarta;
+  t: TranslateFn;
+  operationStations?: readonly OperationStationDocument[];
+  productionStations?: readonly ProductionStationDocument[];
+  cartaCategorias?: readonly CartaCategoria[];
+  cartaFamilias?: readonly CartaFamilia[];
+  className?: string;
+  showRecommendationHint?: boolean;
+  onCorrect?: OpenProductEditFn;
+  correctDisabled?: boolean;
+  correctDisabledTitle?: string;
+}) {
+  const paritySources: ProductResolverParityCatalogSources = {
+    operationStations,
+    productionStations,
+    cartaCategorias,
+    cartaFamilias,
+  };
+  const parity = computeProductResolverParityAudit(p, paritySources);
+  const showCorrect =
+    Boolean(onCorrect) &&
+    productHasCorrectableRoutingParityIssue(parity) &&
+    !correctDisabled;
+
+  return (
+    <span
+      className="hostly-productos-routing-audit-cell"
+      style={{
+        display: "inline-flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 3,
+        minWidth: 0,
+        maxWidth: "100%",
+      }}
+    >
+      <ProductosCartaRoutingAuditChip
+        p={p}
+        t={t}
+        operationStations={operationStations}
+        productionStations={productionStations}
+        cartaCategorias={cartaCategorias}
+        cartaFamilias={cartaFamilias}
+        className={className}
+        showRecommendationHint={showRecommendationHint}
+        parityAudit={parity}
+      />
+      {showCorrect ? (
+        <button
+          type="button"
+          className="hostly-productos-routing-correct-btn"
+          title={t("productos.routingCorrectTitle")}
+          aria-label={t("productos.routingCorrectAria", { name: p.nombre })}
+          onClick={(event) => {
+            event.stopPropagation();
+            onCorrect?.(p, { focus: "routing" });
+          }}
+        >
+          {t("productos.routingCorrectLabel")}
+        </button>
+      ) : correctDisabled && productHasCorrectableRoutingParityIssue(parity) ? (
+        <span
+          className="hostly-productos-routing-correct-btn hostly-productos-routing-correct-btn--disabled"
+          title={correctDisabledTitle ?? PRODUCTOS_CARTA_LEGACY_BLOCKED}
+          aria-hidden
+        >
+          {t("productos.routingCorrectLabel")}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

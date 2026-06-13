@@ -110,7 +110,7 @@ function resolveLegacyBucket(
 }
 
 /** Normaliza `station` / `preparationArea` legacy a bucket KDS. */
-function mapLegacyStationToBucket(
+export function legacyBucketFromStationAndPreparationArea(
   station?: string | null,
   preparationArea?: string | null,
 ): LegacyBucket {
@@ -240,7 +240,7 @@ function resolveFromLegacyStationFields(
   preparationArea: string | null | undefined,
   productionStations: readonly ProductionStationDocument[],
 ): ResolvedProductionStation | null {
-  const bucket = mapLegacyStationToBucket(station, preparationArea);
+  const bucket = legacyBucketFromStationAndPreparationArea(station, preparationArea);
   if (bucket === "none") return null;
 
   const matched = pickProductionStationByLegacyBucket(productionStations, bucket);

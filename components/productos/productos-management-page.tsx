@@ -16,8 +16,12 @@ import {
 } from "@/lib/carta/category-product-family";
 import { ConfigCartaWorkbench, ConfigBtnPrimary, ConfigBtnSecondary, ConfigCard } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
 import ModulePageShell from "@/components/module-page-shell";
-import { ProductosCartaDataView } from "@/components/productos/productos-carta-data-view";
-import { ProductosCartaNameThumb } from "@/components/productos/productos-table-cells";
+import { ProductosCartaDataView, ProductosResolverParitySummaryStrip } from "@/components/productos/productos-carta-data-view";
+import {
+  ProductosCartaNameThumb,
+  type ProductEditFocus,
+  type ProductEditOptions,
+} from "@/components/productos/productos-table-cells";
 import {
   ConfigCartaCompactFilterRow,
   ConfigCartaStatusFilterSelect,
@@ -78,11 +82,19 @@ import {
   PRODUCT_FORM_ACTIVE_NO_FAMILY_WARNING,
 } from "@/lib/carta/product-form-preventive-validation";
 import { buildProductMenuFamilyInheritedHintView } from "@/lib/productos/product-menu-family-inherited-hint";
+import {
+  auditCatalogResolverParityFromSources,
+  filterProductsByResolverParityFilter,
+  summarizeResolverParityAudits,
+  type ResolverParityFilterId,
+} from "@/lib/productos/product-operational-routing-audit";
 import { OperationStationProductSelect } from "@/components/operacion/operation-station-product-select";
 import {
   ensureDefaultOperationStations,
   listenOperationStations,
 } from "@/lib/firestore/operation-stations";
+import { listProductionStations } from "@/lib/firestore/production-stations";
+import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
 import {
   ensureDefaultProductFamilies,
   listenProductFamilies,
@@ -229,6 +241,202 @@ const productosTableInteractionStyles = `
   .hostly-productos-data-row,
   .hostly-productos-row-text-btn,
   .hostly-productos-row-icon-btn {
+    transition: none;
+  }
+}
+.hostly-productos-resolver-parity-strip {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(248, 252, 255, 0.88);
+  min-width: 0;
+  box-sizing: border-box;
+}
+.hostly-productos-resolver-parity-strip__title {
+  flex: 0 0 auto;
+  margin-right: 2px;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  color: #64748b;
+}
+.hostly-productos-resolver-parity-strip__loading {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #94a3b8;
+}
+.hostly-productos-resolver-parity-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  min-height: 24px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  font: inherit;
+  color: inherit;
+}
+.hostly-productos-resolver-parity-pill--clickable {
+  cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease;
+}
+.hostly-productos-resolver-parity-pill--clickable:hover {
+  border-color: rgba(56, 189, 248, 0.38);
+  background: rgba(240, 249, 255, 0.98);
+}
+.hostly-productos-resolver-parity-pill--clickable:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.45);
+  outline-offset: 1px;
+}
+.hostly-productos-resolver-parity-pill--active {
+  border-color: rgba(56, 189, 248, 0.52) !important;
+  background: rgba(224, 242, 254, 0.98) !important;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.14);
+}
+.hostly-productos-resolver-parity-pill--active.hostly-productos-resolver-parity-pill--ok {
+  border-color: rgba(56, 189, 248, 0.52) !important;
+  background: rgba(224, 242, 254, 0.98) !important;
+}
+.hostly-productos-resolver-parity-pill--active.hostly-productos-resolver-parity-pill--warn,
+.hostly-productos-resolver-parity-pill--active.hostly-productos-resolver-parity-pill--danger {
+  border-color: rgba(56, 189, 248, 0.52) !important;
+  background: rgba(224, 242, 254, 0.98) !important;
+}
+.hostly-productos-resolver-parity-strip__status {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #0369a1;
+}
+@media (min-width: 641px) {
+  .hostly-productos-resolver-parity-strip__status {
+    flex: 1 1 auto;
+    margin-left: 4px;
+    text-align: right;
+  }
+}
+.hostly-productos-resolver-parity-pill__label {
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  color: #64748b;
+}
+.hostly-productos-resolver-parity-pill__value {
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.hostly-productos-resolver-parity-pill--ok {
+  border-color: rgba(34, 197, 94, 0.32);
+  background: rgba(240, 253, 244, 0.95);
+}
+.hostly-productos-resolver-parity-pill--ok .hostly-productos-resolver-parity-pill__value {
+  color: #15803d;
+}
+.hostly-productos-resolver-parity-pill--warn {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: rgba(255, 251, 235, 0.96);
+}
+.hostly-productos-resolver-parity-pill--warn .hostly-productos-resolver-parity-pill__value {
+  color: #b45309;
+}
+.hostly-productos-resolver-parity-pill--danger {
+  border-color: rgba(239, 68, 68, 0.28);
+  background: rgba(254, 242, 242, 0.96);
+}
+.hostly-productos-resolver-parity-pill--danger .hostly-productos-resolver-parity-pill__value {
+  color: #b91c1c;
+}
+@media (max-width: 640px) {
+  .hostly-productos-resolver-parity-strip {
+    padding: 6px 10px;
+    gap: 5px;
+  }
+  .hostly-productos-resolver-parity-strip__title {
+    flex-basis: 100%;
+    margin-bottom: 1px;
+  }
+}
+.hostly-productos-routing-correct-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  min-height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  background: rgba(224, 242, 254, 0.95);
+  color: #0369a1;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+.hostly-productos-routing-correct-btn:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(186, 230, 253, 0.98);
+}
+.hostly-productos-routing-correct-btn:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.45);
+  outline-offset: 1px;
+}
+.hostly-productos-routing-correct-btn--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hostly-productos-routing-correct-btn {
+    transition: none;
+  }
+}
+.hostly-product-form-routing-focus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-sm, 10px);
+  min-width: 0;
+  border-radius: 10px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+.hostly-product-form-routing-focus--active {
+  padding: 8px;
+  margin: -4px -4px 0;
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  background: rgba(224, 242, 254, 0.28);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.1);
+}
+.hostly-product-form-routing-focus__banner {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hostly-product-form-routing-focus {
     transition: none;
   }
 }
@@ -1299,6 +1507,8 @@ export default function ProductosManagementPage({
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderBusyId, setReorderBusyId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [editFocus, setEditFocus] = useState<ProductEditFocus | null>(null);
+  const routingFocusRef = useRef<HTMLDivElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNombre, setDraftNombre] = useState("");
   const [draftTipo, setDraftTipo] = useState<TipoProductoVenta>("plato");
@@ -1309,6 +1519,9 @@ export default function ProductosManagementPage({
   const [cartaFamilias, setCartaFamilias] = useState<CartaFamilia[]>([]);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroupDocument[]>([]);
   const [modifierFamilies, setModifierFamilies] = useState<ModifierFamilyRow[]>([]);
+  const [parityCatalogsLoaded, setParityCatalogsLoaded] = useState(false);
+  const [resolverParityFilter, setResolverParityFilter] =
+    useState<ResolverParityFilterId>("all");
   const [draftCategoriaCartaId, setDraftCategoriaCartaId] = useState<string | null>(null);
   const [draftCartaMenuFamiliaId, setDraftCartaMenuFamiliaId] = useState<string | null>(null);
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
@@ -1339,6 +1552,10 @@ export default function ProductosManagementPage({
   );
   const [operationStations, setOperationStations] = useState<
     OperationStationDocument[]
+  >([]);
+  /** Fetch único (sin listener): paridad resolver en tooltip Routing. */
+  const [productionStations, setProductionStations] = useState<
+    ProductionStationDocument[]
   >([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1533,27 +1750,43 @@ export default function ProductosManagementPage({
       setCartaCategorias([]);
       setCartaFamilias([]);
       setModifierFamilies([]);
+      setProductionStations([]);
+      setParityCatalogsLoaded(false);
       return;
     }
     let cancelled = false;
+    setParityCatalogsLoaded(false);
     const rid = tenantRestaurantId;
     void Promise.all([
       fetchCartaCategorias(rid),
       fetchCartaFamilias(rid),
       fetchModifierFamiliesForRestaurante(rid),
-    ]).then(([list, fams, mods]) => {
+      listProductionStations(rid),
+    ]).then(([list, fams, mods, prodStations]) => {
       if (cancelled) return;
       queueMicrotask(() => {
         if (cancelled) return;
         setCartaCategorias(list);
         setCartaFamilias(fams);
         setModifierFamilies(mods);
+        setProductionStations(prodStations);
+        setParityCatalogsLoaded(true);
       });
     });
     return () => {
       cancelled = true;
     };
   }, [profileReady, tenantRestaurantId]);
+
+  const parityCatalogSources = useMemo(
+    () => ({
+      operationStations,
+      productionStations,
+      cartaCategorias,
+      cartaFamilias,
+    }),
+    [operationStations, productionStations, cartaCategorias, cartaFamilias],
+  );
 
   useEffect(() => {
     if (!profileReady || !tenantRestaurantId) return;
@@ -1564,13 +1797,15 @@ export default function ProductosManagementPage({
         fetchCartaCategorias(rid),
         fetchCartaFamilias(rid),
         fetchModifierFamiliesForRestaurante(rid),
-      ]).then(([list, fams, mods]) => {
+        listProductionStations(rid),
+      ]).then(([list, fams, mods, prodStations]) => {
         if (!alive) return;
         queueMicrotask(() => {
           if (!alive) return;
           setCartaCategorias(list);
           setCartaFamilias(fams);
           setModifierFamilies(mods);
+          setProductionStations(prodStations);
         });
       });
     };
@@ -1737,6 +1972,49 @@ export default function ProductosManagementPage({
     return [...rows].sort(comparePlatoCarta);
   }, [filteredSorted, categoryTab, cartaCategorias]);
 
+  const resolverParityAuditsForTab = useMemo(() => {
+    if (!parityCatalogsLoaded) return [];
+    return auditCatalogResolverParityFromSources(
+      tabFilteredSorted,
+      parityCatalogSources,
+    );
+  }, [parityCatalogsLoaded, tabFilteredSorted, parityCatalogSources]);
+
+  const resolverParitySummaryForTab = useMemo(
+    () => summarizeResolverParityAudits(resolverParityAuditsForTab),
+    [resolverParityAuditsForTab],
+  );
+
+  const parityFilteredSorted = useMemo(() => {
+    if (resolverParityFilter === "all" || !parityCatalogsLoaded) {
+      return tabFilteredSorted;
+    }
+    return filterProductsByResolverParityFilter(
+      tabFilteredSorted,
+      resolverParityAuditsForTab,
+      resolverParityFilter,
+    );
+  }, [
+    tabFilteredSorted,
+    resolverParityAuditsForTab,
+    resolverParityFilter,
+    parityCatalogsLoaded,
+  ]);
+
+  const handleResolverParityFilterChange = useCallback(
+    (next: ResolverParityFilterId) => {
+      setResolverParityFilter((prev) => {
+        if (next === "all" || prev === next) return "all";
+        return next;
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (reorderMode) setResolverParityFilter("all");
+  }, [reorderMode]);
+
   const canUseProductReorder =
     isCentralCatalog &&
     !isLegacyReadOnly &&
@@ -1844,15 +2122,16 @@ export default function ProductosManagementPage({
   const displayed = useMemo(() => {
     if (reorderMode) return tabFilteredSorted;
     const q = normalizeForSearch(listSearch);
-    if (!q) return tabFilteredSorted;
-    return tabFilteredSorted.filter(
+    const base = parityFilteredSorted;
+    if (!q) return base;
+    return base.filter(
       (p) =>
         normalizeForSearch(p.nombre).includes(q) ||
         normalizeForSearch(p.categoria).includes(q) ||
         normalizeForSearch(p.tipoVenta).includes(q) ||
         normalizeForSearch(labelTipoVenta(t, p.tipoVenta)).includes(q),
     );
-  }, [reorderMode, tabFilteredSorted, listSearch, t]);
+  }, [reorderMode, tabFilteredSorted, parityFilteredSorted, listSearch, t]);
 
   useEffect(() => {
     let alive = true;
@@ -2522,6 +2801,7 @@ export default function ProductosManagementPage({
     resetDraftImageState();
     setEscandalloModalOpen(false);
     setCommercialInfoModalOpen(false);
+    setEditFocus(null);
     setFormOpen(false);
     setEditingId(null);
     setFormError(null);
@@ -2568,12 +2848,24 @@ export default function ProductosManagementPage({
       }
     };
     window.addEventListener("keydown", onKey);
-    const focusTimer = window.setTimeout(() => nombreInputRef.current?.focus(), 50);
+    const focusTimer = window.setTimeout(() => {
+      if (editFocus !== "routing") {
+        nombreInputRef.current?.focus();
+      }
+    }, 50);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.clearTimeout(focusTimer);
     };
-  }, [formOpen, closeForm]);
+  }, [formOpen, closeForm, editFocus]);
+
+  useEffect(() => {
+    if (!formOpen || editFocus !== "routing") return;
+    const scrollTimer = window.setTimeout(() => {
+      routingFocusRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => window.clearTimeout(scrollTimer);
+  }, [formOpen, editFocus, editingId]);
 
   const metricNum: CSSProperties = {
     ...tabularFigures,
@@ -2603,11 +2895,13 @@ export default function ProductosManagementPage({
     setDraftRecipeEnabled(false);
     setDraftRecipeRows([]);
     setFormError(null);
+    setEditFocus(null);
     setFormOpen(true);
   }
 
-  function openEdit(p: PlatoCarta) {
+  function openEdit(p: PlatoCarta, options?: ProductEditOptions) {
     if (isLegacyReadOnly) return;
+    setEditFocus(options?.focus ?? null);
     setEditingId(p.id);
     setDraftNombre(p.nombre);
     setDraftTipo(p.tipoVenta);
@@ -3553,6 +3847,25 @@ export default function ProductosManagementPage({
                 aria-label={t("carta.productFormBlockProduct")}
               >
                 <div className="hostly-product-form-drawer-zones">
+                  <div
+                    ref={routingFocusRef}
+                    className={[
+                      "hostly-product-form-routing-focus",
+                      editFocus === "routing"
+                        ? "hostly-product-form-routing-focus--active"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {editFocus === "routing" ? (
+                      <p
+                        className="hostly-product-form-routing-focus__banner"
+                        role="status"
+                      >
+                        {t("productos.routingEditFocusHint")}
+                      </p>
+                    ) : null}
                   <ProductFormDrawerZone
                     title={t("carta.productFormBlockCarta")}
                     description={t("carta.productFormBlockCartaHint")}
@@ -3690,6 +4003,7 @@ export default function ProductosManagementPage({
                     </div>
                     <ProductMenuFamilyInheritedHintCard view={draftMenuFamilyInheritedHint} t={t} />
                   </ProductFormDrawerZone>
+                  </div>
 
                   <ProductFormDrawerZone
                     title={t("carta.productFormBlockProduct")}
@@ -4114,6 +4428,15 @@ export default function ProductosManagementPage({
                 ) : tabFilteredSorted.length === 0 ? (
                   <div className="hostly-productos-carta-muted-empty">{t("stock.filterEmpty")}</div>
                 ) : (
+                  <>
+                  <ProductosResolverParitySummaryStrip
+                    summary={resolverParitySummaryForTab}
+                    loading={!parityCatalogsLoaded}
+                    activeFilter={resolverParityFilter}
+                    onFilterChange={handleResolverParityFilterChange}
+                    filteredCount={parityFilteredSorted.length}
+                    t={t}
+                  />
                   <ProductosCartaDataView
                     displayed={tabFilteredSorted}
                     groupedByCategoria={groupedByCategoria}
@@ -4138,7 +4461,12 @@ export default function ProductosManagementPage({
                     onReorderProducts={(orderedIds) => void reorderProductsInCategory(orderedIds)}
                     reorderFocusLayout
                     activeCategoryLabel={activeReorderCategoryLabel}
+                    operationStations={operationStations}
+                    productionStations={productionStations}
+                    cartaCategorias={cartaCategorias}
+                    cartaFamilias={cartaFamilias}
                   />
+                  </>
                 )}
               </div>
             </div>
@@ -4271,6 +4599,16 @@ export default function ProductosManagementPage({
               </div>
               </div>
               ) : null}
+              {items.length > 0 ? (
+                <ProductosResolverParitySummaryStrip
+                  summary={resolverParitySummaryForTab}
+                  loading={!parityCatalogsLoaded}
+                  activeFilter={resolverParityFilter}
+                  onFilterChange={handleResolverParityFilterChange}
+                  filteredCount={parityFilteredSorted.length}
+                  t={t}
+                />
+              ) : null}
               <div
               className="hostly-productos-carta-list-host hostly-productos-carta-list-host--config-table"
               style={{ flexGrow: 1, minHeight: 0, minWidth: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
@@ -4293,7 +4631,11 @@ export default function ProductosManagementPage({
               ) : filteredSorted.length === 0 ? (
               <div className="hostly-productos-carta-muted-empty">{t("stock.filterEmpty")}</div>
               ) : displayed.length === 0 ? (
-              <div className="hostly-productos-carta-muted-empty">{t("carta.searchNoResults")}</div>
+              <div className="hostly-productos-carta-muted-empty">
+              {resolverParityFilter !== "all" && !listSearch.trim()
+                ? t("productos.resolverParityFilterEmpty")
+                : t("carta.searchNoResults")}
+              </div>
               ) : (
               <ProductosCartaDataView
               displayed={displayed}
@@ -4331,6 +4673,10 @@ export default function ProductosManagementPage({
               bulkDeleteDisabledTitle={bulkDeleteDisabledTitle}
               compactBulkBar
               activeCategoryLabel={activeReorderCategoryLabel}
+              operationStations={operationStations}
+              productionStations={productionStations}
+              cartaCategorias={cartaCategorias}
+              cartaFamilias={cartaFamilias}
               />
               )}
               </div>

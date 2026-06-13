@@ -199,6 +199,91 @@ export const en: MessageTree = {
     colPaseTitle: "Service course: starter, first, main, or dessert.",
     colDestino: "Prep.",
     colDestinoTitle: "Where the order is prepared: kitchen, bar, or cocktail.",
+    colRoutingAudit: "Routing",
+    colRoutingAuditTitle:
+      "Operational KDS routing coherence from station, operation station, and heuristics.",
+    routingAuditOk: "✓ OK",
+    routingAuditOkTitle:
+      "Routing is coherent. KDS would route to {{destination}} with current data.",
+    routingAuditNoDestination: "⚠ No dest.",
+    routingAuditNoDestinationTitle:
+      "No station, operation station, or category signals. KDS would default to kitchen.",
+    routingAuditLegacy: "⚠ Legacy",
+    routingAuditLegacyTitle:
+      "Has station/preparationArea but no operation station (operationStationId). KDS → {{destination}}.",
+    routingAuditIncomplete: "⚠ Incomplete",
+    routingAuditIncompleteTitle:
+      "Operation station set without station/preparationArea. KDS ignores operationStationId; heuristic → {{destination}}.",
+    routingAuditConflict: "⚠ Conflict",
+    routingAuditConflictTitle:
+      "station/preparationArea and operation station point to different buckets. station wins → {{destination}} on KDS.",
+    routingAuditHeuristic: "⚠ Heuristic",
+    routingAuditHeuristicTitle:
+      "No station/preparationArea; KDS would decide from category or name → {{destination}}.",
+    resolverParityOkTitle:
+      "Resolver parity: matches legacy (resolveEffectiveProductionStation).",
+    resolverParityBucketTitle:
+      "Resolver parity: bucket mismatch (legacy {{legacyDestination}}/{{legacyBucket}} vs resolver {{resolverDestination}}/{{resolverBucket}}, source {{resolverSource}}).",
+    resolverParityStationTitle:
+      "Resolver parity: station mismatch (legacy vs resolver {{resolverSource}}).",
+    resolverParityPrepAreaTitle:
+      "Resolver parity: preparationArea mismatch (legacy vs resolver {{resolverSource}}).",
+    resolverParityMissingStationTitle:
+      "Resolver parity: product has no station/preparationArea in legacy.",
+    resolverParityHeuristicTitle:
+      "Resolver parity: legacy relies on KDS heuristics until catalogs are enabled.",
+    resolverParityNoOpStationTitle:
+      "Resolver parity: product has no operationStationId.",
+    resolverParityRecommendLabel: "Recommended action",
+    resolverParityRecommendOkTitle: "Routing is coherent",
+    resolverParityRecommendOkDescription:
+      "Product is aligned between legacy and resolver. No changes needed.",
+    resolverParityRecommendMissingStationTitle: "Missing production destination",
+    resolverParityRecommendMissingStationDescription:
+      "Assign a production station or destination to this product.",
+    resolverParityRecommendHeuristicTitle: "Uses heuristic routing",
+    resolverParityRecommendHeuristicDescription:
+      "This product is routed by name or category. Assign an explicit station.",
+    resolverParityRecommendNoOpStationTitle: "No operation station",
+    resolverParityRecommendNoOpStationDescription:
+      "Assign an operation station to improve filters and printing.",
+    resolverParityRecommendBucketTitle: "Different destination",
+    resolverParityRecommendBucketDescription:
+      "Legacy and resolver do not match. Review station, menu family, and production station.",
+    resolverParityRecommendStationTitle: "Different station",
+    resolverParityRecommendStationDescription:
+      "Product station does not match the resolver. Review destination and menu family.",
+    resolverParityRecommendPrepAreaTitle: "Different preparation area",
+    resolverParityRecommendPrepAreaDescription:
+      "Preparation area does not match the resolver. Review destination and menu family.",
+    routingCorrectLabel: "Fix",
+    routingCorrectTitle: "Open product editor to fix routing",
+    routingCorrectAria: "Fix routing for {{name}}",
+    routingEditFocusHint:
+      "Review production destination, operation station, and course if applicable. Also check menu family and category.",
+    resolverParityCatalogHint:
+      "Real catalogs: {{opCount}} operation stations, {{prodCount}} production stations, menu family linked: {{familyLinked}}.",
+    resolverParityCatalogEmpty:
+      "Resolver parity: station catalogs not loaded (heuristic only).",
+    resolverParitySummaryTitle: "Routing parity",
+    resolverParitySummaryAria: "Legacy vs resolver operational routing parity summary",
+    resolverParitySummaryLoading: "Audit loading catalogs…",
+    resolverParitySummaryTotal: "Total",
+    resolverParitySummaryOk: "OK",
+    resolverParitySummaryDivergence: "Divergences",
+    resolverParitySummaryMissingStation: "No station",
+    resolverParitySummaryHeuristic: "Heuristic",
+    resolverParitySummaryNoOpStation: "No op. st.",
+    resolverParityFilterEmpty:
+      "No products match this parity filter. Tap Total to show all.",
+    resolverParityFilterStatusOk: "Showing {{count}} OK products",
+    resolverParityFilterStatusDivergences: "Showing {{count}} products with divergences",
+    resolverParityFilterStatusMissingStation:
+      "Showing {{count}} products without station/preparationArea",
+    resolverParityFilterStatusHeuristic:
+      "Showing {{count}} products with heuristic fallback",
+    resolverParityFilterStatusNoOpStation:
+      "Showing {{count}} products without operation station",
     colEscandallo: "Costing",
     pubEnCarta: "On menu",
     pubFueraCarta: "Off menu",
