@@ -178,6 +178,7 @@ function SortableItemShell({ id, disabled, className, onClick, children }: Sorta
           className,
           isDragging && "is-sortable-dragging",
           isInsertTarget && "is-sortable-over",
+          rowTouchDrag && isDragging && "is-sortable-active-touch",
         ]
           .filter(Boolean)
           .join(" ")}
