@@ -5,6 +5,7 @@ import { fetchCartaCategorias } from "@/lib/carta-categorias/api-client";
 import {
   centralProductVisibleOnMenu,
   centralProductsToPlatos,
+  isStockIngredientProduct,
   platoCartaToOperationalProduct,
   publicationOnMenu,
 } from "@/lib/carta/operational-catalog-mappers";
@@ -22,6 +23,7 @@ export type OperationalCatalogSource =
 
 export type CentralCatalogScope = "tpv_menu" | "management";
 
+/** `management`: catálogo de carta (excluye ingredientes de stock `type === "inventory"`). */
 export type UseCentralProductsForCartaOptions = {
   scope?: CentralCatalogScope;
   /**
@@ -40,6 +42,11 @@ export type UseCentralProductsForCartaResult = {
   catalogDevWarning: string | null;
   /** Snapshot central indexado por id (misma escucha que `products`). */
   productDocumentsById: ReadonlyMap<string, ProductDocument>;
+  /**
+   * Snapshot completo del listener (incluye `type === "inventory"`).
+   * Usar solo para resolución de costes/recetas, no para listados de carta.
+   */
+  allProductDocumentsById: ReadonlyMap<string, ProductDocument>;
   /** Perfil resuelto pero sin `restaurantId` (solo con `requireAuthenticatedTenant`). */
   tenantUnavailable: boolean;
 };
@@ -54,7 +61,9 @@ function filterCentralForScope(
   docs: ProductDocument[],
   scope: CentralCatalogScope,
 ): ProductDocument[] {
-  if (scope === "management") return docs;
+  if (scope === "management") {
+    return docs.filter((doc) => !isStockIngredientProduct(doc));
+  }
   return docs.filter(centralProductVisibleOnMenu);
 }
 
@@ -118,6 +127,9 @@ export function useCentralProductsForCarta(
   const [centralProductDocuments, setCentralProductDocuments] = useState<
     ProductDocument[]
   >([]);
+  const [centralProductDocumentsAll, setCentralProductDocumentsAll] = useState<
+    ProductDocument[]
+  >([]);
 
   const categoryNameByIdRef = useRef<Map<string, string>>(new Map());
   const centralDocsRef = useRef<ProductDocument[]>([]);
@@ -150,6 +162,7 @@ export function useCentralProductsForCarta(
       if (docs.length > 0) {
         const filtered = filterCentralForScope(docs, scope);
         setCentralProductDocuments(filtered);
+        setCentralProductDocumentsAll(docs);
         const platosList = centralProductsToPlatos(
           filtered,
           rid,
@@ -159,6 +172,7 @@ export function useCentralProductsForCarta(
         return;
       }
       setCentralProductDocuments([]);
+      setCentralProductDocumentsAll([]);
       applyCatalog(loadLegacyPlatos(rid, scope), "legacy_local");
     },
     [applyCatalog, rid, scope],
@@ -177,6 +191,7 @@ export function useCentralProductsForCarta(
       setUsingLegacyFallback(false);
       setCatalogDevWarning(null);
       setCentralProductDocuments([]);
+      setCentralProductDocumentsAll([]);
       return;
     }
 
@@ -277,6 +292,10 @@ export function useCentralProductsForCarta(
     for (const doc of centralProductDocuments) {
       productDocumentsById.set(doc.id, doc);
     }
+    const allProductDocumentsById = new Map<string, ProductDocument>();
+    for (const doc of centralProductDocumentsAll) {
+      allProductDocumentsById.set(doc.id, doc);
+    }
     return {
       products,
       platos,
@@ -285,11 +304,13 @@ export function useCentralProductsForCarta(
       usingLegacyFallback,
       catalogDevWarning,
       productDocumentsById,
+      allProductDocumentsById,
       tenantUnavailable,
     };
   }, [
     catalogDevWarning,
     centralProductDocuments,
+    centralProductDocumentsAll,
     loading,
     platos,
     products,

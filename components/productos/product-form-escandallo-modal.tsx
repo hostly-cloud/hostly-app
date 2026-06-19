@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, type Dispatch, type SetStateAction } from "react";
 import type { CSSProperties } from "react";
 import {
   ConfigBtnPrimary,
@@ -8,6 +8,8 @@ import {
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
 import { ProductProfitabilityPanel } from "@/components/carta/escandallos/product-profitability-panel";
 import { formatMoney2 } from "@/components/carta/escandallos/escandallo-display-utils";
+import { EscandalloRecipeStateBadge } from "@/components/carta/escandallos/escandallo-badges";
+import { computeEscandalloVisualStateFromDraft } from "@/components/carta/escandallos/escandallo-row-visual-state";
 import {
   computeProductProfitability,
   type ProductProfitabilityDraftRow,
@@ -59,9 +61,9 @@ export function ProductFormEscandalloSummaryCard({
   disabled = false,
   editLabel = "Editar escandallo",
 }: ProductFormEscandalloSummaryCardProps) {
-  const profitability = useMemo(
+  const visualState = useMemo(
     () =>
-      computeProductProfitability({
+      computeEscandalloVisualStateFromDraft({
         recipeEnabled,
         recipeRows,
         saleProductId,
@@ -71,7 +73,26 @@ export function ProductFormEscandalloSummaryCard({
     [recipeEnabled, recipeRows, saleProductId, salePrice, productDocumentsById],
   );
 
-  const hasEscandallo = recipeEnabled && profitability.hasServiceCost;
+  const profitability = useMemo(
+    () =>
+      visualState === "operativo"
+        ? computeProductProfitability({
+            recipeEnabled,
+            recipeRows,
+            saleProductId,
+            salePrice,
+            productDocumentsById,
+          })
+        : null,
+    [
+      visualState,
+      recipeEnabled,
+      recipeRows,
+      saleProductId,
+      salePrice,
+      productDocumentsById,
+    ],
+  );
 
   return (
     <section className="hostly-product-escandallo-summary" aria-label="Escandallo">
@@ -81,13 +102,14 @@ export function ProductFormEscandalloSummaryCard({
           {editLabel}
         </ConfigBtnSecondary>
       </div>
-      {!hasEscandallo ? (
-        <p className="hostly-product-escandallo-summary__status">Sin escandallo</p>
-      ) : (
+      <div className="hostly-product-escandallo-summary__state">
+        <EscandalloRecipeStateBadge state={visualState} />
+      </div>
+      {visualState === "operativo" && profitability?.serviceCost != null ? (
         <div className="hostly-product-escandallo-summary__metrics">
           <p className="hostly-product-escandallo-summary__metric">
             <span className="hostly-product-escandallo-summary__metric-label">Coste</span>
-            <strong>{formatMoney2(profitability.serviceCost!)}</strong>
+            <strong>{formatMoney2(profitability.serviceCost)}</strong>
           </p>
           {profitability.sufficient && profitability.marginPct != null ? (
             <p className="hostly-product-escandallo-summary__metric">
@@ -101,7 +123,7 @@ export function ProductFormEscandalloSummaryCard({
             </p>
           )}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -113,7 +135,7 @@ export type ProductFormEscandalloModalProps = {
   recipeEnabled: boolean;
   onRecipeEnabledChange: (value: boolean) => void;
   recipeRows: RecipeIngredientDraftRow[];
-  onRecipeRowsChange: (rows: RecipeIngredientDraftRow[]) => void;
+  onRecipeRowsChange: Dispatch<SetStateAction<RecipeIngredientDraftRow[]>>;
   salePrice: number | null;
   productDocumentsById: ReadonlyMap<string, ProductDocument>;
   inventoryProducts: readonly InventoryProductLookup[];

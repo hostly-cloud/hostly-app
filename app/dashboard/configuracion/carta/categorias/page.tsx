@@ -419,6 +419,19 @@ export default function ConfigCartaCategoriasPage() {
       if (!restauranteId) return;
       const currentIds = sorted.map((c) => c.id);
       if (orderedIds.join("|") === currentIds.join("|")) return;
+
+      const byId = new Map(sorted.map((c) => [c.id, c] as const));
+      const optimisticItems: CartaCategoria[] = orderedIds
+        .map((id, idx) => {
+          const c = byId.get(id);
+          return c ? { ...c, sortOrder: idx } : null;
+        })
+        .filter((c): c is CartaCategoria => c != null);
+      for (const c of sorted) {
+        if (!orderedIds.includes(c.id)) optimisticItems.push(c);
+      }
+      const previousItems = items;
+      setItems(optimisticItems);
       setReorderBusyId(orderedIds[0] ?? null);
       setError(null);
       try {
@@ -426,40 +439,26 @@ export default function ConfigCartaCategoriasPage() {
         if (!res.ok) throw new Error(res.error);
         await refresh();
       } catch (e) {
+        setItems(previousItems);
         setError(e instanceof Error ? e.message : "No se pudo cambiar el orden.");
       } finally {
         setReorderBusyId(null);
       }
     },
-    [restauranteId, sorted, refresh],
+    [restauranteId, sorted, items, refresh],
   );
 
   const moveCategory = useCallback(
     async (categoryId: string, direction: "up" | "down") => {
-      if (!restauranteId) return;
       const idx = sorted.findIndex((c) => c.id === categoryId);
       if (idx < 0) return;
       const targetIdx = direction === "up" ? idx - 1 : idx + 1;
       if (targetIdx < 0 || targetIdx >= sorted.length) return;
-      const current = sorted[idx]!;
-      const target = sorted[targetIdx]!;
-      setReorderBusyId(categoryId);
-      setError(null);
-      try {
-        const [resA, resB] = await Promise.all([
-          patchCartaCategoriaApi(restauranteId, current.id, { sortOrder: target.sortOrder }),
-          patchCartaCategoriaApi(restauranteId, target.id, { sortOrder: current.sortOrder }),
-        ]);
-        if (!resA.ok) throw new Error(resA.error);
-        if (!resB.ok) throw new Error(resB.error);
-        await refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "No se pudo cambiar el orden.");
-      } finally {
-        setReorderBusyId(null);
-      }
+      const orderedIds = sorted.map((c) => c.id);
+      [orderedIds[idx], orderedIds[targetIdx]] = [orderedIds[targetIdx]!, orderedIds[idx]!];
+      await reorderCategories(orderedIds);
     },
-    [restauranteId, sorted, refresh],
+    [sorted, reorderCategories],
   );
 
   async function toggleActive(c: CartaCategoria) {

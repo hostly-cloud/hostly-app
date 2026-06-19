@@ -7,6 +7,7 @@ import {
   PointerSensor,
   TouchSensor,
   closestCenter,
+  useDndContext,
   type DragEndEvent,
   type DragStartEvent,
   type DraggableAttributes,
@@ -45,10 +46,15 @@ type SortableDragProps = {
   listeners: SyntheticListenerMap | undefined;
 };
 
+/** Patrón Hostly: mantener pulsado (touch) / arrastrar (ratón) → soltar → un write al final. */
+const HOSTLY_SORTABLE_POINTER = { distance: 6 } as const;
+const HOSTLY_SORTABLE_TOUCH = { delay: 220, tolerance: 8 } as const;
+
 type CategoriasCartaSortableContextValue = {
   localItems: CartaCategoria[];
   disabled?: boolean;
   dragHandleLabel: string;
+  touchRowDrag: boolean;
 };
 
 const CategoriasCartaSortableContext = createContext<CategoriasCartaSortableContextValue | null>(null);
@@ -93,21 +99,33 @@ export function CategoriasCartaDragHandle({
 }
 
 export function CategoriasCartaSortableDragHandle() {
-  const { disabled, dragHandleLabel } = useCategoriasCartaSortableContext();
+  const { disabled, dragHandleLabel, touchRowDrag } = useCategoriasCartaSortableContext();
   return (
-    <SortableDragHandleSlot disabled={disabled} label={dragHandleLabel} />
+    <SortableDragHandleSlot
+      disabled={disabled}
+      label={dragHandleLabel}
+      visualOnly={touchRowDrag}
+    />
   );
 }
 
-function SortableDragHandleSlot({ disabled, label }: { disabled?: boolean; label: string }) {
+function SortableDragHandleSlot({
+  disabled,
+  label,
+  visualOnly,
+}: {
+  disabled?: boolean;
+  label: string;
+  visualOnly?: boolean;
+}) {
   const { setActivatorNodeRef, attributes, listeners } = useSortableItemDrag();
   return (
     <CategoriasCartaDragHandle
       disabled={disabled}
       label={label}
-      setActivatorNodeRef={setActivatorNodeRef}
-      attributes={attributes}
-      listeners={listeners}
+      setActivatorNodeRef={visualOnly ? undefined : setActivatorNodeRef}
+      attributes={visualOnly ? undefined : attributes}
+      listeners={visualOnly ? undefined : listeners}
     />
   );
 }
@@ -133,6 +151,11 @@ type SortableItemShellProps = {
 function SortableItemShell({ id, disabled, className, onClick, children }: SortableItemShellProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id, disabled });
+  const { active, over } = useDndContext();
+  const { touchRowDrag } = useCategoriasCartaSortableContext();
+  const isMobileShell = Boolean(className?.includes("hostly-carta-category-sortable-mobile"));
+  const rowTouchDrag = touchRowDrag && isMobileShell && !disabled;
+  const isInsertTarget = !isDragging && over?.id === id && active?.id !== id;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -151,8 +174,15 @@ function SortableItemShell({ id, disabled, className, onClick, children }: Sorta
         ref={setNodeRef}
         style={style}
         role={className?.includes("hostly-data-table-row") ? "row" : undefined}
-        className={[className, isDragging && "is-sortable-dragging"].filter(Boolean).join(" ")}
+        className={[
+          className,
+          isDragging && "is-sortable-dragging",
+          isInsertTarget && "is-sortable-over",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         onClick={onClick}
+        {...(rowTouchDrag && listeners ? listeners : {})}
       >
         {children}
       </div>
@@ -234,10 +264,10 @@ export function CategoriasCartaSortableRoot({
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
+      activationConstraint: HOSTLY_SORTABLE_POINTER,
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 180, tolerance: 6 },
+      activationConstraint: HOSTLY_SORTABLE_TOUCH,
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -270,8 +300,8 @@ export function CategoriasCartaSortableRoot({
   }
 
   const contextValue = useMemo(
-    () => ({ localItems, disabled, dragHandleLabel }),
-    [localItems, disabled, dragHandleLabel],
+    () => ({ localItems, disabled, dragHandleLabel, touchRowDrag: isMobile }),
+    [localItems, disabled, dragHandleLabel, isMobile],
   );
 
   return (
@@ -283,9 +313,18 @@ export function CategoriasCartaSortableRoot({
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-          {children({ localItems, isMobile })}
-        </SortableContext>
+        <div
+          className={[
+            "hostly-carta-categorias-sortable-root",
+            activeId ? "is-sortable-active" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+            {children({ localItems, isMobile })}
+          </SortableContext>
+        </div>
 
         <DragOverlay dropAnimation={{ duration: 180, easing: "ease-out" }}>
           {activeItem && renderDragPreview ? (

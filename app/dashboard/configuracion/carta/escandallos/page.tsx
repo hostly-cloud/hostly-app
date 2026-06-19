@@ -7,16 +7,17 @@ import { ConfigCard, ConfigCartaWorkbench } from "../../_components/config-carta
 import { EscandallosCartaDataView } from "@/components/carta/escandallos/escandallos-carta-data-view";
 import { EscandallosCartaToolbar, type EscandalloToolbarTier } from "@/components/carta/escandallos/escandallos-carta-toolbar";
 import {
+  computeEscandalloKpiStats,
   computeEscandalloListStats,
-  computeMarginPercent,
   getDraftForItem,
-  marginHealthCategory,
   parseNullableNumber,
+  resolveEscandalloRowEconomics,
   roundTo,
   type EscandalloDraftById,
   type EscandalloListRow,
 } from "@/components/carta/escandallos/escandallo-display-utils";
 import {
+  computeEscandalloProfitability,
   computeEscandalloVisualState,
   computeEscandalloVisualStateCounts,
 } from "@/components/carta/escandallos/escandallo-row-visual-state";
@@ -71,9 +72,11 @@ export default function ConfigCartaEscandallosPage() {
   const [tierFilter, setTierFilter] = useState<EscandalloToolbarTier>("all");
 
   const productDocumentsById = operationalCatalog.productDocumentsById;
+  const productDocumentsByIdForCost = operationalCatalog.allProductDocumentsById;
+  const isCentralCatalog = (operationalCatalog.source ?? catalogSource) === "central";
 
   const visualStateById = useMemo(() => {
-    const isLegacyCatalog = (operationalCatalog.source ?? catalogSource) !== "central";
+    const isLegacyCatalog = !isCentralCatalog;
     const map: Record<string, ReturnType<typeof computeEscandalloVisualState>> = {};
     for (const row of items) {
       const key = String(row.id);
@@ -88,13 +91,42 @@ export default function ConfigCartaEscandallosPage() {
         recipe: doc?.recipe,
         saleProductId: key,
         salePrice,
-        productDocumentsById,
+        productDocumentsById: productDocumentsByIdForCost,
         legacyFallback: isLegacyCatalog,
         rowCoste,
       });
     }
     return map;
-  }, [catalogSource, drafts, items, operationalCatalog.source, productDocumentsById]);
+  }, [
+    catalogSource,
+    drafts,
+    isCentralCatalog,
+    items,
+    operationalCatalog.source,
+    productDocumentsById,
+    productDocumentsByIdForCost,
+  ]);
+
+  const profitabilityById = useMemo(() => {
+    if (!isCentralCatalog) return undefined;
+    const map: Record<string, ReturnType<typeof computeEscandalloProfitability>> = {};
+    for (const row of items) {
+      const key = String(row.id);
+      const doc = productDocumentsById.get(key);
+      const draft = getDraftForItem(row, drafts);
+      const salePrice =
+        typeof doc?.price === "number" && Number.isFinite(doc.price)
+          ? doc.price
+          : parseNullableNumber(draft.precio_venta);
+      map[key] = computeEscandalloProfitability({
+        recipe: doc?.recipe,
+        saleProductId: key,
+        salePrice,
+        productDocumentsById: productDocumentsByIdForCost,
+      });
+    }
+    return map;
+  }, [drafts, isCentralCatalog, items, productDocumentsById, productDocumentsByIdForCost]);
 
   const escandalloStateStats = useMemo(
     () => computeEscandalloVisualStateCounts(Object.values(visualStateById)),
@@ -173,23 +205,23 @@ export default function ConfigCartaEscandallosPage() {
     void cargar();
   }, [cargar]);
 
-  const listStats = useMemo(() => computeEscandalloListStats(items, drafts), [items, drafts]);
+  const economicsOptions = useMemo(
+    () =>
+      isCentralCatalog && profitabilityById
+        ? { profitabilityById, visualStateById }
+        : undefined,
+    [isCentralCatalog, profitabilityById, visualStateById],
+  );
 
-  const kpiStats = useMemo(() => {
-    let margenBajo = 0;
-    const costes: number[] = [];
-    for (const item of items) {
-      const draft = getDraftForItem(item, drafts);
-      const costeN = parseNullableNumber(draft.coste_total);
-      const ventaN = parseNullableNumber(draft.precio_venta);
-      const tier = marginHealthCategory(computeMarginPercent(costeN, ventaN));
-      if (tier === "peligro" || tier === "ajustado") margenBajo += 1;
-      if (costeN != null) costes.push(costeN);
-    }
-    const costeMedio =
-      costes.length > 0 ? roundTo(costes.reduce((s, n) => s + n, 0) / costes.length, 2) : null;
-    return { margenBajo, costeMedio };
-  }, [items, drafts]);
+  const listStats = useMemo(
+    () => computeEscandalloListStats(items, drafts, economicsOptions),
+    [items, drafts, economicsOptions],
+  );
+
+  const kpiStats = useMemo(
+    () => computeEscandalloKpiStats(items, drafts, economicsOptions),
+    [items, drafts, economicsOptions],
+  );
 
   const filteredItems = useMemo(() => {
     let rows = listStats.sortedItems;
@@ -199,41 +231,39 @@ export default function ConfigCartaEscandallosPage() {
     }
     if (tierFilter !== "all") {
       rows = rows.filter((i) => {
-        const draft = getDraftForItem(i, drafts);
-        const tier = marginHealthCategory(
-          computeMarginPercent(parseNullableNumber(draft.coste_total), parseNullableNumber(draft.precio_venta)),
+        const key = String(i.id);
+        const economics = resolveEscandalloRowEconomics(
+          key,
+          getDraftForItem(i, drafts),
+          i,
+          visualStateById[key],
+          profitabilityById,
         );
-        return tier === tierFilter;
+        return economics.marginTier === tierFilter;
       });
     }
     return rows;
-  }, [listStats.sortedItems, search, tierFilter, drafts]);
+  }, [drafts, listStats.sortedItems, profitabilityById, search, tierFilter, visualStateById]);
 
   const bestWorstBar = useMemo(() => {
-    const resolve = (k: string | null) => {
+    const resolve = (k: string | null, prefix: "↑" | "↓") => {
       if (!k) return null;
       const item = items.find((i) => String(i.id) === k);
       if (!item) return null;
-      const draft = getDraftForItem(item, drafts);
-      const m = computeMarginPercent(parseNullableNumber(draft.coste_total), parseNullableNumber(draft.precio_venta));
-      if (m == null) return null;
+      const economics = resolveEscandalloRowEconomics(
+        k,
+        getDraftForItem(item, drafts),
+        item,
+        visualStateById[k],
+        profitabilityById,
+      );
+      if (economics.marginPct == null) return null;
       const raw = (item.nombre_plato ?? "").trim();
       const name = raw.length > 22 ? `${raw.slice(0, 20)}…` : raw || "—";
-      return `↑ ${roundTo(m, 1).toFixed(1).replace(".", ",")} % · ${name}`;
+      return `${prefix} ${roundTo(economics.marginPct, 1).toFixed(1).replace(".", ",")} % · ${name}`;
     };
-    const resolveWorst = (k: string | null) => {
-      if (!k) return null;
-      const item = items.find((i) => String(i.id) === k);
-      if (!item) return null;
-      const draft = getDraftForItem(item, drafts);
-      const m = computeMarginPercent(parseNullableNumber(draft.coste_total), parseNullableNumber(draft.precio_venta));
-      if (m == null) return null;
-      const raw = (item.nombre_plato ?? "").trim();
-      const name = raw.length > 22 ? `${raw.slice(0, 20)}…` : raw || "—";
-      return `↓ ${roundTo(m, 1).toFixed(1).replace(".", ",")} % · ${name}`;
-    };
-    return { best: resolve(listStats.bestKey), worst: resolveWorst(listStats.worstKey) };
-  }, [items, drafts, listStats.bestKey, listStats.worstKey]);
+    return { best: resolve(listStats.bestKey, "↑"), worst: resolve(listStats.worstKey, "↓") };
+  }, [drafts, items, listStats.bestKey, listStats.worstKey, profitabilityById, visualStateById]);
 
   const updateDraft = useCallback((id: string | number, field: "coste_total" | "precio_venta", value: string) => {
     const key = String(id);
@@ -395,6 +425,7 @@ export default function ConfigCartaEscandallosPage() {
           onUpdateDraft={updateDraft}
           onSave={(id) => void guardarFila(id)}
           visualStateById={visualStateById}
+          profitabilityById={profitabilityById}
         />
       </ConfigCard>
 

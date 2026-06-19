@@ -7424,6 +7424,10 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   color: #64748b;
 }
 
+.hostly-product-escandallo-summary__state {
+  margin-top: 10px;
+}
+
 .hostly-product-escandallo-summary__status {
   margin: 10px 0 0;
   font-size: 14px;
@@ -8411,10 +8415,60 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   cursor: not-allowed;
 }
 
+.hostly-carta-category-reorder-hint {
+  margin: 0;
+  padding: 8px 12px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--hostly-navy-deep) 58%, var(--hostly-accent));
+}
+
+.hostly-carta-categorias-sortable-root.is-sortable-active {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hostly-carta-category-sortable-row,
+.hostly-carta-category-sortable-mobile {
+  position: relative;
+  transition:
+    box-shadow 160ms ease,
+    opacity 160ms ease,
+    transform 180ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+
 .hostly-carta-category-sortable-row.is-sortable-dragging,
 .hostly-carta-category-sortable-mobile.is-sortable-dragging {
-  z-index: 2;
-  opacity: 0.42;
+  z-index: 1;
+  opacity: 0.34;
+}
+
+.hostly-carta-category-sortable-mobile.is-sortable-dragging .hostly-mobile-list-item {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--hostly-ice-400) 72%, var(--hostly-accent));
+  background: color-mix(in srgb, var(--hostly-ice-50) 88%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hostly-ice-200) 35%, transparent);
+}
+
+.hostly-carta-category-sortable-row.is-sortable-over::before,
+.hostly-carta-category-sortable-mobile.is-sortable-over::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: -3px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--hostly-accent) 72%, var(--hostly-ice-400)),
+    transparent
+  );
+  pointer-events: none;
+  z-index: 3;
 }
 
 .hostly-carta-category-drag-overlay .hostly-carta-category-drag-preview {
@@ -8427,8 +8481,10 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   border: 1px solid color-mix(in srgb, var(--hostly-accent) 28%, var(--hostly-table-divider-soft));
   background: var(--hostly-surface-card-solid);
   box-shadow:
-    0 10px 24px color-mix(in srgb, var(--hostly-navy-deep) 10%, transparent),
-    0 2px 8px color-mix(in srgb, var(--hostly-navy-deep) 6%, transparent);
+    0 12px 28px color-mix(in srgb, var(--hostly-navy-deep) 12%, transparent),
+    0 4px 10px color-mix(in srgb, var(--hostly-navy-deep) 8%, transparent);
+  transform: translateY(-1px);
+  opacity: 0.96;
 }
 
 .hostly-carta-category-drag-preview__name {
@@ -8442,6 +8498,11 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 
 .hostly-carta-category-sortable-mobile .hostly-mobile-list-item {
   width: 100%;
+  touch-action: manipulation;
+}
+
+.hostly-carta-category-sortable-mobile.is-sortable-active-touch .hostly-mobile-list-item {
+  touch-action: none;
 }
 
 .hostly-carta-category-order-actions .hostly-productos-reorder-controls {

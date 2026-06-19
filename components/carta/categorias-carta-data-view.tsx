@@ -442,8 +442,11 @@ export function CategoriasCartaDataView({
     >
       {({ localItems, isMobile }) => (
         <div className="hostly-data-table-viewport hostly-data-table-viewport--embedded">
+          <p className="hostly-carta-category-reorder-hint" role="note">
+            {t("cartaCategories.dragReorderHint")}
+          </p>
           {!isMobile ? tableContent(localItems, true) : null}
-          {isMobile ? mobileContent(localItems, true) : mobileContent(localItems, false)}
+          {isMobile ? mobileContent(localItems, true) : null}
         </div>
       )}
     </CategoriasCartaSortableRoot>

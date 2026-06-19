@@ -26,18 +26,28 @@ import {
   escandalloRecipeQuickActionLabel,
   type EscandalloVisualState,
 } from "./escandallo-row-visual-state";
+import type { ProductProfitabilityResult } from "./product-profitability-utils";
 import {
-  computeMarginPercent,
   formatMoney2,
   getDraftForItem,
   marginHealthCategory,
-  parseNullableNumber,
+  resolveEscandalloRowEconomics,
   type EscandalloDraftById,
   type EscandalloListRow,
   type EscandalloListStats,
 } from "./escandallo-display-utils";
 
 const inputClass = "hostly-input hostly-carta-config-field-input hostly-recipe-editor__money-input";
+
+function formatCostCellValue(costeN: number | null): string {
+  if (costeN == null) return "—";
+  return formatMoney2(costeN);
+}
+
+function formatSaleCellValue(ventaN: number | null): string {
+  if (ventaN == null) return "—";
+  return formatMoney2(ventaN);
+}
 
 function IconRecipe() {
   return (
@@ -74,6 +84,8 @@ export type EscandallosCartaDataViewProps = {
   showFilteredEmpty?: boolean;
   /** Mapa id → estado visual de escandallo (Config → Carta → Escandallos). */
   visualStateById?: Readonly<Record<string, EscandalloVisualState>>;
+  /** Catálogo central: coste/margen desde computeProductProfitability (solo lectura en tabla). */
+  profitabilityById?: Readonly<Record<string, ProductProfitabilityResult>>;
 };
 
 export function EscandallosCartaDataView({
@@ -93,6 +105,7 @@ export function EscandallosCartaDataView({
   noResultsLabel = "Ningún resultado con estos filtros.",
   showFilteredEmpty = false,
   visualStateById,
+  profitabilityById,
 }: EscandallosCartaDataViewProps) {
   const router = useRouter();
   const showEscandalloState = visualStateById != null;
@@ -164,14 +177,18 @@ export function EscandallosCartaDataView({
             {items.map((item) => {
               const key = String(item.id);
               const draft = getDraftForItem(item, drafts);
-              const costeN = parseNullableNumber(draft.coste_total);
-              const ventaN = parseNullableNumber(draft.precio_venta);
-              const marginPct = computeMarginPercent(costeN, ventaN);
-              const marginTier = marginHealthCategory(marginPct);
+              const escandalloState = visualStateById?.[key];
+              const { costeN, ventaN, marginPct, marginTier, useComputedEconomics } =
+                resolveEscandalloRowEconomics(
+                  key,
+                  draft,
+                  item,
+                  escandalloState,
+                  profitabilityById,
+                );
               const busy = Boolean(savingById[key]);
               const isBest = listStats.bestKey === key;
               const isWorst = listStats.worstKey === key;
-              const escandalloState = visualStateById?.[key];
 
               return (
                 <HostlyDataRow key={key}>
@@ -200,32 +217,45 @@ export function EscandallosCartaDataView({
                     </div>
                   </HostlyDataCell>
                   <HostlyDataCell align="end" col="cost">
-                    <label className="hostly-recipe-editor__inline-money">
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        className={inputClass}
-                        value={draft.coste_total}
-                        onChange={(e) => onUpdateDraft(item.id, "coste_total", e.target.value)}
-                        aria-label={`Coste ${item.nombre_plato ?? ""}`}
-                      />
-                      <span className="hostly-recipe-editor__money-suffix">€</span>
-                    </label>
+                    {useComputedEconomics ? (
+                      <HostlyCostBadge value={formatCostCellValue(costeN)} />
+                    ) : (
+                      <label className="hostly-recipe-editor__inline-money">
+                        <input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          className={inputClass}
+                          value={draft.coste_total}
+                          onChange={(e) => onUpdateDraft(item.id, "coste_total", e.target.value)}
+                          aria-label={`Coste ${item.nombre_plato ?? ""}`}
+                        />
+                        <span className="hostly-recipe-editor__money-suffix">€</span>
+                      </label>
+                    )}
                   </HostlyDataCell>
                   <HostlyDataCell align="end" col="sale">
-                    <label className="hostly-recipe-editor__inline-money">
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        className={inputClass}
-                        value={draft.precio_venta}
-                        onChange={(e) => onUpdateDraft(item.id, "precio_venta", e.target.value)}
-                        aria-label={`Venta ${item.nombre_plato ?? ""}`}
-                      />
-                      <span className="hostly-recipe-editor__money-suffix">€</span>
-                    </label>
+                    {useComputedEconomics ? (
+                      <span className="hostly-recipe-editor__readonly-money">
+                        {formatSaleCellValue(ventaN)}
+                        {ventaN != null ? (
+                          <span className="hostly-recipe-editor__money-suffix"> €</span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      <label className="hostly-recipe-editor__inline-money">
+                        <input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          className={inputClass}
+                          value={draft.precio_venta}
+                          onChange={(e) => onUpdateDraft(item.id, "precio_venta", e.target.value)}
+                          aria-label={`Venta ${item.nombre_plato ?? ""}`}
+                        />
+                        <span className="hostly-recipe-editor__money-suffix">€</span>
+                      </label>
+                    )}
                   </HostlyDataCell>
                   <HostlyDataCell align="end" col="margin">
                     <HostlyMarginBadge
@@ -298,12 +328,16 @@ export function EscandallosCartaDataView({
         {items.map((item) => {
           const key = String(item.id);
           const draft = getDraftForItem(item, drafts);
-          const costeN = parseNullableNumber(draft.coste_total);
-          const ventaN = parseNullableNumber(draft.precio_venta);
-          const marginPct = computeMarginPercent(costeN, ventaN);
-          const marginTier = marginHealthCategory(marginPct);
-          const busy = Boolean(savingById[key]);
           const escandalloState = visualStateById?.[key];
+          const { costeN, ventaN, marginPct, marginTier, useComputedEconomics } =
+            resolveEscandalloRowEconomics(
+              key,
+              draft,
+              item,
+              escandalloState,
+              profitabilityById,
+            );
+          const busy = Boolean(savingById[key]);
 
           return (
             <HostlyMobileListItem
@@ -321,11 +355,11 @@ export function EscandallosCartaDataView({
                       ·
                     </span>
                   ) : null}
-                  <HostlyCostBadge value={formatMoney2(costeN)} />
+                  <HostlyCostBadge value={formatCostCellValue(costeN)} />
                   <span className="hostly-mobile-list-item__dot" aria-hidden>
                     ·
                   </span>
-                  <span>{formatMoney2(ventaN)}</span>
+                  <span>{formatSaleCellValue(ventaN)}{ventaN != null ? " €" : ""}</span>
                 </>
               }
               aside={
@@ -355,6 +389,24 @@ export function EscandallosCartaDataView({
                 </div>
               }
             >
+              {useComputedEconomics ? (
+                <div className="hostly-recipe-editor__mobile-fields hostly-recipe-editor__mobile-fields--readonly">
+                  <div className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">Coste</span>
+                    <span className="hostly-recipe-editor__readonly-money">
+                      {formatCostCellValue(costeN)}
+                      {costeN != null ? " €" : ""}
+                    </span>
+                  </div>
+                  <div className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">Venta</span>
+                    <span className="hostly-recipe-editor__readonly-money">
+                      {formatSaleCellValue(ventaN)}
+                      {ventaN != null ? " €" : ""}
+                    </span>
+                  </div>
+                </div>
+              ) : (
               <div className="hostly-recipe-editor__mobile-fields">
                 <label className="hostly-carta-config-form-field">
                   <span className="hostly-carta-config-form-label">Coste</span>
@@ -385,6 +437,7 @@ export function EscandallosCartaDataView({
                   </div>
                 </label>
               </div>
+              )}
             </HostlyMobileListItem>
           );
         })}
