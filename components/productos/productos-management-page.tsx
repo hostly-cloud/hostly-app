@@ -129,6 +129,7 @@ import {
 import { CatalogMigrationPreviewPanel } from "@/components/productos/catalog-migration-preview-panel";
 import { LegacyPlatosArchivePanel } from "@/components/productos/legacy-platos-archive-panel";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
+import { resolvePlatoTieneEscandallo } from "@/lib/carta/operational-catalog-mappers";
 import {
   applyResolvedCartaCentralProductDelete,
   resolveCartaProductDeleteAction,
@@ -160,6 +161,7 @@ import {
   buildRecipeSourceFromDraftRows,
   isRecipeInventoryUnit,
   normalizeProductRecipe,
+  normalizedProductRecipeToFirestore,
   normalizedProductRecipeToWriteInput,
   productDocumentsToInventoryLookup,
 } from "@/lib/recipes/product-recipe-helpers";
@@ -744,13 +746,6 @@ const rowActionBtn: CSSProperties = {
   minHeight: 28,
   lineHeight: 1.18,
 };
-
-function tieneEscandalloForPlato(p: PlatoCarta, meta: EscandalloMetaMap): boolean {
-  if (typeof p.tieneEscandallo === "boolean") return p.tieneEscandallo;
-  const sid = p.escandalloSupabaseId;
-  if (sid == null) return false;
-  return meta.get(sid)?.tieneEscandallo === true;
-}
 
 type ProductoEstadoVenta = PlatoCarta & { enCarta?: boolean; isActive?: boolean };
 
@@ -1581,6 +1576,10 @@ export default function ProductosManagementPage({
   const [drawerSyncing, setDrawerSyncing] = useState(false);
   const [draftRecipeEnabled, setDraftRecipeEnabled] = useState(false);
   const [draftRecipeRows, setDraftRecipeRows] = useState<RecipeIngredientDraftRow[]>([]);
+  const draftRecipeEnabledRef = useRef(draftRecipeEnabled);
+  const draftRecipeRowsRef = useRef(draftRecipeRows);
+  draftRecipeEnabledRef.current = draftRecipeEnabled;
+  draftRecipeRowsRef.current = draftRecipeRows;
   const [escandalloModalOpen, setEscandalloModalOpen] = useState(false);
   const [commercialInfoModalOpen, setCommercialInfoModalOpen] = useState(false);
   const [inventoryLookup, setInventoryLookup] = useState<InventoryProductLookup[]>([]);
@@ -1844,6 +1843,46 @@ export default function ProductosManagementPage({
     };
   }, [items]);
 
+  const tieneEscandalloForPlato = useCallback(
+    (p: PlatoCarta, escMeta: EscandalloMetaMap = meta) =>
+      resolvePlatoTieneEscandallo(
+        p,
+        escMeta,
+        isCentralCatalog ? centralDocsById.get(p.id) : undefined,
+      ),
+    [meta, isCentralCatalog, centralDocsById],
+  );
+
+  const applyCentralRecipeToLocalCatalog = useCallback(
+    (
+      productId: string,
+      recipe: ReturnType<typeof normalizeProductRecipe>["recipe"],
+    ) => {
+      const enabled = recipe.enabled === true;
+      const recipeDoc = normalizedProductRecipeToFirestore(recipe);
+      setCentralDocsById((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(productId);
+        if (existing) {
+          next.set(productId, { ...existing, recipe: recipeDoc });
+        }
+        return next;
+      });
+      setItems((prev) =>
+        prev.map((p) =>
+          p.id === productId
+            ? {
+                ...p,
+                tieneEscandallo: enabled,
+                estadoCoste: enabled ? "ok" : "pendiente",
+              }
+            : p,
+        ),
+      );
+    },
+    [],
+  );
+
   const stats = useMemo(() => {
     let activos = 0;
     let inactivos = 0;
@@ -1856,7 +1895,7 @@ export default function ProductosManagementPage({
       else sinEsc += 1;
     }
     return { activos, inactivos, conEsc, sinEsc, total: items.length };
-  }, [items, meta]);
+  }, [items, meta, tieneEscandalloForPlato]);
 
   const catalogListFilter: CartaFilter = listFilter;
 
@@ -1891,7 +1930,7 @@ export default function ProductosManagementPage({
     else if (catalogListFilter === "sinEscandallo") rows = rows.filter((p) => !tieneEscandalloForPlato(p, meta));
 
     return rows;
-  }, [items, catalogListFilter, configCartaProductosChrome, meta]);
+  }, [items, catalogListFilter, configCartaProductosChrome, meta, tieneEscandalloForPlato]);
 
   const catalogFoodDrinkCounts = useMemo(() => {
     let food = 0;
@@ -2054,6 +2093,8 @@ export default function ProductosManagementPage({
     setReorderMode((prev) => {
       if (prev) return false;
       setListSearch("");
+      setListFilter("todos");
+      setCatalogFoodDrinkSegment("all");
       setConfigCartaAdvancedOpen(false);
       clearSelection();
       setViewMode("list");
@@ -3154,12 +3195,26 @@ export default function ProductosManagementPage({
 
     if (isCentralCatalog) {
       const saleProductIdForRecipe = editingId?.trim() ?? "";
+      const recipeEnabledForSave = draftRecipeEnabledRef.current;
+      const recipeRowsForSave = draftRecipeRowsRef.current;
       const recipeValidation = normalizeProductRecipe(
-        buildRecipeSourceFromDraftRows(draftRecipeEnabled, draftRecipeRows),
+        buildRecipeSourceFromDraftRows(recipeEnabledForSave, recipeRowsForSave),
         { saleProductId: saleProductIdForRecipe, inventoryProductsById: inventoryLookupMap },
       );
       if (recipeValidation.errors.length > 0) {
         setFormError(recipeValidation.errors[0] ?? "Revisa el escandallo.");
+        return;
+      }
+      const draftRowsWithProductId = recipeRowsForSave.filter(
+        (row) => row.productId.trim().length > 0,
+      ).length;
+      if (
+        recipeEnabledForSave &&
+        draftRowsWithProductId > recipeValidation.recipe.ingredients.length
+      ) {
+        setFormError(
+          "Algunos ingredientes del escandallo no tienen cantidad o unidad válida.",
+        );
         return;
       }
 
@@ -3197,6 +3252,7 @@ export default function ProductosManagementPage({
           savedProductId,
           normalizedProductRecipeToWriteInput(recipeValidation.recipe),
         );
+        applyCentralRecipeToLocalCatalog(savedProductId, recipeValidation.recipe);
         const prevImagePath = draftExistingImagePath;
         if (draftRemoveImage && !draftPendingImageFile) {
           await clearCentralProductImage(
@@ -4692,6 +4748,7 @@ export default function ProductosManagementPage({
                     selectAllRef={selectAllRef}
                     isLegacyReadOnly={isLegacyReadOnly}
                     meta={meta}
+                    centralDocsById={centralDocsById}
                     escNavId={escNavId}
                     locale={locale as Locale}
                     t={t}
@@ -4892,6 +4949,7 @@ export default function ProductosManagementPage({
               selectAllRef={selectAllRef}
               isLegacyReadOnly={isLegacyReadOnly}
               meta={meta}
+              centralDocsById={centralDocsById}
               escNavId={escNavId}
               locale={locale as Locale}
               t={t}
