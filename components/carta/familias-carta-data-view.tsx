@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { useI18n } from "@/components/i18n-provider";
 import { ConfigCartaEditToggleActions } from "@/components/carta/config-carta-row-actions";
+import {
+  FamiliasCartaDragHandle,
+  FamiliasCartaSortableDragHandle,
+  FamiliasCartaSortableItem,
+  FamiliasCartaSortableRoot,
+} from "@/components/carta/familias-carta-sortable";
 import { HostlyStatusBadge } from "@/components/ui/hostly/data-table";
 import { formatCartaFamiliaListSummary } from "@/lib/carta-categorias/familia-operational-config";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
@@ -29,7 +36,60 @@ export type FamiliasCartaDataViewProps = {
   onEdit: (item: CartaFamilia) => void;
   onToggleActive: (item: CartaFamilia) => void;
   onCreateNew?: () => void;
+  onReorderFamilias?: (orderedIds: string[]) => void;
+  reorderBusyId?: string | null;
 };
+
+function renderFamiliaCard(args: {
+  f: CartaFamilia;
+  categoriesByFamiliaId: Map<string, CartaCategoria[]>;
+  onEdit: (item: CartaFamilia) => void;
+  onToggleActive: (item: CartaFamilia) => void;
+  showDragHandle: boolean;
+  isMobile: boolean;
+}) {
+  const { f, categoriesByFamiliaId, onEdit, onToggleActive, showDragHandle, isMobile } = args;
+  const summary = formatCartaFamiliaListSummary(f);
+  const catCount = linkedCategoryCount(f.id, categoriesByFamiliaId);
+
+  return (
+    <div className="hostly-carta-familia-card">
+      {showDragHandle ? (
+        <div className="hostly-carta-familia-card__handle">
+          <FamiliasCartaSortableDragHandle />
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="hostly-carta-familia-card__main"
+        onClick={showDragHandle && isMobile ? undefined : () => onEdit(f)}
+      >
+        <span className="hostly-carta-familia-card__name">{f.name}</span>
+        <span className="hostly-carta-familia-card__summary">{summary}</span>
+        {f.description?.trim() ? (
+          <span className="hostly-carta-familia-card__description">{f.description.trim()}</span>
+        ) : null}
+        {catCount > 0 ? (
+          <span className="hostly-carta-familia-card__meta">
+            {catCount === 1
+              ? "1 categoría de carta vinculada"
+              : `${catCount} categorías de carta vinculadas`}
+          </span>
+        ) : null}
+      </button>
+      <div className="hostly-carta-familia-card__aside">
+        <FamilyStatusBadge active={f.isActive} />
+        <ConfigCartaEditToggleActions
+          isActive={f.isActive}
+          editTitle="Editar familia de menú"
+          toggleTitle={f.isActive ? "Desactivar familia de menú" : "Activar familia de menú"}
+          onEdit={() => onEdit(f)}
+          onToggle={() => onToggleActive(f)}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function FamiliasCartaDataView({
   items,
@@ -38,7 +98,13 @@ export function FamiliasCartaDataView({
   onEdit,
   onToggleActive,
   onCreateNew,
+  onReorderFamilias,
+  reorderBusyId,
 }: FamiliasCartaDataViewProps) {
+  const { t } = useI18n();
+  const dragHandleLabel = t("cartaCategories.menuFamilyDragHandleAria");
+  const sortableEnabled = Boolean(onReorderFamilias);
+
   const categoriesByFamiliaId = useMemo(() => {
     const map = new Map<string, CartaCategoria[]>();
     for (const c of categorias) {
@@ -86,49 +152,64 @@ export function FamiliasCartaDataView({
     );
   }
 
-  return (
-    <div className="hostly-carta-familia-list-wrap">
-      <ul className="hostly-carta-familia-list" role="list">
-        {items.map((f) => {
-          const summary = formatCartaFamiliaListSummary(f);
-          const catCount = linkedCategoryCount(f.id, categoriesByFamiliaId);
+  const renderDragPreview = (f: CartaFamilia) => (
+    <div className="hostly-carta-familia-drag-preview">
+      <FamiliasCartaDragHandle disabled label={dragHandleLabel} />
+      <span className="hostly-carta-familia-drag-preview__name">{f.name}</span>
+    </div>
+  );
 
+  const listContent = (listItems: CartaFamilia[], showDragHandle: boolean, isMobile: boolean) => (
+    <ul className="hostly-carta-familia-list" role="list">
+      {listItems.map((f) => {
+        const card = renderFamiliaCard({
+          f,
+          categoriesByFamiliaId,
+          onEdit,
+          onToggleActive,
+          showDragHandle,
+          isMobile,
+        });
+
+        if (showDragHandle) {
           return (
             <li key={f.id}>
-              <div className="hostly-carta-familia-card">
-                <button
-                  type="button"
-                  className="hostly-carta-familia-card__main"
-                  onClick={() => onEdit(f)}
-                >
-                  <span className="hostly-carta-familia-card__name">{f.name}</span>
-                  <span className="hostly-carta-familia-card__summary">{summary}</span>
-                  {f.description?.trim() ? (
-                    <span className="hostly-carta-familia-card__description">{f.description.trim()}</span>
-                  ) : null}
-                  {catCount > 0 ? (
-                    <span className="hostly-carta-familia-card__meta">
-                      {catCount === 1
-                        ? "1 categoría de carta vinculada"
-                        : `${catCount} categorías de carta vinculadas`}
-                    </span>
-                  ) : null}
-                </button>
-                <div className="hostly-carta-familia-card__aside">
-                  <FamilyStatusBadge active={f.isActive} />
-                  <ConfigCartaEditToggleActions
-                    isActive={f.isActive}
-                    editTitle="Editar familia de menú"
-                    toggleTitle={f.isActive ? "Desactivar familia de menú" : "Activar familia de menú"}
-                    onEdit={() => onEdit(f)}
-                    onToggle={() => onToggleActive(f)}
-                  />
-                </div>
-              </div>
+              <FamiliasCartaSortableItem item={f} isMobile={isMobile} onClick={() => onEdit(f)}>
+                {card}
+              </FamiliasCartaSortableItem>
             </li>
           );
-        })}
-      </ul>
-    </div>
+        }
+
+        return <li key={f.id}>{card}</li>;
+      })}
+    </ul>
+  );
+
+  if (!sortableEnabled) {
+    return (
+      <div className="hostly-carta-familia-list-wrap">
+        {listContent(items, false, false)}
+      </div>
+    );
+  }
+
+  return (
+    <FamiliasCartaSortableRoot
+      items={items}
+      disabled={Boolean(reorderBusyId)}
+      dragHandleLabel={dragHandleLabel}
+      onReorder={onReorderFamilias!}
+      renderDragPreview={renderDragPreview}
+    >
+      {({ localItems, isMobile }) => (
+        <div className="hostly-carta-familia-list-wrap">
+          <p className="hostly-carta-familia-reorder-hint" role="note">
+            {t("cartaCategories.menuFamilyDragReorderHint")}
+          </p>
+          {listContent(localItems, true, isMobile)}
+        </div>
+      )}
+    </FamiliasCartaSortableRoot>
   );
 }
