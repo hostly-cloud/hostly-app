@@ -5,6 +5,8 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useMesas } from "@/hooks/useMesas";
 import { updateMesa } from "@/lib/firestore/mesas";
 import type { Mesa } from "@/types/mesa";
+import ModulePageShell from "@/components/module-page-shell";
+import { HostlyLoadingState } from "@/components/ui/hostly";
 
 export default function MesasPage() {
   const router = useRouter();
@@ -24,43 +26,28 @@ export default function MesasPage() {
   };
 
   if (!ready || loading) {
-    return <div>Cargando mesas...</div>;
+    return (
+      <ModulePageShell title="Mesas" subtitle="Estado de sala" maxWidth={1180} compactLayout>
+        <HostlyLoadingState embedded label="Cargando mesas…" />
+      </ModulePageShell>
+    );
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ marginBottom: 16 }}>Mesas</h2>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-          gap: 12,
-        }}
-      >
+    <ModulePageShell title="Mesas" subtitle="Estado de sala" maxWidth={1180} compactLayout>
+      <div className="hostly-mesas-grid">
         {mesas.map((mesa) => (
           <div
+            className={`hostly-mesa-card hostly-mesa-card--${mesa.status}`}
             key={mesa.id}
             onClick={() => router.push(`/dashboard/mesas/${mesa.id}`)}
-            style={{
-              padding: 12,
-              borderRadius: 12,
-              color: "#f9fafb",
-              background:
-                mesa.status === "free"
-                  ? "#1f2937"
-                  : mesa.status === "occupied"
-                    ? "#7f1d1d"
-                    : "#78350f",
-              cursor: "pointer",
-            }}
           >
-            <div style={{ fontWeight: 600 }}>{mesa.name}</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>{mesa.zone}</div>
-            <div style={{ fontSize: 12 }}>{mesa.capacity} pax</div>
+            <div className="hostly-mesa-card__name">{mesa.name}</div>
+            <div className="hostly-mesa-card__meta">{mesa.zone}</div>
+            <div className="hostly-mesa-card__meta">{mesa.capacity} pax</div>
           </div>
         ))}
       </div>
-    </div>
+    </ModulePageShell>
   );
 }

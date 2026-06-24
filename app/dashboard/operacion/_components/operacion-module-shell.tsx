@@ -20,7 +20,7 @@ const shellStyle: CSSProperties = {
   boxSizing: "border-box",
   background:
     "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 48%, #dbeefa 100%)",
-  color: "#1f2933",
+  color: "var(--hostly-ink)",
   minHeight: "100dvh",
   height: "100dvh",
   maxHeight: "100dvh",
@@ -28,23 +28,22 @@ const shellStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   padding: 0,
-  fontFamily: "Arial, sans-serif",
 };
 
 const topBarStyle: CSSProperties = {
   flexShrink: 0,
   display: "flex",
   alignItems: "center",
-  gap: 12,
-  padding: "10px 16px",
+  gap: "var(--hostly-op-gap-md)",
+  padding: "var(--hostly-op-gap-sm) var(--hostly-op-gap-lg)",
   borderBottom: "1px solid var(--hostly-line)",
   background: "rgba(247, 252, 255, 0.92)",
 };
 
 const moduleLabelStyle: CSSProperties = {
   marginLeft: "auto",
-  color: "#667085",
-  fontSize: 12,
+  color: "var(--hostly-ink-muted)",
+  fontSize: "var(--hostly-type-caption)",
   fontWeight: 700,
   letterSpacing: "0.06em",
   textTransform: "uppercase",
@@ -52,7 +51,7 @@ const moduleLabelStyle: CSSProperties = {
 
 const filterBarWrapStyle: CSSProperties = {
   flexShrink: 0,
-  padding: "10px 16px 0 16px",
+  padding: "var(--hostly-op-gap-sm) var(--hostly-op-gap-lg) 0",
 };
 
 const contentStyle: CSSProperties = {

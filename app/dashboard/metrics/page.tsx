@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import ModulePageShell from "@/components/module-page-shell";
+import { HostlyAlert, HostlyButton, HostlyInput } from "@/components/ui/hostly";
 
 type OrderDoc = {
   id: string;
@@ -297,28 +298,19 @@ export default function MetricsPage() {
 
   return (
     <ModulePageShell title="Métricas" subtitle="Resumen del servicio" maxWidth={1180} compactLayout>
-      <div style={{ color: "#fff" }}>
-      <button
-        type="button"
+      <div className="hostly-legacy-metrics">
+      <HostlyButton
+        variant="secondary"
         onClick={() => {
           new Audio("/alert.mp3").play().catch(console.error);
         }}
       >
         Probar sonido
-      </button>
+      </HostlyButton>
       {showAlert ? (
-        <div
-          style={{
-            backgroundColor: "#ef4444",
-            color: "white",
-            padding: "10px",
-            borderRadius: "6px",
-            marginBottom: "10px",
-            fontWeight: "600",
-          }}
-        >
+        <HostlyAlert tone="danger">
           ⚠️ Servicio empeorando
-        </div>
+        </HostlyAlert>
       ) : null}
       {slowTables.length > 0 ? (
         <div style={{ marginTop: "10px" }}>
@@ -346,19 +338,12 @@ export default function MetricsPage() {
         </div>
       ) : null}
       {slowOrdersCount > 0 ? (
-        <div
-          style={{
-            backgroundColor: "#dc2626",
-            color: "white",
-            padding: 12,
-            marginBottom: 16,
-          }}
-        >
+        <HostlyAlert tone="danger">
           ⚠️ Hay comandas con retraso
-        </div>
+        </HostlyAlert>
       ) : null}
-      <h2 style={{ marginTop: 0 }}>Métricas</h2>
-      <input
+      <HostlyInput
+        className="hostly-legacy-date-input"
         type="date"
         value={toDateInputValue(selectedDate)}
         onChange={(e) => {
@@ -367,7 +352,6 @@ export default function MetricsPage() {
           const [y, m, d] = v.split("-").map(Number);
           setSelectedDate(new Date(y, m - 1, d));
         }}
-        style={{ marginBottom: 12, display: "block" }}
       />
       <p>Hoy: {totalOrders} comandas</p>
       <p>Ayer: {totalOrdersYesterday} comandas</p>
@@ -382,24 +366,14 @@ export default function MetricsPage() {
         {avgTimeYesterday != null ? `${avgTimeYesterday} min` : "—"}
       </p>
       {avgTimeToday != null && avgTimeYesterday != null ? (
-        <div
-          style={{
-            padding: "8px",
-            borderRadius: "6px",
-            marginTop: "8px",
-            border:
-              avgTimeToday < avgTimeYesterday
-                ? "2px solid #22c55e"
-                : avgTimeToday > avgTimeYesterday
-                  ? "2px solid #ef4444"
-                  : "2px solid #9ca3af",
-            backgroundColor:
-              avgTimeToday < avgTimeYesterday
-                ? "#dcfce7"
-                : avgTimeToday > avgTimeYesterday
-                  ? "#fee2e2"
-                  : "#f3f4f6",
-          }}
+        <HostlyAlert
+          tone={
+            avgTimeToday < avgTimeYesterday
+              ? "success"
+              : avgTimeToday > avgTimeYesterday
+                ? "danger"
+                : "neutral"
+          }
         >
           <p style={{ fontWeight: "600" }}>
             {avgTimeToday < avgTimeYesterday
@@ -408,7 +382,7 @@ export default function MetricsPage() {
                 ? `🔴 Servicio más lento que ayer (+${Math.abs(avgTimeToday - avgTimeYesterday)} min)`
                 : "⚪ Mismo rendimiento que ayer"}
           </p>
-        </div>
+        </HostlyAlert>
       ) : null}
       <p>Comandas con retraso: {slowOrdersCount}</p>
       {slowOrderTableLabels.length > 0 ? (

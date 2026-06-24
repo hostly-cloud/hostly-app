@@ -19,6 +19,8 @@ import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types"
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
 import type { EscandalloMetaMap } from "@/lib/platos-escandallo-bridge";
+import { resolvePlatoTieneEscandallo } from "@/lib/carta/operational-catalog-mappers";
+import type { ProductDocument } from "@/lib/firestore/products";
 import type {
   ProductResolverParitySummary,
   ResolverParityFilterId,
@@ -64,11 +66,12 @@ function formatEuro(value: number, locale: Locale): string {
   }).format(value);
 }
 
-function tieneEscandalloForPlato(p: PlatoCarta, meta: EscandalloMetaMap): boolean {
-  if (typeof p.tieneEscandallo === "boolean") return p.tieneEscandallo;
-  const sid = p.escandalloSupabaseId;
-  if (sid == null) return false;
-  return meta.get(sid)?.tieneEscandallo === true;
+function tieneEscandalloForPlato(
+  p: PlatoCarta,
+  meta: EscandalloMetaMap,
+  centralDoc?: Pick<ProductDocument, "recipe"> | null,
+): boolean {
+  return resolvePlatoTieneEscandallo(p, meta, centralDoc);
 }
 
 /** Microchip Carta: visibilidad en carta (sin mezclar activo/inactivo en el copy corto). */
@@ -157,6 +160,8 @@ export type ProductosCartaDataViewProps = {
   selectAllRef: RefObject<HTMLInputElement | null>;
   isLegacyReadOnly: boolean;
   meta: EscandalloMetaMap;
+  /** Snapshot central; fuente de `recipe.enabled` para la columna ESC. */
+  centralDocsById?: ReadonlyMap<string, ProductDocument>;
   escNavId: string | null;
   locale: Locale;
   t: TranslateFn;
@@ -511,6 +516,7 @@ function renderProductosCartaHeaderCells(args: {
 function renderProductRowCells(args: {
   p: PlatoCarta;
   meta: EscandalloMetaMap;
+  centralDocsById?: ReadonlyMap<string, ProductDocument>;
   escNavId: string | null;
   t: TranslateFn;
   locale: Locale;
@@ -538,6 +544,7 @@ function renderProductRowCells(args: {
   const {
     p,
     meta,
+    centralDocsById,
     escNavId,
     t,
     locale,
@@ -562,7 +569,11 @@ function renderProductRowCells(args: {
     cartaCategorias,
     cartaFamilias,
   } = args;
-  const tiene = tieneEscandalloForPlato(p, meta);
+  const tiene = tieneEscandalloForPlato(
+    p,
+    meta,
+    centralDocsById?.get(p.id),
+  );
   const busyEsc = escNavId === p.id;
   const ops = productOperationalFieldsFromPlato(p);
   const sectionCell = formatProductosCartaSectionCellDisplay(
@@ -706,6 +717,7 @@ function MobileProductItem(
   const {
     p,
     meta,
+    centralDocsById,
     escNavId,
     t,
     locale,
@@ -720,7 +732,11 @@ function MobileProductItem(
     onMoveProductDown,
     showDragHandle = false,
   } = props;
-  const tiene = tieneEscandalloForPlato(p, meta);
+  const tiene = tieneEscandalloForPlato(
+    p,
+    meta,
+    centralDocsById?.get(p.id),
+  );
   const busyEsc = escNavId === p.id;
   const selected = selectedIds.has(p.id);
   const ops = productOperationalFieldsFromPlato(p);

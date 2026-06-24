@@ -16,6 +16,7 @@ import {
   fetchCartaCategorias,
   fetchCartaFamilias,
   patchCartaFamiliaApi,
+  reorderCartaFamiliasApi,
 } from "@/lib/carta-categorias/api-client";
 import {
   buildCartaFamiliaOperativaPayload,
@@ -85,6 +86,7 @@ export default function ConfigCartaFamiliasPage() {
   const [draftOrder, setDraftOrder] = useState(0);
   const [draftForm, setDraftForm] = useState<FamiliaFormDraft>(DEFAULT_FORM_DRAFT);
   const [productionStations, setProductionStations] = useState<ProductionStationDocument[]>([]);
+  const [reorderBusyId, setReorderBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const activeProductionStations = useMemo(
@@ -257,6 +259,40 @@ export default function ConfigCartaFamiliasPage() {
     }
   }
 
+  const reorderFamilias = useCallback(
+    async (orderedIds: string[]) => {
+      if (!restauranteId) return;
+      const currentIds = sorted.map((f) => f.id);
+      if (orderedIds.join("|") === currentIds.join("|")) return;
+
+      const byId = new Map(sorted.map((f) => [f.id, f] as const));
+      const optimisticItems: CartaFamilia[] = orderedIds
+        .map((id, idx) => {
+          const f = byId.get(id);
+          return f ? { ...f, sortOrder: idx } : null;
+        })
+        .filter((f): f is CartaFamilia => f != null);
+      for (const f of sorted) {
+        if (!orderedIds.includes(f.id)) optimisticItems.push(f);
+      }
+      const previousItems = items;
+      setItems(optimisticItems);
+      setReorderBusyId(orderedIds[0] ?? null);
+      setError(null);
+      try {
+        const res = await reorderCartaFamiliasApi(restauranteId, orderedIds);
+        if (!res.ok) throw new Error(res.error);
+        await refresh();
+      } catch (e) {
+        setItems(previousItems);
+        setError(e instanceof Error ? e.message : "No se pudo cambiar el orden.");
+      } finally {
+        setReorderBusyId(null);
+      }
+    },
+    [restauranteId, sorted, items, refresh],
+  );
+
   async function toggleActive(f: CartaFamilia) {
     if (!restauranteId) return;
     const res = await patchCartaFamiliaApi(restauranteId, f.id, {
@@ -369,6 +405,8 @@ export default function ConfigCartaFamiliasPage() {
           onEdit={openEdit}
           onToggleActive={(f) => void toggleActive(f)}
           onCreateNew={openNew}
+          onReorderFamilias={(orderedIds) => void reorderFamilias(orderedIds)}
+          reorderBusyId={reorderBusyId}
         />
       </ConfigCard>
 

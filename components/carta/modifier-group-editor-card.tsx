@@ -5,7 +5,7 @@ import {
   ConfigBtnSecondary,
   ConfigCard,
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
-import { HostlyFormToggle } from "@/components/carta/hostly-form-toggle";
+import { HostlyFormToggle } from "@/components/ui/hostly";
 import type { ProductDocument } from "@/lib/firestore/products";
 import {
   MODIFIER_GROUP_TYPES,

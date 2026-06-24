@@ -1,6 +1,7 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, Dispatch, SetStateAction } from "react";
+import Link from "next/link";
 import { useI18n } from "@/components/i18n-provider";
 import {
   RECIPE_INVENTORY_UNITS,
@@ -16,6 +17,17 @@ export type RecipeIngredientDraftRow = {
   unit: RecipeInventoryUnit;
 };
 
+/** Pantalla principal de inventario (productos con stock activo). */
+const INVENTORY_PRODUCTS_ROUTE = "/dashboard/inventario";
+
+const inventoryCtaStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  marginTop: 10,
+  textDecoration: "none",
+};
+
 type RecipeEditorAppearance = "embedded" | "sheet";
 
 type ProductRecipeEditorSectionProps = {
@@ -23,7 +35,7 @@ type ProductRecipeEditorSectionProps = {
   enabled: boolean;
   onEnabledChange: (value: boolean) => void;
   rows: RecipeIngredientDraftRow[];
-  onRowsChange: (rows: RecipeIngredientDraftRow[]) => void;
+  onRowsChange: Dispatch<SetStateAction<RecipeIngredientDraftRow[]>>;
   inventoryProducts: readonly InventoryProductLookup[];
   warnings: readonly string[];
   disabled?: boolean;
@@ -241,15 +253,57 @@ function sheetRecipeLabels(locale: string) {
       listHeading: "Recipe ingredients",
       amount: "Quantity",
       unit: "Unit",
-      pendingName: "Select a product",
+      pendingName: "Select ingredient",
     };
   }
   return {
     listHeading: "Ingredientes de la receta",
     amount: "Cantidad",
     unit: "Unidad",
-    pendingName: "Selecciona producto",
+    pendingName: "Selecciona ingrediente",
   };
+}
+
+function NoStockIngredientsEmpty({
+  isSheet,
+  theme,
+  title,
+  body,
+  ctaLabel,
+}: {
+  isSheet: boolean;
+  theme: ReturnType<typeof recipeEditorTheme>;
+  title: string;
+  body: string;
+  ctaLabel: string;
+}) {
+  const cta = (
+    <Link
+      href={INVENTORY_PRODUCTS_ROUTE}
+      className="hostly-button-primary hostly-button-compact"
+      style={inventoryCtaStyle}
+    >
+      {ctaLabel}
+    </Link>
+  );
+
+  if (isSheet) {
+    return (
+      <div className="hostly-product-recipe-editor__empty hostly-product-recipe-editor__empty--stock">
+        <p className="hostly-product-recipe-editor__empty-title">{title}</p>
+        <p className="hostly-product-recipe-editor__empty-body">{body}</p>
+        {cta}
+      </div>
+    );
+  }
+
+  return (
+    <div style={theme.emptyBox}>
+      <p style={theme.emptyTitle}>{title}</p>
+      <p style={theme.emptyBody}>{body}</p>
+      {cta}
+    </div>
+  );
 }
 
 export function ProductRecipeEditorSection({
@@ -270,6 +324,8 @@ export function ProductRecipeEditorSection({
   const sheetLabels = sheetRecipeLabels(locale);
   const isSheet = appearance === "sheet";
   const saleId = saleProductId?.trim() ?? "";
+  const hasStockProducts = inventoryProducts.length > 0;
+  const ingredientControlsDisabled = disabled || !hasStockProducts;
   const productsById = new Map(inventoryProducts.map((p) => [p.id, p]));
 
   const unitLabel = (unit: RecipeInventoryUnit): string => {
@@ -282,8 +338,8 @@ export function ProductRecipeEditorSection({
     rowId: string,
     patch: Partial<RecipeIngredientDraftRow>,
   ): void {
-    onRowsChange(
-      rows.map((row) => (row.clientRowId === rowId ? { ...row, ...patch } : row)),
+    onRowsChange((prev) =>
+      prev.map((row) => (row.clientRowId === rowId ? { ...row, ...patch } : row)),
     );
   }
 
@@ -297,11 +353,11 @@ export function ProductRecipeEditorSection({
 
   function addRow(): void {
     if (!enabled) onEnabledChange(true);
-    onRowsChange([...rows, createEmptyRecipeIngredientRow()]);
+    onRowsChange((prev) => [...prev, createEmptyRecipeIngredientRow()]);
   }
 
   function removeRow(rowId: string): void {
-    onRowsChange(rows.filter((row) => row.clientRowId !== rowId));
+    onRowsChange((prev) => prev.filter((row) => row.clientRowId !== rowId));
   }
 
   const selectableProducts = inventoryProducts.filter((p) => p.id !== saleId);
@@ -387,7 +443,7 @@ export function ProductRecipeEditorSection({
           <select
             className="hostly-product-recipe-editor__control"
             value={row.productId}
-            disabled={disabled}
+            disabled={ingredientControlsDisabled}
             onChange={(e) => onSelectProduct(row.clientRowId, e.target.value)}
           >
             <option value="">{t("carta.recipeEditor.productPlaceholder")}</option>
@@ -415,7 +471,7 @@ export function ProductRecipeEditorSection({
               min={0}
               step="any"
               className="hostly-product-recipe-editor__control"
-              disabled={disabled}
+              disabled={ingredientControlsDisabled}
               value={row.quantity}
               onChange={(e) => updateRow(row.clientRowId, { quantity: e.target.value })}
               placeholder={t("carta.recipeEditor.amountPlaceholder")}
@@ -428,7 +484,7 @@ export function ProductRecipeEditorSection({
             <select
               className="hostly-product-recipe-editor__control"
               value={row.unit}
-              disabled={disabled}
+              disabled={ingredientControlsDisabled}
               onChange={(e) =>
                 updateRow(row.clientRowId, {
                   unit: e.target.value as RecipeInventoryUnit,
@@ -494,9 +550,13 @@ export function ProductRecipeEditorSection({
           <label style={labelStyle}>{t("carta.recipeEditor.fieldProduct")}</label>
           <select
             value={row.productId}
-            disabled={disabled}
+            disabled={ingredientControlsDisabled}
             onChange={(e) => onSelectProduct(row.clientRowId, e.target.value)}
-            style={{ ...inputStyle, minHeight: 48, cursor: disabled ? "not-allowed" : "pointer" }}
+            style={{
+              ...inputStyle,
+              minHeight: 48,
+              cursor: ingredientControlsDisabled ? "not-allowed" : "pointer",
+            }}
           >
             <option value="">{t("carta.recipeEditor.productPlaceholder")}</option>
             {selectableProducts.map((p) => (
@@ -524,7 +584,7 @@ export function ProductRecipeEditorSection({
               inputMode="decimal"
               min={0}
               step="any"
-              disabled={disabled}
+              disabled={ingredientControlsDisabled}
               value={row.quantity}
               onChange={(e) => updateRow(row.clientRowId, { quantity: e.target.value })}
               placeholder={t("carta.recipeEditor.amountPlaceholder")}
@@ -535,13 +595,17 @@ export function ProductRecipeEditorSection({
             <label style={labelStyle}>{t("carta.recipeEditor.fieldUnit")}</label>
             <select
               value={row.unit}
-              disabled={disabled}
+              disabled={ingredientControlsDisabled}
               onChange={(e) =>
                 updateRow(row.clientRowId, {
                   unit: e.target.value as RecipeInventoryUnit,
                 })
               }
-              style={{ ...inputStyle, minHeight: 48, cursor: disabled ? "not-allowed" : "pointer" }}
+              style={{
+                ...inputStyle,
+                minHeight: 48,
+                cursor: ingredientControlsDisabled ? "not-allowed" : "pointer",
+              }}
             >
               {RECIPE_INVENTORY_UNITS.map((unit) => (
                 <option key={unit} value={unit}>
@@ -569,7 +633,20 @@ export function ProductRecipeEditorSection({
       ) : null}
 
       {enabled ? (
-        isSheet ? (
+        !hasStockProducts ? (
+          <div
+            className={isSheet ? "hostly-product-recipe-editor__body" : undefined}
+            style={isSheet ? undefined : { marginTop: 14 }}
+          >
+            <NoStockIngredientsEmpty
+              isSheet={isSheet}
+              theme={theme}
+              title={t("carta.recipeEditor.noStockTitle")}
+              body={t("carta.recipeEditor.noStockBody")}
+              ctaLabel={t("carta.recipeEditor.goToInventory")}
+            />
+          </div>
+        ) : isSheet ? (
           <div className="hostly-product-recipe-editor__body">
             {rows.length === 0 ? (
               <div className="hostly-product-recipe-editor__empty">
@@ -684,12 +761,6 @@ export function ProductRecipeEditorSection({
             <div key={warning}>{warning}</div>
           ))}
         </div>
-      ) : null}
-
-      {inventoryProducts.length === 0 ? (
-        <p className={isSheet ? "hostly-product-recipe-editor__hint" : undefined} style={isSheet ? undefined : theme.hint}>
-          {t("carta.recipeEditor.noStockProducts")}
-        </p>
       ) : null}
     </div>
   );

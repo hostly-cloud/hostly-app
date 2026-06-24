@@ -508,6 +508,9 @@ export const en: MessageTree = {
     deleteMenuFamily: "Delete",
     deleteFamilyInUse: "This family still has categories; reassign or delete them first.",
     menuFamilyPlaceholder: "e.g. Mains, Drinks…",
+    menuFamilyDragHandleAria: "Press and hold, then drag to reorder menu family",
+    menuFamilyDragReorderHint:
+      "Press and hold, then drag to reorder. Order is saved when you release.",
   },
   recepciones: {
     title: "Receipts",

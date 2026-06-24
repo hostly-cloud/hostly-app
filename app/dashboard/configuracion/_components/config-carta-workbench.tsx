@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import ModulePageShell from "@/components/module-page-shell";
+import { HostlyButton, HostlyCard } from "@/components/ui/hostly";
 
 type ConfigCartaWorkbenchProps = {
   title: string;
@@ -29,9 +30,12 @@ export function ConfigCard({
 }) {
   const variant = flush ? "hostly-carta-config-card--flush" : compact ? "hostly-carta-config-card--compact" : "";
   return (
-    <div className={["hostly-carta-config-card", variant, className].filter(Boolean).join(" ")}>
+    <HostlyCard
+      family="configuration"
+      className={["hostly-carta-config-card", variant, className].filter(Boolean).join(" ")}
+    >
       {children}
-    </div>
+    </HostlyCard>
   );
 }
 
@@ -40,15 +44,7 @@ export function ConfigBtnPrimary({
   className = "",
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string }) {
-  return (
-    <button
-      type="button"
-      className={["hostly-button-primary hostly-button-compact", className].filter(Boolean).join(" ")}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
+  return <HostlyButton variant="primary" className={className} {...rest}>{children}</HostlyButton>;
 }
 
 export function ConfigBtnSecondary({
@@ -56,15 +52,7 @@ export function ConfigBtnSecondary({
   className = "",
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string }) {
-  return (
-    <button
-      type="button"
-      className={["hostly-button-secondary hostly-button-compact", className].filter(Boolean).join(" ")}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
+  return <HostlyButton variant="secondary" className={className} {...rest}>{children}</HostlyButton>;
 }
 
 /** Destructivo discreto (ajustes, no alarmismo). */
@@ -73,15 +61,7 @@ export function ConfigBtnDanger({
   className = "",
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string }) {
-  return (
-    <button
-      type="button"
-      className={["hostly-button-danger hostly-button-compact", className].filter(Boolean).join(" ")}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
+  return <HostlyButton variant="destructive" className={className} {...rest}>{children}</HostlyButton>;
 }
 
 /**

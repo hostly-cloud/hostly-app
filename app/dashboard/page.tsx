@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
@@ -8,9 +8,10 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import type { HostlyCapability } from "@/lib/auth/hostly-capabilities";
 import ModulePageShell from "@/components/module-page-shell";
+import { RestaurantLogoMark } from "@/components/restaurant/restaurant-logo-mark";
 import { HostlyKpiCard, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
-import { isFirebaseConfigured } from "@/lib/firebase/client";
-import { updateRestaurantName } from "@/lib/firestore/restaurants";
+import { DEFAULT_RESTAURANT_NAME } from "@/lib/firestore/user-restaurant-profile";
+import { getRestaurantById } from "@/lib/firestore/restaurants";
 import { loadCompras, type CompraEstado, type CompraLocal } from "@/lib/compras-local";
 import { loadMermas, type MermaLocal } from "@/lib/mermas-local";
 import { fetchEscandalloMergedRowsForBrowser } from "@/lib/platos-escandallo-bridge";
@@ -103,16 +104,66 @@ function mergeEscandalloOverrides(rows: EscandalloRow[]): EscandalloRow[] {
   });
 }
 
-function IconStock({ size = 22 }: { size?: number }) {
+function LauncherIcon({ children }: { children: ReactNode }) {
+  return <span className="hostly-op-launcher-icon">{children}</span>;
+}
+
+function IconTpv() {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 7h16v10H4V7zm2 2v6h12V9H6zm2-4h8v2H8V5z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <LauncherIcon>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M6 4h12a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <path d="M8 8h8M8 12h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </LauncherIcon>
+  );
+}
+
+function IconCocina() {
+  return (
+    <LauncherIcon>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M8 3v8a4 4 0 1 0 8 0V3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M6 21h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </LauncherIcon>
+  );
+}
+
+function IconBarra() {
+  return (
+    <LauncherIcon>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M8 4h8l-1 14H9L8 4z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <path d="M7 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </LauncherIcon>
+  );
+}
+
+function IconReservas() {
+  return (
+    <LauncherIcon>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M7 4v2M17 4v2M5 8h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path
+          d="M6 6h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </LauncherIcon>
   );
 }
 
@@ -145,6 +196,20 @@ function IconBox({ size = 22 }: { size?: number }) {
   );
 }
 
+function IconSettings({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.65 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.65 1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 9c.2.48.62.83 1.15.9H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.1z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function IconOperacion({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -165,29 +230,71 @@ function IconOperacion({ size = 22 }: { size?: number }) {
   );
 }
 
-function IconSettings({ size = 22 }: { size?: number }) {
+function IconEscandallos({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
       <path
-        d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.65 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.65 1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 9c.2.48.62.83 1.15.9H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.1z"
+        d="M4 18h16M6 14l3-8 3 5 2-3 4 6"
         stroke="currentColor"
-        strokeWidth="1.4"
+        strokeWidth="1.5"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
   );
 }
 
-const MODULE_ENTRIES = [
-  { path: "/dashboard/operacion", label: "Operación", Icon: IconOperacion },
-  { path: "/dashboard/configuracion", label: "Configuración", Icon: IconSettings },
-  { path: "/dashboard/inventario", label: "Inventario", Icon: IconBox },
-  { path: "/dashboard/analisis", label: "Análisis", Icon: IconChart },
-  { path: "/dashboard/analisis/ventas", label: "Ventas", Icon: IconChart },
-] as const;
+type PrimaryAction = {
+  href: string;
+  label: string;
+  Icon: () => ReactNode;
+  visible: (can: (capability: HostlyCapability) => boolean) => boolean;
+};
 
-function isDashboardModuleVisible(
+const PRIMARY_ACTIONS: PrimaryAction[] = [
+  {
+    href: "/dashboard/operacion/tpv",
+    label: "TPV",
+    Icon: IconTpv,
+    visible: (can) => can("tpv.sell"),
+  },
+  {
+    href: "/dashboard/operacion/cocina",
+    label: "Cocina",
+    Icon: IconCocina,
+    visible: (can) => can("kds.manage"),
+  },
+  {
+    href: "/dashboard/operacion/barra",
+    label: "Barra",
+    Icon: IconBarra,
+    visible: (can) => can("kds.manage") || can("tpv.sell"),
+  },
+  {
+    href: "/dashboard/operacion/reservas",
+    label: "Reservas",
+    Icon: IconReservas,
+    visible: (can) => can("tpv.sell"),
+  },
+];
+
+type SecondaryModule = {
+  path: string;
+  label: string;
+  Icon: ({ size }: { size?: number }) => ReactNode;
+};
+
+const SECONDARY_MODULES: SecondaryModule[] = [
+  { path: "/dashboard/inventario", label: "Inventario", Icon: IconBox },
+  { path: "/dashboard/compras", label: "Compras", Icon: IconBox },
+  { path: "/dashboard/configuracion/carta/escandallos", label: "Escandallos", Icon: IconEscandallos },
+  { path: "/dashboard/analisis/ventas", label: "Ventas", Icon: IconChart },
+  { path: "/dashboard/analisis", label: "Análisis", Icon: IconChart },
+  { path: "/dashboard/configuracion", label: "Configuración", Icon: IconSettings },
+  { path: "/dashboard/operacion", label: "Operación", Icon: IconOperacion },
+];
+
+function isSecondaryModuleVisible(
   path: string,
   can: (capability: HostlyCapability) => boolean,
 ): boolean {
@@ -195,12 +302,15 @@ function isDashboardModuleVisible(
     case "/dashboard/operacion":
       return can("tpv.sell") || can("kds.manage");
     case "/dashboard/configuracion":
+    case "/dashboard/configuracion/carta/escandallos":
       return can("settings.manage");
     case "/dashboard/inventario":
       return can("inventory.view");
     case "/dashboard/analisis":
     case "/dashboard/analisis/ventas":
       return can("analytics.view");
+    case "/dashboard/compras":
+      return can("purchases.view");
     default:
       return true;
   }
@@ -222,26 +332,17 @@ function compraEstadoLabel(estado: CompraEstado, t: (k: string) => string): stri
 const sectionTitleClass = "hostly-section-label";
 
 export default function DashboardPage() {
-  const [mobileScroll, setMobileScroll] = useState(false);
-  useLayoutEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const sync = () => setMobileScroll(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
   const { t, locale } = useI18n();
   const router = useRouter();
-  const { restaurantId, restaurantName, role, refreshProfile } = useAuth();
+  const { restaurantId, restaurantName, profileReady } = useAuth();
   const { can } = useHostlyCapabilities();
-  const [restaurantNameInput, setRestaurantNameInput] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [stock, setStock] = useState<StockProducto[]>([]);
   const [compras, setCompras] = useState<CompraLocal[]>([]);
   const [mermas, setMermas] = useState<MermaLocal[]>([]);
   const [escandallos, setEscandallos] = useState<EscandalloRow[]>([]);
   const [escandalloError, setEscandalloError] = useState<string | null>(null);
+  const [restaurantLogoUrl, setRestaurantLogoUrl] = useState<string | null>(null);
 
   const refreshLocal = useCallback(() => {
     setStock(loadStock());
@@ -250,27 +351,45 @@ export default function DashboardPage() {
   }, []);
 
   const loadEscandallos = useCallback(async () => {
-    setEscandalloError(null);
-    const { rows, error } = await fetchEscandalloMergedRowsForBrowser();
-
-    if (error) {
-      setEscandalloError(error);
+    if (!profileReady || !restaurantId?.trim()) {
       setEscandallos([]);
+      setEscandalloError(null);
       return;
     }
 
-    setEscandallos(mergeEscandalloOverrides(rows as EscandalloRow[]));
-  }, []);
+    setEscandalloError(null);
+    const { rows, error } = await fetchEscandalloMergedRowsForBrowser({
+      profileRestaurantId: restaurantId,
+    });
+
+    const merged = mergeEscandalloOverrides(rows as EscandalloRow[]);
+    setEscandallos(merged);
+    setEscandalloError(merged.length === 0 && error ? error : null);
+  }, [profileReady, restaurantId]);
 
   useEffect(() => {
     setHydrated(true);
     refreshLocal();
-    void loadEscandallos();
-  }, [refreshLocal, loadEscandallos]);
+  }, [refreshLocal]);
 
   useEffect(() => {
-    setRestaurantNameInput(restaurantName?.trim() ?? "");
-  }, [restaurantName]);
+    void loadEscandallos();
+  }, [loadEscandallos]);
+
+  useEffect(() => {
+    if (!profileReady || !restaurantId?.trim()) {
+      setRestaurantLogoUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void getRestaurantById(restaurantId).then((doc) => {
+      if (cancelled) return;
+      setRestaurantLogoUrl(doc?.logoUrl?.trim() || null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [profileReady, restaurantId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -431,224 +550,202 @@ export default function DashboardPage() {
     ],
   );
 
-  const ownerBlock =
-    role === "owner" && restaurantId && isFirebaseConfigured ? (
-      <HostlySurface variant="ice" className="hostly-dashboard-owner-panel flex shrink-0 flex-col box-border">
-        <div className={`${sectionTitleClass} mb-2`}>Nombre del restaurante</div>
-        <input
-          type="text"
-          value={restaurantNameInput}
-          onChange={(e) => setRestaurantNameInput(e.target.value)}
-          className="hostly-input mb-2 max-w-[360px]"
-        />
-        <button
-          type="button"
-          className="hostly-button-secondary hostly-button-compact w-fit"
-          onClick={() => {
-            void (async () => {
-              if (!restaurantId) return;
-              await updateRestaurantName(restaurantId, restaurantNameInput);
-              await refreshProfile();
-            })();
-          }}
-        >
-          Guardar
-        </button>
-      </HostlySurface>
-    ) : null;
-
-  const visibleModuleEntries = useMemo(
-    () => MODULE_ENTRIES.filter((mod) => isDashboardModuleVisible(mod.path, can)),
+  const visiblePrimaryActions = useMemo(
+    () => PRIMARY_ACTIONS.filter((action) => action.visible(can)),
     [can],
   );
 
-  const operacionEntry = visibleModuleEntries.find((mod) => mod.path === "/dashboard/operacion");
-  const secondaryModuleEntries = visibleModuleEntries.filter((mod) => mod.path !== "/dashboard/operacion");
+  const visibleSecondaryModules = useMemo(
+    () => SECONDARY_MODULES.filter((mod) => isSecondaryModuleVisible(mod.path, can)),
+    [can],
+  );
 
-  const renderSecondaryModules = () =>
-    secondaryModuleEntries.length === 0 ? null : (
-      <div className="hostly-dashboard-module-grid shrink-0">
-        {secondaryModuleEntries.map((mod) => {
-          const Icon = mod.Icon;
-          return (
-            <button
-              key={mod.path}
-              type="button"
-              onClick={() => router.push(mod.path)}
-              className="hostly-dashboard-module-card"
-            >
-              <span className="hostly-dashboard-module-card__icon">
-                <Icon size={18} />
-              </span>
-              <span className="hostly-dashboard-module-card__label">{mod.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    );
+  const homeTitleText = restaurantName?.trim() || DEFAULT_RESTAURANT_NAME;
+  const homeSubtitle = "Listo para trabajar";
 
   return (
     <ModulePageShell
-      title={t("dashboard.title")}
-      subtitle={t("dashboard.subtitle")}
+      title={null}
       maxWidth={1280}
       compactLayout
       operationalFocus
-      lockViewport={!mobileScroll}
+      lockViewport
       hideBackLink
       shellSurface="configLight"
     >
-      <div
-        className={
-          mobileScroll
-            ? "hostly-dashboard-stack hostly-dashboard-stack--scroll min-h-[min(100%,100dvh)] overflow-y-auto pb-24"
-            : "hostly-dashboard-stack hostly-dashboard-stack--viewport"
-        }
-      >
-        <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--dashboard shrink-0">
-          {kpiCards.map((k) => (
-            <HostlyKpiCard
-              key={k.label}
-              title={k.label}
-              value={k.value}
-              helper={k.sub}
-              accentColor={k.accent}
-              valueTitle={String(k.value)}
-              variant="soft"
-            />
-          ))}
-        </div>
-
-        {operacionEntry ? (
-          <Link href={operacionEntry.path} className="hostly-dashboard-op-launcher shrink-0">
-            <span className="hostly-dashboard-op-launcher__icon">
-              <operacionEntry.Icon size={20} />
-            </span>
-            <span className="hostly-dashboard-op-launcher__text">
-              <span className="hostly-dashboard-op-launcher__title">{operacionEntry.label}</span>
-              <span className="hostly-dashboard-op-launcher__subtitle">Flujo diario del servicio</span>
-            </span>
-          </Link>
-        ) : null}
-
-        <div
-          className={
-            mobileScroll
-              ? "hostly-dashboard-panels-grid shrink-0"
-              : "hostly-dashboard-panels-grid min-h-0 flex-1 overflow-hidden"
-          }
-        >
-          <HostlySurface
-            variant="soft"
-            className={
-              mobileScroll
-                ? "hostly-dashboard-panel"
-                : "hostly-dashboard-panel hostly-dashboard-panel--scroll"
-            }
-          >
-            <HostlySectionHeader
-              title={t("dashboard.sectionAlerts")}
-              titleVariant="section"
-              className="hostly-section-header--operational"
-            />
-            {alerts.length === 0 ? (
-              <p className="hostly-muted m-0 text-xs leading-snug">{t("dashboard.alertNone")}</p>
-            ) : (
-              <ul className="hostly-stack-sm m-0 list-none p-0">
-                {alerts.map((a) => (
-                  <li key={a.key} className="hostly-dashboard-alert-item" data-tone={a.tone}>
-                    <div className="hostly-dashboard-alert-title">{a.title}</div>
-                    <div className="hostly-dashboard-alert-body">{a.body}</div>
-                    {a.key === "stock" && lowStockProducts.length > 0 ? (
-                      <div className="hostly-dashboard-alert-detail">
-                        {lowStockProducts
-                          .slice(0, 4)
-                          .map((p) => p.nombre)
-                          .join(" · ")}
-                        {lowStockProducts.length > 4 ? "…" : ""}
-                      </div>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </HostlySurface>
-
-          <HostlySurface
-            variant="soft"
-            className={
-              mobileScroll
-                ? "hostly-dashboard-panel"
-                : "hostly-dashboard-panel hostly-dashboard-panel--scroll"
-            }
-          >
-            <HostlySectionHeader
-              title={t("dashboard.sectionActivity")}
-              titleVariant="section"
-              className="hostly-section-header--operational"
-            />
-            <ul className="hostly-stack-sm m-0 list-none p-0">
-              <li className="hostly-dashboard-activity-row">
-                <div className="hostly-kpi-label">{t("dashboard.activityLastMerma")}</div>
-                {lastMerma && hydrated ? (
-                  <div className="hostly-dashboard-activity-value">
-                    {lastMerma.producto_stock_nombre}
-                    <span className="hostly-dashboard-activity-meta">
-                      {formatIsoDate(lastMerma.fecha, locale)} · {formatMotivoMerma(lastMerma.motivo)}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
-                )}
-              </li>
-              <li className="hostly-dashboard-activity-row">
-                <div className="hostly-kpi-label">{t("dashboard.activityLastOrder")}</div>
-                {lastCompra && hydrated ? (
-                  <div className="hostly-dashboard-activity-value">
-                    {lastCompra.proveedor}
-                    <span className="hostly-dashboard-activity-meta">
-                      {formatIsoDate(lastCompra.fecha, locale)} · {compraEstadoLabel(lastCompra.estado, t)}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
-                )}
-              </li>
-              <li className="hostly-dashboard-activity-row">
-                <div className="hostly-kpi-label">{t("dashboard.activityLastRelevant")}</div>
-                {lastPriceRow && hydrated && !escandalloError ? (
-                  <div className="hostly-dashboard-activity-value">
-                    {lastPriceRow.nombre_plato ?? "—"} · {formatEuro(lastPriceRow.precio_venta ?? 0, locale)}
-                    <span className="hostly-dashboard-activity-meta">{t("dashboard.activityRelevantHint")}</span>
-                  </div>
-                ) : (
-                  <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
-                )}
-              </li>
-            </ul>
-          </HostlySurface>
-        </div>
-
-        {renderSecondaryModules()}
-
-        <HostlySurface variant="soft" className="hostly-dashboard-onboarding shrink-0">
-          <div className="hostly-dashboard-onboarding__copy">
-            <h2 className="hostly-dashboard-onboarding__title">{t("dashboard.onboardingPromoTitle")}</h2>
-            <p className="hostly-dashboard-onboarding__body">{t("dashboard.onboardingPromoBody")}</p>
-          </div>
-          <div className="hostly-dashboard-onboarding__actions">
-            <button
-              type="button"
-              onClick={() => router.push("/dashboard/onboarding")}
-              className="hostly-button-secondary hostly-button-compact whitespace-nowrap"
-            >
-              {t("dashboard.onboardingPromoCta")}
-            </button>
-            <p className="hostly-muted m-0 text-center text-[10px] leading-snug sm:text-left">{t("onboarding.sideHint")}</p>
+      <div className="hostly-dashboard-op-home">
+        <HostlySurface variant="ice" className="hostly-dashboard-identity">
+          <RestaurantLogoMark name={homeTitleText} logoUrl={restaurantLogoUrl} size={56} />
+          <div className="hostly-dashboard-identity__text">
+            <h1 className="hostly-dashboard-identity__name">{homeTitleText}</h1>
+            <p className="hostly-dashboard-identity__subtitle">{homeSubtitle}</p>
           </div>
         </HostlySurface>
 
-        {ownerBlock}
+        {visiblePrimaryActions.length > 0 ? (
+          <nav
+            aria-label="Acciones principales"
+            className="hostly-op-launcher-grid hostly-dashboard-op-actions hostly-dashboard-op-actions--hero"
+          >
+            {visiblePrimaryActions.map((action) => {
+              const Icon = action.Icon;
+              return (
+                <Link key={action.href} href={action.href} className="hostly-op-launcher-card">
+                  <Icon />
+                  <span className="hostly-op-launcher-text">
+                    <span className="hostly-op-launcher-title">{action.label}</span>
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+        ) : (
+          <HostlySurface variant="soft" className="hostly-dashboard-panel">
+            <p className="hostly-muted m-0 text-sm leading-snug">
+              No tienes accesos operativos directos. Consulta las herramientas disponibles más abajo.
+            </p>
+          </HostlySurface>
+        )}
+
+        {visibleSecondaryModules.length > 0 ? (
+          <section aria-label="Herramientas secundarias" className="hostly-dashboard-secondary">
+            <h2 className={sectionTitleClass}>Herramientas</h2>
+            <div className="hostly-dashboard-module-grid hostly-dashboard-module-grid--compact">
+              {visibleSecondaryModules.map((mod) => {
+                const Icon = mod.Icon;
+                return (
+                  <button
+                    key={mod.path}
+                    type="button"
+                    onClick={() => router.push(mod.path)}
+                    className="hostly-dashboard-module-card"
+                  >
+                    <span className="hostly-dashboard-module-card__icon">
+                      <Icon size={16} />
+                    </span>
+                    <span className="hostly-dashboard-module-card__label">{mod.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        <details className="hostly-dashboard-management-panel hostly-dashboard-management-panel--surface">
+          <summary>Panel de gestión</summary>
+          <div className="hostly-dashboard-management-panel__body hostly-dashboard-management-panel__body--compact">
+            <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--dashboard hostly-kpi-grid-unified--dashboard-compact shrink-0">
+              {kpiCards.map((k) => (
+                <HostlyKpiCard
+                  key={k.label}
+                  title={k.label}
+                  value={k.value}
+                  helper={k.sub}
+                  accentColor={k.accent}
+                  valueTitle={String(k.value)}
+                  variant="soft"
+                />
+              ))}
+            </div>
+
+            <div className="hostly-dashboard-panels-grid hostly-dashboard-panels-grid--compact shrink-0">
+              <HostlySurface variant="soft" className="hostly-dashboard-panel hostly-dashboard-panel--compact">
+                <HostlySectionHeader
+                  title={t("dashboard.sectionAlerts")}
+                  titleVariant="section"
+                  className="hostly-section-header--operational"
+                />
+                {alerts.length === 0 ? (
+                  <p className="hostly-muted m-0 text-xs leading-snug">{t("dashboard.alertNone")}</p>
+                ) : (
+                  <ul className="hostly-stack-sm m-0 list-none p-0">
+                    {alerts.map((a) => (
+                      <li key={a.key} className="hostly-dashboard-alert-item" data-tone={a.tone}>
+                        <div className="hostly-dashboard-alert-title">{a.title}</div>
+                        <div className="hostly-dashboard-alert-body">{a.body}</div>
+                        {a.key === "stock" && lowStockProducts.length > 0 ? (
+                          <div className="hostly-dashboard-alert-detail">
+                            {lowStockProducts
+                              .slice(0, 4)
+                              .map((p) => p.nombre)
+                              .join(" · ")}
+                            {lowStockProducts.length > 4 ? "…" : ""}
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </HostlySurface>
+
+              <HostlySurface variant="soft" className="hostly-dashboard-panel hostly-dashboard-panel--compact">
+                <HostlySectionHeader
+                  title={t("dashboard.sectionActivity")}
+                  titleVariant="section"
+                  className="hostly-section-header--operational"
+                />
+                <ul className="hostly-stack-sm m-0 list-none p-0">
+                  <li className="hostly-dashboard-activity-row">
+                    <div className="hostly-kpi-label">{t("dashboard.activityLastMerma")}</div>
+                    {lastMerma && hydrated ? (
+                      <div className="hostly-dashboard-activity-value">
+                        {lastMerma.producto_stock_nombre}
+                        <span className="hostly-dashboard-activity-meta">
+                          {formatIsoDate(lastMerma.fecha, locale)} · {formatMotivoMerma(lastMerma.motivo)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
+                    )}
+                  </li>
+                  <li className="hostly-dashboard-activity-row">
+                    <div className="hostly-kpi-label">{t("dashboard.activityLastOrder")}</div>
+                    {lastCompra && hydrated ? (
+                      <div className="hostly-dashboard-activity-value">
+                        {lastCompra.proveedor}
+                        <span className="hostly-dashboard-activity-meta">
+                          {formatIsoDate(lastCompra.fecha, locale)} · {compraEstadoLabel(lastCompra.estado, t)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
+                    )}
+                  </li>
+                  <li className="hostly-dashboard-activity-row">
+                    <div className="hostly-kpi-label">{t("dashboard.activityLastRelevant")}</div>
+                    {lastPriceRow && hydrated && !escandalloError ? (
+                      <div className="hostly-dashboard-activity-value">
+                        {lastPriceRow.nombre_plato ?? "—"} · {formatEuro(lastPriceRow.precio_venta ?? 0, locale)}
+                        <span className="hostly-dashboard-activity-meta">{t("dashboard.activityRelevantHint")}</span>
+                      </div>
+                    ) : (
+                      <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
+                    )}
+                  </li>
+                </ul>
+              </HostlySurface>
+            </div>
+
+            <HostlySurface variant="soft" className="hostly-dashboard-onboarding hostly-dashboard-onboarding--compact shrink-0">
+              <div className="hostly-dashboard-onboarding__copy">
+                <h2 className="hostly-dashboard-onboarding__title">{t("dashboard.onboardingPromoTitle")}</h2>
+                <p className="hostly-dashboard-onboarding__body">{t("dashboard.onboardingPromoBody")}</p>
+              </div>
+              <div className="hostly-dashboard-onboarding__actions">
+                <button
+                  type="button"
+                  onClick={() => router.push("/dashboard/onboarding")}
+                  className="hostly-button-secondary hostly-button-compact whitespace-nowrap"
+                >
+                  {t("dashboard.onboardingPromoCta")}
+                </button>
+                <p className="hostly-muted m-0 text-center text-[10px] leading-snug sm:text-left">
+                  {t("onboarding.sideHint")}
+                </p>
+              </div>
+            </HostlySurface>
+          </div>
+        </details>
       </div>
     </ModulePageShell>
   );

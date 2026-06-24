@@ -1,4 +1,4 @@
-import { hostlyCx } from "@/components/ui/hostly";
+import { HostlyInput, hostlyCx } from "@/components/ui/hostly";
 
 export type AnalyticsDateRangeFieldsProps = {
   dateFrom: string;
@@ -20,23 +20,23 @@ export function AnalyticsDateRangeFields({
       <label className="hostly-form-label mb-0" htmlFor="hostly-analytics-date-from">
         Desde
       </label>
-      <input
+      <HostlyInput
         id="hostly-analytics-date-from"
         type="date"
         value={dateFrom}
         onChange={(e) => onDateFromChange(e.target.value)}
-        className="hostly-input hostly-input--toolbar-compact"
+        className="hostly-input--toolbar-compact"
         aria-label="Desde"
       />
       <label className="hostly-form-label mb-0" htmlFor="hostly-analytics-date-to">
         Hasta
       </label>
-      <input
+      <HostlyInput
         id="hostly-analytics-date-to"
         type="date"
         value={dateTo}
         onChange={(e) => onDateToChange(e.target.value)}
-        className="hostly-input hostly-input--toolbar-compact"
+        className="hostly-input--toolbar-compact"
         aria-label="Hasta"
       />
     </div>

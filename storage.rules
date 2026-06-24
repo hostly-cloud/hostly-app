@@ -59,5 +59,10 @@ service firebase.storage {
     match /restaurants/{restaurantId}/products/{productId}/{fileName} {
       allow read, write: if sameRestaurant(restaurantId);
     }
+
+    // Logo del restaurante — Configuración → Empresa.
+    match /restaurant-logos/{restaurantId}/{fileName} {
+      allow read, write: if sameRestaurant(restaurantId);
+    }
   }
 }

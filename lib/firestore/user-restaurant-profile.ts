@@ -3,7 +3,10 @@ import { db } from "@/lib/firebase/client";
 
 export const DEFAULT_RESTAURANT_NAME = "Mi restaurante";
 
-export type UserRestaurantRole = "owner" | "staff";
+export type UserRestaurantRole = "owner" | "staff" | "viewer";
+
+/** Rol asignado cuando el perfil no trae `role` válido (denegar elevación por defecto). */
+export const DEFAULT_USER_RESTAURANT_ROLE: UserRestaurantRole = "viewer";
 
 export function parseRoleField(v: unknown): UserRestaurantRole | null {
   if (v === "owner" || v === "staff") return v;
@@ -52,7 +55,7 @@ export async function loadUserRestaurantContext(uid: string): Promise<{
     }
   }
 
-  return { restaurantId, restaurantName, role: role ?? "owner" };
+  return { restaurantId, restaurantName, role: role ?? DEFAULT_USER_RESTAURANT_ROLE };
 }
 
 /** Solo lectura: `restaurants/{restaurantId}.name` */

@@ -1,4 +1,9 @@
-# Hostly Visual System v2
+# Hostly Design System v1
+
+> El nombre del archivo se mantiene por compatibilidad con referencias históricas del
+> código. Este documento constituye ahora el contrato único de **Hostly Design System v1**.
+> Las menciones “Visual System v2.x” indican únicamente la fase técnica en la que se
+> incorporó una regla, no un segundo sistema.
 
 **Constitución visual centralizada** para Hostly (SaaS TPV multi-restaurante).
 
@@ -124,7 +129,8 @@ Botones estándar: `padding: 0 18px` (definido en `.hostly-button-*`, no duplica
 | Botones estándar | `15px` | 650 | CTA principal |
 | `.hostly-button-compact` | `13px` | hereda | Acciones header/listado |
 
-**Fuente:** `Arial, Helvetica, sans-serif` (body global). No introducir familias nuevas sin decisión de producto.
+**Fuente:** Geist, cargada desde el layout raíz. `Inter` y `system-ui` son únicamente
+fallbacks compatibles. No declarar familias locales en shells o componentes.
 
 ### 3.6 Colores y sombras (solo tokens)
 

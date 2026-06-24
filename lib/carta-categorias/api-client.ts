@@ -261,6 +261,38 @@ export async function deleteCartaFamiliaApi(
   return { ok: true };
 }
 
+export async function reorderCartaFamiliasApi(
+  restauranteId: string,
+  orderedIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const res = await fetch("/api/carta-familias/reorder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ restauranteId, orderedIds }),
+  });
+  const data = await parseJson<{ ok?: boolean; error?: string }>(res);
+  if (res.status === 501 || data?.error === "FIRESTORE_NOT_CONFIGURED") {
+    const list = loadCartaFamiliasLocal(restauranteId);
+    const byId = new Map(list.map((f) => [f.id, f] as const));
+    const reordered: CartaFamilia[] = [];
+    orderedIds.forEach((id, idx) => {
+      const f = byId.get(id);
+      if (f) reordered.push({ ...f, sortOrder: idx, updatedAt: new Date().toISOString() });
+    });
+    for (const f of list) {
+      if (!orderedIds.includes(f.id)) reordered.push(f);
+    }
+    saveCartaFamiliasLocal(restauranteId, reordered.sort((a, b) => a.sortOrder - b.sortOrder));
+    emitCartaDataChanged();
+    return { ok: true };
+  }
+  if (!res.ok || !data?.ok) {
+    return { ok: false, error: data?.error ?? "REORDER_FAILED" };
+  }
+  emitCartaDataChanged();
+  return { ok: true };
+}
+
 async function parseJson<T>(res: Response): Promise<T | null> {
   try {
     return (await res.json()) as T;

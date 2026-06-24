@@ -508,6 +508,9 @@ export const es: MessageTree = {
     deleteMenuFamily: "Eliminar",
     deleteFamilyInUse: "Hay categorías en esta familia; reasígnalas o bórralas antes.",
     menuFamilyPlaceholder: "Ej. Platos, Bebidas…",
+    menuFamilyDragHandleAria: "Mantén pulsado y arrastra para reordenar familia de menú",
+    menuFamilyDragReorderHint:
+      "Mantén pulsado y arrastra para reordenar. El orden se guarda al soltar.",
   },
   recepciones: {
     title: "Recepciones",

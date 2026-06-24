@@ -10,6 +10,7 @@ import {
 } from "./_components/configuracion-sidebar";
 
 const MAP_EDITOR_CONFIG_PATH = "/dashboard/configuracion/espacios/mesas";
+const EMPRESA_CONFIG_PATH = "/dashboard/configuracion/empresa";
 
 export default function ConfiguracionLayout({
   children,
@@ -26,6 +27,13 @@ export default function ConfiguracionLayout({
     [pathname],
   );
 
+  const isEmpresaPage = useMemo(
+    () =>
+      pathname === EMPRESA_CONFIG_PATH ||
+      pathname.endsWith("/configuracion/empresa"),
+    [pathname],
+  );
+
   return (
     <div
       data-hostly-config-shell=""
@@ -39,6 +47,7 @@ export default function ConfiguracionLayout({
       ) : null}
 
       <div
+        data-hostly-config-workspace=""
         className={
           isMapEspaciosMesasEditor
             ? "flex min-w-0 flex-1 flex-col"
@@ -52,6 +61,7 @@ export default function ConfiguracionLayout({
           />
         ) : null}
         <div
+          data-hostly-config-content=""
           className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
             isMapEspaciosMesasEditor ? "p-1 sm:p-1.5 lg:p-2" : ""
           }`}
@@ -62,6 +72,8 @@ export default function ConfiguracionLayout({
                 {children}
               </div>
             </div>
+          ) : isEmpresaPage ? (
+            children
           ) : (
             <ConfiguracionCapabilityShell>{children}</ConfiguracionCapabilityShell>
           )}

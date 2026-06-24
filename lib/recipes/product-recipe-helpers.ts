@@ -218,7 +218,7 @@ export function buildRecipeSourceFromDraftRows(
   return {
     enabled,
     ingredients: rows
-      .filter((row) => row.productId.trim() || row.quantity.trim())
+      .filter((row) => row.productId.trim().length > 0)
       .map((row) => ({
         productId: row.productId.trim(),
         quantity: row.quantity.trim(),

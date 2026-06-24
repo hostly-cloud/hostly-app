@@ -41,7 +41,7 @@ export function HostlyDataTableScroll({ children, className }: { children: React
 
 export function HostlyDataTableHead({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={hostlyCx("hostly-data-table-head hostly-config-table-head", className)} role="row">
+    <div className={hostlyCx("hostly-data-table-head hostly-config-table-head hostly-type-table-header", className)} role="row">
       {children}
     </div>
   );
@@ -86,7 +86,7 @@ export function HostlyDataCell({ children, className, align = "start", col }: Ho
     <div
       role="cell"
       className={hostlyCx(
-        "hostly-data-table-cell",
+        "hostly-data-table-cell hostly-type-table-cell",
         col && `hostly-data-table-col--${col}`,
         align === "center" && "is-align-center",
         align === "end" && "is-align-end",

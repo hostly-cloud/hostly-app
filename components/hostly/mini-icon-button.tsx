@@ -1,6 +1,7 @@
 "use client";
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 
 export type HostlyMiniIconButtonProps = {
   children: ReactNode;
@@ -12,31 +13,17 @@ export function HostlyMiniIconButton({
   children,
   ariaLabel,
   title,
-  style,
   ...props
 }: HostlyMiniIconButtonProps) {
   return (
-    <button
-      type="button"
-      aria-label={ariaLabel}
+    <HostlyButton
+      variant="icon"
+      iconOnlyLabel={ariaLabel}
       title={title}
       {...props}
-      style={{
-        width: 24,
-        height: 24,
-        borderRadius: 8,
-        border: "1px solid rgba(15,23,42,0.14)",
-        background: "rgba(255,255,255,0.65)",
-        color: "#0f172a",
-        fontWeight: 900,
-        lineHeight: 1,
-        cursor: props.disabled ? "not-allowed" : "pointer",
-        opacity: props.disabled ? 0.5 : 1,
-        ...style,
-      }}
     >
       {children}
-    </button>
+    </HostlyButton>
   );
 }
 

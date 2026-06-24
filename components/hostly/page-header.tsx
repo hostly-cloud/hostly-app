@@ -85,17 +85,17 @@ function TitleBlock({
   return (
     <div className={wrapperClassName}>
       {title != null && title !== "" ? (
-        <div className={["hostly-page-title", titleClassName].filter(Boolean).join(" ")} style={titleStyle}>
+        <h1 className={["hostly-page-title", "hostly-type-page-title", titleClassName].filter(Boolean).join(" ")} style={titleStyle}>
           {title}
-        </div>
+        </h1>
       ) : null}
       {subtitle != null ? (
-        <div
-          className={["hostly-page-subtitle", subtitleClassName].filter(Boolean).join(" ")}
+        <p
+          className={["hostly-page-subtitle", "hostly-type-caption", subtitleClassName].filter(Boolean).join(" ")}
           style={subtitleStyle}
         >
           {subtitle}
-        </div>
+        </p>
       ) : null}
     </div>
   );
@@ -125,17 +125,17 @@ export function HostlyPageHeader({
       ? undefined
       : compactSpacing
         ? belowStripe === "ultraCompact"
-          ? 3
-          : 6
-        : 18;
+          ? "var(--hostly-op-gap-xs)"
+          : "var(--hostly-op-gap-sm)"
+        : "var(--hostly-op-gap-lg)";
   const belowPaddingTop =
     below === undefined
       ? undefined
       : compactSpacing
         ? belowStripe === "ultraCompact"
-          ? 5
-          : 8
-        : 16;
+          ? "var(--hostly-op-gap-xs)"
+          : "var(--hostly-op-gap-sm)"
+        : "var(--hostly-op-gap-lg)";
 
   if (isMobileLayout && !mobileStackLeftColumn) {
     return (
@@ -166,9 +166,13 @@ export function HostlyPageHeader({
     );
   }
 
-  const rowGap = compactSpacing ? (isMobileLayout && mobileStackLeftColumn ? 6 : isMobileLayout ? 5 : 6) : isMobileLayout && mobileStackLeftColumn ? 10 : isMobileLayout ? 8 : 12;
-  const leftColGap = compactSpacing ? 6 : 10;
-  const rightMarginLeft = compactSpacing ? 6 : 12;
+  const rowGap = compactSpacing
+    ? "var(--hostly-op-gap-xs)"
+    : isMobileLayout
+      ? "var(--hostly-op-gap-sm)"
+      : "var(--hostly-op-gap-md)";
+  const leftColGap = compactSpacing ? "var(--hostly-op-gap-xs)" : "var(--hostly-op-gap-sm)";
+  const rightMarginLeft = compactSpacing ? "var(--hostly-op-gap-xs)" : "var(--hostly-op-gap-md)";
 
   return (
     <header className={headerClassName(isMobileLayout, compactSpacing, dashboardModule, mobileStackLeftColumn)} style={surfaceStyle}>
@@ -236,7 +240,7 @@ export function HostlyPageHeader({
                   : {
                       marginTop: belowMarginTop,
                       paddingTop: belowPaddingTop,
-                      borderTop: "1px solid rgba(148, 163, 184, 0.16)",
+                      borderTop: "1px solid var(--hostly-line)",
                     }
               }
             >

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { hostlyCx } from "../hostly-cx";
 
-export type HostlyStatusBadgeTone = "success" | "warning" | "danger" | "neutral" | "muted";
+export type HostlyStatusBadgeTone = "success" | "warning" | "danger" | "info" | "neutral" | "muted";
 
 export type HostlyStatusBadgeProps = {
   children: ReactNode;

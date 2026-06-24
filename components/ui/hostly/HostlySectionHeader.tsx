@@ -16,7 +16,9 @@ export type HostlySectionHeaderProps = {
 function renderPlainTitle(title: ReactNode, variant: "heading" | "section"): ReactNode {
   if (title == null) return null;
   if (typeof title === "string" || typeof title === "number") {
-    const cls = variant === "section" ? "hostly-section-label" : "hostly-heading";
+    const cls = variant === "section"
+      ? "hostly-section-label hostly-type-caption"
+      : "hostly-heading hostly-type-section-title";
     return <h2 className={cls}>{title}</h2>;
   }
   return title;
@@ -32,7 +34,7 @@ export function HostlySectionHeader({
 }: HostlySectionHeaderProps) {
   const desc =
     description == null ? null : typeof description === "string" || typeof description === "number" ? (
-      <p className={hostlyCx("hostly-muted hostly-muted--section-lead", descriptionClassName)}>{description}</p>
+      <p className={hostlyCx("hostly-muted hostly-muted--section-lead hostly-type-caption", descriptionClassName)}>{description}</p>
     ) : (
       description
     );

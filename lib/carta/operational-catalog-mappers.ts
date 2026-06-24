@@ -28,6 +28,43 @@ export function centralProductVisibleOnMenu(doc: ProductDocument): boolean {
   return true;
 }
 
+/**
+ * Ingrediente de stock (Inventario): materia prima para escandallos, no producto vendible.
+ * Criterio fase 1: `type === "inventory"` (creado desde Inventario).
+ * No usar solo `inventory.enabled`: en el futuro un plato vendible podría llevar inventario activo.
+ */
+export function isStockIngredientProduct(doc: ProductDocument): boolean {
+  return doc.type === "inventory";
+}
+
+/** Catálogo central: escandallo activo si `recipe.enabled === true`. */
+export function centralProductRecipeEscandalloEnabled(
+  doc: Pick<ProductDocument, "recipe"> | null | undefined,
+): boolean {
+  return doc?.recipe?.enabled === true;
+}
+
+/**
+ * ¿Tiene escandallo para la columna ESC / KPIs?
+ * Central: prioriza snapshot Firestore (`centralDoc.recipe.enabled`), luego `plato.tieneEscandallo`.
+ * Legacy: `plato.tieneEscandallo` o meta Supabase por `escandalloSupabaseId`.
+ */
+export function resolvePlatoTieneEscandallo(
+  plato: PlatoCarta,
+  meta: ReadonlyMap<number, { tieneEscandallo: boolean }>,
+  centralDoc?: Pick<ProductDocument, "recipe"> | null,
+): boolean {
+  if (centralDoc && centralProductRecipeEscandalloEnabled(centralDoc)) {
+    return true;
+  }
+  if (typeof plato.tieneEscandallo === "boolean") {
+    return plato.tieneEscandallo;
+  }
+  const sid = plato.escandalloSupabaseId;
+  if (sid == null) return false;
+  return meta.get(sid)?.tieneEscandallo === true;
+}
+
 function msToIso(ms: number | undefined): string {
   if (typeof ms === "number" && Number.isFinite(ms) && ms > 0) {
     return new Date(ms).toISOString();
@@ -71,7 +108,7 @@ export function centralProductToPlatoCarta(
   const visibleOnMenu = doc.visibleOnMenu !== false;
   const now = msToIso(doc.updatedAt ?? doc.createdAt);
 
-  const recipeEnabled = doc.recipe?.enabled === true;
+  const recipeEnabled = centralProductRecipeEscandalloEnabled(doc);
 
   const plato: PlatoCarta & { isActive?: boolean; enCarta?: boolean } = {
     id: doc.id,

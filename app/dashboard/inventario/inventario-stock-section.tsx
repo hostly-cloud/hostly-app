@@ -51,7 +51,6 @@ import {
 import {
   PRODUCT_KIND_LIST_FILTER_OPTIONS,
   PRODUCT_KIND_OPTIONS,
-  getProductKindDisplayLabel,
   matchesProductKindListFilter,
   productKindToSelectValue,
   type ProductKind,
@@ -182,7 +181,7 @@ function parseNumber(value: string, fallback: number): number {
 type InventoryDraftFields = DraftById[string];
 
 const INVENTORY_UNSAVED_CONFIRM_MESSAGE =
-  "Tienes cambios sin guardar en este producto. Si continúas, se perderán.";
+  "Tienes cambios sin guardar en este ingrediente. Si continúas, se perderán.";
 
 function defaultPurchaseUnitForInventoryUnit(
   unidad: string | null | undefined,
@@ -695,7 +694,7 @@ export default function InventarioStockSection() {
         throw new Error("No hay restaurante activo para crear inventario");
       }
       const newId = await upsertProductInventory(rid, null, {
-        name: "Nuevo producto",
+        name: "Nuevo ingrediente",
         categoryId: null,
         station: null,
         productKind: "other",
@@ -905,8 +904,8 @@ export default function InventarioStockSection() {
       productFamilyFilter !== "all" ||
       stockLevelFilter !== "all" ||
       search.trim().length > 0;
-    if (!filtered) return `${total} productos configurables`;
-    return `${shown} de ${total} productos`;
+    if (!filtered) return `${total} ingredientes de stock`;
+    return `${shown} de ${total} ingredientes`;
   }, [
     rowsForRender.length,
     filteredRows.length,
@@ -915,6 +914,43 @@ export default function InventarioStockSection() {
     stockLevelFilter,
     search,
   ]);
+  const showExtendedListFilters = rowsForRender.length >= 20;
+  const inventoryFilterGroups = useMemo((): InventoryStockFilterGroupConfig[] => {
+    const stockGroup: InventoryStockFilterGroupConfig = {
+      groupKey: "stock",
+      label: "Stock",
+      ariaLabel: "Filtrar por nivel de stock",
+      value: stockLevelFilter,
+      onChange: setStockLevelFilter,
+      options: STOCK_LEVEL_LIST_FILTER_OPTIONS,
+    };
+    if (!showExtendedListFilters) return [stockGroup];
+    return [
+      {
+        groupKey: "kind",
+        label: "Tipo",
+        ariaLabel: "Filtrar por tipo de inventario",
+        value: productKindFilter,
+        onChange: setProductKindFilter,
+        options: PRODUCT_KIND_LIST_FILTER_OPTIONS,
+      },
+      {
+        groupKey: "family",
+        label: "Familia",
+        ariaLabel: "Filtrar por familia de producto",
+        value: productFamilyFilter,
+        onChange: setProductFamilyFilter,
+        options: PRODUCT_FAMILY_LIST_FILTER_OPTIONS,
+      },
+      stockGroup,
+    ];
+  }, [
+    showExtendedListFilters,
+    productKindFilter,
+    productFamilyFilter,
+    stockLevelFilter,
+  ]);
+
   const selectedRow = useMemo(
     () => rowsForRender.find((item) => String(item.id) === selectedId) ?? null,
     [rowsForRender, selectedId],
@@ -945,7 +981,7 @@ export default function InventarioStockSection() {
     if (!selectedRow || !selectedDraft) {
       return (
         <div className="hostly-inventory-panel-empty">
-          {loading ? t("inventory.loadingProducts") : "Selecciona un producto para configurarlo."}
+          {loading ? t("inventory.loadingProducts") : t("inventory.selectToConfigure")}
         </div>
       );
     }
@@ -971,25 +1007,11 @@ export default function InventarioStockSection() {
       },
       operationStations,
     );
-    const productKindLabel = getProductKindDisplayLabel(selectedRow.productKind);
     const productFamilyLabel = getProductFamilyLabel(selectedRow);
     const legacyCategoryLabel = inventoryLegacyCategoryLabel(
       selectedRow,
       cartaCategorias,
     );
-    const displayName = selectedDraft.nombre.trim() || "Producto sin nombre";
-    const headInitial = displayName.charAt(0).toUpperCase() || "P";
-    const inspectorStockStatus = resolveStockStatus({
-      currentStock:
-        selectedDraft.stock_actual.trim() === ""
-          ? null
-          : parseNumber(selectedDraft.stock_actual, 0),
-      minStock:
-        selectedDraft.stock_minimo.trim() === ""
-          ? null
-          : parseNumber(selectedDraft.stock_minimo, 0),
-    });
-    const inspectorUnitLabel = selectedDraft.unidad.trim() || "ud";
     const draftPurchaseNormalized = normalizePurchaseCostInput({
       purchaseCost: selectedDraft.purchase_cost,
       purchaseQuantity: selectedDraft.purchase_quantity,
@@ -1009,326 +1031,256 @@ export default function InventarioStockSection() {
 
     return (
       <div className="hostly-inventory-config-panel">
-        <div className="hostly-inventory-panel-head">
-          <div className="hostly-inventory-head-main">
-            <div className="hostly-inventory-avatar" aria-hidden>
-              {selectedRow.image ? (
-                <span className="hostly-inventory-avatar-dot" />
-              ) : (
-                headInitial
-              )}
+        <div className="hostly-inventory-config-body hostly-inventory-config-body--compact">
+          <section className="hostly-inventory-compact-fiche">
+            <div className="hostly-inventory-compact-mobile-bar">
+              <button
+                type="button"
+                className="hostly-inventory-mobile-close"
+                onClick={tryCloseInspector}
+              >
+                Cerrar
+              </button>
             </div>
-            <div className="hostly-inventory-head-text">
-              <h2 className="hostly-inventory-head-title">{displayName}</h2>
-              <p className="hostly-inventory-head-sub hostly-muted">Ficha inventario · catálogo central</p>
-              <div className="hostly-inventory-head-badges">
-                <span
-                  className={`hostly-inventory-head-badge${selectedDraft.active ? " is-active" : " is-inactive"}`}
-                >
-                  {selectedDraft.active ? "Activo" : "Inactivo"}
-                </span>
-                <span className="hostly-inventory-head-badge is-neutral">
-                  {selectedDraft.unidad || "ud"}
-                </span>
-                <span className="hostly-inventory-head-badge is-neutral">
-                  {productKindLabel}
-                </span>
-                <span
-                  className={`hostly-inventory-head-badge hostly-inventory-stock-status ${stockStatusBadgeClassName(inspectorStockStatus)}`}
-                >
-                  {formatStockStatusLabel(inspectorStockStatus)}
-                </span>
-                <span className="hostly-inventory-head-badge is-neutral">
-                  Familia: {productFamilyLabel}
-                </span>
-                {stationTrim && stationTrim !== "Sin estación" ? (
-                  <span className="hostly-inventory-head-badge is-neutral">{stationTrim}</span>
-                ) : null}
+
+            <div className="hostly-inventory-compact-sheet">
+              <div className="hostly-inventory-compact-grid hostly-inventory-compact-grid--2">
+                <label className="hostly-inventory-field">
+                  <span className="hostly-inventory-field-label">{t("common.name")}</span>
+                  <input
+                    value={selectedDraft.nombre}
+                    onChange={(e) => updateDraft(selectedRow.id, { nombre: e.target.value })}
+                    placeholder={selectedRow.nombre ?? t("inventory.placeholderProduct")}
+                    className="hostly-inventory-field-input"
+                  />
+                </label>
+                <label className="hostly-inventory-field">
+                  <span className="hostly-inventory-field-label">Proveedor</span>
+                  <input
+                    value={selectedDraft.supplierName}
+                    onChange={(e) => updateDraft(selectedRow.id, { supplierName: e.target.value })}
+                    placeholder="Proveedor habitual"
+                    className="hostly-inventory-field-input"
+                  />
+                </label>
               </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="hostly-inventory-mobile-close"
-            onClick={tryCloseInspector}
-          >
-            Cerrar
-          </button>
-        </div>
 
-        <div
-          className="hostly-inventory-save-strip"
-          data-dirty={selectedIsDirty ? "true" : "false"}
-          data-feedback={saveFeedback ?? "idle"}
-        >
-          <div className="hostly-inventory-save-strip-meta">
-            {selectedIsDirty ? (
-              <span className="hostly-inventory-unsaved-hint" role="status">
-                Cambios sin guardar
-              </span>
-            ) : saveFeedback === "saved" ? (
-              <span className="hostly-inventory-save-ok" role="status">
-                Cambios guardados en Firestore
-              </span>
-            ) : (
-              <span className="hostly-inventory-save-idle hostly-muted">
-                Sin cambios pendientes
-              </span>
-            )}
-            {saveFeedback === "error" && error ? (
-              <span className="hostly-inventory-save-error" role="alert">
-                {error}
-              </span>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className="hostly-inventory-primary-btn hostly-inventory-save-strip-btn"
-            disabled={saveButtonDisabled}
-            title={capabilityDeniedTitle(canEditInventory)}
-            onClick={() => void guardarFila(selectedRow.id)}
-          >
-            {saveButtonLabel}
-          </button>
-        </div>
+              <div className="hostly-inventory-compact-grid hostly-inventory-compact-grid--3">
+                <label className="hostly-inventory-field">
+                  <span className="hostly-inventory-field-label">{t("common.currentStock")}</span>
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={selectedDraft.stock_actual}
+                    onChange={(e) => updateDraft(selectedRow.id, { stock_actual: e.target.value })}
+                    className="hostly-inventory-field-input"
+                  />
+                </label>
+                <label className="hostly-inventory-field">
+                  <span className="hostly-inventory-field-label">{t("common.minStock")}</span>
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={selectedDraft.stock_minimo}
+                    onChange={(e) => updateDraft(selectedRow.id, { stock_minimo: e.target.value })}
+                    className="hostly-inventory-field-input"
+                    placeholder="—"
+                  />
+                </label>
+                <label className="hostly-inventory-field">
+                  <span className="hostly-inventory-field-label">Unidad stock</span>
+                  <select
+                    value={selectedDraft.unidad}
+                    onChange={(e) => updateDraft(selectedRow.id, { unidad: e.target.value })}
+                    className="hostly-inventory-field-input"
+                  >
+                    {UNIDADES.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
-        <div className="hostly-inventory-config-body">
-          <section className="hostly-inventory-inspector-block">
-            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">General</h3>
-            <div className="hostly-inventory-fiche-grid">
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">{t("common.name")}</span>
-                <input
-                  value={selectedDraft.nombre}
-                  onChange={(e) => updateDraft(selectedRow.id, { nombre: e.target.value })}
-                  placeholder={selectedRow.nombre ?? t("inventory.placeholderProduct")}
-                  className="hostly-inventory-field-input"
-                />
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">Categoría</span>
-                <select
-                  value={selectedDraft.categoryId}
-                  onChange={(e) =>
-                    updateDraft(selectedRow.id, { categoryId: e.target.value })
-                  }
-                  className="hostly-inventory-field-input"
-                  style={{ cursor: "pointer" }}
-                >
-                  <option value="">Sin categoría de carta</option>
-                  {activeCartaCategorias.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                {legacyCategoryLabel ? (
-                  <p className="mt-1 text-xs text-amber-800">
-                    Legacy: {legacyCategoryLabel}
-                  </p>
-                ) : null}
-                <p className="mt-1 text-xs text-slate-500">
-                  Al elegir una categoría, el producto hereda su familia (Bebidas,
-                  Comida, etc.) en el catálogo central.
-                </p>
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">
-                  Estación operativa
-                </span>
-                <OperationStationProductSelect
-                  restaurantId={restaurantId}
-                  value={selectedDraft.station}
-                  onChange={(value) =>
-                    updateDraft(selectedRow.id, { station: value })
-                  }
-                  className="hostly-inventory-field-input"
-                />
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">Tipo de producto</span>
-                <select
-                  value={selectedDraft.productKind}
-                  onChange={(e) =>
-                    updateDraft(selectedRow.id, {
-                      productKind: e.target.value as ProductKind,
-                    })
-                  }
-                  className="hostly-inventory-field-input"
-                  style={{ cursor: "pointer" }}
-                >
-                  {PRODUCT_KIND_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="hostly-inventory-switch-row hostly-inventory-switch-row--compact">
-                <span className="hostly-inventory-switch-label">
-                  <strong>Activo</strong>
-                  <small>Visible cuando el producto esté enlazado al catálogo.</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={selectedDraft.active}
-                  onChange={(e) => updateDraft(selectedRow.id, { active: e.target.checked })}
-                />
-              </label>
-            </div>
-          </section>
+              <div className="hostly-inventory-compact-grid hostly-inventory-compact-grid--3">
+                <label className="hostly-inventory-field">
+                  <span className="hostly-inventory-field-label">Precio compra (€)</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    value={selectedDraft.purchase_cost}
+                    onChange={(e) =>
+                      updateDraft(selectedRow.id, { purchase_cost: e.target.value })
+                    }
+                    className="hostly-inventory-field-input"
+                    placeholder="18"
+                  />
+                </label>
+                <label className="hostly-inventory-field">
+                  <span className="hostly-inventory-field-label">Cantidad compra</span>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    inputMode="decimal"
+                    value={selectedDraft.purchase_quantity}
+                    onChange={(e) =>
+                      updateDraft(selectedRow.id, { purchase_quantity: e.target.value })
+                    }
+                    className="hostly-inventory-field-input"
+                    placeholder="700"
+                  />
+                </label>
+                <label className="hostly-inventory-field">
+                  <span className="hostly-inventory-field-label">Unidad compra</span>
+                  <select
+                    value={selectedDraft.purchase_unit}
+                    onChange={(e) =>
+                      updateDraft(selectedRow.id, {
+                        purchase_unit: e.target.value as PurchaseUnit | "",
+                      })
+                    }
+                    className="hostly-inventory-field-input"
+                    style={{ cursor: "pointer" }}
+                  >
+                    <option value="">—</option>
+                    {PURCHASE_UNIT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
-          <section className="hostly-inventory-inspector-block">
-            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">Inventario</h3>
-            <div className="hostly-inventory-fiche-grid">
-              <label className="hostly-inventory-switch-row hostly-inventory-switch-row--compact">
-                <span className="hostly-inventory-switch-label">
-                  <strong>Inventario activo</strong>
-                  <small>Control de stock habilitado para este artículo.</small>
+              <div className="hostly-inventory-compact-cost-inline">
+                <span className="hostly-inventory-compact-cost-inline__label">
+                  Coste unitario calculado
                 </span>
-                <input type="checkbox" checked readOnly />
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">{t("common.unit")}</span>
-                <select
-                  value={selectedDraft.unidad}
-                  onChange={(e) => updateDraft(selectedRow.id, { unidad: e.target.value })}
-                  className="hostly-inventory-field-input"
-                >
-                  {UNIDADES.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">{t("common.currentStock")}</span>
-                <input
-                  type="number"
-                  step="any"
-                  inputMode="decimal"
-                  value={selectedDraft.stock_actual}
-                  onChange={(e) => updateDraft(selectedRow.id, { stock_actual: e.target.value })}
-                  className="hostly-inventory-field-input"
-                />
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">
-                  {t("common.minStock")} ({inspectorUnitLabel})
-                </span>
-                <input
-                  type="number"
-                  step="any"
-                  inputMode="decimal"
-                  value={selectedDraft.stock_minimo}
-                  onChange={(e) => updateDraft(selectedRow.id, { stock_minimo: e.target.value })}
-                  className="hostly-inventory-field-input"
-                  placeholder="Sin umbral"
-                />
-                <p className="hostly-inventory-field-hint">
-                  Misma unidad que el stock actual. Aviso operativo; no bloquea TPV.
-                </p>
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">Coste legacy (€/ud stock)</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={selectedDraft.coste_unitario}
-                  onChange={(e) =>
-                    updateDraft(selectedRow.id, { coste_unitario: e.target.value })
-                  }
-                  className="hostly-inventory-field-input"
-                />
-                <p className="hostly-inventory-field-hint">
-                  Campo histórico; el coste operativo se calcula en la sección de compra.
-                </p>
-              </label>
-              <label className="hostly-inventory-field hostly-inventory-field--full">
-                <span className="hostly-inventory-field-label">Proveedor</span>
-                <input
-                  value={selectedDraft.supplierName}
-                  onChange={(e) => updateDraft(selectedRow.id, { supplierName: e.target.value })}
-                  placeholder="Proveedor habitual"
-                  className="hostly-inventory-field-input"
-                />
-              </label>
-            </div>
-          </section>
-
-          <section className="hostly-inventory-inspector-block">
-            <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">
-              Coste de compra
-            </h3>
-            <div className="hostly-inventory-fiche-grid">
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">Coste compra (€)</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  inputMode="decimal"
-                  value={selectedDraft.purchase_cost}
-                  onChange={(e) =>
-                    updateDraft(selectedRow.id, { purchase_cost: e.target.value })
-                  }
-                  className="hostly-inventory-field-input"
-                  placeholder="Ej. 18"
-                />
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">Cantidad compra</span>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  inputMode="decimal"
-                  value={selectedDraft.purchase_quantity}
-                  onChange={(e) =>
-                    updateDraft(selectedRow.id, { purchase_quantity: e.target.value })
-                  }
-                  className="hostly-inventory-field-input"
-                  placeholder="Ej. 700"
-                />
-              </label>
-              <label className="hostly-inventory-field">
-                <span className="hostly-inventory-field-label">Unidad compra</span>
-                <select
-                  value={selectedDraft.purchase_unit}
-                  onChange={(e) =>
-                    updateDraft(selectedRow.id, {
-                      purchase_unit: e.target.value as PurchaseUnit | "",
-                    })
-                  }
-                  className="hostly-inventory-field-input"
-                  style={{ cursor: "pointer" }}
-                >
-                  <option value="">Seleccionar…</option>
-                  {PURCHASE_UNIT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="hostly-inventory-field hostly-inventory-field--full">
-                <span className="hostly-inventory-field-label">Coste unitario calculado</span>
-                <div className="hostly-inventory-cost-summary">
+                <span className="hostly-inventory-compact-cost-inline__value">
                   {draftPurchaseEquation ? (
-                    <p className="hostly-inventory-cost-equation">{draftPurchaseEquation}</p>
+                    draftPurchaseEquation
+                  ) : draftCalculatedUnitCost ? (
+                    getInventoryUnitCostLabel(
+                      draftCalculatedUnitCost.unitCost,
+                      draftCalculatedUnitCost.unitCostUnit,
+                    )
                   ) : storedUnitCostLabel ? (
-                    <p className="hostly-inventory-cost-equation">{storedUnitCostLabel}</p>
+                    storedUnitCostLabel
                   ) : (
-                    <p className="hostly-inventory-field-hint">
-                      Indica coste, cantidad y unidad de compra para calcular €/ml, €/g o €/ud.
-                    </p>
+                    "Indica precio, cantidad y unidad de compra."
                   )}
-                </div>
+                </span>
               </div>
-            </div>
-          </section>
+
+              <div
+                className="hostly-inventory-compact-footer"
+                data-dirty={selectedIsDirty ? "true" : "false"}
+                data-feedback={saveFeedback ?? "idle"}
+              >
+                <button
+                  type="button"
+                  className="hostly-inventory-primary-btn hostly-inventory-compact-footer-save"
+                  disabled={saveButtonDisabled}
+                  title={capabilityDeniedTitle(canEditInventory)}
+                  onClick={() => void guardarFila(selectedRow.id)}
+                >
+                  {saveButtonLabel}
+                </button>
+                <details className="hostly-inventory-advanced-details hostly-inventory-advanced-details--inline">
+                  <summary className="hostly-inventory-advanced-summary">
+                    Configuración avanzada
+                  </summary>
+                  <div className="hostly-inventory-advanced-body">
+              <section className="hostly-inventory-inspector-block">
+                <h3 className="hostly-inventory-inspector-section-title hostly-kpi-label">
+                  Catálogo y operación
+                </h3>
+                <div className="hostly-inventory-fiche-grid">
+                  <label className="hostly-inventory-field hostly-inventory-field--full">
+                    <span className="hostly-inventory-field-label">Categoría carta</span>
+                    <select
+                      value={selectedDraft.categoryId}
+                      onChange={(e) =>
+                        updateDraft(selectedRow.id, { categoryId: e.target.value })
+                      }
+                      className="hostly-inventory-field-input"
+                      style={{ cursor: "pointer" }}
+                    >
+                      <option value="">Sin categoría de carta</option>
+                      {activeCartaCategorias.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {legacyCategoryLabel ? (
+                      <p className="mt-1 text-xs text-amber-800">
+                        Legacy: {legacyCategoryLabel}
+                      </p>
+                    ) : null}
+                    <p className="hostly-inventory-field-hint">
+                      Familia menú: {productFamilyLabel}
+                      {stationTrim && stationTrim !== "Sin estación"
+                        ? ` · ${stationTrim}`
+                        : ""}
+                    </p>
+                  </label>
+                  <label className="hostly-inventory-field">
+                    <span className="hostly-inventory-field-label">Estación operativa</span>
+                    <OperationStationProductSelect
+                      restaurantId={restaurantId}
+                      value={selectedDraft.station}
+                      onChange={(value) =>
+                        updateDraft(selectedRow.id, { station: value })
+                      }
+                      className="hostly-inventory-field-input"
+                    />
+                  </label>
+                  <label className="hostly-inventory-field">
+                    <span className="hostly-inventory-field-label">Tipo de ingrediente</span>
+                    <select
+                      value={selectedDraft.productKind}
+                      onChange={(e) =>
+                        updateDraft(selectedRow.id, {
+                          productKind: e.target.value as ProductKind,
+                        })
+                      }
+                      className="hostly-inventory-field-input"
+                      style={{ cursor: "pointer" }}
+                    >
+                      {PRODUCT_KIND_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="hostly-inventory-switch-row hostly-inventory-switch-row--compact hostly-inventory-field--full">
+                    <span className="hostly-inventory-switch-label">
+                      <strong>Activo</strong>
+                      <small>Visible cuando el ingrediente esté enlazado al catálogo.</small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={selectedDraft.active}
+                      onChange={(e) => updateDraft(selectedRow.id, { active: e.target.checked })}
+                    />
+                  </label>
+                  <label className="hostly-inventory-switch-row hostly-inventory-switch-row--compact hostly-inventory-field--full">
+                    <span className="hostly-inventory-switch-label">
+                      <strong>Inventario activo</strong>
+                      <small>Control de stock habilitado para este artículo.</small>
+                    </span>
+                    <input type="checkbox" checked readOnly />
+                  </label>
+                </div>
+              </section>
 
           <section className="hostly-inventory-inspector-block hostly-inventory-inspector-block--movements">
             <div className="hostly-inventory-inspector-section-head">
@@ -1463,25 +1415,41 @@ export default function InventarioStockSection() {
               ))}
             </div>
           </section>
-        </div>
 
-        <div className="hostly-inventory-panel-footer">
-          <button
-            type="button"
-            onClick={() => void guardarFila(selectedRow.id)}
-            disabled={saveButtonDisabled}
-            className="hostly-inventory-primary-btn"
-          >
-            {saveButtonLabel}
-          </button>
-          <button
-            type="button"
-            onClick={() => eliminarFila(selectedRow.id)}
-            disabled={isDeleting}
-            className="hostly-inventory-secondary-btn"
-          >
-            {isDeleting ? t("common.deleting") : "Desactivar inventario"}
-          </button>
+              <div className="hostly-inventory-advanced-footer">
+                <button
+                  type="button"
+                  onClick={() => eliminarFila(selectedRow.id)}
+                  disabled={isDeleting}
+                  className="hostly-inventory-secondary-btn"
+                >
+                  {isDeleting ? t("common.deleting") : "Desactivar inventario"}
+                </button>
+              </div>
+                  </div>
+                </details>
+                {selectedIsDirty ? (
+                  <span className="hostly-inventory-compact-footer-status" role="status">
+                    Sin guardar
+                  </span>
+                ) : saveFeedback === "saved" ? (
+                  <span
+                    className="hostly-inventory-compact-footer-status hostly-inventory-compact-footer-status--ok"
+                    role="status"
+                  >
+                    Guardado
+                  </span>
+                ) : saveFeedback === "error" && error ? (
+                  <span
+                    className="hostly-inventory-compact-footer-status hostly-inventory-compact-footer-status--error"
+                    role="alert"
+                  >
+                    Error
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     );
@@ -1520,39 +1488,12 @@ export default function InventarioStockSection() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar producto, proveedor o unidad..."
+                placeholder="Buscar ingrediente, proveedor o unidad..."
                 className="hostly-inventory-search"
               />
             </div>
             <div className="hostly-stock-filter-panel">
-              {(
-                [
-                  {
-                    groupKey: "kind",
-                    label: "Tipo",
-                    ariaLabel: "Filtrar por tipo de inventario",
-                    value: productKindFilter,
-                    onChange: setProductKindFilter,
-                    options: PRODUCT_KIND_LIST_FILTER_OPTIONS,
-                  },
-                  {
-                    groupKey: "family",
-                    label: "Familia",
-                    ariaLabel: "Filtrar por familia de producto",
-                    value: productFamilyFilter,
-                    onChange: setProductFamilyFilter,
-                    options: PRODUCT_FAMILY_LIST_FILTER_OPTIONS,
-                  },
-                  {
-                    groupKey: "stock",
-                    label: "Stock",
-                    ariaLabel: "Filtrar por nivel de stock",
-                    value: stockLevelFilter,
-                    onChange: setStockLevelFilter,
-                    options: STOCK_LEVEL_LIST_FILTER_OPTIONS,
-                  },
-                ] satisfies InventoryStockFilterGroupConfig[]
-              ).map(renderInventoryStockFilterGroup)}
+              {inventoryFilterGroups.map(renderInventoryStockFilterGroup)}
             </div>
             <div className="hostly-inventory-list">
               {filteredRows.length === 0 ? (
@@ -1577,7 +1518,7 @@ export default function InventarioStockSection() {
                       <span className="hostly-inventory-row-image">P</span>
                       <span className="hostly-inventory-row-main">
                         <span className="hostly-inventory-row-name">
-                          {item.nombre?.trim() || "Producto sin nombre"}
+                          {item.nombre?.trim() || "Ingrediente sin nombre"}
                         </span>
                         <span className="hostly-inventory-row-meta">
                           {formatMoney2(item.coste_unitario)} €/ud · {item.unidad ?? "ud"}
@@ -1833,6 +1774,195 @@ export default function InventarioStockSection() {
           display: flex;
           flex-direction: column;
           gap: 0;
+        }
+        .hostly-inventory-config-body--compact {
+          overflow: visible;
+          padding: 6px 10px 8px;
+          flex: 0 1 auto;
+        }
+        .hostly-inventory-config-body--compact .hostly-inventory-field-input {
+          min-height: 0;
+          max-height: 34px;
+          height: 34px;
+          padding: 3px 7px;
+          font-size: 11px;
+          line-height: 1.2;
+        }
+        .hostly-inventory-config-body--compact .hostly-inventory-field {
+          gap: 1px;
+        }
+        .hostly-inventory-config-body--compact .hostly-inventory-field-label {
+          font-size: 8px;
+          letter-spacing: 0.05em;
+          line-height: 1.1;
+        }
+        .hostly-inventory-compact-fiche {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+        }
+        .hostly-inventory-compact-sheet {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .hostly-inventory-compact-mobile-bar {
+          display: none;
+          justify-content: flex-end;
+          margin-bottom: 2px;
+        }
+        .hostly-inventory-compact-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 4px 6px;
+          align-items: start;
+        }
+        .hostly-inventory-compact-grid--2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .hostly-inventory-compact-grid--3 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .hostly-inventory-compact-cost-inline {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 26px;
+          padding: 3px 0 2px;
+          border-top: 1px solid var(--hostly-table-divider-faint);
+        }
+        .hostly-inventory-compact-cost-inline__label {
+          flex-shrink: 0;
+          font-size: 8px;
+          font-weight: 750;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          color: color-mix(in srgb, var(--hostly-ink-muted) 90%, transparent);
+          line-height: 1.1;
+          max-width: 88px;
+        }
+        .hostly-inventory-compact-cost-inline__value {
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 11px;
+          font-weight: 750;
+          color: #0f766e;
+          font-variant-numeric: tabular-nums;
+          line-height: 1.2;
+        }
+        .hostly-inventory-compact-footer {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px;
+          padding-top: 4px;
+          border-top: 1px solid var(--hostly-table-divider-faint);
+        }
+        .hostly-inventory-compact-footer[data-dirty="true"] {
+          background: color-mix(in srgb, #fffbeb 45%, transparent);
+          margin: 0 -4px;
+          padding: 4px 4px 0;
+          border-radius: 8px;
+        }
+        .hostly-inventory-compact-footer-save {
+          flex: 1 1 120px;
+          min-width: 0;
+          min-height: 34px;
+          max-height: 34px;
+          padding: 0 10px;
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .hostly-inventory-compact-footer-status {
+          flex: 0 0 auto;
+          font-size: 9px;
+          font-weight: 700;
+          color: #b45309;
+          letter-spacing: 0.02em;
+          white-space: nowrap;
+        }
+        .hostly-inventory-compact-footer-status--ok {
+          color: #047857;
+        }
+        .hostly-inventory-compact-footer-status--error {
+          color: #b91c1c;
+        }
+        .hostly-inventory-advanced-details--inline {
+          flex: 0 0 auto;
+          margin: 0;
+          border: none;
+        }
+        .hostly-inventory-advanced-details--inline[open] {
+          flex-basis: 100%;
+          width: 100%;
+        }
+        .hostly-inventory-advanced-details--inline .hostly-inventory-advanced-summary {
+          padding: 6px 4px;
+          margin: 0;
+          border: 0;
+          font-size: 9px;
+          white-space: nowrap;
+        }
+        .hostly-inventory-advanced-details--inline[open] .hostly-inventory-advanced-body {
+          margin-top: 4px;
+        }
+        .hostly-inventory-advanced-summary {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          padding: 8px 2px;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: color-mix(in srgb, var(--hostly-ink-muted) 92%, transparent);
+          cursor: pointer;
+          list-style: none;
+          user-select: none;
+        }
+        .hostly-inventory-advanced-summary::-webkit-details-marker {
+          display: none;
+        }
+        .hostly-inventory-advanced-summary::after {
+          content: "▸";
+          font-size: 10px;
+          color: var(--hostly-ink-soft);
+          transition: transform 0.15s ease;
+        }
+        .hostly-inventory-advanced-details[open] .hostly-inventory-advanced-summary::after {
+          transform: rotate(90deg);
+        }
+        .hostly-inventory-advanced-body {
+          padding: 0 0 8px;
+          max-height: min(40vh, 340px);
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-width: thin;
+        }
+        .hostly-inventory-advanced-footer {
+          display: flex;
+          justify-content: flex-end;
+          padding: 10px 0 4px;
+          border-top: 1px solid var(--hostly-table-divider-faint);
+          margin-top: 4px;
+        }
+        .hostly-inventory-panel-head--compact {
+          padding: 6px 10px;
+        }
+        .hostly-inventory-panel-head--compact .hostly-inventory-head-badges {
+          margin-top: 4px;
+        }
+        @media (max-width: 1100px) {
+          .hostly-inventory-compact-grid--3 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .hostly-inventory-compact-grid--3 .hostly-inventory-field:last-child {
+            grid-column: 1 / -1;
+          }
         }
         .hostly-inventory-config-body::-webkit-scrollbar {
           width: 7px;
@@ -2425,6 +2555,9 @@ export default function InventarioStockSection() {
           }
           .hostly-inventory-mobile-close {
             display: inline-flex;
+          }
+          .hostly-inventory-compact-mobile-bar {
+            display: flex;
           }
           .hostly-inventory-config-panel {
             flex: none;

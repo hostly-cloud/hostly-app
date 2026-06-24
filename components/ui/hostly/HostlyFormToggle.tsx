@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes, ReactNode } from "react";
-import { hostlyCx } from "@/components/ui/hostly/hostly-cx";
+import { hostlyCx } from "./hostly-cx";
 
 export type HostlyFormToggleProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & {
   label: ReactNode;
@@ -7,7 +7,6 @@ export type HostlyFormToggleProps = Omit<InputHTMLAttributes<HTMLInputElement>, 
   className?: string;
 };
 
-/** Checkbox accesible con presentación operacional Hostly v2. */
 export function HostlyFormToggle({
   label,
   hint,

@@ -20,6 +20,7 @@ import { subscribeToAuthState } from "@/lib/auth/auth";
 import {
   loadRestaurantNameById,
   loadUserRestaurantContext,
+  DEFAULT_USER_RESTAURANT_ROLE,
   type UserRestaurantRole,
 } from "@/lib/firestore/user-restaurant-profile";
 
@@ -41,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string | null>(null);
-  const [role, setRole] = useState<UserRestaurantRole>("owner");
+  const [role, setRole] = useState<UserRestaurantRole>(DEFAULT_USER_RESTAURANT_ROLE);
   const [ready, setReady] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
 
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!uid) {
       setRestaurantId(null);
       setRestaurantName(null);
-      setRole("owner");
+      setRole(DEFAULT_USER_RESTAURANT_ROLE);
       setProfileReady(true);
       return;
     }
@@ -122,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setRestaurantId(null);
         setRestaurantName(null);
-        setRole("owner");
+        setRole(DEFAULT_USER_RESTAURANT_ROLE);
       } finally {
         if (isStale()) {
           return;
@@ -144,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setRestaurantId(null);
       setRestaurantName(null);
-      setRole("owner");
+      setRole(DEFAULT_USER_RESTAURANT_ROLE);
       setProfileReady(true);
       setReady(true);
       return;

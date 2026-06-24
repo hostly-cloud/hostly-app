@@ -15,6 +15,8 @@ export type RestaurantDocument = {
   timezone: string;
   currency: string;
   onboardingCompleted: boolean;
+  logoUrl?: string;
+  logoPath?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -81,6 +83,8 @@ export function parseRestaurantDocument(
     timezone: readTrimmedString(data.timezone) || DEFAULT_RESTAURANT_TIMEZONE,
     currency: readTrimmedString(data.currency) || DEFAULT_RESTAURANT_CURRENCY,
     onboardingCompleted: readBoolean(data.onboardingCompleted, false),
+    ...(readTrimmedString(data.logoUrl) ? { logoUrl: readTrimmedString(data.logoUrl) } : {}),
+    ...(readTrimmedString(data.logoPath) ? { logoPath: readTrimmedString(data.logoPath) } : {}),
     createdAt,
     updatedAt,
   };
@@ -120,6 +124,8 @@ const PATCH_STRING_KEYS = [
   "country",
   "timezone",
   "currency",
+  "logoUrl",
+  "logoPath",
 ] as const satisfies readonly (keyof RestaurantProfilePatch)[];
 
 /** Convierte un patch parcial a payload Firestore (solo claves presentes). */

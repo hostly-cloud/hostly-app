@@ -8,6 +8,12 @@ import {
   ConfigCard,
 } from "../_components/config-carta-workbench";
 import { ConfigModulePageHeader } from "../_components/config-module-page-header";
+import {
+  HostlyAlert,
+  HostlyFormToggle,
+  HostlyInput,
+  HostlySelect,
+} from "@/components/ui/hostly";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
   createProductFamily,
@@ -49,9 +55,6 @@ function formatProductFamilyError(error: unknown): string {
   }
   return "No se pudo guardar la familia.";
 }
-
-const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20";
 
 export default function ConfigFamiliasProductoPage() {
   const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
@@ -229,35 +232,35 @@ export default function ConfigFamiliasProductoPage() {
 
       <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
         {error ? (
-          <p className="text-sm text-rose-700" role="alert">
+          <HostlyAlert tone="danger">
             {error}
-          </p>
+          </HostlyAlert>
         ) : null}
         {notice ? (
-          <p className="text-sm text-emerald-800" role="status">
+          <HostlyAlert tone="success">
             {notice}
-          </p>
+          </HostlyAlert>
         ) : null}
 
         <ConfigCard>
-          <h2 className="text-sm font-semibold text-slate-900">Nueva familia de producto</h2>
-          <p className="mt-1 text-xs text-slate-500">
+          <h2 className="hostly-type-card-title">Nueva familia de producto</h2>
+          <p className="hostly-type-caption mt-1 text-[color:var(--hostly-ink-muted)]">
             Ej.: Cócteles, Cafés, Tapas, Menú del día.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">
             <label className="block">
-              <span className="text-xs font-medium text-slate-600">Nombre</span>
-              <input
-                className={`${inputClass} mt-1`}
+              <span className="hostly-form-label">Nombre</span>
+              <HostlyInput
+                className="mt-1"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="Cócteles"
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-slate-600">Clasificación</span>
-              <select
-                className={`${inputClass} mt-1`}
+              <span className="hostly-form-label">Clasificación</span>
+              <HostlySelect
+                className="mt-1"
                 value={newType}
                 onChange={(e) =>
                   setNewType(e.target.value as ProductFamilyType)
@@ -268,8 +271,8 @@ export default function ConfigFamiliasProductoPage() {
                     {PRODUCT_FAMILY_TYPE_LABELS[t]}
                   </option>
                 ))}
-              </select>
-              <p className="mt-1 text-xs text-slate-500">
+              </HostlySelect>
+              <p className="hostly-type-caption mt-1 text-[color:var(--hostly-ink-muted)]">
                 Comida, bebida u otros. Alimenta filtros como Comida / Bebida en Productos.
               </p>
             </label>
@@ -285,11 +288,11 @@ export default function ConfigFamiliasProductoPage() {
 
         {loading || ensuringDefaults ? (
           <ConfigCard>
-            <p className="text-sm text-slate-600">Cargando familias…</p>
+            <p className="hostly-muted">Cargando familias…</p>
           </ConfigCard>
         ) : families.length === 0 ? (
           <ConfigCard>
-            <p className="text-sm text-slate-600">
+            <p className="hostly-muted">
               No hay familias. Se crearán las predeterminadas al conectar.
             </p>
           </ConfigCard>
@@ -308,11 +311,11 @@ export default function ConfigFamiliasProductoPage() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1 grid gap-3 sm:grid-cols-2">
                         <label className="block sm:col-span-2">
-                          <span className="text-xs font-medium text-slate-600">
+                          <span className="hostly-form-label">
                             Nombre
                           </span>
-                          <input
-                            className={`${inputClass} mt-1`}
+                          <HostlyInput
+                            className="mt-1"
                             value={draft.name}
                             onChange={(e) =>
                               patchDraft(family.id, { name: e.target.value })
@@ -320,11 +323,11 @@ export default function ConfigFamiliasProductoPage() {
                           />
                         </label>
                         <label className="block">
-                          <span className="text-xs font-medium text-slate-600">
+                          <span className="hostly-form-label">
                             Clasificación
                           </span>
-                          <select
-                            className={`${inputClass} mt-1`}
+                          <HostlySelect
+                            className="mt-1"
                             value={draft.type}
                             onChange={(e) =>
                               patchDraft(family.id, {
@@ -337,20 +340,18 @@ export default function ConfigFamiliasProductoPage() {
                                 {PRODUCT_FAMILY_TYPE_LABELS[t]}
                               </option>
                             ))}
-                          </select>
+                          </HostlySelect>
                         </label>
-                        <label className="flex items-center gap-2 pt-6">
-                          <input
-                            type="checkbox"
-                            checked={draft.active}
-                            onChange={(e) =>
-                              patchDraft(family.id, {
-                                active: e.target.checked,
-                              })
-                            }
-                          />
-                          <span className="text-sm text-slate-700">Activa</span>
-                        </label>
+                        <HostlyFormToggle
+                          className="pt-6"
+                          label="Activa"
+                          checked={draft.active}
+                          onChange={(e) =>
+                            patchDraft(family.id, {
+                              active: e.target.checked,
+                            })
+                          }
+                        />
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col lg:items-stretch">
                         <div className="flex gap-1">

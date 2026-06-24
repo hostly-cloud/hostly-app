@@ -1,4 +1,5 @@
 import type { ZonasSelectorsExportsData } from "@/components/analysis/hooks/useZonasSelectors";
+import { HostlyButton } from "@/components/ui/hostly";
 
 export type ZonasActionsData = ZonasSelectorsExportsData;
 
@@ -94,34 +95,34 @@ export function ZonasActions({
   ];
 
   return (
-    <div>
-      <button type="button" onClick={copiarVistaActualZonas}>
+    <div className="hostly-analysis-actions" aria-label="Acciones de exportación por zonas">
+      <HostlyButton variant="tableAction" onClick={copiarVistaActualZonas}>
         Copiar vista
-      </button>
-      <button type="button" onClick={copiarKpisZonas}>
+      </HostlyButton>
+      <HostlyButton variant="tableAction" onClick={copiarKpisZonas}>
         Copiar KPIs
-      </button>
-      <button type="button" onClick={copiarInsightZonas}>
+      </HostlyButton>
+      <HostlyButton variant="tableAction" onClick={copiarInsightZonas}>
         Copiar insight
-      </button>
-      <button type="button" onClick={copiarTopScoreZonas}>
+      </HostlyButton>
+      <HostlyButton variant="tableAction" onClick={copiarTopScoreZonas}>
         Copiar top score
-      </button>
-      <button type="button" onClick={copiarZonasCriticas}>
+      </HostlyButton>
+      <HostlyButton variant="tableAction" onClick={copiarZonasCriticas}>
         Copiar zonas críticas
-      </button>
-      <button type="button" onClick={copiarResumenEjecutivoZonas}>
+      </HostlyButton>
+      <HostlyButton variant="tableAction" onClick={copiarResumenEjecutivoZonas}>
         Copiar resumen ejecutivo
-      </button>
-      <button type="button" onClick={copiarEstadoVistaZonas}>
+      </HostlyButton>
+      <HostlyButton variant="tableAction" onClick={copiarEstadoVistaZonas}>
         Copiar estado vista
-      </button>
-      <button type="button" onClick={copiarTodoZonas}>
+      </HostlyButton>
+      <HostlyButton variant="tableAction" onClick={copiarTodoZonas}>
         Copiar todo
-      </button>
-      <button type="button" onClick={copiarResumenUltraZonas}>
+      </HostlyButton>
+      <HostlyButton variant="tableAction" onClick={copiarResumenUltraZonas}>
         Copiar ultra
-      </button>
+      </HostlyButton>
     </div>
   );
 }

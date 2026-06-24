@@ -39,14 +39,14 @@ export function HostlyKpiCard({
       <div className="flex items-start justify-between gap-[var(--hostly-stack-gap-sm)]">
         <span className="hostly-kpi-label min-w-0">{title}</span>
         {icon ? (
-          <span className="pointer-events-none shrink-0 text-[var(--hostly-ink-soft)] [&_svg]:block">
+          <span className="hostly-kpi-icon pointer-events-none shrink-0 text-[var(--hostly-ink-soft)]">
             {icon}
           </span>
         ) : null}
       </div>
       <div
         className={hostlyCx(
-          "hostly-kpi-value overflow-hidden text-ellipsis whitespace-nowrap",
+          "hostly-kpi-value hostly-type-kpi-value overflow-hidden text-ellipsis whitespace-nowrap",
           valueClassName,
         )}
         title={valueTitle}

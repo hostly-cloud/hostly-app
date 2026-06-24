@@ -26,22 +26,8 @@ export function DashboardGate({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <div
-        className="grid min-h-dvh place-items-center px-4"
-        style={{
-          background:
-            "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 55%, var(--hostly-ice-100) 100%)",
-          color: "var(--hostly-ink)",
-        }}
-      >
-        <div
-          className="rounded-[var(--hostly-radius-lg)] px-5 py-4 text-sm font-medium shadow-[var(--hostly-shadow-card)]"
-          style={{
-            border: "1px solid var(--hostly-line)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-muted)",
-          }}
-        >
+      <div className="hostly-session-state">
+        <div className="hostly-session-state__panel" role="status">
           Preparando sesión…
         </div>
       </div>
@@ -50,22 +36,8 @@ export function DashboardGate({ children }: { children: ReactNode }) {
 
   if (!user) {
     return (
-      <div
-        className="grid min-h-dvh place-items-center px-4"
-        style={{
-          background:
-            "linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 55%, var(--hostly-ice-100) 100%)",
-          color: "var(--hostly-ink)",
-        }}
-      >
-        <div
-          className="rounded-[var(--hostly-radius-lg)] px-5 py-4 text-sm font-medium shadow-[var(--hostly-shadow-card)]"
-          style={{
-            border: "1px solid var(--hostly-line)",
-            background: "var(--hostly-surface-card-solid)",
-            color: "var(--hostly-ink-muted)",
-          }}
-        >
+      <div className="hostly-session-state">
+        <div className="hostly-session-state__panel" role="status">
           Redirigiendo a login…
         </div>
       </div>

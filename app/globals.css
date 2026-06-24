@@ -178,6 +178,27 @@
   --hostly-op-launcher-title-size: clamp(14px, 3.6vw, 16px);
   --hostly-op-launcher-subtitle-size: 11px;
   --hostly-op-launcher-icon-size: 20px;
+
+  /* [M] Tipografía e iconografía — Hostly Design System v1 */
+  --hostly-font-family: var(--font-geist-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --hostly-type-page-title: clamp(20px, 2.4vw, 28px);
+  --hostly-type-section-title: clamp(16px, 1.8vw, 20px);
+  --hostly-type-card-title: 14px;
+  --hostly-type-product-name: 14px;
+  --hostly-type-body: 14px;
+  --hostly-type-caption: 12px;
+  --hostly-type-button: 14px;
+  --hostly-type-kpi-value: clamp(18px, 2.35vw, 22px);
+  --hostly-type-kpi-label: 11px;
+  --hostly-type-table-cell: 13px;
+  --hostly-type-table-header: 11px;
+  --hostly-icon-sm: 16px;
+  --hostly-icon-md: 18px;
+  --hostly-icon-lg: 20px;
+  --hostly-icon-xl: 24px;
+  --hostly-space-page-section: var(--hostly-op-gap-lg);
+  --hostly-space-content-stack: var(--hostly-op-gap-md);
+  --hostly-space-control: var(--hostly-op-gap-sm);
   --hostly-op-analytics-section-gap: var(--hostly-op-section-gap);
   --hostly-op-analytics-panel-pad: var(--hostly-op-gap-md);
   --hostly-op-dashboard-header-pad-y: var(--hostly-op-header-pad-y);
@@ -204,13 +225,15 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-geist-sans);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--hostly-font-family);
+  font-size: var(--hostly-type-body);
+  line-height: 1.45;
 }
 
 /* Hostly — shared layout primitives */
@@ -266,18 +289,21 @@ body {
 }
 
 .hostly-page-title {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  margin: 0;
+  font-size: var(--hostly-type-page-title);
+  font-weight: 700;
+  letter-spacing: -0.025em;
   color: var(--hostly-ink-strong);
-  line-height: 1.1;
+  line-height: 1.12;
 }
 
 .hostly-page-subtitle {
   margin-top: 2px;
-  font-size: 12px;
+  margin-bottom: 0;
+  font-size: var(--hostly-type-caption);
+  font-weight: 500;
   color: var(--hostly-ink-soft);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 /* Label de formulario operativo (uppercase suave; sin tocar lógica de campos) */
@@ -2208,6 +2234,321 @@ body {
   color: var(--hostly-navy-deep);
 }
 
+/* Home operativa — /dashboard */
+.hostly-dashboard-op-home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-sm);
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hostly-dashboard-identity {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--hostly-op-gap-md);
+  padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+  min-width: 0;
+}
+
+.hostly-dashboard-identity__text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.hostly-dashboard-identity__name {
+  margin: 0;
+  font-size: clamp(20px, 4vw, 26px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--hostly-ink-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostly-dashboard-identity__subtitle {
+  margin: 3px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-dashboard-op-actions {
+  margin-top: 0 !important;
+  flex: 0 0 auto;
+  align-content: stretch;
+}
+
+.hostly-dashboard-op-actions .hostly-op-launcher-card {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-height: clamp(5.25rem, 17vh, 7rem);
+  padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+}
+
+.hostly-dashboard-op-actions--hero .hostly-op-launcher-card {
+  min-height: clamp(6.25rem, 20vh, 8.75rem);
+  padding: var(--hostly-op-gap-md);
+  gap: var(--hostly-op-gap-sm);
+  border-color: color-mix(in srgb, var(--hostly-accent) 18%, var(--hostly-table-divider-soft));
+  background: color-mix(in srgb, var(--hostly-accent-soft) 28%, var(--hostly-surface-card-solid));
+}
+
+.hostly-dashboard-op-actions .hostly-op-launcher-icon {
+  width: calc(var(--hostly-op-launcher-icon-size) + 4px);
+  height: calc(var(--hostly-op-launcher-icon-size) + 4px);
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-dashboard-op-actions--hero .hostly-op-launcher-icon {
+  width: calc(var(--hostly-op-launcher-icon-size) + 10px);
+  height: calc(var(--hostly-op-launcher-icon-size) + 10px);
+}
+
+.hostly-dashboard-op-actions .hostly-op-launcher-text {
+  align-items: center;
+}
+
+.hostly-dashboard-op-actions .hostly-op-launcher-title {
+  font-size: clamp(15px, 2.4vw, 17px);
+}
+
+.hostly-dashboard-op-actions--hero .hostly-op-launcher-title {
+  font-size: clamp(16px, 2.8vw, 18px);
+}
+
+.hostly-dashboard-secondary {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hostly-dashboard-module-grid--compact {
+  gap: 6px;
+}
+
+@media (min-width: 640px) {
+  .hostly-dashboard-module-grid--compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .hostly-dashboard-module-grid--compact {
+    grid-template-columns: repeat(auto-fit, minmax(7.25rem, 1fr));
+  }
+}
+
+.hostly-dashboard-module-grid--compact .hostly-dashboard-module-card {
+  min-height: 36px;
+  padding: 6px 8px;
+  gap: 6px;
+}
+
+.hostly-dashboard-module-grid--compact .hostly-dashboard-module-card__icon {
+  width: 24px;
+  height: 24px;
+}
+
+.hostly-dashboard-module-grid--compact .hostly-dashboard-module-card__label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hostly-dashboard-more-tools {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-radius: var(--hostly-radius-sm);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
+.hostly-dashboard-more-tools > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+  padding: var(--hostly-op-tab-pad-y) var(--hostly-op-gap-md);
+  min-height: var(--hostly-op-button-compact-min-h);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+  color: var(--hostly-ink-strong);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-dashboard-more-tools > summary::-webkit-details-marker {
+  display: none;
+}
+
+.hostly-dashboard-more-tools > summary::after {
+  content: "▾";
+  font-size: 12px;
+  color: var(--hostly-ink-muted);
+  transition: transform 140ms ease;
+}
+
+.hostly-dashboard-more-tools[open] > summary::after {
+  transform: rotate(-180deg);
+}
+
+.hostly-dashboard-more-tools__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-md);
+  padding: 0 var(--hostly-op-gap-md) var(--hostly-op-gap-md);
+  border-top: 1px solid var(--hostly-table-divider-faint);
+}
+
+.hostly-dashboard-management-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-sm);
+  min-width: 0;
+}
+
+.hostly-dashboard-management-panel--surface {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-radius: var(--hostly-radius-sm);
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-surface-card-solid);
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
+.hostly-dashboard-management-panel--surface > summary {
+  padding: var(--hostly-op-tab-pad-y) var(--hostly-op-gap-md);
+  min-height: var(--hostly-op-button-compact-min-h);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  color: var(--hostly-ink-strong);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-dashboard-management-panel--surface > summary::-webkit-details-marker {
+  display: none;
+}
+
+.hostly-dashboard-management-panel--surface > summary::after {
+  content: "▾";
+  font-size: 12px;
+  color: var(--hostly-ink-muted);
+  transition: transform 140ms ease;
+}
+
+.hostly-dashboard-management-panel--surface[open] > summary::after {
+  transform: rotate(-180deg);
+}
+
+.hostly-dashboard-management-panel--surface .hostly-dashboard-management-panel__body {
+  padding: 0 var(--hostly-op-gap-md) var(--hostly-op-gap-md);
+  border-top: 1px solid var(--hostly-table-divider-faint);
+}
+
+.hostly-dashboard-management-panel__body--compact {
+  gap: var(--hostly-op-gap-xs);
+}
+
+.hostly-kpi-grid-unified--dashboard-compact .hostly-kpi-card {
+  padding: 6px 8px !important;
+}
+
+.hostly-dashboard-panel--compact {
+  padding: var(--hostly-op-gap-xs) var(--hostly-op-gap-sm);
+}
+
+.hostly-dashboard-panels-grid--compact {
+  gap: var(--hostly-op-gap-xs);
+}
+
+.hostly-dashboard-onboarding--compact {
+  padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-md);
+}
+
+.hostly-dashboard-onboarding--compact .hostly-dashboard-onboarding__title {
+  font-size: clamp(13px, 2vw, 15px);
+}
+
+.hostly-dashboard-onboarding--compact .hostly-dashboard-onboarding__body {
+  font-size: 10px;
+}
+
+.hostly-dashboard-management-panel > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+  padding: var(--hostly-op-gap-xs) 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-muted);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.hostly-dashboard-management-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.hostly-dashboard-management-panel > summary::after {
+  content: "▾";
+  font-size: 10px;
+  transition: transform 140ms ease;
+}
+
+.hostly-dashboard-management-panel[open] > summary::after {
+  transform: rotate(-180deg);
+}
+
+.hostly-dashboard-management-panel--surface > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--hostly-op-tab-pad-y) var(--hostly-op-gap-md);
+  min-height: var(--hostly-op-button-compact-min-h);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  text-transform: none;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-dashboard-management-panel--surface > summary::after {
+  font-size: 12px;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-dashboard-management-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-sm);
+  padding-top: var(--hostly-op-gap-xs);
+}
+
 .hostly-dashboard-onboarding {
   box-sizing: border-box;
   display: flex;
@@ -3105,6 +3446,33 @@ body {
     radial-gradient(ellipse 90% 62% at 50% -18%, rgba(255, 255, 255, 0.74), transparent 48%),
     linear-gradient(180deg, var(--hostly-surface-page-soft) 0%, var(--hostly-surface-page) 48%, #dbeefa 100%);
   color: var(--hostly-ink);
+}
+
+[data-hostly-config-workspace],
+[data-hostly-config-content] {
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 1023px) {
+  .hostly-config-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  [data-hostly-config-workspace] {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  [data-hostly-config-content] > .hostly-module-shell--mobile {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    overscroll-behavior-y: contain;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -6257,6 +6625,93 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   gap: var(--hostly-op-gap-xs);
 }
 
+.hostly-carta-familia-card__handle {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.hostly-carta-familia-reorder-hint {
+  margin: 0;
+  padding: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--hostly-navy-deep) 58%, var(--hostly-accent));
+}
+
+.hostly-carta-familias-sortable-root.is-sortable-active {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hostly-carta-familia-sortable-item {
+  position: relative;
+  transition:
+    box-shadow 160ms ease,
+    opacity 160ms ease,
+    transform 180ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 140ms ease;
+}
+
+.hostly-carta-familia-sortable-item.is-sortable-dragging .hostly-carta-familia-card {
+  opacity: 0.34;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--hostly-ice-400) 72%, var(--hostly-accent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hostly-ice-200) 35%, transparent);
+}
+
+.hostly-carta-familia-sortable-item.is-sortable-over::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: -3px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--hostly-accent) 72%, var(--hostly-ice-400)),
+    transparent
+  );
+  pointer-events: none;
+  z-index: 3;
+}
+
+.hostly-carta-familia-sortable-mobile .hostly-carta-familia-card {
+  touch-action: manipulation;
+}
+
+.hostly-carta-familia-sortable-mobile.is-sortable-active-touch .hostly-carta-familia-card {
+  touch-action: none;
+}
+
+.hostly-carta-familia-drag-overlay .hostly-carta-familia-drag-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: min(320px, 72vw);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 28%, var(--hostly-table-divider-soft));
+  background: var(--hostly-surface-card-solid);
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--hostly-navy-deep) 12%, transparent),
+    0 4px 10px color-mix(in srgb, var(--hostly-navy-deep) 8%, transparent);
+  transform: translateY(-1px);
+  opacity: 0.96;
+}
+
+.hostly-carta-familia-drag-preview__name {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--hostly-navy-deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hostly-carta-familia-description-input {
   resize: vertical;
   min-height: 4.5rem;
@@ -6494,10 +6949,13 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 }
 
 .hostly-carta-config-drawer {
+  display: flex;
+  min-height: 0;
   width: 100%;
   max-width: 32rem;
   max-height: min(92dvh, 720px);
-  overflow-y: auto;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {
@@ -6507,6 +6965,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 }
 
 .hostly-carta-config-drawer__title {
+  flex-shrink: 0;
   margin: 0;
   font-size: 13px;
   font-weight: 700;
@@ -6516,6 +6975,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 }
 
 .hostly-carta-config-drawer__footer {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -6536,8 +6996,8 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   flex-direction: column;
   width: min(960px, 94vw);
   max-width: min(960px, 94vw);
-  max-height: none;
-  overflow: visible;
+  max-height: min(90dvh, 760px);
+  overflow: hidden;
   padding: 14px 18px 12px;
 }
 
@@ -6551,8 +7011,15 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 }
 
 .hostly-carta-category-form-drawer__body {
+  flex: 1 1 auto;
   margin-top: 10px;
+  min-height: 0;
   min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 3px;
 }
 
 .hostly-carta-category-form-grid {
@@ -6642,7 +7109,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
     width: 100%;
     max-width: 100%;
     max-height: min(92dvh, 720px);
-    overflow-y: auto;
+    overflow: hidden;
     border-radius: 14px 14px 0 0;
   }
 
@@ -6658,7 +7125,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 @media (max-height: 620px) {
   .hostly-carta-category-form-drawer.hostly-carta-config-drawer {
     max-height: 92dvh;
-    overflow-y: auto;
+    overflow: hidden;
   }
 }
 
@@ -7914,7 +8381,123 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 }
 
 .hostly-carta-config-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
   margin-top: var(--hostly-op-gap-sm);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Empresa — ficha clara, compacta y táctil sin alterar el modelo de datos. */
+.hostly-company-profile-content,
+.hostly-company-profile-savebar__inner {
+  max-width: 960px;
+}
+
+@media (min-width: 768px) {
+  .hostly-company-profile-page .hostly-carta-config-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--hostly-op-gap-md);
+  }
+}
+
+@media (max-width: 767px) {
+  .hostly-company-profile-page {
+    overscroll-behavior-y: contain;
+  }
+
+  .hostly-company-profile-content {
+    gap: var(--hostly-op-gap-md);
+    padding-bottom: 88px;
+  }
+
+  .hostly-company-profile-page .hostly-carta-config-card {
+    padding: var(--hostly-op-gap-md);
+  }
+
+  .hostly-company-profile-savebar {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .hostly-company-profile-savebar__inner .hostly-button-primary {
+    width: 100%;
+    min-height: 48px !important;
+    justify-content: center;
+  }
+
+  [data-hostly-config-shell] .hostly-carta-config-actions-row > .hostly-button-primary,
+  [data-hostly-config-shell] .hostly-carta-config-actions-row > .hostly-button-secondary,
+  [data-hostly-config-shell] .hostly-carta-config-drawer__footer .hostly-button-primary,
+  [data-hostly-config-shell] .hostly-carta-config-drawer__footer .hostly-button-secondary,
+  [data-hostly-config-shell] .hostly-carta-category-form-drawer__footer .hostly-button-primary,
+  [data-hostly-config-shell] .hostly-carta-category-form-drawer__footer .hostly-button-secondary {
+    min-height: 44px !important;
+  }
+
+  [data-hostly-config-shell] .hostly-carta-config-drawer__footer,
+  [data-hostly-config-shell] .hostly-carta-category-form-drawer__footer {
+    padding-bottom: max(var(--hostly-op-gap-sm), env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 479px) {
+  [data-hostly-config-shell] .hostly-carta-config-actions-row > .hostly-button-primary,
+  [data-hostly-config-shell] .hostly-carta-config-actions-row > .hostly-button-secondary {
+    flex: 1 1 100%;
+    width: 100%;
+    justify-content: center;
+  }
+
+  [data-hostly-config-shell] .hostly-carta-config-actions-row > .hostly-carta-config-text-link {
+    width: 100%;
+    padding: 6px 2px;
+  }
+
+  [data-hostly-config-shell] .hostly-carta-config-drawer__footer > .hostly-button-primary,
+  [data-hostly-config-shell] .hostly-carta-config-drawer__footer > .hostly-button-secondary,
+  [data-hostly-config-shell] .hostly-carta-category-form-drawer__footer > .hostly-button-primary,
+  [data-hostly-config-shell] .hostly-carta-category-form-drawer__footer > .hostly-button-secondary {
+    flex: 1 1 100%;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Dashboard — uso completo del ancho y objetivos táctiles reales en móvil. */
+@media (max-width: 767px) {
+  .hostly-dashboard-module-card,
+  .hostly-dashboard-management-panel--surface > summary {
+    min-height: 48px;
+    touch-action: manipulation;
+  }
+
+  .hostly-dashboard-module-card {
+    padding: 9px 10px;
+  }
+
+  .hostly-op-launcher-grid > .hostly-op-launcher-card:nth-child(odd):last-child {
+    width: 100%;
+  }
+}
+
+@media (max-width: 359px) {
+  .hostly-dashboard-op-actions.hostly-op-launcher-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hostly-dashboard-op-actions--hero .hostly-op-launcher-card {
+    min-height: 76px;
+    flex-direction: row;
+    justify-content: flex-start;
+    text-align: left;
+    padding: var(--hostly-op-gap-md);
+  }
+
+  .hostly-dashboard-op-actions .hostly-op-launcher-text {
+    align-items: flex-start;
+  }
 }
 
 .hostly-carta-config-form-chips {
@@ -12104,3 +12687,832 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   }
 }
 
+/* Estados compartidos — acceso, sesión y redirección. */
+.hostly-session-state {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: clamp(16px, 4vw, 28px);
+  box-sizing: border-box;
+  background: linear-gradient(
+    180deg,
+    var(--hostly-surface-page-soft) 0%,
+    var(--hostly-surface-page) 55%,
+    var(--hostly-ice-100) 100%
+  );
+}
+
+.hostly-session-state__panel {
+  width: auto;
+  max-width: min(100%, 360px);
+  padding: 14px 20px;
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink-muted);
+  box-shadow: var(--hostly-shadow-card);
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* Análisis — grupo de utilidades secundarias navegable y táctil. */
+.hostly-analysis-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hostly-op-gap-xs);
+  min-width: 0;
+}
+
+/* Pantallas heredadas visibles: misma semántica, presentación Hostly. */
+.hostly-legacy-metrics,
+.hostly-legacy-tables {
+  min-width: 0;
+  padding: clamp(14px, 2vw, 22px);
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-legacy-metrics {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.hostly-legacy-metrics p {
+  margin-block: 0;
+  color: var(--hostly-ink-muted);
+  line-height: 1.45;
+}
+
+.hostly-legacy-date-input {
+  display: block;
+  width: min(100%, 220px);
+  margin-bottom: 4px;
+}
+
+.hostly-legacy-tables__grid,
+.hostly-mesas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: var(--hostly-op-gap-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hostly-legacy-table-card,
+.hostly-mesa-card {
+  min-width: 0;
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-md);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink);
+  box-shadow: var(--hostly-shadow-hairline);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+  transition:
+    transform 120ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.hostly-legacy-table-card:hover,
+.hostly-mesa-card:hover {
+  border-color: var(--hostly-line-strong);
+  box-shadow: var(--hostly-shadow-card);
+}
+
+.hostly-legacy-table-card:active,
+.hostly-mesa-card:active {
+  transform: scale(0.985);
+}
+
+.hostly-legacy-table-card--ready,
+.hostly-mesa-card--free {
+  background: var(--hostly-success-soft);
+}
+
+.hostly-legacy-table-card--occupied,
+.hostly-mesa-card--occupied {
+  background: var(--hostly-danger-soft);
+}
+
+.hostly-legacy-table-card--free,
+.hostly-mesa-card:not(.hostly-mesa-card--free):not(.hostly-mesa-card--occupied) {
+  background: var(--hostly-surface-operational);
+}
+
+.hostly-legacy-table-card.is-selected {
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-mesa-card__name {
+  color: var(--hostly-ink-strong);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.hostly-mesa-card__meta {
+  margin-top: 3px;
+  color: var(--hostly-ink-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+@media (max-width: 767px) {
+  .hostly-analysis-actions > .hostly-ds-button {
+    min-height: 44px !important;
+  }
+
+  .hostly-legacy-metrics,
+  .hostly-legacy-tables {
+    padding: 12px;
+  }
+
+  .hostly-legacy-tables__grid,
+  .hostly-mesas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hostly-legacy-table-card,
+  .hostly-mesa-card {
+    min-height: 84px;
+  }
+}
+
+@media (max-width: 359px) {
+  .hostly-analysis-actions > .hostly-ds-button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .hostly-legacy-tables__grid,
+  .hostly-mesas-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hostly Design System v1 — contrato único de componentes visuales           */
+/* -------------------------------------------------------------------------- */
+
+.hostly-ds-button {
+  min-height: var(--hostly-m-touch-target) !important;
+  border-radius: var(--hostly-radius-button) !important;
+  font-family: inherit;
+  font-size: 14px !important;
+  font-weight: 650 !important;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.hostly-ds-button__icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hostly-ds-button__icon > svg {
+  width: 100%;
+  height: 100%;
+}
+
+.hostly-ds-button--icon {
+  display: inline-flex;
+  width: var(--hostly-m-touch-target);
+  min-width: var(--hostly-m-touch-target);
+  height: var(--hostly-m-touch-target);
+  min-height: var(--hostly-m-touch-target);
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-sm);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink-strong);
+  box-shadow: var(--hostly-shadow-hairline);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 120ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.hostly-ds-button--icon:hover:not(:disabled) {
+  border-color: var(--hostly-line-strong);
+  background: var(--hostly-ice-50);
+}
+
+.hostly-ds-button--icon:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.hostly-ds-button--icon:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-ds-button--icon:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.hostly-ds-button.hostly-row-actions__btn {
+  min-height: var(--hostly-m-touch-target) !important;
+  padding: 0 12px;
+}
+
+.hostly-ds-button--drawer {
+  min-width: 112px;
+}
+
+.hostly-ds-card {
+  min-width: 0;
+  padding: var(--hostly-mobile-panel-pad);
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink);
+  box-shadow: var(--hostly-shadow-card);
+  box-sizing: border-box;
+}
+
+.hostly-ds-card--operation {
+  background: var(--hostly-surface-operational);
+}
+
+.hostly-ds-card--configuration {
+  background: var(--hostly-surface-card-solid);
+}
+
+.hostly-ds-card--kpi {
+  padding: var(--hostly-op-kpi-pad-y) var(--hostly-op-kpi-pad-x);
+  background: var(--hostly-surface-ice-bg);
+}
+
+.hostly-ds-card--action {
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 120ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.hostly-ds-card--action:hover {
+  border-color: var(--hostly-line-strong);
+  background: var(--hostly-ice-50);
+  box-shadow: var(--hostly-shadow-elevated);
+}
+
+.hostly-ds-card--action:active {
+  transform: scale(0.99);
+}
+
+.hostly-ds-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hostly-ds-field__label {
+  color: var(--hostly-ink-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.hostly-ds-field__message {
+  color: var(--hostly-ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.hostly-ds-field__message--error {
+  color: #991b1b;
+}
+
+.hostly-ds-checkbox {
+  display: inline-flex;
+  min-height: var(--hostly-m-touch-target);
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  color: var(--hostly-ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hostly-ds-checkbox.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hostly-ds-checkbox__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hostly-ds-checkbox__control {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hostly-line-strong);
+  border-radius: 6px;
+  background: var(--hostly-surface-card-solid);
+  box-shadow: var(--hostly-shadow-hairline);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.hostly-ds-checkbox__input:checked + .hostly-ds-checkbox__control {
+  border-color: var(--hostly-navy-deep);
+  background: var(--hostly-navy-deep);
+}
+
+.hostly-ds-checkbox__input:checked + .hostly-ds-checkbox__control::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-bottom: 2px solid white;
+  border-left: 2px solid white;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.hostly-ds-checkbox__input:focus-visible + .hostly-ds-checkbox__control {
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-ds-alert {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-sm);
+  background: var(--hostly-surface-operational);
+  color: var(--hostly-ink);
+  box-sizing: border-box;
+}
+
+.hostly-ds-alert__title {
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.hostly-ds-alert__content {
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 1.45;
+}
+
+.hostly-ds-alert--success {
+  border-color: color-mix(in srgb, #15803d 20%, var(--hostly-line));
+  background: var(--hostly-success-soft);
+  color: #14532d;
+}
+
+.hostly-ds-alert--warning {
+  border-color: color-mix(in srgb, #b45309 20%, var(--hostly-line));
+  background: var(--hostly-warning-soft);
+  color: #78350f;
+}
+
+.hostly-ds-alert--danger {
+  border-color: color-mix(in srgb, #b91c1c 20%, var(--hostly-line));
+  background: var(--hostly-danger-soft);
+  color: #7f1d1d;
+}
+
+.hostly-ds-alert--info {
+  border-color: color-mix(in srgb, var(--hostly-accent) 20%, var(--hostly-line));
+  background: var(--hostly-info-soft);
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-ds-state {
+  display: grid;
+  min-height: 50dvh;
+  place-items: center;
+  padding: clamp(16px, 4vw, 28px);
+  box-sizing: border-box;
+}
+
+.hostly-ds-state.is-embedded {
+  min-height: 220px;
+  padding: 16px;
+}
+
+.hostly-ds-state.is-full-page {
+  min-height: 100dvh;
+  background: linear-gradient(
+    180deg,
+    var(--hostly-surface-page-soft) 0%,
+    var(--hostly-surface-page) 55%,
+    var(--hostly-ice-100) 100%
+  );
+}
+
+.hostly-ds-state__panel {
+  display: flex;
+  width: min(100%, 520px);
+  align-items: center;
+  justify-content: center;
+  gap: var(--hostly-op-gap-md);
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-ds-state__spinner {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 2px solid var(--hostly-ice-200);
+  border-top-color: var(--hostly-accent);
+  border-radius: 999px;
+  animation: hostly-ds-spin 700ms linear infinite;
+}
+
+@keyframes hostly-ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hostly-ds-state__title {
+  margin: 0 0 6px;
+  color: var(--hostly-ink-strong);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.hostly-ds-state__copy {
+  color: var(--hostly-ink-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.hostly-ds-drawer {
+  display: flex;
+  width: min(100%, 560px);
+  max-height: min(92dvh, 760px);
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--hostly-line);
+  border-radius: var(--hostly-radius-lg);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink);
+  box-shadow: var(--hostly-shadow-float);
+}
+
+.hostly-ds-drawer__header,
+.hostly-ds-drawer__footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-md);
+  padding: 14px 16px;
+}
+
+.hostly-ds-drawer__header {
+  border-bottom: 1px solid var(--hostly-table-divider);
+}
+
+.hostly-ds-drawer__footer {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  border-top: 1px solid var(--hostly-table-divider);
+  background: var(--hostly-surface-page-soft);
+}
+
+.hostly-ds-drawer__heading {
+  min-width: 0;
+}
+
+.hostly-ds-drawer__title {
+  margin: 0;
+  color: var(--hostly-ink-strong);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.hostly-ds-drawer__description {
+  margin: 4px 0 0;
+  color: var(--hostly-ink-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.hostly-ds-drawer__header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
+}
+
+.hostly-ds-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hostly-status-badge--info {
+  border-color: color-mix(in srgb, var(--hostly-accent) 20%, var(--hostly-line));
+  background: var(--hostly-info-soft);
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-status-badge--info .hostly-status-badge__dot {
+  background: var(--hostly-accent);
+}
+
+@media (max-width: 767px) {
+  .hostly-ds-button {
+    min-height: 44px !important;
+  }
+
+  .hostly-ds-drawer {
+    width: 100%;
+    max-width: 100%;
+    max-height: 94dvh;
+    border-radius: var(--hostly-m-drawer-radius);
+  }
+
+  .hostly-ds-drawer__footer > .hostly-ds-button {
+    flex: 1 1 140px;
+  }
+}
+
+@media (max-width: 359px) {
+  .hostly-ds-drawer__footer > .hostly-ds-button {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}
+
+/* Hostly DS v1 — escala tipográfica semántica cerrada. */
+.hostly-type-page-title {
+  font-size: var(--hostly-type-page-title);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+.hostly-page-title--dashboard-module.hostly-type-page-title,
+.hostly-page-title--module-mobile.hostly-type-page-title {
+  font-size: var(--hostly-op-module-title-size);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
+
+.hostly-type-section-title,
+.hostly-heading {
+  font-size: var(--hostly-type-section-title);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.18;
+}
+
+.hostly-type-card-title,
+.hostly-carta-config-section-title,
+.hostly-ds-card h3 {
+  font-size: var(--hostly-type-card-title);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.hostly-type-product-name,
+.hostly-data-table-primary__name,
+.hostly-mobile-list-item__name,
+.hostly-product-recipe-editor__row-name,
+.hostly-carta-familia-card__name,
+.hostly-categoria-productos-orden-item__name {
+  font-size: var(--hostly-type-product-name);
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+}
+
+.hostly-type-body {
+  font-size: var(--hostly-type-body);
+  font-weight: 450;
+  line-height: 1.45;
+}
+
+.hostly-type-caption,
+.hostly-muted,
+.hostly-ds-field__message {
+  font-size: var(--hostly-type-caption);
+  line-height: 1.4;
+}
+
+.hostly-type-button,
+.hostly-ds-button {
+  font-size: var(--hostly-type-button) !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.012em;
+}
+
+.hostly-type-kpi-value,
+.hostly-kpi-value {
+  font-size: var(--hostly-type-kpi-value);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.hostly-kpi-label {
+  font-size: var(--hostly-type-kpi-label);
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  line-height: 1.2;
+}
+
+.hostly-type-table-cell,
+.hostly-data-table-cell {
+  font-size: var(--hostly-type-table-cell);
+  line-height: 1.35;
+}
+
+.hostly-type-table-header,
+.hostly-data-table-head .hostly-data-table-cell {
+  font-size: var(--hostly-type-table-header);
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  line-height: 1.2;
+}
+
+/* Iconografía: cuatro tamaños y trazo heredado; el significado no cambia. */
+.hostly-icon-sm {
+  width: var(--hostly-icon-sm);
+  height: var(--hostly-icon-sm);
+}
+
+.hostly-icon-md,
+.hostly-ds-button__icon,
+.hostly-module-header-actions svg,
+.hostly-nav-aux svg {
+  width: var(--hostly-icon-md);
+  height: var(--hostly-icon-md);
+}
+
+.hostly-icon-lg,
+.hostly-kpi-icon,
+.hostly-kpi-icon svg {
+  width: var(--hostly-icon-lg);
+  height: var(--hostly-icon-lg);
+}
+
+.hostly-icon-xl {
+  width: var(--hostly-icon-xl);
+  height: var(--hostly-icon-xl);
+}
+
+.hostly-ds-button--icon > svg,
+.hostly-row-actions__btn--icon > svg {
+  width: var(--hostly-icon-sm);
+  height: var(--hostly-icon-sm);
+}
+
+/* Ritmo común de contenido y formularios. */
+.hostly-stack-sm {
+  gap: var(--hostly-space-control);
+}
+
+.hostly-stack-md,
+.hostly-mobile-op-page-stack,
+.hostly-carta-config-stack {
+  gap: var(--hostly-space-content-stack);
+}
+
+.hostly-stack-lg {
+  gap: var(--hostly-space-page-section);
+}
+
+.hostly-ds-field,
+.hostly-carta-config-form-field {
+  gap: var(--hostly-space-control);
+}
+
+.hostly-ds-field__label,
+.hostly-form-label,
+.hostly-carta-config-form-label {
+  font-size: var(--hostly-type-caption);
+  font-weight: 650;
+  letter-spacing: 0.045em;
+  line-height: 1.25;
+}
+
+/* Tablas: una densidad legible, compacta y táctil. */
+.hostly-data-table-head {
+  min-height: 36px;
+  padding: var(--hostly-space-control) var(--hostly-space-content-stack);
+}
+
+.hostly-data-table-row {
+  min-height: 44px;
+  padding: var(--hostly-space-control) var(--hostly-space-content-stack);
+}
+
+.hostly-data-table-head,
+.hostly-data-table-row {
+  column-gap: var(--hostly-space-control);
+}
+
+.hostly-row-actions {
+  gap: var(--hostly-space-control);
+}
+
+.hostly-row-actions__btn.hostly-ds-button--icon {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px !important;
+  padding: 0;
+}
+
+/* Badges y estados vacíos comparten caption y ritmo. */
+.hostly-status-badge {
+  min-height: 24px;
+  padding: 3px 8px;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+.hostly-data-table-microchip.hostly-status-badge {
+  min-height: 22px;
+  padding: 3px 6px;
+  font-size: 10px;
+}
+
+.hostly-operational-empty__title {
+  font-size: var(--hostly-type-card-title);
+  font-weight: 700;
+}
+
+.hostly-operational-empty__text,
+.hostly-operational-empty__hint {
+  font-size: var(--hostly-type-caption);
+}
+
+@media (max-width: 767px) {
+  .hostly-type-page-title {
+    font-size: clamp(20px, 5.6vw, 24px);
+  }
+
+  .hostly-data-table-row {
+    min-height: 48px;
+  }
+
+  .hostly-row-actions__btn.hostly-ds-button--icon {
+    width: var(--hostly-m-touch-target);
+    min-width: var(--hostly-m-touch-target);
+    height: var(--hostly-m-touch-target);
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+}

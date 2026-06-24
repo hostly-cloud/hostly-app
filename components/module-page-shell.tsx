@@ -225,7 +225,6 @@ export default function ModulePageShell({
         paddingTop: padTop,
         paddingLeft: 0,
         paddingRight: 0,
-        fontFamily: "Arial, sans-serif",
         ...(isMobile
           ? effectiveLockViewport && lockFill
             ? {

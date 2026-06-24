@@ -1,4 +1,5 @@
 import type { VentasSelectorsActionsData } from "@/components/analysis/hooks/useVentasSelectors";
+import { HostlyButton } from "@/components/ui/hostly";
 
 export type VentasActionsData = VentasSelectorsActionsData;
 
@@ -14,30 +15,27 @@ export function VentasActions({ data, onCopySummary, onCopyKpis, onExportJson }:
 
   return (
     <div className="hostly-analytics-toolbar__actions w-full justify-start sm:w-auto sm:justify-end">
-      <button
-        type="button"
+      <HostlyButton
+        variant="tableAction"
         disabled={!onCopySummary}
         onClick={onCopySummary}
-        className="hostly-button-secondary hostly-button-compact"
       >
         Copiar resumen
-      </button>
-      <button
-        type="button"
+      </HostlyButton>
+      <HostlyButton
+        variant="tableAction"
         disabled={!onCopyKpis}
         onClick={onCopyKpis}
-        className="hostly-button-secondary hostly-button-compact"
       >
         Copiar KPIs
-      </button>
-      <button
-        type="button"
+      </HostlyButton>
+      <HostlyButton
+        variant="tableAction"
         disabled={!onExportJson}
         onClick={onExportJson}
-        className="hostly-button-secondary hostly-button-compact"
       >
         Exportar JSON
-      </button>
+      </HostlyButton>
     </div>
   );
 }

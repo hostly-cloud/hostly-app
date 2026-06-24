@@ -93,9 +93,8 @@ export default function TablesPage() {
 
   return (
     <ModulePageShell title="Mesas" subtitle="Selecciona una mesa para operar" maxWidth={1180} compactLayout>
-      <div style={{ color: "#fff" }}>
-      <h2 style={{ marginTop: 0 }}>Mesas</h2>
-      <ul>
+      <div className="hostly-legacy-tables">
+      <ul className="hostly-legacy-tables__grid">
         {tables.map((t) => {
           const isReady = orders.some(
             (o) => o.tableId === t.id && o.status === "ready",
@@ -123,6 +122,15 @@ export default function TablesPage() {
 
           return (
             <li
+              className={[
+                "hostly-legacy-table-card",
+                isReady
+                  ? "hostly-legacy-table-card--ready"
+                  : isOccupied
+                    ? "hostly-legacy-table-card--occupied"
+                    : "hostly-legacy-table-card--free",
+                selectedTable?.id === t.id ? "is-selected" : "",
+              ].filter(Boolean).join(" ")}
               key={t.id}
               onClick={() => {
                 const active = orders.find(
@@ -137,12 +145,7 @@ export default function TablesPage() {
                 }
               }}
               style={{
-                backgroundColor: isReady
-                  ? "#22c55e"
-                  : isOccupied
-                    ? "#ef4444"
-                    : "#e5e7eb",
-                border: `3px solid ${borderColor}`,
+                borderColor,
               }}
             >
               {t.name}

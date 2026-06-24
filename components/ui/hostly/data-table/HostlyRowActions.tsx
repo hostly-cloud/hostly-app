@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { hostlyCx } from "../hostly-cx";
+import { HostlyButton } from "../HostlyButton";
 
 export type HostlyRowActionsProps = {
   children: ReactNode;
@@ -44,8 +45,9 @@ export function HostlyRowActionButton({
   ...rest
 }: HostlyRowActionButtonProps) {
   return (
-    <button
+    <HostlyButton
       type={type}
+      variant={variant === "icon" ? "icon" : "tableAction"}
       className={hostlyCx(
         "hostly-row-actions__btn",
         variant === "icon" && "hostly-row-actions__btn--icon",

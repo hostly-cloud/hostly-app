@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
 import { useAuth } from "@/components/auth/auth-context";
+import { HostlyAlert } from "@/components/ui/hostly";
 import CartaImportPremiumLayout from "@/components/carta/carta-import-premium-layout";
 import { fetchCartaCategorias, fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
 import { loadCartaCategoriasLocal } from "@/lib/carta-categorias/local-store";
@@ -40,6 +41,7 @@ import {
   saveOnboardingSession,
   type OnboardingCartaPhase,
 } from "@/lib/hostly/onboarding-session";
+import { saveRestaurantProfileWithUserSync } from "@/lib/firestore/save-restaurant-profile";
 import { loadRestaurantProfile, saveRestaurantProfile, type RestaurantProfile, TIPOS_NEGOCIO, MODELOS_VENTA } from "@/lib/hostly/restaurant-profile";
 import { saveEscandalloCosteForPlato } from "@/lib/hostly/save-escandallo-coste-onboarding";
 import {
@@ -105,7 +107,7 @@ const onboardingLead: CSSProperties = {
   fontWeight: 500,
 };
 
-const onboardingSectionTitle = "hostly-heading m-0 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-[color:var(--hostly-ink-strong)]";
+const onboardingSectionTitle = "hostly-type-section-title m-0 text-[color:var(--hostly-ink-strong)]";
 
 function normalizeName(s: string): string {
   return s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -186,7 +188,7 @@ function groupCatalogRowsBySuggestedCategory(rows: ExtractedMenuRow[]): { catKey
 export default function OnboardingApp() {
   const { t, locale } = useI18n();
   const router = useRouter();
-  const { user, restaurantId: authRestaurantId, restaurantName: authRestaurantName } = useAuth();
+  const { user, restaurantId: authRestaurantId, restaurantName: authRestaurantName, refreshProfile } = useAuth();
   const initialSession = useMemo(() => loadOnboardingSession(), []);
   const [step, setStep] = useState(initialSession.step);
   const [checkpoints, setCheckpoints] = useState<OnboardingCheckpoints>(loadOnboardingCheckpoints);
@@ -548,11 +550,29 @@ export default function OnboardingApp() {
   }, [file, procBusy, markCheckpoint, flashSaved, t]);
 
   const saveNegocio = () => {
-    if (!profile.nombre.trim()) return;
-    saveRestaurantProfile(profile);
-    markCheckpoint("negocio");
-    setStep(1);
-    flashSaved(t("onboarding.flashSaved"));
+    void (async () => {
+      if (!profile.nombre.trim()) return;
+      saveRestaurantProfile(profile);
+
+      const rid = authRestaurantId?.trim();
+      if (rid && user?.uid) {
+        try {
+          await saveRestaurantProfileWithUserSync(rid, user.uid, {
+            name: profile.nombre.trim(),
+            businessType: profile.tipoNegocio,
+          });
+          refreshProfile();
+        } catch (error) {
+          console.error("[onboarding] save negocio firestore failed", error);
+          flashSaved("No se pudo guardar el perfil en el restaurante. Reintenta.");
+          return;
+        }
+      }
+
+      markCheckpoint("negocio");
+      setStep(1);
+      flashSaved(t("onboarding.flashSaved"));
+    })();
   };
 
   const createCatalog = async () => {
@@ -1522,14 +1542,14 @@ export default function OnboardingApp() {
             <p style={onboardingLead}>{t("onboarding.usersSub")}</p>
             <p className="hostly-muted mt-0 text-[11px] leading-snug">{t("onboarding.usersInvitePhaseHint")}</p>
             {usersInviteError ? (
-              <p className="m-0 rounded-lg border border-[color-mix(in_srgb,#dc2626_28%,transparent)] bg-[color-mix(in_srgb,#fee2e2_72%,transparent)] px-3 py-2 text-[11.5px] font-semibold text-[#991b1b]" role="alert">
+              <HostlyAlert tone="danger">
                 {usersInviteError}
-              </p>
+              </HostlyAlert>
             ) : null}
             {!authRestaurantId ? (
-              <p className="m-0 rounded-lg border border-[color-mix(in_srgb,#dc2626_28%,transparent)] bg-[color-mix(in_srgb,#fee2e2_72%,transparent)] px-3 py-2 text-[11.5px] font-semibold text-[#991b1b]" role="alert">
+              <HostlyAlert tone="danger">
                 {t("onboarding.usersInviteNoRestaurant")}
-              </p>
+              </HostlyAlert>
             ) : null}
             {usersList.length === 0 && !userFormVisible ? (
               <div
@@ -1614,9 +1634,9 @@ export default function OnboardingApp() {
                   </button>
                 </div>
                 {userFormError ? (
-                  <p className="m-0 text-[11.5px] font-semibold text-[#991b1b]" role="alert">
+                  <HostlyAlert tone="danger">
                     {userFormError}
-                  </p>
+                  </HostlyAlert>
                 ) : null}
               </div>
             ) : null}
@@ -1756,7 +1776,7 @@ export default function OnboardingApp() {
       case 6:
         return (
           <div className="onboarding-scroll-step" style={{ gap: 12, alignItems: "stretch" }}>
-            <h2 className="hostly-heading m-0 text-[18px] font-semibold text-[color:var(--hostly-accent)]">{t("onboarding.doneTitle")}</h2>
+            <h2 className="hostly-type-section-title m-0 text-[color:var(--hostly-accent)]">{t("onboarding.doneTitle")}</h2>
             <p style={onboardingLead}>{t("onboarding.doneSub")}</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", gap: 8 }}>
               {[

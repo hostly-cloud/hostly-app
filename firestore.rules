@@ -32,7 +32,7 @@ service cloud.firestore {
     }
 
     // Matriz alineada con lib/auth/hostly-capabilities.ts (Fase 5 / 5B).
-    // Sin role en perfil → owner (legacy, igual que loadUserRestaurantContext).
+    // Sin role en perfil → viewer (denegar elevación por defecto).
     // staff Firebase → manager (legacy operacional).
     function normalizedRole() {
       let role = userRole();
@@ -43,7 +43,6 @@ service cloud.firestore {
         : role == 'kitchen' || role == 'cocina' || role == 'cook' ? 'kitchen'
         : role == 'viewer' || role == 'readonly' || role == 'read_only' ? 'viewer'
         : role == 'staff' ? 'manager'
-        : role == '' ? 'owner'
         : 'viewer';
     }
 
@@ -304,7 +303,8 @@ service cloud.firestore {
         && !exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
         && request.resource.data.keys().hasOnly(['name', 'createdAt']);
 
-      allow read, update, delete: if sameRestaurant(restaurantId);
+      allow read: if sameRestaurant(restaurantId);
+      allow update, delete: if sameRestaurant(restaurantId) && canManageSettings();
 
       // Config operacional / sensible por docId.
       // tableGroups: join/separar mesas (manager+). floorPlanLayouts/printers: settings (owner/admin).
