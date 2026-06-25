@@ -2116,8 +2116,8 @@ function BoardLineRow({
       ? kitchenMarkBtnServeClass
       : kitchenMarkBtnPrimaryClass
     : isServeAction
-      ? "hostly-button-secondary !min-h-8 !border-emerald-200 !bg-emerald-600 !px-2.5 !py-1.5 !text-[11px] !font-semibold !text-white hover:!bg-emerald-700"
-      : "hostly-button-primary !min-h-8 !px-2.5 !py-1.5 !text-[11px]";
+      ? "hostly-button-secondary !min-h-11 !min-w-[48px] !border-emerald-200 !bg-emerald-600 !px-3 !py-2 !text-[13px] !font-semibold !text-white hover:!bg-emerald-700"
+      : "hostly-button-primary !min-h-11 !min-w-[48px] !px-3 !py-2 !text-[13px]";
   const markLabel = kitchenOpsUi
     ? isServeAction
       ? "Servir"
@@ -2242,7 +2242,7 @@ function BoardLineRow({
           ? `hostly-kds-kitchen-line-row${
               isWaitingMarch ? " is-waiting-march" : ""
             }`
-          : undefined
+          : "hostly-kds-line-row"
       }
       style={{
         ...(kitchenOpsUi ? kitchenLineRowStyle : lineRowStyle),
@@ -2946,7 +2946,7 @@ function BoardColumn({
               <div
                 key={g.tableKey}
                 data-kds-focus-table={g.tableKey}
-                className={`transition-all duration-300 hostly-kds-line-enter${
+                className={`hostly-kds-ticket-card transition-all duration-150 hostly-kds-line-enter${
                   cardUrgencyClass ? ` border ${cardUrgencyClass}` : ""
                 }${isFocusTicket ? " hostly-kds-focus-ticket" : ""}${
                   kitchenOpsUi ? " hostly-kds-kitchen-ticket" : ""
@@ -2998,7 +2998,7 @@ function BoardColumn({
                     </span>
                     {!kitchenOpsUi && urgencyLabel ? (
                       <span
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                        className={`hostly-kds-urgency-label rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                           urgencyLabel === "Urgente"
                             ? "border border-red-200 bg-red-50 text-red-800"
                             : "border border-amber-200 bg-amber-50 text-amber-900"
@@ -3010,6 +3010,7 @@ function BoardColumn({
                   </div>
                   {showUrgency && g.oldestSentAtMs != null ? (
                     <span
+                      className="hostly-kds-ticket-time"
                       style={{
                         ...(kitchenOpsUi
                           ? kitchenTicketTimeBadgeStyle
@@ -3164,7 +3165,7 @@ function BoardColumn({
                           className={`${
                             kitchenOpsUi
                               ? kitchenPassPrepareBtnClass
-                              : "hostly-button-primary !min-h-8 !px-3 !py-1.5 !text-[11px] !font-semibold shrink-0"
+                              : "hostly-button-primary !min-h-11 !min-w-[48px] !px-3 !py-2 !text-[13px] !font-semibold shrink-0"
                           } ${
                             !!busyPassKey || passBulkBusy
                               ? "cursor-not-allowed opacity-60"

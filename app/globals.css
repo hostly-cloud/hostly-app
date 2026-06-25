@@ -11594,16 +11594,21 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 
 .hostly-tpv-quick-actions-menu-item {
   width: 100%;
+  min-height: 42px;
   border: 0;
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-align: left;
   font-size: 13px;
   font-weight: 650;
   color: #0f172a;
   background: transparent;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 100ms ease;
 }
 
 .hostly-tpv-quick-actions-menu-item:hover:not(:disabled) {
@@ -11612,6 +11617,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 
 .hostly-tpv-quick-actions-menu-item:active:not(:disabled) {
   background: rgba(226, 232, 240, 0.85);
+  transform: scale(0.985);
 }
 
 .hostly-tpv-quick-actions-menu-item:disabled {
@@ -11715,20 +11721,28 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 .hostly-tpv-inline-mixer-chip {
   border: 1px solid rgba(226, 232, 240, 0.95);
   border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 10px;
+  min-height: 34px;
+  padding: 6px 11px;
+  font-size: 11px;
   font-weight: 700;
   color: #475569;
   background: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   touch-action: manipulation;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 100ms ease;
 }
 
 .hostly-tpv-inline-mixer-chip.is-active {
   color: #0369a1;
   border-color: rgba(125, 211, 252, 0.65);
   background: rgba(224, 242, 254, 0.75);
+}
+
+.hostly-tpv-inline-mixer-chip:active {
+  transform: scale(0.96);
 }
 
 .hostly-tpv-repeat-round-btn {
@@ -11871,7 +11885,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 8px;
   border-radius: 8px;
   border: 1px solid rgba(226, 232, 240, 0.95);
@@ -11882,6 +11896,17 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   cursor: pointer;
   touch-action: manipulation;
   white-space: nowrap;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.hostly-kds-kitchen-metrics-details-btn:active,
+.hostly-kds-kitchen-servidos-btn:active,
+.hostly-kds-kitchen-listos-btn:active {
+  transform: scale(0.98);
 }
 
 .hostly-kds-kitchen-listos-btn.is-open {
@@ -11942,6 +11967,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   padding-left: 3px !important;
   padding-right: 3px !important;
   padding-bottom: 5px !important;
+  overscroll-behavior-x: contain;
 }
 
 .hostly-kds-board--kitchen-ops .hostly-kds-kitchen-ticket {
@@ -11954,6 +11980,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   overflow-y: auto;
   scroll-snap-align: start;
   padding: 8px 8px !important;
+  overscroll-behavior-y: contain;
 }
 
 /* Tablet estrecha / rail pequeño: 2 tickets cómodos */
@@ -12162,6 +12189,56 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 /* Sin tocar fondos SLA (urgency); solo separación ligera entre líneas */
 .hostly-kds-board--kitchen-ops .hostly-kds-kitchen-line-row {
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.hostly-kds-ticket-card {
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 7px 18px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.hostly-kds-ticket-card:hover,
+.hostly-kds-ticket-card:focus-within {
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.07),
+    0 12px 24px rgba(15, 23, 42, 0.07);
+}
+
+.hostly-kds-ticket-card:active {
+  transform: translateY(1px);
+}
+
+.hostly-kds-ticket-time {
+  min-width: 58px;
+  justify-content: center;
+  text-align: center;
+  font-size: 14px !important;
+  font-weight: 850 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em !important;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+.hostly-kds-urgency-label {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hostly-kds-line-row,
+.hostly-kds-kitchen-line-row {
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.hostly-kds-line-row:focus-within,
+.hostly-kds-kitchen-line-row:focus-within {
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
 .hostly-kds-board--kitchen-ops .hostly-kds-kitchen-product-name {
@@ -12385,19 +12462,9 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 
 .hostly-kds-sla-pill.is-critical {
   color: #b91c1c;
-  border-color: rgba(252, 165, 165, 0.5);
+  border-color: rgba(239, 68, 68, 0.58);
   background: rgba(254, 242, 242, 0.92);
-  animation: hostly-kds-critical-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes hostly-kds-critical-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
-  }
-  50% {
-    box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12);
-  }
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.1);
 }
 
 .hostly-kds-sla-progress {
@@ -12413,7 +12480,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #7dd3fc, #f87171);
-  transition: width 160ms ease;
+  transition: width 140ms ease;
 }
 
 .hostly-kds-focus-ticket {
@@ -12471,7 +12538,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 }
 
 .hostly-kds-line-enter {
-  animation: hostly-kds-line-enter 160ms ease-out;
+  animation: hostly-kds-line-enter 140ms ease-out;
 }
 
 @keyframes hostly-kds-line-enter {
@@ -12506,6 +12573,7 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
 
 .hostly-kds-quick-menu button {
   width: 100%;
+  min-height: 44px;
   border: 0;
   border-radius: 8px;
   padding: 8px 10px;
@@ -12514,10 +12582,18 @@ main:has(.hostly-productos-config-skin--simplified) .hostly-carta-config-header-
   font-weight: 650;
   background: transparent;
   cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
 }
 
 .hostly-kds-quick-menu button:hover {
   background: rgba(241, 245, 249, 0.95);
+}
+
+.hostly-kds-quick-menu button:active {
+  transform: scale(0.985);
 }
 
 .carta-product-card--adding {

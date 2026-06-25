@@ -9426,7 +9426,7 @@ export function CartaPageContent({
                   setComandaLineActionsTargetId(item.id);
                   setComandaLineActionsOpen(true);
                 }}
-                className="h-6 px-2 flex items-center justify-center rounded bg-gray-100 text-xs font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-200"
+                className="carta-comanda-more-btn"
                 style={{ position: "relative", zIndex: 3 }}
                 title="Acciones"
                 aria-label="Acciones"
@@ -11576,9 +11576,9 @@ button.carta-comanda-pass-chip:disabled {
 }
 
 .carta-comanda-pass-chip.is-pending-march {
-  min-height: 28px;
-  padding: 4px 12px;
-  font-size: 11px;
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 12px;
   font-weight: 800;
   border-width: 1.5px;
   border-color: rgba(251, 146, 60, 0.62);
@@ -11615,6 +11615,18 @@ button.carta-comanda-pass-chip:disabled {
 button.carta-comanda-pass-chip.is-pending-march:hover:not(:disabled) {
   background: rgba(254, 215, 170, 0.99);
   border-color: rgba(249, 115, 22, 0.72);
+}
+
+button.carta-comanda-pass-chip.is-pending-march {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 100ms ease;
+}
+
+button.carta-comanda-pass-chip.is-pending-march:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
@@ -11657,13 +11669,22 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 }
 
 .carta-march-confirm-modal__btn {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 10px;
-  font-size: 13px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 100ms ease,
+    box-shadow 120ms ease;
+}
+
+.carta-march-confirm-modal__btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .carta-march-confirm-modal__btn:disabled {
@@ -12415,9 +12436,28 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   padding: 4px 7px 4px 9px;
   margin-left: 0;
   margin-right: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.85);
-  transition: background-color 0.1s ease;
+  transform: translateZ(0);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 100ms ease;
+}
+
+.carta-comanda-line:hover:not(.is-cancelled),
+.carta-comanda-line:focus-within:not(.is-cancelled) {
+  box-shadow:
+    0 0 0 1px rgba(14, 165, 233, 0.18),
+    0 5px 14px rgba(15, 23, 42, 0.07);
+}
+
+.carta-comanda-line:active:not(.is-cancelled) {
+  transform: scale(0.992);
+  box-shadow:
+    0 0 0 2px rgba(14, 165, 233, 0.24),
+    0 2px 7px rgba(15, 23, 42, 0.08);
 }
 
 .carta-comanda-line.is-pending {
@@ -12604,7 +12644,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
 .carta-comanda-status-chip--clickable {
   cursor: pointer;
-  transition: opacity 120ms ease, filter 120ms ease;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px !important;
+  transition:
+    opacity 120ms ease,
+    filter 120ms ease,
+    transform 100ms ease,
+    box-shadow 120ms ease;
 }
 
 .carta-comanda-status-chip--clickable:hover {
@@ -12615,6 +12663,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 .carta-comanda-status-chip--clickable:focus-visible {
   outline: 2px solid rgba(15, 23, 42, 0.26);
   outline-offset: 1px;
+}
+
+.carta-comanda-status-chip--clickable:active {
+  transform: scale(0.96);
 }
 
 .carta-comanda-qty-inline {
@@ -12642,13 +12694,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 }
 
 .carta-comanda-line-cost-hint {
-  font-size: 9px;
-  line-height: 1.1;
-  color: #94a3b8;
-  margin-top: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: none;
 }
 
 .carta-comanda-line-meta {
@@ -12825,10 +12871,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
 .carta-comanda-qty-btn {
   box-sizing: border-box;
-  min-width: 32px;
-  min-height: 32px;
-  border-radius: 8px;
-  font-size: 15px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 10px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1;
   display: inline-flex;
@@ -12842,6 +12888,11 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease,
+    transform 100ms ease,
+    box-shadow 120ms ease;
 }
 
 .carta-comanda-qty-btn:hover {
@@ -12850,6 +12901,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
 .carta-comanda-qty-btn:active {
   background: #d1d5db;
+  transform: scale(0.94);
 }
 
 .carta-comanda-qty-btn--remove {
@@ -12858,6 +12910,40 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
 .carta-comanda-qty-btn--remove:hover {
   color: #dc2626;
+}
+
+.carta-comanda-more-btn {
+  box-sizing: border-box;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  touch-action: manipulation;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease,
+    transform 100ms ease,
+    box-shadow 120ms ease;
+}
+
+.carta-comanda-more-btn:hover {
+  background: #eef2f7;
+  color: #0f172a;
+}
+
+.carta-comanda-more-btn:active {
+  transform: scale(0.94);
+}
+
+.carta-comanda-more-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
 }
 
 .carta-line-editor-backdrop {
@@ -13140,12 +13226,28 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 .carta-line-editor-btn {
   flex: 1 1 auto;
   min-width: 0;
-  border-radius: 9px;
+  min-height: 44px;
+  border-radius: 11px;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  padding: 9px 10px;
-  font-size: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 100ms ease,
+    box-shadow 120ms ease;
+}
+
+.carta-line-editor-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.carta-line-editor-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
 }
 
 .carta-line-editor-btn--ghost {
@@ -13303,7 +13405,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 }
 
 .carta-product-card--adding {
-  animation: cartaProductAddFlash 160ms ease-out both;
+  animation: cartaProductAddFlash 140ms ease-out both;
 }
 
 /* Badge de cantidad: muestra cuántas unidades del producto hay ya en la
@@ -13389,6 +13491,30 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   border-color: rgba(56, 189, 248, 0.35) !important;
 }
 
+.carta-comanda-button {
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 100ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease !important;
+}
+
+.carta-comanda-button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.carta-comanda-button.is-success {
+  color: #065f46 !important;
+  border-color: rgba(16, 185, 129, 0.38) !important;
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  box-shadow:
+    0 0 0 2px rgba(16, 185, 129, 0.12),
+    0 5px 14px rgba(16, 185, 129, 0.14) !important;
+}
+
 .carta-comanda-button:disabled {
   opacity: 0.45 !important;
   cursor: not-allowed !important;
@@ -13396,6 +13522,43 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   color: #6b7280 !important;
   box-shadow: none !important;
   filter: none !important;
+}
+
+.carta-comanda-button.is-success:disabled {
+  opacity: 1 !important;
+  color: #065f46 !important;
+  border-color: rgba(16, 185, 129, 0.38) !important;
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  box-shadow:
+    0 0 0 2px rgba(16, 185, 129, 0.12),
+    0 5px 14px rgba(16, 185, 129, 0.14) !important;
+}
+
+.carta-tpv-dock-cobrar,
+.carta-tpv-dock-pre-ticket {
+  touch-action: manipulation;
+  transition:
+    filter 120ms ease,
+    transform 100ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease;
+}
+
+.carta-tpv-dock-cobrar:hover:not(:disabled) {
+  filter: brightness(1.035) saturate(1.04);
+}
+
+.carta-tpv-dock-cobrar:active:not(:disabled),
+.carta-tpv-dock-pre-ticket:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.carta-tpv-dock-cobrar:focus-visible,
+.carta-tpv-dock-pre-ticket:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(56, 189, 248, 0.3),
+    0 6px 18px rgba(14, 165, 233, 0.2) !important;
 }
 
 /* Indicador global de unidades pendientes de enviar a cocina/barra.
@@ -13415,18 +13578,14 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
-  animation: pulsePending 1.2s infinite;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 /* Fila intermedia tiempo + pendientes: el gap del flex ya separa del tiempo. */
 .carta-pending-indicator.carta-pending-indicator--meta-row {
   margin-left: 0;
-}
-
-@keyframes pulsePending {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.08); }
-  100% { transform: scale(1); }
 }
 
 /* "Ya enviado a cocina/barra": baja opacidad para distinguir el producto
@@ -13457,7 +13616,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
    unidad (long-press). La clase holding se añade a los 200 ms y se
    retira al soltar/cancelar. El color rojo señala "vas a quitar". */
 .carta-product-card.holding {
-  transform: scale(0.92);
+  transform: scale(0.96);
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.28);
 }
 
@@ -13885,9 +14044,9 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   gap: 3px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-pass-chip.is-pending-march {
-  font-size: 9px !important;
-  min-height: 24px !important;
-  padding: 3px 9px !important;
+  font-size: 10px !important;
+  min-height: 34px !important;
+  padding: 5px 11px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comensales-compact.carta-comensales--pill {
   height: 24px !important;
@@ -13973,12 +14132,18 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   gap: 2px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-qty-btn {
-  width: 23px !important;
-  height: 23px !important;
-  min-width: 23px !important;
-  min-height: 23px !important;
-  border-radius: 7px !important;
-  font-size: 12px !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  min-height: 34px !important;
+  border-radius: 9px !important;
+  font-size: 15px !important;
+}
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-comanda-more-btn {
+  min-width: 34px !important;
+  min-height: 34px !important;
+  padding: 0 8px !important;
+  border-radius: 9px !important;
 }
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-tpv-payment-dock {
   padding-top: 3px !important;
@@ -15401,7 +15566,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     isComandaSending
                       ? " opacity-60 cursor-not-allowed"
                       : ""
-                  }`}
+                  }${comandaSentFlash ? " is-success" : ""}`}
                   onClick={() => {
                     if (!hasPendingItems) return;
                     void handleComandaAndExit();
@@ -15443,7 +15608,9 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     boxShadow: "0 1px 2px rgba(15, 23, 42, 0.05)",
                   }}
                 >
-                  {comandaSentFlash ? "Comanda enviada" : "Comanda"}
+                  {comandaSentFlash
+                    ? "Comanda enviada"
+                    : `Enviar comanda${linesPending.length > 0 ? ` · ${linesPending.length}` : ""}`}
                 </button>
                 <div
                   className="carta-tpv-dock-pre-ticket-wrap"
