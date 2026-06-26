@@ -27,7 +27,6 @@ import {
   Layers3,
   Maximize2,
   Minus,
-  MousePointer2,
   Plus,
   RectangleHorizontal,
   Scan,
@@ -44,6 +43,14 @@ import {
 import MapFloatingQuickActions, {
   type ScreenRect,
 } from "@/components/map/MapFloatingQuickActions";
+import {
+  ConfigMapAssistantPlanoBanner,
+  ConfigMapEditorEmptyState,
+  ConfigMapElementContextPanel,
+  ConfigMapInspectorGuide,
+  ConfigMapInspectorIdleHint,
+  ConfigMapSelectionHud,
+} from "@/components/map/config-map-editor-assistant-ux";
 import FloorPlanLayoutToolbar from "@/components/map/floor-plan-layout-toolbar";
 import ModulePageShell from "@/components/module-page-shell";
 import { useFloorPlanLayouts } from "@/hooks/useFloorPlanLayouts";
@@ -81,6 +88,20 @@ import {
   type AreaTemplateKey,
 } from "@/lib/map/area-template-furniture";
 import type { FloorPlanSnapshotFloorPlan } from "@/lib/firestore/floor-plan-snapshots";
+import {
+  planTypeLabelEs,
+  resolvePlanElementDisplayName,
+} from "@/lib/map/plan-element-labels";
+import {
+  dismissRoomsAssistantBanner,
+  dismissRoomsAssistantGuide,
+  isRoomsAssistantBannerDismissed,
+  isRoomsAssistantGuideDismissed,
+  readRoomsAssistantDraft,
+  type RoomsAssistantDraft,
+} from "@/lib/rooms-assistant/draft";
+import { buildFloorPlanSeedFromDraft } from "@/lib/rooms-assistant/floor-plan-seed";
+import type { FloorPlanSeedZone } from "@/lib/rooms-assistant/floor-plan-seed-types";
 
 const fieldLabelStyle: CSSProperties = {
   display: "block",
@@ -854,31 +875,6 @@ const sideEmptyStyle: CSSProperties = {
   lineHeight: 1.4,
 };
 
-function planTypeLabelEs(t: PlanElementType): string {
-  switch (t) {
-    case "sunbed":
-      return "Hamaca";
-    case "bed":
-      return "Cama";
-    case "wall":
-      return "Pared";
-    case "bar":
-      return "Barra";
-    case "column":
-      return "Columna";
-    case "pool":
-      return "Piscina";
-    case "door":
-      return "Puerta";
-    case "planter":
-      return "Jardinera";
-    case "custom":
-      return "Personalizado";
-    default:
-      return "Mesa";
-  }
-}
-
 function minSizeForPlanType(t: PlanElementType): { w: number; h: number } {
   if (t === "sunbed") return { w: 64, h: 28 };
   if (t === "bed") return { w: 72, h: 44 };
@@ -1174,6 +1170,7 @@ export default function ConfigMesasPage({
   const [elements, setElementsBase] = useState<FloorElement[]>([]);
   const elementsRef = useRef<FloorElement[]>([]);
   const venueBaselineLockRef = useRef<Set<string>>(new Set());
+  const roomsAssistantSeedLockRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     elementsRef.current = elements;
   }, [elements]);
@@ -1222,6 +1219,19 @@ export default function ConfigMesasPage({
   const [premiumInspectorCollapsed, setPremiumInspectorCollapsed] = useState(
     () => Boolean(configuracionMapEditorLayout),
   );
+  const [roomsAssistantBannerVisible, setRoomsAssistantBannerVisible] =
+    useState(false);
+  const [roomsAssistantGuideVisible, setRoomsAssistantGuideVisible] =
+    useState(false);
+  const [cfgInspectorAdvancedOpen, setCfgInspectorAdvancedOpen] =
+    useState(false);
+  const [cfgMapActionFeedback, setCfgMapActionFeedback] = useState<string | null>(
+    null,
+  );
+  const [hasRoomsAssistantDraft, setHasRoomsAssistantDraft] = useState(false);
+  const cfgMapFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const premiumToolsMenuRef = useRef<HTMLDivElement | null>(null);
   const mapViewportControlsRef = useRef<EditableFloorMapViewportControls | null>(
     null,
@@ -1235,6 +1245,30 @@ export default function ConfigMesasPage({
     setPlacementRequest(null);
     setPreferredPlacementMapPoint(null);
   }, []);
+
+  const flashCfgMapFeedback = useCallback((message: string) => {
+    setCfgMapActionFeedback(message);
+    if (cfgMapFeedbackTimerRef.current) {
+      clearTimeout(cfgMapFeedbackTimerRef.current);
+    }
+    cfgMapFeedbackTimerRef.current = setTimeout(() => {
+      setCfgMapActionFeedback(null);
+      cfgMapFeedbackTimerRef.current = null;
+    }, 2600);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cfgMapFeedbackTimerRef.current) {
+        clearTimeout(cfgMapFeedbackTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!configuracionMapEditorLayout || !premiumSpatialEditor) return;
+    setHasRoomsAssistantDraft(Boolean(readRoomsAssistantDraft()));
+  }, [configuracionMapEditorLayout, premiumSpatialEditor]);
 
   useEffect(() => {
     if (!premiumToolsMenuOpen || configuracionMapEditorLayout) return;
@@ -1255,6 +1289,14 @@ export default function ConfigMesasPage({
       return;
     }
     if (!configuracionMapEditorLayout) return;
+    if (
+      roomsAssistantGuideVisible &&
+      selectedIds.length === 0 &&
+      !editingZones
+    ) {
+      setPremiumInspectorCollapsed(false);
+      return;
+    }
     const hasFocus = editingZones || selectedIds.length > 0;
     setPremiumInspectorCollapsed(!hasFocus);
   }, [
@@ -1263,7 +1305,17 @@ export default function ConfigMesasPage({
     configuracionMapEditorLayout,
     editingZones,
     selectedIds.length,
+    roomsAssistantGuideVisible,
   ]);
+
+  useEffect(() => {
+    if (!configuracionMapEditorLayout || !premiumSpatialEditor) return;
+    const draft = readRoomsAssistantDraft();
+    if (draft && !isRoomsAssistantGuideDismissed()) {
+      setRoomsAssistantGuideVisible(true);
+      setPremiumInspectorCollapsed(false);
+    }
+  }, [configuracionMapEditorLayout, premiumSpatialEditor]);
 
   const requestStructureAtMapCenter = useCallback(
     (planType: PlanElementType) => {
@@ -1765,6 +1817,7 @@ export default function ConfigMesasPage({
     if (!selectedElement) {
       setNameDraft("");
       setDimDraft({ w: "", h: "", x: "", y: "" });
+      setCfgInspectorAdvancedOpen(false);
       return;
     }
     const def = getDefaultSizeForPlanElementType(selectedElement.type);
@@ -2455,11 +2508,52 @@ export default function ConfigMesasPage({
   const persistName = useCallback(async () => {
     if (!selectedElement || !restaurantId || !isFirebaseConfigured) return;
     const name = nameDraft.trim() || selectedElement.name;
+    const previous = (selectedElement.name ?? "").trim();
     commitElements((prev) =>
       prev.map((el) => (el.id === selectedElement.id ? { ...el, name } : el)),
     );
     setHasUnsavedChanges(true);
-  }, [selectedElement, nameDraft, restaurantId, commitElements]);
+    if (
+      configuracionMapEditorLayout &&
+      premiumSpatialEditor &&
+      name.trim() !== previous
+    ) {
+      flashCfgMapFeedback("Nombre actualizado");
+    }
+  }, [
+    selectedElement,
+    nameDraft,
+    restaurantId,
+    commitElements,
+    configuracionMapEditorLayout,
+    premiumSpatialEditor,
+    flashCfgMapFeedback,
+  ]);
+
+  const persistSeats = useCallback(
+    (seats: number) => {
+      if (!selectedElement || !restaurantId || !isFirebaseConfigured) return;
+      if (selectedElement.type !== "table") return;
+      if ((selectedElement.seats ?? 4) === seats) return;
+      commitElements((prev) =>
+        prev.map((el) =>
+          el.id === selectedElement.id ? { ...el, seats } : el,
+        ),
+      );
+      setHasUnsavedChanges(true);
+      if (configuracionMapEditorLayout && premiumSpatialEditor) {
+        flashCfgMapFeedback(`${seats} comensales`);
+      }
+    },
+    [
+      selectedElement,
+      restaurantId,
+      commitElements,
+      configuracionMapEditorLayout,
+      premiumSpatialEditor,
+      flashCfgMapFeedback,
+    ],
+  );
 
   const persistDims = useCallback(async () => {
     if (!selectedElement || !restaurantId || !isFirebaseConfigured) return;
@@ -2505,6 +2599,12 @@ export default function ConfigMesasPage({
         nextZoneId = z.id;
         nextZoneName = z.name;
       }
+      if (
+        (selectedElement.zoneId ?? "") === (nextZoneId ?? "") &&
+        (selectedElement.zoneName ?? "") === (nextZoneName ?? "")
+      ) {
+        return;
+      }
       commitElements((prev) =>
         prev.map((el) =>
           el.id === selectedElement.id
@@ -2518,13 +2618,27 @@ export default function ConfigMesasPage({
         ),
       );
       setHasUnsavedChanges(true);
+      if (configuracionMapEditorLayout && premiumSpatialEditor) {
+        flashCfgMapFeedback(
+          nextZoneName ? `Zona: ${nextZoneName}` : "Sin zona asignada",
+        );
+      }
     },
-    [selectedElement, restaurantId, zones, commitElements],
+    [
+      selectedElement,
+      restaurantId,
+      zones,
+      commitElements,
+      configuracionMapEditorLayout,
+      premiumSpatialEditor,
+      flashCfgMapFeedback,
+    ],
   );
 
   const handleDelete = useCallback(async () => {
     if (!selectedElement || !restaurantId || !isFirebaseConfigured) return;
     if (!window.confirm("¿Eliminar este elemento?")) return;
+    const label = resolvePlanElementDisplayName(selectedElement);
     commitElements((prev) => prev.filter((el) => el.id !== selectedElement.id));
     setSelectedIds((prevSel) =>
       prevSel.filter(
@@ -2532,7 +2646,17 @@ export default function ConfigMesasPage({
       ),
     );
     setHasUnsavedChanges(true);
-  }, [selectedElement, restaurantId, commitElements]);
+    if (configuracionMapEditorLayout && premiumSpatialEditor) {
+      flashCfgMapFeedback(`${label} eliminado`);
+    }
+  }, [
+    selectedElement,
+    restaurantId,
+    commitElements,
+    configuracionMapEditorLayout,
+    premiumSpatialEditor,
+    flashCfgMapFeedback,
+  ]);
 
   const handleBringToFront = useCallback(() => {
     if (!selectedElement) return;
@@ -2690,6 +2814,9 @@ export default function ConfigMesasPage({
           }
         : {}),
     });
+    if (configuracionMapEditorLayout && premiumSpatialEditor) {
+      flashCfgMapFeedback("Copia creada");
+    }
   }, [
     selectedElement,
     restaurantId,
@@ -2698,6 +2825,9 @@ export default function ConfigMesasPage({
     createFloorElement,
     mapEditorWorldSize.width,
     mapEditorWorldSize.height,
+    configuracionMapEditorLayout,
+    premiumSpatialEditor,
+    flashCfgMapFeedback,
   ]);
 
   const handleDuplicateSelection = useCallback(() => {
@@ -3230,6 +3360,123 @@ export default function ConfigMesasPage({
     ],
   );
 
+  const runRoomsAssistantDraftSeed = useCallback(
+    async (floorPlanId: string, draft: RoomsAssistantDraft): Promise<boolean> => {
+      if (!configuracionMapEditorLayout || !premiumSpatialEditor) return false;
+      if (!restaurantId || !isFirebaseConfigured) return false;
+      if (editingZones) return false;
+      const onPlan = (e: FloorElement) =>
+        typeof e.floorPlanId === "string" &&
+        e.floorPlanId.trim() === floorPlanId;
+      if (elementsRef.current.some(onPlan)) return false;
+      if (roomsAssistantSeedLockRef.current.has(floorPlanId)) return false;
+      roomsAssistantSeedLockRef.current.add(floorPlanId);
+      try {
+        const seed = buildFloorPlanSeedFromDraft(draft, floorPlanId);
+        const allRemoteZones = await getZones(restaurantId);
+        let remoteZones = allRemoteZones.filter(
+          (z) => z.floorPlanId === floorPlanId,
+        );
+        if (elementsRef.current.some(onPlan)) return false;
+
+        const ensureZone = async (
+          name: string,
+          rect: { x: number; y: number; w: number; h: number },
+        ): Promise<Zone> => {
+          const existing = remoteZones.find(
+            (z) =>
+              zoneHasVisualRect(z) &&
+              z.name.trim().toLowerCase() === name.trim().toLowerCase(),
+          );
+          if (existing) return existing;
+          const zoneId = await createZone(restaurantId, name, undefined, {
+            floorPlanId,
+            x: rect.x,
+            y: rect.y,
+            width: rect.w,
+            height: rect.h,
+          });
+          const created: Zone = {
+            id: zoneId,
+            restaurantId,
+            floorPlanId,
+            name,
+            x: rect.x,
+            y: rect.y,
+            width: rect.w,
+            height: rect.h,
+          };
+          remoteZones = sortZonesByName([...remoteZones, created]);
+          return created;
+        };
+
+        const zoneByKey = new Map<
+          FloorPlanSeedZone["key"],
+          Zone
+        >();
+
+        for (const zoneSpec of seed.zones) {
+          const zone = await ensureZone(zoneSpec.name, zoneSpec);
+          zoneByKey.set(zoneSpec.key, zone);
+        }
+
+        const mainZone = zoneByKey.get("main");
+        if (!mainZone) return false;
+
+        setZones((prev) =>
+          sortZonesByName([
+            ...prev.filter((z) => z.floorPlanId !== floorPlanId),
+            ...remoteZones,
+          ]),
+        );
+        setLoadedZones((prev) =>
+          sortZonesByName([
+            ...prev.filter((z) => z.floorPlanId !== floorPlanId),
+            ...remoteZones,
+          ]),
+        );
+        setZoneHighlight(mainZone.id);
+        setSelectedZoneId(mainZone.id);
+
+        if (elementsRef.current.some(onPlan)) return false;
+
+        for (const piece of seed.elements) {
+          const zone =
+            (piece.zoneKey && zoneByKey.get(piece.zoneKey)) ?? mainZone;
+          await createFloorElement(piece.type, piece.x, piece.y, {
+            name: piece.name,
+            width: piece.width,
+            height: piece.height,
+            tableShape: piece.tableShape,
+            seats: piece.seats,
+            floorPlanId,
+            zoneId: zone.id,
+            zoneName: zone.name,
+            zone: zone.name,
+          });
+        }
+
+        setSelectedIds([]);
+        return true;
+      } finally {
+        roomsAssistantSeedLockRef.current.delete(floorPlanId);
+      }
+    },
+    [
+      configuracionMapEditorLayout,
+      premiumSpatialEditor,
+      restaurantId,
+      isFirebaseConfigured,
+      editingZones,
+      createFloorElement,
+      setZones,
+      setLoadedZones,
+      setZoneHighlight,
+      setSelectedZoneId,
+      setSelectedIds,
+    ],
+  );
+
   const handleCreateNewFloorPlan = useCallback(async () => {
     if (!restaurantId || !isFirebaseConfigured) return;
     const raw = window.prompt("Nombre del plano");
@@ -3356,6 +3603,42 @@ export default function ConfigMesasPage({
     visibleElements.length,
     legacyFloorPlanAnchorId,
     runPremiumVenueBaseline,
+  ]);
+
+  useEffect(() => {
+    if (!configuracionMapEditorLayout || !premiumSpatialEditor) return;
+    if (!restaurantId || !isFirebaseConfigured) return;
+    if (!selectedFloorPlanId || loading || editingZones) return;
+    if (visibleElements.length > 0) return;
+
+    const draft = readRoomsAssistantDraft();
+    if (!draft) return;
+
+    let cancelled = false;
+    void (async () => {
+      const applied = await runRoomsAssistantDraftSeed(selectedFloorPlanId, draft);
+      if (cancelled || !applied) return;
+      setPremiumInspectorCollapsed(false);
+      if (!isRoomsAssistantBannerDismissed()) {
+        setRoomsAssistantBannerVisible(true);
+      }
+      if (!isRoomsAssistantGuideDismissed()) {
+        setRoomsAssistantGuideVisible(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    configuracionMapEditorLayout,
+    premiumSpatialEditor,
+    restaurantId,
+    isFirebaseConfigured,
+    selectedFloorPlanId,
+    loading,
+    editingZones,
+    visibleElements.length,
+    runRoomsAssistantDraftSeed,
   ]);
 
   useEffect(() => {
@@ -3629,6 +3912,20 @@ export default function ConfigMesasPage({
     !loading &&
     Boolean(restaurantId && isFirebaseConfigured) &&
     visibleElements.length === 0;
+
+  const handleStartManualPlacement = useCallback(() => {
+    setEditingZones(false);
+    setOpenRailSection("tables");
+    setActiveCreateType("table");
+    setActiveTableVariant(TABLE_CREATE_VARIANTS[0].key);
+    if (configuracionMapEditorLayout && premiumSpatialEditor) {
+      flashCfgMapFeedback("Toca el plano para colocar la mesa");
+    }
+  }, [
+    configuracionMapEditorLayout,
+    premiumSpatialEditor,
+    flashCfgMapFeedback,
+  ]);
 
   const editorSecondaryActionBtnStyle = premiumSpatialEditor
     ? premiumMiniToolBtn
@@ -4352,6 +4649,11 @@ export default function ConfigMesasPage({
       ) : null}
       {!premiumSpatialEditor ? editorToolbar : null}
       <div
+        className={
+          configuracionMapEditorLayout && premiumSpatialEditor
+            ? "hostly-floor-editor-workbench"
+            : undefined
+        }
         style={{
           flex: 1,
           minHeight: 0,
@@ -4821,6 +5123,7 @@ export default function ConfigMesasPage({
           </aside>
         ) : null}
         <div
+          className="hostly-floor-editor-stage"
           style={{
             flex: 1,
             minWidth: 0,
@@ -4903,45 +5206,65 @@ export default function ConfigMesasPage({
                 boxSizing: "border-box",
               }}
             >
-              {showMapEmptyHint ? (
-                <div
-                  aria-hidden
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    pointerEvents: "none",
-                    zIndex: 1,
-                    padding: 24,
+              {roomsAssistantBannerVisible && cfgMapUi ? (
+                <ConfigMapAssistantPlanoBanner
+                  visible
+                  onDismiss={() => {
+                    dismissRoomsAssistantBanner();
+                    setRoomsAssistantBannerVisible(false);
                   }}
-                >
-                  <div style={{ textAlign: "center", maxWidth: 340 }}>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#94a3b8",
-                        fontSize: 15,
-                        fontWeight: 600,
-                        lineHeight: 1.4,
-                      }}
+                />
+              ) : null}
+              {showMapEmptyHint ? (
+                cfgMapUi ? (
+                  <ConfigMapEditorEmptyState
+                    hasAssistantDraft={hasRoomsAssistantDraft}
+                    onStartManualPlacement={handleStartManualPlacement}
+                  />
+                ) : (
+                  <div
+                    className="hostly-floor-editor-empty"
+                    aria-hidden
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                      zIndex: 1,
+                      padding: 24,
+                    }}
+                  >
+                    <div
+                      className="hostly-floor-editor-empty-card"
+                      style={{ textAlign: "center", maxWidth: 340 }}
                     >
-                      Aún no hay elementos en el plano
-                    </p>
-                    <p
-                      style={{
-                        margin: "10px 0 0",
-                        color: "#64748b",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      Empieza añadiendo una mesa, hamaca o cama
-                    </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "#94a3b8",
+                          fontSize: 15,
+                          fontWeight: 600,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Empieza creando tu primer espacio
+                      </p>
+                      <p
+                        style={{
+                          margin: "10px 0 0",
+                          color: "#64748b",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        Después podrás colocar mesas, barras, hamacas, camas o zonas.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )
               ) : null}
               {premiumSpatialEditor &&
               !configuracionMapEditorLayout &&
@@ -5609,6 +5932,16 @@ export default function ConfigMesasPage({
                       </span>
                     </div>
                   ) : null}
+                  {cfgMapUi &&
+                  selectedElement &&
+                  selectionScreenRect &&
+                  !editingZones &&
+                  selectedIds.length === 1 ? (
+                    <ConfigMapSelectionHud
+                      anchor={selectionScreenRect}
+                      element={selectedElement}
+                    />
+                  ) : null}
                 </>
               ) : null}
             </div>
@@ -5989,6 +6322,76 @@ export default function ConfigMesasPage({
               </div>
             </div>
           ) : selectedElement ? (
+            cfgMapUi ? (
+              <ConfigMapElementContextPanel
+                element={selectedElement}
+                visibleZones={visibleZones}
+                nameDraft={nameDraft}
+                dimDraft={dimDraft}
+                showAdvancedLayout={cfgInspectorAdvancedOpen}
+                actionFeedback={cfgMapActionFeedback}
+                onToggleAdvancedLayout={() =>
+                  setCfgInspectorAdvancedOpen((open) => !open)
+                }
+                onNameChange={setNameDraft}
+                onNameBlur={() => void persistName()}
+                onZoneChange={(zoneId) => void persistZone(zoneId)}
+                onSeatsChange={persistSeats}
+                onDuplicate={() => void handleDuplicate()}
+                onDelete={() => void handleDelete()}
+                onDimChange={(key, value) =>
+                  setDimDraft((current) => ({ ...current, [key]: value }))
+                }
+                onDimBlur={() => void persistDims()}
+                minSize={minSizeForPlanType(selectedElement.type)}
+                footerActions={
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 5,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={{
+                        ...inspectorCfgFooterBtn,
+                        cursor:
+                          selectedElementIndex < 0 ||
+                          selectedElementIndex >= elements.length - 1
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          selectedElementIndex < 0 ||
+                          selectedElementIndex >= elements.length - 1
+                            ? 0.45
+                            : 1,
+                      }}
+                      disabled={
+                        selectedElementIndex < 0 ||
+                        selectedElementIndex >= elements.length - 1
+                      }
+                      onClick={() => void handleBringToFront()}
+                    >
+                      Delante
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        ...inspectorCfgFooterBtn,
+                        cursor:
+                          selectedElementIndex <= 0 ? "not-allowed" : "pointer",
+                        opacity: selectedElementIndex <= 0 ? 0.45 : 1,
+                      }}
+                      disabled={selectedElementIndex <= 0}
+                      onClick={() => void handleSendToBack()}
+                    >
+                      Detrás
+                    </button>
+                  </div>
+                }
+              />
+            ) : (
             <>
             <div style={{ flex: 1, minHeight: 0, overflow: "auto", paddingRight: 2 }}>
 
@@ -6313,21 +6716,21 @@ export default function ConfigMesasPage({
             </div>
             </div>
             </>
-          ) : configuracionMapEditorLayout && premiumSpatialEditor ? (
-            <div
-              className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 px-3 text-center transition-opacity duration-150 ease-out"
-              aria-live="polite"
-            >
-              <MousePointer2
-                size={15}
-                strokeWidth={1.75}
-                className="shrink-0 text-slate-400"
-                aria-hidden
-              />
-              <span className="text-[11px] font-medium text-slate-500">
-                Selecciona un elemento
-              </span>
-            </div>
+            )
+          ) : cfgMapUi && roomsAssistantGuideVisible ? (
+            <ConfigMapInspectorGuide
+              tableCount={
+                visibleElements.filter((element) => element.type === "table")
+                  .length
+              }
+              zoneCount={visibleZones.length}
+              onDismiss={() => {
+                dismissRoomsAssistantGuide();
+                setRoomsAssistantGuideVisible(false);
+              }}
+            />
+          ) : cfgMapUi ? (
+            <ConfigMapInspectorIdleHint />
           ) : (
             <div style={sideEmptyStyle}>
               <div>Selecciona un elemento</div>

@@ -7,6 +7,7 @@ import {
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -19,6 +20,7 @@ import {
 } from "@/lib/firestore/tables";
 import type { FloorPlanCanvasSize } from "@/lib/firestore/floorPlans";
 import { inferSpatialAreaVisual } from "@/lib/map/editor-spatial-visual";
+import { resolvePlanElementDisplayName } from "@/lib/map/plan-element-labels";
 import {
   MAP_TABLE_CHAIR_BORDER,
   MAP_TABLE_CHAIR_FILL,
@@ -288,6 +290,18 @@ export type EditableFloorMapProps = {
   /** Punto preferido en coords de mapa para colocar piezas desde el rail. */
   preferredPlacementMapPoint?: { x: number; y: number } | null;
 };
+
+function assignDomRef<T>(
+  ref: Ref<T> | undefined,
+  value: T,
+): void {
+  if (!ref) return;
+  if (typeof ref === "function") {
+    ref(value);
+    return;
+  }
+  (ref as MutableRefObject<T>).current = value;
+}
 
 function elementSize(el: Table) {
   const def = getDefaultSizeForPlanElementType(el.type);
@@ -747,9 +761,9 @@ export function EditableFloorMap({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [spacePressed, setSpacePressed] = useState(false);
   const processedPlacementIdsRef = useRef(new Set<number>());
-  const dragGroupSnapshotRef = useRef<Record<string, { x: number; y: number }> | null>(
-    null,
-  );
+  const [dragGroupSnapshot, setDragGroupSnapshot] = useState<
+    Record<string, { x: number; y: number }> | null
+  >(null);
 
   useEffect(() => {
     if (!placementRequest || !editable || editingZones || !onCreate) return;
@@ -812,9 +826,7 @@ export function EditableFloorMap({
   const setFloorRef = useCallback(
     (el: HTMLDivElement | null) => {
       floorRef.current = el;
-      if (typeof mapRef === "function") mapRef(el);
-      else if (mapRef && "current" in mapRef)
-        (mapRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+      assignDomRef(mapRef, el);
     },
     [mapRef],
   );
@@ -829,8 +841,12 @@ export function EditableFloorMap({
 
   const mapFitElementsRef = useRef(viewportFitElements ?? elements);
   const mapFitZonesRef = useRef(viewportFitZones ?? zones ?? []);
-  mapFitElementsRef.current = viewportFitElements ?? elements;
-  mapFitZonesRef.current = viewportFitZones ?? zones ?? [];
+  useEffect(() => {
+    mapFitElementsRef.current = viewportFitElements ?? elements;
+  }, [viewportFitElements, elements]);
+  useEffect(() => {
+    mapFitZonesRef.current = viewportFitZones ?? zones ?? [];
+  }, [viewportFitZones, zones]);
 
   const logicalPlanWidth =
     planSize &&
@@ -1060,7 +1076,9 @@ export function EditableFloorMap({
   const marqueeEndRef = useRef<{ bx: number; by: number } | null>(null);
   const marqueePointerIdRef = useRef<number | null>(null);
   const elementsForMarqueeRef = useRef(elements);
-  elementsForMarqueeRef.current = elements;
+  useEffect(() => {
+    elementsForMarqueeRef.current = elements;
+  }, [elements]);
   const [marqueeBox, setMarqueeBox] = useState<{
     ax: number;
     ay: number;
@@ -1070,13 +1088,19 @@ export function EditableFloorMap({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const skipBlurSaveRef = useRef(false);
+  const activeEditingId = useMemo(() => {
+    if (editingZones || !editingId) return null;
+    return elements.some((e) => String(e.id).trim() === String(editingId).trim())
+      ? editingId
+      : null;
+  }, [editingZones, editingId, elements]);
 
   const saveName = useCallback(() => {
     if (skipBlurSaveRef.current) return;
-    if (!editingId) return;
-    onRename?.(editingId, editingName.trim());
+    if (!activeEditingId) return;
+    onRename?.(activeEditingId, editingName.trim());
     setEditingId(null);
-  }, [editingId, editingName, onRename]);
+  }, [activeEditingId, editingName, onRename]);
 
   const cancelEditName = useCallback(() => {
     skipBlurSaveRef.current = true;
@@ -1087,19 +1111,6 @@ export function EditableFloorMap({
   }, []);
 
   useEffect(() => {
-    if (editingZones) setEditingId(null);
-  }, [editingZones]);
-
-  useEffect(() => {
-    if (!editingId) return;
-    if (
-      !elements.some((e) => String(e.id).trim() === String(editingId).trim())
-    ) {
-      setEditingId(null);
-    }
-  }, [elements, editingId]);
-
-  useEffect(() => {
     if (!drag && !resize && !zoneDrag && !zoneResize) return;
     const onMoveEv = (e: PointerEvent) => {
       if (drag) {
@@ -1107,7 +1118,18 @@ export function EditableFloorMap({
           drag.origX + (e.clientX - drag.startPx) / zoom;
         const ny =
           drag.origY + (e.clientY - drag.startPy) / zoom;
-        const el = elements.find((item) => String(item.id).trim() === drag.id)!;
+        const el = elements.find((item) => String(item.id).trim() === drag.id);
+        if (!el) {
+          setDrag(null);
+          setPeerSnapGuides({ v: [], h: [] });
+          setPreview((p) => {
+            if (!(drag.id in p)) return p;
+            const next = { ...p };
+            delete next[drag.id];
+            return next;
+          });
+          return;
+        }
         const { w, h } = elementSize(el);
         let sx = snapToGrid(nx);
         let sy = snapToGrid(ny);
@@ -1119,7 +1141,7 @@ export function EditableFloorMap({
           guides = r.guides;
         }
         setPeerSnapGuides(guides);
-        const snapGroup = dragGroupSnapshotRef.current;
+        const snapGroup = dragGroupSnapshot;
         const deltaX = sx - drag.origX;
         const deltaY = sy - drag.origY;
         setPreview((p) => {
@@ -1152,7 +1174,17 @@ export function EditableFloorMap({
           return next;
         });
       } else if (resize) {
-        const el = elements.find((x) => String(x.id).trim() === resize.id)!;
+        const el = elements.find((x) => String(x.id).trim() === resize.id);
+        if (!el) {
+          setResize(null);
+          setPreview((p) => {
+            if (!(resize.id in p)) return p;
+            const next = { ...p };
+            delete next[resize.id];
+            return next;
+          });
+          return;
+        }
         const mins = minSizeForPlanType(el.type ?? "table");
         let nw = Math.max(
           mins.w,
@@ -1242,7 +1274,7 @@ export function EditableFloorMap({
         }
         const floorW = logicalPlanWidth ?? floorRef.current?.clientWidth ?? 0;
         const floorH = logicalPlanHeight ?? floorRef.current?.clientHeight ?? 0;
-        const snapGroup = dragGroupSnapshotRef.current;
+        const snapGroup = dragGroupSnapshot;
         const deltaX = sx - drag.origX;
         const deltaY = sy - drag.origY;
 
@@ -1287,7 +1319,7 @@ export function EditableFloorMap({
               : { x: sx, y: sy };
           onMove?.(drag.id, Math.round(pos.x), Math.round(pos.y));
         }
-        dragGroupSnapshotRef.current = null;
+        setDragGroupSnapshot(null);
         setDrag(null);
         setPreview({});
         setPeerSnapGuides({ v: [], h: [] });
@@ -1389,6 +1421,7 @@ export function EditableFloorMap({
     onMoveMany,
     logicalPlanWidth,
     logicalPlanHeight,
+    dragGroupSnapshot,
   ]);
 
   useLayoutEffect(() => {
@@ -2277,7 +2310,7 @@ export function EditableFloorMap({
               ? selectedIds.some((s) => String(s).trim() === elementId)
               : selectedId === elementId;
           const locked = element.locked === true;
-          const snapLive = dragGroupSnapshotRef.current;
+          const snapLive = dragGroupSnapshot;
           const inMultiDrag =
             drag != null &&
             snapLive != null &&
@@ -2361,6 +2394,9 @@ export function EditableFloorMap({
           return (
             <div
               key={element.id}
+              className="hostly-floor-editor-element"
+              data-hostly-editor-selected={selected ? "true" : undefined}
+              data-hostly-editor-type={element.type}
               style={{
                 position: "absolute",
                 left: mapLayoutX,
@@ -2426,8 +2462,8 @@ export function EditableFloorMap({
                     element.type === "bed" ||
                     element.type === "custom";
                   if (
-                    editingId != null &&
-                    String(editingId).trim() === elementId
+                    activeEditingId != null &&
+                    String(activeEditingId).trim() === elementId
                   )
                     return 40;
                   if (selected) return tableLike ? 34 : 26;
@@ -2492,8 +2528,8 @@ export function EditableFloorMap({
                   return;
                 }
                 if (
-                  editingId != null &&
-                  String(editingId).trim() === elementId
+                  activeEditingId != null &&
+                  String(activeEditingId).trim() === elementId
                 ) {
                   e.stopPropagation();
                   return;
@@ -2521,7 +2557,7 @@ export function EditableFloorMap({
                     return hit && hit.locked !== true;
                   });
 
-                dragGroupSnapshotRef.current = null;
+                setDragGroupSnapshot(null);
                 if (dragIds.length > 1) {
                   const snap: Record<string, { x: number; y: number }> = {};
                   for (const sid of dragIds) {
@@ -2532,7 +2568,7 @@ export function EditableFloorMap({
                     snap[sid] = { x: hit.x ?? 0, y: hit.y ?? 0 };
                   }
                   if (Object.keys(snap).length > 1) {
-                    dragGroupSnapshotRef.current = snap;
+                    setDragGroupSnapshot(snap);
                   }
                 }
 
@@ -2666,8 +2702,8 @@ export function EditableFloorMap({
                   🔒
                 </span>
               ) : null}
-              {editingId != null &&
-              String(editingId).trim() === elementId &&
+              {activeEditingId != null &&
+              String(activeEditingId).trim() === elementId &&
               onRename ? (
                 <input
                   value={editingName}
@@ -2789,7 +2825,7 @@ export function EditableFloorMap({
                           : "none",
                   }}
                 >
-                  {element.name || elementId}
+                  {resolvePlanElementDisplayName(element)}
                 </span>
               )}
               <button
