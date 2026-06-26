@@ -94,6 +94,13 @@ import {
   type FloorPlanWorkingDraft,
 } from "@/lib/map/floor-plan-publish-contract";
 import {
+  FLOOR_PLAN_PUBLISH_STATUS_LABELS,
+  getFloorPlanPublishPrimaryButtonLabel,
+  getFloorPlanPublishStatusBadgeStyle,
+  isFloorPlanPublishPrimaryButtonDisabled,
+  resolveFloorPlanEditorPublishUiState,
+} from "@/lib/map/floor-plan-editor-publish-ux";
+import {
   dismissRoomsAssistantBanner,
   dismissRoomsAssistantGuide,
   isRoomsAssistantBannerDismissed,
@@ -101,8 +108,7 @@ import {
   readRoomsAssistantDraft,
   type RoomsAssistantDraft,
 } from "@/lib/rooms-assistant/draft";
-import { buildFloorPlanSeedFromDraft } from "@/lib/rooms-assistant/floor-plan-seed";
-import type { FloorPlanSeedZone } from "@/lib/rooms-assistant/floor-plan-seed-types";
+import { buildFloorPlanWorkingDraftFromAssistant } from "@/lib/rooms-assistant/build-floor-plan-working-draft";
 
 const fieldLabelStyle: CSSProperties = {
   display: "block",
@@ -303,22 +309,7 @@ const unsavedBadgeCompactStyle: CSSProperties = {
   gap: 3,
 };
 
-/** Pill “Sin guardar” en cabecera del editor de plano (config clara, mínima). */
-const mapEditorUnsavedPillStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "1px 7px",
-  borderRadius: 999,
-  border: "1px solid #e2e8f0",
-  background: "#ffffff",
-  color: "#64748b",
-  fontWeight: 500,
-  fontSize: 10,
-  letterSpacing: "0.01em",
-  whiteSpace: "nowrap",
-};
-
-/** Guardar integrado en toolbar premium (protagonismo mapa). */
+/** Publicar plano integrado en toolbar premium (protagonismo mapa). */
 const premiumToolbarSaveBtn: CSSProperties = {
   padding: "3px 9px",
   borderRadius: 6,
@@ -626,7 +617,7 @@ function mapToolboxChipStyle(disabled: boolean): CSSProperties {
   };
 }
 
-/** Barra principal del editor: acciones colocar + guardar. */
+/** Barra principal del editor: acciones colocar + publicar. */
 const editorTopBarStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
@@ -1160,6 +1151,9 @@ export default function ConfigMesasPage({
   const restaurantId = profileRestaurantId ?? null;
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isPublishingPlan, setIsPublishingPlan] = useState(false);
+  const [publishPlanError, setPublishPlanError] = useState<string | null>(null);
+  const [publishUiBaselineReady, setPublishUiBaselineReady] = useState(false);
 
   const [activeCreateType, setActiveCreateType] =
     useState<ActiveCreateTool>(null);
@@ -1587,6 +1581,8 @@ export default function ConfigMesasPage({
       floorPlans,
       canvas: mapEditorWorldSize,
     });
+    setPublishUiBaselineReady(true);
+    setPublishPlanError(null);
   }, [
     restaurantId,
     selectedFloorPlanId,
@@ -1630,6 +1626,8 @@ export default function ConfigMesasPage({
       setLoadedZones(list);
       setZones(list);
       setHasUnsavedChanges(false);
+      setPublishUiBaselineReady(true);
+      setPublishPlanError(null);
       setSelectedIds([]);
       setSelectedZoneId(null);
     } catch {
@@ -1725,7 +1723,9 @@ export default function ConfigMesasPage({
       const a = target?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!a) return;
       if (a.target && a.target !== "_self") return;
-      const ok = window.confirm("Tienes cambios sin guardar. ¿Salir igualmente?");
+      const ok = window.confirm(
+        "Tienes cambios sin publicar. ¿Salir igualmente?",
+      );
       if (!ok) {
         e.preventDefault();
         e.stopPropagation();
@@ -3386,7 +3386,7 @@ export default function ConfigMesasPage({
   );
 
   const runRoomsAssistantDraftSeed = useCallback(
-    async (floorPlanId: string, draft: RoomsAssistantDraft): Promise<boolean> => {
+    (floorPlanId: string, draft: RoomsAssistantDraft): boolean => {
       if (!configuracionMapEditorLayout || !premiumSpatialEditor) return false;
       if (!restaurantId || !isFirebaseConfigured) return false;
       if (editingZones) return false;
@@ -3396,91 +3396,48 @@ export default function ConfigMesasPage({
       if (elementsRef.current.some(onPlan)) return false;
       if (roomsAssistantSeedLockRef.current.has(floorPlanId)) return false;
       roomsAssistantSeedLockRef.current.add(floorPlanId);
+
       try {
-        const seed = buildFloorPlanSeedFromDraft(draft, floorPlanId);
-        const allRemoteZones = await getZones(restaurantId);
-        let remoteZones = allRemoteZones.filter(
-          (z) => z.floorPlanId === floorPlanId,
-        );
-        if (elementsRef.current.some(onPlan)) return false;
+        const workingDraft = buildFloorPlanWorkingDraftFromAssistant({
+          draft,
+          restaurantId,
+          floorPlanId,
+          canvas: mapEditorWorldSize,
+          existingZones: zones,
+        });
+        if (!workingDraft) return false;
 
-        const ensureZone = async (
-          name: string,
-          rect: { x: number; y: number; w: number; h: number },
-        ): Promise<Zone> => {
-          const existing = remoteZones.find(
-            (z) =>
-              zoneHasVisualRect(z) &&
-              z.name.trim().toLowerCase() === name.trim().toLowerCase(),
-          );
-          if (existing) return existing;
-          const zoneId = await createZone(restaurantId, name, undefined, {
-            floorPlanId,
-            x: rect.x,
-            y: rect.y,
-            width: rect.w,
-            height: rect.h,
-          });
-          const created: Zone = {
-            id: zoneId,
-            restaurantId,
-            floorPlanId,
-            name,
-            x: rect.x,
-            y: rect.y,
-            width: rect.w,
-            height: rect.h,
-          };
-          remoteZones = sortZonesByName([...remoteZones, created]);
-          return created;
-        };
-
-        const zoneByKey = new Map<
-          FloorPlanSeedZone["key"],
-          Zone
-        >();
-
-        for (const zoneSpec of seed.zones) {
-          const zone = await ensureZone(zoneSpec.name, zoneSpec);
-          zoneByKey.set(zoneSpec.key, zone);
-        }
-
-        const mainZone = zoneByKey.get("main");
-        if (!mainZone) return false;
+        const mainZone =
+          workingDraft.zones.find(
+            (zone) =>
+              zoneHasVisualRect(zone) &&
+              zone.name.trim().toLowerCase().includes("principal"),
+          ) ??
+          workingDraft.zones.find(zoneHasVisualRect) ??
+          workingDraft.zones[0] ??
+          null;
 
         setZones((prev) =>
           sortZonesByName([
-            ...prev.filter((z) => z.floorPlanId !== floorPlanId),
-            ...remoteZones,
+            ...prev.filter((zone) => zone.floorPlanId !== floorPlanId),
+            ...workingDraft.zones,
           ]),
         );
-        setLoadedZones((prev) =>
-          sortZonesByName([
-            ...prev.filter((z) => z.floorPlanId !== floorPlanId),
-            ...remoteZones,
-          ]),
-        );
-        setZoneHighlight(mainZone.id);
-        setSelectedZoneId(mainZone.id);
 
-        if (elementsRef.current.some(onPlan)) return false;
+        commitElements((prev) => [
+          ...prev.filter((element) => !onPlan(element)),
+          ...workingDraft.elements,
+        ]);
 
-        for (const piece of seed.elements) {
-          const zone =
-            (piece.zoneKey && zoneByKey.get(piece.zoneKey)) ?? mainZone;
-          await createFloorElement(piece.type, piece.x, piece.y, {
-            name: piece.name,
-            width: piece.width,
-            height: piece.height,
-            tableShape: piece.tableShape,
-            seats: piece.seats,
-            floorPlanId,
-            zoneId: zone.id,
-            zoneName: zone.name,
-            zone: zone.name,
-          });
+        setHasUnsavedChanges(true);
+        setPublishUiBaselineReady(false);
+        setPublishPlanError(null);
+        lastPublishedDraftRef.current = null;
+
+        if (mainZone) {
+          setZoneHighlight(mainZone.id);
+          setSelectedZoneId(mainZone.id);
         }
-
         setSelectedIds([]);
         return true;
       } finally {
@@ -3493,9 +3450,9 @@ export default function ConfigMesasPage({
       restaurantId,
       isFirebaseConfigured,
       editingZones,
-      createFloorElement,
-      setZones,
-      setLoadedZones,
+      mapEditorWorldSize,
+      zones,
+      commitElements,
       setZoneHighlight,
       setSelectedZoneId,
       setSelectedIds,
@@ -3640,17 +3597,15 @@ export default function ConfigMesasPage({
     if (!draft) return;
 
     let cancelled = false;
-    void (async () => {
-      const applied = await runRoomsAssistantDraftSeed(selectedFloorPlanId, draft);
-      if (cancelled || !applied) return;
-      setPremiumInspectorCollapsed(false);
-      if (!isRoomsAssistantBannerDismissed()) {
-        setRoomsAssistantBannerVisible(true);
-      }
-      if (!isRoomsAssistantGuideDismissed()) {
-        setRoomsAssistantGuideVisible(true);
-      }
-    })();
+    const applied = runRoomsAssistantDraftSeed(selectedFloorPlanId, draft);
+    if (cancelled || !applied) return;
+    setPremiumInspectorCollapsed(false);
+    if (!isRoomsAssistantBannerDismissed()) {
+      setRoomsAssistantBannerVisible(true);
+    }
+    if (!isRoomsAssistantGuideDismissed()) {
+      setRoomsAssistantGuideVisible(true);
+    }
     return () => {
       cancelled = true;
     };
@@ -3747,6 +3702,9 @@ export default function ConfigMesasPage({
   const handleSavePlanChanges = useCallback(async () => {
     if (!restaurantId || !isFirebaseConfigured) return;
 
+    setIsPublishingPlan(true);
+    setPublishPlanError(null);
+
     const workingDraft: FloorPlanWorkingDraft = {
       floorPlanId: selectedFloorPlanId ?? "",
       restaurantId,
@@ -3761,49 +3719,56 @@ export default function ConfigMesasPage({
       publishedRevision: lastPublishedDraftRef.current?.publishedRevision,
     };
 
-    const result = await publishFloorPlan({
-      restaurantId,
-      floorPlanId: selectedFloorPlanId ?? "",
-      workingDraft,
-      loadedBaseline: {
-        elements: loadedElements.map((el) => ({ ...el })),
-        zones: loadedZones.map((z) => ({ ...z })),
-      },
-      options: { areaTemplateBusy },
-    });
-
-    if (result.status === "skipped") {
-      if (result.error?.message) {
-        window.alert(result.error.message);
-      }
-      return;
-    }
-
-    if (result.status === "failed") {
-      console.error("[MAP_EDITOR] save failed", result.error);
-      const detail = result.error?.message ?? "error desconocido";
-      window.alert(`No se pudo guardar el plano.\n\nDetalle: ${detail}`);
-      return;
-    }
-
-    setLoadedElements(elements.map((el) => ({ ...el })));
-    setLoadedZones(zones.map((z) => ({ ...z })));
-    setHasUnsavedChanges(false);
-
-    if (selectedFloorPlanId) {
-      lastPublishedDraftRef.current = loadPublishedFloorPlan({
+    try {
+      const result = await publishFloorPlan({
         restaurantId,
-        floorPlanId: selectedFloorPlanId,
-        tables: elements,
-        zones,
-        floorPlans,
-        canvas: mapEditorWorldSize,
+        floorPlanId: selectedFloorPlanId ?? "",
+        workingDraft,
+        loadedBaseline: {
+          elements: loadedElements.map((el) => ({ ...el })),
+          zones: loadedZones.map((z) => ({ ...z })),
+        },
+        options: { areaTemplateBusy },
       });
-      lastPublishedDraftRef.current = {
-        ...lastPublishedDraftRef.current,
-        publishedRevision: result.publishedRevision,
-        revision: result.publishedRevision,
-      };
+
+      if (result.status === "skipped") {
+        if (result.error?.message) {
+          window.alert(result.error.message);
+        }
+        return;
+      }
+
+      if (result.status === "failed") {
+        console.error("[MAP_EDITOR] publish failed", result.error);
+        const detail = result.error?.message ?? "error desconocido";
+        setPublishPlanError(detail);
+        window.alert(`No se pudo publicar el plano.\n\nDetalle: ${detail}`);
+        return;
+      }
+
+      setLoadedElements(elements.map((el) => ({ ...el })));
+      setLoadedZones(zones.map((z) => ({ ...z })));
+      setHasUnsavedChanges(false);
+      setPublishUiBaselineReady(true);
+      setPublishPlanError(null);
+
+      if (selectedFloorPlanId) {
+        lastPublishedDraftRef.current = loadPublishedFloorPlan({
+          restaurantId,
+          floorPlanId: selectedFloorPlanId,
+          tables: elements,
+          zones,
+          floorPlans,
+          canvas: mapEditorWorldSize,
+        });
+        lastPublishedDraftRef.current = {
+          ...lastPublishedDraftRef.current,
+          publishedRevision: result.publishedRevision,
+          revision: result.publishedRevision,
+        };
+      }
+    } finally {
+      setIsPublishingPlan(false);
     }
   }, [
     restaurantId,
@@ -3819,7 +3784,8 @@ export default function ConfigMesasPage({
 
   const handleDiscardPlanChanges = useCallback(() => {
     if (!hasUnsavedChanges) return;
-    if (!window.confirm("¿Descartar cambios sin guardar?")) return;
+    if (!window.confirm("¿Descartar cambios sin publicar?")) return;
+    setPublishPlanError(null);
     resetFromLoaded();
   }, [hasUnsavedChanges, resetFromLoaded]);
 
@@ -3860,6 +3826,29 @@ export default function ConfigMesasPage({
     premiumSpatialEditor,
     flashCfgMapFeedback,
   ]);
+
+  const publishUiState = useMemo(
+    () =>
+      resolveFloorPlanEditorPublishUiState({
+        hasUnsavedChanges,
+        isPublishing: isPublishingPlan,
+        publishError: publishPlanError,
+        hasPublishedBaseline: publishUiBaselineReady,
+      }),
+    [
+      hasUnsavedChanges,
+      isPublishingPlan,
+      publishPlanError,
+      publishUiBaselineReady,
+    ],
+  );
+
+  const publishPrimaryButtonLabel = getFloorPlanPublishPrimaryButtonLabel(
+    publishUiState,
+  );
+  const publishPrimaryButtonDisabled =
+    isFloorPlanPublishPrimaryButtonDisabled(publishUiState);
+  const publishStatusLabel = FLOOR_PLAN_PUBLISH_STATUS_LABELS[publishUiState];
 
   const editorSecondaryActionBtnStyle = premiumSpatialEditor
     ? premiumMiniToolBtn
@@ -3953,8 +3942,14 @@ export default function ConfigMesasPage({
             marginLeft: "auto",
           }}
         >
-          {hasUnsavedChanges ? (
-            <span style={unsavedBadgeStyle}>Sin guardar</span>
+          {selectedFloorPlanId ? (
+            <span
+              style={getFloorPlanPublishStatusBadgeStyle(publishUiState, "dark")}
+              role="status"
+              aria-live="polite"
+            >
+              {publishStatusLabel}
+            </span>
           ) : null}
           <button
             type="button"
@@ -3962,13 +3957,13 @@ export default function ConfigMesasPage({
               ...primaryBtn,
               fontSize: 12,
               padding: "6px 12px",
-              opacity: hasUnsavedChanges ? 1 : 0.5,
-              cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+              opacity: publishPrimaryButtonDisabled ? 0.5 : 1,
+              cursor: publishPrimaryButtonDisabled ? "not-allowed" : "pointer",
             }}
             onClick={() => void handleSavePlanChanges()}
-            disabled={!hasUnsavedChanges}
+            disabled={publishPrimaryButtonDisabled}
           >
-            Guardar
+            {publishPrimaryButtonLabel}
           </button>
           <button
             type="button"
@@ -4273,7 +4268,8 @@ export default function ConfigMesasPage({
     configuracionMapEditorLayout &&
     premiumSpatialEditor &&
     restaurantId &&
-    isFirebaseConfigured ? (
+    isFirebaseConfigured &&
+    selectedFloorPlanId ? (
       <div
         style={{
           display: "inline-flex",
@@ -4283,9 +4279,13 @@ export default function ConfigMesasPage({
           justifyContent: "flex-end",
         }}
       >
-        {hasUnsavedChanges ? (
-          <span style={mapEditorUnsavedPillStyle}>Sin guardar</span>
-        ) : null}
+        <span
+          style={getFloorPlanPublishStatusBadgeStyle(publishUiState, "light")}
+          role="status"
+          aria-live="polite"
+        >
+          {publishStatusLabel}
+        </span>
       </div>
     ) : null;
 
@@ -4397,14 +4397,34 @@ export default function ConfigMesasPage({
                 </option>
               ))}
             </select>
-            {hasUnsavedChanges ? (
+            {selectedFloorPlanId ? (
               <span
-                title="Cambios sin guardar"
+                title={publishStatusLabel}
                 style={{
                   ...unsavedBadgeCompactStyle,
                   fontSize: 8,
                   padding: "1px 5px",
+                  ...(publishUiState === "published"
+                    ? {
+                        border: "1px solid rgba(34, 197, 94, 0.32)",
+                        background: "rgba(34, 197, 94, 0.12)",
+                        color: "#bbf7d0",
+                      }
+                    : publishUiState === "publishing"
+                      ? {
+                          border: "1px solid rgba(56, 189, 248, 0.35)",
+                          background: "rgba(56, 189, 248, 0.14)",
+                          color: "#bae6fd",
+                        }
+                      : publishUiState === "publish_error"
+                        ? {
+                            border: "1px solid rgba(248, 113, 113, 0.35)",
+                            background: "rgba(248, 113, 113, 0.12)",
+                            color: "#fecaca",
+                          }
+                        : {}),
                 }}
+                aria-label={publishStatusLabel}
               >
                 ●
               </span>
@@ -4413,13 +4433,13 @@ export default function ConfigMesasPage({
               type="button"
               style={{
                 ...premiumToolbarSaveBtn,
-                opacity: hasUnsavedChanges ? 1 : 0.42,
-                cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+                opacity: publishPrimaryButtonDisabled ? 0.42 : 1,
+                cursor: publishPrimaryButtonDisabled ? "not-allowed" : "pointer",
               }}
               onClick={() => void handleSavePlanChanges()}
-              disabled={!hasUnsavedChanges}
+              disabled={publishPrimaryButtonDisabled}
             >
-              Guardar
+              {publishPrimaryButtonLabel}
             </button>
             <button
               type="button"
@@ -4647,13 +4667,13 @@ export default function ConfigMesasPage({
                   type="button"
                   style={{
                     ...mapToolboxSaveSm,
-                    opacity: hasUnsavedChanges ? 1 : 0.4,
-                    cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+                    opacity: publishPrimaryButtonDisabled ? 0.4 : 1,
+                    cursor: publishPrimaryButtonDisabled ? "not-allowed" : "pointer",
                   }}
-                  disabled={!hasUnsavedChanges}
+                  disabled={publishPrimaryButtonDisabled}
                   onClick={() => void handleSavePlanChanges()}
                 >
-                  Guardar
+                  {publishPrimaryButtonLabel}
                 </button>
                 <button
                   type="button"

@@ -70,7 +70,6 @@ function cachePublishResult(
  *
  * **Pendiente iteraciones futuras:**
  * - Publicación atómica scoped solo al plano (sin elementos de otros planos en el batch)
- * - Eliminar writes parciales del seed del asistente (`createZone` inmediato)
  * - Idempotencia server-side / `publishedRevision` en documento
  * - Chunking >500 ops, conflict detection, activityLog
  */
