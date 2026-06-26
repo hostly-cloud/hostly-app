@@ -1,0 +1,212 @@
+---
+description: Contexto canónico de Hostly — SaaS TPV multi-restaurante. Aplicar en todo el proyecto.
+alwaysApply: true
+---
+
+# Hostly — Regla de proyecto
+
+## 1. Qué es Hostly
+
+Hostly es un **SaaS TPV multi-restaurante** para hostelería.
+
+## 2. Stack
+
+- Next.js App Router
+- React
+- TypeScript
+- Tailwind
+- Firebase Auth
+- Firestore
+- Firebase Storage
+- Vercel
+
+## 3. Antes de tocar código
+
+Explicar brevemente, en este orden:
+
+- **Rol especialista** que asumes
+- **Qué entiendes** del objetivo y del contexto
+- **Riesgo** principal
+- **Solución mínima** propuesta
+- **Archivos a tocar**
+- **Archivos a no tocar**
+
+## 4. Reglas de trabajo
+
+- Un cambio importante por iteración
+- No refactors masivos
+- No tocar arquitectura sin motivo
+- Preservar `restaurantId` en auth, Firestore, Storage y UI
+- Pensar primero como operador de restaurante y después como desarrollador
+- Priorizar tablet, móvil y táctil (touch first)
+- No romper TPV, Carta, KDS, Firestore ni producción
+
+## 5. Al terminar cada tarea
+
+Devolver siempre:
+
+- Qué cambió
+- Qué no cambió
+- Archivos modificados
+- Riesgos pendientes
+- Qué validar
+- Resultado de TypeScript (`npx tsc --noEmit`, o motivo si no se ejecutó)
+- Resultado de build (`npm run build`, o motivo si no se ejecutó)
+
+## 6. Documentación canónica
+
+Consultar antes de decisiones de producto, arquitectura, UI u operación:
+
+- `docs/00_HOSTLY_PRODUCT_BIBLE.md`
+- `docs/01_HOSTLY_ARCHITECTURE_GUIDE.md`
+- `docs/02_HOSTLY_DESIGN_SYSTEM.md`
+- `docs/03_HOSTLY_ROADMAP.md`
+- `docs/04_HOSTLY_DECISIONS_LOG.md`
+- `docs/05_HOSTLY_STATE_AUDIT.md`
+- `docs/06_HOSTLY_AI_GUIDELINES.md`
+- `docs/07_HOSTLY_OPERATIONS_GUIDE.md`
+- `docs/08_HOSTLY_BOOTSTRAP.md`
+- `docs/09_HOSTLY_PATTERNS.md`
+- `docs/10_HOSTLY_TECHNICAL_DEBT.md`
+
+Prioridad: Product Bible → Architecture Guide → Design System.
+
+# ENGINEERING PRINCIPLES
+
+## 1. Pensar antes de programar
+
+Antes de escribir código:
+
+- identificar el dominio (TPV, Carta, Cocina, KDS, Inventario, Empresa, Reservas, IA, Arquitectura…);
+- asumir el rol especialista adecuado;
+- revisar primero la documentación canónica relacionada;
+- comprobar si ya existe una solución reutilizable.
+
+## 2. Reutilización
+
+Antes de crear:
+
+- componentes;
+- hooks;
+- utilidades;
+- funciones;
+- tipos;
+- estilos;
+- servicios;
+
+buscar siempre si ya existe algo equivalente.
+
+Nunca duplicar código deliberadamente.
+
+## 3. Arquitectura
+
+No crear deuda técnica innecesaria.
+
+Priorizar:
+
+- simplicidad;
+- bajo acoplamiento;
+- alta cohesión;
+- separación clara entre UI, lógica y acceso a datos.
+
+Evitar:
+
+- componentes gigantes;
+- lógica de Firestore dentro de componentes;
+- estados innecesarios;
+- efectos duplicados.
+
+## 4. Firebase
+
+Cuando un cambio afecte a:
+
+- Firestore Rules
+- Storage Rules
+- índices
+- Storage
+- Auth
+
+indicar SIEMPRE:
+
+- si requiere deploy;
+- qué comando ejecutar;
+- cómo validar el resultado.
+
+## 5. Producción
+
+Antes de considerar terminado un cambio, comprobar mentalmente:
+
+- móvil;
+- tablet;
+- escritorio;
+- multi-restaurante;
+- permisos;
+- restaurantId;
+- rendimiento;
+- accesibilidad.
+
+## 6. Producto
+
+Pensar siempre como un restaurante real.
+
+Priorizar:
+
+- rapidez;
+- pocos clics;
+- operación táctil;
+- onboarding sencillo;
+- consistencia visual.
+
+Nunca implementar una solución únicamente porque sea técnicamente elegante.
+
+## 7. Calidad
+
+Siempre que sea viable:
+
+- TypeScript limpio.
+- Sin warnings nuevos.
+- Sin código muerto.
+- Sin imports sin usar.
+- Sin TODO olvidados.
+
+## 8. Commits
+
+Si una tarea merece commit, proponer:
+
+- nombre del commit;
+- alcance;
+- riesgos;
+- validaciones.
+
+No hacer commit automáticamente salvo petición expresa.
+
+## 9. Documentación
+
+Cuando una decisión afecte al producto de forma permanente, indicar si debe actualizarse alguno de:
+
+- `docs/00_HOSTLY_PRODUCT_BIBLE.md`
+- `docs/01_HOSTLY_ARCHITECTURE_GUIDE.md`
+- `docs/02_HOSTLY_DESIGN_SYSTEM.md`
+- `docs/03_HOSTLY_ROADMAP.md`
+- `docs/04_HOSTLY_DECISIONS_LOG.md`
+- `docs/05_HOSTLY_STATE_AUDIT.md`
+- `docs/06_HOSTLY_AI_GUIDELINES.md`
+- `docs/07_HOSTLY_OPERATIONS_GUIDE.md`
+- `docs/08_HOSTLY_BOOTSTRAP.md`
+- `docs/09_HOSTLY_PATTERNS.md`
+- `docs/10_HOSTLY_TECHNICAL_DEBT.md`
+
+## 10. Mentalidad Hostly
+
+Hostly no busca tener más funciones que la competencia.
+
+Busca ser:
+
+- el TPV más rápido;
+- el más intuitivo;
+- el más estable;
+- el más fácil de aprender;
+- el que menos clics necesita;
+- el que más trabajo elimina mediante IA.
+
+Cada decisión debe acercar el producto a esa visión.
