@@ -2,11 +2,7 @@
 
 import {
   collection,
-  deleteField,
   doc,
-  serverTimestamp,
-  writeBatch,
-  type DocumentData,
 } from "firebase/firestore";
 import type { CSSProperties, ReactNode } from "react";
 import {
@@ -92,6 +88,11 @@ import {
   planTypeLabelEs,
   resolvePlanElementDisplayName,
 } from "@/lib/map/plan-element-labels";
+import {
+  loadPublishedFloorPlan,
+  publishFloorPlan,
+  type FloorPlanWorkingDraft,
+} from "@/lib/map/floor-plan-publish-contract";
 import {
   dismissRoomsAssistantBanner,
   dismissRoomsAssistantGuide,
@@ -1171,6 +1172,7 @@ export default function ConfigMesasPage({
   const elementsRef = useRef<FloorElement[]>([]);
   const venueBaselineLockRef = useRef<Set<string>>(new Set());
   const roomsAssistantSeedLockRef = useRef<Set<string>>(new Set());
+  const lastPublishedDraftRef = useRef<FloorPlanWorkingDraft | null>(null);
   useEffect(() => {
     elementsRef.current = elements;
   }, [elements]);
@@ -1572,6 +1574,29 @@ export default function ConfigMesasPage({
     () => legacyUnscopedFloorPlanAnchorId(floorPlans),
     [floorPlans],
   );
+
+  useEffect(() => {
+    if (!restaurantId || !selectedFloorPlanId || loading || hasUnsavedChanges) {
+      return;
+    }
+    lastPublishedDraftRef.current = loadPublishedFloorPlan({
+      restaurantId,
+      floorPlanId: selectedFloorPlanId,
+      tables: loadedElements,
+      zones: loadedZones,
+      floorPlans,
+      canvas: mapEditorWorldSize,
+    });
+  }, [
+    restaurantId,
+    selectedFloorPlanId,
+    loadedElements,
+    loadedZones,
+    floorPlans,
+    mapEditorWorldSize,
+    loading,
+    hasUnsavedChanges,
+  ]);
 
   const visibleElements = useMemo(() => {
     if (!selectedFloorPlanId) return [];
@@ -3721,156 +3746,64 @@ export default function ConfigMesasPage({
 
   const handleSavePlanChanges = useCallback(async () => {
     if (!restaurantId || !isFirebaseConfigured) return;
-    if (areaTemplateBusy) {
-      window.alert("Espera a que termine de crearse la zona antes de guardar.");
+
+    const workingDraft: FloorPlanWorkingDraft = {
+      floorPlanId: selectedFloorPlanId ?? "",
+      restaurantId,
+      elements: elements.map((el) => ({ ...el })),
+      zones: zones.map((z) => ({ ...z })),
+      canvas: {
+        width: mapEditorWorldSize.width,
+        height: mapEditorWorldSize.height,
+      },
+      revision: lastPublishedDraftRef.current?.revision ?? 1,
+      source: "manual",
+      publishedRevision: lastPublishedDraftRef.current?.publishedRevision,
+    };
+
+    const result = await publishFloorPlan({
+      restaurantId,
+      floorPlanId: selectedFloorPlanId ?? "",
+      workingDraft,
+      loadedBaseline: {
+        elements: loadedElements.map((el) => ({ ...el })),
+        zones: loadedZones.map((z) => ({ ...z })),
+      },
+      options: { areaTemplateBusy },
+    });
+
+    if (result.status === "skipped") {
+      if (result.error?.message) {
+        window.alert(result.error.message);
+      }
       return;
     }
-    const batch = writeBatch(db);
+
+    if (result.status === "failed") {
+      console.error("[MAP_EDITOR] save failed", result.error);
+      const detail = result.error?.message ?? "error desconocido";
+      window.alert(`No se pudo guardar el plano.\n\nDetalle: ${detail}`);
+      return;
+    }
+
+    setLoadedElements(elements.map((el) => ({ ...el })));
+    setLoadedZones(zones.map((z) => ({ ...z })));
+    setHasUnsavedChanges(false);
 
     if (selectedFloorPlanId) {
-      batch.set(
-        doc(db, "floorPlans", selectedFloorPlanId),
-        {
-          id: selectedFloorPlanId,
-          restaurantId,
-          width: mapEditorWorldSize.width,
-          height: mapEditorWorldSize.height,
-          updatedAt: serverTimestamp(),
-        } as DocumentData,
-        { merge: true },
-      );
-    }
-
-    const loadedById: Record<string, FloorElement> = {};
-    for (const el of loadedElements) loadedById[el.id] = el;
-
-    const currentIds = new Set(elements.map((e) => e.id));
-    for (const oldId of Object.keys(loadedById)) {
-      if (!currentIds.has(oldId)) {
-        batch.update(doc(db, "tables", oldId), {
-          isActive: false,
-          updatedAt: serverTimestamp(),
-        } as DocumentData);
-      }
-    }
-
-    for (const el of elements) {
-      const ref = doc(db, "tables", el.id);
-      const def = getDefaultSizeForPlanElementType(el.type);
-      const mins = minSizeForPlanType(el.type);
-      const width = Math.max(mins.w, Math.round(el.width ?? def.width));
-      const height = Math.max(mins.h, Math.round(el.height ?? def.height));
-      const decorative = isDecorativePlanElementType(el.type);
-      const payload: DocumentData = {
-        id: el.id,
+      lastPublishedDraftRef.current = loadPublishedFloorPlan({
         restaurantId,
-        name: String(el.name ?? "").trim(),
-        type: el.type,
-        status: el.status ?? TABLE_MAP_STATUS_FREE,
-        tableShape: el.tableShape ?? "square",
-        seats: decorative ? 0 : (el.seats ?? 4),
-        x: Math.round(el.x ?? 0),
-        y: Math.round(el.y ?? 0),
-        width,
-        height,
-        isActive: el.isActive !== false,
-        locked: el.locked === true,
-        updatedAt: serverTimestamp(),
+        floorPlanId: selectedFloorPlanId,
+        tables: elements,
+        zones,
+        floorPlans,
+        canvas: mapEditorWorldSize,
+      });
+      lastPublishedDraftRef.current = {
+        ...lastPublishedDraftRef.current,
+        publishedRevision: result.publishedRevision,
+        revision: result.publishedRevision,
       };
-      if (el.zoneId && el.zoneName) {
-        payload.zoneId = el.zoneId;
-        payload.zoneName = el.zoneName;
-        payload.zone = el.zoneName;
-      } else {
-        payload.zoneId = deleteField();
-        payload.zoneName = deleteField();
-        payload.zone = deleteField();
-      }
-      if (
-        typeof el.floorPlanId === "string" &&
-        el.floorPlanId.trim() !== ""
-      ) {
-        payload.floorPlanId = el.floorPlanId.trim();
-      } else {
-        payload.floorPlanId = deleteField();
-      }
-      if (!loadedById[el.id]) payload.createdAt = serverTimestamp();
-      batch.set(ref, payload, { merge: true });
-    }
-
-    const loadedZonesById: Record<string, Zone> = {};
-    for (const z of loadedZones) loadedZonesById[z.id] = z;
-
-    for (const z of zones) {
-      const before = loadedZonesById[z.id];
-      const changed =
-        !before ||
-        before.name !== z.name ||
-        (before.floorPlanId ?? "") !== (z.floorPlanId ?? "") ||
-        (before.color ?? "") !== (z.color ?? "") ||
-        (before.x ?? null) !== (z.x ?? null) ||
-        (before.y ?? null) !== (z.y ?? null) ||
-        (before.width ?? null) !== (z.width ?? null) ||
-        (before.height ?? null) !== (z.height ?? null);
-      if (!changed) continue;
-      const zref = doc(db, "zones", z.id);
-      const up: DocumentData = {
-        name: z.name,
-        updatedAt: serverTimestamp(),
-      };
-      if (z.floorPlanId && z.floorPlanId.trim()) {
-        up.floorPlanId = z.floorPlanId.trim();
-      } else {
-        up.floorPlanId = deleteField();
-      }
-      if (z.color && z.color.trim()) up.color = z.color.trim();
-      else up.color = deleteField();
-      if (
-        typeof z.x === "number" &&
-        typeof z.y === "number" &&
-        typeof z.width === "number" &&
-        typeof z.height === "number" &&
-        Number.isFinite(z.x) &&
-        Number.isFinite(z.y) &&
-        Number.isFinite(z.width) &&
-        Number.isFinite(z.height)
-      ) {
-        up.x = Math.round(z.x);
-        up.y = Math.round(z.y);
-        up.width = Math.round(z.width);
-        up.height = Math.round(z.height);
-      } else {
-        up.x = deleteField();
-        up.y = deleteField();
-        up.width = deleteField();
-        up.height = deleteField();
-      }
-      if (before) {
-        batch.update(zref, up);
-      } else {
-        batch.set(
-          zref,
-          {
-            ...up,
-            id: z.id,
-            restaurantId,
-            createdAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
-    }
-
-    try {
-      await batch.commit();
-      setLoadedElements(elements.map((el) => ({ ...el })));
-      setLoadedZones(zones.map((z) => ({ ...z })));
-      setHasUnsavedChanges(false);
-    } catch (error) {
-      console.error("[MAP_EDITOR] save failed", error);
-      const detail = error instanceof Error ? error.message : String(error);
-      window.alert(`No se pudo guardar el plano.\n\nDetalle: ${detail}`);
-      // keep unsaved state
     }
   }, [
     restaurantId,
@@ -3881,6 +3814,7 @@ export default function ConfigMesasPage({
     areaTemplateBusy,
     selectedFloorPlanId,
     mapEditorWorldSize,
+    floorPlans,
   ]);
 
   const handleDiscardPlanChanges = useCallback(() => {
