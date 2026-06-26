@@ -3095,8 +3095,8 @@ export default function RoomsAssistant({
           </HostlySurface>
 
           <HostlyAlert tone="success" title="Borrador preparado para el editor">
-            El plano queda guardado en esta sesión. La Fase 2 lo cargará en el editor sin
-            tocar Firestore todavía.
+            El plano es un borrador. Revísalo en el editor y pulsa Publicar plano para que
+            el TPV lo use.
           </HostlyAlert>
         </main>
       </div>

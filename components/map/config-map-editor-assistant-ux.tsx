@@ -53,7 +53,7 @@ export function ConfigMapAssistantPlanoBanner({
           Plano listo desde el Asistente de Salas
         </p>
         <p className="hostly-floor-editor-assistant-banner__hint">
-          Mueve mesas, cambia nombres y capacidad. Cuando termines, pulsa Guardar.
+          El plano es un borrador. Revísalo y pulsa Publicar plano para que el TPV lo use.
         </p>
       </div>
       <HostlyButton
@@ -101,6 +101,10 @@ export function ConfigMapInspectorGuide({
         <li>
           <Utensils className="hostly-icon-sm" aria-hidden />
           Cambia nombre y comensales en el panel
+        </li>
+        <li>
+          <LayoutGrid className="hostly-icon-sm" aria-hidden />
+          Publica el plano para que el TPV lo use
         </li>
       </ul>
       <HostlyButton

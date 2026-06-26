@@ -4081,6 +4081,14 @@ body {
   padding-right: 22px;
 }
 
+.hostly-rooms-question-card__copy .hostly-type-card-title {
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-rooms-question-card__copy .hostly-type-caption {
+  color: color-mix(in srgb, var(--hostly-ink) 78%, var(--hostly-ink-muted));
+}
+
 .hostly-rooms-question-count {
   margin: -4px 0 0;
   color: var(--hostly-ink-muted);
