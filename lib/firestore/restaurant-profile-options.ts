@@ -1,10 +1,5 @@
 import { TIPOS_NEGOCIO } from "@/lib/hostly/restaurant-profile";
 
-export const RESTAURANT_BUSINESS_TYPE_OPTIONS = TIPOS_NEGOCIO.map((value) => ({
-  value,
-  label: RESTAURANT_BUSINESS_TYPE_LABELS[value],
-}));
-
 const RESTAURANT_BUSINESS_TYPE_LABELS: Record<(typeof TIPOS_NEGOCIO)[number], string> = {
   restaurante: "Restaurante",
   bar: "Bar",
@@ -13,6 +8,11 @@ const RESTAURANT_BUSINESS_TYPE_LABELS: Record<(typeof TIPOS_NEGOCIO)[number], st
   gastrobar: "Gastrobar",
   otro: "Otro",
 };
+
+export const RESTAURANT_BUSINESS_TYPE_OPTIONS = TIPOS_NEGOCIO.map((value) => ({
+  value,
+  label: RESTAURANT_BUSINESS_TYPE_LABELS[value],
+}));
 
 export const RESTAURANT_TIMEZONE_OPTIONS = [
   { value: "Europe/Madrid", label: "Europa · Madrid (CET/CEST)" },
