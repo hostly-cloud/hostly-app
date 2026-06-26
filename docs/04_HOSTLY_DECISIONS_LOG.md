@@ -2,145 +2,144 @@
 
 > Registro de decisiones permanentes o de largo alcance.
 
-**Estado:** oficial y acumulativo  
-**Autoridad documental:** nivel 5  
+**Estado:** oficial y acumulativo
+**Autoridad documental:** nivel 5
 **Regla:** no borrar decisiones antiguas; marcarlas como sustituidas y enlazar la nueva.
 
 ---
 
 ## Formato
 
-Cada nueva decisión debe incluir:
+Cada nueva decisiÃ³n debe incluir:
 
 - identificador;
 - estado: propuesta, aceptada, sustituida o retirada;
 - contexto;
-- decisión;
+- decisiÃ³n;
 - consecuencias;
-- documentos y código relacionados.
+- documentos y cÃ³digo relacionados.
 
 ---
 
 ## Decisiones aceptadas
 
-### H-001 — Hostly es SaaS multi-restaurante
+### H-001 â€” Hostly es SaaS multi-restaurante
 
 **Estado:** aceptada.
 
-Hostly se diseña como SaaS B2B para múltiples restaurantes. Toda capacidad nueva debe
-considerar aislamiento, permisos, coste y operación concurrente.
+Hostly se diseÃ±a como SaaS B2B para mÃºltiples restaurantes. Toda capacidad nueva debe
+considerar aislamiento, permisos, coste y operaciÃ³n concurrente.
 
-### H-002 — `restaurantId` es frontera de seguridad
+### H-002 â€” `restaurantId` es frontera de seguridad
 
 **Estado:** aceptada.
 
 `restaurantId` no es un filtro de interfaz. Determina el tenant de cada lectura,
 escritura, listener, archivo y proceso servidor.
 
-### H-003 — Operación y Configuración son módulos separados
+### H-003 â€” OperaciÃ³n y ConfiguraciÃ³n son mÃ³dulos separados
 
 **Estado:** aceptada.
 
-Operación prioriza rapidez y continuidad del servicio. Configuración define estructura
-y comportamiento. Una no debe convertirse en una segunda implementación de la otra.
+OperaciÃ³n prioriza rapidez y continuidad del servicio. ConfiguraciÃ³n define estructura
+y comportamiento. Una no debe convertirse en una segunda implementaciÃ³n de la otra.
 
-### H-004 — Carta visible y producto interno son conceptos distintos
-
-**Estado:** aceptada.
-
-La carta representa lo que se vende y cómo se presenta. El producto interno puede
-incluir receta, inventario, estación, coste y configuración no visible al cliente.
-
-### H-005 — TPV y KDS son runtimes críticos
+### H-004 â€” Carta visible y producto interno son conceptos distintos
 
 **Estado:** aceptada.
 
-TPV, Cocina, Barra, Coctelería y Sala evolucionan mediante cambios pequeños,
+La carta representa lo que se vende y cÃ³mo se presenta. El producto interno puede
+incluir receta, inventario, estaciÃ³n, coste y configuraciÃ³n no visible al cliente.
+
+### H-005 â€” TPV y KDS son runtimes crÃ­ticos
+
+**Estado:** aceptada.
+
+TPV, Cocina, Barra, CoctelerÃ­a y Sala evolucionan mediante cambios pequeÃ±os,
 caracterizados y verificables. No se reescriben durante limpiezas visuales.
 
-### H-006 — Enviar no significa Marchar
+### H-006 â€” Enviar no significa Marchar
 
 **Estado:** aceptada.
 
-Enviar registra y comunica la comanda. Marchar libera un pase o curso para producción.
-No deben tratarse como la misma acción.
+Enviar registra y comunica la comanda. Marchar libera un pase o curso para producciÃ³n.
+No deben tratarse como la misma acciÃ³n.
 
-### H-007 — Hostly Design System v1 es contrato
+### H-007 â€” Hostly Design System v1 es contrato
 
 **Estado:** aceptada.
 
-Los componentes, tokens y patrones canónicos se reutilizan. No se crean variantes
+Los componentes, tokens y patrones canÃ³nicos se reutilizan. No se crean variantes
 locales equivalentes.
 
-### H-008 — Geist es la tipografía principal
+### H-008 â€” Geist es la tipografÃ­a principal
 
 **Estado:** aceptada.
 
 Geist es la familia visual de Hostly. Otras familias solo pueden actuar como fallback
 compatible.
 
-### H-009 — Asistente de Salas como flujo principal futuro
+### H-009 â€” Asistente de Salas como flujo principal futuro
 
 **Estado:** aceptada.
 
-La creación inicial de espacios debe ser guiada. El usuario no debe enfrentarse primero
-a un lienzo vacío.
+La creaciÃ³n inicial de espacios debe ser guiada. El usuario no debe enfrentarse primero
+a un lienzo vacÃ­o.
 
-### H-010 — Editor avanzado como herramienta secundaria
+### H-010 â€” Editor avanzado como herramienta secundaria
 
 **Estado:** aceptada.
 
-El editor existente se conserva para precisión y ajustes avanzados. No es la experiencia
-recomendada para una primera configuración.
+El editor existente se conserva para precisiÃ³n y ajustes avanzados. No es la experiencia
+recomendada para una primera configuraciÃ³n.
 
-### H-011 — La IA propone y el humano confirma
+### H-011 â€” La IA propone y el humano confirma
 
 **Estado:** aceptada.
 
 La IA puede extraer, sugerir, ordenar y detectar. Nunca publica, cobra, elimina,
-migra o confirma automáticamente.
+migra o confirma automÃ¡ticamente.
 
-### H-012 — No reescribir megacomponentes sin caracterización
+### H-012 â€” No reescribir megacomponentes sin caracterizaciÃ³n
 
 **Estado:** aceptada.
 
-El tamaño de un archivo no autoriza una reescritura. Primero se documentan contratos,
+El tamaÃ±o de un archivo no autoriza una reescritura. Primero se documentan contratos,
 flujos, consumidores e invariantes.
 
-### H-013 — Orden de modularización
+### H-013 â€” Orden de modularizaciÃ³n
 
 **Estado:** aceptada.
 
 El orden recomendado es:
 
-1. presentación;
+1. presentaciÃ³n;
 2. helpers puros;
 3. estado;
 4. persistencia.
 
-No se mezclan estas fases en una única misión crítica.
+No se mezclan estas fases en una Ãºnica misiÃ³n crÃ­tica.
 
-### H-014 — La arquitectura canónica no amplía legacy
+### H-014 â€” La arquitectura canÃ³nica no amplÃ­a legacy
 
 **Estado:** aceptada.
 
 `restaurantes`, `usuarios`, `mesas` y localStorage operativo pueden mantenerse por
-compatibilidad, pero ninguna funcionalidad nueva debe elegirlos como patrón por defecto.
+compatibilidad, pero ninguna funcionalidad nueva debe elegirlos como patrÃ³n por defecto.
 
-### H-015 — Operación antes que decoración
+### H-015 â€” OperaciÃ³n antes que decoraciÃ³n
 
 **Estado:** aceptada.
 
-Toda decisión visual debe responder primero a velocidad, comprensión, prevención de
-errores y uso táctil.
+Toda decisiÃ³n visual debe responder primero a velocidad, comprensiÃ³n, prevenciÃ³n de
+errores y uso tÃ¡ctil.
 
 ---
 
 ## Decisiones pendientes de cierre
 
-- Fuente única definitiva de stock y costes.
-- Fecha/criterio para retirar catálogo legacy local.
-- Política final de roles granulares en perfiles Firestore.
+- Fuente Ãºnica definitiva de stock y costes.
+- Fecha/criterio para retirar catÃ¡logo legacy local.
+- PolÃ­tica final de roles granulares en perfiles Firestore.
 - Estrategia de fuentes locales para builds reproducibles.
 - Contrato persistente de salida del Asistente de Salas.
-

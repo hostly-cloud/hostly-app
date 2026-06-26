@@ -1,9 +1,9 @@
 # Hostly Operations Guide
 
-> Cómo debe pensar Hostly desde la realidad de un servicio de hostelería.
+> CÃ³mo debe pensar Hostly desde la realidad de un servicio de hostelerÃ­a.
 
-**Autoridad documental:** nivel 8  
-**Principio rector:** si funciona un sábado con el restaurante lleno, funciona siempre.
+**Autoridad documental:** nivel 8
+**Principio rector:** si funciona un sÃ¡bado con el restaurante lleno, funciona siempre.
 
 ---
 
@@ -13,20 +13,20 @@ Hostly no debe optimizar pantallas aisladas. Debe conectar el recorrido:
 
 ```text
 Preparar negocio
-→ abrir servicio
-→ recibir clientes
-→ asignar mesa
-→ tomar comanda
-→ enviar
-→ marchar
-→ preparar
-→ servir
-→ cobrar
-→ cerrar
-→ aprender
+â†’ abrir servicio
+â†’ recibir clientes
+â†’ asignar mesa
+â†’ tomar comanda
+â†’ enviar
+â†’ marchar
+â†’ preparar
+â†’ servir
+â†’ cobrar
+â†’ cerrar
+â†’ aprender
 ```
 
-Cada módulo debe comprender qué ocurrió antes y qué necesita el siguiente.
+Cada mÃ³dulo debe comprender quÃ© ocurriÃ³ antes y quÃ© necesita el siguiente.
 
 ---
 
@@ -35,14 +35,14 @@ Cada módulo debe comprender qué ocurrió antes y qué necesita el siguiente.
 Necesita:
 
 - identificar operador y mesa;
-- añadir productos con pocos toques;
+- aÃ±adir productos con pocos toques;
 - comprender pendientes, enviados y servidos;
-- añadir notas y modificadores sin detenerse;
+- aÃ±adir notas y modificadores sin detenerse;
 - evitar cobrar o cancelar por error;
-- saber qué mesa necesita atención;
-- recuperarse rápido si cambia de dispositivo.
+- saber quÃ© mesa necesita atenciÃ³n;
+- recuperarse rÃ¡pido si cambia de dispositivo.
 
-Hostly debe reducir memoria y navegación. La comanda y la siguiente acción deben ser
+Hostly debe reducir memoria y navegaciÃ³n. La comanda y la siguiente acciÃ³n deben ser
 evidentes.
 
 ---
@@ -55,25 +55,25 @@ Necesita:
 - ver producto, cantidad, mesa, pase, nota y tiempo;
 - distinguir pendiente, preparando, listo y servido;
 - detectar urgencias sin exceso de badges;
-- actuar con objetivos táctiles grandes;
+- actuar con objetivos tÃ¡ctiles grandes;
 - mantener contexto en hora punta.
 
-Todo elemento visual debe responder: “¿Ayuda a sacar antes el siguiente plato?”.
+Todo elemento visual debe responder: â€œÂ¿Ayuda a sacar antes el siguiente plato?â€.
 
 ---
 
-## 4. Barra y Coctelería
+## 4. Barra y CoctelerÃ­a
 
 Necesitan:
 
 - recibir solo lo que les corresponde;
-- diferenciar bebidas rápidas de elaboraciones;
+- diferenciar bebidas rÃ¡pidas de elaboraciones;
 - ver modificadores y mixers;
-- marcar preparado/entregado sin ambigüedad;
+- marcar preparado/entregado sin ambigÃ¼edad;
 - compartir estado con sala y TPV.
 
-La calidad del routing de producto y estación es parte de la operación, no solo de la
-configuración.
+La calidad del routing de producto y estaciÃ³n es parte de la operaciÃ³n, no solo de la
+configuraciÃ³n.
 
 ---
 
@@ -85,10 +85,10 @@ Necesita:
 - localizar platos listos;
 - coordinar entrega;
 - detectar mesas listas para cerrar;
-- entender reservas próximas;
+- entender reservas prÃ³ximas;
 - evitar conflictos entre camareros o dispositivos.
 
-El mapa es una representación operativa del restaurante, no un dibujo decorativo.
+El mapa es una representaciÃ³n operativa del restaurante, no un dibujo decorativo.
 
 ---
 
@@ -99,11 +99,11 @@ Necesita:
 - intervenir sin bloquear al equipo;
 - corregir errores;
 - autorizar acciones sensibles;
-- ver saturación y excepciones;
+- ver saturaciÃ³n y excepciones;
 - gestionar usuarios, estaciones y servicio;
-- comprender qué requiere atención ahora.
+- comprender quÃ© requiere atenciÃ³n ahora.
 
-Hostly debe separar alertas accionables de métricas informativas.
+Hostly debe separar alertas accionables de mÃ©tricas informativas.
 
 ---
 
@@ -114,10 +114,10 @@ Necesita:
 - configurar el negocio;
 - comprender ventas, costes y margen;
 - controlar equipo y permisos;
-- detectar pérdidas y oportunidades;
-- confiar en que los datos pertenecen únicamente a su restaurante.
+- detectar pÃ©rdidas y oportunidades;
+- confiar en que los datos pertenecen Ãºnicamente a su restaurante.
 
-La analítica debe explicar decisiones posibles, no inundar con gráficos.
+La analÃ­tica debe explicar decisiones posibles, no inundar con grÃ¡ficos.
 
 ---
 
@@ -127,24 +127,24 @@ El flujo real es:
 
 ```text
 Necesidad
-→ propuesta o pedido
-→ recepción
-→ incidencia
-→ factura
-→ coste real
-→ stock
+â†’ propuesta o pedido
+â†’ recepciÃ³n
+â†’ incidencia
+â†’ factura
+â†’ coste real
+â†’ stock
 ```
 
-Hostly debe diferenciar claramente pedido, recepción y factura. Que una mercancía haya
-llegado no significa que esté conciliada ni pagada.
+Hostly debe diferenciar claramente pedido, recepciÃ³n y factura. Que una mercancÃ­a haya
+llegado no significa que estÃ© conciliada ni pagada.
 
 ---
 
 ## 9. Inventario y escandallos
 
-Inventario responde cuánto existe y cómo cambia.
+Inventario responde cuÃ¡nto existe y cÃ³mo cambia.
 
-Escandallo responde qué consume un producto y cuál es su coste teórico.
+Escandallo responde quÃ© consume un producto y cuÃ¡l es su coste teÃ³rico.
 
 Factura proveedor aporta coste real.
 
@@ -158,15 +158,15 @@ trazables e idempotentes.
 Durante hora punta:
 
 - las decisiones deben ser cortas;
-- los estados deben ser inequívocos;
+- los estados deben ser inequÃ­vocos;
 - no se abren formularios largos;
 - no se depende de hover;
-- no se obliga a leer párrafos;
+- no se obliga a leer pÃ¡rrafos;
 - no se cambia de contexto innecesariamente;
 - los errores deben poder corregirse;
 - la conectividad imperfecta debe ser visible.
 
-El modo normal de Hostly se diseña para presión, no como una excepción posterior.
+El modo normal de Hostly se diseÃ±a para presiÃ³n, no como una excepciÃ³n posterior.
 
 ---
 
@@ -174,15 +174,15 @@ El modo normal de Hostly se diseña para presión, no como una excepción poster
 
 El mapa debe permitir comprender:
 
-- distribución;
+- distribuciÃ³n;
 - estado;
-- ocupación;
+- ocupaciÃ³n;
 - reservas;
 - agrupaciones;
 - responsable;
-- siguiente acción.
+- siguiente acciÃ³n.
 
-La geometría es secundaria respecto a la continuidad de IDs, pedidos y servicio.
+La geometrÃ­a es secundaria respecto a la continuidad de IDs, pedidos y servicio.
 
 ---
 
@@ -192,54 +192,53 @@ El asistente es la experiencia recomendada para crear el restaurante.
 
 Debe:
 
-- acompañar;
-- preguntar una decisión principal cada vez;
-- recomendar según tipo de negocio;
+- acompaÃ±ar;
+- preguntar una decisiÃ³n principal cada vez;
+- recomendar segÃºn tipo de negocio;
 - preparar espacios, estructura, ambiente y elementos;
-- guardar contexto local mientras el modelo no esté cerrado;
-- mostrar revisión antes de publicar.
+- guardar contexto local mientras el modelo no estÃ© cerrado;
+- mostrar revisiÃ³n antes de publicar.
 
-El editor avanzado permanece para ajustes de precisión.
+El editor avanzado permanece para ajustes de precisiÃ³n.
 
 ---
 
-## 13. Operación frente a Configuración
+## 13. OperaciÃ³n frente a ConfiguraciÃ³n
 
-### Operación
+### OperaciÃ³n
 
 - tiempo real;
 - acciones frecuentes;
-- alta presión;
-- mínima explicación;
-- máxima claridad;
+- alta presiÃ³n;
+- mÃ­nima explicaciÃ³n;
+- mÃ¡xima claridad;
 - errores con impacto inmediato.
 
-### Configuración
+### ConfiguraciÃ³n
 
 - decisiones estructurales;
 - menor frecuencia;
-- más contexto y ayuda;
+- mÃ¡s contexto y ayuda;
 - cambios que preparan el runtime;
-- confirmación antes de afectar servicio.
+- confirmaciÃ³n antes de afectar servicio.
 
-Una opción de configuración no debe aparecer en operación salvo que sea necesaria para
+Una opciÃ³n de configuraciÃ³n no debe aparecer en operaciÃ³n salvo que sea necesaria para
 trabajar en ese momento.
 
 ---
 
 ## 14. Prueba operativa
 
-Antes de considerar terminada una función, comprobar:
+Antes de considerar terminada una funciÃ³n, comprobar:
 
-- ¿la entiende un usuario nuevo?
-- ¿funciona con una mano?
-- ¿funciona con ruido y prisa?
-- ¿evita el error más probable?
-- ¿explica qué ocurrió?
-- ¿se recupera de conexión inestable?
-- ¿funciona con dos dispositivos?
-- ¿respeta el restaurante correcto?
-- ¿afecta al siguiente equipo del servicio?
+- Â¿la entiende un usuario nuevo?
+- Â¿funciona con una mano?
+- Â¿funciona con ruido y prisa?
+- Â¿evita el error mÃ¡s probable?
+- Â¿explica quÃ© ocurriÃ³?
+- Â¿se recupera de conexiÃ³n inestable?
+- Â¿funciona con dos dispositivos?
+- Â¿respeta el restaurante correcto?
+- Â¿afecta al siguiente equipo del servicio?
 
-Si funciona un sábado con el restaurante lleno, funciona siempre.
-
+Si funciona un sÃ¡bado con el restaurante lleno, funciona siempre.

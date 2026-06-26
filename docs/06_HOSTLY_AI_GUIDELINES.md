@@ -2,8 +2,8 @@
 
 > Contrato de trabajo para Codex, Cursor, ChatGPT y cualquier otra IA.
 
-**Autoridad documental:** nivel 7  
-**Objetivo:** permitir colaboración rápida sin romper operación, datos ni coherencia.
+**Autoridad documental:** nivel 7
+**Objetivo:** permitir colaboraciÃ³n rÃ¡pida sin romper operaciÃ³n, datos ni coherencia.
 
 ---
 
@@ -15,7 +15,7 @@ Antes de cambios importantes:
 2. `01_HOSTLY_ARCHITECTURE_GUIDE.md`
 3. `02_HOSTLY_DESIGN_SYSTEM.md`
 
-Después, leer el documento especializado del dominio: roles, stock, catálogo, KDS,
+DespuÃ©s, leer el documento especializado del dominio: roles, stock, catÃ¡logo, KDS,
 layouts, OCR o release.
 
 ---
@@ -23,15 +23,15 @@ layouts, OCR o release.
 ## 2. Reglas permanentes
 
 - No inventar arquitectura, modelos, colecciones o funcionalidades.
-- Confirmar el estado real en código antes de afirmar.
+- Confirmar el estado real en cÃ³digo antes de afirmar.
 - No crear componentes nuevos si existe un equivalente Hostly.
-- No tocar Firestore, Firebase, rules o modelos salvo misión explícita.
-- No mezclar UI y persistencia en la misma misión.
-- No convertir compatibilidad legacy en patrón nuevo.
-- No reescribir megacomponentes sin caracterización.
-- No borrar código por parecer muerto.
-- No hacer commit, push o deploy sin autorización explícita.
-- Un cambio importante por iteración.
+- No tocar Firestore, Firebase, rules o modelos salvo misiÃ³n explÃ­cita.
+- No mezclar UI y persistencia en la misma misiÃ³n.
+- No convertir compatibilidad legacy en patrÃ³n nuevo.
+- No reescribir megacomponentes sin caracterizaciÃ³n.
+- No borrar cÃ³digo por parecer muerto.
+- No hacer commit, push o deploy sin autorizaciÃ³n explÃ­cita.
+- Un cambio importante por iteraciÃ³n.
 
 ---
 
@@ -41,29 +41,29 @@ Antes de actuar, la IA debe poder indicar:
 
 - rol asumido;
 - dominio;
-- qué entiende del problema;
+- quÃ© entiende del problema;
 - riesgos principales;
 - archivos que espera tocar;
-- archivos que no tocará;
-- validación prevista.
+- archivos que no tocarÃ¡;
+- validaciÃ³n prevista.
 
-Si la misión es solo lectura, debe respetarlo literalmente.
+Si la misiÃ³n es solo lectura, debe respetarlo literalmente.
 
 ---
 
 ## 4. Orden de trabajo
 
 1. Comprender el problema operativo.
-2. Inspeccionar código y documentación relevante.
-3. Verificar estado del árbol de trabajo.
-4. Definir el cambio mínimo.
+2. Inspeccionar cÃ³digo y documentaciÃ³n relevante.
+3. Verificar estado del Ã¡rbol de trabajo.
+4. Definir el cambio mÃ­nimo.
 5. Ejecutar solo dentro del alcance.
-6. Validar en proporción al riesgo.
-7. Informar con precisión.
+6. Validar en proporciÃ³n al riesgo.
+7. Informar con precisiÃ³n.
 
-Para modularización:
+Para modularizaciÃ³n:
 
-1. presentación;
+1. presentaciÃ³n;
 2. helpers puros;
 3. estado;
 4. persistencia.
@@ -82,13 +82,13 @@ Para modularización:
 ### Firestore
 
 - Tratar `restaurantId` como frontera de seguridad.
-- Revisar rules, índices, queries y costes.
+- Revisar rules, Ã­ndices, queries y costes.
 - No aceptar tenant arbitrario del cliente.
-- No aplicar migraciones sin misión y plan específico.
+- No aplicar migraciones sin misiÃ³n y plan especÃ­fico.
 
 ### TPV/KDS
 
-- Son runtimes críticos.
+- Son runtimes crÃ­ticos.
 - No cambiar estados, cobros, listeners ni persistencia durante ajustes visuales.
 - Caracterizar antes de extraer.
 - Validar con flujos reales de servicio.
@@ -115,26 +115,26 @@ La IA de Hostly:
 La IA nunca:
 
 - decide por el restaurante;
-- publica automáticamente;
+- publica automÃ¡ticamente;
 - cobra;
 - elimina;
 - confirma recepciones;
 - aplica migraciones;
 - cambia permisos;
-- cierra una mesa sin acción humana.
+- cierra una mesa sin acciÃ³n humana.
 
 ---
 
-## 7. Validación
+## 7. ValidaciÃ³n
 
-Según la misión:
+SegÃºn la misiÃ³n:
 
 - `npx tsc --noEmit`
 - `npm run build`
 - `git diff --check`
-- smoke tests específicos
-- revisión responsive
-- comprobación de rules/índices si fueron modificados
+- smoke tests especÃ­ficos
+- revisiÃ³n responsive
+- comprobaciÃ³n de rules/Ã­ndices si fueron modificados
 
 No se corrigen errores ajenos al alcance.
 
@@ -144,26 +144,25 @@ No se corrigen errores ajenos al alcance.
 
 Explicar:
 
-- qué cambió;
-- qué no cambió;
+- quÃ© cambiÃ³;
+- quÃ© no cambiÃ³;
 - archivos modificados;
-- qué validar;
+- quÃ© validar;
 - riesgos pendientes;
 - resultado TypeScript;
 - resultado build;
 - resultado `git diff --check`.
 
-Si una validación falla por entorno, distinguirlo de un error de código.
+Si una validaciÃ³n falla por entorno, distinguirlo de un error de cÃ³digo.
 
 ---
 
 ## 9. Criterio de parada
 
-La IA debe detenerse y pedir dirección cuando:
+La IA debe detenerse y pedir direcciÃ³n cuando:
 
-- falta una decisión humana que cambia el producto;
-- la solución mínima requiere ampliar alcance;
-- existe riesgo de pérdida de datos;
+- falta una decisiÃ³n humana que cambia el producto;
+- la soluciÃ³n mÃ­nima requiere ampliar alcance;
+- existe riesgo de pÃ©rdida de datos;
 - el tenant no puede verificarse;
-- una acción externa irreversible no fue autorizada.
-
+- una acciÃ³n externa irreversible no fue autorizada.

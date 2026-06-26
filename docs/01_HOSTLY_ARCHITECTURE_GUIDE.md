@@ -1,104 +1,104 @@
 # Hostly Architecture Guide v1
 
-> Constitución técnica y referencia maestra de arquitectura de Hostly.
+> ConstituciÃ³n tÃ©cnica y referencia maestra de arquitectura de Hostly.
 
-**Autoridad documental:** nivel 2. Este documento está subordinado únicamente a
-`00_HOSTLY_PRODUCT_BIBLE.md`. Ante una contradicción de producto, prevalece la
-Product Bible; ante una decisión técnica, esta guía es la referencia principal.
+**Autoridad documental:** nivel 2. Este documento estÃ¡ subordinado Ãºnicamente a
+`00_HOSTLY_PRODUCT_BIBLE.md`. Ante una contradicciÃ³n de producto, prevalece la
+Product Bible; ante una decisiÃ³n tÃ©cnica, esta guÃ­a es la referencia principal.
 
-**Estado:** oficial  
-**Versión:** 1.0  
-**Ámbito:** aplicación Hostly, runtimes operativos, módulos de gestión y persistencia  
+**Estado:** oficial
+**VersiÃ³n:** 1.0
+**Ãmbito:** aplicaciÃ³n Hostly, runtimes operativos, mÃ³dulos de gestiÃ³n y persistencia
 **Stack principal:** Next.js App Router, React, TypeScript, Tailwind, Firebase Auth, Firestore, Firebase Storage y Vercel
 
 ---
 
-## Cómo utilizar esta guía
+## CÃ³mo utilizar esta guÃ­a
 
 Este documento sirve para:
 
 - comprender Hostly antes de modificarlo;
-- decidir dónde debe vivir una nueva responsabilidad;
+- decidir dÃ³nde debe vivir una nueva responsabilidad;
 - evitar regresiones en TPV, KDS, inventario y pagos;
 - preparar modularizaciones sin alterar comportamiento;
 - reconocer compatibilidades legacy que no deben convertirse en nuevos patrones;
-- orientar a desarrolladores, agentes de IA, revisores y responsables técnicos.
+- orientar a desarrolladores, agentes de IA, revisores y responsables tÃ©cnicos.
 
-La guía diferencia dos conceptos:
+La guÃ­a diferencia dos conceptos:
 
-- **Arquitectura actual:** cómo funciona realmente Hostly hoy.
-- **Arquitectura objetivo:** dirección que deben seguir las mejoras futuras.
+- **Arquitectura actual:** cÃ³mo funciona realmente Hostly hoy.
+- **Arquitectura objetivo:** direcciÃ³n que deben seguir las mejoras futuras.
 
-La arquitectura objetivo no autoriza migraciones, borrados o cambios de modelo. Cualquier transición requiere una misión específica, pruebas y revisión humana.
+La arquitectura objetivo no autoriza migraciones, borrados o cambios de modelo. Cualquier transiciÃ³n requiere una misiÃ³n especÃ­fica, pruebas y revisiÃ³n humana.
 
 ---
 
-# 1. Filosofía de arquitectura
+# 1. FilosofÃ­a de arquitectura
 
-## 1.1 Propósito
+## 1.1 PropÃ³sito
 
-Hostly es un SaaS operativo multi-restaurante. No es un panel administrativo genérico: participa directamente en la apertura de mesas, creación de pedidos, producción en cocina y barra, servicio, cobro, inventario y recepción de mercancía.
+Hostly es un SaaS operativo multi-restaurante. No es un panel administrativo genÃ©rico: participa directamente en la apertura de mesas, creaciÃ³n de pedidos, producciÃ³n en cocina y barra, servicio, cobro, inventario y recepciÃ³n de mercancÃ­a.
 
 La arquitectura debe priorizar, en este orden:
 
-1. Integridad de la operación.
+1. Integridad de la operaciÃ³n.
 2. Aislamiento entre restaurantes.
-3. Corrección económica y de stock.
-4. Disponibilidad y recuperación ante fallos.
+3. CorrecciÃ³n econÃ³mica y de stock.
+4. Disponibilidad y recuperaciÃ³n ante fallos.
 5. Claridad para el personal.
-6. Evolución segura del producto.
-7. Consistencia técnica y visual.
+6. EvoluciÃ³n segura del producto.
+7. Consistencia tÃ©cnica y visual.
 
-La elegancia interna nunca justifica poner en riesgo una operación real.
+La elegancia interna nunca justifica poner en riesgo una operaciÃ³n real.
 
 ## 1.2 Principios fundamentales
 
 ### Seguridad por tenant
 
-Toda lectura, escritura, listener, API y proceso debe estar asociado a un restaurante explícito. `restaurantId` es una frontera de seguridad, no un filtro visual.
+Toda lectura, escritura, listener, API y proceso debe estar asociado a un restaurante explÃ­cito. `restaurantId` es una frontera de seguridad, no un filtro visual.
 
-### Una única fuente de verdad por responsabilidad
+### Una Ãºnica fuente de verdad por responsabilidad
 
-Cada dato debe tener un propietario claro. Cuando conviven modelos legacy y canónicos, la convivencia debe documentarse como transición, no asumirse como diseño definitivo.
+Cada dato debe tener un propietario claro. Cuando conviven modelos legacy y canÃ³nicos, la convivencia debe documentarse como transiciÃ³n, no asumirse como diseÃ±o definitivo.
 
 ### Runtimes operativos conservadores
 
-TPV, Cocina, Barra, Coctelería y Sala son sistemas sensibles al tiempo. Deben evolucionar mediante cambios pequeños, observables y reversibles.
+TPV, Cocina, Barra, CoctelerÃ­a y Sala son sistemas sensibles al tiempo. Deben evolucionar mediante cambios pequeÃ±os, observables y reversibles.
 
 ### Estado cerca de su propietario
 
-El estado debe permanecer en el nivel que coordina realmente la operación. No debe fragmentarse en hooks o contextos antes de conocer sus invariantes.
+El estado debe permanecer en el nivel que coordina realmente la operaciÃ³n. No debe fragmentarse en hooks o contextos antes de conocer sus invariantes.
 
 ### UI separada de persistencia
 
-Los componentes de presentación no deben construir rutas Firestore ni conocer detalles de almacenamiento. Las páginas tampoco deberían convertirse en repositorios.
+Los componentes de presentaciÃ³n no deben construir rutas Firestore ni conocer detalles de almacenamiento. Las pÃ¡ginas tampoco deberÃ­an convertirse en repositorios.
 
-### Compatibilidad explícita
+### Compatibilidad explÃ­cita
 
-Los fallbacks y puentes legacy deben estar identificados. Ningún desarrollo nuevo debe depender de ellos sin una decisión arquitectónica consciente.
+Los fallbacks y puentes legacy deben estar identificados. NingÃºn desarrollo nuevo debe depender de ellos sin una decisiÃ³n arquitectÃ³nica consciente.
 
-### Idempotencia en procesos económicos
+### Idempotencia en procesos econÃ³micos
 
 Pagos, consumos, reversiones y movimientos de stock deben poder reintentarse sin duplicar efectos.
 
-### Medición antes que eliminación
+### MediciÃ³n antes que eliminaciÃ³n
 
-Una ruta o modelo aparentemente obsoleto no se elimina hasta conocer sus consumidores, tráfico, datos y equivalencia funcional.
+Una ruta o modelo aparentemente obsoleto no se elimina hasta conocer sus consumidores, trÃ¡fico, datos y equivalencia funcional.
 
-## 1.3 Qué nunca debe hacerse
+## 1.3 QuÃ© nunca debe hacerse
 
-- Confiar únicamente en permisos de UI para proteger datos.
-- Resolver el tenant desde parámetros no validados.
+- Confiar Ãºnicamente en permisos de UI para proteger datos.
+- Resolver el tenant desde parÃ¡metros no validados.
 - Permitir que el cliente eleve su rol o cambie libremente su pertenencia.
-- Crear listeners operativos sin alcance temporal, estado o límite razonable.
+- Crear listeners operativos sin alcance temporal, estado o lÃ­mite razonable.
 - Reescribir TPV o KDS como parte de una limpieza visual.
-- Cambiar simultáneamente UI, queries y modelo de datos.
-- Mover lógica Firestore mientras se divide presentación.
+- Cambiar simultÃ¡neamente UI, queries y modelo de datos.
+- Mover lÃ³gica Firestore mientras se divide presentaciÃ³n.
 - Duplicar un flujo operativo para experimentar sin una estrategia de retirada.
 - Introducir una tercera variante de `restaurants/restaurantes`, `users/usuarios` o `tables/mesas`.
-- Borrar compatibilidad legacy basándose únicamente en búsquedas estáticas.
-- Dividir archivos gigantes sin pruebas de caracterización.
-- Ocultar errores de datos sustituyéndolos silenciosamente por datos de demostración.
+- Borrar compatibilidad legacy basÃ¡ndose Ãºnicamente en bÃºsquedas estÃ¡ticas.
+- Dividir archivos gigantes sin pruebas de caracterizaciÃ³n.
+- Ocultar errores de datos sustituyÃ©ndolos silenciosamente por datos de demostraciÃ³n.
 
 ---
 
@@ -107,72 +107,72 @@ Una ruta o modelo aparentemente obsoleto no se elimina hasta conocer sus consumi
 ## 2.1 Mapa funcional
 
 ```text
-Autenticación y perfil de usuario
-        │
-        ├── restaurantId / roles / capabilities
-        │
-        ▼
+AutenticaciÃ³n y perfil de usuario
+        â”‚
+        â”œâ”€â”€ restaurantId / roles / capabilities
+        â”‚
+        â–¼
 Dashboard
-        ├── Operación
-        │   ├── TPV
-        │   ├── Cocina
-        │   ├── Barra
-        │   ├── Coctelería
-        │   ├── Sala
-        │   └── Reservas
-        │
-        ├── Catálogo
-        │   ├── Productos
-        │   ├── Categorías
-        │   ├── Familias
-        │   ├── Modificadores
-        │   └── Escandallos
-        │
-        ├── Inventario y compras
-        │   ├── Stock
-        │   ├── Movimientos
-        │   ├── Compras
-        │   ├── Recepciones
-        │   ├── Facturas
-        │   └── Proveedores
-        │
-        ├── Gestión
-        │   ├── Configuración
-        │   ├── Empresa
-        │   ├── Espacios y mesas
-        │   ├── Estaciones
-        │   ├── Impresoras
-        │   └── Usuarios
-        │
-        └── Inteligencia
-            ├── Análisis
-            ├── Ventas
-            ├── Métricas
-            └── Reportes
+        â”œâ”€â”€ OperaciÃ³n
+        â”‚   â”œâ”€â”€ TPV
+        â”‚   â”œâ”€â”€ Cocina
+        â”‚   â”œâ”€â”€ Barra
+        â”‚   â”œâ”€â”€ CoctelerÃ­a
+        â”‚   â”œâ”€â”€ Sala
+        â”‚   â””â”€â”€ Reservas
+        â”‚
+        â”œâ”€â”€ CatÃ¡logo
+        â”‚   â”œâ”€â”€ Productos
+        â”‚   â”œâ”€â”€ CategorÃ­as
+        â”‚   â”œâ”€â”€ Familias
+        â”‚   â”œâ”€â”€ Modificadores
+        â”‚   â””â”€â”€ Escandallos
+        â”‚
+        â”œâ”€â”€ Inventario y compras
+        â”‚   â”œâ”€â”€ Stock
+        â”‚   â”œâ”€â”€ Movimientos
+        â”‚   â”œâ”€â”€ Compras
+        â”‚   â”œâ”€â”€ Recepciones
+        â”‚   â”œâ”€â”€ Facturas
+        â”‚   â””â”€â”€ Proveedores
+        â”‚
+        â”œâ”€â”€ GestiÃ³n
+        â”‚   â”œâ”€â”€ ConfiguraciÃ³n
+        â”‚   â”œâ”€â”€ Empresa
+        â”‚   â”œâ”€â”€ Espacios y mesas
+        â”‚   â”œâ”€â”€ Estaciones
+        â”‚   â”œâ”€â”€ Impresoras
+        â”‚   â””â”€â”€ Usuarios
+        â”‚
+        â””â”€â”€ Inteligencia
+            â”œâ”€â”€ AnÃ¡lisis
+            â”œâ”€â”€ Ventas
+            â”œâ”€â”€ MÃ©tricas
+            â””â”€â”€ Reportes
 ```
 
 ## 2.2 Dashboard
 
-El Dashboard es la puerta de entrada y superficie de orientación. Agrega indicadores, alertas y accesos, pero no debe convertirse en una segunda implementación de la lógica de cada módulo.
+El Dashboard es la puerta de entrada y superficie de orientaciÃ³n. Agrega indicadores, alertas y accesos, pero no debe convertirse en una segunda implementaciÃ³n de la lÃ³gica de cada mÃ³dulo.
 
-Actualmente combina fuentes centrales y almacenamiento local de compatibilidad. Su evolución debe dirigirse hacia modelos de lectura agregados, sin duplicar reglas de negocio.
+Actualmente combina fuentes centrales y almacenamiento local de compatibilidad. Su evoluciÃ³n debe dirigirse hacia modelos de lectura agregados, sin duplicar reglas de negocio.
 
-## 2.3 Configuración
+## 2.3 ConfiguraciÃ³n
 
-Configuración contiene las decisiones estructurales del restaurante:
+ConfiguraciÃ³n contiene las decisiones estructurales del restaurante:
 
 - perfil de empresa;
-- carta y catálogo;
+- carta y catÃ¡logo;
 - espacios, planos y mesas;
 - estaciones operativas;
-- impresión;
+- impresiÃ³n;
 - usuarios e integraciones.
 
-Los cambios de Configuración pueden afectar directamente al runtime. Por ello deben tratarse como configuración operativa, no como formularios aislados.
+Los cambios de ConfiguraciÃ³n pueden afectar directamente al runtime. Por ello deben tratarse como configuraciÃ³n operativa, no como formularios aislados.
 
 ## 2.4 Empresa
 
-Empresa representa el perfil raíz del restaurante. Su identidad se relaciona con:
+Empresa representa el perfil raÃ­z del restaurante. Su identidad se relaciona con:
 
 - `AuthContext`;
 - documento `restaurants/{restaurantId}`;
@@ -180,76 +180,76 @@ Empresa representa el perfil raíz del restaurante. Su identidad se relaciona co
 - onboarding;
 - copias de nombre almacenadas en perfiles de usuario.
 
-El documento del restaurante debe ser la fuente canónica de su identidad.
+El documento del restaurante debe ser la fuente canÃ³nica de su identidad.
 
 ## 2.5 TPV
 
-El TPV coordina mesas, catálogo, pedido, comanda, pago e impresión. Es el runtime con mayor concentración de estado y mayor impacto económico.
+El TPV coordina mesas, catÃ¡logo, pedido, comanda, pago e impresiÃ³n. Es el runtime con mayor concentraciÃ³n de estado y mayor impacto econÃ³mico.
 
-El mismo contenido principal se utiliza desde la ruta Carta y desde Operación → TPV. Esta reutilización es correcta, pero el componente central mantiene demasiadas responsabilidades.
+El mismo contenido principal se utiliza desde la ruta Carta y desde OperaciÃ³n â†’ TPV. Esta reutilizaciÃ³n es correcta, pero el componente central mantiene demasiadas responsabilidades.
 
 ## 2.6 KDS
 
-KDS transforma pedidos y líneas en trabajo operativo para:
+KDS transforma pedidos y lÃ­neas en trabajo operativo para:
 
 - Cocina;
 - Barra;
-- Coctelería;
+- CoctelerÃ­a;
 - Sala.
 
-Cocina, Barra y Coctelería reutilizan `OrderItemsBoard` con filtros y acciones distintas. Sala mantiene una vista especializada.
+Cocina, Barra y CoctelerÃ­a reutilizan `OrderItemsBoard` con filtros y acciones distintas. Sala mantiene una vista especializada.
 
 ## 2.7 Productos y Carta
 
-Productos es el catálogo central. Carta añade organización comercial y operativa:
+Productos es el catÃ¡logo central. Carta aÃ±ade organizaciÃ³n comercial y operativa:
 
-- categorías;
+- categorÃ­as;
 - familias;
 - disponibilidad;
 - orden;
 - destino operativo;
 - modificadores;
 - pases;
-- relación con escandallos e inventario.
+- relaciÃ³n con escandallos e inventario.
 
-La compatibilidad con catálogos antiguos sigue activa y debe considerarse transicional.
+La compatibilidad con catÃ¡logos antiguos sigue activa y debe considerarse transicional.
 
 ## 2.8 Inventario, Compras y Recepciones
 
-Inventario mantiene la existencia y configuración de stock. Compras registra intención y documentación. Recepciones confirma cantidades y costes reales y puede generar movimientos de stock.
+Inventario mantiene la existencia y configuraciÃ³n de stock. Compras registra intenciÃ³n y documentaciÃ³n. Recepciones confirma cantidades y costes reales y puede generar movimientos de stock.
 
-La relación esperada es:
+La relaciÃ³n esperada es:
 
 ```text
 Producto
-  ├── configuración de inventario
-  ├── receta / escandallo
-  └── movimientos
-          ▲
-          ├── recepción de compra
-          ├── consumo de receta
-          ├── consumo de modificador
-          ├── ajuste
-          └── reversión
+  â”œâ”€â”€ configuraciÃ³n de inventario
+  â”œâ”€â”€ receta / escandallo
+  â””â”€â”€ movimientos
+          â–²
+          â”œâ”€â”€ recepciÃ³n de compra
+          â”œâ”€â”€ consumo de receta
+          â”œâ”€â”€ consumo de modificador
+          â”œâ”€â”€ ajuste
+          â””â”€â”€ reversiÃ³n
 ```
 
 ## 2.9 Escandallos
 
-Los escandallos conectan venta e inventario. Definen composición, coste teórico, margen y consumo esperado.
+Los escandallos conectan venta e inventario. Definen composiciÃ³n, coste teÃ³rico, margen y consumo esperado.
 
-No deben mezclarse los cálculos visuales de rentabilidad con la aplicación transaccional de movimientos.
+No deben mezclarse los cÃ¡lculos visuales de rentabilidad con la aplicaciÃ³n transaccional de movimientos.
 
 ## 2.10 Reservas
 
-Reservas relaciona fecha, hora, comensales, estado y mesa. Comparte información espacial con planos y ocupación de pedidos.
+Reservas relaciona fecha, hora, comensales, estado y mesa. Comparte informaciÃ³n espacial con planos y ocupaciÃ³n de pedidos.
 
-La selección de mesa reutiliza el mapa, pero el dominio de reservas debe seguir siendo propietario de las reglas de disponibilidad.
+La selecciÃ³n de mesa reutiliza el mapa, pero el dominio de reservas debe seguir siendo propietario de las reglas de disponibilidad.
 
-## 2.11 Análisis
+## 2.11 AnÃ¡lisis
 
-Análisis consume pedidos, pagos y reservas para crear vistas derivadas. Debe ser de lectura y nunca convertirse en fuente de verdad operacional.
+AnÃ¡lisis consume pedidos, pagos y reservas para crear vistas derivadas. Debe ser de lectura y nunca convertirse en fuente de verdad operacional.
 
-Los cálculos deben residir en selectores o funciones de dominio, no dentro de componentes gráficos.
+Los cÃ¡lculos deben residir en selectores o funciones de dominio, no dentro de componentes grÃ¡ficos.
 
 ## 2.12 Usuarios
 
@@ -265,36 +265,36 @@ La UI puede representar permisos, pero solo Auth, procesos administrativos confi
 
 ```text
 Route
-  ↓
+  â†“
 Shell
-  ↓
+  â†“
 Feature Controller / Provider
-  ↓
+  â†“
 Presentational Components
-  ↓
+  â†“
 Feature Hooks
-  ↓
+  â†“
 Repositories / Services
-  ↓
+  â†“
 Firestore / Storage / APIs
 ```
 
-No todos los módulos actuales cumplen todavía esta separación. El modelo define la dirección, no el estado completo del repositorio.
+No todos los mÃ³dulos actuales cumplen todavÃ­a esta separaciÃ³n. El modelo define la direcciÃ³n, no el estado completo del repositorio.
 
 ## 3.2 Route
 
 Responsabilidades:
 
-- declarar la entrada de navegación;
-- montar providers específicos;
-- obtener parámetros de ruta;
+- declarar la entrada de navegaciÃ³n;
+- montar providers especÃ­ficos;
+- obtener parÃ¡metros de ruta;
 - aplicar guards de alto nivel;
 - elegir shell y feature principal.
 
 No debe:
 
-- contener lógica de negocio extensa;
-- construir múltiples queries;
+- contener lÃ³gica de negocio extensa;
+- construir mÃºltiples queries;
 - gestionar transacciones;
 - duplicar un runtime existente.
 
@@ -304,16 +304,16 @@ Responsabilidades:
 
 - viewport;
 - estructura de cabecera y contenido;
-- navegación común;
+- navegaciÃ³n comÃºn;
 - slots;
-- límites de scroll;
+- lÃ­mites de scroll;
 - contexto visual y operativo.
 
 Ejemplos conceptuales:
 
-- shell general de módulo;
-- shell de Configuración;
-- shell de Operación;
+- shell general de mÃ³dulo;
+- shell de ConfiguraciÃ³n;
+- shell de OperaciÃ³n;
 - shell de editor espacial.
 
 No debe interpretar documentos Firestore.
@@ -325,12 +325,12 @@ Es el propietario del estado coordinado de una feature.
 Responsabilidades:
 
 - ensamblar repositorios y hooks;
-- mantener la máquina de estados del flujo;
+- mantener la mÃ¡quina de estados del flujo;
 - traducir acciones de UI a comandos;
 - exponer un modelo estable a los componentes;
 - resolver loading, error y permisos.
 
-No debe contener grandes bloques de presentación.
+No debe contener grandes bloques de presentaciÃ³n.
 
 ## 3.5 Presentational Components
 
@@ -339,14 +339,14 @@ Responsabilidades:
 - representar datos;
 - emitir intenciones mediante callbacks;
 - aplicar Design System;
-- accesibilidad y UX táctil.
+- accesibilidad y UX tÃ¡ctil.
 
 No deben:
 
 - conocer rutas Firestore;
 - decidir permisos reales;
 - generar IDs transaccionales;
-- aplicar movimientos económicos.
+- aplicar movimientos econÃ³micos.
 
 ## 3.6 Hooks
 
@@ -356,15 +356,15 @@ Existen tres familias recomendadas:
 
 Conectan una feature con un repositorio y modelan loading/error/data.
 
-### Hooks de estado de interacción
+### Hooks de estado de interacciÃ³n
 
-Gestionan selección, filtros, modales, gestos o preferencias.
+Gestionan selecciÃ³n, filtros, modales, gestos o preferencias.
 
 ### Hooks de dominio coordinado
 
-Orquestan un flujo delimitado, como pago o edición de inventario.
+Orquestan un flujo delimitado, como pago o ediciÃ³n de inventario.
 
-Un hook no debe ser únicamente un archivo grande trasladado. Debe tener una responsabilidad, entradas y salidas claras.
+Un hook no debe ser Ãºnicamente un archivo grande trasladado. Debe tener una responsabilidad, entradas y salidas claras.
 
 ## 3.7 Repositories y Services
 
@@ -376,17 +376,17 @@ Encapsula persistencia:
 - queries;
 - mapeo de documentos;
 - listeners;
-- paginación.
+- paginaciÃ³n.
 
 ### Domain Service
 
 Encapsula reglas:
 
-- cálculos;
-- validación;
+- cÃ¡lculos;
+- validaciÃ³n;
 - idempotencia;
-- composición de comandos;
-- transformación independiente de UI.
+- composiciÃ³n de comandos;
+- transformaciÃ³n independiente de UI.
 
 Los servicios de dominio no deben importar componentes ni barrels visuales.
 
@@ -394,12 +394,12 @@ Los servicios de dominio no deben importar componentes ni barrels visuales.
 
 Firestore es la persistencia y canal en tiempo real. No sustituye al dominio.
 
-Toda operación debe definir:
+Toda operaciÃ³n debe definir:
 
 - tenant;
-- colección;
+- colecciÃ³n;
 - alcance;
-- autorización;
+- autorizaciÃ³n;
 - estrategia de error;
 - coste esperado;
 - consistencia e idempotencia.
@@ -408,15 +408,15 @@ Toda operación debe definir:
 
 # 4. Runtime TPV
 
-## 4.1 Propósito
+## 4.1 PropÃ³sito
 
-El TPV coordina la sesión de servicio de una mesa desde su selección hasta el cierre económico.
+El TPV coordina la sesiÃ³n de servicio de una mesa desde su selecciÃ³n hasta el cierre econÃ³mico.
 
 Su componente central actual es:
 
 `app/dashboard/carta/carta-page-content.tsx`
 
-También se monta desde:
+TambiÃ©n se monta desde:
 
 - `/dashboard/carta`;
 - `/dashboard/operacion/tpv`.
@@ -425,26 +425,26 @@ También se monta desde:
 
 ```text
 Operador activo
-  ↓
-Mapa / selección de mesa
-  ↓
-Carga o creación de pedido abierto
-  ↓
-Catálogo y composición de líneas
-  ↓
-Envío de comanda
-  ↓
-Producción KDS
-  ↓
+  â†“
+Mapa / selecciÃ³n de mesa
+  â†“
+Carga o creaciÃ³n de pedido abierto
+  â†“
+CatÃ¡logo y composiciÃ³n de lÃ­neas
+  â†“
+EnvÃ­o de comanda
+  â†“
+ProducciÃ³n KDS
+  â†“
 Servicio
-  ↓
+  â†“
 Solicitud de cuenta
-  ↓
+  â†“
 Pago total o dividido
-  ↓
-Impresión / factura
-  ↓
-Cierre y liberación de mesa
+  â†“
+ImpresiÃ³n / factura
+  â†“
+Cierre y liberaciÃ³n de mesa
 ```
 
 ## 4.3 Mesa
@@ -453,12 +453,12 @@ La mesa aporta:
 
 - identidad;
 - zona y plano;
-- estado de ocupación;
+- estado de ocupaciÃ³n;
 - operador asignado;
-- número de comensales;
+- nÃºmero de comensales;
 - grupo de mesas;
 - pedido activo;
-- señales de reserva;
+- seÃ±ales de reserva;
 - solicitud de cuenta;
 - disponibilidad de cierre.
 
@@ -466,40 +466,40 @@ El runtime actual utiliza el modelo nuevo `tables/tableId`. La coexistencia con 
 
 ## 4.4 Pedido
 
-`orders` representa la cuenta y sesión operativa de una mesa.
+`orders` representa la cuenta y sesiÃ³n operativa de una mesa.
 
 Puede incluir:
 
 - `restaurantId`;
 - mesa;
 - estado;
-- líneas embebidas;
+- lÃ­neas embebidas;
 - tiempos;
 - operador;
 - notas;
 - solicitud de cuenta;
 - datos de total y pago.
 
-El TPV mantiene una representación local para interacción rápida y sincroniza con el documento persistido.
+El TPV mantiene una representaciÃ³n local para interacciÃ³n rÃ¡pida y sincroniza con el documento persistido.
 
 Invariantes:
 
-- un pedido pertenece a un único restaurante;
+- un pedido pertenece a un Ãºnico restaurante;
 - un pedido no debe cambiar de tenant;
 - los estados terminales no deben reaparecer como activos;
-- la hidratación no debe duplicar líneas;
+- la hidrataciÃ³n no debe duplicar lÃ­neas;
 - los merges de mesas deben conservar trazabilidad.
 
-## 4.5 Líneas
+## 4.5 LÃ­neas
 
-Las líneas representan productos, cantidades, extras, modificadores, notas, destino y estado productivo.
+Las lÃ­neas representan productos, cantidades, extras, modificadores, notas, destino y estado productivo.
 
 Conviven dos representaciones:
 
-- líneas embebidas en `orders.items[]`;
+- lÃ­neas embebidas en `orders.items[]`;
 - documentos operativos en `orderItems`.
 
-Esta dualidad es una compatibilidad activa. No debe eliminarse ni ampliarse sin una misión de modelo de pedidos.
+Esta dualidad es una compatibilidad activa. No debe eliminarse ni ampliarse sin una misiÃ³n de modelo de pedidos.
 
 ## 4.6 Pagos
 
@@ -512,48 +512,48 @@ Los pagos se registran en `payments`. El TPV soporta:
 - pago dividido;
 - pago por productos;
 - factura;
-- impresión final.
+- impresiÃ³n final.
 
 Las cantidades monetarias deben normalizarse y redondearse mediante utilidades comunes.
 
 Invariantes:
 
-- ningún pago debe atribuirse a otro restaurante;
+- ningÃºn pago debe atribuirse a otro restaurante;
 - no debe duplicarse por reintento;
 - total pagado y total de cuenta deben reconciliarse;
 - cancelaciones y devoluciones requieren capacidades superiores;
-- la mesa no se libera antes de completar el cierre válido.
+- la mesa no se libera antes de completar el cierre vÃ¡lido.
 
 ## 4.7 Presencia
 
-La presencia evita que varios operadores actúen sobre la misma mesa sin contexto.
+La presencia evita que varios operadores actÃºen sobre la misma mesa sin contexto.
 
 Incluye:
 
 - operador activo;
 - heartbeat;
-- asignación de mesa;
+- asignaciÃ³n de mesa;
 - indicadores visuales;
 - sesiones activas.
 
-La presencia es una ayuda de coordinación, no un sustituto de transacciones o reglas de seguridad.
+La presencia es una ayuda de coordinaciÃ³n, no un sustituto de transacciones o reglas de seguridad.
 
 ## 4.8 Reservas
 
-El TPV escucha las reservas del día para:
+El TPV escucha las reservas del dÃ­a para:
 
-- mostrar presión de reserva;
-- identificar la próxima ocupación;
+- mostrar presiÃ³n de reserva;
+- identificar la prÃ³xima ocupaciÃ³n;
 - priorizar visualmente mesas;
 - evitar decisiones operativas ciegas.
 
-La información de reserva complementa la ocupación; no debe reemplazar el estado real del pedido.
+La informaciÃ³n de reserva complementa la ocupaciÃ³n; no debe reemplazar el estado real del pedido.
 
 ## 4.9 Listeners
 
 El TPV escucha, directa o indirectamente:
 
-- reservas del día;
+- reservas del dÃ­a;
 - mesas;
 - zonas;
 - planos;
@@ -562,7 +562,7 @@ El TPV escucha, directa o indirectamente:
 - pagos;
 - modificadores;
 - estaciones;
-- configuración de impresión;
+- configuraciÃ³n de impresiÃ³n;
 - presencia.
 
 Reglas:
@@ -571,8 +571,8 @@ Reglas:
 - debe tener un alcance operativo;
 - debe limpiarse al desmontar o cambiar de tenant;
 - no debe duplicarse por rerenders;
-- los listeners históricos deben limitarse;
-- los errores no deben confundirse con estados vacíos.
+- los listeners histÃ³ricos deben limitarse;
+- los errores no deben confundirse con estados vacÃ­os.
 
 ## 4.10 Eventos
 
@@ -585,61 +585,61 @@ El TPV consume o emite eventos para:
 
 Estos eventos son contratos globales y deben tratarse como APIs internas.
 
-## 4.11 Dirección futura
+## 4.11 DirecciÃ³n futura
 
 ```text
 TpvRoute
-└── TpvRuntimeProvider
-    ├── TpvShell
-    ├── TpvTableMap
-    ├── TpvCatalog
-    ├── TpvOrderPanel
-    ├── TpvCourseFlow
-    ├── TpvPaymentFlow
-    ├── TpvPrintFlow
-    └── TpvDialogs
+â””â”€â”€ TpvRuntimeProvider
+    â”œâ”€â”€ TpvShell
+    â”œâ”€â”€ TpvTableMap
+    â”œâ”€â”€ TpvCatalog
+    â”œâ”€â”€ TpvOrderPanel
+    â”œâ”€â”€ TpvCourseFlow
+    â”œâ”€â”€ TpvPaymentFlow
+    â”œâ”€â”€ TpvPrintFlow
+    â””â”€â”€ TpvDialogs
 ```
 
-La división se realizará de fuera hacia dentro: presentación, helpers, estado y, por último, persistencia.
+La divisiÃ³n se realizarÃ¡ de fuera hacia dentro: presentaciÃ³n, helpers, estado y, por Ãºltimo, persistencia.
 
 ---
 
 # 5. Runtime KDS
 
-## 5.1 Propósito
+## 5.1 PropÃ³sito
 
-KDS traduce líneas vendidas en trabajo de producción y servicio.
+KDS traduce lÃ­neas vendidas en trabajo de producciÃ³n y servicio.
 
-## 5.2 Módulos
+## 5.2 MÃ³dulos
 
 ### Cocina
 
-Utiliza `KitchenView` y `OrderItemsBoard`. Añade:
+Utiliza `KitchenView` y `OrderItemsBoard`. AÃ±ade:
 
-- filtro de estación;
-- métricas;
+- filtro de estaciÃ³n;
+- mÃ©tricas;
 - rail de tickets;
 - panel de preparados;
 - archivo de servidos;
-- agrupación por pase.
+- agrupaciÃ³n por pase.
 
 ### Barra
 
 Reutiliza `OrderItemsBoard` filtrando bebidas y estaciones de barra.
 
-### Coctelería
+### CoctelerÃ­a
 
-Reutiliza el mismo tablero con el scope de coctelería.
+Reutiliza el mismo tablero con el scope de coctelerÃ­a.
 
 ### Sala
 
-Presenta líneas preparadas agrupadas por mesa y permite completar el servicio. También calcula qué mesas están listas para cerrar.
+Presenta lÃ­neas preparadas agrupadas por mesa y permite completar el servicio. TambiÃ©n calcula quÃ© mesas estÃ¡n listas para cerrar.
 
-## 5.3 Pedidos y líneas
+## 5.3 Pedidos y lÃ­neas
 
-El KDS actual obtiene pedidos de `orders` y transforma sus líneas embebidas en un modelo de tablero.
+El KDS actual obtiene pedidos de `orders` y transforma sus lÃ­neas embebidas en un modelo de tablero.
 
-Las rutas legacy pueden escuchar `orderItems` directamente. Esta convivencia no debe tomarse como patrón para nuevas pantallas.
+Las rutas legacy pueden escuchar `orderItems` directamente. Esta convivencia no debe tomarse como patrÃ³n para nuevas pantallas.
 
 ## 5.4 Estados
 
@@ -647,13 +647,13 @@ Estados operativos conceptuales:
 
 ```text
 pendiente local
-  ↓
+  â†“
 sent
-  ↓
+  â†“
 waiting_march (si requiere pase)
-  ↓
+  â†“
 prepared / ready
-  ↓
+  â†“
 served
 ```
 
@@ -665,49 +665,49 @@ Los estados terminales del pedido incluyen variantes como:
 - `canceled`;
 - `merged`.
 
-Toda clasificación debe centralizarse gradualmente para evitar diferencias entre TPV, Cocina y Sala.
+Toda clasificaciÃ³n debe centralizarse gradualmente para evitar diferencias entre TPV, Cocina y Sala.
 
 ## 5.5 Flujo
 
 ```text
 TPV crea o actualiza pedido
-  ↓
-TPV envía líneas
-  ↓
-KDS clasifica por destino y estación
-  ↓
-Producción prepara
-  ↓
-Sala recibe líneas listas
-  ↓
+  â†“
+TPV envÃ­a lÃ­neas
+  â†“
+KDS clasifica por destino y estaciÃ³n
+  â†“
+ProducciÃ³n prepara
+  â†“
+Sala recibe lÃ­neas listas
+  â†“
 Sala sirve
-  ↓
-TPV puede cerrar cuando no quedan líneas pendientes
+  â†“
+TPV puede cerrar cuando no quedan lÃ­neas pendientes
 ```
 
 ## 5.6 Riesgos
 
-- Un único tablero afecta Cocina, Barra y Coctelería.
+- Un Ãºnico tablero afecta Cocina, Barra y CoctelerÃ­a.
 - Las mutaciones actualizan arrays embebidos.
 - Existen normalizadores duplicados.
-- Los listeners amplios crecen con el histórico.
+- Los listeners amplios crecen con el histÃ³rico.
 - Los eventos globales ocultan dependencias.
-- Cocina legacy mantiene otra implementación.
+- Cocina legacy mantiene otra implementaciÃ³n.
 
-## 5.7 Dirección futura
+## 5.7 DirecciÃ³n futura
 
 ```text
 KdsModule
-├── useKdsOrders
-├── useKdsBoardModel
-├── useKdsActions
-├── KdsTicketRail
-├── KdsColumn
-├── KdsTicket
-└── KdsLine
+â”œâ”€â”€ useKdsOrders
+â”œâ”€â”€ useKdsBoardModel
+â”œâ”€â”€ useKdsActions
+â”œâ”€â”€ KdsTicketRail
+â”œâ”€â”€ KdsColumn
+â”œâ”€â”€ KdsTicket
+â””â”€â”€ KdsLine
 ```
 
-La normalización pura debe separarse antes que las acciones Firestore.
+La normalizaciÃ³n pura debe separarse antes que las acciones Firestore.
 
 ---
 
@@ -717,10 +717,10 @@ La normalización pura debe separarse antes que las acciones Firestore.
 
 ```text
 Producto
-├── datos comerciales
-├── configuración de inventario
-├── receta
-└── movimientos de stock
+â”œâ”€â”€ datos comerciales
+â”œâ”€â”€ configuraciÃ³n de inventario
+â”œâ”€â”€ receta
+â””â”€â”€ movimientos de stock
 ```
 
 ## 6.2 Productos
@@ -728,14 +728,14 @@ Producto
 El producto central vive bajo el restaurante y puede contener:
 
 - disponibilidad comercial;
-- familia y categoría;
+- familia y categorÃ­a;
 - destino operativo;
-- configuración de inventario;
+- configuraciÃ³n de inventario;
 - receta;
 - imagen;
 - modificadores.
 
-El módulo de Productos actúa como punto de edición principal, mientras Inventario presenta una vista especializada.
+El mÃ³dulo de Productos actÃºa como punto de ediciÃ³n principal, mientras Inventario presenta una vista especializada.
 
 ## 6.3 Recetas y escandallos
 
@@ -743,37 +743,37 @@ Una receta conecta el producto vendido con ingredientes o productos inventariabl
 
 El escandallo calcula:
 
-- coste teórico;
+- coste teÃ³rico;
 - margen;
-- composición;
+- composiciÃ³n;
 - estado de completitud.
 
-La aplicación real del consumo pertenece al ledger de movimientos, no a la UI del escandallo.
+La aplicaciÃ³n real del consumo pertenece al ledger de movimientos, no a la UI del escandallo.
 
 ## 6.4 Movimientos
 
 `stockMovements` es el ledger central.
 
-Orígenes:
+OrÃ­genes:
 
 - consumo de receta;
 - consumo de modificador;
-- recepción de compra;
+- recepciÃ³n de compra;
 - ajuste;
-- reversión.
+- reversiÃ³n.
 
-Propiedades arquitectónicas:
+Propiedades arquitectÃ³nicas:
 
 - IDs deterministas cuando sea posible;
 - idempotencia;
 - trazabilidad de origen;
 - compatibilidad de unidades;
 - stock anterior y posterior verificables;
-- reversión explícita, nunca borrado silencioso.
+- reversiÃ³n explÃ­cita, nunca borrado silencioso.
 
 ## 6.5 Recepciones
 
-Una recepción:
+Una recepciÃ³n:
 
 1. parte de una compra o documento;
 2. confirma cantidades y costes;
@@ -782,21 +782,21 @@ Una recepción:
 5. aplica movimientos;
 6. deja trazabilidad.
 
-La UI puede preparar borradores, pero la aplicación de stock debe ser transaccional.
+La UI puede preparar borradores, pero la aplicaciÃ³n de stock debe ser transaccional.
 
 ## 6.6 Stock
 
-El stock actual es una proyección derivada de movimientos aplicados.
+El stock actual es una proyecciÃ³n derivada de movimientos aplicados.
 
 No debe actualizarse sin registrar el origen correspondiente. Los fallos no deben sustituirse silenciosamente por datos mock en contextos operativos.
 
 ## 6.7 Consumos y reversiones
 
-El consumo debe asociarse a una línea o acción concreta. Si una línea se cancela, la reversión debe:
+El consumo debe asociarse a una lÃ­nea o acciÃ³n concreta. Si una lÃ­nea se cancela, la reversiÃ³n debe:
 
 - identificar el consumo original;
 - evitar duplicados;
-- conservar la auditoría;
+- conservar la auditorÃ­a;
 - respetar unidades;
 - pertenecer al mismo tenant.
 
@@ -806,50 +806,50 @@ El consumo debe asociarse a una línea o acción concreta. Si una línea se canc
 
 ## 7.1 Principio multi-tenant
 
-`restaurantId` delimita el acceso lógico a los datos.
+`restaurantId` delimita el acceso lÃ³gico a los datos.
 
 Patrones actuales:
 
 ```text
-Colección top-level + restaurantId
+ColecciÃ³n top-level + restaurantId
 orders/{orderId}
 payments/{paymentId}
 tables/{tableId}
 reservations/{reservationId}
 
-Subcolección bajo restaurante
+SubcolecciÃ³n bajo restaurante
 restaurants/{restaurantId}/products/{productId}
 restaurants/{restaurantId}/stockMovements/{movementId}
 ```
 
-Ambos patrones son válidos si las reglas y queries verifican tenant de forma explícita.
+Ambos patrones son vÃ¡lidos si las reglas y queries verifican tenant de forma explÃ­cita.
 
 ## 7.2 Colecciones y subcolecciones principales
 
 ### Identidad
 
 - `users`
-- `usuarios` — espejo legacy
+- `usuarios` â€” espejo legacy
 - `restaurant_invites`
 
 ### Restaurante
 
 - `restaurants`
-- `restaurantes` — raíz legacy utilizada todavía por partes de Carta
+- `restaurantes` â€” raÃ­z legacy utilizada todavÃ­a por partes de Carta
 
-### Operación
+### OperaciÃ³n
 
 - `orders`
 - `orderItems`
 - `payments`
 - `vouchers`
 - `tables`
-- `mesas` — modelo legacy
+- `mesas` â€” modelo legacy
 - `zones`
 - `floorPlans`
 - `reservations`
 
-### Catálogo
+### CatÃ¡logo
 
 - `restaurants/{restaurantId}/products`
 - `restaurants/{restaurantId}/productFamilies`
@@ -868,7 +868,7 @@ Ambos patrones son válidos si las reglas y queries verifican tenant de forma ex
 - `restaurants/{restaurantId}/supplierInvoices`
 - `restaurants/{restaurantId}/supplierProductAliases`
 
-### Configuración y soporte operativo
+### ConfiguraciÃ³n y soporte operativo
 
 - `restaurants/{restaurantId}/config/*`
 - `restaurants/{restaurantId}/printJobs`
@@ -892,27 +892,27 @@ Regla permanente: el cliente no debe poder elevar su rol ni asociarse libremente
 
 ## 7.4 `restaurants` y `restaurantes`
 
-`restaurants` es la raíz canónica para perfil, catálogo central, inventario y configuración moderna.
+`restaurants` es la raÃ­z canÃ³nica para perfil, catÃ¡logo central, inventario y configuraciÃ³n moderna.
 
 `restaurantes` sigue siendo utilizada por APIs y colecciones legacy de Carta.
 
 No se debe:
 
-- añadir nuevos dominios bajo `restaurantes`;
-- borrar la raíz legacy sin migración;
-- asumir que ambas raíces contienen exactamente los mismos datos.
+- aÃ±adir nuevos dominios bajo `restaurantes`;
+- borrar la raÃ­z legacy sin migraciÃ³n;
+- asumir que ambas raÃ­ces contienen exactamente los mismos datos.
 
 ## 7.5 Pedidos
 
-`orders` contiene el pedido y líneas embebidas utilizadas por TPV y KDS moderno.
+`orders` contiene el pedido y lÃ­neas embebidas utilizadas por TPV y KDS moderno.
 
-Debe consultarse siempre con tenant y un alcance operativo. Los listeners de todo el histórico son una deuda de coste y escalabilidad.
+Debe consultarse siempre con tenant y un alcance operativo. Los listeners de todo el histÃ³rico son una deuda de coste y escalabilidad.
 
 ## 7.6 OrderItems
 
-`orderItems` mantiene líneas operativas independientes para compatibilidad y rutas legacy.
+`orderItems` mantiene lÃ­neas operativas independientes para compatibilidad y rutas legacy.
 
-No debe declararse obsoleta hasta completar la auditoría de consumidores.
+No debe declararse obsoleta hasta completar la auditorÃ­a de consumidores.
 
 ## 7.7 Payments
 
@@ -922,19 +922,19 @@ Requiere:
 
 - tenant;
 - capacidad de cobro;
-- capacidad superior para devolución;
+- capacidad superior para devoluciÃ³n;
 - inmutabilidad del tenant;
-- reconciliación con pedido.
+- reconciliaciÃ³n con pedido.
 
-## 7.8 Índices y queries
+## 7.8 Ãndices y queries
 
-Toda query compuesta debe tener su índice documentado.
+Toda query compuesta debe tener su Ã­ndice documentado.
 
-Un fallback por índice ausente puede preservar funcionalidad, pero suele:
+Un fallback por Ã­ndice ausente puede preservar funcionalidad, pero suele:
 
-- leer más documentos;
+- leer mÃ¡s documentos;
 - ordenar en cliente;
-- ocultar degradación;
+- ocultar degradaciÃ³n;
 - aumentar coste.
 
 Los fallbacks deben ser observables y temporales.
@@ -945,30 +945,30 @@ Firestore Rules constituyen la barrera real.
 
 Las reglas deben validar:
 
-- autenticación;
+- autenticaciÃ³n;
 - tenant actual;
 - tenant inmutable;
 - capability;
 - campos que pueden cambiar;
 - operaciones especiales como cobros, devoluciones y cancelaciones.
 
-La protección de una ruta React nunca sustituye a Rules.
+La protecciÃ³n de una ruta React nunca sustituye a Rules.
 
 ---
 
 # 8. Eventos globales
 
-Los eventos globales existentes son APIs internas. Deben conservar nombre y payload hasta que una misión específica los sustituya.
+Los eventos globales existentes son APIs internas. Deben conservar nombre y payload hasta que una misiÃ³n especÃ­fica los sustituya.
 
 | Evento | Emisor principal | Receptor principal | Objetivo | Riesgo |
 |---|---|---|---|---|
-| `tablesReadyToClose:update` | Sala/KDS | Wrappers de Carta y TPV | Publicar mesas sin líneas operativas pendientes | Payload no tipado y dependencia invisible |
+| `tablesReadyToClose:update` | Sala/KDS | Wrappers de Carta y TPV | Publicar mesas sin lÃ­neas operativas pendientes | Payload no tipado y dependencia invisible |
 | `tablesReadyToClose:clear` | TPV al cerrar o limpiar mesa | Wrappers de Carta y TPV | Retirar una mesa del conjunto de cierre | Puede dejar estado visual obsoleto si no se procesa |
-| `kds:station-status` | `OrderItemsBoard` y Sala | Indicadores de Operación | Informar actividad y estado de estaciones | Varios emisores pueden divergir |
+| `kds:station-status` | `OrderItemsBoard` y Sala | Indicadores de OperaciÃ³n | Informar actividad y estado de estaciones | Varios emisores pueden divergir |
 | Evento de merge de pedidos de grupo | Servicio de merge de mesas | TPV | Invalidar o rehidratar pedidos tras unir mesas | Contrato sensible a IDs y orden temporal |
-| `STOCK_CHANGED_EVENT` | Recepciones y flujos de stock | Dashboard y consumidores locales | Refrescar proyecciones locales de stock | Bus global sin confirmación de persistencia |
-| `PLATOS_CHANGED_EVENT` | Persistencia legacy de platos | Productos y paneles legacy | Sincronizar catálogo local antiguo | Mantiene acoplamiento con `localStorage` |
-| `CARTA_CATEGORIAS_CHANGED_EVENT` | Store local de categorías | Productos | Refrescar jerarquía de Carta | Compatibilidad local, no fuente canónica |
+| `STOCK_CHANGED_EVENT` | Recepciones y flujos de stock | Dashboard y consumidores locales | Refrescar proyecciones locales de stock | Bus global sin confirmaciÃ³n de persistencia |
+| `PLATOS_CHANGED_EVENT` | Persistencia legacy de platos | Productos y paneles legacy | Sincronizar catÃ¡logo local antiguo | Mantiene acoplamiento con `localStorage` |
+| `CARTA_CATEGORIAS_CHANGED_EVENT` | Store local de categorÃ­as | Productos | Refrescar jerarquÃ­a de Carta | Compatibilidad local, no fuente canÃ³nica |
 
 ## Reglas para eventos
 
@@ -976,8 +976,8 @@ Los eventos globales existentes son APIs internas. Deben conservar nombre y payl
 - Documentar payload.
 - No reutilizar el mismo nombre con otra forma.
 - Limpiar listeners al desmontar.
-- No utilizar eventos globales para nuevos flujos si props, contexto o repositorio resuelven la relación.
-- No sustituir un evento existente durante una modularización visual.
+- No utilizar eventos globales para nuevos flujos si props, contexto o repositorio resuelven la relaciÃ³n.
+- No sustituir un evento existente durante una modularizaciÃ³n visual.
 
 ---
 
@@ -987,7 +987,7 @@ Los eventos globales existentes son APIs internas. Deben conservar nombre y payl
 
 Consumidores:
 
-- configuración de mesas;
+- configuraciÃ³n de mesas;
 - TPV;
 - selector de mesa de Reservas.
 
@@ -995,12 +995,12 @@ Riesgos:
 
 - contrato de props extenso;
 - coordenadas y transformaciones;
-- gestos táctiles;
+- gestos tÃ¡ctiles;
 - controles imperativos;
-- selección y edición;
+- selecciÃ³n y ediciÃ³n;
 - diferencias entre modo operativo y modo editor.
 
-No cambiar simultáneamente API, coordenadas y gestos.
+No cambiar simultÃ¡neamente API, coordenadas y gestos.
 
 ## 9.2 `OrderItemsBoard`
 
@@ -1008,64 +1008,64 @@ Consumidores:
 
 - Cocina;
 - Barra;
-- Coctelería.
+- CoctelerÃ­a.
 
 Riesgos:
 
 - listener compartido;
-- normalización de pedido;
-- mutación de arrays embebidos;
-- agrupación por pase;
+- normalizaciÃ³n de pedido;
+- mutaciÃ³n de arrays embebidos;
+- agrupaciÃ³n por pase;
 - prioridades y SLA;
-- acciones distintas según estación.
+- acciones distintas segÃºn estaciÃ³n.
 
-Toda modificación requiere validar los tres módulos.
+Toda modificaciÃ³n requiere validar los tres mÃ³dulos.
 
 ## 9.3 Productos
 
 Productos conecta:
 
 - Carta;
-- categorías;
+- categorÃ­as;
 - familias;
 - estaciones;
 - modificadores;
 - recetas;
 - inventario;
-- imágenes;
-- migración legacy.
+- imÃ¡genes;
+- migraciÃ³n legacy.
 
 Un cambio en tipos o mappers puede afectar TPV, KDS e inventario.
 
 ## 9.4 TPV
 
-Es la dependencia más delicada por impacto económico y operativo. Combina datos, tiempo real, navegación, interacción y persistencia.
+Es la dependencia mÃ¡s delicada por impacto econÃ³mico y operativo. Combina datos, tiempo real, navegaciÃ³n, interacciÃ³n y persistencia.
 
 ## 9.5 Stock
 
-El ledger y el stock actual deben mantenerse reconciliados. Un error puede permanecer oculto hasta inventario físico o cierre económico.
+El ledger y el stock actual deben mantenerse reconciliados. Un error puede permanecer oculto hasta inventario fÃ­sico o cierre econÃ³mico.
 
 ## 9.6 AuthContext y scope del restaurante
 
-Muchos módulos dependen de:
+Muchos mÃ³dulos dependen de:
 
 - usuario;
 - `restaurantId`;
 - rol;
 - estado `ready`.
 
-Ningún listener debe iniciarse antes de que auth y tenant estén resueltos.
+NingÃºn listener debe iniciarse antes de que auth y tenant estÃ©n resueltos.
 
 ## 9.7 Ciclos de imports conocidos
 
-Áreas con ciclos detectados:
+Ãreas con ciclos detectados:
 
-- builders y barrel de Análisis;
-- productos, escritura central, ordenación y estación operativa;
-- configuración operacional de categorías;
+- builders y barrel de AnÃ¡lisis;
+- productos, escritura central, ordenaciÃ³n y estaciÃ³n operativa;
+- configuraciÃ³n operacional de categorÃ­as;
 - utilidades visuales de escandallos;
-- tipos de snapshots de Análisis;
-- curso y liberación de líneas de comanda.
+- tipos de snapshots de AnÃ¡lisis;
+- curso y liberaciÃ³n de lÃ­neas de comanda.
 
 Los barrels internos son una causa relevante. Dentro de una feature deben preferirse imports directos.
 
@@ -1073,188 +1073,188 @@ Los barrels internos son una causa relevante. Dentro de una feature deben prefer
 
 # 10. Componentes gigantes
 
-## 10.1 TPV — `carta-page-content.tsx`
+## 10.1 TPV â€” `carta-page-content.tsx`
 
-**Responsabilidad actual:** runtime completo de sala, pedido y cobro.  
-**Riesgo:** máximo.  
-**No tocar todavía:** ownership del pedido, orden de efectos, pagos, persistencia y listeners.  
-**División futura:** shell, mapa, catálogo, comanda, pases, pagos, impresión y diálogos.  
-**Orden:** helpers puros → presentación → controladores locales → estado → repositories.
+**Responsabilidad actual:** runtime completo de sala, pedido y cobro.
+**Riesgo:** mÃ¡ximo.
+**No tocar todavÃ­a:** ownership del pedido, orden de efectos, pagos, persistencia y listeners.
+**DivisiÃ³n futura:** shell, mapa, catÃ¡logo, comanda, pases, pagos, impresiÃ³n y diÃ¡logos.
+**Orden:** helpers puros â†’ presentaciÃ³n â†’ controladores locales â†’ estado â†’ repositories.
 
-## 10.2 Configuración de mesas — `config/mesas/page.tsx`
+## 10.2 ConfiguraciÃ³n de mesas â€” `config/mesas/page.tsx`
 
-**Responsabilidad actual:** editor gráfico y persistencia de planos.  
-**Riesgo:** geometría, historial y batch de guardado.  
-**No tocar todavía:** sistema de coordenadas, undo/redo y transacción de guardado.  
-**División futura:** toolbar, rail, canvas, selección, inspectores, historial y persistencia.  
-**Orden:** chrome visual → inspectores → hooks de selección/historial → persistencia.
+**Responsabilidad actual:** editor grÃ¡fico y persistencia de planos.
+**Riesgo:** geometrÃ­a, historial y batch de guardado.
+**No tocar todavÃ­a:** sistema de coordenadas, undo/redo y transacciÃ³n de guardado.
+**DivisiÃ³n futura:** toolbar, rail, canvas, selecciÃ³n, inspectores, historial y persistencia.
+**Orden:** chrome visual â†’ inspectores â†’ hooks de selecciÃ³n/historial â†’ persistencia.
 
-## 10.3 Productos — `productos-management-page.tsx`
+## 10.3 Productos â€” `productos-management-page.tsx`
 
-**Responsabilidad actual:** listado, edición, relaciones de catálogo y operaciones masivas.  
-**Riesgo:** sincronización central/legacy y formulario con muchas dependencias.  
-**No tocar todavía:** guardado, borrado, publicación y migración.  
-**División futura:** lista, filtros, bulk actions, editor por secciones y flujos de borrado.  
-**Orden:** secciones visuales → helpers del draft → controlador de formulario → repository.
+**Responsabilidad actual:** listado, ediciÃ³n, relaciones de catÃ¡logo y operaciones masivas.
+**Riesgo:** sincronizaciÃ³n central/legacy y formulario con muchas dependencias.
+**No tocar todavÃ­a:** guardado, borrado, publicaciÃ³n y migraciÃ³n.
+**DivisiÃ³n futura:** lista, filtros, bulk actions, editor por secciones y flujos de borrado.
+**Orden:** secciones visuales â†’ helpers del draft â†’ controlador de formulario â†’ repository.
 
-## 10.4 KDS — `order-items-board.tsx`
+## 10.4 KDS â€” `order-items-board.tsx`
 
-**Responsabilidad actual:** snapshot, modelo, acciones y presentación del tablero.  
-**Riesgo:** afecta tres estaciones y muta pedidos activos.  
-**No tocar todavía:** acciones Firestore y transición de estados.  
-**División futura:** normalizador, board model, actions, columnas, tickets y líneas.  
-**Orden:** normalización pura → presentación → acciones.
+**Responsabilidad actual:** snapshot, modelo, acciones y presentaciÃ³n del tablero.
+**Riesgo:** afecta tres estaciones y muta pedidos activos.
+**No tocar todavÃ­a:** acciones Firestore y transiciÃ³n de estados.
+**DivisiÃ³n futura:** normalizador, board model, actions, columnas, tickets y lÃ­neas.
+**Orden:** normalizaciÃ³n pura â†’ presentaciÃ³n â†’ acciones.
 
-## 10.5 Recepciones — `recepciones/page.tsx`
+## 10.5 Recepciones â€” `recepciones/page.tsx`
 
-**Responsabilidad actual:** listado, conciliación, drawer y aplicación de stock.  
-**Riesgo:** mezcla persistencia local y central.  
-**No tocar todavía:** aplicación de stock y validación final.  
-**División futura:** resumen, filtros, lista, drawer y workflow.  
-**Orden:** bloques del drawer → lista → hook de workflow.
+**Responsabilidad actual:** listado, conciliaciÃ³n, drawer y aplicaciÃ³n de stock.
+**Riesgo:** mezcla persistencia local y central.
+**No tocar todavÃ­a:** aplicaciÃ³n de stock y validaciÃ³n final.
+**DivisiÃ³n futura:** resumen, filtros, lista, drawer y workflow.
+**Orden:** bloques del drawer â†’ lista â†’ hook de workflow.
 
-## 10.6 Mapa — `EditableFloorMap.tsx`
+## 10.6 Mapa â€” `EditableFloorMap.tsx`
 
-**Responsabilidad actual:** motor espacial reutilizable.  
-**Riesgo:** contrato público y matemáticas de viewport.  
-**No tocar todavía:** transformaciones y API completa.  
-**División futura:** viewport, capas, gestos, selección y coordenadas.  
-**Orden:** funciones puras → capas visuales → hooks de interacción.
+**Responsabilidad actual:** motor espacial reutilizable.
+**Riesgo:** contrato pÃºblico y matemÃ¡ticas de viewport.
+**No tocar todavÃ­a:** transformaciones y API completa.
+**DivisiÃ³n futura:** viewport, capas, gestos, selecciÃ³n y coordenadas.
+**Orden:** funciones puras â†’ capas visuales â†’ hooks de interacciÃ³n.
 
-## 10.7 Movimientos — `stock-movements.ts`
+## 10.7 Movimientos â€” `stock-movements.ts`
 
-**Responsabilidad actual:** ledger, consumos, reversiones, recepciones y consultas.  
-**Riesgo:** consistencia económica e idempotencia.  
-**No tocar todavía:** IDs, transacciones y reversiones.  
-**División futura:** IDs, unidades, consumos, recepciones, reversiones, aplicación y queries.  
-**Orden:** tipos/helpers → queries → comandos, siempre con pruebas.
+**Responsabilidad actual:** ledger, consumos, reversiones, recepciones y consultas.
+**Riesgo:** consistencia econÃ³mica e idempotencia.
+**No tocar todavÃ­a:** IDs, transacciones y reversiones.
+**DivisiÃ³n futura:** IDs, unidades, consumos, recepciones, reversiones, aplicaciÃ³n y queries.
+**Orden:** tipos/helpers â†’ queries â†’ comandos, siempre con pruebas.
 
-## 10.8 Productos Firestore — `products.ts`
+## 10.8 Productos Firestore â€” `products.ts`
 
-**Responsabilidad actual:** legacy, catálogo central, inventario, recetas y listeners.  
-**Riesgo:** ciclo de imports y consumidores numerosos.  
-**No tocar todavía:** contratos exportados y fallbacks.  
-**División futura:** tipos, mappers, repositorios legacy/central/inventario y listeners.  
-**Orden:** tipos → mappers → adapters compatibles → repositorios.
+**Responsabilidad actual:** legacy, catÃ¡logo central, inventario, recetas y listeners.
+**Riesgo:** ciclo de imports y consumidores numerosos.
+**No tocar todavÃ­a:** contratos exportados y fallbacks.
+**DivisiÃ³n futura:** tipos, mappers, repositorios legacy/central/inventario y listeners.
+**Orden:** tipos â†’ mappers â†’ adapters compatibles â†’ repositorios.
 
-## 10.9 Inventario — `inventario-stock-section.tsx`
+## 10.9 Inventario â€” `inventario-stock-section.tsx`
 
-**Responsabilidad actual:** lista, filtros, drafts, inspector y movimientos.  
-**Riesgo:** cambios sin guardar y fallback mock.  
-**No tocar todavía:** guardado y reconciliación de movimientos.  
-**División futura:** filtros, lista, inspector, editor y movimientos.  
-**Orden:** presentación → estado de draft → datos.
+**Responsabilidad actual:** lista, filtros, drafts, inspector y movimientos.
+**Riesgo:** cambios sin guardar y fallback mock.
+**No tocar todavÃ­a:** guardado y reconciliaciÃ³n de movimientos.
+**DivisiÃ³n futura:** filtros, lista, inspector, editor y movimientos.
+**Orden:** presentaciÃ³n â†’ estado de draft â†’ datos.
 
-## 10.10 Cocina legacy — `dashboard/cocina/page.tsx`
+## 10.10 Cocina legacy â€” `dashboard/cocina/page.tsx`
 
-**Responsabilidad actual:** runtime KDS independiente.  
-**Riesgo:** no está claro si es compatibilidad o ruta productiva.  
-**No tocar todavía:** cualquier modularización extensa.  
-**División futura:** solo si se confirma su continuidad.  
-**Orden:** medir uso → comparar funcionalidad → conservar o retirar.
+**Responsabilidad actual:** runtime KDS independiente.
+**Riesgo:** no estÃ¡ claro si es compatibilidad o ruta productiva.
+**No tocar todavÃ­a:** cualquier modularizaciÃ³n extensa.
+**DivisiÃ³n futura:** solo si se confirma su continuidad.
+**Orden:** medir uso â†’ comparar funcionalidad â†’ conservar o retirar.
 
 ---
 
-# 11. Modularización futura
+# 11. ModularizaciÃ³n futura
 
-## Fase 0 — Caracterización
+## Fase 0 â€” CaracterizaciÃ³n
 
 - Inventariar flujos.
 - Documentar invariantes.
 - Identificar propietarios de estado.
 - Capturar queries, eventos y efectos.
-- Crear pruebas de humo y caracterización.
+- Crear pruebas de humo y caracterizaciÃ³n.
 
-## Fase 1 — Dependencias y ciclos
+## Fase 1 â€” Dependencias y ciclos
 
 - Evitar barrels internos.
 - Extraer tipos sin dependencias.
-- Romper ciclos pequeños.
+- Romper ciclos pequeÃ±os.
 - Documentar eventos globales.
 
-## Fase 2 — Presentación
+## Fase 2 â€” PresentaciÃ³n
 
 - Extraer secciones puramente visuales.
 - Mantener estado y callbacks en el padre.
 - No cambiar Firestore.
 - No cambiar modelos.
 
-## Fase 3 — Helpers puros
+## Fase 3 â€” Helpers puros
 
 - Formateo.
-- Normalización.
-- Cálculos.
-- Clasificación.
+- NormalizaciÃ³n.
+- CÃ¡lculos.
+- ClasificaciÃ³n.
 - Transformaciones deterministas.
 
 Todos deben ser probables mediante entradas y salidas.
 
-## Fase 4 — Estado de interacción
+## Fase 4 â€” Estado de interacciÃ³n
 
-- Selección.
+- SelecciÃ³n.
 - Filtros.
 - Modales.
 - Historial visual.
 - Preferencias.
 
-No mover todavía la persistencia.
+No mover todavÃ­a la persistencia.
 
-## Fase 5 — Controladores de feature
+## Fase 5 â€” Controladores de feature
 
 - Definir ownership.
 - Agrupar comandos.
 - Exponer modelos estables.
 - Reducir prop drilling cuando exista evidencia.
 
-## Fase 6 — Repositories
+## Fase 6 â€” Repositories
 
 - Encapsular rutas y queries.
 - Separar listeners y comandos.
 - Mantener adapters compatibles.
-- Añadir observabilidad.
+- AÃ±adir observabilidad.
 
-## Fase 7 — Optimización Firestore
+## Fase 7 â€” OptimizaciÃ³n Firestore
 
 - Acotar listeners.
-- Revisar índices.
-- Paginar históricos.
+- Revisar Ã­ndices.
+- Paginar histÃ³ricos.
 - Verificar costes.
 
-Esta fase debe ser independiente de la modularización visual.
+Esta fase debe ser independiente de la modularizaciÃ³n visual.
 
-## Fase 8 — Retirada legacy
+## Fase 8 â€” Retirada legacy
 
 - Medir uso.
 - Migrar datos.
 - Mantener compatibilidad temporal.
 - Retirar lectores.
 - Retirar escritores.
-- Eliminar rutas únicamente al final.
+- Eliminar rutas Ãºnicamente al final.
 
 ---
 
 # 12. Reglas permanentes
 
 1. Nunca dividir estado antes de caracterizar el flujo.
-2. Nunca mover Firestore junto con UI en la misma misión.
+2. Nunca mover Firestore junto con UI en la misma misiÃ³n.
 3. Nunca reescribir TPV como parte de una limpieza.
-4. Nunca cambiar listeners durante modularización visual.
-5. Primero presentación.
-6. Después helpers puros.
-7. Después estado.
-8. Después persistencia.
-9. Nunca confiar en UI para autorización.
-10. Toda operación debe conservar `restaurantId`.
+4. Nunca cambiar listeners durante modularizaciÃ³n visual.
+5. Primero presentaciÃ³n.
+6. DespuÃ©s helpers puros.
+7. DespuÃ©s estado.
+8. DespuÃ©s persistencia.
+9. Nunca confiar en UI para autorizaciÃ³n.
+10. Toda operaciÃ³n debe conservar `restaurantId`.
 11. El tenant no puede cambiar durante un update.
 12. Los procesos de stock y pago deben ser idempotentes.
-13. Los errores de lectura no equivalen a “sin datos”.
+13. Los errores de lectura no equivalen a â€œsin datosâ€.
 14. Todo fallback legacy debe estar documentado.
 15. No crear nuevas dependencias sobre modelos legacy.
 16. Los barrels no deben utilizarse dentro de su propia feature.
 17. Todo evento global es un contrato.
 18. Todo listener debe tener cleanup y alcance.
-19. Una extracción debe mantener el mismo comportamiento observable.
-20. Una misión debe tener una única dimensión principal de cambio.
+19. Una extracciÃ³n debe mantener el mismo comportamiento observable.
+20. Una misiÃ³n debe tener una Ãºnica dimensiÃ³n principal de cambio.
 
 ---
 
@@ -1262,42 +1262,42 @@ Esta fase debe ser independiente de la modularización visual.
 
 ## Alcance
 
-- [ ] ¿Está definido el comportamiento que debe permanecer idéntico?
-- [ ] ¿Se conoce el propietario actual del estado?
-- [ ] ¿Se han identificado todos los consumidores?
-- [ ] ¿Se han identificado rutas legacy relacionadas?
-- [ ] ¿El cambio se limita a una responsabilidad?
+- [ ] Â¿EstÃ¡ definido el comportamiento que debe permanecer idÃ©ntico?
+- [ ] Â¿Se conoce el propietario actual del estado?
+- [ ] Â¿Se han identificado todos los consumidores?
+- [ ] Â¿Se han identificado rutas legacy relacionadas?
+- [ ] Â¿El cambio se limita a una responsabilidad?
 
 ## Datos y seguridad
 
-- [ ] ¿Se conserva `restaurantId`?
-- [ ] ¿Se mantienen roles y capabilities?
-- [ ] ¿No cambian Rules, modelos o queries accidentalmente?
-- [ ] ¿No se convierte un error en estado vacío?
+- [ ] Â¿Se conserva `restaurantId`?
+- [ ] Â¿Se mantienen roles y capabilities?
+- [ ] Â¿No cambian Rules, modelos o queries accidentalmente?
+- [ ] Â¿No se convierte un error en estado vacÃ­o?
 
 ## React
 
-- [ ] ¿Se conserva el orden de efectos relevante?
-- [ ] ¿Se mantienen dependencias de callbacks y memos?
-- [ ] ¿No se duplican providers?
-- [ ] ¿No se crean dos fuentes de verdad?
-- [ ] ¿Los listeners se limpian?
+- [ ] Â¿Se conserva el orden de efectos relevante?
+- [ ] Â¿Se mantienen dependencias de callbacks y memos?
+- [ ] Â¿No se duplican providers?
+- [ ] Â¿No se crean dos fuentes de verdad?
+- [ ] Â¿Los listeners se limpian?
 
 ## Compatibilidad
 
-- [ ] ¿Los exports públicos permanecen compatibles?
-- [ ] ¿Los eventos mantienen nombre y payload?
-- [ ] ¿Los deep links siguen funcionando?
-- [ ] ¿Responsive y UX táctil siguen equivalentes?
+- [ ] Â¿Los exports pÃºblicos permanecen compatibles?
+- [ ] Â¿Los eventos mantienen nombre y payload?
+- [ ] Â¿Los deep links siguen funcionando?
+- [ ] Â¿Responsive y UX tÃ¡ctil siguen equivalentes?
 
-## Validación
+## ValidaciÃ³n
 
 - [ ] TypeScript.
 - [ ] Build.
 - [ ] `git diff --check`.
-- [ ] Pruebas de caracterización.
+- [ ] Pruebas de caracterizaciÃ³n.
 - [ ] Smoke test de rutas afectadas.
-- [ ] Revisión humana proporcional al riesgo.
+- [ ] RevisiÃ³n humana proporcional al riesgo.
 
 ---
 
@@ -1306,13 +1306,13 @@ Esta fase debe ser independiente de la modularización visual.
 - [ ] Probar apertura de mesa.
 - [ ] Probar mesa con pedido existente.
 - [ ] Probar grupo de mesas.
-- [ ] Añadir producto simple.
-- [ ] Añadir producto con modificadores.
+- [ ] AÃ±adir producto simple.
+- [ ] AÃ±adir producto con modificadores.
 - [ ] Editar cantidad y nota.
 - [ ] Enviar comanda.
 - [ ] Marchar primeros, segundos y postres.
-- [ ] Cancelar línea pendiente.
-- [ ] Cancelar línea enviada con permisos válidos.
+- [ ] Cancelar lÃ­nea pendiente.
+- [ ] Cancelar lÃ­nea enviada con permisos vÃ¡lidos.
 - [ ] Compensar producto.
 - [ ] Solicitar cuenta.
 - [ ] Dividir por partes iguales.
@@ -1324,40 +1324,40 @@ Esta fase debe ser independiente de la modularización visual.
 - [ ] Emitir factura.
 - [ ] Imprimir preticket y ticket.
 - [ ] Cerrar mesa.
-- [ ] Confirmar que no se duplican pagos ni líneas.
-- [ ] Confirmar recuperación tras recarga.
+- [ ] Confirmar que no se duplican pagos ni lÃ­neas.
+- [ ] Confirmar recuperaciÃ³n tras recarga.
 - [ ] Confirmar comportamiento offline/inestable.
 - [ ] Validar presencia de operador.
-- [ ] Validar reservas y presión de mesa.
-- [ ] Validar móvil y tablet.
-- [ ] No cambiar queries y UI en la misma misión.
+- [ ] Validar reservas y presiÃ³n de mesa.
+- [ ] Validar mÃ³vil y tablet.
+- [ ] No cambiar queries y UI en la misma misiÃ³n.
 
 ---
 
 # 15. Checklist antes de tocar Firestore
 
-- [ ] Identificar colección y ruta exacta.
-- [ ] Confirmar si es canónica o legacy.
+- [ ] Identificar colecciÃ³n y ruta exacta.
+- [ ] Confirmar si es canÃ³nica o legacy.
 - [ ] Identificar todos los lectores.
 - [ ] Identificar todos los escritores.
 - [ ] Confirmar `restaurantId`.
 - [ ] Confirmar tenant inmutable.
 - [ ] Confirmar rol/capability.
 - [ ] Revisar Rules locales y desplegadas.
-- [ ] Determinar índice necesario.
-- [ ] Estimar documentos leídos y frecuencia.
-- [ ] Definir límite, fecha o estado del listener.
+- [ ] Determinar Ã­ndice necesario.
+- [ ] Estimar documentos leÃ­dos y frecuencia.
+- [ ] Definir lÃ­mite, fecha o estado del listener.
 - [ ] Definir comportamiento ante error.
 - [ ] Verificar cleanup.
 - [ ] Verificar idempotencia.
-- [ ] Verificar transacción o batch cuando corresponda.
+- [ ] Verificar transacciÃ³n o batch cuando corresponda.
 - [ ] Revisar compatibilidad `restaurants/restaurantes`.
 - [ ] Revisar compatibilidad `users/usuarios`.
 - [ ] Revisar compatibilidad `tables/mesas`.
 - [ ] Revisar `orders.items[]/orderItems`.
 - [ ] Probar con al menos dos tenants.
 - [ ] Probar roles distintos.
-- [ ] No desplegar Rules sin emulador y revisión humana.
+- [ ] No desplegar Rules sin emulador y revisiÃ³n humana.
 
 ---
 
@@ -1370,19 +1370,19 @@ Esta fase debe ser independiente de la modularización visual.
 - [ ] Identificar movimiento origen.
 - [ ] Confirmar ID idempotente.
 - [ ] Verificar stock anterior y posterior.
-- [ ] Probar recepción parcial.
+- [ ] Probar recepciÃ³n parcial.
 - [ ] Probar consumo de receta.
 - [ ] Probar consumo de modificadores.
-- [ ] Probar cancelación y reversión.
+- [ ] Probar cancelaciÃ³n y reversiÃ³n.
 - [ ] Probar reintento.
 - [ ] Confirmar que no se duplica el movimiento.
 - [ ] Confirmar mismo tenant en producto y movimiento.
 - [ ] Revisar fallbacks legacy.
-- [ ] No sustituir errores por mocks en producción.
+- [ ] No sustituir errores por mocks en producciÃ³n.
 - [ ] Comparar ledger y stock actual.
 - [ ] Revisar impacto en escandallos.
 - [ ] Revisar timeline.
-- [ ] Revisión humana obligatoria si cambia una transacción.
+- [ ] RevisiÃ³n humana obligatoria si cambia una transacciÃ³n.
 
 ---
 
@@ -1390,101 +1390,101 @@ Esta fase debe ser independiente de la modularización visual.
 
 - [ ] Validar Cocina.
 - [ ] Validar Barra.
-- [ ] Validar Coctelería.
+- [ ] Validar CoctelerÃ­a.
 - [ ] Validar Sala.
-- [ ] Confirmar filtros por estación.
-- [ ] Confirmar destino de cada línea.
-- [ ] Confirmar agrupación por mesa.
-- [ ] Confirmar agrupación por pase.
+- [ ] Confirmar filtros por estaciÃ³n.
+- [ ] Confirmar destino de cada lÃ­nea.
+- [ ] Confirmar agrupaciÃ³n por mesa.
+- [ ] Confirmar agrupaciÃ³n por pase.
 - [ ] Confirmar urgencia y SLA.
-- [ ] Probar `sent → prepared`.
-- [ ] Probar `prepared → served`.
-- [ ] Probar líneas `waiting_march`.
+- [ ] Probar `sent â†’ prepared`.
+- [ ] Probar `prepared â†’ served`.
+- [ ] Probar lÃ­neas `waiting_march`.
 - [ ] Probar cantidades divididas.
 - [ ] Probar extras y notas.
-- [ ] Probar líneas canceladas.
+- [ ] Probar lÃ­neas canceladas.
 - [ ] Confirmar que pedidos terminales no aparecen.
-- [ ] Confirmar que el update conserva las demás líneas.
+- [ ] Confirmar que el update conserva las demÃ¡s lÃ­neas.
 - [ ] Confirmar mesas listas para cerrar.
-- [ ] Confirmar eventos de estado de estación.
+- [ ] Confirmar eventos de estado de estaciÃ³n.
 - [ ] Confirmar sonido y feedback.
 - [ ] Confirmar cleanup del listener.
-- [ ] Validar pantalla táctil.
+- [ ] Validar pantalla tÃ¡ctil.
 - [ ] Comparar con rutas legacy si siguen activas.
 
 ---
 
-# 18. Próximas épicas
+# 18. PrÃ³ximas Ã©picas
 
-## Prioridad 0 — Seguridad multi-tenant
+## Prioridad 0 â€” Seguridad multi-tenant
 
 Objetivo:
 
 - proteger pertenencia y roles;
 - endurecer capabilities;
 - verificar Rules desplegadas;
-- añadir pruebas multi-tenant.
+- aÃ±adir pruebas multi-tenant.
 
-No debe mezclarse con modularización.
+No debe mezclarse con modularizaciÃ³n.
 
-## Prioridad 1 — Red de seguridad TPV
+## Prioridad 1 â€” Red de seguridad TPV
 
 Objetivo:
 
 - mapa contractual;
-- pruebas de caracterización;
+- pruebas de caracterizaciÃ³n;
 - smoke tests repetibles;
 - inventario de eventos y listeners.
 
-## Prioridad 2 — Coste y alcance de listeners
+## Prioridad 2 â€” Coste y alcance de listeners
 
 Objetivo:
 
-- limitar pedidos y pagos históricos;
+- limitar pedidos y pagos histÃ³ricos;
 - definir ventanas operativas;
-- revisar índices;
+- revisar Ã­ndices;
 - medir lecturas.
 
-## Prioridad 3 — Modularización TPV, fase exterior
+## Prioridad 3 â€” ModularizaciÃ³n TPV, fase exterior
 
 Objetivo:
 
-- extraer presentación y helpers puros;
+- extraer presentaciÃ³n y helpers puros;
 - mantener estado y persistencia intactos.
 
-## Prioridad 4 — Editor de espacios
+## Prioridad 4 â€” Editor de espacios
 
 Objetivo:
 
 - separar chrome e inspectores;
-- caracterizar geometría;
+- caracterizar geometrÃ­a;
 - mantener guardado transaccional.
 
-## Prioridad 5 — Productos
+## Prioridad 5 â€” Productos
 
 Objetivo:
 
 - dividir editor por dominios;
 - estabilizar draft y mappers;
-- conservar sincronización y publicación.
+- conservar sincronizaciÃ³n y publicaciÃ³n.
 
-## Prioridad 6 — KDS
+## Prioridad 6 â€” KDS
 
 Objetivo:
 
-- centralizar normalización;
-- separar modelo derivado de presentación;
+- centralizar normalizaciÃ³n;
+- separar modelo derivado de presentaciÃ³n;
 - mantener acciones Firestore.
 
-## Prioridad 7 — Inventario y Recepciones
+## Prioridad 7 â€” Inventario y Recepciones
 
 Objetivo:
 
 - separar lista, inspector y drawer;
 - probar ledger y reversiones;
-- dividir repositories solo después.
+- dividir repositories solo despuÃ©s.
 
-## Prioridad 8 — Ciclos y límites de dominio
+## Prioridad 8 â€” Ciclos y lÃ­mites de dominio
 
 Objetivo:
 
@@ -1492,61 +1492,61 @@ Objetivo:
 - reducir barrels internos;
 - aislar tipos y helpers puros.
 
-## Prioridad 9 — Consolidación legacy
+## Prioridad 9 â€” ConsolidaciÃ³n legacy
 
 Objetivo:
 
-- auditar tráfico;
-- definir canónicos;
+- auditar trÃ¡fico;
+- definir canÃ³nicos;
 - migrar progresivamente;
-- retirar rutas y modelos únicamente con evidencia.
+- retirar rutas y modelos Ãºnicamente con evidencia.
 
 ---
 
-# Apéndice A — Orden seguro de trabajo
+# ApÃ©ndice A â€” Orden seguro de trabajo
 
 ```text
 Comprender
-  ↓
+  â†“
 Caracterizar
-  ↓
+  â†“
 Probar
-  ↓
-Extraer presentación
-  ↓
+  â†“
+Extraer presentaciÃ³n
+  â†“
 Extraer helpers puros
-  ↓
+  â†“
 Definir ownership del estado
-  ↓
+  â†“
 Extraer controladores
-  ↓
+  â†“
 Separar repositories
-  ↓
+  â†“
 Optimizar Firestore
-  ↓
+  â†“
 Retirar legacy
 ```
 
-# Apéndice B — Glosario
+# ApÃ©ndice B â€” Glosario
 
-**Tenant:** restaurante o conjunto de restaurantes al que pertenece un dato.  
-**Scope:** alcance de una lectura, operación o vista.  
-**Runtime operativo:** pantalla que participa en servicio en tiempo real.  
-**KDS:** Kitchen Display System; sistema de producción y salida.  
-**Repository:** capa que encapsula persistencia y queries.  
-**Domain service:** lógica de negocio independiente de UI.  
-**Feature controller:** propietario del estado coordinado de un módulo.  
-**Listener:** suscripción en tiempo real a Firestore.  
-**Ledger:** registro inmutable o trazable de movimientos.  
-**Idempotencia:** capacidad de repetir una operación sin duplicar su efecto.  
-**Legacy:** compatibilidad anterior todavía activa; no significa automáticamente código muerto.  
-**Caracterización:** pruebas y documentación que capturan el comportamiento actual antes de cambiar estructura.
+**Tenant:** restaurante o conjunto de restaurantes al que pertenece un dato.
+**Scope:** alcance de una lectura, operaciÃ³n o vista.
+**Runtime operativo:** pantalla que participa en servicio en tiempo real.
+**KDS:** Kitchen Display System; sistema de producciÃ³n y salida.
+**Repository:** capa que encapsula persistencia y queries.
+**Domain service:** lÃ³gica de negocio independiente de UI.
+**Feature controller:** propietario del estado coordinado de un mÃ³dulo.
+**Listener:** suscripciÃ³n en tiempo real a Firestore.
+**Ledger:** registro inmutable o trazable de movimientos.
+**Idempotencia:** capacidad de repetir una operaciÃ³n sin duplicar su efecto.
+**Legacy:** compatibilidad anterior todavÃ­a activa; no significa automÃ¡ticamente cÃ³digo muerto.
+**CaracterizaciÃ³n:** pruebas y documentaciÃ³n que capturan el comportamiento actual antes de cambiar estructura.
 
-# Apéndice C — Regla de decisión
+# ApÃ©ndice C â€” Regla de decisiÃ³n
 
 Ante cualquier duda:
 
-1. preservar operación;
+1. preservar operaciÃ³n;
 2. preservar tenant;
 3. preservar dinero y stock;
 4. preservar contratos;
@@ -1554,4 +1554,4 @@ Ante cualquier duda:
 6. documentar la incertidumbre;
 7. posponer el cambio antes que asumir.
 
-Esta guía debe actualizarse cuando cambie un límite arquitectónico, un modelo canónico, un evento global o una regla permanente. Los cambios puramente visuales o locales no requieren modificarla.
+Esta guÃ­a debe actualizarse cuando cambie un lÃ­mite arquitectÃ³nico, un modelo canÃ³nico, un evento global o una regla permanente. Los cambios puramente visuales o locales no requieren modificarla.
