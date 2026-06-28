@@ -14967,13 +14967,6 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           : 8
                         : 16
                     }
-                    viewportFitVisualScale={
-                      embeddedInOperacion
-                        ? cartaHeaderMobile
-                          ? 1.1
-                          : 1.18
-                        : 1.12
-                    }
                     viewportFitMode="content"
                     viewportFitElements={mapViewportFitElementsForTpv}
                     viewportFitZones={[]}
