@@ -28,6 +28,8 @@ export type FloorPlan = {
   isDefault?: boolean;
   /** Si es `false`, el plano no aparece en TPV / picker operativo (legacy sin campo = activo). */
   active?: boolean;
+  /** Si es `false`, el plano no aparece como sala operativa en TPV (legacy sin campo = visible). */
+  showInTpv?: boolean;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -235,6 +237,8 @@ function mapDocToFloorPlan(d: QueryDocumentSnapshot): FloorPlan {
       : undefined;
   const active =
     typeof data.active === "boolean" ? data.active : undefined;
+  const showInTpv =
+    typeof data.showInTpv === "boolean" ? data.showInTpv : undefined;
   const createdAt =
     typeof data.createdAt === "number" && Number.isFinite(data.createdAt)
       ? data.createdAt
@@ -253,6 +257,7 @@ function mapDocToFloorPlan(d: QueryDocumentSnapshot): FloorPlan {
     ...(sortOrder !== undefined ? { sortOrder } : {}),
     ...(isDefault !== undefined ? { isDefault } : {}),
     ...(active !== undefined ? { active } : {}),
+    ...(showInTpv !== undefined ? { showInTpv } : {}),
     ...(createdAt !== undefined ? { createdAt } : {}),
     ...(updatedAt !== undefined ? { updatedAt } : {}),
   };
@@ -278,6 +283,7 @@ export async function createFloorPlan(
       name: n,
       slug: slugifyFloorPlanName(n),
       active: true,
+      showInTpv: true,
       sortOrder: maxSort + 1,
       width,
       height,
