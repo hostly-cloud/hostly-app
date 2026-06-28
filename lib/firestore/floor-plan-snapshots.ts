@@ -279,6 +279,25 @@ function snapshotCollectionRef(restaurantId: string) {
   return collection(db, "restaurants", assertRestaurantId(restaurantId), SUBCOLLECTION);
 }
 
+/** Firestore rechaza `undefined`; omite claves opcionales (incl. objetos anidados). */
+function removeUndefinedFields<T>(value: T): T {
+  if (value === undefined) {
+    return value;
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => removeUndefinedFields(item)) as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (entry === undefined) continue;
+    out[key] = removeUndefinedFields(entry);
+  }
+  return out as T;
+}
+
 function snapshotDocRef(restaurantId: string, snapshotId: string) {
   return doc(
     db,
@@ -414,13 +433,16 @@ export async function createFloorPlanSnapshot(
   const payload = buildFloorPlanSnapshotPayload(restaurantId, input);
   try {
     const ref = doc(snapshotCollectionRef(restaurantId));
-    await setDoc(ref, {
-      ...(payload as unknown as DocumentData),
-      id: ref.id,
-      restaurantId: payload.restaurantId,
-      /** Server truth para auditoría; `createdAt`/`updatedAt` numéricos siguen el brief. */
-      serverSavedAt: serverTimestamp(),
-    } as DocumentData);
+    await setDoc(
+      ref,
+      removeUndefinedFields({
+        ...(payload as unknown as DocumentData),
+        id: ref.id,
+        restaurantId: payload.restaurantId,
+        /** Server truth para auditoría; `createdAt`/`updatedAt` numéricos siguen el brief. */
+        serverSavedAt: serverTimestamp(),
+      }) as DocumentData,
+    );
     return ref.id;
   } catch (e) {
     rethrowWithMessage(e);

@@ -282,19 +282,30 @@ function buildElementWritePayload(
   const { payload, clearZone } = op;
   const docPayload: DocumentData = {
     id: op.id,
-    restaurantId: "restaurantId" in payload ? payload.restaurantId : undefined,
     name: payload.name,
     type: payload.type,
     tableShape: payload.tableShape,
     seats: payload.seats,
     x: payload.x,
     y: payload.y,
-    width: payload.width,
-    height: payload.height,
     isActive: true,
     locked: payload.locked === true,
     updatedAt: serverTimestamp(),
   };
+
+  if ("restaurantId" in payload && typeof payload.restaurantId === "string") {
+    const restaurantId = payload.restaurantId.trim();
+    if (restaurantId) {
+      docPayload.restaurantId = restaurantId;
+    }
+  }
+
+  if (typeof payload.width === "number" && Number.isFinite(payload.width)) {
+    docPayload.width = payload.width;
+  }
+  if (typeof payload.height === "number" && Number.isFinite(payload.height)) {
+    docPayload.height = payload.height;
+  }
 
   if (mode === "create") {
     docPayload.status = TABLE_MAP_STATUS_FREE;
