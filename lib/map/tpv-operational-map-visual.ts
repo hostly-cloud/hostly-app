@@ -5,7 +5,7 @@ import {
 } from "@/lib/firestore/tables";
 
 /** Factor de escala del layout TPV operativo (solo render; no muta Firestore). */
-export const TPV_OPERATIONAL_MAP_VISUAL_SCALE = 1.25;
+export const TPV_OPERATIONAL_MAP_VISUAL_SCALE = 1.4;
 
 function finiteNumber(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n);

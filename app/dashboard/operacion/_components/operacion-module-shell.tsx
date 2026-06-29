@@ -124,9 +124,9 @@ export function OperacionModuleShell({
       <div style={contentStyle}>{children}</div>
       <style>{`
         .hostly-operation-shell[data-operation-module="tpv"] .hostly-operation-topbar {
-          min-height: 30px;
-          padding: 4px 10px;
-          gap: 6px;
+          min-height: 26px;
+          padding: 2px 8px;
+          gap: 4px;
           border-bottom-color: rgba(148, 163, 184, 0.12);
           background: rgba(247, 252, 255, 0.55);
         }

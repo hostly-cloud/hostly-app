@@ -10253,45 +10253,81 @@ export function CartaPageContent({
   overflow: auto !important;
 }
 
-.carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"]) .carta-map-page-fill {
-  padding-left: 8px !important;
-  padding-right: 8px !important;
-}
-
 .carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
   .carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
 .carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
   .carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
-  height: 36px !important;
-  min-height: 36px !important;
-  padding-left: 4px !important;
-  padding-right: 4px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+}
+
+.carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
+  .carta-map-top-strip-main
+  .carta-map-summary-pill,
+.carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
+  .carta-map-top-strip-main
+  .carta-map-summary-pill--interactive {
+  min-height: 24px !important;
+  height: 24px !important;
+  max-height: 24px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  font-size: 10px !important;
 }
 
 .carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
   .carta-map-floor-plan-cluster
   .carta-tpv-floor-plan-seg-pill {
-  min-height: 30px !important;
-  height: 30px !important;
-  max-height: 30px !important;
+  min-height: 26px !important;
+  height: 26px !important;
+  max-height: 26px !important;
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+  font-size: 10px !important;
+}
+
+.carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
+  .carta-map-floor-plan-cluster
+  .carta-tpv-layout-active-badge {
+  min-height: 24px !important;
+  max-height: 24px !important;
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+  font-size: 9px !important;
+}
+
+.carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
+  .carta-map-summary-status {
+  font-size: 9px !important;
+  max-width: 72px !important;
 }
 
 .carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
   .carta-my-tables-map-scope {
-  padding: 2px 6px 0 !important;
+  padding: 0 4px 0 !important;
 }
 
 .carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"])
   .carta-my-tables-map-scope
   .carta-table-map-zone-btn {
-  min-height: 22px !important;
-  height: 22px !important;
+  min-height: 20px !important;
+  height: 20px !important;
   font-size: 10px !important;
+  padding-left: 7px !important;
+  padding-right: 7px !important;
 }
 
 .carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"]) .carta-table-map-grid {
-  padding: 8px;
-  border-radius: 14px;
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.carta-root[data-carta-embedded="true"]:not([data-carta-mobile="true"]) .carta-map-page-fill {
+  padding-left: 4px !important;
+  padding-right: 4px !important;
 }
 
 .carta-root .hostly-page-header {
@@ -10447,15 +10483,15 @@ export function CartaPageContent({
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell.carta-map-summary-block,
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-metrics-strip-host.carta-map-summary-shell--critical.carta-map-summary-block {
-  position: absolute !important;
-  top: 2px !important;
-  left: 2px !important;
-  right: 2px !important;
-  z-index: 12 !important;
-  height: 24px !important;
-  min-height: 24px !important;
-  max-height: 24px !important;
-  padding: 1px 2px !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  z-index: 2 !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  padding: 0 2px !important;
   align-items: center !important;
   overflow: hidden !important;
   gap: 2px !important;
@@ -10463,7 +10499,23 @@ export function CartaPageContent({
   border-radius: 0 !important;
   border-width: 0 0 1px !important;
   box-shadow: none !important;
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-my-tables-map-scope {
+  padding: 0 4px !important;
+  gap: 3px !important;
+}
+
+.carta-root[data-carta-embedded="true"][data-carta-mobile="true"]
+  .carta-my-tables-map-scope
+  .carta-table-map-zone-btn {
+  min-height: 18px !important;
+  height: 18px !important;
+  max-height: 18px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  font-size: 9px !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-line {
@@ -10523,12 +10575,12 @@ export function CartaPageContent({
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-table-map-zone-btn {
   flex: 0 0 auto !important;
   max-width: none !important;
-  height: 20px !important;
-  min-height: 20px !important;
-  max-height: 20px !important;
-  padding-left: 5px !important;
-  padding-right: 5px !important;
-  font-size: 8.5px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+  font-size: 8px !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-top-strip-main .carta-map-waiter-compact {
@@ -10553,12 +10605,12 @@ export function CartaPageContent({
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster .carta-tpv-floor-plan-trigger {
-  max-width: min(148px, 30vw) !important;
-  min-height: 20px !important;
-  height: 20px !important;
-  max-height: 20px !important;
-  padding: 1px 6px 1px 5px !important;
-  gap: 3px !important;
+  max-width: min(132px, 28vw) !important;
+  min-height: 18px !important;
+  height: 18px !important;
+  max-height: 18px !important;
+  padding: 0 5px 0 4px !important;
+  gap: 2px !important;
 }
 
 .carta-root[data-carta-embedded="true"][data-carta-mobile="true"] .carta-map-floor-plan-cluster .carta-tpv-floor-plan-trigger-label {
@@ -14560,12 +14612,12 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   }
                   style={{
                     boxSizing: "border-box",
-                    paddingLeft: 6,
-                    paddingRight: 6,
+                    paddingLeft: embeddedInOperacion ? 4 : 6,
+                    paddingRight: embeddedInOperacion ? 4 : 6,
                     flexShrink: 0,
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 6,
+                    gap: embeddedInOperacion ? 4 : 6,
                     border:
                       mapSummaryAlertLevel === "critical"
                         ? "1px solid rgba(201, 99, 91, 0.38)"
