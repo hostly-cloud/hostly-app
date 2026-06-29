@@ -131,8 +131,11 @@ import {
   resolveFloorPlanCanvasSize,
   type FloorPlan,
 } from "@/lib/firestore/floorPlans";
-import { isOperationalViewportElement } from "@/lib/map/operational-viewport";
-import { resolveTpvOperationalTableVisualLayout } from "@/lib/map/tpv-operational-table-visual";
+import {
+  scaleTpvOperationalMapElements,
+  scaleTpvOperationalPlanSize,
+  TPV_OPERATIONAL_MAP_VISUAL_SCALE,
+} from "@/lib/map/tpv-operational-map-visual";
 import { listenZonesByRestaurantId, type Zone } from "@/lib/firestore/zones";
 import { getUsersByRestaurant } from "@/lib/firestore/users";
 import {
@@ -7002,16 +7005,41 @@ export function CartaPageContent({
     return tablesVisibleOnMap;
   }, [mapTablesForChipFilter, tablesVisibleOnMap]);
 
+  const tpvOperationalMapElementsForRender = useMemo(() => {
+    if (!embeddedInOperacion) return mapElementsForTpvRender;
+    return scaleTpvOperationalMapElements(
+      mapElementsForTpvRender,
+      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
+    );
+  }, [embeddedInOperacion, mapElementsForTpvRender]);
+
+  const tpvOperationalPlanSizeForRender = useMemo(() => {
+    if (!embeddedInOperacion) return selectedTpvFloorPlanSize;
+    return scaleTpvOperationalPlanSize(
+      selectedTpvFloorPlanSize,
+      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
+    );
+  }, [embeddedInOperacion, selectedTpvFloorPlanSize]);
+
+  const tpvOperationalViewportFitElements = useMemo(() => {
+    if (!embeddedInOperacion) return mapViewportFitElementsForTpv;
+    return scaleTpvOperationalMapElements(
+      mapViewportFitElementsForTpv,
+      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
+    );
+  }, [embeddedInOperacion, mapViewportFitElementsForTpv]);
+
   const tpvMapAutoFitKey = useMemo(() => {
     const planKey = selectedTpvFloorPlanId ?? "legacy";
     return [
       planKey,
-      selectedTpvFloorPlanSize.width,
-      selectedTpvFloorPlanSize.height,
-      mapElementsForTpvRender.length,
+      embeddedInOperacion ? TPV_OPERATIONAL_MAP_VISUAL_SCALE : 1,
+      tpvOperationalPlanSizeForRender.width,
+      tpvOperationalPlanSizeForRender.height,
+      tpvOperationalMapElementsForRender.length,
       planElementsForTpvMap.length,
       zonesForOperationalMapRender.length,
-      mapElementsForTpvRender
+      tpvOperationalMapElementsForRender
         .map((element) =>
           [
             element.id,
@@ -7043,8 +7071,9 @@ export function CartaPageContent({
     ].join("::");
   }, [
     selectedTpvFloorPlanId,
-    selectedTpvFloorPlanSize,
-    mapElementsForTpvRender,
+    embeddedInOperacion,
+    tpvOperationalPlanSizeForRender,
+    tpvOperationalMapElementsForRender,
     planElementsForTpvMap,
     zonesForOperationalMapRender,
   ]);
@@ -14968,7 +14997,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         : 16
                     }
                     viewportFitMode="content"
-                    viewportFitElements={mapViewportFitElementsForTpv}
+                    viewportFitElements={tpvOperationalViewportFitElements}
                     viewportFitZones={[]}
                     viewportFitZoomMax={
                       embeddedInOperacion
@@ -14978,8 +15007,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         : 1.78
                     }
                     mapAutoFitKey={tpvMapAutoFitKey}
-                    planSize={selectedTpvFloorPlanSize}
-                    elements={mapElementsForTpvRender}
+                    planSize={tpvOperationalPlanSizeForRender}
+                    elements={tpvOperationalMapElementsForRender}
                     zones={zonesForOperationalMapRender}
                     renderElement={(ctx) => {
                       const tableId = ctx.elementId;
@@ -15005,25 +15034,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         return null;
                       }
                       const stableTable = tablesById[tableId] ?? ctx.element;
-                      let mapLayoutX = ctx.mapLayoutX;
-                      let mapLayoutY = ctx.mapLayoutY;
-                      let mapTileWidth = ctx.mapTileWidth;
-                      let mapTileHeight = ctx.mapTileHeight;
-                      if (
-                        embeddedInOperacion &&
-                        isOperationalViewportElement(ctx.element.type)
-                      ) {
-                        const tpvVisual = resolveTpvOperationalTableVisualLayout(
-                          mapLayoutX,
-                          mapLayoutY,
-                          mapTileWidth,
-                          mapTileHeight,
-                        );
-                        mapLayoutX = tpvVisual.mapLayoutX;
-                        mapLayoutY = tpvVisual.mapLayoutY;
-                        mapTileWidth = tpvVisual.mapTileWidth;
-                        mapTileHeight = tpvVisual.mapTileHeight;
-                      }
+                      const mapLayoutX = ctx.mapLayoutX;
+                      const mapLayoutY = ctx.mapLayoutY;
+                      const mapTileWidth = ctx.mapTileWidth;
+                      const mapTileHeight = ctx.mapTileHeight;
                       const priorityTable =
                         mapTablesForChipFilter.find(
                           (t) => String(t.id).trim() === tableId,
