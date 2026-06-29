@@ -222,6 +222,8 @@ export type EditableFloorMapProps = {
   viewportFitMode?: "plan" | "content";
   /** Tope de escala para el auto-fit. Permite al TPV llenar mejor el espacio útil. */
   viewportFitZoomMax?: number;
+  /** Alineación del encuadre automático (`start` = anclar arriba-izquierda del contenido). */
+  viewportFitAlign?: "center" | "start";
   /** Solo modo editor: zonas conocidas (para color / badge). */
   zones?: EditableFloorMapZone[];
   /** Solo modo editor: resaltar zona (opacidad atenuada en el resto). */
@@ -405,6 +407,8 @@ export type FitBoundsToViewportOptions = {
   paddingPx: number;
   maxZoom: number;
   fitZoomMax: number;
+  /** `start` ancla el contenido arriba-izquierda; `center` centra el cluster (default). */
+  align?: "center" | "start";
 };
 
 const DEFAULT_PLAN_BOUNDS: PlanContentBounds = {
@@ -509,6 +513,7 @@ export function fitBoundsToViewport(
   const paddingPx = options.paddingPx ?? VIEW_PADDING_PX;
   const maxZoom = options.maxZoom ?? ZOOM_MAX;
   const fitZoomMax = options.fitZoomMax ?? FIT_ZOOM_MAX;
+  const align = options.align ?? "center";
 
   const vw = Math.max(1, viewportWidth);
   const vh = Math.max(1, viewportHeight);
@@ -522,10 +527,17 @@ export function fitBoundsToViewport(
   const zoom = Math.min(naturalFit, fitZoomMax, maxZoom);
   const z = Number.isFinite(zoom) && zoom > 0 ? Math.max(zoom, 0.06) : 0.06;
 
-  const pan = {
-    x: vw / 2 - bounds.centerX * z,
-    y: vh / 2 - bounds.centerY * z,
-  };
+  const inset = paddingPx / 2;
+  const pan =
+    align === "start"
+      ? {
+          x: inset - bounds.minX * z,
+          y: inset - bounds.minY * z,
+        }
+      : {
+          x: vw / 2 - bounds.centerX * z,
+          y: vh / 2 - bounds.centerY * z,
+        };
   return { zoom: z, pan };
 }
 
@@ -719,6 +731,7 @@ export function EditableFloorMap({
   viewportFitZones,
   viewportFitMode = "plan",
   viewportFitZoomMax,
+  viewportFitAlign = "center",
   zones,
   zoneHighlight = "all",
   editingZones = false,
@@ -880,14 +893,22 @@ export function EditableFloorMap({
       paddingPx: fitPaddingPx,
       maxZoom: Math.max(ZOOM_MAX, fitZoomMax),
       fitZoomMax,
+      align: viewportFitAlign,
     });
     if (mapLayoutEmphasis) {
       const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
       z = clamp(viewportFitMode === "content" ? z : z * 1.085, 0.06, cap);
-      p = {
-        x: vw / 2 - bounds.centerX * z,
-        y: vh / 2 - bounds.centerY * z,
-      };
+      const inset = fitPaddingPx / 2;
+      p =
+        viewportFitAlign === "start"
+          ? {
+              x: inset - bounds.minX * z,
+              y: inset - bounds.minY * z,
+            }
+          : {
+              x: vw / 2 - bounds.centerX * z,
+              y: vh / 2 - bounds.centerY * z,
+            };
     }
     setZoom(z);
     setPan(p);
@@ -897,6 +918,7 @@ export function EditableFloorMap({
     fitZoomMax,
     mapLayoutEmphasis,
     planSize,
+    viewportFitAlign,
     viewportFitMode,
   ]);
 

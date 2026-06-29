@@ -132,8 +132,12 @@ import {
   type FloorPlan,
 } from "@/lib/firestore/floorPlans";
 import {
+  filterTpvOperationalViewportFitElements,
   scaleTpvOperationalMapElements,
   scaleTpvOperationalPlanSize,
+  TPV_OPERATIONAL_FIT_PADDING_PX,
+  TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP,
+  TPV_OPERATIONAL_FIT_ZOOM_MAX_MOBILE,
   TPV_OPERATIONAL_MAP_VISUAL_SCALE,
 } from "@/lib/map/tpv-operational-map-visual";
 import { listenZonesByRestaurantId, type Zone } from "@/lib/firestore/zones";
@@ -7023,8 +7027,11 @@ export function CartaPageContent({
 
   const tpvOperationalViewportFitElements = useMemo(() => {
     if (!embeddedInOperacion) return mapViewportFitElementsForTpv;
-    return scaleTpvOperationalMapElements(
+    const fitSource = filterTpvOperationalViewportFitElements(
       mapViewportFitElementsForTpv,
+    );
+    return scaleTpvOperationalMapElements(
+      fitSource,
       TPV_OPERATIONAL_MAP_VISUAL_SCALE,
     );
   }, [embeddedInOperacion, mapViewportFitElementsForTpv]);
@@ -15043,10 +15050,11 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     }
                     viewportFitPaddingPx={
                       embeddedInOperacion
-                        ? cartaHeaderMobile
-                          ? 0
-                          : 8
+                        ? TPV_OPERATIONAL_FIT_PADDING_PX
                         : 16
+                    }
+                    viewportFitAlign={
+                      embeddedInOperacion ? "start" : "center"
                     }
                     viewportFitMode="content"
                     viewportFitElements={tpvOperationalViewportFitElements}
@@ -15054,8 +15062,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     viewportFitZoomMax={
                       embeddedInOperacion
                         ? cartaHeaderMobile
-                          ? 2.35
-                          : 1.96
+                          ? TPV_OPERATIONAL_FIT_ZOOM_MAX_MOBILE
+                          : TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP
                         : 1.78
                     }
                     mapAutoFitKey={tpvMapAutoFitKey}
