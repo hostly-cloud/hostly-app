@@ -224,6 +224,18 @@ export type EditableFloorMapProps = {
   viewportFitZoomMax?: number;
   /** Alineación del encuadre automático (`start` = anclar arriba-izquierda del contenido). */
   viewportFitAlign?: "center" | "start";
+  /**
+   * Desplazamiento (px de pantalla) aplicado al pan tras el encuadre. Solo UX
+   * (p. ej. recentrar el restaurante en TPV); no altera datos ni zoom.
+   */
+  viewportFitOffsetX?: number;
+  viewportFitOffsetY?: number;
+  /**
+   * Multiplicador aplicado al zoom final del encuadre (solo UX). Permite que una
+   * superficie (p. ej. TPV operativo) aproveche más pantalla sin tocar el pan ni
+   * el algoritmo de fit. Default `1` = sin efecto.
+   */
+  viewportFitZoomMultiplier?: number;
   /** Solo modo editor: zonas conocidas (para color / badge). */
   zones?: EditableFloorMapZone[];
   /** Solo modo editor: resaltar zona (opacidad atenuada en el resto). */
@@ -732,6 +744,9 @@ export function EditableFloorMap({
   viewportFitMode = "plan",
   viewportFitZoomMax,
   viewportFitAlign = "center",
+  viewportFitOffsetX = 0,
+  viewportFitOffsetY = 0,
+  viewportFitZoomMultiplier = 1,
   zones,
   zoneHighlight = "all",
   editingZones = false,
@@ -889,26 +904,43 @@ export function EditableFloorMap({
       mapFitZonesRef.current,
       viewportFitMode === "plan" ? planSize : null,
     );
-    let { zoom: z, pan: p } = fitBoundsToViewport(bounds, vw, vh, {
+    let { zoom: z } = fitBoundsToViewport(bounds, vw, vh, {
       paddingPx: fitPaddingPx,
       maxZoom: Math.max(ZOOM_MAX, fitZoomMax),
       fitZoomMax,
       align: viewportFitAlign,
     });
-    if (mapLayoutEmphasis) {
+    // `mapLayoutEmphasis` solo ajusta el zoom (lienzo "denso" del editor en modo
+    // plan); el pan se calcula UNA sola vez con el zoom final para evitar dobles
+    // cálculos y que `viewportFitOffsetX/Y` sea predecible.
+    if (mapLayoutEmphasis && viewportFitMode !== "content") {
       const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
-      z = clamp(viewportFitMode === "content" ? z : z * 1.085, 0.06, cap);
-      const inset = fitPaddingPx / 2;
-      p =
-        viewportFitAlign === "start"
-          ? {
-              x: inset - bounds.minX * z,
-              y: inset - bounds.minY * z,
-            }
-          : {
-              x: vw / 2 - bounds.centerX * z,
-              y: vh / 2 - bounds.centerY * z,
-            };
+      z = clamp(z * 1.085, 0.06, cap);
+    }
+    // Multiplicador visual de zoom (solo UX, p. ej. TPV operativo). No altera el
+    // pan: la fórmula de pan ya consume el zoom final, así el contenido crece
+    // manteniendo el mismo centrado.
+    if (
+      viewportFitZoomMultiplier !== 1 &&
+      Number.isFinite(viewportFitZoomMultiplier) &&
+      viewportFitZoomMultiplier > 0
+    ) {
+      const zoomCeil = Math.max(ZOOM_MAX, fitZoomMax);
+      z = clamp(z * viewportFitZoomMultiplier, 0.06, zoomCeil);
+    }
+    const inset = fitPaddingPx / 2;
+    let p =
+      viewportFitAlign === "start"
+        ? {
+            x: inset - bounds.minX * z,
+            y: inset - bounds.minY * z,
+          }
+        : {
+            x: vw / 2 - bounds.centerX * z,
+            y: vh / 2 - bounds.centerY * z,
+          };
+    if (viewportFitOffsetX !== 0 || viewportFitOffsetY !== 0) {
+      p = { x: p.x + viewportFitOffsetX, y: p.y + viewportFitOffsetY };
     }
     setZoom(z);
     setPan(p);
@@ -919,6 +951,9 @@ export function EditableFloorMap({
     mapLayoutEmphasis,
     planSize,
     viewportFitAlign,
+    viewportFitOffsetX,
+    viewportFitOffsetY,
+    viewportFitZoomMultiplier,
     viewportFitMode,
   ]);
 

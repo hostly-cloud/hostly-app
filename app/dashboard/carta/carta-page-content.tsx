@@ -135,9 +135,12 @@ import {
   filterTpvOperationalViewportFitElements,
   scaleTpvOperationalMapElements,
   scaleTpvOperationalPlanSize,
+  TPV_OPERATIONAL_FIT_OFFSET_X,
+  TPV_OPERATIONAL_FIT_OFFSET_Y,
   TPV_OPERATIONAL_FIT_PADDING_PX,
   TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP,
   TPV_OPERATIONAL_FIT_ZOOM_MAX_MOBILE,
+  TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER,
   TPV_OPERATIONAL_MAP_VISUAL_SCALE,
 } from "@/lib/map/tpv-operational-map-visual";
 import { listenZonesByRestaurantId, type Zone } from "@/lib/firestore/zones";
@@ -15053,8 +15056,17 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         ? TPV_OPERATIONAL_FIT_PADDING_PX
                         : 16
                     }
-                    viewportFitAlign={
-                      embeddedInOperacion ? "start" : "center"
+                    viewportFitAlign="center"
+                    viewportFitOffsetX={
+                      embeddedInOperacion ? TPV_OPERATIONAL_FIT_OFFSET_X : 0
+                    }
+                    viewportFitOffsetY={
+                      embeddedInOperacion ? TPV_OPERATIONAL_FIT_OFFSET_Y : 0
+                    }
+                    viewportFitZoomMultiplier={
+                      embeddedInOperacion
+                        ? TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER
+                        : 1
                     }
                     viewportFitMode="content"
                     viewportFitElements={tpvOperationalViewportFitElements}

@@ -15,6 +15,20 @@ export const TPV_OPERATIONAL_FIT_PADDING_PX = 4;
 export const TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP = 3.4;
 export const TPV_OPERATIONAL_FIT_ZOOM_MAX_MOBILE = 3.8;
 
+/**
+ * Offset de pan TPV-only aplicado tras el encuadre centrado. Recentra el
+ * restaurante para que no quede pegado a una esquina. Solo UX; no muta datos.
+ */
+export const TPV_OPERATIONAL_FIT_OFFSET_X = 0;
+export const TPV_OPERATIONAL_FIT_OFFSET_Y = 0;
+
+/**
+ * Multiplicador del zoom final SOLO en TPV operativo, para que el restaurante
+ * aproveche más pantalla sin tocar el algoritmo de fit ni el pan. Subir a
+ * 1.18 / 1.20 / 1.25 si sigue quedando pequeño.
+ */
+export const TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER = 1.2;
+
 const TPV_VIEWPORT_FIT_ELEMENT_TYPES: PlanElementType[] = [
   "table",
   "sunbed",
