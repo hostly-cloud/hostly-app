@@ -27,7 +27,7 @@ export const TPV_OPERATIONAL_FIT_OFFSET_Y = 0;
  * aproveche más pantalla sin tocar el algoritmo de fit ni el pan. Subir a
  * 1.18 / 1.20 / 1.25 si sigue quedando pequeño.
  */
-export const TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER = 1.2;
+export const TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER = 1.0;
 
 const TPV_VIEWPORT_FIT_ELEMENT_TYPES: PlanElementType[] = [
   "table",
