@@ -112,3 +112,14 @@ export function createEmptyProductQuickCreateDraft(): ProductQuickCreateDraft {
     precio: "",
   };
 }
+
+/** Alta continua: limpia nombre y precio; mantiene categoría y herencias. */
+export function resetProductQuickCreateDraftKeepingCategory(
+  draft: ProductQuickCreateDraft,
+): ProductQuickCreateDraft {
+  return {
+    nombre: "",
+    precio: "",
+    categoriaCartaId: draft.categoriaCartaId,
+  };
+}

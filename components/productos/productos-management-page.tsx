@@ -174,7 +174,13 @@ import {
   ProductFormEscandalloSummaryCard,
 } from "@/components/productos/product-form-escandallo-modal";
 import { ProductFormDrawerZone, ProductFormDrawerSubgroup } from "@/components/productos/product-form-drawer-section";
+import { ProductQuickCreateDrawer } from "@/components/productos/product-quick-create-drawer";
+import { useProductQuickCreate } from "@/components/productos/use-product-quick-create";
 import type { ProductDocument } from "@/lib/firestore/products";
+import type {
+  ProductQuickCreateDraft,
+  ProductQuickCreateInheritedDraft,
+} from "@/lib/productos/product-category-inheritance";
 import {
   PLATOS_CHANGED_EVENT,
   TIPOS_PRODUCTO_VENTA,
@@ -1412,6 +1418,7 @@ export default function ProductosManagementPage({
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderBusyId, setReorderBusyId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [editFocus, setEditFocus] = useState<ProductEditFocus | null>(null);
   const routingFocusRef = useRef<HTMLDivElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1459,6 +1466,24 @@ export default function ProductosManagementPage({
   const [operationStations, setOperationStations] = useState<
     OperationStationDocument[]
   >([]);
+  const productFormSubmitMessages = useMemo(
+    () => ({
+      errorNombre: t("carta.errorNombre"),
+      errorPrecio: t("carta.errorPrecio"),
+      errorCategoriaTipo: t("carta.errorCategoriaTipo"),
+    }),
+    [t],
+  );
+  const quickCreate = useProductQuickCreate({
+    restaurantId: operationalRestaurantId,
+    cartaCategorias,
+    operationStations,
+    productFamilies,
+    modifierGroups,
+    inventoryProducts: [],
+    isCentralCatalog,
+    messages: productFormSubmitMessages,
+  });
   /** Fetch único (sin listener): paridad resolver en tooltip Routing. */
   const [productionStations, setProductionStations] = useState<
     ProductionStationDocument[]
@@ -2808,6 +2833,39 @@ export default function ProductosManagementPage({
     setFormError(null);
   }, [resetDraftImageState]);
 
+  const closeQuickCreate = useCallback(() => {
+    setQuickCreateOpen(false);
+    quickCreate.resetDraft();
+  }, [quickCreate]);
+
+  const openAdvancedCreateFromQuickDraft = useCallback(
+    (quickDraft: ProductQuickCreateDraft, inherited: ProductQuickCreateInheritedDraft) => {
+      setQuickCreateOpen(false);
+      setEditingId(null);
+      setDraftNombre(quickDraft.nombre);
+      setDraftPrecio(quickDraft.precio);
+      setDraftCategoriaCartaId(quickDraft.categoriaCartaId);
+      setDraftCartaMenuFamiliaId(inherited.cartaMenuFamiliaId);
+      setDraftTipo(inherited.tipoVenta);
+      setDraftProductCompositionType(inherited.productCompositionType);
+      setDraftActivo(inherited.activo);
+      setDraftOperationStationSelect(inherited.operationStationSelect);
+      setDraftCourse(inherited.course);
+      setDraftProductFamilyId(inherited.productFamilyId);
+      setDraftModifierGroupIds([...inherited.modifierGroupIds]);
+      setDraftDesc("");
+      setDraftFoto("");
+      resetDraftImageState();
+      setDraftRecipeEnabled(false);
+      setDraftRecipeRows([]);
+      setFormError(null);
+      setEditFocus(null);
+      quickCreate.resetDraft();
+      setFormOpen(true);
+    },
+    [quickCreate, resetDraftImageState],
+  );
+
   const handleDraftImageFileChange = useCallback(async (file: File | null) => {
     setDraftImagePreviewUrl((prev) => {
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
@@ -2926,8 +2984,7 @@ export default function ProductosManagementPage({
     lineHeight: 1.1,
   };
 
-  function openCreate() {
-    if (isLegacyReadOnly) return;
+  function resetNewProductDraftState() {
     setEditingId(null);
     setDraftNombre("");
     setDraftTipo("plato");
@@ -2945,8 +3002,18 @@ export default function ProductosManagementPage({
     setDraftModifierGroupIds([]);
     setDraftRecipeEnabled(false);
     setDraftRecipeRows([]);
-    setFormError(null);
     setEditFocus(null);
+  }
+
+  function openCreate() {
+    if (isLegacyReadOnly) return;
+    setFormError(null);
+    if (isCentralCatalog) {
+      quickCreate.resetDraft();
+      setQuickCreateOpen(true);
+      return;
+    }
+    resetNewProductDraftState();
     setFormOpen(true);
   }
 
@@ -3047,11 +3114,7 @@ export default function ProductosManagementPage({
       cartaCategorias,
       modifierGroups,
       preventiveValidation: draftPreventiveValidation,
-      messages: {
-        errorNombre: t("carta.errorNombre"),
-        errorPrecio: t("carta.errorPrecio"),
-        errorCategoriaTipo: t("carta.errorCategoriaTipo"),
-      },
+      messages: productFormSubmitMessages,
     });
 
     if (!validation.ok) {
@@ -3251,19 +3314,27 @@ export default function ProductosManagementPage({
       setCartaFamilias(fams);
       setModifierFamilies(mods);
       const newCat = list.find((c) => c.id === res.item.id) ?? res.item;
-      setDraftCategoriaCartaId(newCat.id);
-      setDraftCartaMenuFamiliaId(
-        newCat.cartaFamiliaId?.trim() ? newCat.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
-      );
-      const familyPatch = buildProductFamilyPatchFromCategoryId(newCat.id, list);
-      if (familyPatch.clearProductFamily) {
-        setDraftProductFamilyId(CATEGORY_PRODUCT_FAMILY_NONE);
-      } else if (familyPatch.productFamilyId) {
-        setDraftProductFamilyId(familyPatch.productFamilyId);
+      if (quickCreateOpen) {
+        quickCreate.selectCategory(newCat.id);
+      } else {
+        setDraftCategoriaCartaId(newCat.id);
+        setDraftCartaMenuFamiliaId(
+          newCat.cartaFamiliaId?.trim() ? newCat.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
+        );
+        const familyPatch = buildProductFamilyPatchFromCategoryId(newCat.id, list);
+        if (familyPatch.clearProductFamily) {
+          setDraftProductFamilyId(CATEGORY_PRODUCT_FAMILY_NONE);
+        } else if (familyPatch.productFamilyId) {
+          setDraftProductFamilyId(familyPatch.productFamilyId);
+        }
       }
       setAddCategoryOpen(false);
       setAddCatName("");
-      setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
+      setAddCatType(
+        defaultCartaCategoriaTipoForTipoProducto(
+          quickCreateOpen ? quickCreate.inheritedDraft.tipoVenta : draftTipo,
+        ),
+      );
       setAddCatCartaFamiliaId(undefined);
     }
   }
@@ -3880,6 +3951,30 @@ export default function ProductosManagementPage({
 
   const sharedProductModals = (
     <>
+      {quickCreateOpen ? (
+        <ProductQuickCreateDrawer
+          open={quickCreateOpen}
+          onClose={closeQuickCreate}
+          quickCreate={quickCreate}
+          t={t}
+          onCreated={() => {
+            /* El listado se actualiza vía listener; feedback inline en el drawer. */
+          }}
+          onOpenAdvancedConfig={openAdvancedCreateFromQuickDraft}
+          onOpenAddCategory={() => {
+            setAddCatType(
+              defaultCartaCategoriaTipoForTipoProducto(quickCreate.inheritedDraft.tipoVenta),
+            );
+            const menuFamId = quickCreate.inheritedDraft.cartaMenuFamiliaId;
+            setAddCatCartaFamiliaId(
+              menuFamId && menuFamId !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED
+                ? menuFamId
+                : undefined,
+            );
+            setAddCategoryOpen(true);
+          }}
+        />
+      ) : null}
       {formOpen ? (
         <div
           className="hostly-product-form-drawer-backdrop"

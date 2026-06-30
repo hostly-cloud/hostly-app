@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveProductFamilyFromSelectValue } from "@/lib/carta/category-product-family";
 import { cartaCategoriasForProductForm } from "@/lib/carta-categorias/filter-for-tipo-producto";
 import type { CartaCategoria } from "@/lib/carta-categorias/types";
@@ -13,6 +13,7 @@ import { buildInventoryProductLookupMap, productDocumentsToInventoryLookup } fro
 import type { ProductDocument } from "@/lib/firestore/products";
 import {
   createEmptyProductQuickCreateDraft,
+  resetProductQuickCreateDraftKeepingCategory,
   resolveCategorySelectionInheritance,
   resolveQuickCreateInheritedDraft,
   type ProductQuickCreateDraft,
@@ -24,6 +25,13 @@ import {
   type ProductFormSubmitMessages,
 } from "@/lib/productos/product-form-submit-payload";
 import { persistCentralCatalogProduct } from "@/lib/productos/persist-central-catalog-product";
+
+export type ProductQuickCreateSubmitMode = "continue" | "close";
+
+export type ProductQuickCreateSubmitResult = {
+  productId: string;
+  mode: ProductQuickCreateSubmitMode;
+};
 
 export type UseProductQuickCreateArgs = {
   restaurantId: string;
@@ -43,13 +51,18 @@ export type UseProductQuickCreateResult = {
   categoriasForForm: CartaCategoria[];
   saving: boolean;
   error: string | null;
+  successFlash: string | null;
+  canSubmit: boolean;
   setNombre: (value: string) => void;
   setPrecio: (value: string) => void;
   selectCategory: (categoryId: string | null) => void;
   resetDraft: () => void;
-  /** Preparado para la siguiente iteración; devuelve null si central no está activo. */
-  submitQuickCreate: () => Promise<string | null>;
+  submitQuickCreate: (
+    mode?: ProductQuickCreateSubmitMode,
+  ) => Promise<ProductQuickCreateSubmitResult | null>;
 };
+
+const QUICK_CREATE_SUCCESS_FLASH_MS = 2200;
 
 export function useProductQuickCreate(
   args: UseProductQuickCreateArgs,
@@ -59,6 +72,32 @@ export function useProductQuickCreate(
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successFlash, setSuccessFlash] = useState<string | null>(null);
+  const successFlashTimerRef = useRef<number | null>(null);
+
+  const clearSuccessFlash = useCallback(() => {
+    if (successFlashTimerRef.current != null) {
+      window.clearTimeout(successFlashTimerRef.current);
+      successFlashTimerRef.current = null;
+    }
+    setSuccessFlash(null);
+  }, []);
+
+  const showSuccessFlash = useCallback(
+    (message: string) => {
+      setSuccessFlash(message);
+      if (successFlashTimerRef.current != null) {
+        window.clearTimeout(successFlashTimerRef.current);
+      }
+      successFlashTimerRef.current = window.setTimeout(() => {
+        setSuccessFlash(null);
+        successFlashTimerRef.current = null;
+      }, QUICK_CREATE_SUCCESS_FLASH_MS);
+    },
+    [],
+  );
+
+  useEffect(() => () => clearSuccessFlash(), [clearSuccessFlash]);
 
   const inheritedDraft = useMemo(
     () => resolveQuickCreateInheritedDraft(draft.categoriaCartaId, args.cartaCategorias),
@@ -130,20 +169,47 @@ export function useProductQuickCreate(
     [formCoreDraft, args.productFamilies, args.operationStations, args.isCentralCatalog],
   );
 
+  const canSubmit = useMemo(() => {
+    if (saving || !args.isCentralCatalog) return false;
+    const validation = validateProductFormCoreFields(formCoreDraft, {
+      cartaCategorias: args.cartaCategorias,
+      modifierGroups: args.modifierGroups,
+      preventiveValidation,
+      messages: args.messages,
+    });
+    return validation.ok;
+  }, [
+    saving,
+    args.isCentralCatalog,
+    formCoreDraft,
+    args.cartaCategorias,
+    args.modifierGroups,
+    preventiveValidation,
+    args.messages,
+  ]);
+
   const resetDraft = useCallback(() => {
     setDraft(createEmptyProductQuickCreateDraft());
+    setError(null);
+    clearSuccessFlash();
+  }, [clearSuccessFlash]);
+
+  const resetDraftForContinuousCreate = useCallback(() => {
+    setDraft((prev) => resetProductQuickCreateDraftKeepingCategory(prev));
     setError(null);
   }, []);
 
   const setNombre = useCallback((value: string) => {
     setDraft((prev) => ({ ...prev, nombre: value }));
     setError(null);
-  }, []);
+    clearSuccessFlash();
+  }, [clearSuccessFlash]);
 
   const setPrecio = useCallback((value: string) => {
     setDraft((prev) => ({ ...prev, precio: value }));
     setError(null);
-  }, []);
+    clearSuccessFlash();
+  }, [clearSuccessFlash]);
 
   const selectCategory = useCallback(
     (categoryId: string | null) => {
@@ -156,72 +222,88 @@ export function useProductQuickCreate(
         categoriaCartaId: inheritance.categoriaCartaId,
       }));
       setError(null);
+      clearSuccessFlash();
     },
-    [args.cartaCategorias],
+    [args.cartaCategorias, clearSuccessFlash],
   );
 
-  const submitQuickCreate = useCallback(async (): Promise<string | null> => {
-    if (!args.isCentralCatalog) {
-      setError("Alta rápida disponible solo con catálogo central.");
-      return null;
-    }
-
-    const validation = validateProductFormCoreFields(formCoreDraft, {
-      cartaCategorias: args.cartaCategorias,
-      modifierGroups: args.modifierGroups,
-      preventiveValidation,
-      messages: args.messages,
-    });
-
-    if (!validation.ok) {
-      setError(validation.error);
-      return null;
-    }
-
-    const centralInput = buildCentralInputFromProductFormDraft(
-      formCoreDraft,
-      validation,
-      {
-        operationStations: args.operationStations,
-        productFamilies: args.productFamilies,
-        cartaCategorias: args.cartaCategorias,
-      },
-    );
-
-    setSaving(true);
-    setError(null);
-    try {
-      const result = await persistCentralCatalogProduct({
-        restaurantId: args.restaurantId,
-        centralInput,
-        inventoryLookupMap,
-        recipeEnabled: false,
-        recipeRows: [],
-      });
-
-      if (!result.ok) {
-        setError(result.error);
+  const submitQuickCreate = useCallback(
+    async (
+      mode: ProductQuickCreateSubmitMode = "continue",
+    ): Promise<ProductQuickCreateSubmitResult | null> => {
+      if (!args.isCentralCatalog) {
+        setError("Alta rápida disponible solo con catálogo central.");
         return null;
       }
 
-      resetDraft();
-      return result.productId;
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    args.isCentralCatalog,
-    args.restaurantId,
-    args.cartaCategorias,
-    args.modifierGroups,
-    args.operationStations,
-    args.productFamilies,
-    formCoreDraft,
-    preventiveValidation,
-    inventoryLookupMap,
-    args.messages,
-    resetDraft,
-  ]);
+      const validation = validateProductFormCoreFields(formCoreDraft, {
+        cartaCategorias: args.cartaCategorias,
+        modifierGroups: args.modifierGroups,
+        preventiveValidation,
+        messages: args.messages,
+      });
+
+      if (!validation.ok) {
+        setError(validation.error);
+        return null;
+      }
+
+      const centralInput = buildCentralInputFromProductFormDraft(
+        formCoreDraft,
+        validation,
+        {
+          operationStations: args.operationStations,
+          productFamilies: args.productFamilies,
+          cartaCategorias: args.cartaCategorias,
+        },
+      );
+
+      setSaving(true);
+      setError(null);
+      clearSuccessFlash();
+      try {
+        const result = await persistCentralCatalogProduct({
+          restaurantId: args.restaurantId,
+          centralInput,
+          inventoryLookupMap,
+          recipeEnabled: false,
+          recipeRows: [],
+        });
+
+        if (!result.ok) {
+          setError(result.error);
+          return null;
+        }
+
+        if (mode === "continue") {
+          resetDraftForContinuousCreate();
+          showSuccessFlash("✓ Producto creado");
+        } else {
+          resetDraft();
+        }
+
+        return { productId: result.productId, mode };
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      args.isCentralCatalog,
+      args.restaurantId,
+      args.cartaCategorias,
+      args.modifierGroups,
+      args.operationStations,
+      args.productFamilies,
+      formCoreDraft,
+      preventiveValidation,
+      inventoryLookupMap,
+      args.messages,
+      resetDraft,
+      resetDraftForContinuousCreate,
+      showSuccessFlash,
+      clearSuccessFlash,
+    ],
+  );
 
   return {
     draft,
@@ -229,6 +311,8 @@ export function useProductQuickCreate(
     categoriasForForm,
     saving,
     error,
+    successFlash,
+    canSubmit,
     setNombre,
     setPrecio,
     selectCategory,
