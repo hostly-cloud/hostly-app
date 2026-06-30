@@ -5,7 +5,7 @@ import ModulePageShell from "@/components/module-page-shell";
 import { HostlyButton, HostlyCard } from "@/components/ui/hostly";
 
 type ConfigCartaWorkbenchProps = {
-  title: string;
+  title: ReactNode;
   description?: string;
   children?: ReactNode;
   /** Acciones alineadas a la derecha del título (p. ej. importar / nuevo). */
@@ -13,6 +13,7 @@ type ConfigCartaWorkbenchProps = {
   lockViewport?: boolean;
   lockViewportFillParent?: boolean;
   fitLaptopViewport?: boolean;
+  visualVariant?: "productos";
 };
 
 /** Tarjeta / panel estándar en Carta · Configuración. */
@@ -75,7 +76,10 @@ export function ConfigCartaWorkbench({
   lockViewport,
   lockViewportFillParent,
   fitLaptopViewport,
+  visualVariant,
 }: ConfigCartaWorkbenchProps) {
+  const isProductosVariant = visualVariant === "productos";
+
   return (
     <ModulePageShell
       title={title}
@@ -85,19 +89,38 @@ export function ConfigCartaWorkbench({
       operationalFocus
       denseWorkbench
       denseInventoryHeader
+      headerActionsPlacement="below"
       lockViewport={lockViewport}
       lockViewportFillParent={lockViewportFillParent}
       fitLaptopViewport={fitLaptopViewport}
       shellSurface="configLight"
-      backHref="/dashboard"
-      backLabel="Dashboard"
+      hideBackLink
+      hideLogoutButton
       headerRight={
         headerActions ? (
-          <div className="hostly-carta-config-header-actions">{headerActions}</div>
+          <div
+            className={[
+              "hostly-carta-config-header-actions",
+              isProductosVariant ? "hostly-carta-config-header-actions--productos" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {headerActions}
+          </div>
         ) : undefined
       }
     >
-      <div className="hostly-carta-config-stack">{children}</div>
+      <div
+        className={[
+          "hostly-carta-config-stack",
+          isProductosVariant ? "hostly-carta-config-stack--productos" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {children}
+      </div>
     </ModulePageShell>
   );
 }

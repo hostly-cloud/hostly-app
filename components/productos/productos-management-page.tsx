@@ -10,7 +10,6 @@ import { ProductCatalogHierarchyContext } from "@/components/productos/product-c
 import { ProductMenuFamilyInheritedHintCard } from "@/components/productos/product-menu-family-inherited-hint-card";
 import { CategoryProductFamilySelect } from "@/components/carta/category-product-family-select";
 import {
-  buildCategoryProductFamilyFields,
   CATEGORY_PRODUCT_FAMILY_NONE,
   resolveProductFamilyFromSelectValue,
 } from "@/lib/carta/category-product-family";
@@ -50,11 +49,19 @@ import {
   cartaCategoriasForProductForm,
   categoryRequiresManualTipoVenta,
   defaultCartaCategoriaTipoForTipoProducto,
-  isCartaCategoriaCompatibleWithTipoProducto,
 } from "@/lib/carta-categorias/filter-for-tipo-producto";
 import {
   buildProductFamilyPatchFromCategoryId,
 } from "@/lib/carta/product-category-family-resolver";
+import {
+  defaultOperationStationSelectForTipoVenta,
+} from "@/lib/productos/product-central-draft";
+import { resolveCategorySelectionInheritance } from "@/lib/productos/product-category-inheritance";
+import {
+  buildCentralInputFromProductFormDraft,
+  validateProductFormCoreFields,
+} from "@/lib/productos/product-form-submit-payload";
+import { persistCentralCatalogProduct } from "@/lib/productos/persist-central-catalog-product";
 import {
   matchesCatalogFoodDrinkSegment,
   productFamilyDenormFromPlato,
@@ -63,7 +70,6 @@ import {
 } from "@/lib/carta/product-family-list-filter";
 import type { CartaCategoria, CartaCategoriaTipo, CartaFamilia } from "@/lib/carta-categorias/types";
 import { CARTA_MENU_FAMILIA_FILTER_UNASSIGNED, isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
-import { selectValueToPreparationArea } from "@/lib/carta/operational-station-options";
 import {
   productCatalogCourseFromSelectValue,
   productCatalogCourseSelectValue,
@@ -78,7 +84,6 @@ import {
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
 import {
   evaluateProductFormPreventiveValidation,
-  getProductFormSubmitBlockingErrors,
   PRODUCT_FORM_ACTIVE_NO_FAMILY_WARNING,
 } from "@/lib/carta/product-form-preventive-validation";
 import { buildProductMenuFamilyInheritedHintView } from "@/lib/productos/product-menu-family-inherited-hint";
@@ -106,7 +111,6 @@ import { sanitizeModifierGroupIdsForSave } from "@/lib/modifiers/effective-produ
 import {
   buildProductStationPatchFromSelectValue,
   isLegacyOperationStationSelectValue,
-  isNoneOperationStationSelectValue,
   operationStationSelectValueFromProduct,
   resolveOperationStationFromSelectValue,
 } from "@/lib/operacion/product-operation-station";
@@ -140,8 +144,6 @@ import {
   bulkUpdateCentralProductsDestination,
   bulkUpdateCentralProductsCategory,
   bulkUpdateCentralProductsFamily,
-  clearCentralProductImage,
-  createCentralProduct,
   deleteCentralProductPermanently,
   disableCentralProduct,
   formatCentralCatalogWriteError,
@@ -150,10 +152,6 @@ import {
   setCentralProductPublication,
   reorderCentralProductsInCategory,
   swapCentralProductSortOrderInCategory,
-  updateCentralProduct,
-  updateCentralProductRecipe,
-  uploadAndAttachCentralProductImage,
-  type CentralOperationalProductInput,
 } from "@/lib/firestore/products";
 import { createStableImageFile } from "@/lib/firebase/product-image-storage";
 import {
@@ -162,7 +160,6 @@ import {
   isRecipeInventoryUnit,
   normalizeProductRecipe,
   normalizedProductRecipeToFirestore,
-  normalizedProductRecipeToWriteInput,
   productDocumentsToInventoryLookup,
 } from "@/lib/recipes/product-recipe-helpers";
 import type { InventoryProductLookup } from "@/lib/recipes/product-recipe-types";
@@ -530,10 +527,6 @@ function labelTipoVenta(t: (key: string) => string, tipo: TipoProductoVenta): st
   return t(TIPO_VENTA_I18N[tipo]);
 }
 
-function defaultOperationStationSelectForTipoVenta(tipo: TipoProductoVenta): string {
-  return tipo === "bebida" ? "default-bar" : "default-kitchen";
-}
-
 function operationStationLabelFromSelect(
   selectValue: string,
   stations: readonly OperationStationDocument[],
@@ -761,94 +754,6 @@ function getPublicationFlags(p: PlatoCarta): {
   if (!isActive) return { isActive, enCarta, status: "inactive" };
   if (enCarta) return { isActive, enCarta, status: "onMenu" };
   return { isActive, enCarta, status: "offMenu" };
-}
-
-function resolveProductFamilyFirestoreFromDraft(args: {
-  productFamilySelect: string;
-  productFamilies: readonly ProductFamilyDocument[];
-}): Pick<
-  CentralOperationalProductInput,
-  "productFamilyId" | "productFamilyName" | "productFamilyType"
-> {
-  const selected = resolveProductFamilyFromSelectValue(
-    args.productFamilySelect,
-    args.productFamilies,
-  );
-  if (selected) {
-    const fields = buildCategoryProductFamilyFields(selected);
-    return {
-      productFamilyId: fields.productFamilyId ?? null,
-      productFamilyName: fields.productFamilyName ?? null,
-      productFamilyType: fields.productFamilyType ?? null,
-    };
-  }
-  return {
-    productFamilyId: null,
-    productFamilyName: null,
-    productFamilyType: null,
-  };
-}
-
-function buildCentralInputFromDraft(args: {
-  nombre: string;
-  operationStationSelect: string;
-  operationStations: readonly OperationStationDocument[];
-  cartaCategorias: readonly CartaCategoria[];
-  draftTipo: TipoProductoVenta;
-  draftProductCompositionType: ProductCompositionType;
-  categoria: string;
-  categoriaCartaIdPatch?: string;
-  precioVenta: number;
-  draftActivo: boolean;
-  draftDesc: string;
-  draftCourse: string;
-  productFamilySelect: string;
-  productFamilies: readonly ProductFamilyDocument[];
-  existingIsActive?: boolean;
-  modifierGroupIds?: string[] | null;
-}): CentralOperationalProductInput {
-  const categoryId = args.categoriaCartaIdPatch ?? null;
-  const familyFirestore = resolveProductFamilyFirestoreFromDraft({
-    productFamilySelect: args.productFamilySelect,
-    productFamilies: args.productFamilies,
-  });
-
-  const base = {
-    name: args.nombre,
-    categoryName: args.categoria.trim() || "General",
-    categoryId,
-    price: args.precioVenta,
-    tipoVenta: args.draftTipo,
-    productCompositionType: normalizeProductCompositionType(
-      args.draftProductCompositionType,
-    ),
-    visibleOnMenu: args.draftActivo,
-    active: args.existingIsActive !== false,
-    course: productCatalogCourseFromSelectValue(args.draftCourse),
-    ...(args.draftDesc.trim() ? { description: args.draftDesc.trim() } : {}),
-    ...familyFirestore,
-    ...(args.modifierGroupIds !== undefined ? { modifierGroupIds: args.modifierGroupIds } : {}),
-  };
-
-  const resolved = resolveOperationStationFromSelectValue(
-    args.operationStationSelect,
-    args.operationStations,
-  );
-  if (resolved) {
-    return {
-      ...base,
-      operationStationId: resolved.id,
-      operationStationName: resolved.name,
-      operationStationType: resolved.type,
-    };
-  }
-  if (isNoneOperationStationSelectValue(args.operationStationSelect)) {
-    return { ...base, operationStationId: null };
-  }
-  return {
-    ...base,
-    preparationArea: selectValueToPreparationArea(args.operationStationSelect),
-  };
 }
 
 function ProductRowPublicationCell({
@@ -2768,19 +2673,10 @@ export default function ProductosManagementPage({
 
   const applyCategorySelection = useCallback(
     (id: string | null) => {
-      setDraftCategoriaCartaId(id);
-      if (!id) return;
-      const c = cartaCategorias.find((x) => x.id === id);
-      if (!c) return;
-      setDraftCartaMenuFamiliaId(
-        c.cartaFamiliaId?.trim() ? c.cartaFamiliaId.trim() : CARTA_MENU_FAMILIA_FILTER_UNASSIGNED,
-      );
-      const familyPatch = buildProductFamilyPatchFromCategoryId(id, cartaCategorias);
-      if (familyPatch.clearProductFamily) {
-        setDraftProductFamilyId(CATEGORY_PRODUCT_FAMILY_NONE);
-      } else if (familyPatch.productFamilyId) {
-        setDraftProductFamilyId(familyPatch.productFamilyId);
-      }
+      const inheritance = resolveCategorySelectionInheritance(id, cartaCategorias);
+      setDraftCategoriaCartaId(inheritance.categoriaCartaId);
+      setDraftCartaMenuFamiliaId(inheritance.cartaMenuFamiliaId);
+      setDraftProductFamilyId(inheritance.productFamilyId);
     },
     [cartaCategorias],
   );
@@ -3131,61 +3027,46 @@ export default function ProductosManagementPage({
     setFormOpen(true);
   }
 
-  function parsePrecio(s: string): number | null {
-    const x = s.trim().replace(",", ".");
-    if (x === "") return null;
-    const n = Number(x);
-    return Number.isFinite(n) && n >= 0 ? n : null;
-  }
-
   async function submitForm() {
     setFormError(null);
-    const nombre = draftNombre.trim();
-    if (!nombre) {
-      setFormError(t("carta.errorNombre"));
+    const formCoreDraft = {
+      nombre: draftNombre,
+      precioInput: draftPrecio,
+      categoriaCartaId: draftCategoriaCartaId,
+      draftTipo,
+      draftActivo,
+      draftOperationStationSelect,
+      draftCourse,
+      draftProductFamilyId,
+      draftProductCompositionType,
+      draftDesc,
+      draftModifierGroupIds,
+    };
+
+    const validation = validateProductFormCoreFields(formCoreDraft, {
+      cartaCategorias,
+      modifierGroups,
+      preventiveValidation: draftPreventiveValidation,
+      messages: {
+        errorNombre: t("carta.errorNombre"),
+        errorPrecio: t("carta.errorPrecio"),
+        errorCategoriaTipo: t("carta.errorCategoriaTipo"),
+      },
+    });
+
+    if (!validation.ok) {
+      setFormError(validation.error);
       return;
     }
+
+    const { nombre, precioVenta, selectedCategory: selectedCat } = validation;
     const stationPatch = buildProductStationPatchFromSelectValue(
       draftOperationStationSelect,
       operationStations,
     );
     const preparationArea = stationPatch.preparationArea;
-    const precioVenta = parsePrecio(draftPrecio);
-    if (precioVenta == null) {
-      setFormError(t("carta.errorPrecio"));
-      return;
-    }
-
-    const preventiveBlockingErrors = getProductFormSubmitBlockingErrors(
-      draftPreventiveValidation,
-    );
-    if (preventiveBlockingErrors.length > 0) {
-      setFormError(preventiveBlockingErrors[0]!);
-      return;
-    }
-
     const restauranteId = operationalRestaurantId;
     const now = new Date().toISOString();
-    const selectedCat = draftCategoriaCartaId ? cartaCategorias.find((c) => c.id === draftCategoriaCartaId) : undefined;
-    if (selectedCat && !isCartaCategoriaCompatibleWithTipoProducto(selectedCat, draftTipo)) {
-      setFormError(t("carta.errorCategoriaTipo"));
-      return;
-    }
-    const inheritedIdsForSave = selectedCat
-      ? sanitizeModifierGroupIdsForSave(
-          selectedCat.modifierGroupIds ?? [],
-          modifierGroups,
-        )
-      : [];
-    const inheritedIdSetForSave = new Set(inheritedIdsForSave);
-    const sanitizedModifierGroupIds = sanitizeModifierGroupIdsForSave(
-      draftModifierGroupIds,
-      modifierGroups,
-    ).filter((id) => !inheritedIdSetForSave.has(id));
-    const modifierGroupIdsForSave =
-      sanitizedModifierGroupIds.length > 0 ? sanitizedModifierGroupIds : null;
-    const categoria = selectedCat ? selectedCat.name : "";
-    const categoriaCartaIdPatch = selectedCat ? selectedCat.id : undefined;
     const cartaFamiliaIdPatch = selectedCat?.cartaFamiliaId?.trim() || undefined;
     const selMenuFamId = selectedCat?.cartaFamiliaId?.trim();
     const menuFamName =
@@ -3194,85 +3075,48 @@ export default function ProductosManagementPage({
         : undefined;
 
     if (isCentralCatalog) {
-      const saleProductIdForRecipe = editingId?.trim() ?? "";
-      const recipeEnabledForSave = draftRecipeEnabledRef.current;
-      const recipeRowsForSave = draftRecipeRowsRef.current;
-      const recipeValidation = normalizeProductRecipe(
-        buildRecipeSourceFromDraftRows(recipeEnabledForSave, recipeRowsForSave),
-        { saleProductId: saleProductIdForRecipe, inventoryProductsById: inventoryLookupMap },
-      );
-      if (recipeValidation.errors.length > 0) {
-        setFormError(recipeValidation.errors[0] ?? "Revisa el escandallo.");
-        return;
-      }
-      const draftRowsWithProductId = recipeRowsForSave.filter(
-        (row) => row.productId.trim().length > 0,
-      ).length;
-      if (
-        recipeEnabledForSave &&
-        draftRowsWithProductId > recipeValidation.recipe.ingredients.length
-      ) {
-        setFormError(
-          "Algunos ingredientes del escandallo no tienen cantidad o unidad válida.",
-        );
-        return;
-      }
-
       setDrawerSyncing(true);
       try {
         const existingFlags = editingId
           ? getPublicationFlags(items.find((p) => p.id === editingId)!)
           : null;
-        const centralInput = buildCentralInputFromDraft({
-          nombre,
-          operationStationSelect: draftOperationStationSelect,
-          operationStations,
-          cartaCategorias,
-          draftTipo,
-          draftProductCompositionType,
-          categoria,
-          categoriaCartaIdPatch,
-          precioVenta,
-          draftActivo,
-          draftDesc,
-          draftCourse,
-          productFamilySelect: draftProductFamilyId,
-          productFamilies,
-          existingIsActive: existingFlags?.isActive,
-          modifierGroupIds: modifierGroupIdsForSave,
-        });
-        let savedProductId = editingId?.trim() ?? "";
-        if (editingId) {
-          await updateCentralProduct(restauranteId, editingId, centralInput);
-        } else {
-          savedProductId = await createCentralProduct(restauranteId, centralInput);
-        }
-        await updateCentralProductRecipe(
-          restauranteId,
-          savedProductId,
-          normalizedProductRecipeToWriteInput(recipeValidation.recipe),
+        const centralInput = buildCentralInputFromProductFormDraft(
+          formCoreDraft,
+          validation,
+          {
+            operationStations,
+            productFamilies,
+            cartaCategorias,
+            existingIsActive: existingFlags?.isActive,
+          },
         );
-        applyCentralRecipeToLocalCatalog(savedProductId, recipeValidation.recipe);
-        const prevImagePath = draftExistingImagePath;
-        if (draftRemoveImage && !draftPendingImageFile) {
-          await clearCentralProductImage(
-            restauranteId,
-            savedProductId,
-            prevImagePath,
-          );
-        } else if (draftPendingImageFile) {
-          await uploadAndAttachCentralProductImage(
-            restauranteId,
-            savedProductId,
-            draftPendingImageFile,
-            prevImagePath,
-          );
+        const persistResult = await persistCentralCatalogProduct({
+          restaurantId: restauranteId,
+          editingId,
+          centralInput,
+          recipeEnabled: draftRecipeEnabledRef.current,
+          recipeRows: draftRecipeRowsRef.current,
+          saleProductIdForRecipe: editingId?.trim() ?? "",
+          inventoryLookupMap,
+          image: {
+            pendingFile: draftPendingImageFile,
+            remove: draftRemoveImage,
+            existingPath: draftExistingImagePath,
+          },
+        });
+
+        if (!persistResult.ok) {
+          setFormError(persistResult.error);
+          return;
         }
+
+        applyCentralRecipeToLocalCatalog(
+          persistResult.productId,
+          persistResult.recipe,
+        );
         setNotice("Guardado en catálogo central");
         closeForm();
         window.setTimeout(() => setNotice(null), 3200);
-      } catch (e) {
-        setFormError(formatCentralCatalogWriteError(e));
       } finally {
         setDrawerSyncing(false);
       }
@@ -3280,6 +3124,13 @@ export default function ProductosManagementPage({
     }
 
     if (isLegacyReadOnly) return;
+
+    const {
+      modifierGroupIdsForSave,
+      categoria,
+      categoriaCartaIdPatch,
+    } = validation;
+    const sanitizedModifierGroupIds = modifierGroupIdsForSave ?? [];
 
     if (editingId) {
       const next = items.map((p) => {
@@ -3928,7 +3779,7 @@ export default function ProductosManagementPage({
           disabled={isLegacyReadOnly}
           title={isLegacyReadOnly ? LEGACY_CATALOG_EDIT_BLOCKED : undefined}
           onClick={openCreate}
-          className="hostly-button-primary hostly-button-compact hostly-productos-carta-header-inline-actions__btn whitespace-nowrap"
+          className="hostly-button-primary hostly-button-compact hostly-productos-carta-header-inline-actions__btn hostly-productos-carta-header-inline-actions__btn--primary whitespace-nowrap"
           style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
         >
           {t("carta.ctaNew")}
@@ -3940,9 +3791,18 @@ export default function ProductosManagementPage({
             e.stopPropagation();
             router.push("/dashboard/configuracion/carta/importacion");
           }}
-          className="hostly-button-secondary hostly-button-compact hostly-productos-carta-header-inline-actions__btn whitespace-nowrap"
+          className="hostly-button-secondary hostly-button-compact hostly-productos-carta-header-inline-actions__btn hostly-productos-carta-header-inline-actions__btn--secondary whitespace-nowrap"
         >
           Importar carta IA
+        </button>
+        <button
+          type="button"
+          className="hostly-productos-carta-header-inline-actions__more"
+          aria-expanded={configCartaAdvancedOpen}
+          aria-controls="hostly-productos-carta-advanced-panel"
+          onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
+        >
+          {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
         </button>
       </div>
     );
@@ -3952,10 +3812,11 @@ export default function ProductosManagementPage({
     if (configCartaProductosChrome) {
       return (
         <ConfigCartaWorkbench
-          title={t("productos.title")}
-          description={t("productos.subtitle")}
+          title="Productos"
+          description="Catálogo maestro de productos del restaurante"
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
+          visualVariant="productos"
           headerActions={renderConfigCartaHeaderActions()}
         >
           <p style={{ color: "#64748b", fontSize: 13 }}>{t("common.preparingData")}</p>
@@ -3984,10 +3845,11 @@ export default function ProductosManagementPage({
     if (configCartaProductosChrome) {
       return (
         <ConfigCartaWorkbench
-          title={t("productos.title")}
-          description={t("productos.subtitle")}
+          title="Productos"
+          description="Catálogo maestro de productos del restaurante"
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
+          visualVariant="productos"
           headerActions={renderConfigCartaHeaderActions()}
         >
           <p style={{ color: "#64748b", fontSize: 13 }}>
@@ -4787,10 +4649,11 @@ export default function ProductosManagementPage({
       <>
         <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
         <ConfigCartaWorkbench
-          title={t("productos.title")}
-          description={t("productos.subtitle")}
+          title="Productos"
+          description="Catálogo maestro de productos del restaurante"
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
+          visualVariant="productos"
           headerActions={renderConfigCartaHeaderActions()}
         >
           <HostlySection
@@ -4810,24 +4673,15 @@ export default function ProductosManagementPage({
             ) : null}
             <ProductosTableChrome iceVisual embedFlatChrome>
               <>
-              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical hostly-productos-carta-toolbar--config-primary">
+              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical hostly-productos-carta-toolbar--config-primary hostly-productos-carta-toolbar--hero-search">
               <input
               type="search"
               value={listSearch}
               onChange={(e) => setListSearch(e.target.value)}
               placeholder="Buscar producto..."
               aria-label="Buscar producto"
-              className="hostly-productos-carta-search hostly-productos-carta-search--prominent hostly-productos-carta-search--field"
+              className="hostly-config-canonical-search hostly-productos-carta-search hostly-productos-carta-search--prominent hostly-productos-carta-search--field"
               />
-              <button
-              type="button"
-              className="hostly-productos-carta-advanced-toggle hostly-productos-carta-advanced-toggle--toolbar"
-              aria-expanded={configCartaAdvancedOpen}
-              aria-controls="hostly-productos-carta-advanced-panel"
-              onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
-              >
-              {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
-              </button>
               </div>
               <div className="hostly-productos-carta-controls-stack hostly-productos-carta-controls-stack--dense">
                 <ConfigCartaCompactFilterRow className="hostly-productos-carta-compact-filters--ops-row">
@@ -4999,8 +4853,8 @@ export default function ProductosManagementPage({
     <>
       <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
       <ModulePageShell
-      title={t("productos.title")}
-      subtitle={t("productos.subtitle")}
+      title={dashboardListIceVisual ? "Productos" : t("productos.title")}
+      subtitle={dashboardListIceVisual ? "Gestiona el catálogo maestro del restaurante." : t("productos.subtitle")}
       maxWidth={PRODUCTOS_SHELL_MAX_WIDTH}
       compactLayout
       operationalFocus
@@ -5174,7 +5028,7 @@ export default function ProductosManagementPage({
                     }
               }
             >
-              {t("carta.ctaNew")}
+              {dashboardListIceVisual ? "Nuevo producto" : t("carta.ctaNew")}
             </button>
           </div>
         </div>
@@ -5183,8 +5037,10 @@ export default function ProductosManagementPage({
       <HostlySection
         stack="sm"
         className={
-          iceVisual
-            ? "hostly-productos-config-skin min-h-0 min-w-0 flex-1 overflow-hidden"
+          dashboardListIceVisual
+            ? "hostly-productos-config-skin hostly-productos-catalog-workspace min-h-0 min-w-0 flex-1 overflow-hidden"
+            : iceVisual
+              ? "hostly-productos-config-skin min-h-0 min-w-0 flex-1 overflow-hidden"
             : "min-h-0 min-w-0 flex-1 overflow-hidden"
         }
         style={{
@@ -5245,7 +5101,7 @@ export default function ProductosManagementPage({
           </div>
         ) : null}
 
-        {iceVisual ? (
+        {iceVisual && !dashboardListIceVisual ? (
             <div
               className="grid shrink-0 gap-1.5"
               style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
@@ -5292,32 +5148,36 @@ export default function ProductosManagementPage({
           <>
           {iceVisual ? (
             <HostlySectionHeader
-              title={t("carta.listTitle")}
+              title={dashboardListIceVisual ? "Centro de catálogo" : t("carta.listTitle")}
               description={t("carta.listCount", { shown: displayed.length, total: items.length })}
               descriptionClassName="!text-[10px] !font-semibold !leading-snug !m-0"
-              className="shrink-0 border-b border-[var(--hostly-line)] px-1.5 py-0.5"
+              className={dashboardListIceVisual
+                ? "hostly-productos-catalog-toolbar shrink-0 border-b border-[var(--hostly-line)]"
+                : "shrink-0 border-b border-[var(--hostly-line)] px-1.5 py-0.5"}
             >
               <input
                 type="search"
                 value={listSearch}
                 onChange={(e) => setListSearch(e.target.value)}
-                placeholder={t("carta.searchPlaceholder")}
-                aria-label={t("carta.searchPlaceholder")}
+                placeholder={dashboardListIceVisual ? "Buscar producto, categoría, familia, alérgeno..." : t("carta.searchPlaceholder")}
+                aria-label={dashboardListIceVisual ? "Buscar producto, categoría, familia, alérgeno..." : t("carta.searchPlaceholder")}
+                className="hostly-config-canonical-search"
                 style={{
                   minWidth: 160,
                   flexGrow: 1,
                   flexShrink: 1,
-                  flexBasis: "220px",
-                  maxWidth: 360,
-                  padding: "5px 10px",
-                  borderRadius: 999,
+                  flexBasis: dashboardListIceVisual ? "min(100%, 520px)" : "220px",
+                  maxWidth: dashboardListIceVisual ? 720 : 360,
+                  padding: dashboardListIceVisual ? "11px 16px" : "5px 10px",
+                  borderRadius: dashboardListIceVisual ? 18 : 999,
                   border: "1px solid var(--hostly-line)",
-                  background: "var(--hostly-surface-page-soft)",
+                  background: dashboardListIceVisual ? "rgba(255, 255, 255, 0.94)" : "var(--hostly-surface-page-soft)",
                   color: "var(--hostly-ink-strong)",
-                  fontSize: 12,
+                  fontSize: dashboardListIceVisual ? 15 : 12,
                   outline: "none",
                   boxSizing: "border-box",
-                  minHeight: 32,
+                  minHeight: dashboardListIceVisual ? 50 : 32,
+                  boxShadow: dashboardListIceVisual ? "0 16px 36px rgba(15, 23, 42, 0.06)" : undefined,
                 }}
               />
             </HostlySectionHeader>
@@ -5344,6 +5204,7 @@ export default function ProductosManagementPage({
               onChange={(e) => setListSearch(e.target.value)}
               placeholder={t("carta.searchPlaceholder")}
               aria-label={t("carta.searchPlaceholder")}
+              className="hostly-config-canonical-search"
               style={{
                 minWidth: 160,
                 flexGrow: 1,
@@ -5367,6 +5228,7 @@ export default function ProductosManagementPage({
           {renderCatalogFoodDrinkSegment()}
 
           <div
+            className={dashboardListIceVisual ? "hostly-productos-catalog-filterbar" : undefined}
             style={{
               flexShrink: 0,
               display: "flex",
@@ -5392,6 +5254,7 @@ export default function ProductosManagementPage({
           </div>
 
           <div
+            className={dashboardListIceVisual ? "hostly-productos-catalog-categorybar" : undefined}
             style={{
               flexShrink: 0,
               padding: "1px 5px 2px",
@@ -5454,6 +5317,7 @@ export default function ProductosManagementPage({
           </div>
 
           <div
+            className={dashboardListIceVisual ? "hostly-productos-catalog-list" : undefined}
             style={{ flexGrow: 1, minHeight: 0, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
           >
             {items.length === 0 ? (

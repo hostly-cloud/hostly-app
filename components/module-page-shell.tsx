@@ -17,6 +17,8 @@ export type ModulePageShellProps = {
   maxWidth?: number;
   /** Acciones alineadas a la derecha del título (p. ej. Recargar). */
   headerRight?: ReactNode;
+  /** Ubicación de acciones de cabecera. Configuración V3 usa banda inferior canónica. */
+  headerActionsPlacement?: "right" | "below";
   /** Segunda franja bajo título/subtítulo: contexto o controles a ancho completo. */
   headerBelow?: ReactNode;
   backHref?: string;
@@ -57,6 +59,7 @@ export default function ModulePageShell({
   children,
   maxWidth = DEFAULT_MAX,
   headerRight,
+  headerActionsPlacement = "right",
   headerBelow,
   backHref = "/dashboard",
   backLabel,
@@ -207,6 +210,44 @@ export default function ModulePageShell({
   ]
     .filter(Boolean)
     .join(" ");
+  const headerActions = (
+    <div
+      className={[
+        "hostly-module-header-actions",
+        headerActionsPlacement === "below"
+          ? "hostly-module-header-actions--canonical"
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="hostly-module-header-actions__primary">
+        {headerRight}
+      </div>
+      <div className="hostly-module-header-actions__secondary">
+        {!hideLogoutButton && hideBackLink && backHref === "/dashboard" ? (
+          <LogoutButton
+            compact={Boolean(compactLayout && operationalFocus)}
+            surface="light"
+          />
+        ) : null}
+        <LanguageSwitcher />
+      </div>
+    </div>
+  );
+  const canonicalBelow =
+    headerActionsPlacement === "below" ? (
+      <>
+        {headerActions}
+        {headerBelow ? (
+          <div className="hostly-module-header-below__content">
+            {headerBelow}
+          </div>
+        ) : null}
+      </>
+    ) : (
+      headerBelow
+    );
 
   return (
     <main
@@ -296,19 +337,8 @@ export default function ModulePageShell({
         }
         title={title}
         subtitle={subtitle}
-        below={headerBelow}
-        right={
-          <div className="hostly-module-header-actions">
-            {headerRight}
-            {!hideLogoutButton && hideBackLink && backHref === "/dashboard" ? (
-              <LogoutButton
-                compact={Boolean(compactLayout && operationalFocus)}
-                surface="light"
-              />
-            ) : null}
-            <LanguageSwitcher />
-          </div>
-        }
+        below={canonicalBelow}
+        right={headerActionsPlacement === "right" ? headerActions : undefined}
         titleStyle={dashboardModuleChrome || isMobile ? undefined : titleStyleResolved}
         subtitleStyle={dashboardModuleChrome || isMobile ? undefined : subtitleStyleResolved}
         belowStripe={effectiveDenseInventory ? "ultraCompact" : "default"}

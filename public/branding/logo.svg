@@ -1,0 +1,12 @@
+<svg width="720" height="200" viewBox="0 0 720 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Hostly</title>
+  <desc id="desc">Hostly official wordmark</desc>
+  <rect width="720" height="200" rx="44" fill="#F7FCFF"/>
+  <g transform="translate(56 44)">
+    <rect width="112" height="112" rx="30" fill="url(#symbolGradient)"/>
+    <path d="M33 33h14v35h34V33h14v46c0 10-8 18-18 18H81V80H47v17H33V33Z" fill="white"/>
+    <path d="M47 80h34" stroke="#DDF3FF" stroke-width="8" stroke-linecap="round" opacity=".72"/>
+  </g>
+  <path d="M218 64h24v32h42V64h24v82h-24v-32h-42v32h-24V64ZM348 148c-25 0-43-17-43-41s18-42 43-42 43 18 43 42-18 41-43 41Zm0-20c12 0 20-9 20-21s-8-22-20-22-20 9-20 22 8 21 20 21ZM426 148c-22 0-37-10-39-27h23c2 7 8 10 17 10 8 0 13-3 13-8 0-6-8-8-19-10-15-3-31-9-31-24 0-16 14-25 35-25 20 0 34 9 37 25h-22c-2-6-7-9-15-9-7 0-12 3-12 8 0 6 8 7 19 10 15 3 32 8 32 25 0 16-15 25-38 25ZM491 146c-18 0-28-9-28-27V86h-14V67h14V45h23v22h22v19h-22v29c0 8 4 12 12 12h10v19h-17ZM514 43h23v103h-23V43ZM575 146l-34-79h25l21 53 20-53h24l-47 111h-24l15-32Z" fill="#0F2744"/>
+  <defs><linearGradient id="symbolGradient" x1="15" y1="11" x2="100" y2="106" gradientUnits="userSpaceOnUse"><stop stop-color="#3D8AB8"/><stop offset="1" stop-color="#0F2744"/></linearGradient></defs>
+</svg>

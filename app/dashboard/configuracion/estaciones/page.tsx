@@ -180,6 +180,11 @@ export default function ConfigEstacionesPage() {
         eyebrow="Producción"
         title="Estaciones"
         description="Define dónde se prepara cada producto: cocina, barra, coctelería u otras zonas."
+        actions={
+          <ConfigBtnPrimary type="button" disabled={!authReady || !restaurantId} onClick={openNew}>
+            Nueva estación
+          </ConfigBtnPrimary>
+        }
       />
 
       <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
@@ -192,12 +197,6 @@ export default function ConfigEstacionesPage() {
             Esta configuración aún no afecta al TPV ni a las pantallas de cocina.
           </p>
         </ConfigCard>
-
-        <div className="hostly-carta-config-actions-row">
-          <ConfigBtnPrimary type="button" disabled={!authReady || !restaurantId} onClick={openNew}>
-            Nueva estación
-          </ConfigBtnPrimary>
-        </div>
 
         {!restaurantId ? (
           <div className="hostly-carta-config-alert hostly-carta-config-alert--warning">

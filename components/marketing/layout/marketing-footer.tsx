@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { marketingFooter } from "@/data/marketing/landing-content";
+import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
 
 function FooterColumn({ title, links }: { title: string; links: { label: string; href: string }[] }) {
   return (
@@ -30,12 +31,12 @@ export function MarketingFooter() {
       <div className="marketing-container py-14">
         <div className="grid gap-10 md:grid-cols-[1.2fr_repeat(3,minmax(0,1fr))]">
           <div>
-            <div className="inline-flex items-center gap-2.5">
-              <span className="inline-flex size-8 items-center justify-center rounded-xl bg-[color:var(--hostly-navy-deep)] text-[13px] font-bold text-white">
-                H
-              </span>
-              <span className="text-[15px] font-semibold tracking-[-0.03em]">Hostly</span>
-            </div>
+            <HostlyBrandLockup
+              size={32}
+              tone="app"
+              className="inline-flex items-center gap-2.5"
+              wordmarkClassName="text-[15px] font-semibold tracking-[-0.03em]"
+            />
             <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-[color:var(--hostly-ink-muted)]">
               Plataforma operativa premium para restaurantes que quieren centralizar servicio, cocina, stock y decisiones.
             </p>

@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { ConfiguracionHubPageContent } from "./_components/configuracion-hub-page-content";
 
 export default function ConfiguracionIndexPage() {
-  redirect("/dashboard/configuracion/carta/productos");
+  return <ConfiguracionHubPageContent />;
 }

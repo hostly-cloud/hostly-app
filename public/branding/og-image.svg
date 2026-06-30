@@ -1,0 +1,15 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#F7FCFF"/>
+  <circle cx="1000" cy="72" r="280" fill="#DDF3FF" opacity=".72"/>
+  <circle cx="80" cy="590" r="260" fill="#C6E4F8" opacity=".52"/>
+  <g transform="translate(112 142)">
+    <rect width="144" height="144" rx="38" fill="url(#g)"/>
+    <path d="M43 42h18v45h44V42h18v59c0 13-10 23-23 23h-7v-22H61v22H43V42Z" fill="white"/>
+    <path d="M61 102h32" stroke="#DDF3FF" stroke-width="10" stroke-linecap="round" opacity=".72"/>
+  </g>
+  <text x="300" y="232" font-family="Geist, Inter, Arial, sans-serif" font-size="108" font-weight="850" letter-spacing="-5" fill="#0F2744">Hostly</text>
+  <text x="305" y="304" font-family="Geist, Inter, Arial, sans-serif" font-size="34" font-weight="650" fill="#315F7D">TPV rápido, intuitivo y estable para hostelería</text>
+  <rect x="305" y="360" width="520" height="2" rx="1" fill="#B7D7EA"/>
+  <text x="305" y="430" font-family="Geist, Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#0F2744">Mesas · Cocina · Carta · Inventario · IA</text>
+  <defs><linearGradient id="g" x1="19" y1="14" x2="129" y2="136" gradientUnits="userSpaceOnUse"><stop stop-color="#3D8AB8"/><stop offset="1" stop-color="#0F2744"/></linearGradient></defs>
+</svg>

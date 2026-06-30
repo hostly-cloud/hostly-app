@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { authErrorMessage, login, logout, register } from "@/lib/auth/auth";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { useAuth } from "@/components/auth/auth-context";
+import { HostlyBrandMark } from "@/components/brand/hostly-brand";
 
 const DEFAULT_NEXT = "/dashboard";
 
@@ -173,32 +174,6 @@ function IconShield(props: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-/** Marca Hostly — icono más vivo (azul producto) */
-function HostlyLogoMark({ size = 56 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
-    >
-      <rect x="1.5" y="1.5" width="45" height="45" rx="15" fill="url(#hostlyLoginMarkGrad)" />
-      <path
-        d="M14 15h4.5v7.5h11V15H34v18h-4.5v-6.5h-11V33H14V15z"
-        fill="#ffffff"
-      />
-      <defs>
-        <linearGradient id="hostlyLoginMarkGrad" x1="10" y1="6" x2="42" y2="44" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#3d8ab8" />
-          <stop offset="1" stopColor="#0f2744" />
-        </linearGradient>
-      </defs>
     </svg>
   );
 }
@@ -393,7 +368,7 @@ function LoginPageContent() {
         >
           <header className="hostly-mobile-header" style={{ paddingLeft: 0, paddingRight: 0, textAlign: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-              <HostlyLogoMark size={48} />
+              <HostlyBrandMark size={48} tone="premium" />
               <span
                 style={{
                   fontSize: 12,
@@ -497,7 +472,7 @@ function LoginPageContent() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <HostlyLogoMark size={58} />
+            <HostlyBrandMark size={58} tone="premium" />
             <div
               style={{
                 fontSize: 13,

@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import type { HostlyCapability } from "@/lib/auth/hostly-capabilities";
 import ModulePageShell from "@/components/module-page-shell";
-import { RestaurantLogoMark } from "@/components/restaurant/restaurant-logo-mark";
+import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
 import { HostlyKpiCard, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import { DEFAULT_RESTAURANT_NAME } from "@/lib/firestore/user-restaurant-profile";
 import { getRestaurantById } from "@/lib/firestore/restaurants";
@@ -167,6 +167,23 @@ function IconReservas() {
   );
 }
 
+function IconCocteleria() {
+  return (
+    <LauncherIcon>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M7 4h10l-2.5 7.5a2.6 2.6 0 0 1-5 0L7 4z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        <path d="M12 14v6M9 20h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M9 7h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </LauncherIcon>
+  );
+}
+
 function IconChart({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -204,6 +221,45 @@ function IconSettings({ size = 22 }: { size?: number }) {
         d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.65 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.65 1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 9c.2.48.62.83 1.15.9H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.1z"
         stroke="currentColor"
         strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconCarta({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M9 8h6M9 12h6M9 16h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconAI({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 3l1.4 4.1L18 8.5l-4.1 1.4L12 14l-1.9-4.1L6 8.5l4.6-1.4L12 3z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.5 13l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z"
+        stroke="currentColor"
+        strokeWidth="1.5"
         strokeLinejoin="round"
       />
     </svg>
@@ -258,6 +314,9 @@ const PRIMARY_ACTIONS: PrimaryAction[] = [
     Icon: IconTpv,
     visible: (can) => can("tpv.sell"),
   },
+];
+
+const OPERATION_ACTIONS: PrimaryAction[] = [
   {
     href: "/dashboard/operacion/cocina",
     label: "Cocina",
@@ -268,6 +327,12 @@ const PRIMARY_ACTIONS: PrimaryAction[] = [
     href: "/dashboard/operacion/barra",
     label: "Barra",
     Icon: IconBarra,
+    visible: (can) => can("kds.manage") || can("tpv.sell"),
+  },
+  {
+    href: "/dashboard/operacion/cocteleria",
+    label: "Coctelería",
+    Icon: IconCocteleria,
     visible: (can) => can("kds.manage") || can("tpv.sell"),
   },
   {
@@ -284,15 +349,39 @@ type SecondaryModule = {
   Icon: ({ size }: { size?: number }) => ReactNode;
 };
 
-const SECONDARY_MODULES: SecondaryModule[] = [
+const MANAGEMENT_MODULES: SecondaryModule[] = [
+  { path: "/dashboard/configuracion/carta/categorias", label: "Carta", Icon: IconCarta },
+  { path: "/dashboard/productos", label: "Productos", Icon: IconBox },
+  { path: "/dashboard/configuracion/carta/importacion", label: "Importar carta IA", Icon: IconAI },
   { path: "/dashboard/inventario", label: "Inventario", Icon: IconBox },
   { path: "/dashboard/compras", label: "Compras", Icon: IconBox },
-  { path: "/dashboard/configuracion/carta/escandallos", label: "Escandallos", Icon: IconEscandallos },
-  { path: "/dashboard/analisis/ventas", label: "Ventas", Icon: IconChart },
-  { path: "/dashboard/analisis", label: "Análisis", Icon: IconChart },
   { path: "/dashboard/configuracion", label: "Configuración", Icon: IconSettings },
-  { path: "/dashboard/operacion", label: "Operación", Icon: IconOperacion },
+  { path: "/dashboard/analisis", label: "Análisis", Icon: IconChart },
 ];
+
+const OPERATION_SUBTITLES: Record<string, string> = {
+  Cocina: "Pedidos en preparación",
+  Barra: "Bebidas y cafés",
+  Coctelería: "Cócteles y combinados",
+  Reservas: "Llegadas de hoy",
+};
+
+const OPERATION_VISUAL_KEYS: Record<string, string> = {
+  Cocina: "kitchen",
+  Barra: "bar",
+  Coctelería: "cocktail",
+  Reservas: "reservations",
+};
+
+const MANAGEMENT_VISUAL_KEYS: Record<string, string> = {
+  Carta: "menu",
+  Productos: "products",
+  "Importar carta IA": "ai",
+  Inventario: "inventory",
+  Compras: "purchases",
+  Configuración: "settings",
+  Análisis: "analytics",
+};
 
 function isSecondaryModuleVisible(
   path: string,
@@ -303,6 +392,9 @@ function isSecondaryModuleVisible(
       return can("tpv.sell") || can("kds.manage");
     case "/dashboard/configuracion":
     case "/dashboard/configuracion/carta/escandallos":
+    case "/dashboard/productos":
+    case "/dashboard/configuracion/carta/categorias":
+    case "/dashboard/configuracion/carta/importacion":
       return can("settings.manage");
     case "/dashboard/inventario":
       return can("inventory.view");
@@ -555,13 +647,18 @@ export default function DashboardPage() {
     [can],
   );
 
-  const visibleSecondaryModules = useMemo(
-    () => SECONDARY_MODULES.filter((mod) => isSecondaryModuleVisible(mod.path, can)),
+  const visibleOperationActions = useMemo(
+    () => OPERATION_ACTIONS.filter((action) => action.visible(can)),
+    [can],
+  );
+
+  const visibleManagementModules = useMemo(
+    () => MANAGEMENT_MODULES.filter((mod) => isSecondaryModuleVisible(mod.path, can)),
     [can],
   );
 
   const homeTitleText = restaurantName?.trim() || DEFAULT_RESTAURANT_NAME;
-  const homeSubtitle = "Listo para trabajar";
+  const homeSubtitle = "Centro de operaciones";
 
   return (
     <ModulePageShell
@@ -573,179 +670,105 @@ export default function DashboardPage() {
       hideBackLink
       shellSurface="configLight"
     >
-      <div className="hostly-dashboard-op-home">
-        <HostlySurface variant="ice" className="hostly-dashboard-identity">
-          <RestaurantLogoMark name={homeTitleText} logoUrl={restaurantLogoUrl} size={56} />
-          <div className="hostly-dashboard-identity__text">
-            <h1 className="hostly-dashboard-identity__name">{homeTitleText}</h1>
-            <p className="hostly-dashboard-identity__subtitle">{homeSubtitle}</p>
-          </div>
-        </HostlySurface>
-
-        {visiblePrimaryActions.length > 0 ? (
-          <nav
-            aria-label="Acciones principales"
-            className="hostly-op-launcher-grid hostly-dashboard-op-actions hostly-dashboard-op-actions--hero"
-          >
-            {visiblePrimaryActions.map((action) => {
-              const Icon = action.Icon;
-              return (
-                <Link key={action.href} href={action.href} className="hostly-op-launcher-card">
-                  <Icon />
-                  <span className="hostly-op-launcher-text">
-                    <span className="hostly-op-launcher-title">{action.label}</span>
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
-        ) : (
-          <HostlySurface variant="soft" className="hostly-dashboard-panel">
-            <p className="hostly-muted m-0 text-sm leading-snug">
-              No tienes accesos operativos directos. Consulta las herramientas disponibles más abajo.
-            </p>
-          </HostlySurface>
-        )}
-
-        {visibleSecondaryModules.length > 0 ? (
-          <section aria-label="Herramientas secundarias" className="hostly-dashboard-secondary">
-            <h2 className={sectionTitleClass}>Herramientas</h2>
-            <div className="hostly-dashboard-module-grid hostly-dashboard-module-grid--compact">
-              {visibleSecondaryModules.map((mod) => {
-                const Icon = mod.Icon;
-                return (
-                  <button
-                    key={mod.path}
-                    type="button"
-                    onClick={() => router.push(mod.path)}
-                    className="hostly-dashboard-module-card"
-                  >
-                    <span className="hostly-dashboard-module-card__icon">
-                      <Icon size={16} />
-                    </span>
-                    <span className="hostly-dashboard-module-card__label">{mod.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-
-        <details className="hostly-dashboard-management-panel hostly-dashboard-management-panel--surface">
-          <summary>Panel de gestión</summary>
-          <div className="hostly-dashboard-management-panel__body hostly-dashboard-management-panel__body--compact">
-            <div className="hostly-kpi-grid-unified hostly-kpi-grid-unified--dashboard hostly-kpi-grid-unified--dashboard-compact shrink-0">
-              {kpiCards.map((k) => (
-                <HostlyKpiCard
-                  key={k.label}
-                  title={k.label}
-                  value={k.value}
-                  helper={k.sub}
-                  accentColor={k.accent}
-                  valueTitle={String(k.value)}
-                  variant="soft"
-                />
-              ))}
-            </div>
-
-            <div className="hostly-dashboard-panels-grid hostly-dashboard-panels-grid--compact shrink-0">
-              <HostlySurface variant="soft" className="hostly-dashboard-panel hostly-dashboard-panel--compact">
-                <HostlySectionHeader
-                  title={t("dashboard.sectionAlerts")}
-                  titleVariant="section"
-                  className="hostly-section-header--operational"
-                />
-                {alerts.length === 0 ? (
-                  <p className="hostly-muted m-0 text-xs leading-snug">{t("dashboard.alertNone")}</p>
-                ) : (
-                  <ul className="hostly-stack-sm m-0 list-none p-0">
-                    {alerts.map((a) => (
-                      <li key={a.key} className="hostly-dashboard-alert-item" data-tone={a.tone}>
-                        <div className="hostly-dashboard-alert-title">{a.title}</div>
-                        <div className="hostly-dashboard-alert-body">{a.body}</div>
-                        {a.key === "stock" && lowStockProducts.length > 0 ? (
-                          <div className="hostly-dashboard-alert-detail">
-                            {lowStockProducts
-                              .slice(0, 4)
-                              .map((p) => p.nombre)
-                              .join(" · ")}
-                            {lowStockProducts.length > 4 ? "…" : ""}
-                          </div>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </HostlySurface>
-
-              <HostlySurface variant="soft" className="hostly-dashboard-panel hostly-dashboard-panel--compact">
-                <HostlySectionHeader
-                  title={t("dashboard.sectionActivity")}
-                  titleVariant="section"
-                  className="hostly-section-header--operational"
-                />
-                <ul className="hostly-stack-sm m-0 list-none p-0">
-                  <li className="hostly-dashboard-activity-row">
-                    <div className="hostly-kpi-label">{t("dashboard.activityLastMerma")}</div>
-                    {lastMerma && hydrated ? (
-                      <div className="hostly-dashboard-activity-value">
-                        {lastMerma.producto_stock_nombre}
-                        <span className="hostly-dashboard-activity-meta">
-                          {formatIsoDate(lastMerma.fecha, locale)} · {formatMotivoMerma(lastMerma.motivo)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
-                    )}
-                  </li>
-                  <li className="hostly-dashboard-activity-row">
-                    <div className="hostly-kpi-label">{t("dashboard.activityLastOrder")}</div>
-                    {lastCompra && hydrated ? (
-                      <div className="hostly-dashboard-activity-value">
-                        {lastCompra.proveedor}
-                        <span className="hostly-dashboard-activity-meta">
-                          {formatIsoDate(lastCompra.fecha, locale)} · {compraEstadoLabel(lastCompra.estado, t)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
-                    )}
-                  </li>
-                  <li className="hostly-dashboard-activity-row">
-                    <div className="hostly-kpi-label">{t("dashboard.activityLastRelevant")}</div>
-                    {lastPriceRow && hydrated && !escandalloError ? (
-                      <div className="hostly-dashboard-activity-value">
-                        {lastPriceRow.nombre_plato ?? "—"} · {formatEuro(lastPriceRow.precio_venta ?? 0, locale)}
-                        <span className="hostly-dashboard-activity-meta">{t("dashboard.activityRelevantHint")}</span>
-                      </div>
-                    ) : (
-                      <div className="hostly-muted m-0 mt-1 text-xs">{t("dashboard.activityEmpty")}</div>
-                    )}
-                  </li>
-                </ul>
-              </HostlySurface>
-            </div>
-
-            <HostlySurface variant="soft" className="hostly-dashboard-onboarding hostly-dashboard-onboarding--compact shrink-0">
-              <div className="hostly-dashboard-onboarding__copy">
-                <h2 className="hostly-dashboard-onboarding__title">{t("dashboard.onboardingPromoTitle")}</h2>
-                <p className="hostly-dashboard-onboarding__body">{t("dashboard.onboardingPromoBody")}</p>
+      <div className="hostly-dashboard-premium-shell">
+        <div className="hostly-dashboard-command-center">
+          <header className="hostly-dashboard-command-header">
+            <div className="hostly-dashboard-command-brand">
+              <HostlyBrandLockup
+                className="hostly-dashboard-brand-lockup"
+                size={34}
+                tone="app"
+                wordmarkClassName="hostly-dashboard-brand-lockup__wordmark"
+              />
+              <div className="min-w-0">
+                <p className="hostly-dashboard-command-eyebrow">{homeTitleText}</p>
+                <h1 className="hostly-dashboard-command-title">Centro de operaciones</h1>
+                <p className="hostly-dashboard-command-subtitle">Listo para operar</p>
               </div>
-              <div className="hostly-dashboard-onboarding__actions">
-                <button
-                  type="button"
-                  onClick={() => router.push("/dashboard/onboarding")}
-                  className="hostly-button-secondary hostly-button-compact whitespace-nowrap"
-                >
-                  {t("dashboard.onboardingPromoCta")}
-                </button>
-                <p className="hostly-muted m-0 text-center text-[10px] leading-snug sm:text-left">
-                  {t("onboarding.sideHint")}
+            </div>
+          </header>
+
+          <section className="hostly-dashboard-command-main" aria-label="Acciones operativas">
+            {visiblePrimaryActions.length > 0 ? (
+              <nav aria-label="Acción principal" className="hostly-dashboard-command-hero-wrap">
+                {visiblePrimaryActions.map((action) => {
+                  const Icon = action.Icon;
+                  return (
+                    <Link key={action.href} href={action.href} className="hostly-dashboard-command-hero">
+                      <span className="hostly-dashboard-command-hero__icon">
+                        <Icon />
+                      </span>
+                      <span className="hostly-dashboard-command-hero__copy">
+                        <span className="hostly-dashboard-command-hero__label">Abrir TPV</span>
+                        <span className="hostly-dashboard-command-hero__sub">Mesas, pedidos y cobro</span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            ) : (
+              <HostlySurface variant="soft" className="hostly-dashboard-panel">
+                <p className="hostly-muted m-0 text-sm leading-snug">
+                  No tienes accesos operativos directos. Consulta las herramientas disponibles más abajo.
                 </p>
+              </HostlySurface>
+            )}
+
+            {visibleOperationActions.length > 0 ? (
+              <section aria-label="Operación" className="hostly-dashboard-command-operation">
+                <h2 className="hostly-dashboard-command-section-title">Operación</h2>
+                <nav className="hostly-dashboard-command-stations">
+                  {visibleOperationActions.map((action) => {
+                    const Icon = action.Icon;
+                    return (
+                      <Link
+                        key={action.href}
+                        href={action.href}
+                        className="hostly-dashboard-command-station"
+                        data-visual={OPERATION_VISUAL_KEYS[action.label] ?? "operation"}
+                      >
+                        <span className="hostly-dashboard-command-station__icon">
+                          <Icon />
+                        </span>
+                        <span className="hostly-dashboard-command-station__copy">
+                          <span className="hostly-dashboard-command-station__label">{action.label}</span>
+                          <span className="hostly-dashboard-command-station__sub">
+                            {OPERATION_SUBTITLES[action.label] ?? "Área operativa"}
+                          </span>
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </section>
+            ) : null}
+          </section>
+
+          {visibleManagementModules.length > 0 ? (
+            <section aria-label="Gestión" className="hostly-dashboard-command-management">
+              <h2 className="hostly-dashboard-command-section-title">Gestión</h2>
+              <div className="hostly-dashboard-command-dock">
+                {visibleManagementModules.map((mod) => {
+                  const Icon = mod.Icon;
+                  return (
+                    <button
+                      key={mod.path}
+                      type="button"
+                      onClick={() => router.push(mod.path)}
+                      className="hostly-dashboard-command-dock-item"
+                    data-visual={MANAGEMENT_VISUAL_KEYS[mod.label] ?? "management"}
+                    >
+                      <span className="hostly-dashboard-command-dock-item__icon">
+                        <Icon size={17} />
+                      </span>
+                      <span className="hostly-dashboard-command-dock-item__label">{mod.label}</span>
+                    </button>
+                  );
+                })}
               </div>
-            </HostlySurface>
-          </div>
-        </details>
+            </section>
+          ) : null}
+        </div>
       </div>
     </ModulePageShell>
   );

@@ -2,23 +2,38 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ConfiguracionCapabilityShell } from "@/components/auth/configuracion-capability-shell";
-import {
-  ConfiguracionMobileHeader,
-  ConfiguracionSidebar,
-} from "./_components/configuracion-sidebar";
+import { ConfiguracionContextSelector } from "./_components/configuracion-context-selector";
 
 const MAP_EDITOR_CONFIG_PATH = "/dashboard/configuracion/espacios/mesas";
 const EMPRESA_CONFIG_PATH = "/dashboard/configuracion/empresa";
+const CONFIG_HUB_PATH = "/dashboard/configuracion";
+const PRODUCTOS_CONFIG_PATH = "/dashboard/configuracion/carta/productos";
+
+function isConfigHubPath(pathname: string): boolean {
+  return pathname === CONFIG_HUB_PATH;
+}
+
+function isProductosConfigPath(pathname: string): boolean {
+  return (
+    pathname === PRODUCTOS_CONFIG_PATH ||
+    pathname.startsWith(`${PRODUCTOS_CONFIG_PATH}/`)
+  );
+}
 
 export default function ConfiguracionLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const pathname = usePathname() ?? "";
+
+  const isConfigHub = useMemo(() => isConfigHubPath(pathname), [pathname]);
+  const isProductosPage = useMemo(
+    () => isProductosConfigPath(pathname),
+    [pathname],
+  );
 
   const isMapEspaciosMesasEditor = useMemo(
     () =>
@@ -37,33 +52,29 @@ export default function ConfiguracionLayout({
   return (
     <div
       data-hostly-config-shell=""
-      className="hostly-config-shell flex min-h-[100dvh] w-full text-slate-900"
+      className={`hostly-config-shell flex min-h-[100dvh] w-full text-slate-900${
+        isConfigHub ? " hostly-config-shell--hub" : ""
+      }${isProductosPage ? " hostly-config-shell--productos" : ""}`}
     >
-      {!isMapEspaciosMesasEditor ? (
-        <ConfiguracionSidebar
-          mobileOpen={mobileNavOpen}
-          onCloseMobile={() => setMobileNavOpen(false)}
-        />
-      ) : null}
-
       <div
         data-hostly-config-workspace=""
         className={
           isMapEspaciosMesasEditor
             ? "flex min-w-0 flex-1 flex-col"
-            : "flex min-w-0 flex-1 flex-col lg:pl-0"
+            : isConfigHub
+              ? "flex min-w-0 flex-1 flex-col"
+              : isProductosPage
+                ? "flex min-w-0 flex-1 flex-col"
+                : "flex min-w-0 flex-1 flex-col lg:pl-0"
         }
       >
-        {!isMapEspaciosMesasEditor ? (
-          <ConfiguracionMobileHeader
-            navOpen={mobileNavOpen}
-            onOpenNav={() => setMobileNavOpen(true)}
-          />
-        ) : null}
+        {!isConfigHub ? <ConfiguracionContextSelector /> : null}
         <div
           data-hostly-config-content=""
-          className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
-            isMapEspaciosMesasEditor ? "p-1 sm:p-1.5 lg:p-2" : ""
+          className={`flex flex-1 flex-col ${
+            isConfigHub
+              ? "min-h-0 overflow-visible"
+              : `min-h-0 overflow-hidden ${isMapEspaciosMesasEditor ? "p-1 sm:p-1.5 lg:p-2" : ""}`
           }`}
         >
           {isMapEspaciosMesasEditor ? (

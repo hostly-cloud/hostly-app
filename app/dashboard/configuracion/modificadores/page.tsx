@@ -460,7 +460,7 @@ export default function ConfigModificadoresPage() {
           </p>
         ) : null}
 
-        <ConfigCard className="hostly-modifier-form-section hostly-modifier-form-section--create">
+        <ConfigCard className="hostly-config-create-card hostly-modifier-form-section hostly-modifier-form-section--create">
           <h2 className="hostly-carta-config-section-title">Nuevo grupo</h2>
           <p className="hostly-carta-config-form-hint">Ej.: Punto de carne, Guarnición, Salsa extra.</p>
           <div className="hostly-carta-config-form hostly-carta-config-drawer__body sm:grid sm:grid-cols-[1fr_200px_auto] sm:items-end">

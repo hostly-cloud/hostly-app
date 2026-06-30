@@ -1,55 +1,57 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { HostlyBackButton } from "@/components/hostly/back-button";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 type ConfigModulePageHeaderProps = {
   title: ReactNode;
   description?: ReactNode;
   /** Línea superior opcional (p. ej. «Operación · Configuración»). */
   eyebrow?: ReactNode;
+  actions?: ReactNode;
+  secondaryActions?: ReactNode;
   children?: ReactNode;
   className?: string;
 };
 
 /**
- * Cabecera compacta de módulos Configuración: salida táctil al Dashboard integrada
- * en la misma fila que el título (sin línea extra de breadcrumb).
+ * Cabecera compacta de módulos Configuración V3.
+ * El contexto vive en el selector contextual superior; aquí solo destaca la tarea.
  */
 export function ConfigModulePageHeader({
   title,
   description,
-  eyebrow,
+  actions,
+  secondaryActions,
   children,
   className = "",
 }: ConfigModulePageHeaderProps) {
   return (
     <header
       className={[
-        "hostly-config-module-header mx-auto mb-6 w-full max-w-[var(--hostly-config-content-max)] sm:mb-7",
+        "hostly-config-module-header mx-auto mb-4 w-full max-w-[var(--hostly-config-content-max)] sm:mb-5",
         className,
       ]
         .filter(Boolean)
         .join(" ")}
     >
       <div className="hostly-config-module-header__title-row">
-        <HostlyBackButton
-          href="/dashboard"
-          label="Dashboard"
-          ariaLabel="Volver al dashboard"
-          tone="light"
-          moduleChrome
-        />
         <div className="hostly-config-module-header__title-block min-w-0">
-          {eyebrow ? (
-            <p className="hostly-config-module-header__eyebrow">{eyebrow}</p>
-          ) : null}
           <h1 className="hostly-config-module-header__title">{title}</h1>
         </div>
       </div>
       {description ? (
         <p className="hostly-config-module-header__description">{description}</p>
       ) : null}
+      <div className="hostly-config-module-header__actions">
+        <div className="hostly-config-module-header__actions-primary">
+          {actions}
+        </div>
+        <div className="hostly-config-module-header__actions-secondary">
+          {secondaryActions}
+          <LanguageSwitcher />
+        </div>
+      </div>
       {children}
     </header>
   );

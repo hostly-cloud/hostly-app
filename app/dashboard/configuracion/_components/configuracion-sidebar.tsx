@@ -7,6 +7,7 @@ import {
   CONFIG_NAV_GROUPS,
   configPathnameMatches,
 } from "@/lib/configuracion/config-nav";
+import { HostlyBrandMark } from "@/components/brand/hostly-brand";
 
 type NavLeaf = { href: string; label: string };
 type NavGroup = { id: string; label: string; children: NavLeaf[] };
@@ -74,12 +75,12 @@ export function ConfiguracionSidebar({
       <aside className={asideClass}>
         <div className="hostly-config-sidebar__header">
           <Link
-            href="/dashboard/configuracion/carta/productos"
+            href="/dashboard/configuracion"
             className="hostly-config-sidebar__header-link"
             onClick={onCloseMobile}
           >
             <span className="hostly-config-sidebar__header-icon" aria-hidden>
-              ⚙
+              <HostlyBrandMark size={26} tone="app" />
             </span>
             <span className="hostly-config-sidebar__header-title">
               Configuración
@@ -169,6 +170,7 @@ export function ConfiguracionMobileHeader({
           ☰
         </span>
       </button>
+      <HostlyBrandMark size={24} tone="app" />
       <span className="hostly-config-mobile-header__title">Configuración</span>
     </header>
   );

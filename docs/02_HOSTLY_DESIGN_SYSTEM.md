@@ -71,6 +71,36 @@ Las clases históricas permanecen únicamente como compatibilidad de migración.
 **Operación antes que decoración:** ninguna decisión visual debe reducir velocidad,
 claridad o seguridad durante el servicio.
 
+### Configuración V3
+
+Configuración es una colección de espacios de trabajo, no un panel
+administrativo. El patrón canónico para todos sus módulos es:
+
+1. Selector contextual.
+2. Título del módulo.
+3. Descripción corta, máximo dos líneas visibles.
+4. Banda de acciones: primaria, secundarias e idioma.
+5. Contenido principal.
+
+Reglas específicas:
+
+- La navegación interna vive solo en el selector contextual; no sidebar ni barra
+  horizontal permanente.
+- Las acciones no flotan ni se mezclan con el título. Se agrupan en la banda
+  canónica de cabecera.
+- Los buscadores de Configuración usan `hostly-config-canonical-search` o una
+  clase equivalente mapeada al mismo patrón.
+- Los KPIs son secundarios: compactos, discretos y nunca más protagonistas que
+  el trabajo principal.
+- Las tarjetas usan `ConfigCard` / `HostlyCard` con radios, sombras y padding de
+  Configuración; no se crean escalas locales.
+- Los formularios de creación son compactos salvo que el módulo sea
+  exclusivamente de creación.
+- Los estados vacíos siguen el patrón Hostly: título, descripción breve y acción
+  principal.
+- Densidad por tipo: módulos administrativos compactos, flujos guiados con algo
+  más de aire y herramientas canvas con chrome mínimo.
+
 ---
 
 ## 2. Principios inmutables

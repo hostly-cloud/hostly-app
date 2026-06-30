@@ -4353,6 +4353,7 @@ export default function ConfigMesasPage({
       stretchContentWidth={premiumSpatialEditor}
       mapEditorDenseChrome={configuracionMapEditorLayout}
       headerRight={premiumCanvasHeaderRight}
+      hideBackLink={configuracionMapEditorLayout}
       hideLogoutButton={configuracionMapEditorLayout}
     >
       {restaurantId && isFirebaseConfigured ? (

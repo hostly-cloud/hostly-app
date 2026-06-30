@@ -1,7 +1,7 @@
 ﻿import { HostlyCard } from "@/components/ui/hostly/HostlyCard";
-import { HostlySectionHeader } from "@/components/ui/hostly/HostlySectionHeader";
 import { HostlySurface } from "@/components/ui/hostly/HostlySurface";
 import { HostlyStatusBadge } from "@/components/ui/hostly/data-table/HostlyStatusBadge";
+import { ConfigModulePageHeader } from "../../../_components/config-module-page-header";
 
 const importSources = [
   {
@@ -59,20 +59,18 @@ const futurePreviews = ["Preview TPV", "Preview Cocina", "Preview Barra"] as con
 export function ImportWorkspacePageContent() {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--hostly-surface-page)] text-[var(--hostly-ink)]">
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[var(--hostly-page-pad-x)] py-[calc(var(--hostly-page-pad-y)*1.25)]">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-        <HostlySectionHeader
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[var(--hostly-page-pad-x)] py-[var(--hostly-page-pad-y)]">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+        <ConfigModulePageHeader
           title="Importar carta"
           description="Hostly analizará tu carta y preparará un borrador inteligente para revisar antes de publicar."
-          className="items-end"
-          descriptionClassName="max-w-2xl text-[15px]"
+          secondaryActions={<HostlyStatusBadge tone="info">Workspace futuro</HostlyStatusBadge>}
         >
-          <HostlyStatusBadge tone="info">Workspace futuro</HostlyStatusBadge>
-        </HostlySectionHeader>
+        </ConfigModulePageHeader>
 
         <HostlySurface
           variant="ice"
-          className="border border-[rgba(148,163,184,0.2)] p-4 shadow-[0_18px_60px_rgba(15,23,42,0.06)] sm:p-6"
+          className="hostly-config-import-workspace-source-panel border border-[rgba(148,163,184,0.2)] p-4 shadow-[0_18px_60px_rgba(15,23,42,0.06)] sm:p-6"
         >
           <section aria-labelledby="import-workspace-source-title" className="space-y-5">
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -92,7 +90,7 @@ export function ImportWorkspacePageContent() {
               {importSources.map((source) => (
                 <div
                   key={source.title}
-                  className="group flex min-h-[210px] flex-col justify-between rounded-[28px] border border-dashed border-[rgba(148,163,184,0.5)] bg-white/82 p-5 shadow-[0_10px_32px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(59,130,246,0.34)] hover:bg-white hover:shadow-[0_18px_45px_rgba(15,23,42,0.08)]"
+                  className="hostly-config-import-source-card group flex min-h-[210px] flex-col justify-between rounded-[28px] border border-dashed border-[rgba(148,163,184,0.5)] bg-white/82 p-5 shadow-[0_10px_32px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(59,130,246,0.34)] hover:bg-white hover:shadow-[0_18px_45px_rgba(15,23,42,0.08)]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--hostly-surface-soft)] text-2xl shadow-inner">

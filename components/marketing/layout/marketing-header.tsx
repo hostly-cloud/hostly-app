@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { marketingNav } from "@/data/marketing/landing-content";
 import { MarketingButton } from "@/components/marketing/ui/marketing-primitives";
+import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
 
 export function MarketingHeader() {
   const [open, setOpen] = useState(false);
@@ -33,11 +34,13 @@ export function MarketingHeader() {
       }`}
     >
       <div className="marketing-container flex h-[68px] items-center justify-between gap-4">
-        <Link href="/" className="inline-flex items-center gap-2.5">
-          <span className="inline-flex size-8 items-center justify-center rounded-xl bg-[color:var(--hostly-navy-deep)] text-[13px] font-bold tracking-tight text-white">
-            H
-          </span>
-          <span className="text-[15px] font-semibold tracking-[-0.03em] text-[color:var(--hostly-ink-strong)]">Hostly</span>
+        <Link href="/" className="inline-flex items-center gap-2.5 no-underline">
+          <HostlyBrandLockup
+            size={32}
+            tone="app"
+            className="inline-flex items-center gap-2.5"
+            wordmarkClassName="text-[15px] font-semibold tracking-[-0.03em] text-[color:var(--hostly-ink-strong)]"
+          />
         </Link>
 
         <nav className="hidden items-center gap-7 md:flex">

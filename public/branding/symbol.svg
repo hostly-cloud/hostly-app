@@ -1,0 +1,8 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Hostly</title>
+  <desc id="desc">Hostly official symbol</desc>
+  <rect width="512" height="512" rx="136" fill="url(#hostlySymbolGradient)"/>
+  <path d="M150 148h66v158h152V148h66v210c0 44-36 80-80 80h-52v-72H216v72h-66V148Z" fill="white"/>
+  <path d="M216 366h86" stroke="#DDF3FF" stroke-width="38" stroke-linecap="round" opacity=".72"/>
+  <defs><linearGradient id="hostlySymbolGradient" x1="70" y1="46" x2="458" y2="486" gradientUnits="userSpaceOnUse"><stop stop-color="#3D8AB8"/><stop offset="1" stop-color="#0F2744"/></linearGradient></defs>
+</svg>
