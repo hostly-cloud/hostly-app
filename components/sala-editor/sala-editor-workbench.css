@@ -1713,6 +1713,34 @@
   background-position: 8px 8px;
 }
 
+.hostly-sala-canvas-snap-guides {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hostly-sala-canvas-snap-guides__line {
+  position: absolute;
+  background: rgba(56, 189, 248, 0.42);
+  transition: opacity 135ms ease;
+}
+
+.hostly-sala-canvas-snap-guides__line--v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-0.5px);
+}
+
+.hostly-sala-canvas-snap-guides__line--h {
+  left: 0;
+  right: 0;
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
 .hostly-sala-espacio-frame-host {
   padding: 8px 10px 10px;
 }

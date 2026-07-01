@@ -9,7 +9,9 @@ import {
   type OperationalInstanceResizeCorner,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
+import type { OperationalSnapGuides } from "@/lib/sala-editor/canvas/operational-snap";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
+import { SalaCanvasSnapGuides } from "@/components/sala-editor/panels/sala-canvas-snap-guides";
 import { SalaOperationalInstanceCanvasObject } from "@/components/sala-editor/panels/sala-operational-instance-canvas-object";
 
 function clientToCanvasPoint(
@@ -32,6 +34,7 @@ export type SalaOperacionWorkspaceProps = {
   draggingInstanceId: string | null;
   resizingInstanceId: string | null;
   dropAnimatingInstanceId: string | null;
+  snapGuides?: OperationalSnapGuides;
   isDragging: () => boolean;
   isResizing: () => boolean;
   onCanvasPointerDown: (point: { x: number; y: number }) => void;
@@ -66,6 +69,7 @@ export function SalaOperacionWorkspace({
   draggingInstanceId,
   resizingInstanceId,
   dropAnimatingInstanceId,
+  snapGuides,
   isDragging,
   isResizing,
   onCanvasPointerDown,
@@ -220,6 +224,7 @@ export function SalaOperacionWorkspace({
         </>
       }
     >
+      {snapGuides ? <SalaCanvasSnapGuides guides={snapGuides} /> : null}
       {instances.map((instance) => {
         const instanceCatalog = getOperationalElementCatalogItem(instance.elementType);
         const moveHandlers = createMoveHandlers(instance.id);

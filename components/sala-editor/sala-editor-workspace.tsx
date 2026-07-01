@@ -13,8 +13,15 @@ import { useSalaWallDrawing } from "@/hooks/useSalaWallDrawing";
 import { useOperationalElementDragging } from "@/hooks/useOperationalElementDragging";
 import { useOperationalElementResizing } from "@/hooks/useOperationalElementResizing";
 import {
+  getDefaultOperationalInstanceCanvasSize,
   getOperationalInstanceCanvasSize,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import type { OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
+import {
+  EMPTY_OPERATIONAL_SNAP_GUIDES,
+  snapOperationalCenterPosition,
+  type OperationalSnapGuides,
+} from "@/lib/sala-editor/canvas/operational-snap";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import {
   loadSalaEditorDraft,
@@ -49,6 +56,8 @@ export function SalaEditorWorkspace({
   draftPersistenceEnabled = true,
 }: SalaEditorWorkspaceProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [operationalSnapGuides, setOperationalSnapGuides] =
+    useState<OperationalSnapGuides>(EMPTY_OPERATIONAL_SNAP_GUIDES);
   const [draftReady, setDraftReady] = useState(!draftPersistenceEnabled);
   const draftLoadSeqRef = useRef(0);
   const lastDraftSignatureRef = useRef<string | null>(null);
@@ -155,6 +164,27 @@ export function SalaEditorWorkspace({
 
   const operationalDragEnabled = document.navigation.phase === "operacion";
 
+  const clearOperationalSnapGuides = useCallback(() => {
+    setOperationalSnapGuides(EMPTY_OPERATIONAL_SNAP_GUIDES);
+  }, []);
+
+  const applyOperationalSnap = useCallback(
+    (
+      instanceId: string,
+      raw: OperationalElementPosition,
+      size: { width: number; height: number },
+    ) => {
+      const result = snapOperationalCenterPosition(raw, {
+        draggingInstanceId: instanceId,
+        instances: operationalElementInstancesInEspacio,
+        size,
+      });
+      setOperationalSnapGuides(result.guides);
+      return result.position;
+    },
+    [operationalElementInstancesInEspacio],
+  );
+
   const {
     draggingInstanceId: draggingOperationalInstanceId,
     dropAnimatingInstanceId: dropAnimatingOperationalInstanceId,
@@ -168,7 +198,19 @@ export function SalaEditorWorkspace({
   } = useOperationalElementDragging({
     enabled: operationalDragEnabled,
     onUpdatePosition: (instanceId, position) => {
-      updateOperationalElement(instanceId, { position });
+      const instance = operationalElementInstancesInEspacio.find(
+        (item) => item.id === instanceId,
+      );
+      if (!instance) {
+        updateOperationalElement(instanceId, { position });
+        return;
+      }
+      const snapped = applyOperationalSnap(
+        instanceId,
+        position,
+        getOperationalInstanceCanvasSize(instance),
+      );
+      updateOperationalElement(instanceId, { position: snapped });
     },
     onSelectInstance: selectOperationalElementInstance,
     onClearSelection: clearOperationalElementInstance,
@@ -213,10 +255,27 @@ export function SalaEditorWorkspace({
   const handleOperationalCanvasPointerDown = useCallback(
     (point: { x: number; y: number }) => {
       operationalCanvasPointerDown(point, () => {
-        placeOperationalElementAt(point);
+        if (!activeOperationalElementType) {
+          placeOperationalElementAt(point);
+          return;
+        }
+        const defaultSize = getDefaultOperationalInstanceCanvasSize(
+          activeOperationalElementType,
+        );
+        const { position } = snapOperationalCenterPosition(point, {
+          draggingInstanceId: "__placement__",
+          instances: operationalElementInstancesInEspacio,
+          size: defaultSize,
+        });
+        placeOperationalElementAt(position);
       });
     },
-    [operationalCanvasPointerDown, placeOperationalElementAt],
+    [
+      activeOperationalElementType,
+      operationalCanvasPointerDown,
+      operationalElementInstancesInEspacio,
+      placeOperationalElementAt,
+    ],
   );
 
   const handleOperationalInstancePointerDown = useCallback(
@@ -243,15 +302,17 @@ export function SalaEditorWorkspace({
   const handleOperationalInstancePointerUp = useCallback(
     (instanceId: string) => {
       endInstancePointer(instanceId);
+      clearOperationalSnapGuides();
     },
-    [endInstancePointer],
+    [clearOperationalSnapGuides, endInstancePointer],
   );
 
   const handleOperationalInstancePointerCancel = useCallback(
     (instanceId: string) => {
       cancelInstancePointer(instanceId);
+      clearOperationalSnapGuides();
     },
-    [cancelInstancePointer],
+    [cancelInstancePointer, clearOperationalSnapGuides],
   );
 
   const wallDrawingEnabled =
@@ -311,9 +372,10 @@ export function SalaEditorWorkspace({
     ) {
       cancelDragging();
       cancelResize();
+      clearOperationalSnapGuides();
     }
     previousEspacioIdRef.current = nextId;
-  }, [cancelDragging, cancelResize, selectedEspacio?.id]);
+  }, [cancelDragging, cancelResize, clearOperationalSnapGuides, selectedEspacio?.id]);
 
   const openAddDialog = useCallback(() => {
     setAddDialogOpen(true);
@@ -372,6 +434,7 @@ export function SalaEditorWorkspace({
             draggingOperationalInstanceId={draggingOperationalInstanceId}
             resizingOperationalInstanceId={resizingOperationalInstanceId}
             dropAnimatingOperationalInstanceId={dropAnimatingOperationalInstanceId}
+            operationalSnapGuides={operationalSnapGuides}
             isOperationalDragging={isOperationalDragging}
             isOperationalResizing={isOperationalResizing}
             onOperationalCanvasPointerDown={handleOperationalCanvasPointerDown}
