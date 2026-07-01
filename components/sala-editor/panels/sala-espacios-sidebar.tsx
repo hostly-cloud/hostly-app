@@ -12,6 +12,8 @@ export type SalaEspaciosSidebarProps = {
   onSelectEspacio: (espacioId: string) => void;
   onRequestAddEspacio: () => void;
   onUpdateEspacio?: (espacioId: string, patch: Partial<SalaEspacioDraft>) => void;
+  /** primary = fase Espacios · switcher = selector compacto en Estructura/Operación */
+  mode?: "primary" | "switcher";
 };
 
 export function SalaEspaciosSidebar({
@@ -21,6 +23,7 @@ export function SalaEspaciosSidebar({
   onSelectEspacio,
   onRequestAddEspacio,
   onUpdateEspacio,
+  mode = "primary",
 }: SalaEspaciosSidebarProps) {
   const sorted = sortSalaEspacios(espacios);
 
@@ -28,16 +31,30 @@ export function SalaEspaciosSidebar({
     return <SalaEspaciosEmptyState onCreateEspacio={onRequestAddEspacio} compact />;
   }
 
+  const isSwitcher = mode === "switcher";
+
   return (
-    <div className="hostly-sala-editor-toolbox hostly-sala-editor-toolbox--spaces">
-      <button
-        type="button"
-        onClick={onRequestAddEspacio}
-        className="hostly-sala-editor-toolbox__add hostly-sala-editor-toolbox__add--icon"
-        title="Añadir espacio"
-      >
-        <span aria-hidden>+</span>
-      </button>
+    <div
+      className={[
+        "hostly-sala-editor-toolbox",
+        "hostly-sala-editor-toolbox--spaces",
+        isSwitcher ? "hostly-sala-editor-toolbox--spaces-switcher" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {isSwitcher ? (
+        <p className="hostly-sala-editor-space-switcher__label">Espacio activo</p>
+      ) : (
+        <button
+          type="button"
+          onClick={onRequestAddEspacio}
+          className="hostly-sala-editor-toolbox__add hostly-sala-editor-toolbox__add--icon"
+          title="Añadir espacio"
+        >
+          <span aria-hidden>+</span>
+        </button>
+      )}
 
       <ul className="hostly-sala-editor-space-grid">
         {sorted.map((espacio) => (

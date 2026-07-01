@@ -37,8 +37,20 @@ export function SalaEditorLeftPanel({
 }: SalaEditorLeftPanelProps) {
   return (
     <>
+      {espacios.length > 0 && phase !== "espacios" ? (
+        <SalaEspaciosSidebar
+          mode="switcher"
+          espacios={espacios}
+          selectedEspacioId={selectedEspacioId}
+          elementCountByEspacioId={elementCountByEspacioId}
+          onSelectEspacio={onSelectEspacio}
+          onRequestAddEspacio={onRequestAddEspacio}
+          onUpdateEspacio={onUpdateEspacio}
+        />
+      ) : null}
       {phase === "espacios" ? (
         <SalaEspaciosSidebar
+          mode="primary"
           espacios={espacios}
           selectedEspacioId={selectedEspacioId}
           elementCountByEspacioId={elementCountByEspacioId}

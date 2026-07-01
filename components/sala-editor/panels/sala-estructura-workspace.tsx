@@ -9,6 +9,7 @@ import { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas
 
 export type SalaEstructuraWorkspaceProps = {
   espacio: SalaEspacio;
+  restaurantId: string;
   tool: StructuralToolboxItem;
   walls?: SalaWallSegment[];
   wallDraft?: SalaWallDrawingDraft | null;
@@ -19,6 +20,7 @@ export type SalaEstructuraWorkspaceProps = {
 
 export function SalaEstructuraWorkspace({
   espacio,
+  restaurantId,
   tool,
   walls = [],
   wallDraft = null,
@@ -31,7 +33,7 @@ export function SalaEstructuraWorkspace({
     isWallTool && onWallPointerDown && onWallPointerMove;
 
   return (
-    <SalaEspacioCanvasFrame espacio={espacio}>
+    <SalaEspacioCanvasFrame espacio={espacio} restaurantId={restaurantId}>
       {wallDrawingEnabled ? (
         <SalaWallCanvas
           walls={walls}

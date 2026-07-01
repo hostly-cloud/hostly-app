@@ -26,6 +26,7 @@ function clientToCanvasPoint(
 
 export type SalaOperacionWorkspaceProps = {
   espacio: SalaEspacio;
+  restaurantId: string;
   instances: OperationalElementInstance[];
   selectedInstanceId: string | null;
   draggingInstanceId: string | null;
@@ -59,6 +60,7 @@ export type SalaOperacionWorkspaceProps = {
 
 export function SalaOperacionWorkspace({
   espacio,
+  restaurantId,
   instances,
   selectedInstanceId,
   draggingInstanceId,
@@ -191,6 +193,7 @@ export function SalaOperacionWorkspace({
   return (
     <SalaEspacioCanvasFrame
       espacio={espacio}
+      restaurantId={restaurantId}
       stageRef={surfaceRef}
       stageRole="application"
       stageAriaLabel="Lienzo de elementos operativos"

@@ -13,9 +13,14 @@ import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operat
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
+import {
+  createSpaceWorkspaceScope,
+  getSpaceWorkspaceKey,
+} from "@/lib/sala-editor/canvas/space-workspace";
 import { SalaEditorEmptyState } from "@/components/sala-editor/panels/sala-editor-empty-state";
 
 export type SalaEditorWorkspaceCanvasProps = {
+  restaurantId: string;
   phase: SalaEditorPhase;
   espacio: SalaEspacio | null;
   hasEspacios: boolean;
@@ -59,6 +64,7 @@ export type SalaEditorWorkspaceCanvasProps = {
 };
 
 export function SalaEditorWorkspaceCanvas({
+  restaurantId,
   phase,
   espacio,
   hasEspacios,
@@ -89,12 +95,21 @@ export function SalaEditorWorkspaceCanvas({
   onOperationalDeleteInstance,
   onRequestCreateEspacio,
 }: SalaEditorWorkspaceCanvasProps) {
+  const spaceWorkspaceKey =
+    espacio != null
+      ? getSpaceWorkspaceKey(createSpaceWorkspaceScope(restaurantId, espacio.id))
+      : "no-space";
+
   if (!hasEspacios) {
     return <SalaEspaciosEmptyState onCreateEspacio={onRequestCreateEspacio} />;
   }
 
   if (phase === "espacios" && espacio) {
-    return <SalaEspacioWorkspaceHero espacio={espacio} />;
+    return (
+      <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
+        <SalaEspacioWorkspaceHero espacio={espacio} restaurantId={restaurantId} />
+      </div>
+    );
   }
 
   if (!espacio) {
@@ -109,15 +124,18 @@ export function SalaEditorWorkspaceCanvas({
 
   if (phase === "estructura" && activeStructuralToolboxItem) {
     return (
-      <SalaEstructuraWorkspace
-        espacio={espacio}
-        tool={activeStructuralToolboxItem}
-        walls={walls}
-        wallDraft={wallDraft}
-        selectedWallId={selectedWallId}
-        onWallPointerDown={onWallPointerDown}
-        onWallPointerMove={onWallPointerMove}
-      />
+      <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
+        <SalaEstructuraWorkspace
+          espacio={espacio}
+          restaurantId={restaurantId}
+          tool={activeStructuralToolboxItem}
+          walls={walls}
+          wallDraft={wallDraft}
+          selectedWallId={selectedWallId}
+          onWallPointerDown={onWallPointerDown}
+          onWallPointerMove={onWallPointerMove}
+        />
+      </div>
     );
   }
 
@@ -133,9 +151,11 @@ export function SalaEditorWorkspaceCanvas({
 
   if (phase === "operacion" && espacio && activeOperationalCatalogItem) {
     return (
-      <SalaOperacionWorkspace
-        espacio={espacio}
-        instances={operationalElementInstances}
+      <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
+        <SalaOperacionWorkspace
+          espacio={espacio}
+          restaurantId={restaurantId}
+          instances={operationalElementInstances}
         selectedInstanceId={selectedOperationalElementInstanceId}
         draggingInstanceId={draggingOperationalInstanceId}
         resizingInstanceId={resizingOperationalInstanceId}
@@ -153,7 +173,8 @@ export function SalaEditorWorkspaceCanvas({
         onResizeCancel={onOperationalResizeCancel ?? (() => undefined)}
         onDuplicateInstance={onOperationalDuplicateInstance ?? (() => undefined)}
         onDeleteInstance={onOperationalDeleteInstance ?? (() => undefined)}
-      />
+        />
+      </div>
     );
   }
 

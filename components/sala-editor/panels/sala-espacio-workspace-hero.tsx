@@ -5,12 +5,15 @@ import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-esp
 
 export type SalaEspacioWorkspaceHeroProps = {
   espacio: SalaEspacio;
+  restaurantId: string;
 };
 
-export function SalaEspacioWorkspaceHero({ espacio }: SalaEspacioWorkspaceHeroProps) {
+export function SalaEspacioWorkspaceHero({
+  espacio,
+  restaurantId,
+}: SalaEspacioWorkspaceHeroProps) {
   return (
-    <SalaEspacioCanvasFrame
-      espacio={espacio}
+    <SalaEspacioCanvasFrame espacio={espacio} restaurantId={restaurantId}
       hint={
         <div className="hostly-sala-espacio-frame__hero">
           <p className="hostly-sala-espacio-frame__hero-title">Tu espacio está listo</p>

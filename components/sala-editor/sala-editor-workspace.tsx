@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
@@ -82,6 +82,7 @@ export function SalaEditorWorkspace({
     moveInstancePointer,
     endInstancePointer,
     cancelInstancePointer,
+    cancelDragging,
     isDragging: isOperationalDragging,
     handleCanvasPointerDown: operationalCanvasPointerDown,
   } = useOperationalElementDragging({
@@ -220,6 +221,20 @@ export function SalaEditorWorkspace({
     [selectEspacio],
   );
 
+  const previousEspacioIdRef = useRef<string | null>(selectedEspacio?.id ?? null);
+
+  useEffect(() => {
+    const nextId = selectedEspacio?.id ?? null;
+    if (
+      previousEspacioIdRef.current != null &&
+      previousEspacioIdRef.current !== nextId
+    ) {
+      cancelDragging();
+      cancelResize();
+    }
+    previousEspacioIdRef.current = nextId;
+  }, [cancelDragging, cancelResize, selectedEspacio?.id]);
+
   const openAddDialog = useCallback(() => {
     setAddDialogOpen(true);
   }, []);
@@ -261,6 +276,7 @@ export function SalaEditorWorkspace({
         }
         workspace={
           <SalaEditorWorkspaceCanvas
+            restaurantId={document.restaurantId}
             phase={document.navigation.phase}
             espacio={selectedEspacio}
             hasEspacios={document.espacios.length > 0}

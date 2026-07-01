@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties, type MouseEvent } from "react";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import { salaEspacioTypeIcon } from "@/lib/sala-editor/catalog/espacio-types";
 
@@ -21,6 +21,12 @@ export function SalaEspacioCard({
 }: SalaEspacioCardProps) {
   const icon = salaEspacioTypeIcon(espacio.tipo);
   const menuRef = useRef<HTMLDetailsElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selected) return;
+    rootRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selected]);
 
   const closeMenu = useCallback(() => {
     if (menuRef.current) menuRef.current.open = false;
@@ -50,6 +56,7 @@ export function SalaEspacioCard({
 
   return (
     <div
+      ref={rootRef}
       className={[
         "hostly-sala-editor-space-chip",
         selected ? "is-selected" : "",
@@ -57,6 +64,7 @@ export function SalaEspacioCard({
       ]
         .filter(Boolean)
         .join(" ")}
+      style={{ "--espacio-accent": espacio.color } as CSSProperties}
     >
       <button
         type="button"
