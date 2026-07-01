@@ -125,7 +125,7 @@ function ProductosCartaTableCartaBadge({
       title={full}
       aria-label={full}
       dot
-      className="hostly-data-table-microchip hostly-data-table-microchip--carta"
+      className="hostly-data-table-microchip hostly-data-table-microchip--carta hostly-productos-carta-table-chip"
     >
       {short}
     </HostlyStatusBadge>
@@ -148,7 +148,7 @@ function ProductosCartaTableEscBadge({
       title={full}
       aria-label={full}
       dot={false}
-      className="hostly-data-table-microchip hostly-data-table-microchip--esc"
+      className="hostly-data-table-microchip hostly-data-table-microchip--esc hostly-productos-carta-table-chip"
     >
       {short}
     </HostlyStatusBadge>
@@ -453,7 +453,11 @@ function ProductPrimaryCell({
           </span>
         )}
         {p.origenAlta === "importacion_ia" ? (
-          <HostlyStatusBadge tone="neutral" dot={false} className="hostly-data-table-primary__tag">
+          <HostlyStatusBadge
+            tone="neutral"
+            dot={false}
+            className="hostly-data-table-primary__tag hostly-productos-carta-table-chip"
+          >
             IA
           </HostlyStatusBadge>
         ) : null}
@@ -659,7 +663,7 @@ function renderProductRowCells(args: {
           dot={false}
           title={labelTipoVenta(t, p.tipoVenta)}
           aria-label={labelTipoVenta(t, p.tipoVenta)}
-          className="hostly-data-table-tipo-pill"
+          className="hostly-data-table-tipo-pill hostly-productos-carta-table-chip"
         >
           {labelTipoVenta(t, p.tipoVenta)}
         </HostlyStatusBadge>
@@ -723,15 +727,17 @@ function renderProductRowCells(args: {
           <span className="hostly-data-table-price">{formatEuro(p.precioVenta, locale)}</span>
         )}
       </HostlyDataCell>
-      <HostlyDataCell align="center" col="carta">
+      <HostlyDataCell align="center" col="carta" className="hostly-productos-carta-active-cell">
         {inlineEditEnabled && onInlineToggleActive ? (
-          <ProductosInlineActiveToggle
-            p={p}
-            disabled={isLegacyReadOnly}
-            t={t}
-            onToggle={() => onInlineToggleActive(p)}
-            onError={onInlineEditError}
-          />
+          <span className="hostly-productos-inline-active-cell">
+            <ProductosInlineActiveToggle
+              p={p}
+              disabled={isLegacyReadOnly}
+              t={t}
+              onToggle={() => onInlineToggleActive(p)}
+              onError={onInlineEditError}
+            />
+          </span>
         ) : (
           <ProductosCartaTableCartaBadge p={p} t={t} locale={locale} />
         )}

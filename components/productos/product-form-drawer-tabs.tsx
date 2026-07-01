@@ -4,9 +4,6 @@ import type { ReactNode } from "react";
 
 export type ProductFormDrawerTabId =
   | "basico"
-  | "produccion"
-  | "venta"
-  | "clasificacion"
   | "modificadores"
   | "escandallo"
   | "comercial";
@@ -16,9 +13,6 @@ export const PRODUCT_FORM_DRAWER_TAB_SPECS: ReadonlyArray<{
   label: string;
 }> = [
   { id: "basico", label: "Básico" },
-  { id: "produccion", label: "Producción" },
-  { id: "venta", label: "Venta" },
-  { id: "clasificacion", label: "Clasificación" },
   { id: "modificadores", label: "Modificadores" },
   { id: "escandallo", label: "Escandallo" },
   { id: "comercial", label: "Info comercial" },

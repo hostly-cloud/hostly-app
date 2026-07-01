@@ -482,7 +482,7 @@ export function ProductosInlineActiveToggle({
     triggerSaved();
   }, [busy, disabled, onError, onToggle, triggerSaved]);
 
-  const label = isActive ? t("carta.filterActive") : t("carta.filterInactive");
+  const label = isActive ? t("carta.estadoActivo") : t("carta.estadoInactivo");
 
   return (
     <button

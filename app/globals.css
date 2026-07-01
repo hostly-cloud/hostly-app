@@ -10446,6 +10446,94 @@ main:has(.hostly-carta-config-stack--productos) .hostly-module-header-actions {
   gap: 0.3rem;
 }
 
+.hostly-product-form-catalog-hierarchy--category-first {
+  gap: 0.45rem;
+}
+
+.hostly-product-form-catalog-hierarchy--category-first .hostly-product-form-catalog-hierarchy__child {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+
+.hostly-product-form-derived-family {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hostly-product-form-derived-family__card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 34px;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 16%, #e2e8f0);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--hostly-ice-50, #f8fafc) 72%, #ffffff);
+  padding: 5px 9px;
+}
+
+.hostly-product-form-derived-family__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--hostly-ink-strong, #1e293b);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.hostly-product-form-derived-family__hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--hostly-ink-muted, #64748b);
+  font-size: 9px;
+  font-weight: 550;
+  line-height: 1.2;
+}
+
+.hostly-product-form-family-override {
+  margin-top: 1px;
+  border-top: 1px dashed color-mix(in srgb, var(--hostly-table-divider-soft) 76%, transparent);
+  padding-top: 5px;
+}
+
+.hostly-product-form-family-override__summary {
+  cursor: pointer;
+  color: var(--hostly-ink-muted, #64748b);
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.hostly-product-form-family-override[open] .hostly-product-form-family-override__summary {
+  margin-bottom: 5px;
+}
+
+.hostly-product-form-internal-classification {
+  border: 1px dashed color-mix(in srgb, var(--hostly-table-divider-soft) 84%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--hostly-ice-50, #f8fafc) 48%, #ffffff);
+  padding: 7px 9px;
+}
+
+.hostly-product-form-internal-classification__summary {
+  cursor: pointer;
+  color: var(--hostly-ink-muted, #64748b);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.hostly-product-form-internal-classification[open] .hostly-product-form-internal-classification__summary {
+  margin-bottom: 7px;
+}
+
 .hostly-product-form-drawer-zones {
   display: flex;
   flex-direction: column;
@@ -11880,6 +11968,16 @@ main:has(.hostly-carta-config-stack--productos) .hostly-module-header-actions {
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
+.hostly-productos-inline-active-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 .hostly-productos-inline-active.is-active {
   border-color: rgba(34, 197, 94, 0.34);
   background: rgba(240, 253, 244, 0.96);
@@ -12094,6 +12192,154 @@ main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline
 .hostly-productos-v3--operations .hostly-data-table-viewport {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* Productos V3 · Fase 6 — pulido visual de tabla (filas, chips, jerarquía) */
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table--productos-carta {
+  --hostly-productos-v3-chip-h: 20px;
+  --hostly-productos-v3-chip-py: 1px;
+  --hostly-productos-v3-chip-px: 6px;
+  --hostly-productos-v3-chip-fs: 9.5px;
+  --hostly-productos-v3-row-min-h: 48px;
+  --hostly-productos-v3-thumb: 34px;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-head,
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-row {
+  padding: 6px 8px;
+  align-items: center;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-row {
+  min-height: var(--hostly-productos-v3-row-min-h);
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-row .hostly-data-table-cell {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding-block: 0;
+  min-height: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-cell.is-align-center {
+  justify-content: center;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-cell.is-align-end {
+  justify-content: flex-end;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-head .hostly-data-table-cell {
+  padding-block: 1px;
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-name-thumb {
+  width: var(--hostly-productos-v3-thumb);
+  height: var(--hostly-productos-v3-thumb);
+  border-radius: 7px;
+}
+
+.hostly-productos-v3--operations .hostly-data-table-primary--with-thumb {
+  gap: 7px;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-name-thumb__initial {
+  font-size: 13px;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-primary__name {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-secondary,
+.hostly-productos-v3--operations .hostly-data-table--productos-carta .hostly-data-table-col--familia .hostly-data-table-secondary,
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-secondary--muted {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--hostly-ink-faint);
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-price {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-productos-carta-table-chip,
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-tipo-pill,
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-microchip.hostly-status-badge,
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-primary__tag.hostly-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: var(--hostly-productos-v3-chip-h);
+  max-height: var(--hostly-productos-v3-chip-h);
+  padding: var(--hostly-productos-v3-chip-py) var(--hostly-productos-v3-chip-px);
+  border-radius: 999px;
+  font-size: var(--hostly-productos-v3-chip-fs);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  text-transform: none;
+  white-space: nowrap;
+  gap: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-microchip .hostly-status-badge__dot {
+  display: none;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-microchip--oper.hostly-data-table-microchip,
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-microchip--routing-audit.hostly-data-table-microchip {
+  padding: var(--hostly-productos-v3-chip-py) var(--hostly-productos-v3-chip-px);
+  font-size: var(--hostly-productos-v3-chip-fs);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-tipo-pill {
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 16%, var(--hostly-line));
+  background: color-mix(in srgb, var(--hostly-info-soft) 65%, white);
+  color: var(--hostly-accent);
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-data-table-col--carta,
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-productos-carta-active-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 0;
+  min-height: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host .hostly-productos-inline-active-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.hostly-productos-v3--operations .hostly-productos-routing-correct-btn {
+  min-height: 16px;
+  padding: 0 4px;
+  font-size: 8.5px;
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.hostly-productos-v3--operations .hostly-productos-routing-audit-cell {
+  gap: 2px;
 }
 
 .hostly-productos-v3--operations .hostly-productos-v3__advanced-panel {

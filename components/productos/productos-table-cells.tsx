@@ -236,7 +236,10 @@ export function ProductosCartaOperMicrochip({
       dot={false}
       title={title}
       aria-label={title}
-      className={["hostly-data-table-microchip hostly-data-table-microchip--oper", className]
+      className={[
+        "hostly-data-table-microchip hostly-data-table-microchip--oper hostly-productos-carta-table-chip",
+        className,
+      ]
         .filter(Boolean)
         .join(" ")}
     >
@@ -330,6 +333,7 @@ export function ProductosCartaRoutingAuditChip({
         className={[
           "hostly-data-table-microchip",
           "hostly-data-table-microchip--routing-audit",
+          "hostly-productos-carta-table-chip",
           tone === "ok" ? "hostly-data-table-microchip--routing-audit-ok" : "",
           className,
         ]
