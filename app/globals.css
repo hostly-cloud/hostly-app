@@ -7113,10 +7113,23 @@ body {
 }
 
 .hostly-config-context-selector__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.hostly-config-context-selector__main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.hostly-config-context-selector__language {
+  flex: 0 0 auto;
 }
 
 .hostly-config-context-selector__hub {
@@ -11980,6 +11993,306 @@ main:has(.hostly-productos-v3) .hostly-carta-config-header-actions .hostly-butto
   font-size: 12px !important;
 }
 
+/* Productos V3 · Fase 4 — catálogo operativo masivo (~90 % tabla) */
+
+.hostly-productos-v3--operations {
+  gap: 0 !important;
+}
+
+main:has(.hostly-productos-v3--operations) .hostly-carta-config-stack--productos {
+  gap: 4px;
+  padding: 0;
+}
+
+main:has(.hostly-productos-v3--operations).hostly-module-shell {
+  padding-top: 0 !important;
+}
+
+main:has(.hostly-productos-v3--operations) .hostly-page-header--dashboard-module {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  min-height: 0 !important;
+}
+
+main:has(.hostly-productos-v3--operations) .hostly-page-header--dashboard-module .hostly-page-title {
+  font-size: 17px !important;
+  line-height: 1.15 !important;
+}
+
+main:has(.hostly-productos-v3--operations) .hostly-module-header-below {
+  min-height: 0 !important;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+main:has(.hostly-productos-v3--operations) .hostly-module-header-actions__primary,
+main:has(.hostly-productos-v3--operations) .hostly-module-header-actions__secondary {
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+main:has(.hostly-productos-v3--operations) .hostly-module-content--dashboard {
+  margin-top: 0 !important;
+}
+
+main:has(.hostly-productos-v3--operations) .hostly-carta-config-header-actions .hostly-button-compact {
+  min-height: 34px !important;
+  padding: 4px 12px !important;
+  font-size: 12px !important;
+}
+
+main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline-actions__btn--primary {
+  min-height: 36px !important;
+  padding: 6px 14px !important;
+  font-size: 12.5px !important;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__command-bar {
+  gap: 3px;
+  padding: 3px 4px 2px;
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: transparent;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__command-bar-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__search .hostly-productos-carta-search--field {
+  min-height: 34px !important;
+  font-size: 13px !important;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__status-wrap {
+  flex: 0 0 auto;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__category-rail {
+  max-height: 28px;
+  gap: 3px;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__category-rail .hostly-productos-carta-filter-chip--rail-premium {
+  min-height: 24px;
+  padding: 1px 8px;
+  font-size: 10.5px;
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-list-host--config-table {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.hostly-productos-v3--operations .hostly-data-table-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 5px 6px 6px;
+  gap: 5px;
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: color-mix(in srgb, var(--hostly-ice-50) 42%, white);
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-tools-row,
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  min-width: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-tools {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: min(100%, 360px);
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-tools a,
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-tools button,
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-order {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hostly-table-divider-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--hostly-ink-muted);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.15;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-tools a:hover,
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-tools button:hover,
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-order:hover {
+  border-color: color-mix(in srgb, var(--hostly-accent) 26%, var(--hostly-table-divider-soft));
+  background: color-mix(in srgb, var(--hostly-accent-soft) 28%, white);
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-productos-v3--operations .hostly-productos-carta-food-drink-segment.hostly-productos-carta-food-drink-segment--inline {
+  display: flex !important;
+  flex: 0 0 auto;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-group--kpis {
+  flex: 1 1 360px;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-label {
+  flex: 0 0 auto;
+  color: var(--hostly-ink-faint);
+  font-size: 8.5px;
+  font-weight: 780;
+  letter-spacing: 0.075em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__advanced-chips .hostly-productos-carta-filter-chip {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  line-height: 1.1;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-grid {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-card {
+  display: inline-flex;
+  min-width: 52px;
+  min-height: 42px;
+  flex: 0 0 52px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  border: 1px solid var(--hostly-table-divider-faint);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--hostly-ink-muted);
+  padding: 3px 5px;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-card:hover {
+  border-color: color-mix(in srgb, var(--hostly-accent) 28%, var(--hostly-table-divider-soft));
+  background: color-mix(in srgb, var(--hostly-accent-soft) 24%, white);
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-card.is-active {
+  border-color: color-mix(in srgb, var(--hostly-accent) 50%, var(--hostly-table-divider-soft));
+  background: color-mix(in srgb, var(--hostly-accent-soft) 48%, white);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--hostly-accent) 12%, transparent);
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-card.is-ok .hostly-productos-v3__kpi-value {
+  color: #15803d;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-card.is-warn .hostly-productos-v3__kpi-value {
+  color: #b45309;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-card.is-danger .hostly-productos-v3__kpi-value {
+  color: #b91c1c;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-value {
+  color: var(--hostly-ink-strong);
+  font-size: 15px;
+  font-weight: 780;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-label {
+  max-width: 48px;
+  overflow: hidden;
+  color: var(--hostly-ink-faint);
+  font-size: 7px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  line-height: 1.05;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hostly-productos-v3--operations .hostly-productos-v3__kpi-loading {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  color: var(--hostly-ink-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.hostly-productos-v3--operations .hostly-carta-config-alert {
+  margin-bottom: 2px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .hostly-productos-v3--operations .hostly-productos-v3__command-bar-primary {
+    flex-wrap: wrap;
+  }
+
+  .hostly-productos-v3--operations .hostly-productos-v3__status-wrap {
+    width: 100%;
+  }
+
+  .hostly-productos-v3--operations .hostly-productos-v3__advanced-group--kpis {
+    flex-basis: 100%;
+  }
+}
+
 .hostly-carta-config-drawer-backdrop--elevated {
   z-index: 55;
 }
@@ -13378,7 +13691,7 @@ main:has(.hostly-productos-v3) .hostly-carta-config-header-actions .hostly-butto
   grid-column: 8;
   min-width: var(--hostly-dt-dense-actions);
   max-width: var(--hostly-dt-dense-actions);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .hostly-data-table--dense-config .hostly-data-table-head .hostly-data-table-cell {
@@ -13430,7 +13743,7 @@ main:has(.hostly-productos-v3) .hostly-carta-config-header-actions .hostly-butto
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .hostly-data-table--dense-config .hostly-data-table-col--actions .hostly-row-actions {
@@ -13464,8 +13777,9 @@ main:has(.hostly-productos-v3) .hostly-carta-config-header-actions .hostly-butto
   --hostly-dt-dense-meta-oper: 38px;
   --hostly-dt-dense-meta-routing: minmax(72px, 88px);
   --hostly-dt-dense-price: 86px;
-  --hostly-dt-dense-status: 72px;
-  --hostly-dt-dense-actions: 114px;
+  --hostly-dt-dense-carta: 112px;
+  --hostly-dt-dense-esc: 54px;
+  --hostly-dt-dense-actions: 146px;
   --hostly-data-table-columns:
     var(--hostly-dt-dense-select)
     var(--hostly-dt-dense-product)
@@ -13476,18 +13790,21 @@ main:has(.hostly-productos-v3) .hostly-carta-config-header-actions .hostly-butto
     var(--hostly-dt-dense-meta-oper)
     var(--hostly-dt-dense-meta-routing)
     var(--hostly-dt-dense-price)
-    var(--hostly-dt-dense-status)
-    var(--hostly-dt-dense-status)
+    var(--hostly-dt-dense-carta)
+    var(--hostly-dt-dense-esc)
     var(--hostly-dt-dense-actions);
 }
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-scroll {
   column-gap: 7px;
+  padding-right: 16px;
+  box-sizing: border-box;
 }
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head,
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-row {
   column-gap: 7px;
+  padding-right: 6px;
 }
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--tipo {
@@ -13529,18 +13846,56 @@ main:has(.hostly-productos-v3) .hostly-carta-config-header-actions .hostly-butto
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--price {
   grid-column: 9;
+  justify-self: stretch;
 }
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--carta {
   grid-column: 10;
+  min-width: var(--hostly-dt-dense-carta);
+  max-width: var(--hostly-dt-dense-carta);
+  justify-self: stretch;
 }
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--esc {
   grid-column: 11;
+  min-width: var(--hostly-dt-dense-esc);
+  max-width: var(--hostly-dt-dense-esc);
+  justify-self: stretch;
 }
 
 .hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--actions {
   grid-column: 12;
+  justify-self: stretch;
+  min-width: var(--hostly-dt-dense-actions);
+  max-width: var(--hostly-dt-dense-actions);
+  padding-right: 4px;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head .hostly-data-table-col--price,
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head .hostly-data-table-col--carta,
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head .hostly-data-table-col--esc,
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head .hostly-data-table-col--actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head .hostly-data-table-col--price,
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head .hostly-data-table-col--actions {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head .hostly-data-table-col--carta,
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-head .hostly-data-table-col--esc {
+  justify-content: center;
+  text-align: center;
+}
+
+.hostly-data-table--dense-config.hostly-data-table--productos-carta .hostly-data-table-col--actions .hostly-row-actions {
+  gap: 4px;
+  width: auto;
+  max-width: none;
 }
 
 .hostly-data-table-microchip--oper.hostly-data-table-microchip {

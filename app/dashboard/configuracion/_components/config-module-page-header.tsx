@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { LanguageSwitcher } from "@/components/language-switcher";
 
 type ConfigModulePageHeaderProps = {
   title: ReactNode;
@@ -49,7 +48,6 @@ export function ConfigModulePageHeader({
         </div>
         <div className="hostly-config-module-header__actions-secondary">
           {secondaryActions}
-          <LanguageSwitcher />
         </div>
       </div>
       {children}

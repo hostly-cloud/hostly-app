@@ -47,6 +47,8 @@ export type ModulePageShellProps = {
   shellSurface?: "default" | "configLight";
   /** Oculta logout en herramientas inmersivas donde ya existe navegación global. */
   hideLogoutButton?: boolean;
+  /** Oculta el selector de idioma cuando lo renderiza un chrome superior compartido. */
+  hideLanguageSwitcher?: boolean;
   /** Listado inventario/config carta: cabecera y franja bajo-título más bajos (solo presentación). */
   denseInventoryHeader?: boolean;
 };
@@ -75,6 +77,7 @@ export default function ModulePageShell({
   mapEditorDenseChrome,
   shellSurface = "default",
   hideLogoutButton,
+  hideLanguageSwitcher,
   denseInventoryHeader,
 }: ModulePageShellProps) {
   const { t } = useI18n();
@@ -231,7 +234,7 @@ export default function ModulePageShell({
             surface="light"
           />
         ) : null}
-        <LanguageSwitcher />
+        {!hideLanguageSwitcher ? <LanguageSwitcher /> : null}
       </div>
     </div>
   );

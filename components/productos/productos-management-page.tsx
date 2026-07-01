@@ -22,7 +22,6 @@ import {
   type ProductEditOptions,
 } from "@/components/productos/productos-table-cells";
 import {
-  ConfigCartaCompactFilterRow,
   ConfigCartaStatusFilterSelect,
   type ConfigCartaListFilterId,
 } from "@/components/productos/productos-config-carta-compact-controls";
@@ -3883,6 +3882,84 @@ export default function ProductosManagementPage({
     );
   }
 
+  function renderCompactResolverParityCards(): ReactNode {
+    if (!parityCatalogsLoaded) {
+      return (
+        <span className="hostly-productos-v3__kpi-loading" role="status">
+          {t("productos.resolverParitySummaryLoading")}
+        </span>
+      );
+    }
+
+    const missingStation = resolverParitySummaryForTab.byIssue.FALTA_STATION;
+    const heuristic = resolverParitySummaryForTab.byIssue.FALLBACK_HEURISTICO;
+    const noOpStation = resolverParitySummaryForTab.byIssue.SIN_OPERATION_STATION;
+    const cards: Array<{
+      label: string;
+      value: number;
+      filterId: ResolverParityFilterId;
+      tone?: "ok" | "warn" | "danger";
+    }> = [
+      {
+        label: t("productos.resolverParitySummaryTotal"),
+        value: resolverParitySummaryForTab.total,
+        filterId: "all",
+      },
+      {
+        label: t("productos.resolverParitySummaryOk"),
+        value: resolverParitySummaryForTab.ok,
+        filterId: "ok",
+        tone: "ok",
+      },
+      {
+        label: t("productos.resolverParitySummaryDivergence"),
+        value: resolverParitySummaryForTab.withDivergence,
+        filterId: "divergences",
+        tone: resolverParitySummaryForTab.withDivergence > 0 ? "danger" : undefined,
+      },
+      {
+        label: t("productos.resolverParitySummaryMissingStation"),
+        value: missingStation,
+        filterId: "missingStation",
+        tone: missingStation > 0 ? "warn" : undefined,
+      },
+      {
+        label: t("productos.resolverParitySummaryHeuristic"),
+        value: heuristic,
+        filterId: "heuristic",
+        tone: heuristic > 0 ? "warn" : undefined,
+      },
+      {
+        label: t("productos.resolverParitySummaryNoOpStation"),
+        value: noOpStation,
+        filterId: "missingOperationStation",
+        tone: noOpStation > 0 ? "warn" : undefined,
+      },
+    ];
+
+    return cards.map((card) => {
+      const active = resolverParityFilter === card.filterId;
+      return (
+        <button
+          key={card.filterId}
+          type="button"
+          className={[
+            "hostly-productos-v3__kpi-card",
+            active ? "is-active" : "",
+            card.tone ? `is-${card.tone}` : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          aria-pressed={active}
+          onClick={() => handleResolverParityFilterChange(card.filterId)}
+        >
+          <span className="hostly-productos-v3__kpi-value">{card.value}</span>
+          <span className="hostly-productos-v3__kpi-label">{card.label}</span>
+        </button>
+      );
+    });
+  }
+
   function renderConfigCartaHeaderActions(): ReactNode {
     return (
       <div className="hostly-productos-carta-header-inline-actions">
@@ -3895,17 +3972,6 @@ export default function ProductosManagementPage({
           style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
         >
           {t("carta.ctaNew")}
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            router.push("/dashboard/configuracion/carta/importacion");
-          }}
-          className="hostly-button-secondary hostly-button-compact hostly-productos-carta-header-inline-actions__btn hostly-productos-carta-header-inline-actions__btn--secondary whitespace-nowrap"
-        >
-          Importar carta IA
         </button>
         <button
           type="button"
@@ -4805,7 +4871,7 @@ export default function ProductosManagementPage({
         >
           <HostlySection
             stack="sm"
-            className="hostly-productos-config-skin hostly-productos-config-skin--simplified hostly-productos-v3 min-h-0 min-w-0 flex-1 overflow-hidden !gap-0"
+            className="hostly-productos-config-skin hostly-productos-config-skin--simplified hostly-productos-v3 hostly-productos-v3--operations min-h-0 min-w-0 flex-1 overflow-hidden !gap-0"
             style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0 }}
           >
             {notice ? (
@@ -4821,6 +4887,7 @@ export default function ProductosManagementPage({
             <ProductosTableChrome iceVisual embedFlatChrome>
               <>
               <div className="hostly-productos-v3__command-bar">
+              <div className="hostly-productos-v3__command-bar-primary">
               <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical hostly-productos-carta-toolbar--config-primary hostly-productos-carta-toolbar--hero-search hostly-productos-v3__search">
               <input
               type="search"
@@ -4831,23 +4898,11 @@ export default function ProductosManagementPage({
               className="hostly-config-canonical-search hostly-productos-carta-search hostly-productos-carta-search--prominent hostly-productos-carta-search--field"
               />
               </div>
-              <div className="hostly-productos-v3__command-bar-filters">
-                <ConfigCartaCompactFilterRow className="hostly-productos-carta-compact-filters--ops-row hostly-productos-v3__status-row">
-                  <div className="hostly-productos-carta-ops-group">
-                    {renderConfigCartaStatusFilterSelect()}
-                    {canUseProductReorder ? (
-                      <button
-                        type="button"
-                        className="hostly-productos-carta-action hostly-productos-carta-action--secondary hostly-productos-carta-action--compact hostly-productos-carta-action--ops"
-                        aria-label={t("productos.orderModeCtaAria", { category: activeReorderCategoryLabel })}
-                        onClick={toggleReorderMode}
-                      >
-                        {t("productos.orderModeCta")}
-                      </button>
-                    ) : null}
-                  </div>
-                </ConfigCartaCompactFilterRow>
-                <div
+              <div className="hostly-productos-v3__status-wrap">
+                {renderConfigCartaStatusFilterSelect()}
+              </div>
+              </div>
+              <div
                   className="hostly-productos-carta-category-rail hostly-productos-carta-category-rail--protagonist hostly-productos-carta-category-rail--premium hostly-productos-v3__category-rail"
                   aria-label={t("cartaCategories.title")}
                   role="tablist"
@@ -4871,13 +4926,13 @@ export default function ProductosManagementPage({
                     })}
                 </div>
               </div>
-              </div>
               {configCartaAdvancedOpen ? (
               <div
               id="hostly-productos-carta-advanced-panel"
-              className="hostly-productos-carta-advanced-panel hostly-productos-carta-advanced-panel--inline"
+              className="hostly-productos-carta-advanced-panel hostly-productos-carta-advanced-panel--inline hostly-productos-v3__advanced-panel"
               >
-              <nav className="hostly-productos-carta-advanced-nav" aria-label="Navegación avanzada de carta">
+              <div className="hostly-productos-v3__advanced-tools-row">
+              <nav className="hostly-productos-carta-advanced-nav hostly-productos-v3__advanced-tools" aria-label="Navegación avanzada de carta">
               <Link href="/dashboard/configuracion/carta/categorias">{t("cartaCategories.manageLink")}</Link>
               <button
               type="button"
@@ -4886,30 +4941,52 @@ export default function ProductosManagementPage({
               {t("carta.ctaModifiers")}
               </button>
               <Link href="/dashboard/configuracion/carta/escandallos">Escandallos</Link>
+              <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push("/dashboard/configuracion/carta/importacion");
+              }}
+              >
+              Importar IA
+              </button>
               </nav>
-              <div className="hostly-productos-carta-advanced-section">
-              <span className="hostly-productos-carta-advanced-section__label">Escandallo</span>
-              <div className="hostly-productos-carta-filter-chips">
+              {canUseProductReorder ? (
+                <button
+                  type="button"
+                  className="hostly-productos-carta-action hostly-productos-carta-action--secondary hostly-productos-carta-action--compact hostly-productos-carta-action--ops hostly-productos-v3__advanced-order"
+                  aria-label={t("productos.orderModeCtaAria", { category: activeReorderCategoryLabel })}
+                  onClick={toggleReorderMode}
+                >
+                  {t("productos.orderModeCta")}
+                </button>
+              ) : null}
+              {renderCatalogFoodDrinkSegment(true)}
+              </div>
+              <div className="hostly-productos-v3__advanced-controls-row">
+              <div className="hostly-productos-v3__advanced-group">
+              <span className="hostly-productos-v3__advanced-label">Escandallo</span>
+              <div className="hostly-productos-carta-filter-chips hostly-productos-v3__advanced-chips">
               {iceToolbarFilterButtons(true, CONFIG_CARTA_ADVANCED_ESC_FILTER_IDS)}
               </div>
               </div>
-              <div className="hostly-productos-carta-advanced-section">
-              <span className="hostly-productos-carta-advanced-section__label">Vista</span>
-              <div className="hostly-productos-carta-view-discreet" role="group" aria-label="Modo de vista">
+              <div className="hostly-productos-v3__advanced-group">
+              <span className="hostly-productos-v3__advanced-label">Vista</span>
+              <div className="hostly-productos-carta-view-discreet hostly-productos-v3__advanced-chips" role="group" aria-label="Modo de vista">
               {iceToolbarViewControls(true)}
               </div>
               </div>
+              {items.length > 0 ? (
+              <div className="hostly-productos-v3__advanced-group hostly-productos-v3__advanced-group--kpis">
+              <span className="hostly-productos-v3__advanced-label">KPIs</span>
+              <div className="hostly-productos-v3__kpi-grid" aria-label={t("productos.resolverParitySummaryAria")}>
+              {renderCompactResolverParityCards()}
+              </div>
               </div>
               ) : null}
-              {configCartaAdvancedOpen && items.length > 0 ? (
-                <ProductosResolverParitySummaryStrip
-                  summary={resolverParitySummaryForTab}
-                  loading={!parityCatalogsLoaded}
-                  activeFilter={resolverParityFilter}
-                  onFilterChange={handleResolverParityFilterChange}
-                  filteredCount={parityFilteredSorted.length}
-                  t={t}
-                />
+              </div>
+              </div>
               ) : null}
               <div
               className="hostly-productos-carta-list-host hostly-productos-carta-list-host--config-table"

@@ -27,6 +27,7 @@ import {
   configPathnameMatches,
   type ConfigNavLeaf,
 } from "@/lib/configuracion/config-nav";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 type ConfigContextItem = ConfigNavLeaf & {
   Icon: LucideIcon;
@@ -120,38 +121,41 @@ export function ConfiguracionContextSelector() {
       className={`hostly-config-context-selector${open ? " is-open" : ""}`}
     >
       <div className="hostly-config-context-selector__bar">
-        <Link
-          href="/dashboard/configuracion"
-          className="hostly-config-context-selector__hub"
-          onClick={() => setOpen(false)}
-        >
-          Configuración
-        </Link>
-        <button
-          type="button"
-          className="hostly-config-context-selector__trigger"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <span className="hostly-config-context-selector__trigger-icon" aria-hidden>
-            <ActiveIcon size={17} strokeWidth={2.25} />
-          </span>
-          <span className="hostly-config-context-selector__trigger-text">
-            <span className="hostly-config-context-selector__group">
-              {activeGroup}
+        <div className="hostly-config-context-selector__main">
+          <Link
+            href="/dashboard/configuracion"
+            className="hostly-config-context-selector__hub"
+            onClick={() => setOpen(false)}
+          >
+            Configuración
+          </Link>
+          <button
+            type="button"
+            className="hostly-config-context-selector__trigger"
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            <span className="hostly-config-context-selector__trigger-icon" aria-hidden>
+              <ActiveIcon size={17} strokeWidth={2.25} />
             </span>
-            <span className="hostly-config-context-selector__label">
-              {activeLabel}
+            <span className="hostly-config-context-selector__trigger-text">
+              <span className="hostly-config-context-selector__group">
+                {activeGroup}
+              </span>
+              <span className="hostly-config-context-selector__label">
+                {activeLabel}
+              </span>
             </span>
-          </span>
-          <ChevronDown
-            className="hostly-config-context-selector__chevron"
-            size={16}
-            strokeWidth={2.4}
-            aria-hidden
-          />
-        </button>
+            <ChevronDown
+              className="hostly-config-context-selector__chevron"
+              size={16}
+              strokeWidth={2.4}
+              aria-hidden
+            />
+          </button>
+        </div>
+        <LanguageSwitcher className="hostly-config-context-selector__language" />
       </div>
 
       {open ? (

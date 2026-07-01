@@ -89,13 +89,14 @@ export function ConfigCartaWorkbench({
       operationalFocus
       denseWorkbench
       denseInventoryHeader
-      headerActionsPlacement="below"
+      headerActionsPlacement={isProductosVariant ? "right" : "below"}
       lockViewport={lockViewport}
       lockViewportFillParent={lockViewportFillParent}
       fitLaptopViewport={fitLaptopViewport}
       shellSurface="configLight"
       hideBackLink
       hideLogoutButton
+      hideLanguageSwitcher
       headerRight={
         headerActions ? (
           <div

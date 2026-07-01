@@ -533,7 +533,7 @@ function renderProductosCartaHeaderCells(args: {
       </HostlyDataCell>
       <HostlyDataCell align="center" col="esc">
         <span title={t("productos.colEscandallo")} aria-label={t("productos.colEscandallo")}>
-          Esc.
+          S.C.
         </span>
       </HostlyDataCell>
       <HostlyDataCell align="end" col="actions">
