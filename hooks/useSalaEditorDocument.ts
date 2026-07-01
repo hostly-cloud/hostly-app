@@ -5,6 +5,16 @@ import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document
 import { createEmptySalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
+import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
+import type { SalaEditorActiveTool } from "@/lib/sala-editor/types/editor-tool";
+import {
+  createStructuralActiveTool,
+  DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND,
+  isToolSelected,
+} from "@/lib/sala-editor/types/editor-tool";
+import {
+  getStructuralToolboxItem,
+} from "@/lib/sala-editor/catalog/structural-toolbox";
 import {
   getDisabledSalaEditorPhases,
   navigateSalaEditorPhase,
@@ -33,6 +43,8 @@ export function useSalaEditorDocument({
     },
   }));
 
+  const [activeTool, setActiveTool] = useState<SalaEditorActiveTool>(null);
+
   const disabledPhases = useMemo(
     () => getDisabledSalaEditorPhases(document.espacios, document.navigation),
     [document.espacios, document.navigation],
@@ -60,13 +72,45 @@ export function useSalaEditorDocument({
     return counts;
   }, [document.espacios, document.structuralElements, document.operationalElements]);
 
-  const setPhase = useCallback((phase: SalaEditorPhase) => {
-    setDocument((prev) => ({
-      ...prev,
-      navigation: navigateSalaEditorPhase(prev.navigation, phase, prev.espacios),
-      updatedAt: Date.now(),
-    }));
+  const activeStructuralToolKind = useMemo((): SalaStructuralElementKind | null => {
+    if (activeTool?.layer !== "estructura") return null;
+    return activeTool.kind;
+  }, [activeTool]);
+
+  const activeStructuralToolboxItem = useMemo(() => {
+    if (!activeStructuralToolKind) return null;
+    return getStructuralToolboxItem(activeStructuralToolKind) ?? null;
+  }, [activeStructuralToolKind]);
+
+  const clearTool = useCallback(() => {
+    setActiveTool(null);
   }, []);
+
+  const selectTool = useCallback((kind: SalaStructuralElementKind) => {
+    setActiveTool(createStructuralActiveTool(kind));
+  }, []);
+
+  const isStructuralToolSelected = useCallback(
+    (kind: SalaStructuralElementKind) => isToolSelected(activeTool, kind),
+    [activeTool],
+  );
+
+  const setPhase = useCallback(
+    (phase: SalaEditorPhase) => {
+      setDocument((prev) => ({
+        ...prev,
+        navigation: navigateSalaEditorPhase(prev.navigation, phase, prev.espacios),
+        updatedAt: Date.now(),
+      }));
+
+      if (phase === "estructura") {
+        setActiveTool(createStructuralActiveTool(DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND));
+      } else {
+        setActiveTool(null);
+      }
+    },
+    [],
+  );
 
   const selectEspacio = useCallback((espacioId: string | null) => {
     setDocument((prev) => ({
@@ -119,6 +163,14 @@ export function useSalaEditorDocument({
     disabledPhases,
     selectedEspacio,
     elementCountByEspacioId,
+    activeTool,
+    setActiveTool,
+    activeStructuralToolKind,
+    activeStructuralToolboxItem,
+    selectTool,
+    clearTool,
+    isToolSelected: isStructuralToolSelected,
+    isStructuralToolSelected,
     setPhase,
     selectEspacio,
     replaceEspacios,

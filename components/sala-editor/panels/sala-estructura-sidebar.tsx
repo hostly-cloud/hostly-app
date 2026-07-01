@@ -1,43 +1,35 @@
 "use client";
 
-import { SALA_STRUCTURAL_CATALOG } from "@/lib/sala-editor/catalog/structural-catalog";
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
+import { STRUCTURAL_TOOLBOX_ITEMS } from "@/lib/sala-editor/catalog/structural-toolbox";
+import { SalaStructuralToolCard } from "@/components/sala-editor/panels/sala-structural-tool-card";
 
-const PREVIEW_STRUCTURAL_KINDS: SalaStructuralElementKind[] = [
-  "wall",
-  "glass",
-  "door",
-  "bar",
-  "stage",
-  "planter",
-];
+export type SalaEstructuraSidebarProps = {
+  activeToolKind: SalaStructuralElementKind | null;
+  onSelectTool: (kind: SalaStructuralElementKind) => void;
+};
 
-export function SalaEstructuraSidebar() {
-  const items = SALA_STRUCTURAL_CATALOG.filter((item) =>
-    PREVIEW_STRUCTURAL_KINDS.includes(item.kind),
-  );
-
+export function SalaEstructuraSidebar({
+  activeToolKind,
+  onSelectTool,
+}: SalaEstructuraSidebarProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div>
-        <h3 className="text-sm font-extrabold text-slate-900">
-          Elementos estructurales
-        </h3>
+        <h3 className="text-sm font-extrabold text-slate-900">Herramientas</h3>
         <p className="mt-1 text-xs text-slate-500">
-          Catálogo preview — sin colocación todavía.
+          Selecciona una herramienta activa.
         </p>
       </div>
 
-      <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-0.5">
-        {items.map((item) => (
-          <li
-            key={item.kind}
-            className="rounded-xl border border-slate-200/80 bg-white px-3 py-2.5"
-          >
-            <p className="text-sm font-extrabold text-slate-800">{item.label}</p>
-            <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-              {item.description}
-            </p>
+      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-0.5">
+        {STRUCTURAL_TOOLBOX_ITEMS.map((item) => (
+          <li key={item.kind}>
+            <SalaStructuralToolCard
+              item={item}
+              selected={activeToolKind === item.kind}
+              onSelect={() => onSelectTool(item.kind)}
+            />
           </li>
         ))}
       </ul>

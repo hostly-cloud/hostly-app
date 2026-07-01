@@ -2,6 +2,7 @@
 
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
+import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import { SalaEspaciosSidebar } from "@/components/sala-editor/panels/sala-espacios-sidebar";
 import { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
 import { SalaOperacionSidebar } from "@/components/sala-editor/panels/sala-operacion-sidebar";
@@ -11,8 +12,10 @@ export type SalaEditorLeftPanelProps = {
   espacios: SalaEspacio[];
   selectedEspacioId: string | null;
   elementCountByEspacioId: Record<string, number>;
+  activeStructuralToolKind: SalaStructuralElementKind | null;
   onSelectEspacio: (espacioId: string) => void;
   onRequestAddEspacio: () => void;
+  onSelectStructuralTool: (kind: SalaStructuralElementKind) => void;
 };
 
 export function SalaEditorLeftPanel({
@@ -20,8 +23,10 @@ export function SalaEditorLeftPanel({
   espacios,
   selectedEspacioId,
   elementCountByEspacioId,
+  activeStructuralToolKind,
   onSelectEspacio,
   onRequestAddEspacio,
+  onSelectStructuralTool,
 }: SalaEditorLeftPanelProps) {
   return (
     <aside className="flex min-h-0 w-full flex-col rounded-2xl border border-slate-200/80 bg-slate-50/50 p-3">
@@ -34,7 +39,12 @@ export function SalaEditorLeftPanel({
           onRequestAddEspacio={onRequestAddEspacio}
         />
       ) : null}
-      {phase === "estructura" ? <SalaEstructuraSidebar /> : null}
+      {phase === "estructura" ? (
+        <SalaEstructuraSidebar
+          activeToolKind={activeStructuralToolKind}
+          onSelectTool={onSelectStructuralTool}
+        />
+      ) : null}
       {phase === "operacion" ? <SalaOperacionSidebar /> : null}
     </aside>
   );

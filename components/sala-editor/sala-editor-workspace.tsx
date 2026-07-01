@@ -24,7 +24,7 @@ export type SalaEditorWorkspaceProps = {
 
 /**
  * Workspace del editor de sala V2.
- * Estado 100 % local; gestor visual de espacios (Fase 2.1).
+ * Estado 100 % local; gestor visual + herramienta activa (Fase 2.2).
  */
 export function SalaEditorWorkspace({
   restaurantId,
@@ -37,6 +37,9 @@ export function SalaEditorWorkspace({
     disabledPhases,
     selectedEspacio,
     elementCountByEspacioId,
+    activeStructuralToolKind,
+    activeStructuralToolboxItem,
+    selectTool,
     setPhase,
     selectEspacio,
     addEspacioAndSelect,
@@ -96,8 +99,10 @@ export function SalaEditorWorkspace({
             espacios={document.espacios}
             selectedEspacioId={document.navigation.selectedEspacioId}
             elementCountByEspacioId={elementCountByEspacioId}
+            activeStructuralToolKind={activeStructuralToolKind}
             onSelectEspacio={handleSelectEspacio}
             onRequestAddEspacio={openAddDialog}
+            onSelectStructuralTool={selectTool}
           />
         }
         workspace={
@@ -105,6 +110,7 @@ export function SalaEditorWorkspace({
             phase={document.navigation.phase}
             espacio={selectedEspacio}
             hasEspacios={document.espacios.length > 0}
+            activeStructuralToolboxItem={activeStructuralToolboxItem}
             onRequestCreateEspacio={openAddDialog}
           />
         }
@@ -113,6 +119,7 @@ export function SalaEditorWorkspace({
             phase={document.navigation.phase}
             espacio={selectedEspacio}
             elementCount={selectedElementCount}
+            activeStructuralToolboxItem={activeStructuralToolboxItem}
             onUpdateEspacio={handleUpdateEspacio}
           />
         }

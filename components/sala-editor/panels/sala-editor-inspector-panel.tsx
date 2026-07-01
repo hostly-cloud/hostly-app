@@ -3,11 +3,13 @@
 import type { ReactNode } from "react";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
+import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
 import {
   SALA_ESPACIO_TYPE_OPTIONS,
   salaEspacioTypeLabel,
 } from "@/lib/sala-editor/catalog/espacio-types";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
+import { SalaStructuralToolInspector } from "@/components/sala-editor/panels/sala-structural-tool-inspector";
 
 function InspectorSection({
   title,
@@ -34,6 +36,7 @@ export type SalaEditorInspectorPanelProps = {
   phase: SalaEditorPhase;
   espacio: SalaEspacio | null;
   elementCount?: number;
+  activeStructuralToolboxItem?: StructuralToolboxItem | null;
   onUpdateEspacio?: (patch: Partial<SalaEspacioDraft>) => void;
 };
 
@@ -41,20 +44,58 @@ export function SalaEditorInspectorPanel({
   phase,
   espacio,
   elementCount = 0,
+  activeStructuralToolboxItem = null,
   onUpdateEspacio,
 }: SalaEditorInspectorPanelProps) {
-  if (phase !== "espacios" || !espacio) {
+  if (phase === "estructura") {
+    if (!espacio) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <h3 className="text-sm font-extrabold text-slate-900">Inspector</h3>
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+            <p className="text-sm font-bold text-slate-600">
+              Selecciona un espacio en la Fase 1
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeStructuralToolboxItem) {
+      return <SalaStructuralToolInspector tool={activeStructuralToolboxItem} />;
+    }
+
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <h3 className="text-sm font-extrabold text-slate-900">Inspector</h3>
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
           <p className="text-sm font-bold text-slate-600">
-            {phase === "estructura"
-              ? "Selecciona un espacio para continuar"
-              : phase === "operacion"
-                ? "Elementos operativos en preview"
-                : "Sin espacio seleccionado"}
+            Selecciona una herramienta
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "operacion") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <h3 className="text-sm font-extrabold text-slate-900">Inspector</h3>
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+          <p className="text-sm font-bold text-slate-600">
+            Elementos operativos en preview
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!espacio) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <h3 className="text-sm font-extrabold text-slate-900">Inspector</h3>
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+          <p className="text-sm font-bold text-slate-600">Sin espacio seleccionado</p>
         </div>
       </div>
     );

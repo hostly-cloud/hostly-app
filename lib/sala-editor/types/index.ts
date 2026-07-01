@@ -34,6 +34,16 @@ export {
   createDefaultSalaEditorNavigation,
 } from "@/lib/sala-editor/types/editor-navigation";
 
+export type {
+  SalaEditorActiveTool,
+  SalaStructuralActiveTool,
+} from "@/lib/sala-editor/types/editor-tool";
+export {
+  createStructuralActiveTool,
+  DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND,
+  isStructuralToolActive,
+  isToolSelected,
+} from "@/lib/sala-editor/types/editor-tool";
 export type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 export {
   SALA_EDITOR_DOCUMENT_VERSION,
