@@ -37,36 +37,36 @@ export function SalaEspacioCard({
         aria-hidden
       />
 
-      <span className="flex min-w-0 flex-1 flex-col gap-2 px-3 py-3">
-        <span className="flex items-start gap-2.5">
+      <span className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2">
+        <span className="flex items-center gap-2">
           <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm"
             style={{ backgroundColor: `${espacio.color}22`, color: espacio.color }}
             aria-hidden
           >
             {icon}
           </span>
-          <span className="min-w-0 flex-1 pt-0.5">
-            <span className="flex items-center gap-1.5">
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1">
               <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: espacio.color }}
                 aria-hidden
               />
-              <span className="truncate text-sm font-extrabold text-slate-900">
+              <span className="truncate text-xs font-extrabold text-slate-900">
                 {espacio.name}
               </span>
             </span>
-            <span className="mt-1 block text-[11px] font-bold text-slate-500">
-              {elementCount} elemento{elementCount === 1 ? "" : "s"}
+            <span className="mt-0.5 block text-[10px] font-bold text-slate-500">
+              {elementCount} elem.
             </span>
           </span>
         </span>
 
-        <span className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+        <span className="flex items-center gap-1.5 border-t border-slate-100 pt-1">
           <span
             className={[
-              "rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.05em]",
+              "rounded-full px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide",
               espacio.visible
                 ? "bg-emerald-50 text-emerald-700"
                 : "bg-slate-100 text-slate-500",
@@ -75,7 +75,7 @@ export function SalaEspacioCard({
             {espacio.visible ? "Visible" : "Oculto"}
           </span>
           {!espacio.active ? (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.05em] text-amber-700">
+            <span className="rounded-full bg-amber-50 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide text-amber-700">
               Inactivo
             </span>
           ) : null}

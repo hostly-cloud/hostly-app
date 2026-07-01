@@ -33,26 +33,23 @@ export function SalaOperationalElementCard({
         aria-hidden
       />
 
-      <span className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-3">
+      <span className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2">
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base transition"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm"
           style={{
             backgroundColor: selected
               ? "var(--hostly-accent-soft)"
               : `${item.color}18`,
-            boxShadow: selected
-              ? "inset 0 0 0 1px color-mix(in srgb, var(--hostly-accent) 22%, transparent)"
-              : `inset 0 0 0 1px ${item.color}33`,
           }}
           aria-hidden
         >
           {item.icon}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-extrabold text-slate-900">
+          <span className="block truncate text-xs font-extrabold text-slate-900">
             {item.label}
           </span>
-          <span className="mt-0.5 block truncate text-[11px] font-semibold text-slate-500">
+          <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-500">
             {item.description}
           </span>
         </span>

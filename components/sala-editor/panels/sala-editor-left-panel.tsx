@@ -34,7 +34,7 @@ export function SalaEditorLeftPanel({
   onSelectOperationalElement,
 }: SalaEditorLeftPanelProps) {
   return (
-    <aside className="flex min-h-0 w-full flex-col rounded-2xl border border-slate-200/80 bg-slate-50/50 p-3">
+    <>
       {phase === "espacios" ? (
         <SalaEspaciosSidebar
           espacios={espacios}
@@ -56,6 +56,6 @@ export function SalaEditorLeftPanel({
           onSelectElementType={onSelectOperationalElement}
         />
       ) : null}
-    </aside>
+    </>
   );
 }

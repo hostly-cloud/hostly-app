@@ -30,21 +30,18 @@ export function SalaEstructuraWorkspace({
     isWallTool && onWallPointerDown && onWallPointerMove;
 
   return (
-    <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_55%,#eef2f7_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
-      <div className="border-b border-slate-200/70 bg-white/85 px-4 py-3">
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
-          Herramienta activa
-        </p>
-        <div className="mt-1 flex items-center gap-2.5">
+    <div className="hostly-sala-editor-canvas-frame">
+      <div className="hostly-sala-editor-canvas-frame__bar">
+        <div className="flex items-center gap-2">
           <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--hostly-accent-soft)] text-lg"
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--hostly-accent-soft)] text-sm"
             aria-hidden
           >
             {tool.icon}
           </span>
-          <div>
-            <p className="text-base font-extrabold text-slate-900">{tool.label}</p>
-            <p className="text-[11px] font-semibold text-slate-500">{espacio.name}</p>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-extrabold text-slate-900">{tool.label}</p>
+            <p className="truncate text-[10px] font-semibold text-slate-500">{espacio.name}</p>
           </div>
         </div>
       </div>
@@ -59,7 +56,7 @@ export function SalaEstructuraWorkspace({
           onPointerMove={onWallPointerMove}
         />
       ) : (
-        <div className="relative flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+        <div className="hostly-sala-editor-canvas-frame__surface relative flex flex-col items-center justify-center px-4 py-6 text-center">
           <div
             className="pointer-events-none absolute inset-6 rounded-2xl opacity-60"
             style={{
@@ -70,11 +67,9 @@ export function SalaEstructuraWorkspace({
             aria-hidden
           />
 
-          <div className="relative max-w-md">
-            <p className="text-lg font-extrabold leading-snug text-slate-800">
-              {tool.workspaceHint}
-            </p>
-            <p className="mt-3 text-sm text-slate-500">
+          <div className="relative max-w-sm">
+            <p className="text-sm font-extrabold leading-snug text-slate-800">{tool.workspaceHint}</p>
+            <p className="mt-2 text-[11px] text-slate-500">
               El dibujo estará disponible en la siguiente iteración.
             </p>
           </div>

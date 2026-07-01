@@ -22,6 +22,7 @@ import {
 export type SalaEditorWorkspaceProps = {
   restaurantId: string;
   initialEspacios?: SalaEspacio[];
+  legacyEditorHref?: string;
 };
 
 /**
@@ -31,6 +32,7 @@ export type SalaEditorWorkspaceProps = {
 export function SalaEditorWorkspace({
   restaurantId,
   initialEspacios = [],
+  legacyEditorHref,
 }: SalaEditorWorkspaceProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
@@ -183,6 +185,7 @@ export function SalaEditorWorkspace({
         disabledPhases={disabledPhases}
         espaciosCount={document.espacios.length}
         onPhaseChange={setPhase}
+        legacyEditorHref={legacyEditorHref}
         leftPanel={
           <SalaEditorLeftPanel
             phase={document.navigation.phase}

@@ -11,17 +11,11 @@ function InspectorSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
-      <h4 className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
-        {title}
-      </h4>
+    <section className="hostly-sala-editor-inspector__section">
+      <h4 className="hostly-sala-editor-inspector__section-title">{title}</h4>
       {children}
     </section>
   );
-}
-
-function InspectorDivider() {
-  return <div className="h-px bg-slate-200/80" aria-hidden />;
 }
 
 export type SalaStructuralToolInspectorProps = {
@@ -29,47 +23,30 @@ export type SalaStructuralToolInspectorProps = {
   subtitle?: string;
 };
 
-export function SalaStructuralToolInspector({
-  tool,
-  subtitle = "Herramienta seleccionada",
-}: SalaStructuralToolInspectorProps) {
+export function SalaStructuralToolInspector({ tool }: SalaStructuralToolInspectorProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-0.5">
-      <div>
-        <h3 className="text-sm font-extrabold text-slate-900">Inspector</h3>
-        <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
-      </div>
-
-      <InspectorSection title="Estructura">
-        <div className="rounded-xl border border-slate-200/80 bg-white px-3 py-3">
-          <div className="flex items-center gap-2.5">
+    <div className="hostly-sala-editor-inspector">
+      <InspectorSection title="Herramienta">
+        <div className="hostly-sala-editor-inspector__card">
+          <div className="flex items-center gap-2">
             <span
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--hostly-accent-soft)] text-xl"
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--hostly-accent-soft)] text-base"
               aria-hidden
             >
               {tool.icon}
             </span>
-            <div>
-              <p className="text-xs font-bold text-slate-500">Tipo</p>
-              <p className="text-sm font-extrabold text-slate-900">{tool.label}</p>
-            </div>
+            <p className="text-xs font-extrabold text-slate-900">{tool.label}</p>
           </div>
-          <p className="mt-3 text-xs leading-relaxed text-slate-600">
-            <span className="font-bold text-slate-700">Descripción</span>
-            <br />
-            {tool.description}
-          </p>
+          <p className="mt-2 text-[10px] leading-relaxed text-slate-600">{tool.description}</p>
         </div>
       </InspectorSection>
 
-      <InspectorDivider />
-
-      <InspectorSection title="Próximamente podrás">
-        <ul className="space-y-1.5 rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-3">
+      <InspectorSection title="Próximamente">
+        <ul className="hostly-sala-editor-inspector__card space-y-1 bg-slate-50/70 py-2">
           {tool.upcomingActions.map((action) => (
             <li
               key={action}
-              className="flex items-center gap-2 text-xs font-semibold text-slate-600"
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"
             >
               <span className="text-[var(--hostly-accent)]" aria-hidden>
                 •

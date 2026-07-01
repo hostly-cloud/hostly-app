@@ -23,32 +23,22 @@ export function SalaEspaciosSidebar({
   const sorted = sortSalaEspacios(espacios);
 
   if (sorted.length === 0) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <SalaEspaciosEmptyState onCreateEspacio={onRequestAddEspacio} compact />
-      </div>
-    );
+    return <SalaEspaciosEmptyState onCreateEspacio={onRequestAddEspacio} compact />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-extrabold text-slate-900">Espacios</h3>
-        <span className="text-[11px] font-bold text-slate-400">{sorted.length}</span>
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="hostly-sala-editor-sidebar-heading">
+        <h3 className="hostly-sala-editor-sidebar-heading__title">Espacios</h3>
+        <span className="hostly-sala-editor-sidebar-heading__count">{sorted.length}</span>
       </div>
 
-      <button
-        type="button"
-        onClick={onRequestAddEspacio}
-        className="inline-flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--hostly-accent)_22%,#cbd5e1)] bg-[var(--hostly-accent-soft)] px-3 text-sm font-extrabold text-[var(--hostly-accent)] transition hover:bg-[color-mix(in_srgb,var(--hostly-accent-soft)_88%,#dbeafe)]"
-      >
+      <button type="button" onClick={onRequestAddEspacio} className="hostly-sala-editor-sidebar-action">
         <span aria-hidden>+</span>
-        Añadir espacio
+        Añadir
       </button>
 
-      <div className="h-px bg-slate-200/80" aria-hidden />
-
-      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-0.5">
+      <ul className="hostly-sala-editor-sidebar-list">
         {sorted.map((espacio) => (
           <li key={espacio.id}>
             <SalaEspacioCard

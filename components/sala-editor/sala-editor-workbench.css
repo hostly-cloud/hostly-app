@@ -1,0 +1,412 @@
+/**
+ * Editor Sala V2 — Configuration Compact Workbench
+ * Prioridad: lienzo · sin scroll de página · 1366×768
+ */
+
+.hostly-sala-editor-page {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+[data-hostly-config-content]:has(.hostly-sala-editor-page) {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+[data-hostly-config-content]:has(.hostly-sala-editor-page) > .hostly-sala-editor-page {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.hostly-sala-editor-workbench {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--hostly-table-divider-soft) 88%, #cbd5e1);
+  background: color-mix(in srgb, #ffffff 96%, var(--hostly-surface-page-soft));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.hostly-sala-editor-workbench__toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: color-mix(in srgb, var(--hostly-surface-page-soft) 92%, white);
+}
+
+.hostly-sala-editor-workbench__toolbar-meta {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.hostly-sala-editor-workbench__count {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hostly-surface-page) 80%, #e2e8f0);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--hostly-ink-soft);
+  white-space: nowrap;
+}
+
+.hostly-sala-editor-workbench__legacy-link {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hostly-ink-soft);
+  text-decoration: none;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.hostly-sala-editor-workbench__legacy-link:hover {
+  border-color: color-mix(in srgb, var(--hostly-accent) 24%, #cbd5e1);
+  background: white;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-sala-editor-workbench__body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 196px) minmax(0, 1fr) minmax(0, 232px);
+  gap: 1px;
+  overflow: hidden;
+  background: var(--hostly-table-divider-faint);
+}
+
+@media (max-width: 1023px) {
+  .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(0, 168px) minmax(0, 1fr) minmax(0, 200px);
+  }
+}
+
+.hostly-sala-editor-workbench__panel {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--hostly-surface-page-soft) 78%, white);
+}
+
+.hostly-sala-editor-workbench__panel-inner {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 6px;
+}
+
+.hostly-sala-editor-workbench__canvas {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.hostly-sala-editor-workbench__canvas > * {
+  min-height: 0;
+  flex: 1;
+}
+
+.hostly-sala-editor-workbench__inspector-scroll {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+}
+
+/* Phase nav — compact toolbar tabs */
+.hostly-sala-editor-phase-nav {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.hostly-sala-editor-phase-nav__btn {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0 10px;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.hostly-sala-editor-phase-nav__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.hostly-sala-editor-phase-nav__btn:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--hostly-accent) 18%, #e2e8f0);
+  background: color-mix(in srgb, var(--hostly-accent-soft) 55%, white);
+}
+
+.hostly-sala-editor-phase-nav__btn.is-active {
+  border-color: color-mix(in srgb, var(--hostly-accent) 34%, #e2e8f0);
+  background: white;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+  color: var(--hostly-accent);
+}
+
+.hostly-sala-editor-phase-nav__index {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-sala-editor-phase-nav__btn.is-active .hostly-sala-editor-phase-nav__index {
+  color: color-mix(in srgb, var(--hostly-accent) 72%, #64748b);
+}
+
+.hostly-sala-editor-phase-nav__label {
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: -0.015em;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-sala-editor-phase-nav__btn.is-active .hostly-sala-editor-phase-nav__label {
+  color: var(--hostly-accent);
+}
+
+/* Canvas frame — fills column */
+.hostly-sala-editor-canvas-frame {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0;
+  border: none;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 52%, #eef2f7 100%);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+
+.hostly-sala-editor-canvas-frame__bar {
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px 8px;
+}
+
+.hostly-sala-editor-canvas-frame__surface {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Empty / placeholder states */
+.hostly-sala-editor-empty {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+}
+
+.hostly-sala-editor-empty__glyph {
+  margin-bottom: 8px;
+  font-size: 28px;
+  line-height: 1;
+  opacity: 0.28;
+}
+
+.hostly-sala-editor-empty__title {
+  margin: 0;
+  max-width: 18rem;
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1.35;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-sala-editor-empty__hint {
+  margin: 4px 0 0;
+  max-width: 20rem;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--hostly-ink-soft);
+}
+
+/* Inspector */
+.hostly-sala-editor-inspector {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hostly-sala-editor-inspector__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hostly-sala-editor-inspector__section-title {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-sala-editor-inspector__field {
+  display: block;
+}
+
+.hostly-sala-editor-inspector__field-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-sala-editor-inspector__input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--hostly-table-divider-soft);
+  background: white;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--hostly-ink-strong);
+  outline: none;
+}
+
+.hostly-sala-editor-inspector__input:focus {
+  border-color: color-mix(in srgb, var(--hostly-accent) 35%, #cbd5e1);
+  box-shadow: 0 0 0 2px var(--hostly-accent-soft);
+}
+
+.hostly-sala-editor-inspector__card {
+  border-radius: 8px;
+  border: 1px solid var(--hostly-table-divider-faint);
+  background: white;
+  padding: 8px;
+}
+
+.hostly-sala-editor-inspector__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--hostly-table-divider-faint);
+  background: white;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hostly-ink-soft);
+}
+
+/* Left panel cards — compact touch targets */
+.hostly-sala-editor-sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.hostly-sala-editor-sidebar-heading__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-sala-editor-sidebar-heading__count {
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-sala-editor-sidebar-action {
+  display: inline-flex;
+  min-height: 36px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 20%, #cbd5e1);
+  background: var(--hostly-accent-soft);
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--hostly-accent);
+  transition: background-color 120ms ease;
+}
+
+.hostly-sala-editor-sidebar-action:hover {
+  background: color-mix(in srgb, var(--hostly-accent-soft) 88%, #dbeafe);
+}
+
+.hostly-sala-editor-sidebar-list {
+  min-height: 0;
+  flex: 1;
+  margin: 0;
+  list-style: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0;
+}
+
+.hostly-sala-editor-sidebar-list > li + li {
+  margin-top: 4px;
+}

@@ -106,26 +106,23 @@ export function SalaOperacionWorkspace({
   );
 
   return (
-    <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_55%,#eef2f7_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
-      <div className="border-b border-slate-200/70 bg-white/85 px-4 py-3">
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
-          Elemento activo
-        </p>
-        <div className="mt-1 flex items-center gap-2.5">
+    <div className="hostly-sala-editor-canvas-frame">
+      <div className="hostly-sala-editor-canvas-frame__bar">
+        <div className="flex items-center gap-2">
           <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-lg"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm"
             style={{ backgroundColor: `${catalogItem.color}22` }}
             aria-hidden
           >
             {catalogItem.icon}
           </span>
-          <div>
-            <p className="text-base font-extrabold text-slate-900">{catalogItem.label}</p>
-            <p className="text-[11px] font-semibold text-slate-500">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-extrabold text-slate-900">{catalogItem.label}</p>
+            <p className="truncate text-[10px] font-semibold text-slate-500">
               {espacioName}
               {instances.length > 0
                 ? ` · ${instances.length} colocado${instances.length === 1 ? "" : "s"}`
-                : " · Haz clic en el plano para colocar"}
+                : " · clic para colocar"}
             </p>
           </div>
         </div>
@@ -135,7 +132,7 @@ export function SalaOperacionWorkspace({
         ref={surfaceRef}
         role="application"
         aria-label="Lienzo de elementos operativos"
-        className="relative min-h-[320px] flex-1 touch-none select-none"
+        className="hostly-sala-editor-canvas-frame__surface"
         style={{ cursor: draggingInstanceId ? "grabbing" : "crosshair" }}
         onPointerDown={handleCanvasPointerDown}
       >
@@ -150,13 +147,11 @@ export function SalaOperacionWorkspace({
         />
 
         {instances.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
-            <div className="max-w-sm rounded-2xl border border-dashed border-[color-mix(in_srgb,var(--hostly-accent)_28%,#cbd5e1)] bg-white/85 px-6 py-5 text-center shadow-sm">
-              <p className="text-lg font-extrabold text-slate-800">
-                Haz clic en el plano
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                Aparecerá <span className="text-[var(--hostly-accent)]">{catalogItem.label} 1</span> donde pulses
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4">
+            <div className="text-center">
+              <p className="text-sm font-extrabold text-slate-700">Haz clic en el plano</p>
+              <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                Aparecerá {catalogItem.label} 1 donde pulses
               </p>
             </div>
           </div>
@@ -191,8 +186,8 @@ export function SalaOperacionWorkspace({
           );
         })}
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4">
-          <p className="rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 text-xs font-semibold text-slate-500 shadow-sm backdrop-blur-sm">
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center px-3">
+          <p className="rounded-full border border-slate-200/80 bg-white/92 px-3 py-1 text-[10px] font-semibold text-slate-500 shadow-sm backdrop-blur-sm">
             {draggingInstanceId
               ? "Suelta para fijar la posición"
               : `Haz clic para colocar · ${catalogItem.label}`}
