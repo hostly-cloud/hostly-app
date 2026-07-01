@@ -12,6 +12,8 @@ export * from "@/lib/sala-editor/catalog/espacio-types";
 export * from "@/lib/sala-editor/catalog/structural-catalog";
 export * from "@/lib/sala-editor/catalog/structural-toolbox";
 export * from "@/lib/sala-editor/catalog/operational-catalog";
+export * from "@/lib/sala-editor/geometry/wall-geometry";
 export * from "@/lib/sala-editor/adapters/legacy-adapters";
 export * from "@/lib/sala-editor/navigation/editor-phase-routing";
+export * from "@/lib/sala-editor/ose";
 export * from "@/lib/sala-editor/preview/create-preview-espacios";

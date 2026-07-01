@@ -10,6 +10,10 @@ import {
 } from "@/lib/sala-editor/catalog/espacio-types";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
 import { SalaStructuralToolInspector } from "@/components/sala-editor/panels/sala-structural-tool-inspector";
+import { SalaWallInspector } from "@/components/sala-editor/panels/sala-wall-inspector";
+import { SalaOperationalElementInspector } from "@/components/sala-editor/panels/sala-operational-element-inspector";
+import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
+import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 
 function InspectorSection({
   title,
@@ -37,6 +41,8 @@ export type SalaEditorInspectorPanelProps = {
   espacio: SalaEspacio | null;
   elementCount?: number;
   activeStructuralToolboxItem?: StructuralToolboxItem | null;
+  selectedWall?: SalaWallSegment | null;
+  activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
   onUpdateEspacio?: (patch: Partial<SalaEspacioDraft>) => void;
 };
 
@@ -45,6 +51,8 @@ export function SalaEditorInspectorPanel({
   espacio,
   elementCount = 0,
   activeStructuralToolboxItem = null,
+  selectedWall = null,
+  activeOperationalCatalogItem = null,
   onUpdateEspacio,
 }: SalaEditorInspectorPanelProps) {
   if (phase === "estructura") {
@@ -61,8 +69,17 @@ export function SalaEditorInspectorPanel({
       );
     }
 
+    if (selectedWall) {
+      return <SalaWallInspector wall={selectedWall} />;
+    }
+
     if (activeStructuralToolboxItem) {
-      return <SalaStructuralToolInspector tool={activeStructuralToolboxItem} />;
+      return (
+        <SalaStructuralToolInspector
+          tool={activeStructuralToolboxItem}
+          subtitle="Herramienta activa"
+        />
+      );
     }
 
     return (
@@ -78,12 +95,31 @@ export function SalaEditorInspectorPanel({
   }
 
   if (phase === "operacion") {
+    if (!espacio) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <h3 className="text-sm font-extrabold text-slate-900">Inspector</h3>
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+            <p className="text-sm font-bold text-slate-600">
+              Selecciona un espacio en la Fase 1
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeOperationalCatalogItem) {
+      return (
+        <SalaOperationalElementInspector catalogItem={activeOperationalCatalogItem} />
+      );
+    }
+
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <h3 className="text-sm font-extrabold text-slate-900">Inspector</h3>
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
           <p className="text-sm font-bold text-slate-600">
-            Elementos operativos en preview
+            Selecciona un elemento
           </p>
         </div>
       </div>
@@ -202,7 +238,9 @@ export function SalaEditorInspectorPanel({
             Tipo: {salaEspacioTypeLabel(espacio.tipo)}
           </p>
           <p className="mt-2 text-xs font-semibold text-slate-400">
-            Sin estructura creada
+            {elementCount > 0
+              ? `${elementCount} elemento${elementCount === 1 ? "" : "s"} en este espacio`
+              : "Sin estructura creada"}
           </p>
         </div>
       </InspectorSection>

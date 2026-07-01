@@ -10,4 +10,9 @@ export { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estr
 export { SalaStructuralToolCard } from "@/components/sala-editor/panels/sala-structural-tool-card";
 export { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-estructura-workspace";
 export { SalaStructuralToolInspector } from "@/components/sala-editor/panels/sala-structural-tool-inspector";
+export { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas";
+export { SalaWallInspector } from "@/components/sala-editor/panels/sala-wall-inspector";
+export { SalaOperacionWorkspace } from "@/components/sala-editor/panels/sala-operacion-workspace";
+export { SalaOperationalElementCard } from "@/components/sala-editor/panels/sala-operational-element-card";
+export { SalaOperationalElementInspector } from "@/components/sala-editor/panels/sala-operational-element-inspector";
 export { SalaOperacionSidebar } from "@/components/sala-editor/panels/sala-operacion-sidebar";

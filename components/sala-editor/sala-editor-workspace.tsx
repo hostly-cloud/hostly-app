@@ -9,6 +9,7 @@ import {
   nextEspacioSortOrder,
 } from "@/lib/sala-editor/preview/create-preview-espacios";
 import { useSalaEditorDocument } from "@/hooks/useSalaEditorDocument";
+import { useSalaWallDrawing } from "@/hooks/useSalaWallDrawing";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
 import {
   SalaEditorLeftPanel,
@@ -24,7 +25,7 @@ export type SalaEditorWorkspaceProps = {
 
 /**
  * Workspace del editor de sala V2.
- * Estado 100 % local; gestor visual + herramienta activa (Fase 2.2).
+ * Estado 100 % local; gestor visual + herramienta activa + paredes (Fase 2.3).
  */
 export function SalaEditorWorkspace({
   restaurantId,
@@ -39,14 +40,36 @@ export function SalaEditorWorkspace({
     elementCountByEspacioId,
     activeStructuralToolKind,
     activeStructuralToolboxItem,
+    activeOperationalElementType,
+    activeOperationalCatalogItem,
     selectTool,
+    selectOperationalElement,
     setPhase,
     selectEspacio,
     addEspacioAndSelect,
     updateEspacio,
+    addWall,
   } = useSalaEditorDocument({
     restaurantId,
     initialEspacios,
+  });
+
+  const wallDrawingEnabled =
+    document.navigation.phase === "estructura" &&
+    activeStructuralToolKind === "wall";
+
+  const {
+    wallsInEspacio,
+    draft: wallDraft,
+    selectedWallId,
+    selectedWall,
+    handlePointerDown: handleWallPointerDown,
+    handlePointerMove: handleWallPointerMove,
+  } = useSalaWallDrawing({
+    espacioId: selectedEspacio?.id ?? null,
+    walls: document.walls,
+    enabled: wallDrawingEnabled,
+    onAddWall: addWall,
   });
 
   const handleCreateEspacio = useCallback(
@@ -100,9 +123,11 @@ export function SalaEditorWorkspace({
             selectedEspacioId={document.navigation.selectedEspacioId}
             elementCountByEspacioId={elementCountByEspacioId}
             activeStructuralToolKind={activeStructuralToolKind}
+            activeOperationalElementType={activeOperationalElementType}
             onSelectEspacio={handleSelectEspacio}
             onRequestAddEspacio={openAddDialog}
             onSelectStructuralTool={selectTool}
+            onSelectOperationalElement={selectOperationalElement}
           />
         }
         workspace={
@@ -111,6 +136,12 @@ export function SalaEditorWorkspace({
             espacio={selectedEspacio}
             hasEspacios={document.espacios.length > 0}
             activeStructuralToolboxItem={activeStructuralToolboxItem}
+            walls={wallsInEspacio}
+            wallDraft={wallDraft}
+            selectedWallId={selectedWallId}
+            onWallPointerDown={wallDrawingEnabled ? handleWallPointerDown : undefined}
+            onWallPointerMove={wallDrawingEnabled ? handleWallPointerMove : undefined}
+            activeOperationalCatalogItem={activeOperationalCatalogItem}
             onRequestCreateEspacio={openAddDialog}
           />
         }
@@ -120,6 +151,8 @@ export function SalaEditorWorkspace({
             espacio={selectedEspacio}
             elementCount={selectedElementCount}
             activeStructuralToolboxItem={activeStructuralToolboxItem}
+            selectedWall={selectedWall}
+            activeOperationalCatalogItem={activeOperationalCatalogItem}
             onUpdateEspacio={handleUpdateEspacio}
           />
         }

@@ -12,9 +12,18 @@ import {
   DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND,
   isToolSelected,
 } from "@/lib/sala-editor/types/editor-tool";
+import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import {
   getStructuralToolboxItem,
 } from "@/lib/sala-editor/catalog/structural-toolbox";
+import type { ActiveOperationalElementSelection } from "@/lib/sala-editor/ose/active-operational-element";
+import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
+import {
+  createActiveOperationalElement,
+  DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE,
+  isOperationalElementTypeSelected,
+} from "@/lib/sala-editor/ose/active-operational-element";
+import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import {
   getDisabledSalaEditorPhases,
   navigateSalaEditorPhase,
@@ -44,6 +53,8 @@ export function useSalaEditorDocument({
   }));
 
   const [activeTool, setActiveTool] = useState<SalaEditorActiveTool>(null);
+  const [activeOperationalElement, setActiveOperationalElement] =
+    useState<ActiveOperationalElementSelection>(null);
 
   const disabledPhases = useMemo(
     () => getDisabledSalaEditorPhases(document.espacios, document.navigation),
@@ -61,16 +72,17 @@ export function useSalaEditorDocument({
   const elementCountByEspacioId = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const espacio of document.espacios) {
+      const walls = document.walls.filter((w) => w.espacioId === espacio.id).length;
       const structural = document.structuralElements.filter(
         (el) => el.espacioId === espacio.id,
       ).length;
       const operational = document.operationalElements.filter(
         (el) => el.espacioId === espacio.id,
       ).length;
-      counts[espacio.id] = structural + operational;
+      counts[espacio.id] = walls + structural + operational;
     }
     return counts;
-  }, [document.espacios, document.structuralElements, document.operationalElements]);
+  }, [document.espacios, document.walls, document.structuralElements, document.operationalElements]);
 
   const activeStructuralToolKind = useMemo((): SalaStructuralElementKind | null => {
     if (activeTool?.layer !== "estructura") return null;
@@ -82,12 +94,44 @@ export function useSalaEditorDocument({
     return getStructuralToolboxItem(activeStructuralToolKind) ?? null;
   }, [activeStructuralToolKind]);
 
+  const activeOperationalCatalogItem = useMemo(() => {
+    if (activeOperationalElement?.layer !== "operacion") return null;
+    return getOperationalElementCatalogItem(activeOperationalElement.type) ?? null;
+  }, [activeOperationalElement]);
+
+  const activeOperationalElementType = useMemo((): OperationalElementType | null => {
+    if (activeOperationalElement?.layer !== "operacion") return null;
+    return activeOperationalElement.type;
+  }, [activeOperationalElement]);
+
+  const clearOperationalElement = useCallback(() => {
+    setActiveOperationalElement(null);
+  }, []);
+
+  const selectOperationalElement = useCallback((type: OperationalElementType) => {
+    setActiveOperationalElement(createActiveOperationalElement(type));
+  }, []);
+
+  const isOperationalElementSelected = useCallback(
+    (type: OperationalElementType) =>
+      isOperationalElementTypeSelected(activeOperationalElement, type),
+    [activeOperationalElement],
+  );
+
   const clearTool = useCallback(() => {
     setActiveTool(null);
   }, []);
 
   const selectTool = useCallback((kind: SalaStructuralElementKind) => {
     setActiveTool(createStructuralActiveTool(kind));
+  }, []);
+
+  const addWall = useCallback((wall: SalaWallSegment) => {
+    setDocument((prev) => ({
+      ...prev,
+      walls: [...prev.walls, wall],
+      updatedAt: Date.now(),
+    }));
   }, []);
 
   const isStructuralToolSelected = useCallback(
@@ -105,8 +149,15 @@ export function useSalaEditorDocument({
 
       if (phase === "estructura") {
         setActiveTool(createStructuralActiveTool(DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND));
+        setActiveOperationalElement(null);
+      } else if (phase === "operacion") {
+        setActiveTool(null);
+        setActiveOperationalElement(
+          createActiveOperationalElement(DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE),
+        );
       } else {
         setActiveTool(null);
+        setActiveOperationalElement(null);
       }
     },
     [],
@@ -167,6 +218,13 @@ export function useSalaEditorDocument({
     setActiveTool,
     activeStructuralToolKind,
     activeStructuralToolboxItem,
+    activeOperationalElement,
+    setActiveOperationalElement,
+    activeOperationalElementType,
+    activeOperationalCatalogItem,
+    selectOperationalElement,
+    clearOperationalElement,
+    isOperationalElementSelected,
     selectTool,
     clearTool,
     isToolSelected: isStructuralToolSelected,
@@ -177,5 +235,6 @@ export function useSalaEditorDocument({
     addEspacio,
     addEspacioAndSelect,
     updateEspacio,
+    addWall,
   };
 }

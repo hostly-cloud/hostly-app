@@ -6,6 +6,7 @@
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaStructuralElement } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { SalaOperationalElement } from "@/lib/sala-editor/types/elementos-operativos";
+import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 import { createDefaultSalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 
@@ -15,6 +16,8 @@ export type SalaEditorDocument = {
   version: typeof SALA_EDITOR_DOCUMENT_VERSION;
   restaurantId: string;
   espacios: SalaEspacio[];
+  /** Paredes dibujadas localmente (Fase 2.3). */
+  walls: SalaWallSegment[];
   structuralElements: SalaStructuralElement[];
   operationalElements: SalaOperationalElement[];
   navigation: SalaEditorNavigation;
@@ -29,6 +32,7 @@ export function createEmptySalaEditorDocument(
     version: SALA_EDITOR_DOCUMENT_VERSION,
     restaurantId: rid,
     espacios: [],
+    walls: [],
     structuralElements: [],
     operationalElements: [],
     navigation: createDefaultSalaEditorNavigation(),

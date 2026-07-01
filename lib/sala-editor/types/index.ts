@@ -44,6 +44,12 @@ export {
   isStructuralToolActive,
   isToolSelected,
 } from "@/lib/sala-editor/types/editor-tool";
+export type {
+  SalaWallSegment,
+  SalaWallSegmentDraft,
+  SalaWallSegmentId,
+} from "@/lib/sala-editor/types/wall-segment";
+export { createSalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 export type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 export {
   SALA_EDITOR_DOCUMENT_VERSION,
