@@ -17,7 +17,6 @@ export type SalaEstructuraWorkspaceProps = {
 };
 
 export function SalaEstructuraWorkspace({
-  espacio,
   tool,
   walls = [],
   wallDraft = null,
@@ -30,22 +29,7 @@ export function SalaEstructuraWorkspace({
     isWallTool && onWallPointerDown && onWallPointerMove;
 
   return (
-    <div className="hostly-sala-editor-canvas-frame">
-      <div className="hostly-sala-editor-canvas-frame__bar">
-        <div className="flex items-center gap-2">
-          <span
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--hostly-accent-soft)] text-sm"
-            aria-hidden
-          >
-            {tool.icon}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-extrabold text-slate-900">{tool.label}</p>
-            <p className="truncate text-[10px] font-semibold text-slate-500">{espacio.name}</p>
-          </div>
-        </div>
-      </div>
-
+    <div className="hostly-sala-editor-canvas-frame hostly-sala-editor-canvas-frame--canvas">
       {wallDrawingEnabled ? (
         <SalaWallCanvas
           walls={walls}
@@ -57,21 +41,10 @@ export function SalaEstructuraWorkspace({
         />
       ) : (
         <div className="hostly-sala-editor-canvas-frame__surface relative flex flex-col items-center justify-center px-4 py-6 text-center">
-          <div
-            className="pointer-events-none absolute inset-6 rounded-2xl opacity-60"
-            style={{
-              backgroundImage:
-                "linear-gradient(rgba(148,163,184,0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.14) 1px, transparent 1px)",
-              backgroundSize: "24px 24px",
-            }}
-            aria-hidden
-          />
+          <div className="hostly-sala-editor-dot-grid" aria-hidden />
 
-          <div className="relative max-w-sm">
-            <p className="text-sm font-extrabold leading-snug text-slate-800">{tool.workspaceHint}</p>
-            <p className="mt-2 text-[11px] text-slate-500">
-              El dibujo estará disponible en la siguiente iteración.
-            </p>
+          <div className="relative max-w-xs">
+            <p className="text-xs font-bold leading-snug text-slate-600">{tool.workspaceHint}</p>
           </div>
         </div>
       )}

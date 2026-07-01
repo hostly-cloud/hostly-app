@@ -11,6 +11,7 @@ export type SalaEditorShellProps = {
   navigation: SalaEditorNavigation;
   disabledPhases?: SalaEditorPhase[];
   espaciosCount: number;
+  inspectorOpen: boolean;
   onPhaseChange: (phase: SalaEditorPhase) => void;
   leftPanel: ReactNode;
   workspace: ReactNode;
@@ -25,6 +26,7 @@ export function SalaEditorShell({
   navigation,
   disabledPhases = [],
   espaciosCount,
+  inspectorOpen,
   onPhaseChange,
   leftPanel,
   workspace,
@@ -32,7 +34,14 @@ export function SalaEditorShell({
   legacyEditorHref,
 }: SalaEditorShellProps) {
   return (
-    <section className="hostly-sala-editor-workbench">
+    <section
+      className={[
+        "hostly-sala-editor-workbench",
+        inspectorOpen ? "hostly-sala-editor-workbench--inspector-open" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <header className="hostly-sala-editor-workbench__toolbar">
         <SalaEditorPhaseNav
           phase={navigation.phase}
@@ -52,13 +61,15 @@ export function SalaEditorShell({
       </header>
 
       <div className="hostly-sala-editor-workbench__body">
-        <aside className="hostly-sala-editor-workbench__panel">
+        <aside className="hostly-sala-editor-workbench__panel hostly-sala-editor-workbench__panel--toolbox">
           <div className="hostly-sala-editor-workbench__panel-inner">{leftPanel}</div>
         </aside>
         <main className="hostly-sala-editor-workbench__canvas">{workspace}</main>
-        <aside className="hostly-sala-editor-workbench__panel">
-          <div className="hostly-sala-editor-workbench__inspector-scroll">{inspector}</div>
-        </aside>
+        {inspectorOpen ? (
+          <aside className="hostly-sala-editor-workbench__panel hostly-sala-editor-workbench__panel--inspector">
+            <div className="hostly-sala-editor-workbench__inspector-scroll">{inspector}</div>
+          </aside>
+        ) : null}
       </div>
     </section>
   );

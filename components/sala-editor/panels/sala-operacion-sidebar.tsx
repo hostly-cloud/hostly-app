@@ -14,12 +14,12 @@ export function SalaOperacionSidebar({
   onSelectElementType,
 }: SalaOperacionSidebarProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="hostly-sala-editor-sidebar-heading">
-        <h3 className="hostly-sala-editor-sidebar-heading__title">Elementos</h3>
+    <div className="hostly-sala-editor-toolbox">
+      <div className="hostly-sala-editor-toolbox__head">
+        <span className="hostly-sala-editor-toolbox__label">Elementos</span>
       </div>
 
-      <ul className="hostly-sala-editor-sidebar-list">
+      <ul className="hostly-sala-editor-tool-grid">
         {OPERATIONAL_ELEMENT_CATALOG.map((item) => (
           <li key={item.type}>
             <SalaOperationalElementCard

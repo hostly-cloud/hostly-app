@@ -12,6 +12,7 @@ import { useSalaEditorDocument } from "@/hooks/useSalaEditorDocument";
 import { useSalaWallDrawing } from "@/hooks/useSalaWallDrawing";
 import { useOperationalElementDragging } from "@/hooks/useOperationalElementDragging";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
+import { hasSalaEditorInspectorSelection } from "@/components/sala-editor/sala-editor-inspector-visibility";
 import {
   SalaEditorLeftPanel,
   SalaEditorInspectorPanel,
@@ -178,12 +179,20 @@ export function SalaEditorWorkspace({
     ? (elementCountByEspacioId[selectedEspacio.id] ?? 0)
     : 0;
 
+  const inspectorOpen = hasSalaEditorInspectorSelection({
+    phase: document.navigation.phase,
+    espacio: selectedEspacio,
+    selectedWall: selectedWall ?? null,
+    selectedOperationalElementInstance: selectedOperationalElementInstance ?? null,
+  });
+
   return (
     <>
       <SalaEditorShell
         navigation={document.navigation}
         disabledPhases={disabledPhases}
         espaciosCount={document.espacios.length}
+        inspectorOpen={inspectorOpen}
         onPhaseChange={setPhase}
         legacyEditorHref={legacyEditorHref}
         leftPanel={
@@ -198,6 +207,7 @@ export function SalaEditorWorkspace({
             onRequestAddEspacio={openAddDialog}
             onSelectStructuralTool={selectTool}
             onSelectOperationalElement={selectOperationalElement}
+            onUpdateEspacio={updateEspacio}
           />
         }
         workspace={

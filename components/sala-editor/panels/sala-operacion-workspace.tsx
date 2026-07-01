@@ -34,7 +34,6 @@ export type SalaOperacionWorkspaceProps = {
 };
 
 export function SalaOperacionWorkspace({
-  espacioName,
   catalogItem,
   instances,
   selectedInstanceId,
@@ -106,28 +105,7 @@ export function SalaOperacionWorkspace({
   );
 
   return (
-    <div className="hostly-sala-editor-canvas-frame">
-      <div className="hostly-sala-editor-canvas-frame__bar">
-        <div className="flex items-center gap-2">
-          <span
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm"
-            style={{ backgroundColor: `${catalogItem.color}22` }}
-            aria-hidden
-          >
-            {catalogItem.icon}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-extrabold text-slate-900">{catalogItem.label}</p>
-            <p className="truncate text-[10px] font-semibold text-slate-500">
-              {espacioName}
-              {instances.length > 0
-                ? ` · ${instances.length} colocado${instances.length === 1 ? "" : "s"}`
-                : " · clic para colocar"}
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <div className="hostly-sala-editor-canvas-frame hostly-sala-editor-canvas-frame--canvas">
       <div
         ref={surfaceRef}
         role="application"
@@ -136,24 +114,11 @@ export function SalaOperacionWorkspace({
         style={{ cursor: draggingInstanceId ? "grabbing" : "crosshair" }}
         onPointerDown={handleCanvasPointerDown}
       >
-        <div
-          className="pointer-events-none absolute inset-0 opacity-60"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(148,163,184,0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.14) 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
-          }}
-          aria-hidden
-        />
+        <div className="hostly-sala-editor-dot-grid" aria-hidden />
 
         {instances.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4">
-            <div className="text-center">
-              <p className="text-sm font-extrabold text-slate-700">Haz clic en el plano</p>
-              <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                Aparecerá {catalogItem.label} 1 donde pulses
-              </p>
-            </div>
+          <div className="hostly-sala-editor-canvas-hint">
+            Clic en el plano para colocar
           </div>
         ) : null}
 
@@ -186,13 +151,11 @@ export function SalaOperacionWorkspace({
           );
         })}
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center px-3">
-          <p className="rounded-full border border-slate-200/80 bg-white/92 px-3 py-1 text-[10px] font-semibold text-slate-500 shadow-sm backdrop-blur-sm">
-            {draggingInstanceId
-              ? "Suelta para fijar la posición"
-              : `Haz clic para colocar · ${catalogItem.label}`}
-          </p>
-        </div>
+        {draggingInstanceId ? (
+          <div className="hostly-sala-editor-canvas-hint hostly-sala-editor-canvas-hint--floating">
+            Suelta para fijar
+          </div>
+        ) : null}
       </div>
     </div>
   );

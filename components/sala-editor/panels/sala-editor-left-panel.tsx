@@ -1,7 +1,7 @@
 "use client";
 
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
-import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
+import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
 import { SalaEspaciosSidebar } from "@/components/sala-editor/panels/sala-espacios-sidebar";
@@ -19,6 +19,7 @@ export type SalaEditorLeftPanelProps = {
   onRequestAddEspacio: () => void;
   onSelectStructuralTool: (kind: SalaStructuralElementKind) => void;
   onSelectOperationalElement: (type: OperationalElementType) => void;
+  onUpdateEspacio?: (espacioId: string, patch: Partial<SalaEspacioDraft>) => void;
 };
 
 export function SalaEditorLeftPanel({
@@ -32,6 +33,7 @@ export function SalaEditorLeftPanel({
   onRequestAddEspacio,
   onSelectStructuralTool,
   onSelectOperationalElement,
+  onUpdateEspacio,
 }: SalaEditorLeftPanelProps) {
   return (
     <>
@@ -42,6 +44,7 @@ export function SalaEditorLeftPanel({
           elementCountByEspacioId={elementCountByEspacioId}
           onSelectEspacio={onSelectEspacio}
           onRequestAddEspacio={onRequestAddEspacio}
+          onUpdateEspacio={onUpdateEspacio}
         />
       ) : null}
       {phase === "estructura" ? (
