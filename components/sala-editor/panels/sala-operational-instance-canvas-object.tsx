@@ -51,7 +51,7 @@ export function SalaOperationalInstanceCanvasObject({
   onDuplicate,
   onDelete,
 }: SalaOperationalInstanceCanvasObjectProps) {
-  const showChrome = selected && !isDragging;
+  const chromeVisible = selected && !isDragging && !isResizing;
 
   return (
     <div
@@ -60,6 +60,7 @@ export function SalaOperationalInstanceCanvasObject({
         selected ? "is-selected" : "",
         isDragging ? "is-dragging" : "",
         isResizing ? "is-resizing" : "",
+        chromeVisible ? "is-chrome-visible" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -72,7 +73,7 @@ export function SalaOperationalInstanceCanvasObject({
         zIndex: isDragging || isResizing ? 40 : selected ? 20 : 1,
       }}
     >
-      {showChrome ? (
+      {selected ? (
         <>
           <div className="hostly-sala-canvas-object__frame" aria-hidden />
           <SalaCanvasSelectionToolbar onDuplicate={onDuplicate} onDelete={onDelete} />

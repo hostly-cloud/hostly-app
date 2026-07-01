@@ -15,6 +15,7 @@ import { useOperationalElementResizing } from "@/hooks/useOperationalElementResi
 import {
   getOperationalInstanceCanvasSize,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
 import { hasSalaEditorInspectorSelection } from "@/components/sala-editor/sala-editor-inspector-visibility";
 import {
@@ -77,10 +78,10 @@ export function SalaEditorWorkspace({
   const {
     draggingInstanceId: draggingOperationalInstanceId,
     dropAnimatingInstanceId: dropAnimatingOperationalInstanceId,
-    startDragging,
-    updateDragging,
-    finishDragging,
-    cancelDragging,
+    beginInstancePointer,
+    moveInstancePointer,
+    endInstancePointer,
+    cancelInstancePointer,
     isDragging: isOperationalDragging,
     handleCanvasPointerDown: operationalCanvasPointerDown,
   } = useOperationalElementDragging({
@@ -138,34 +139,38 @@ export function SalaEditorWorkspace({
   );
 
   const handleOperationalInstancePointerDown = useCallback(
-    (instanceId: string, _point: { x: number; y: number }) => {
+    (instanceId: string, payload: OperationalInstancePointerPayload) => {
       if (isOperationalResizing()) return;
-      startDragging(instanceId);
+      beginInstancePointer(instanceId, {
+        ...payload,
+        canvasPoint: payload.point,
+      });
     },
-    [isOperationalResizing, startDragging],
+    [beginInstancePointer, isOperationalResizing],
   );
 
   const handleOperationalInstancePointerMove = useCallback(
-    (instanceId: string, point: { x: number; y: number }) => {
-      updateDragging(instanceId, point);
+    (instanceId: string, payload: OperationalInstancePointerPayload) => {
+      moveInstancePointer(instanceId, {
+        ...payload,
+        canvasPoint: payload.point,
+      });
     },
-    [updateDragging],
+    [moveInstancePointer],
   );
 
   const handleOperationalInstancePointerUp = useCallback(
     (instanceId: string) => {
-      if (isOperationalDragging()) {
-        finishDragging();
-      }
+      endInstancePointer(instanceId);
     },
-    [finishDragging, isOperationalDragging],
+    [endInstancePointer],
   );
 
   const handleOperationalInstancePointerCancel = useCallback(
-    (_instanceId: string) => {
-      cancelDragging();
+    (instanceId: string) => {
+      cancelInstancePointer(instanceId);
     },
-    [cancelDragging],
+    [cancelInstancePointer],
   );
 
   const wallDrawingEnabled =

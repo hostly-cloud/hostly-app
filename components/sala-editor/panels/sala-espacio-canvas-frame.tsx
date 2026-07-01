@@ -28,19 +28,17 @@ export function SalaEspacioCanvasFrame({
   const icon = salaEspacioTypeIcon(espacio.tipo);
 
   return (
-    <div className="hostly-sala-editor-canvas-frame hostly-sala-editor-canvas-frame--canvas">
+    <div className="hostly-sala-editor-canvas-frame hostly-sala-editor-canvas-frame--canvas hostly-sala-editor-canvas-frame--blueprint">
       <div className="hostly-sala-editor-canvas-frame__surface hostly-sala-espacio-frame-host">
-        <div className="hostly-sala-editor-dot-grid" aria-hidden />
-
         <div
-          className="hostly-sala-espacio-frame"
+          className="hostly-sala-espacio-frame hostly-sala-espacio-frame--blueprint"
           style={{ "--espacio-accent": espacio.color } as CSSProperties}
         >
-          <div className="hostly-sala-espacio-frame__tab">
-            <span className="hostly-sala-espacio-frame__tab-icon" aria-hidden>
+          <div className="hostly-sala-espacio-frame__header">
+            <span className="hostly-sala-espacio-frame__header-icon" aria-hidden>
               {icon}
             </span>
-            <span className="hostly-sala-espacio-frame__tab-name">{espacio.name}</span>
+            <span className="hostly-sala-espacio-frame__header-name">{espacio.name}</span>
           </div>
 
           <div
@@ -51,6 +49,7 @@ export function SalaEspacioCanvasFrame({
             style={stageStyle}
             onPointerDown={onStagePointerDown}
           >
+            <div className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft" aria-hidden />
             {children}
             {hint}
           </div>

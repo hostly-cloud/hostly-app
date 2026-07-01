@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
+import {
+  hasExceededDragSlop,
+  type OperationalInstancePointerPayload,
+} from "@/lib/sala-editor/canvas/pointer-interaction";
 
 export type UseOperationalElementDraggingOptions = {
   enabled: boolean;
@@ -11,6 +15,18 @@ export type UseOperationalElementDraggingOptions = {
   ) => void;
   onSelectInstance: (instanceId: string) => void;
   onClearSelection: () => void;
+};
+
+export type OperationalInstancePointerSample = OperationalInstancePointerPayload & {
+  canvasPoint: OperationalElementPosition;
+};
+
+type PendingDragSession = {
+  instanceId: string;
+  startClientX: number;
+  startClientY: number;
+  pointerType: string;
+  active: boolean;
 };
 
 const DROP_ANIMATION_MS = 130;
@@ -29,6 +45,7 @@ export function useOperationalElementDragging({
   >(null);
 
   const draggingInstanceIdRef = useRef<string | null>(null);
+  const pendingDragRef = useRef<PendingDragSession | null>(null);
   const dropTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const syncDraggingRef = useCallback((instanceId: string | null) => {
@@ -40,26 +57,102 @@ export function useOperationalElementDragging({
     return draggingInstanceIdRef.current !== null;
   }, []);
 
-  const startDragging = useCallback(
-    (instanceId: string) => {
+  const beginInstancePointer = useCallback(
+    (instanceId: string, sample: OperationalInstancePointerSample) => {
       if (!enabled) return;
       onSelectInstance(instanceId);
-      syncDraggingRef(instanceId);
+      pendingDragRef.current = {
+        instanceId,
+        startClientX: sample.clientX,
+        startClientY: sample.clientY,
+        pointerType: sample.pointerType,
+        active: false,
+      };
     },
-    [enabled, onSelectInstance, syncDraggingRef],
+    [enabled, onSelectInstance],
   );
 
-  const updateDragging = useCallback(
-    (instanceId: string, position: OperationalElementPosition) => {
+  const moveInstancePointer = useCallback(
+    (instanceId: string, sample: OperationalInstancePointerSample) => {
       if (!enabled) return;
+
+      const pending = pendingDragRef.current;
+      if (!pending || pending.instanceId !== instanceId) return;
+
+      if (!pending.active) {
+        if (
+          !hasExceededDragSlop(
+            pending.startClientX,
+            pending.startClientY,
+            sample.clientX,
+            sample.clientY,
+            pending.pointerType,
+          )
+        ) {
+          return;
+        }
+        pending.active = true;
+        syncDraggingRef(instanceId);
+      }
+
       if (draggingInstanceIdRef.current !== instanceId) return;
-      onUpdatePosition(instanceId, position);
+      onUpdatePosition(instanceId, sample.canvasPoint);
     },
-    [enabled, onUpdatePosition],
+    [enabled, onUpdatePosition, syncDraggingRef],
+  );
+
+  const endInstancePointer = useCallback(
+    (instanceId: string) => {
+      const pending = pendingDragRef.current;
+
+      if (pending?.instanceId === instanceId && !pending.active) {
+        pendingDragRef.current = null;
+        return;
+      }
+
+      if (pending?.instanceId === instanceId) {
+        pendingDragRef.current = null;
+      }
+
+      const finishedId = draggingInstanceIdRef.current;
+      syncDraggingRef(null);
+
+      if (!finishedId) return;
+
+      if (dropTimeoutRef.current) {
+        clearTimeout(dropTimeoutRef.current);
+      }
+
+      setDropAnimatingInstanceId(finishedId);
+      dropTimeoutRef.current = setTimeout(() => {
+        setDropAnimatingInstanceId(null);
+        dropTimeoutRef.current = null;
+      }, DROP_ANIMATION_MS);
+    },
+    [syncDraggingRef],
+  );
+
+  const cancelInstancePointer = useCallback(
+    (instanceId: string) => {
+      const pending = pendingDragRef.current;
+      if (pending?.instanceId === instanceId) {
+        pendingDragRef.current = null;
+      }
+      if (draggingInstanceIdRef.current === instanceId) {
+        syncDraggingRef(null);
+      }
+      setDropAnimatingInstanceId(null);
+      if (dropTimeoutRef.current) {
+        clearTimeout(dropTimeoutRef.current);
+        dropTimeoutRef.current = null;
+      }
+    },
+    [syncDraggingRef],
   );
 
   const finishDragging = useCallback(() => {
     const finishedId = draggingInstanceIdRef.current;
+    pendingDragRef.current = null;
     syncDraggingRef(null);
 
     if (!finishedId) return;
@@ -76,6 +169,7 @@ export function useOperationalElementDragging({
   }, [syncDraggingRef]);
 
   const cancelDragging = useCallback(() => {
+    pendingDragRef.current = null;
     syncDraggingRef(null);
     setDropAnimatingInstanceId(null);
     if (dropTimeoutRef.current) {
@@ -88,6 +182,7 @@ export function useOperationalElementDragging({
     (position: OperationalElementPosition, onPlace: () => void) => {
       if (!enabled) return;
       if (isDragging()) return;
+      pendingDragRef.current = null;
       onClearSelection();
       onPlace();
     },
@@ -125,11 +220,13 @@ export function useOperationalElementDragging({
   return {
     draggingInstanceId,
     dropAnimatingInstanceId,
-    startDragging,
-    updateDragging,
+    beginInstancePointer,
+    moveInstancePointer,
+    endInstancePointer,
+    cancelInstancePointer,
     finishDragging,
     cancelDragging,
     isDragging,
     handleCanvasPointerDown,
   };
-}
+};

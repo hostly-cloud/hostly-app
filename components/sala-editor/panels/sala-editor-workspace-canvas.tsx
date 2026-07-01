@@ -12,6 +12,7 @@ import { SalaOperacionWorkspace } from "@/components/sala-editor/panels/sala-ope
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import { SalaEditorEmptyState } from "@/components/sala-editor/panels/sala-editor-empty-state";
 
 export type SalaEditorWorkspaceCanvasProps = {
@@ -35,11 +36,11 @@ export type SalaEditorWorkspaceCanvasProps = {
   onOperationalCanvasPointerDown?: (point: { x: number; y: number }) => void;
   onOperationalInstancePointerDown?: (
     instanceId: string,
-    point: { x: number; y: number },
+    payload: OperationalInstancePointerPayload,
   ) => void;
   onOperationalInstancePointerMove?: (
     instanceId: string,
-    point: { x: number; y: number },
+    payload: OperationalInstancePointerPayload,
   ) => void;
   onOperationalInstancePointerUp?: (instanceId: string) => void;
   onOperationalInstancePointerCancel?: (instanceId: string) => void;

@@ -8,6 +8,7 @@ import {
   getOperationalInstanceCanvasSize,
   type OperationalInstanceResizeCorner,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
 import { SalaOperationalInstanceCanvasObject } from "@/components/sala-editor/panels/sala-operational-instance-canvas-object";
 
@@ -33,8 +34,14 @@ export type SalaOperacionWorkspaceProps = {
   isDragging: () => boolean;
   isResizing: () => boolean;
   onCanvasPointerDown: (point: { x: number; y: number }) => void;
-  onInstancePointerDown: (instanceId: string, point: { x: number; y: number }) => void;
-  onInstancePointerMove: (instanceId: string, point: { x: number; y: number }) => void;
+  onInstancePointerDown: (
+    instanceId: string,
+    payload: OperationalInstancePointerPayload,
+  ) => void;
+  onInstancePointerMove: (
+    instanceId: string,
+    payload: OperationalInstancePointerPayload,
+  ) => void;
   onInstancePointerUp: (instanceId: string) => void;
   onInstancePointerCancel: (instanceId: string) => void;
   onResizeStart: (
@@ -100,13 +107,23 @@ export function SalaOperacionWorkspace({
         event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolvePoint(event.clientX, event.clientY);
         if (!point) return;
-        onInstancePointerDown(instanceId, point);
+        onInstancePointerDown(instanceId, {
+          point,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          pointerType: event.pointerType,
+        });
       },
       onBodyPointerMove: (event: PointerEvent<HTMLDivElement>) => {
         if (isResizing()) return;
         const point = resolvePoint(event.clientX, event.clientY);
         if (!point) return;
-        onInstancePointerMove(instanceId, point);
+        onInstancePointerMove(instanceId, {
+          point,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          pointerType: event.pointerType,
+        });
       },
       onBodyPointerUp: (event: PointerEvent<HTMLDivElement>) => {
         event.stopPropagation();
