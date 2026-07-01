@@ -24,6 +24,10 @@ import {
   isOperationalElementTypeSelected,
 } from "@/lib/sala-editor/ose/active-operational-element";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
+import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
+import { buildOperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
+import { nextOperationalElementInstanceName } from "@/lib/sala-editor/ose/operational-element-naming";
+import type { OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
 import {
   getDisabledSalaEditorPhases,
   navigateSalaEditorPhase,
@@ -55,6 +59,8 @@ export function useSalaEditorDocument({
   const [activeTool, setActiveTool] = useState<SalaEditorActiveTool>(null);
   const [activeOperationalElement, setActiveOperationalElement] =
     useState<ActiveOperationalElementSelection>(null);
+  const [selectedOperationalElementInstanceId, setSelectedOperationalElementInstanceId] =
+    useState<string | null>(null);
 
   const disabledPhases = useMemo(
     () => getDisabledSalaEditorPhases(document.espacios, document.navigation),
@@ -76,13 +82,22 @@ export function useSalaEditorDocument({
       const structural = document.structuralElements.filter(
         (el) => el.espacioId === espacio.id,
       ).length;
+      const oseOperational = document.operationalElementInstances.filter(
+        (el) => el.spaceId === espacio.id,
+      ).length;
       const operational = document.operationalElements.filter(
         (el) => el.espacioId === espacio.id,
       ).length;
-      counts[espacio.id] = walls + structural + operational;
+      counts[espacio.id] = walls + structural + oseOperational + operational;
     }
     return counts;
-  }, [document.espacios, document.walls, document.structuralElements, document.operationalElements]);
+  }, [
+    document.espacios,
+    document.walls,
+    document.structuralElements,
+    document.operationalElements,
+    document.operationalElementInstances,
+  ]);
 
   const activeStructuralToolKind = useMemo((): SalaStructuralElementKind | null => {
     if (activeTool?.layer !== "estructura") return null;
@@ -104,13 +119,115 @@ export function useSalaEditorDocument({
     return activeOperationalElement.type;
   }, [activeOperationalElement]);
 
+  const operationalElementInstancesInEspacio = useMemo(
+    () =>
+      selectedEspacio
+        ? document.operationalElementInstances.filter(
+            (instance) => instance.spaceId === selectedEspacio.id,
+          )
+        : [],
+    [document.operationalElementInstances, selectedEspacio],
+  );
+
+  const selectedOperationalElementInstance = useMemo(
+    () =>
+      operationalElementInstancesInEspacio.find(
+        (instance) => instance.id === selectedOperationalElementInstanceId,
+      ) ?? null,
+    [
+      operationalElementInstancesInEspacio,
+      selectedOperationalElementInstanceId,
+    ],
+  );
+
   const clearOperationalElement = useCallback(() => {
     setActiveOperationalElement(null);
   }, []);
 
+  const clearOperationalElementInstance = useCallback(() => {
+    setSelectedOperationalElementInstanceId(null);
+  }, []);
+
+  const selectOperationalElementInstance = useCallback((instanceId: string | null) => {
+    setSelectedOperationalElementInstanceId(instanceId);
+  }, []);
+
   const selectOperationalElement = useCallback((type: OperationalElementType) => {
     setActiveOperationalElement(createActiveOperationalElement(type));
+    setSelectedOperationalElementInstanceId(null);
   }, []);
+
+  const addOperationalElement = useCallback((instance: OperationalElementInstance) => {
+    setDocument((prev) => ({
+      ...prev,
+      operationalElementInstances: [...prev.operationalElementInstances, instance],
+      updatedAt: Date.now(),
+    }));
+    setSelectedOperationalElementInstanceId(instance.id);
+  }, []);
+
+  const removeOperationalElement = useCallback((instanceId: string) => {
+    setDocument((prev) => ({
+      ...prev,
+      operationalElementInstances: prev.operationalElementInstances.filter(
+        (instance) => instance.id !== instanceId,
+      ),
+      updatedAt: Date.now(),
+    }));
+    setSelectedOperationalElementInstanceId((current) =>
+      current === instanceId ? null : current,
+    );
+  }, []);
+
+  const updateOperationalElement = useCallback(
+    (
+      instanceId: string,
+      patch: Partial<Omit<OperationalElementInstance, "id">>,
+    ) => {
+      setDocument((prev) => ({
+        ...prev,
+        operationalElementInstances: prev.operationalElementInstances.map(
+          (instance) =>
+            instance.id === instanceId ? { ...instance, ...patch } : instance,
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    [],
+  );
+
+  const placeOperationalElementAt = useCallback(
+    (position: OperationalElementPosition) => {
+      if (!selectedEspacio || !activeOperationalElementType) return;
+
+      const catalogItem = getOperationalElementCatalogItem(
+        activeOperationalElementType,
+      );
+      if (!catalogItem) return;
+
+      const name = nextOperationalElementInstanceName(
+        document.operationalElementInstances,
+        selectedEspacio.id,
+        activeOperationalElementType,
+      );
+
+      const instance = buildOperationalElementInstance({
+        spaceId: selectedEspacio.id,
+        elementType: activeOperationalElementType,
+        name,
+        position,
+        capacity: catalogItem.defaultCapacity,
+      });
+
+      addOperationalElement(instance);
+    },
+    [
+      activeOperationalElementType,
+      addOperationalElement,
+      document.operationalElementInstances,
+      selectedEspacio,
+    ],
+  );
 
   const isOperationalElementSelected = useCallback(
     (type: OperationalElementType) =>
@@ -150,14 +267,17 @@ export function useSalaEditorDocument({
       if (phase === "estructura") {
         setActiveTool(createStructuralActiveTool(DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND));
         setActiveOperationalElement(null);
+        setSelectedOperationalElementInstanceId(null);
       } else if (phase === "operacion") {
         setActiveTool(null);
         setActiveOperationalElement(
           createActiveOperationalElement(DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE),
         );
+        setSelectedOperationalElementInstanceId(null);
       } else {
         setActiveTool(null);
         setActiveOperationalElement(null);
+        setSelectedOperationalElementInstanceId(null);
       }
     },
     [],
@@ -169,6 +289,7 @@ export function useSalaEditorDocument({
       navigation: selectSalaEspacioInNavigation(prev.navigation, espacioId),
       updatedAt: Date.now(),
     }));
+    setSelectedOperationalElementInstanceId(null);
   }, []);
 
   const replaceEspacios = useCallback((espacios: SalaEspacio[]) => {
@@ -222,9 +343,18 @@ export function useSalaEditorDocument({
     setActiveOperationalElement,
     activeOperationalElementType,
     activeOperationalCatalogItem,
+    operationalElementInstancesInEspacio,
+    selectedOperationalElementInstanceId,
+    selectedOperationalElementInstance,
     selectOperationalElement,
     clearOperationalElement,
     isOperationalElementSelected,
+    addOperationalElement,
+    removeOperationalElement,
+    updateOperationalElement,
+    selectOperationalElementInstance,
+    clearOperationalElementInstance,
+    placeOperationalElementAt,
     selectTool,
     clearTool,
     isToolSelected: isStructuralToolSelected,

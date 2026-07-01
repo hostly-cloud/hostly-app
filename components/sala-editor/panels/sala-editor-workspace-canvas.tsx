@@ -10,6 +10,7 @@ import { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-esp
 import { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-estructura-workspace";
 import { SalaOperacionWorkspace } from "@/components/sala-editor/panels/sala-operacion-workspace";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
+import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 
 export type SalaEditorWorkspaceCanvasProps = {
   phase: SalaEditorPhase;
@@ -22,6 +23,10 @@ export type SalaEditorWorkspaceCanvasProps = {
   onWallPointerDown?: (point: { x: number; y: number }) => void;
   onWallPointerMove?: (point: { x: number; y: number }) => void;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
+  operationalElementInstances?: OperationalElementInstance[];
+  selectedOperationalElementInstanceId?: string | null;
+  onPlaceOperationalElement?: (point: { x: number; y: number }) => void;
+  onSelectOperationalElementInstance?: (instanceId: string) => void;
   onRequestCreateEspacio: () => void;
 };
 
@@ -36,6 +41,10 @@ export function SalaEditorWorkspaceCanvas({
   onWallPointerDown,
   onWallPointerMove,
   activeOperationalCatalogItem = null,
+  operationalElementInstances = [],
+  selectedOperationalElementInstanceId = null,
+  onPlaceOperationalElement,
+  onSelectOperationalElementInstance,
   onRequestCreateEspacio,
 }: SalaEditorWorkspaceCanvasProps) {
   if (!hasEspacios) {
@@ -86,11 +95,15 @@ export function SalaEditorWorkspaceCanvas({
     );
   }
 
-  if (phase === "operacion" && activeOperationalCatalogItem) {
+  if (phase === "operacion" && espacio && activeOperationalCatalogItem) {
     return (
       <SalaOperacionWorkspace
-        espacio={espacio}
+        espacioName={espacio.name}
         catalogItem={activeOperationalCatalogItem}
+        instances={operationalElementInstances}
+        selectedInstanceId={selectedOperationalElementInstanceId}
+        onCanvasPlace={onPlaceOperationalElement ?? (() => undefined)}
+        onSelectInstance={onSelectOperationalElementInstance ?? (() => undefined)}
       />
     );
   }

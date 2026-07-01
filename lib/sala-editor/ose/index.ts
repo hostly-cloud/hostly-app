@@ -28,3 +28,19 @@ export {
   getDefaultOperationalElementCatalogItem,
   getOperationalElementCatalogItem,
 } from "@/lib/sala-editor/ose/operational-element-catalog";
+
+export type {
+  OperationalElementInstance,
+  OperationalElementInstanceDraft,
+  OperationalElementInstanceId,
+  BuildOperationalElementInstanceInput,
+} from "@/lib/sala-editor/ose/operational-element-instance";
+export {
+  buildOperationalElementInstance,
+  createOperationalElementInstance,
+} from "@/lib/sala-editor/ose/operational-element-instance";
+
+export {
+  countOperationalElementInstancesByType,
+  nextOperationalElementInstanceName,
+} from "@/lib/sala-editor/ose/operational-element-naming";

@@ -6,6 +6,7 @@
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaStructuralElement } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { SalaOperationalElement } from "@/lib/sala-editor/types/elementos-operativos";
+import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 import { createDefaultSalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
@@ -20,6 +21,8 @@ export type SalaEditorDocument = {
   walls: SalaWallSegment[];
   structuralElements: SalaStructuralElement[];
   operationalElements: SalaOperationalElement[];
+  /** Instancias OSE colocadas localmente (Fase 2). */
+  operationalElementInstances: OperationalElementInstance[];
   navigation: SalaEditorNavigation;
   updatedAt: number;
 };
@@ -35,6 +38,7 @@ export function createEmptySalaEditorDocument(
     walls: [],
     structuralElements: [],
     operationalElements: [],
+    operationalElementInstances: [],
     navigation: createDefaultSalaEditorNavigation(),
     updatedAt: Date.now(),
   };

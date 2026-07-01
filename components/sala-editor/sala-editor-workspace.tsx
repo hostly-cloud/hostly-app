@@ -42,8 +42,13 @@ export function SalaEditorWorkspace({
     activeStructuralToolboxItem,
     activeOperationalElementType,
     activeOperationalCatalogItem,
+    operationalElementInstancesInEspacio,
+    selectedOperationalElementInstanceId,
+    selectedOperationalElementInstance,
     selectTool,
     selectOperationalElement,
+    placeOperationalElementAt,
+    selectOperationalElementInstance,
     setPhase,
     selectEspacio,
     addEspacioAndSelect,
@@ -142,6 +147,10 @@ export function SalaEditorWorkspace({
             onWallPointerDown={wallDrawingEnabled ? handleWallPointerDown : undefined}
             onWallPointerMove={wallDrawingEnabled ? handleWallPointerMove : undefined}
             activeOperationalCatalogItem={activeOperationalCatalogItem}
+            operationalElementInstances={operationalElementInstancesInEspacio}
+            selectedOperationalElementInstanceId={selectedOperationalElementInstanceId}
+            onPlaceOperationalElement={placeOperationalElementAt}
+            onSelectOperationalElementInstance={selectOperationalElementInstance}
             onRequestCreateEspacio={openAddDialog}
           />
         }
@@ -153,6 +162,7 @@ export function SalaEditorWorkspace({
             activeStructuralToolboxItem={activeStructuralToolboxItem}
             selectedWall={selectedWall}
             activeOperationalCatalogItem={activeOperationalCatalogItem}
+            selectedOperationalElementInstance={selectedOperationalElementInstance}
             onUpdateEspacio={handleUpdateEspacio}
           />
         }

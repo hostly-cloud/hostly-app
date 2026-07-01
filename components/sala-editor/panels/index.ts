@@ -15,4 +15,6 @@ export { SalaWallInspector } from "@/components/sala-editor/panels/sala-wall-ins
 export { SalaOperacionWorkspace } from "@/components/sala-editor/panels/sala-operacion-workspace";
 export { SalaOperationalElementCard } from "@/components/sala-editor/panels/sala-operational-element-card";
 export { SalaOperationalElementInspector } from "@/components/sala-editor/panels/sala-operational-element-inspector";
+export { SalaOperationalElementInstanceInspector } from "@/components/sala-editor/panels/sala-operational-element-instance-inspector";
+export { SalaOperationalElementInstanceCard } from "@/components/sala-editor/panels/sala-operational-element-instance-card";
 export { SalaOperacionSidebar } from "@/components/sala-editor/panels/sala-operacion-sidebar";

@@ -13,7 +13,9 @@ import { SalaStructuralToolInspector } from "@/components/sala-editor/panels/sal
 import { SalaWallInspector } from "@/components/sala-editor/panels/sala-wall-inspector";
 import { SalaOperationalElementInspector } from "@/components/sala-editor/panels/sala-operational-element-inspector";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
+import { SalaOperationalElementInstanceInspector } from "@/components/sala-editor/panels/sala-operational-element-instance-inspector";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
+import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 
 function InspectorSection({
   title,
@@ -43,6 +45,7 @@ export type SalaEditorInspectorPanelProps = {
   activeStructuralToolboxItem?: StructuralToolboxItem | null;
   selectedWall?: SalaWallSegment | null;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
+  selectedOperationalElementInstance?: OperationalElementInstance | null;
   onUpdateEspacio?: (patch: Partial<SalaEspacioDraft>) => void;
 };
 
@@ -53,6 +56,7 @@ export function SalaEditorInspectorPanel({
   activeStructuralToolboxItem = null,
   selectedWall = null,
   activeOperationalCatalogItem = null,
+  selectedOperationalElementInstance = null,
   onUpdateEspacio,
 }: SalaEditorInspectorPanelProps) {
   if (phase === "estructura") {
@@ -105,6 +109,14 @@ export function SalaEditorInspectorPanel({
             </p>
           </div>
         </div>
+      );
+    }
+
+    if (selectedOperationalElementInstance) {
+      return (
+        <SalaOperationalElementInstanceInspector
+          instance={selectedOperationalElementInstance}
+        />
       );
     }
 
