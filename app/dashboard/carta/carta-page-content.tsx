@@ -30,6 +30,9 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useActiveOperator } from "@/components/tpv/active-operator-context";
 import { ActiveOperatorTopBarButton } from "@/components/tpv/active-operator-top-bar-button";
 import { PaymentBillingSection } from "@/components/tpv/payment/payment-billing-section";
+import { BillingInvoiceCompletionPanel } from "@/components/tpv/payment/billing-invoice-completion-panel";
+import { createBillingInvoiceFromPayment } from "@/lib/billing/create-billing-invoice-from-payment";
+import { mapTpvOrderLinesToBillingLines } from "@/lib/billing/map-tpv-order-lines-to-billing-lines";
 import { HostlyBackButton } from "@/components/hostly/back-button";
 import { HostlyMiniIconButton } from "@/components/hostly/mini-icon-button";
 import {
@@ -201,6 +204,7 @@ import {
 } from "@/lib/kds/order-line-station";
 import type { Product } from "@/types/product";
 import type { BillingCustomer } from "@/types/billing-customer";
+import type { BillingInvoice } from "@/types/billing-invoice";
 import { getPrinterConfig } from "@/lib/firestore/printer-config";
 import {
   cancelPrintJobsForOrderLine,
@@ -1142,6 +1146,25 @@ function comandaLineDisplayName(line: CartOrderLine): string {
   if (display) return display;
   const v = line.variantLabel?.trim();
   return v ? `${line.product.nombre} (${v})` : line.product.nombre;
+}
+
+function mapCartOrderLinesToBillingSources(lines: CartOrderLine[]) {
+  return mapTpvOrderLinesToBillingLines(
+    lines.filter(isActiveComandaLineForOps).map((item) => {
+      const isGifted = Boolean(item.isComped);
+      const unit = comandaLineUnitPriceWithExtras(item);
+      const qty = Number(item.quantity) || 0;
+      const lineTotal = isGifted ? 0 : unit * qty;
+      return {
+        id: item.id,
+        name: comandaLineDisplayName(item),
+        quantity: qty,
+        unitPrice: isGifted ? 0 : unit,
+        lineTotal: Number.isFinite(lineTotal) ? roundMoney(lineTotal) : 0,
+        isComped: isGifted,
+      };
+    }),
+  );
 }
 
 function comandaLineSortKey(line: CartOrderLine): number {
@@ -2466,6 +2489,10 @@ export function CartaPageContent({
   const [invoiceEmail, setInvoiceEmail] = useState("");
   const [selectedBillingCustomer, setSelectedBillingCustomer] =
     useState<BillingCustomer | null>(null);
+  const [lastBillingInvoice, setLastBillingInvoice] =
+    useState<BillingInvoice | null>(null);
+  const [isBillingInvoicePanelOpen, setIsBillingInvoicePanelOpen] =
+    useState(false);
   const [lastPaymentInfo, setLastPaymentInfo] = useState<{
     ticketNumber?: string;
     invoiceNumber?: string;
@@ -2736,6 +2763,8 @@ export function CartaPageContent({
   useEffect(() => {
     if (isPaymentOpen) return;
     setSelectedBillingCustomer(null);
+    setLastBillingInvoice(null);
+    setIsBillingInvoicePanelOpen(false);
   }, [isPaymentOpen]);
 
   useEffect(() => {
@@ -3955,6 +3984,37 @@ export function CartaPageContent({
         paymentId: paymentRef.id,
       });
 
+      if (
+        selectedBillingCustomer &&
+        !isSplitEqualInstallment &&
+        isAccountFinalPayment
+      ) {
+        const billingRestaurantId =
+          (operationalRestaurantId ?? restaurantId)?.trim() ?? "";
+        if (billingRestaurantId) {
+          try {
+            const createdBillingInvoice = await createBillingInvoiceFromPayment({
+              restaurantId: billingRestaurantId,
+              billingCustomer: selectedBillingCustomer,
+              orderId: primaryOrderId,
+              tableId: selectedTableId || selectedTable?.id || null,
+              paymentMethod: pm,
+              lines: mapCartOrderLinesToBillingSources(order),
+              subtotal: roundMoney(breakdown.finalTotal),
+              taxes: 0,
+              total: roundMoney(breakdown.finalTotal),
+            });
+            setLastBillingInvoice(createdBillingInvoice);
+            setIsBillingInvoicePanelOpen(true);
+          } catch (billingError) {
+            console.error(
+              "[billing] createBillingInvoiceFromPayment",
+              billingError,
+            );
+          }
+        }
+      }
+
       void createActivityLog({
         restaurantId,
         type: "payment_created",
@@ -4113,6 +4173,8 @@ export function CartaPageContent({
     paymentMethod,
     reloadSessionTableAmountPaidSum,
     restaurantId,
+    operationalRestaurantId,
+    selectedBillingCustomer,
     selectedTableId,
     sessionTableAmountPaidSum,
     soundEnabled,
@@ -18185,6 +18247,16 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
             </div>
           </div>
         )}
+        {isBillingInvoicePanelOpen && lastBillingInvoice ? (
+          <BillingInvoiceCompletionPanel
+            open={isBillingInvoicePanelOpen}
+            invoice={lastBillingInvoice}
+            onClose={() => {
+              setIsBillingInvoicePanelOpen(false);
+              setLastBillingInvoice(null);
+            }}
+          />
+        ) : null}
         {showComandaPanelSplitter ? (
           <div
             className="carta-layout-splitter"

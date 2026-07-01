@@ -40,6 +40,14 @@
         { "fieldPath": "restaurantId", "order": "ASCENDING" },
         { "fieldPath": "orderId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "billingInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "restaurantId", "order": "ASCENDING" },
+        { "fieldPath": "billingCustomerId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

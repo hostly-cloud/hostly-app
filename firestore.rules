@@ -599,5 +599,29 @@ service cloud.firestore {
       allow delete: if sameRestaurant(resource.data.restaurantId)
         && isManagerOrAbove();
     }
+
+    // BILLING INVOICES (facturas emitidas desde TPV)
+    match /billingInvoices/{invoiceId} {
+      allow read: if sameRestaurant(resource.data.restaurantId)
+        && canChargeTpv();
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canChargeTpv();
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && canChargeTpv();
+      allow delete: if false;
+    }
+
+    match /billingInvoiceCounters/{restaurantId} {
+      allow read: if sameRestaurant(restaurantId) && canChargeTpv();
+      allow create, update: if sameRestaurant(restaurantId) && canChargeTpv();
+      allow delete: if false;
+    }
+
+    match /billingInvoiceSettings/{restaurantId} {
+      allow read: if sameRestaurant(restaurantId) && canChargeTpv();
+      allow create, update: if sameRestaurant(restaurantId) && isManagerOrAbove();
+      allow delete: if false;
+    }
   }
 }
