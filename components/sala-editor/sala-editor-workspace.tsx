@@ -11,6 +11,10 @@ import {
 import { useSalaEditorDocument } from "@/hooks/useSalaEditorDocument";
 import { useSalaWallDrawing } from "@/hooks/useSalaWallDrawing";
 import { useOperationalElementDragging } from "@/hooks/useOperationalElementDragging";
+import { useOperationalElementResizing } from "@/hooks/useOperationalElementResizing";
+import {
+  getOperationalInstanceCanvasSize,
+} from "@/lib/sala-editor/canvas/operational-instance-layout";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
 import { hasSalaEditorInspectorSelection } from "@/components/sala-editor/sala-editor-inspector-visibility";
 import {
@@ -55,6 +59,9 @@ export function SalaEditorWorkspace({
     selectOperationalElementInstance,
     clearOperationalElementInstance,
     updateOperationalElement,
+    removeOperationalElement,
+    duplicateOperationalElement,
+    resizeOperationalElementInstance,
     setPhase,
     selectEspacio,
     addEspacioAndSelect,
@@ -85,6 +92,42 @@ export function SalaEditorWorkspace({
     onClearSelection: clearOperationalElementInstance,
   });
 
+  const {
+    resizingInstanceId: resizingOperationalInstanceId,
+    startResize,
+    updateResize,
+    finishResize,
+    cancelResize,
+    isResizing: isOperationalResizing,
+  } = useOperationalElementResizing({
+    enabled: operationalDragEnabled,
+    onSelectInstance: selectOperationalElementInstance,
+    onResize: resizeOperationalElementInstance,
+  });
+
+  const handleOperationalResizeStart = useCallback(
+    (
+      instanceId: string,
+      corner: Parameters<typeof startResize>[1],
+      clientX: number,
+      clientY: number,
+    ) => {
+      const instance = operationalElementInstancesInEspacio.find(
+        (item) => item.id === instanceId,
+      );
+      if (!instance) return;
+      startResize(
+        instanceId,
+        corner,
+        clientX,
+        clientY,
+        getOperationalInstanceCanvasSize(instance),
+        instance.position,
+      );
+    },
+    [operationalElementInstancesInEspacio, startResize],
+  );
+
   const handleOperationalCanvasPointerDown = useCallback(
     (point: { x: number; y: number }) => {
       operationalCanvasPointerDown(point, () => {
@@ -96,9 +139,10 @@ export function SalaEditorWorkspace({
 
   const handleOperationalInstancePointerDown = useCallback(
     (instanceId: string, _point: { x: number; y: number }) => {
+      if (isOperationalResizing()) return;
       startDragging(instanceId);
     },
-    [startDragging],
+    [isOperationalResizing, startDragging],
   );
 
   const handleOperationalInstancePointerMove = useCallback(
@@ -225,13 +269,21 @@ export function SalaEditorWorkspace({
             operationalElementInstances={operationalElementInstancesInEspacio}
             selectedOperationalElementInstanceId={selectedOperationalElementInstanceId}
             draggingOperationalInstanceId={draggingOperationalInstanceId}
+            resizingOperationalInstanceId={resizingOperationalInstanceId}
             dropAnimatingOperationalInstanceId={dropAnimatingOperationalInstanceId}
             isOperationalDragging={isOperationalDragging}
+            isOperationalResizing={isOperationalResizing}
             onOperationalCanvasPointerDown={handleOperationalCanvasPointerDown}
             onOperationalInstancePointerDown={handleOperationalInstancePointerDown}
             onOperationalInstancePointerMove={handleOperationalInstancePointerMove}
             onOperationalInstancePointerUp={handleOperationalInstancePointerUp}
             onOperationalInstancePointerCancel={handleOperationalInstancePointerCancel}
+            onOperationalResizeStart={handleOperationalResizeStart}
+            onOperationalResizeMove={updateResize}
+            onOperationalResizeEnd={finishResize}
+            onOperationalResizeCancel={cancelResize}
+            onOperationalDuplicateInstance={duplicateOperationalElement}
+            onOperationalDeleteInstance={removeOperationalElement}
             onRequestCreateEspacio={openAddDialog}
           />
         }

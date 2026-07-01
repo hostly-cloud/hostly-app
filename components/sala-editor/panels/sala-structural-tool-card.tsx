@@ -18,18 +18,18 @@ export function SalaStructuralToolCard({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      title={item.description}
+      title={item.label}
       className={[
-        "hostly-sala-editor-tool-tile",
+        "hostly-sala-editor-tool-chip hostly-sala-editor-tool-chip--structural",
         selected ? "is-selected" : "",
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <span className="hostly-sala-editor-tool-tile__icon" aria-hidden>
+      <span className="hostly-sala-editor-tool-chip__glyph" aria-hidden>
         {item.icon}
       </span>
-      <span className="hostly-sala-editor-tool-tile__label">{item.label}</span>
+      <span className="hostly-sala-editor-tool-chip__caption">{item.label}</span>
     </button>
   );
 }

@@ -15,11 +15,7 @@ export function SalaEstructuraSidebar({
 }: SalaEstructuraSidebarProps) {
   return (
     <div className="hostly-sala-editor-toolbox">
-      <div className="hostly-sala-editor-toolbox__head">
-        <span className="hostly-sala-editor-toolbox__label">Herramientas</span>
-      </div>
-
-      <ul className="hostly-sala-editor-tool-grid">
+      <ul className="hostly-sala-editor-tool-chip-grid">
         {STRUCTURAL_TOOLBOX_ITEMS.map((item) => (
           <li key={item.kind}>
             <SalaStructuralToolCard

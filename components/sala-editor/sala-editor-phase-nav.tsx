@@ -34,34 +34,39 @@ export function SalaEditorPhaseNav({
           const isActive = item === phase;
           const isDisabled = disabled.has(item);
           const isComplete = activeIndex > index;
+          const isPending = !isActive && !isComplete;
 
           return (
             <li
               key={item}
               className={[
-                "hostly-sala-editor-stepper__step",
+                "hostly-sala-editor-stepper__segment",
                 isActive ? "is-active" : "",
                 isComplete ? "is-complete" : "",
+                isPending ? "is-pending" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
-              {index > 0 ? (
-                <span className="hostly-sala-editor-stepper__connector" aria-hidden />
-              ) : null}
               <button
                 type="button"
                 disabled={isDisabled}
                 aria-current={isActive ? "step" : undefined}
                 title={SALA_EDITOR_PHASE_DESCRIPTIONS[item]}
                 onClick={() => onPhaseChange(item)}
-                className="hostly-sala-editor-stepper__btn"
+                className="hostly-sala-editor-stepper__node"
               >
-                <span className="hostly-sala-editor-stepper__badge">{PHASE_INDEX[item]}</span>
+                <span className="hostly-sala-editor-stepper__marker" aria-hidden>
+                  {isComplete ? "✓" : PHASE_INDEX[item]}
+                </span>
                 <span className="hostly-sala-editor-stepper__label">
                   {SALA_EDITOR_PHASE_LABELS[item]}
                 </span>
               </button>
+
+              {index < SALA_EDITOR_PHASE_ORDER.length - 1 ? (
+                <span className="hostly-sala-editor-stepper__rail" aria-hidden />
+              ) : null}
             </li>
           );
         })}

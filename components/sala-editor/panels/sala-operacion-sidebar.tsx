@@ -15,11 +15,7 @@ export function SalaOperacionSidebar({
 }: SalaOperacionSidebarProps) {
   return (
     <div className="hostly-sala-editor-toolbox">
-      <div className="hostly-sala-editor-toolbox__head">
-        <span className="hostly-sala-editor-toolbox__label">Elementos</span>
-      </div>
-
-      <ul className="hostly-sala-editor-tool-grid">
+      <ul className="hostly-sala-editor-tool-chip-grid">
         {OPERATIONAL_ELEMENT_CATALOG.map((item) => (
           <li key={item.type}>
             <SalaOperationalElementCard

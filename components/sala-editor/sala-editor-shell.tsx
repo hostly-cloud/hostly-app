@@ -66,7 +66,7 @@ export function SalaEditorShell({
         </aside>
         <main className="hostly-sala-editor-workbench__canvas">{workspace}</main>
         {inspectorOpen ? (
-          <aside className="hostly-sala-editor-workbench__panel hostly-sala-editor-workbench__panel--inspector">
+          <aside className="hostly-sala-editor-workbench__panel hostly-sala-editor-workbench__panel--inspector hostly-sala-editor-workbench__panel--inspector-subtle">
             <div className="hostly-sala-editor-workbench__inspector-scroll">{inspector}</div>
           </aside>
         ) : null}

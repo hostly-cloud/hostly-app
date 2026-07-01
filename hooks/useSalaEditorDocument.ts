@@ -17,7 +17,7 @@ import {
   getStructuralToolboxItem,
 } from "@/lib/sala-editor/catalog/structural-toolbox";
 import type { ActiveOperationalElementSelection } from "@/lib/sala-editor/ose/active-operational-element";
-import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
+import type { OperationalElementType, OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
 import {
   createActiveOperationalElement,
   DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE,
@@ -27,7 +27,11 @@ import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operatio
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { buildOperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { nextOperationalElementInstanceName } from "@/lib/sala-editor/ose/operational-element-naming";
-import type { OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
+import {
+  getDefaultOperationalInstanceCanvasSize,
+  withOperationalInstanceCanvasSize,
+  type OperationalInstanceCanvasSize,
+} from "@/lib/sala-editor/canvas/operational-instance-layout";
 import {
   getDisabledSalaEditorPhases,
   navigateSalaEditorPhase,
@@ -196,6 +200,82 @@ export function useSalaEditorDocument({
     [],
   );
 
+  const duplicateOperationalElement = useCallback((instanceId: string) => {
+    let duplicateId: string | null = null;
+
+    setDocument((prev) => {
+      const source = prev.operationalElementInstances.find(
+        (instance) => instance.id === instanceId,
+      );
+      if (!source) return prev;
+
+      const duplicate = buildOperationalElementInstance({
+        spaceId: source.spaceId,
+        zoneId: source.zoneId,
+        elementType: source.elementType,
+        name: nextOperationalElementInstanceName(
+          prev.operationalElementInstances,
+          source.spaceId,
+          source.elementType,
+        ),
+        position: {
+          x: source.position.x + 24,
+          y: source.position.y + 24,
+        },
+        rotation: source.rotation,
+        capacity: source.capacity,
+        visible: source.visible,
+        enabled: source.enabled,
+        metadata: { ...source.metadata },
+        state: source.state,
+      });
+
+      duplicateId = duplicate.id;
+
+      return {
+        ...prev,
+        operationalElementInstances: [
+          ...prev.operationalElementInstances,
+          duplicate,
+        ],
+        updatedAt: Date.now(),
+      };
+    });
+
+    if (duplicateId) {
+      setSelectedOperationalElementInstanceId(duplicateId);
+    }
+  }, []);
+
+  const resizeOperationalElementInstance = useCallback(
+    (
+      instanceId: string,
+      patch: {
+        size: OperationalInstanceCanvasSize;
+        position: OperationalElementPosition;
+      },
+    ) => {
+      setDocument((prev) => ({
+        ...prev,
+        operationalElementInstances: prev.operationalElementInstances.map(
+          (instance) =>
+            instance.id === instanceId
+              ? {
+                  ...instance,
+                  position: patch.position,
+                  metadata: withOperationalInstanceCanvasSize(
+                    instance.metadata,
+                    patch.size,
+                  ),
+                }
+              : instance,
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    [],
+  );
+
   const placeOperationalElementAt = useCallback(
     (position: OperationalElementPosition) => {
       if (!selectedEspacio || !activeOperationalElementType) return;
@@ -211,12 +291,17 @@ export function useSalaEditorDocument({
         activeOperationalElementType,
       );
 
+      const defaultSize = getDefaultOperationalInstanceCanvasSize(
+        activeOperationalElementType,
+      );
+
       const instance = buildOperationalElementInstance({
         spaceId: selectedEspacio.id,
         elementType: activeOperationalElementType,
         name,
         position,
         capacity: catalogItem.defaultCapacity,
+        metadata: withOperationalInstanceCanvasSize({}, defaultSize),
       });
 
       addOperationalElement(instance);
@@ -351,6 +436,8 @@ export function useSalaEditorDocument({
     isOperationalElementSelected,
     addOperationalElement,
     removeOperationalElement,
+    duplicateOperationalElement,
+    resizeOperationalElementInstance,
     updateOperationalElement,
     selectOperationalElementInstance,
     clearOperationalElementInstance,

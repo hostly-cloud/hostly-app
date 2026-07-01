@@ -11,6 +11,7 @@ import { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-es
 import { SalaOperacionWorkspace } from "@/components/sala-editor/panels/sala-operacion-workspace";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
+import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import { SalaEditorEmptyState } from "@/components/sala-editor/panels/sala-editor-empty-state";
 
 export type SalaEditorWorkspaceCanvasProps = {
@@ -27,8 +28,10 @@ export type SalaEditorWorkspaceCanvasProps = {
   operationalElementInstances?: OperationalElementInstance[];
   selectedOperationalElementInstanceId?: string | null;
   draggingOperationalInstanceId?: string | null;
+  resizingOperationalInstanceId?: string | null;
   dropAnimatingOperationalInstanceId?: string | null;
   isOperationalDragging?: () => boolean;
+  isOperationalResizing?: () => boolean;
   onOperationalCanvasPointerDown?: (point: { x: number; y: number }) => void;
   onOperationalInstancePointerDown?: (
     instanceId: string,
@@ -40,6 +43,17 @@ export type SalaEditorWorkspaceCanvasProps = {
   ) => void;
   onOperationalInstancePointerUp?: (instanceId: string) => void;
   onOperationalInstancePointerCancel?: (instanceId: string) => void;
+  onOperationalResizeStart?: (
+    instanceId: string,
+    corner: OperationalInstanceResizeCorner,
+    clientX: number,
+    clientY: number,
+  ) => void;
+  onOperationalResizeMove?: (clientX: number, clientY: number) => void;
+  onOperationalResizeEnd?: () => void;
+  onOperationalResizeCancel?: () => void;
+  onOperationalDuplicateInstance?: (instanceId: string) => void;
+  onOperationalDeleteInstance?: (instanceId: string) => void;
   onRequestCreateEspacio: () => void;
 };
 
@@ -57,13 +71,21 @@ export function SalaEditorWorkspaceCanvas({
   operationalElementInstances = [],
   selectedOperationalElementInstanceId = null,
   draggingOperationalInstanceId = null,
+  resizingOperationalInstanceId = null,
   dropAnimatingOperationalInstanceId = null,
   isOperationalDragging,
+  isOperationalResizing,
   onOperationalCanvasPointerDown,
   onOperationalInstancePointerDown,
   onOperationalInstancePointerMove,
   onOperationalInstancePointerUp,
   onOperationalInstancePointerCancel,
+  onOperationalResizeStart,
+  onOperationalResizeMove,
+  onOperationalResizeEnd,
+  onOperationalResizeCancel,
+  onOperationalDuplicateInstance,
+  onOperationalDeleteInstance,
   onRequestCreateEspacio,
 }: SalaEditorWorkspaceCanvasProps) {
   if (!hasEspacios) {
@@ -111,18 +133,25 @@ export function SalaEditorWorkspaceCanvas({
   if (phase === "operacion" && espacio && activeOperationalCatalogItem) {
     return (
       <SalaOperacionWorkspace
-        espacioName={espacio.name}
-        catalogItem={activeOperationalCatalogItem}
+        espacio={espacio}
         instances={operationalElementInstances}
         selectedInstanceId={selectedOperationalElementInstanceId}
         draggingInstanceId={draggingOperationalInstanceId}
+        resizingInstanceId={resizingOperationalInstanceId}
         dropAnimatingInstanceId={dropAnimatingOperationalInstanceId}
         isDragging={isOperationalDragging ?? (() => false)}
+        isResizing={isOperationalResizing ?? (() => false)}
         onCanvasPointerDown={onOperationalCanvasPointerDown ?? (() => undefined)}
         onInstancePointerDown={onOperationalInstancePointerDown ?? (() => undefined)}
         onInstancePointerMove={onOperationalInstancePointerMove ?? (() => undefined)}
         onInstancePointerUp={onOperationalInstancePointerUp ?? (() => undefined)}
         onInstancePointerCancel={onOperationalInstancePointerCancel ?? (() => undefined)}
+        onResizeStart={onOperationalResizeStart ?? (() => undefined)}
+        onResizeMove={onOperationalResizeMove ?? (() => undefined)}
+        onResizeEnd={onOperationalResizeEnd ?? (() => undefined)}
+        onResizeCancel={onOperationalResizeCancel ?? (() => undefined)}
+        onDuplicateInstance={onOperationalDuplicateInstance ?? (() => undefined)}
+        onDeleteInstance={onOperationalDeleteInstance ?? (() => undefined)}
       />
     );
   }

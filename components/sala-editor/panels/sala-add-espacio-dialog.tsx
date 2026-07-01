@@ -1,11 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
 import {
   SALA_ESPACIO_TYPE_OPTIONS,
   getSalaEspacioTypeOption,
 } from "@/lib/sala-editor/catalog/espacio-types";
-import { useEffect, useState } from "react";
+
+function isSalaEspacioType(value: string): value is SalaEspacioType {
+  return SALA_ESPACIO_TYPE_OPTIONS.some((option) => option.type === value);
+}
 
 export type SalaAddEspacioDialogProps = {
   open: boolean;
@@ -54,7 +58,13 @@ export function SalaAddEspacioDialog({
   const handleSubmit = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    onCreate({ name: trimmed, tipo, color });
+    const resolvedTipo = isSalaEspacioType(tipo) ? tipo : "sala";
+    const option = getSalaEspacioTypeOption(resolvedTipo);
+    onCreate({
+      name: trimmed,
+      tipo: resolvedTipo,
+      color: color || option.defaultColor,
+    });
     onClose();
   };
 
@@ -99,28 +109,23 @@ export function SalaAddEspacioDialog({
               {SALA_ESPACIO_TYPE_OPTIONS.map((option) => {
                 const active = tipo === option.type;
                 return (
-                  <label
+                  <button
                     key={option.type}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => handleTipoChange(option.type)}
                     className={[
-                      "flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 transition",
+                      "flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition",
                       active
                         ? "border-[color-mix(in_srgb,var(--hostly-accent)_42%,#cbd5e1)] bg-[var(--hostly-accent-soft)]"
                         : "border-slate-200 bg-white hover:border-slate-300",
                     ].join(" ")}
                   >
-                    <input
-                      type="radio"
-                      name="espacio-tipo"
-                      value={option.type}
-                      checked={active}
-                      onChange={() => handleTipoChange(option.type)}
-                      className="sr-only"
-                    />
                     <span aria-hidden>{option.icon}</span>
                     <span className="text-sm font-bold text-slate-800">
                       {option.label}
                     </span>
-                  </label>
+                  </button>
                 );
               })}
             </div>

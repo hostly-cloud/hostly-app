@@ -4,6 +4,7 @@ import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
+import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
 import { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas";
 
 export type SalaEstructuraWorkspaceProps = {
@@ -17,6 +18,7 @@ export type SalaEstructuraWorkspaceProps = {
 };
 
 export function SalaEstructuraWorkspace({
+  espacio,
   tool,
   walls = [],
   wallDraft = null,
@@ -29,7 +31,7 @@ export function SalaEstructuraWorkspace({
     isWallTool && onWallPointerDown && onWallPointerMove;
 
   return (
-    <div className="hostly-sala-editor-canvas-frame hostly-sala-editor-canvas-frame--canvas">
+    <SalaEspacioCanvasFrame espacio={espacio}>
       {wallDrawingEnabled ? (
         <SalaWallCanvas
           walls={walls}
@@ -38,16 +40,13 @@ export function SalaEstructuraWorkspace({
           hint={tool.workspaceHint}
           onPointerDown={onWallPointerDown}
           onPointerMove={onWallPointerMove}
+          embedded
         />
       ) : (
-        <div className="hostly-sala-editor-canvas-frame__surface relative flex flex-col items-center justify-center px-4 py-6 text-center">
-          <div className="hostly-sala-editor-dot-grid" aria-hidden />
-
-          <div className="relative max-w-xs">
-            <p className="text-xs font-bold leading-snug text-slate-600">{tool.workspaceHint}</p>
-          </div>
+        <div className="hostly-sala-espacio-frame__placeholder">
+          <p>{tool.workspaceHint}</p>
         </div>
       )}
-    </div>
+    </SalaEspacioCanvasFrame>
   );
 }

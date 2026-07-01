@@ -15,6 +15,8 @@ export type SalaWallCanvasProps = {
   hint: string;
   onPointerDown: (point: { x: number; y: number }) => void;
   onPointerMove: (point: { x: number; y: number }) => void;
+  /** Dentro del frame de espacio — sin chrome propio. */
+  embedded?: boolean;
 };
 
 function clientToCanvasPoint(
@@ -36,6 +38,7 @@ export function SalaWallCanvas({
   hint,
   onPointerDown,
   onPointerMove,
+  embedded = false,
 }: SalaWallCanvasProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
 
@@ -68,14 +71,18 @@ export function SalaWallCanvas({
   return (
     <div
       ref={surfaceRef}
-      role="application"
-      aria-label="Lienzo de paredes"
-      className="hostly-sala-editor-canvas-frame__surface"
+      role={embedded ? undefined : "application"}
+      aria-label={embedded ? undefined : "Lienzo de paredes"}
+      className={
+        embedded
+          ? "hostly-sala-espacio-frame__wall-stage"
+          : "hostly-sala-editor-canvas-frame__surface"
+      }
       style={{ cursor: "crosshair" }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
     >
-      <div className="hostly-sala-editor-dot-grid" aria-hidden />
+      {!embedded ? <div className="hostly-sala-editor-dot-grid" aria-hidden /> : null}
 
       <svg
         className="pointer-events-none absolute inset-0 h-full w-full"

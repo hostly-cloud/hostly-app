@@ -29,17 +29,17 @@ export function SalaEspaciosSidebar({
   }
 
   return (
-    <div className="hostly-sala-editor-toolbox">
-      <div className="hostly-sala-editor-toolbox__head">
-        <span className="hostly-sala-editor-toolbox__label">Capas</span>
-        <span className="hostly-sala-editor-toolbox__count">{sorted.length}</span>
-      </div>
-
-      <button type="button" onClick={onRequestAddEspacio} className="hostly-sala-editor-toolbox__add" title="Añadir espacio">
+    <div className="hostly-sala-editor-toolbox hostly-sala-editor-toolbox--spaces">
+      <button
+        type="button"
+        onClick={onRequestAddEspacio}
+        className="hostly-sala-editor-toolbox__add hostly-sala-editor-toolbox__add--icon"
+        title="Añadir espacio"
+      >
         <span aria-hidden>+</span>
       </button>
 
-      <ul className="hostly-sala-editor-layer-list">
+      <ul className="hostly-sala-editor-space-grid">
         {sorted.map((espacio) => (
           <li key={espacio.id}>
             <SalaEspacioCard

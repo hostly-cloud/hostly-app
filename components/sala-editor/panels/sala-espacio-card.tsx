@@ -48,54 +48,42 @@ export function SalaEspacioCard({
     [closeMenu, espacio.active, onUpdateEspacio],
   );
 
-  const statusLabel = !espacio.active
-    ? "Inactivo"
-    : espacio.visible
-      ? "Visible"
-      : "Oculto";
-
   return (
     <div
       className={[
-        "hostly-sala-editor-layer",
+        "hostly-sala-editor-space-chip",
         selected ? "is-selected" : "",
+        !espacio.active ? "is-inactive" : "",
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <button type="button" onClick={onSelect} className="hostly-sala-editor-layer__main">
+      <button
+        type="button"
+        onClick={onSelect}
+        className="hostly-sala-editor-space-chip__main"
+        title={espacio.name}
+      >
         <span
-          className="hostly-sala-editor-layer__icon"
-          style={{ backgroundColor: `${espacio.color}24`, color: espacio.color }}
+          className="hostly-sala-editor-space-chip__icon"
+          style={{ backgroundColor: `${espacio.color}28`, color: espacio.color }}
           aria-hidden
         >
           {icon}
         </span>
-        <span className="hostly-sala-editor-layer__body">
-          <span className="hostly-sala-editor-layer__name">{espacio.name}</span>
-          <span className="hostly-sala-editor-layer__meta">
-            <span
-              className={[
-                "hostly-sala-editor-layer__status",
-                !espacio.active ? "is-muted" : espacio.visible ? "is-on" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {statusLabel}
-            </span>
-            <span className="hostly-sala-editor-layer__count">{elementCount}</span>
-          </span>
-        </span>
+        {selected ? (
+          <span className="hostly-sala-editor-space-chip__name">{espacio.name}</span>
+        ) : null}
+        <span className="hostly-sala-editor-space-chip__count">{elementCount}</span>
       </button>
 
       {onUpdateEspacio ? (
         <details
           ref={menuRef}
-          className="hostly-sala-editor-layer__menu"
+          className="hostly-sala-editor-space-chip__menu"
           onClick={handleMenuToggle}
         >
-          <summary className="hostly-sala-editor-layer__menu-trigger" aria-label="Opciones del espacio">
+          <summary className="hostly-sala-editor-space-chip__menu-trigger" aria-label="Opciones">
             ⋮
           </summary>
           <div className="hostly-sala-editor-layer__menu-panel" role="menu">

@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
+import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
 
 export type SalaOperationalElementCardProps = {
   item: OperationalElementCatalogItem;
@@ -21,27 +22,20 @@ export function SalaOperationalElementCard({
       aria-pressed={selected}
       title={item.label}
       className={[
-        "hostly-sala-editor-tool-tile",
+        "hostly-sala-editor-tool-chip",
         selected ? "is-selected" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      style={
-        selected
-          ? undefined
-          : ({
-              "--tool-accent": item.color,
-            } as CSSProperties)
-      }
+      style={{ "--tool-accent": item.color } as CSSProperties}
     >
-      <span
-        className="hostly-sala-editor-tool-tile__icon"
-        style={selected ? undefined : { backgroundColor: `${item.color}20` }}
-        aria-hidden
-      >
-        {item.icon}
-      </span>
-      <span className="hostly-sala-editor-tool-tile__label">{item.label}</span>
+      <SalaOperationalElementVisual
+        elementType={item.type}
+        label={item.label}
+        color={item.color}
+        mini
+      />
+      <span className="hostly-sala-editor-tool-chip__caption">{item.label}</span>
     </button>
   );
 }

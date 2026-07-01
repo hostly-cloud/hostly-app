@@ -6,6 +6,7 @@ import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espa
 import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
 import {
   SALA_ESPACIO_TYPE_OPTIONS,
+  getSalaEspacioTypeOption,
   salaEspacioTypeLabel,
 } from "@/lib/sala-editor/catalog/espacio-types";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
@@ -74,8 +75,9 @@ export function SalaEditorInspectorPanel(props: SalaEditorInspectorPanelProps) {
   }
 
   if (phase === "espacios" && espacio) {
-    const handleTipoChange = (tipo: SalaEspacioType) => {
-      onUpdateEspacio?.({ tipo });
+    const handleTipoChange = (nextTipo: SalaEspacioType) => {
+      const option = getSalaEspacioTypeOption(nextTipo);
+      onUpdateEspacio?.({ tipo: nextTipo, color: option.defaultColor });
     };
 
     return (
