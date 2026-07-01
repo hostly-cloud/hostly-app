@@ -1676,8 +1676,56 @@ body {
 }
 
 [data-hostly-config-content] > .flex.min-h-0.flex-1.flex-col {
-  padding-top: clamp(12px, 1.4vw, 18px) !important;
-  padding-bottom: clamp(12px, 1.4vw, 18px) !important;
+  padding-top: clamp(8px, 1vw, 12px) !important;
+  padding-bottom: clamp(8px, 1vw, 12px) !important;
+}
+
+/* Configuration Compact Layout — cuerpo de página sin cabecera duplicada */
+.hostly-config-page-body {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(8px, 1vw, 12px) clamp(12px, 1.6vw, 20px);
+}
+
+@media (min-width: 640px) {
+  .hostly-config-page-body {
+    padding-inline: clamp(16px, 2vw, 24px);
+  }
+}
+
+@media (min-width: 1024px) {
+  .hostly-config-page-body {
+    padding-inline: clamp(20px, 2.2vw, 32px);
+  }
+}
+
+.hostly-config-page-body__lead {
+  margin: 0;
+}
+
+.hostly-config-module-header--compact {
+  margin-bottom: clamp(8px, 1vw, 12px) !important;
+}
+
+.hostly-config-module-header--actions-only .hostly-config-module-header__actions,
+.hostly-config-module-header--no-title .hostly-config-module-header__actions {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+[data-hostly-config-shell] .hostly-page-header--dashboard-module:not(:has(.hostly-page-title)) {
+  padding-top: 4px !important;
+  padding-bottom: 6px !important;
+}
+
+[data-hostly-config-shell] .hostly-module-shell:not(:has(.hostly-page-header)) {
+  padding-top: 4px !important;
+}
+
+[data-hostly-config-shell] .hostly-module-shell:not(:has(.hostly-page-header)) .hostly-module-content--dashboard {
+  margin-top: 0 !important;
 }
 
 [data-hostly-config-content] > .hostly-module-shell {
@@ -1897,8 +1945,8 @@ body {
 }
 
 [data-hostly-config-shell] .hostly-page-header--dashboard-module {
-  padding-top: 5px !important;
-  padding-bottom: 5px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
 }
 
 [data-hostly-config-shell] .hostly-page-subtitle--dashboard-module {

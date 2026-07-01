@@ -5,11 +5,13 @@ import ModulePageShell from "@/components/module-page-shell";
 import { HostlyButton, HostlyCard } from "@/components/ui/hostly";
 
 type ConfigCartaWorkbenchProps = {
-  title: ReactNode;
+  title?: ReactNode;
   description?: string;
   children?: ReactNode;
   /** Acciones alineadas a la derecha del título (p. ej. importar / nuevo). */
   headerActions?: ReactNode;
+  /** Configuration Compact Layout: sin título/subtítulo duplicados (default). */
+  compactSectionHeader?: boolean;
   lockViewport?: boolean;
   lockViewportFillParent?: boolean;
   fitLaptopViewport?: boolean;
@@ -73,17 +75,19 @@ export function ConfigCartaWorkbench({
   description,
   children,
   headerActions,
+  compactSectionHeader = true,
   lockViewport,
   lockViewportFillParent,
   fitLaptopViewport,
   visualVariant,
 }: ConfigCartaWorkbenchProps) {
   const isProductosVariant = visualVariant === "productos";
+  const showSectionHeader = compactSectionHeader !== true;
 
   return (
     <ModulePageShell
-      title={title}
-      subtitle={description}
+      title={showSectionHeader ? title : undefined}
+      subtitle={showSectionHeader ? description : undefined}
       maxWidth={1280}
       compactLayout
       operationalFocus

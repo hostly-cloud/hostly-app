@@ -3,9 +3,10 @@
 import type { ReactNode } from "react";
 
 type ConfigModulePageHeaderProps = {
-  title: ReactNode;
+  /** Omitir si el context selector ya indica la sección (Configuration Compact Layout). */
+  title?: ReactNode;
   description?: ReactNode;
-  /** Línea superior opcional (p. ej. «Operación · Configuración»). */
+  /** @deprecated El contexto vive en el selector superior. */
   eyebrow?: ReactNode;
   actions?: ReactNode;
   secondaryActions?: ReactNode;
@@ -14,8 +15,8 @@ type ConfigModulePageHeaderProps = {
 };
 
 /**
- * Cabecera compacta de módulos Configuración V3.
- * El contexto vive en el selector contextual superior; aquí solo destaca la tarea.
+ * Cabecera compacta de módulos Configuración.
+ * Configuration Compact Layout: breadcrumb → acciones útiles → contenido.
  */
 export function ConfigModulePageHeader({
   title,
@@ -25,31 +26,46 @@ export function ConfigModulePageHeader({
   children,
   className = "",
 }: ConfigModulePageHeaderProps) {
+  const hasTitle = title != null && title !== "";
+  const hasDescription = description != null && description !== "";
+  const hasActions = Boolean(actions || secondaryActions);
+  const hasBody = hasTitle || hasDescription || hasActions || children;
+
+  if (!hasBody) return null;
+
+  const actionsOnly = !hasTitle && !hasDescription && !children && hasActions;
+
   return (
     <header
       className={[
-        "hostly-config-module-header mx-auto mb-4 w-full max-w-[var(--hostly-config-content-max)] sm:mb-5",
+        "hostly-config-module-header hostly-config-module-header--compact mx-auto w-full max-w-[var(--hostly-config-content-max)]",
+        actionsOnly ? "hostly-config-module-header--actions-only" : "",
+        !hasTitle && !hasDescription ? "hostly-config-module-header--no-title" : "",
         className,
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <div className="hostly-config-module-header__title-row">
-        <div className="hostly-config-module-header__title-block min-w-0">
-          <h1 className="hostly-config-module-header__title">{title}</h1>
+      {hasTitle ? (
+        <div className="hostly-config-module-header__title-row">
+          <div className="hostly-config-module-header__title-block min-w-0">
+            <h1 className="hostly-config-module-header__title">{title}</h1>
+          </div>
         </div>
-      </div>
-      {description ? (
+      ) : null}
+      {hasDescription ? (
         <p className="hostly-config-module-header__description">{description}</p>
       ) : null}
-      <div className="hostly-config-module-header__actions">
-        <div className="hostly-config-module-header__actions-primary">
-          {actions}
+      {hasActions ? (
+        <div className="hostly-config-module-header__actions">
+          <div className="hostly-config-module-header__actions-primary">
+            {actions}
+          </div>
+          <div className="hostly-config-module-header__actions-secondary">
+            {secondaryActions}
+          </div>
         </div>
-        <div className="hostly-config-module-header__actions-secondary">
-          {secondaryActions}
-        </div>
-      </div>
+      ) : null}
       {children}
     </header>
   );

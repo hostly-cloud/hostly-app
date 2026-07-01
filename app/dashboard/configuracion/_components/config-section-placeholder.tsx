@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { ConfigModulePageHeader } from "./config-module-page-header";
 
 type ConfigSectionPlaceholderProps = {
   title: string;
@@ -9,18 +8,22 @@ type ConfigSectionPlaceholderProps = {
 
 /**
  * Contenedor mínimo para secciones de configuración aún sin vista dedicada.
- * Solo UX; no sustituye tablas ni formularios reales.
+ * Configuration Compact Layout: sin cabecera duplicada.
  */
 export function ConfigSectionPlaceholder({
-  title,
+  title: _title,
   description,
   children,
 }: ConfigSectionPlaceholderProps) {
   return (
-    <div className="flex flex-1 flex-col min-h-0 px-5 py-8 sm:px-8 lg:px-10">
-      <ConfigModulePageHeader title={title} description={description} />
+    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col overflow-auto">
+      {description ? (
+        <p className="hostly-config-page-body__lead mx-auto w-full max-w-xl text-sm leading-relaxed text-slate-500">
+          {description}
+        </p>
+      ) : null}
       {children ? (
-        <div className="max-w-xl rounded-2xl bg-white/80 px-6 py-8 shadow-sm ring-1 ring-slate-200/80">
+        <div className="mx-auto mt-4 max-w-xl rounded-2xl bg-white/80 px-6 py-8 shadow-sm ring-1 ring-slate-200/80">
           {children}
         </div>
       ) : null}

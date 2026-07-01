@@ -10,7 +10,7 @@ import { HostlyPageContainer } from "@/components/hostly/page-container";
 import { HostlyPageHeader } from "@/components/hostly/page-header";
 
 export type ModulePageShellProps = {
-  title: ReactNode;
+  title?: ReactNode;
   subtitle?: ReactNode;
   children: ReactNode;
   /** Ancho máximo del bloque (px). Por defecto 1120. */
@@ -213,6 +213,19 @@ export default function ModulePageShell({
   ]
     .filter(Boolean)
     .join(" ");
+
+  const hasSectionTitle = title != null && title !== "";
+  const hasHeaderPrimaryActions = Boolean(headerRight);
+  const hasHeaderBelow = Boolean(headerBelow);
+  const hasBackNav = !hideBackLink && Boolean(backHref);
+  const showPageHeader =
+    hasSectionTitle ||
+    subtitle != null ||
+    hasHeaderPrimaryActions ||
+    hasHeaderBelow ||
+    hasBackNav ||
+    (!hideLogoutButton && hideBackLink && backHref === "/dashboard") ||
+    !hideLanguageSwitcher;
   const headerActions = (
     <div
       className={[
@@ -306,6 +319,7 @@ export default function ModulePageShell({
             }),
       }}
     >
+      {showPageHeader ? (
       <HostlyPageHeader
         wide={isWide}
         isMobileLayout={isMobile}
@@ -346,6 +360,7 @@ export default function ModulePageShell({
         subtitleStyle={dashboardModuleChrome || isMobile ? undefined : subtitleStyleResolved}
         belowStripe={effectiveDenseInventory ? "ultraCompact" : "default"}
       />
+      ) : null}
 
       <HostlyPageContainer
         wide={isWide}

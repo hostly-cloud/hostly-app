@@ -29,7 +29,11 @@ function displayNombre(row: UserRow): string {
   return em || "—";
 }
 
-export default function EmpleadosPage() {
+export default function EmpleadosPage({
+  embedInConfig = false,
+}: {
+  embedInConfig?: boolean;
+}) {
   const { user, restaurantId, role, ready: authReady } = useAuth();
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,9 +62,21 @@ export default function EmpleadosPage() {
     void load();
   }, [authReady, load]);
 
+  const shellTitle = embedInConfig ? undefined : "Empleados";
+  const shellSubtitle = embedInConfig ? undefined : "Gestión de usuarios";
+
   if (!authReady) {
     return (
-      <ModulePageShell title="Empleados" subtitle="Gestión de usuarios" maxWidth={1180} compactLayout>
+      <ModulePageShell
+        title={shellTitle}
+        subtitle={shellSubtitle}
+        maxWidth={1180}
+        compactLayout
+        hideBackLink={embedInConfig}
+        hideLogoutButton={embedInConfig}
+        hideLanguageSwitcher={embedInConfig}
+        shellSurface={embedInConfig ? "configLight" : "default"}
+      >
         <div style={{ color: "#fff" }}>
           <p>Cargando...</p>
         </div>
@@ -70,7 +86,16 @@ export default function EmpleadosPage() {
 
   if (role !== "owner") {
     return (
-      <ModulePageShell title="Empleados" subtitle="Gestión de usuarios" maxWidth={1180} compactLayout>
+      <ModulePageShell
+        title={shellTitle}
+        subtitle={shellSubtitle}
+        maxWidth={1180}
+        compactLayout
+        hideBackLink={embedInConfig}
+        hideLogoutButton={embedInConfig}
+        hideLanguageSwitcher={embedInConfig}
+        shellSurface={embedInConfig ? "configLight" : "default"}
+      >
         <div style={{ color: "#fff" }}>
           <p>No tienes permiso para ver esta página.</p>
         </div>
@@ -95,7 +120,16 @@ export default function EmpleadosPage() {
   const owners = rows.filter((u) => u.role === "owner");
 
   return (
-    <ModulePageShell title="Empleados" subtitle="Gestión de usuarios" maxWidth={1180} compactLayout>
+    <ModulePageShell
+      title={shellTitle}
+      subtitle={shellSubtitle}
+      maxWidth={1180}
+      compactLayout
+      hideBackLink={embedInConfig}
+      hideLogoutButton={embedInConfig}
+      hideLanguageSwitcher={embedInConfig}
+      shellSurface={embedInConfig ? "configLight" : "default"}
+    >
       <div style={{ color: "#fff" }}>
       {!isFirebaseConfigured && <p>Falta configuración de Firebase</p>}
       {isFirebaseConfigured && !restaurantId && (

@@ -4882,8 +4882,6 @@ export default function ProductosManagementPage({
       <>
         <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
         <ConfigCartaWorkbench
-          title="Productos"
-          description=""
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
           visualVariant="productos"

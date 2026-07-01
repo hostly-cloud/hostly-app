@@ -175,11 +175,8 @@ export default function ConfigEstacionesPage() {
   const activeCount = items.filter((s) => s.active).length;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
       <ConfigModulePageHeader
-        eyebrow="Producción"
-        title="Estaciones"
-        description="Define dónde se prepara cada producto: cocina, barra, coctelería u otras zonas."
         actions={
           <ConfigBtnPrimary type="button" disabled={!authReady || !restaurantId} onClick={openNew}>
             Nueva estación

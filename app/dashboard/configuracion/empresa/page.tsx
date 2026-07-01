@@ -12,7 +12,6 @@ import {
 } from "../_components/config-carta-workbench";
 import { createStableImageFile } from "@/lib/firebase/product-image-storage";
 import { uploadRestaurantLogo } from "@/lib/firebase/restaurant-logo-storage";
-import { ConfigModulePageHeader } from "../_components/config-module-page-header";
 import {
   DEFAULT_RESTAURANT_CURRENCY,
   DEFAULT_RESTAURANT_TIMEZONE,
@@ -233,12 +232,7 @@ export default function ConfigEmpresaPage() {
   }, [canEditEmpresa, form, refreshProfile, restaurantId, user?.uid]);
 
   return (
-    <div className="hostly-company-profile-page flex min-h-0 flex-1 flex-col overflow-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
-      <ConfigModulePageHeader
-        eyebrow="Empresa"
-        title="Perfil del restaurante"
-        description="Datos del negocio, contacto, fiscal y preferencias regionales. Se aplican a todo el restaurante."
-      />
+    <div className="hostly-company-profile-page hostly-config-page-body flex min-h-0 flex-1 flex-col overflow-auto">
 
       <div className="hostly-company-profile-content mx-auto flex w-full flex-col gap-4 pb-24">
         {!profileReady || loading ? (

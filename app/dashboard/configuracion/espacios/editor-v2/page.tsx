@@ -8,10 +8,8 @@ const PREVIEW_RESTAURANT_ID = "preview-local";
 
 export default function EditorSalaV2PreviewPage() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6 lg:px-8">
+    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col overflow-hidden">
       <ConfigModulePageHeader
-        title="Editor Sala V2"
-        description="Gestor visual de espacios — preview local sin persistencia."
         secondaryActions={
           <Link
             href="/dashboard/configuracion/espacios/mesas"

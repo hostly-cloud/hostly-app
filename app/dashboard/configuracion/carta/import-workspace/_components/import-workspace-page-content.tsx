@@ -60,13 +60,10 @@ export function ImportWorkspacePageContent() {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--hostly-surface-page)] text-[var(--hostly-ink)]">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[var(--hostly-page-pad-x)] py-[var(--hostly-page-pad-y)]">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+        <div className="hostly-config-page-body mx-auto flex w-full max-w-6xl flex-col gap-3">
         <ConfigModulePageHeader
-          title="Importar carta"
-          description="Hostly analizará tu carta y preparará un borrador inteligente para revisar antes de publicar."
           secondaryActions={<HostlyStatusBadge tone="info">Workspace futuro</HostlyStatusBadge>}
-        >
-        </ConfigModulePageHeader>
+        />
 
         <HostlySurface
           variant="ice"

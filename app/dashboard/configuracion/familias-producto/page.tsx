@@ -7,7 +7,6 @@ import {
   ConfigBtnSecondary,
   ConfigCard,
 } from "../_components/config-carta-workbench";
-import { ConfigModulePageHeader } from "../_components/config-module-page-header";
 import {
   HostlyAlert,
   HostlyFormToggle,
@@ -223,12 +222,7 @@ export default function ConfigFamiliasProductoPage() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-      <ConfigModulePageHeader
-        eyebrow="Catálogo · Configuración"
-        title="Familias de producto"
-        description="Las familias de producto agrupan a nivel interno (filtros, informes e inventario). Se asignan en Categorías y se heredan en cada producto."
-      />
+    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
 
       <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
         {error ? (

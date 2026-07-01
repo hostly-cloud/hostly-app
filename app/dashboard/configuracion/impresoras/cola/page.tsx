@@ -266,18 +266,13 @@ export default function ConfigImpresorasColaPage() {
   }, []);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-      <ConfigModulePageHeader
-        eyebrow="Operación · Configuración · Impresoras"
-        title="Cola de impresión"
-        description={
-          <>
-            <span className="font-medium text-slate-800">Simulador.</span> No imprime
-            físicamente todavía. El worker automático marca jobs como impresos o
-            fallidos según la configuración (canal/impresora por estación).
-          </>
-        }
-      >
+    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
+      <ConfigModulePageHeader title="Cola de impresión">
+        <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+          <span className="font-medium text-slate-800">Simulador.</span> No imprime
+          físicamente todavía. El worker automático marca jobs como impresos o
+          fallidos según la configuración (canal/impresora por estación).
+        </p>
         <p className="mt-2">
           <Link
             href="/dashboard/configuracion/impresoras"

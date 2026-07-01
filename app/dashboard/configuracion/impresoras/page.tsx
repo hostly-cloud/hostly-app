@@ -8,7 +8,6 @@ import {
   ConfigBtnSecondary,
   ConfigCard,
 } from "../_components/config-carta-workbench";
-import { ConfigModulePageHeader } from "../_components/config-module-page-header";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
   PRINTER_CONFIG_DEFAULT_DISPLAY_NAMES,
@@ -131,13 +130,9 @@ export default function ConfigImpresorasPage() {
   }, [remoteConfig]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-      <ConfigModulePageHeader
-        eyebrow="Operación · Configuración"
-        title="Impresoras"
-        description="Configura qué impresora recibirá cada estación. Al enviar comanda se encolan tickets por estación; revisa el simulador en la cola (sin hardware todavía)."
-      >
-        <p className="mt-3 max-w-2xl rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-sm leading-relaxed text-amber-950">
+    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
+        <div className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-sm leading-relaxed text-amber-950">
           La configuración por Cocina/Barra/Coctelería se usa como fallback.
           Para varias barras usa{" "}
           <Link
@@ -147,8 +142,8 @@ export default function ConfigImpresorasPage() {
             Configuración → Estaciones
           </Link>
           .
-        </p>
-        <p className="mt-3">
+        </div>
+        <p>
           <Link
             href="/dashboard/configuracion/impresoras/cola"
             className="text-sm font-medium text-sky-700 hover:text-sky-800"
@@ -156,9 +151,6 @@ export default function ConfigImpresorasPage() {
             Ver cola de impresión (simulador) →
           </Link>
         </p>
-      </ConfigModulePageHeader>
-
-      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
         {loading ? (
           <ConfigCard>
             <p className="text-sm text-slate-600">Cargando configuración…</p>
