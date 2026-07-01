@@ -586,5 +586,18 @@ service cloud.firestore {
         && canChargeTpv();
       allow delete: if false;
     }
+
+    // BILLING CUSTOMERS (empresas reutilizables en facturación TPV)
+    match /billingCustomers/{customerId} {
+      allow read: if sameRestaurant(resource.data.restaurantId)
+        && canChargeTpv();
+      allow create: if sameRestaurant(request.resource.data.restaurantId)
+        && canChargeTpv();
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && canChargeTpv();
+      allow delete: if sameRestaurant(resource.data.restaurantId)
+        && isManagerOrAbove();
+    }
   }
 }

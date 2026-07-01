@@ -29,6 +29,7 @@ import {
 import { useAuth } from "@/components/auth/auth-context";
 import { useActiveOperator } from "@/components/tpv/active-operator-context";
 import { ActiveOperatorTopBarButton } from "@/components/tpv/active-operator-top-bar-button";
+import { PaymentBillingSection } from "@/components/tpv/payment/payment-billing-section";
 import { HostlyBackButton } from "@/components/hostly/back-button";
 import { HostlyMiniIconButton } from "@/components/hostly/mini-icon-button";
 import {
@@ -199,6 +200,7 @@ import {
   type OrderLineStation,
 } from "@/lib/kds/order-line-station";
 import type { Product } from "@/types/product";
+import type { BillingCustomer } from "@/types/billing-customer";
 import { getPrinterConfig } from "@/lib/firestore/printer-config";
 import {
   cancelPrintJobsForOrderLine,
@@ -2462,6 +2464,8 @@ export function CartaPageContent({
   const [invoiceName, setInvoiceName] = useState("");
   const [invoiceTaxId, setInvoiceTaxId] = useState("");
   const [invoiceEmail, setInvoiceEmail] = useState("");
+  const [selectedBillingCustomer, setSelectedBillingCustomer] =
+    useState<BillingCustomer | null>(null);
   const [lastPaymentInfo, setLastPaymentInfo] = useState<{
     ticketNumber?: string;
     invoiceNumber?: string;
@@ -2728,6 +2732,11 @@ export function CartaPageContent({
     const t = setTimeout(() => setLastPaymentInfo(null), 3000);
     return () => clearTimeout(t);
   }, [lastPaymentInfo, isFinalTicketOpen]);
+
+  useEffect(() => {
+    if (isPaymentOpen) return;
+    setSelectedBillingCustomer(null);
+  }, [isPaymentOpen]);
 
   useEffect(() => {
     if (!isPaymentOpen) return;
@@ -16055,36 +16064,41 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
           )}
         </div>
         {isPaymentOpen && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-3">
-            <div className="bg-white text-gray-900 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[calc(100vh-32px)] overflow-hidden">
+          <div className="fixed inset-0 bg-slate-950/72 flex items-center justify-center z-50 p-2">
+            <div className="bg-white text-gray-900 rounded-[26px] w-full max-w-[520px] shadow-[0_28px_80px_rgba(2,6,23,0.34)] flex flex-col max-h-[calc(100vh-16px)] overflow-hidden border border-white/70">
               <div
                 className={
                   isSimplePaymentMode
-                    ? "flex-1 min-h-0 flex flex-col px-3 sm:px-4 pt-3 pb-3"
+                    ? "flex-1 min-h-0 flex flex-col px-3 sm:px-4 pt-3 pb-0 bg-gradient-to-b from-slate-50 via-white to-white"
                     : "flex-1 min-h-0 overflow-y-auto overscroll-contain px-2.5 sm:px-3 pt-2 pb-0"
                 }
               >
                 {isSimplePaymentMode ? (
                   <div className="flex flex-col min-h-0 flex-1">
-                      <div className="shrink-0 flex flex-wrap items-center justify-between gap-x-2 gap-y-2 mb-2">
+                      <div className="shrink-0 flex items-center justify-between gap-3 mb-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <button
                             type="button"
                             onClick={handleCancelPaymentFlow}
                             disabled={isConfirmingPayment}
-                            className="shrink-0 min-h-[44px] px-3 rounded-xl text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 active:bg-slate-200 touch-manipulation disabled:opacity-50"
+                            className="shrink-0 min-h-[40px] px-3 rounded-2xl text-sm font-semibold text-slate-700 bg-white border border-slate-200 shadow-sm active:bg-slate-50 touch-manipulation disabled:opacity-50"
                           >
                             ← Volver
                           </button>
-                          <span className="min-w-0 text-sm font-semibold text-gray-900 leading-tight truncate">
-                            Cobrar mesa
+                          <span className="min-w-0 text-[15px] font-extrabold text-slate-950 leading-tight truncate">
+                            {selectedTableId
+                              ? `Cobrar ${formatActiveMesaIndicator(
+                                  tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
+                                    selectedTableId,
+                                ).replace(/^Mesa/, "mesa")}`
+                              : "Cobrar mesa"}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <label className="inline-flex items-center gap-1.5 cursor-pointer text-[10px] font-medium text-gray-500 normal-case select-none">
+                          <label className="inline-flex min-h-[40px] items-center gap-2 cursor-pointer rounded-2xl border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm normal-case select-none">
                             <input
                               type="checkbox"
-                              className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
                               checked={autoPrintTicket}
                               onChange={(e) =>
                                 persistAutoPrintTicket(e.target.checked)
@@ -16094,13 +16108,6 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               Auto imprimir ticket
                             </span>
                           </label>
-                          <button
-                            type="button"
-                            onClick={() => setSoundEnabled((v) => !v)}
-                            className="text-[10px] text-gray-500 shrink-0"
-                          >
-                            🔊 {soundEnabled ? "On" : "Off"}
-                          </button>
                         </div>
                       </div>
 
@@ -16252,11 +16259,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         };
 
                         const keypadTouchClass =
-                          "min-h-[52px] rounded-2xl border-2 border-slate-200 bg-white text-xl font-bold text-slate-900 shadow-sm active:scale-[0.98] active:bg-slate-50 touch-manipulation select-none";
-                        const keypadWideClass = `${keypadTouchClass} col-span-3 min-h-[54px] text-lg`;
+                          "min-h-[58px] rounded-[20px] border border-slate-100 bg-white text-2xl font-extrabold text-slate-950 shadow-[0_8px_20px_rgba(15,23,42,0.06)] active:scale-[0.985] active:bg-slate-50 touch-manipulation select-none transition";
 
                         const inputMoneyClass =
-                          "w-full min-h-[52px] border-2 rounded-2xl px-4 text-center text-2xl font-bold tracking-tight text-slate-900 border-slate-200 bg-white touch-manipulation outline-none focus:border-blue-500 focus:ring-0";
+                          "w-full min-h-[56px] border border-slate-200 rounded-[20px] px-4 text-center text-2xl font-black tracking-tight text-slate-950 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)] touch-manipulation outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10";
 
                         const cashPaymentHint =
                           paymentMethod === "cash" &&
@@ -16266,9 +16272,9 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
                         return (
                           <>
-                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pb-2">
+                            <div className="flex-1 min-h-0 overflow-visible space-y-2 pb-2 pr-0.5">
                             {sessionPaymentHistory.length > 0 ? (
-                              <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 space-y-2">
+                              <div className="rounded-[22px] border border-slate-200 bg-white p-3 space-y-2 shadow-sm">
                                 <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
                                   Pagos realizados
                                 </div>
@@ -16302,7 +16308,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               </div>
                             ) : null}
 
-                            <div className="rounded-2xl border-2 border-slate-900/10 bg-slate-900/[0.03] p-4 space-y-4">
+                            <div className="rounded-[24px] border border-slate-200 bg-white p-3 space-y-2 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
                               {sessionTableAmountPaidSum > MONEY_EPS ? (
                                 <div className="flex justify-between gap-2 text-sm font-semibold text-slate-500">
                                   <span>Total cuenta</span>
@@ -16311,30 +16317,30 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   </span>
                                 </div>
                               ) : null}
-                              <div className="space-y-1">
-                                <div className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                              <div className="space-y-1 text-center">
+                                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
                                   Pendiente
                                 </div>
-                                <div className="text-4xl sm:text-5xl font-black tabular-nums leading-none text-slate-900">
+                                <div className="text-5xl sm:text-6xl font-black tabular-nums leading-none tracking-[-0.06em] text-slate-950">
                                   {formatTpveurEs(remainingDue)}
                                 </div>
                               </div>
                               {!isZeroAccountClose ? (
-                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div className="space-y-1">
-                                  <div className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
+                                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
                                     Recibido
                                   </div>
-                                  <div className="text-3xl sm:text-4xl font-extrabold tabular-nums leading-none text-slate-800">
+                                  <div className="mt-0.5 text-xl font-black tabular-nums leading-none text-slate-800">
                                     {formatTpveurEs(receivedDisplay)}
                                   </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <div className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
+                                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
                                     {paymentMethod === "card" ? "Propina" : "Cambio"}
                                   </div>
                                   <div
-                                    className={`text-3xl sm:text-4xl font-extrabold tabular-nums leading-none ${
+                                    className={`mt-0.5 text-xl font-black tabular-nums leading-none ${
                                       (paymentMethod === "card"
                                         ? tipRaw
                                         : changeDisplay) > MONEY_EPS
@@ -16360,13 +16366,13 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               </p>
                             ) : (
                               <>
-                            <div className="flex gap-2 pt-1">
+                            <div className="grid grid-cols-3 gap-1.5 rounded-[22px] bg-slate-100 p-1.5 shadow-inner">
                               <button
                                 type="button"
-                                className={`flex-1 min-h-[52px] rounded-2xl text-base font-bold shadow-sm touch-manipulation select-none ${
+                                className={`min-h-[48px] rounded-[17px] text-base font-black touch-manipulation select-none transition ${
                                   paymentMethod === "cash"
-                                    ? "bg-blue-600 text-white ring-2 ring-blue-600/40"
-                                    : "bg-slate-100 text-slate-900 active:bg-slate-200"
+                                    ? "bg-white text-blue-700 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-white"
+                                    : "text-slate-500 active:bg-white/70"
                                 }`}
                                 onClick={() => {
                                   setPaymentMethod("cash");
@@ -16385,10 +16391,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               </button>
                               <button
                                 type="button"
-                                className={`flex-1 min-h-[52px] rounded-2xl text-base font-bold shadow-sm touch-manipulation select-none ${
+                                className={`min-h-[48px] rounded-[17px] text-base font-black touch-manipulation select-none transition ${
                                   paymentMethod === "card"
-                                    ? "bg-blue-600 text-white ring-2 ring-blue-600/40"
-                                    : "bg-slate-100 text-slate-900 active:bg-slate-200"
+                                    ? "bg-white text-blue-700 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-white"
+                                    : "text-slate-500 active:bg-white/70"
                                 }`}
                                 onClick={() => {
                                   setPaymentMethod("card");
@@ -16407,10 +16413,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               </button>
                               <button
                                 type="button"
-                                className={`flex-1 min-h-[52px] rounded-2xl text-base font-bold shadow-sm touch-manipulation select-none ${
+                                className={`min-h-[48px] rounded-[17px] text-base font-black touch-manipulation select-none transition ${
                                   paymentMethod === "voucher"
-                                    ? "bg-blue-600 text-white ring-2 ring-blue-600/40"
-                                    : "bg-slate-100 text-slate-900 active:bg-slate-200"
+                                    ? "bg-white text-blue-700 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-white"
+                                    : "text-slate-500 active:bg-white/70"
                                 }`}
                                 onClick={() => setPaymentMethod("voucher")}
                               >
@@ -16439,7 +16445,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                             ) : null}
 
                             {paymentMethod === "voucher" ? (
-                              <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-2">
                                 <input
                                   ref={simplePaymentAmountInputRef}
                                   type="text"
@@ -16462,10 +16468,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   onChange={(e) =>
                                     setVoucherNumber(e.target.value)
                                   }
-                                  className="w-full min-h-[48px] border-2 rounded-2xl px-4 text-lg font-semibold border-slate-200 bg-white touch-manipulation outline-none focus:border-blue-500"
+                                  className="w-full min-h-[56px] border border-slate-200 rounded-[20px] px-4 text-lg font-semibold bg-white shadow-sm touch-manipulation outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                                 />
                                 {voucherLookupBalance != null ? (
-                                  <div className="text-base font-medium text-slate-600">
+                                  <div className="col-span-2 text-sm font-medium text-slate-600">
                                     Saldo disponible:{" "}
                                     {voucherLookupBalance
                                       .toFixed(2)
@@ -16474,7 +16480,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   </div>
                                 ) : null}
                                 {voucherValueUi > 0 ? (
-                                  <div className="text-base text-slate-600">
+                                  <div className="col-span-2 text-sm text-slate-600">
                                     Usado:{" "}
                                     {voucherUsedUi
                                       .toFixed(2)
@@ -16519,21 +16525,77 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                             {paymentMethod === "cash" ||
                             paymentMethod === "card" ||
                             paymentMethod === "voucher" ? (
-                              <div className="space-y-2.5 pt-1">
-                                <div className="grid grid-cols-3 gap-2.5">
-                                  {(
-                                    [
-                                      "1",
-                                      "2",
-                                      "3",
-                                      "4",
-                                      "5",
-                                      "6",
-                                      "7",
-                                      "8",
-                                      "9",
-                                    ] as const
-                                  ).map((k) => (
+                              <div className="grid grid-cols-4 gap-2 pt-0.5">
+                                {(
+                                  [
+                                    "1",
+                                    "2",
+                                    "3",
+                                    "⌫",
+                                    "4",
+                                    "5",
+                                    "6",
+                                    "+5 €",
+                                    "7",
+                                    "8",
+                                    "9",
+                                    "+10 €",
+                                    "0",
+                                    ",",
+                                    "00",
+                                    "Exacto",
+                                  ] as const
+                                ).map((k) => {
+                                  if (k === "⌫") {
+                                    return (
+                                      <button
+                                        key={k}
+                                        type="button"
+                                        className={keypadTouchClass}
+                                        onClick={backspaceDigit}
+                                        aria-label="Borrar"
+                                      >
+                                        ⌫
+                                      </button>
+                                    );
+                                  }
+                                  if (k === "+5 €") {
+                                    return (
+                                      <button
+                                        key={k}
+                                        type="button"
+                                        className={keypadTouchClass}
+                                        onClick={() => bumpBy(5)}
+                                      >
+                                        +5 €
+                                      </button>
+                                    );
+                                  }
+                                  if (k === "+10 €") {
+                                    return (
+                                      <button
+                                        key={k}
+                                        type="button"
+                                        className={keypadTouchClass}
+                                        onClick={() => bumpBy(10)}
+                                      >
+                                        +10 €
+                                      </button>
+                                    );
+                                  }
+                                  if (k === "Exacto") {
+                                    return (
+                                      <button
+                                        key={k}
+                                        type="button"
+                                        className={`${keypadTouchClass} !bg-blue-50 !border-blue-100 !text-blue-900 !text-base`}
+                                        onClick={setExact}
+                                      >
+                                        Exacto
+                                      </button>
+                                    );
+                                  }
+                                  return (
                                     <button
                                       key={k}
                                       type="button"
@@ -16542,72 +16604,19 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                     >
                                       {k}
                                     </button>
-                                  ))}
-                                </div>
-                                <div className="grid grid-cols-3 gap-2.5">
-                                  <button
-                                    type="button"
-                                    className={keypadTouchClass}
-                                    onClick={() => appendDigit("0")}
-                                  >
-                                    0
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={keypadTouchClass}
-                                    onClick={() => appendDigit(",")}
-                                  >
-                                    ,
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={keypadTouchClass}
-                                    onClick={() => appendDigit("00")}
-                                  >
-                                    00
-                                  </button>
-                                </div>
-                                <button
-                                  type="button"
-                                  className={keypadWideClass}
-                                  onClick={backspaceDigit}
-                                >
-                                  ⌫ Borrar
-                                </button>
-                                <div className="grid grid-cols-3 gap-2.5">
-                                  <button
-                                    type="button"
-                                    className={keypadTouchClass}
-                                    onClick={() => bumpBy(5)}
-                                  >
-                                    +5 €
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={keypadTouchClass}
-                                    onClick={() => bumpBy(10)}
-                                  >
-                                    +10 €
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={`${keypadTouchClass} bg-blue-50 border-blue-200 text-blue-900`}
-                                    onClick={setExact}
-                                  >
-                                    Exacto
-                                  </button>
-                                </div>
+                                  );
+                                })}
                               </div>
                             ) : null}
                               </>
                             )}
 
-                            <div className="mt-2 rounded-2xl border-2 border-gray-200 bg-gray-50 p-3 space-y-2.5">
-                              <div className="text-xs font-bold text-gray-600 uppercase tracking-wide">
+                            <div className="rounded-[20px] border border-slate-200 bg-slate-50/80 p-2 space-y-2">
+                              <div className="text-[11px] font-black text-slate-400 uppercase tracking-[0.18em]">
                                 Ajustes
                               </div>
 
-                              <div className="flex gap-2">
+                              <div className="grid grid-cols-2 gap-2">
                                 <input
                                   type="text"
                                   placeholder="Invitación (€)"
@@ -16615,7 +16624,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   onChange={(e) =>
                                     setDiscountAmount(e.target.value)
                                   }
-                                  className="flex-1 min-h-[44px] border rounded-xl px-2 text-sm bg-white"
+                                  className="min-h-[40px] border border-slate-200 rounded-2xl px-3 text-sm bg-white shadow-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                                 />
                                 <input
                                   type="text"
@@ -16624,64 +16633,28 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   onChange={(e) =>
                                     setDiscountPercent(e.target.value)
                                   }
-                                  className="flex-1 min-h-[44px] border rounded-xl px-2 text-sm bg-white"
+                                  className="min-h-[40px] border border-slate-200 rounded-2xl px-3 text-sm bg-white shadow-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                                 />
                               </div>
 
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-sm text-gray-700">
-                                  Factura
-                                </span>
-                                <input
-                                  type="checkbox"
-                                  className="h-5 w-5 accent-blue-600 shrink-0 touch-manipulation"
-                                  checked={isInvoice}
-                                  onChange={(e) =>
-                                    setIsInvoice(e.target.checked)
-                                  }
-                                />
-                              </div>
+                              <PaymentBillingSection
+                                variant="compact"
+                                restaurantId={operationalRestaurantId}
+                                selectedCustomer={selectedBillingCustomer}
+                                onSelectedCustomerChange={setSelectedBillingCustomer}
+                              />
 
-                              {isInvoice ? (
-                                <div className="grid gap-2">
-                                  <input
-                                    placeholder="Nombre / Empresa"
-                                    className="input-base !py-2 !text-sm min-h-[44px]"
-                                    value={invoiceName}
-                                    onChange={(e) =>
-                                      setInvoiceName(e.target.value)
-                                    }
-                                  />
-                                  <input
-                                    placeholder="NIF / CIF"
-                                    className="input-base !py-2 !text-sm min-h-[44px]"
-                                    value={invoiceTaxId}
-                                    onChange={(e) =>
-                                      setInvoiceTaxId(e.target.value)
-                                    }
-                                  />
-                                  <input
-                                    placeholder="Email"
-                                    className="input-base !py-2 !text-sm min-h-[44px]"
-                                    value={invoiceEmail}
-                                    onChange={(e) =>
-                                      setInvoiceEmail(e.target.value)
-                                    }
-                                  />
-                                </div>
-                              ) : null}
-
-                              <div className="flex gap-2 pt-1">
+                              <div className="grid grid-cols-2 gap-2">
                                 <button
                                   type="button"
-                                  className="flex-1 min-h-[48px] rounded-xl text-sm font-bold bg-white text-gray-900 border border-gray-200 active:bg-gray-100 touch-manipulation"
+                                  className="min-h-[42px] rounded-2xl text-sm font-bold bg-white text-slate-700 border border-slate-200 shadow-sm active:bg-slate-50 touch-manipulation"
                                   onClick={handlePrintPreTicket}
                                 >
                                   Pre-ticket
                                 </button>
                                 <button
                                   type="button"
-                                  className="flex-1 min-h-[48px] rounded-xl text-sm font-bold bg-white text-gray-900 border border-gray-200 active:bg-gray-100 touch-manipulation"
+                                  className="min-h-[42px] rounded-2xl text-sm font-bold bg-white text-slate-700 border border-slate-200 shadow-sm active:bg-slate-50 touch-manipulation"
                                   onClick={() => {
                                     setIsSplitMode(true);
                                     setIsSplitEqualMode(false);
@@ -16696,7 +16669,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                             </div>
                             </div>
 
-                            <div className="shrink-0 border-t border-slate-200/90 bg-white pt-2 pb-0.5 space-y-1.5">
+                            <div className="sticky bottom-0 -mx-3 sm:-mx-4 shrink-0 border-t border-slate-200/80 bg-white/95 px-3 sm:px-4 pt-2 pb-3 space-y-1.5 shadow-[0_-18px_38px_rgba(15,23,42,0.08)] backdrop-blur">
                               {cashPaymentHint ? (
                                 <p className="text-sm font-medium text-amber-700 text-center px-1">
                                   {cashPaymentHint}
@@ -16706,7 +16679,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                 <button
                                   type="button"
                                   disabled={isConfirmingPayment || !canCharge}
-                                  className="w-full min-h-[56px] rounded-2xl text-lg font-bold shadow-md touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                  className="w-full min-h-[58px] rounded-[20px] text-lg font-black shadow-[0_16px_32px_rgba(37,99,235,0.24)] touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
                                   style={{
                                     background:
                                       isConfirmingPayment || !canCharge
@@ -16739,7 +16712,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   isConfirmingPayment ||
                                   !canCharge
                                 }
-                                className="w-full min-h-[56px] rounded-2xl text-lg font-bold shadow-md touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="w-full min-h-[58px] rounded-[20px] text-lg font-black shadow-[0_16px_32px_rgba(37,99,235,0.24)] touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
                                 style={{
                                   background:
                                     paymentMethod === null ||
@@ -17988,39 +17961,12 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           </div>
                         )}
 
-                        <div className="border-t border-gray-200/70 my-0.5" />
-                        <div className="flex items-center justify-between gap-2 min-h-0">
-                          <span className="text-xs text-gray-700">Factura</span>
-                          <input
-                            type="checkbox"
-                            className="h-3.5 w-3.5 accent-blue-600 shrink-0"
-                            checked={isInvoice}
-                            onChange={(e) => setIsInvoice(e.target.checked)}
-                          />
-                        </div>
-
-                        {isInvoice && (
-                          <div className="mt-0.5 space-y-0.5">
-                            <input
-                              placeholder="Nombre / Empresa"
-                              className="input-base !py-1 !text-xs"
-                              value={invoiceName}
-                              onChange={(e) => setInvoiceName(e.target.value)}
-                            />
-                            <input
-                              placeholder="NIF / CIF"
-                              className="input-base !py-1 !text-xs"
-                              value={invoiceTaxId}
-                              onChange={(e) => setInvoiceTaxId(e.target.value)}
-                            />
-                            <input
-                              placeholder="Email"
-                              className="input-base !py-1 !text-xs"
-                              value={invoiceEmail}
-                              onChange={(e) => setInvoiceEmail(e.target.value)}
-                            />
-                          </div>
-                        )}
+                        <PaymentBillingSection
+                          variant="compact"
+                          restaurantId={operationalRestaurantId}
+                          selectedCustomer={selectedBillingCustomer}
+                          onSelectedCustomerChange={setSelectedBillingCustomer}
+                        />
 
                         <div className="border-t border-gray-200/70 my-0.5" />
                         <button
