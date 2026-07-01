@@ -1,49 +1,86 @@
 "use client";
 
+import type { PointerEvent } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 
 export type SalaOperationalElementInstanceCardProps = {
   instance: OperationalElementInstance;
   catalogIcon?: string;
+  catalogColor?: string;
   selected: boolean;
-  onSelect: () => void;
+  isDragging?: boolean;
+  isDropAnimating?: boolean;
+  onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerUp: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => void;
 };
 
 export function SalaOperationalElementInstanceCard({
   instance,
   catalogIcon,
+  catalogColor = "#315f7d",
   selected,
-  onSelect,
+  isDragging = false,
+  isDropAnimating = false,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
 }: SalaOperationalElementInstanceCardProps) {
+  const isActive = selected || isDragging;
+
   return (
     <button
       type="button"
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect();
-      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       aria-pressed={selected}
+      aria-label={instance.name}
       className={[
-        "whitespace-nowrap rounded-xl border bg-white px-3 py-2 text-left shadow-sm transition duration-150",
-        selected
-          ? "border-[color-mix(in_srgb,var(--hostly-accent)_48%,#93c5fd)] shadow-[0_6px_18px_rgba(49,95,125,0.12)]"
-          : "border-slate-200/90 hover:border-slate-300 hover:shadow-[0_4px_14px_rgba(15,23,42,0.06)]",
+        "group relative flex min-h-[56px] min-w-[96px] items-stretch overflow-hidden rounded-xl border bg-white text-left",
+        isDragging
+          ? "border-[var(--hostly-accent)] shadow-[0_18px_40px_rgba(49,95,125,0.28)] ring-4 ring-[var(--hostly-accent-soft)]"
+          : isActive
+            ? "border-[var(--hostly-accent)] shadow-[0_10px_28px_rgba(49,95,125,0.18)] ring-2 ring-[var(--hostly-accent-soft)]"
+            : "border-slate-200/90 shadow-[0_4px_16px_rgba(15,23,42,0.08)] hover:border-slate-300 hover:shadow-[0_8px_22px_rgba(15,23,42,0.1)]",
+        isDragging ? "" : isDropAnimating ? "transition duration-[130ms] ease-out" : "transition duration-150",
       ].join(" ")}
       style={{
-        transform: "translate(-50%, -50%)",
+        transform: isDragging
+          ? "translate(-50%, -50%) scale(1.06)"
+          : "translate(-50%, -50%)",
+        cursor: isDragging ? "grabbing" : "grab",
+        opacity: isDragging ? 0.95 : 1,
+        zIndex: isDragging ? 30 : selected ? 10 : 1,
       }}
     >
-      <span className="flex items-center gap-2 text-sm font-extrabold text-slate-800">
-        <span className="text-[var(--hostly-accent)]" aria-hidden>
-          ○
+      <span
+        className={[
+          "w-1 shrink-0 transition-colors",
+          isActive ? "bg-[var(--hostly-accent)]" : "bg-transparent group-hover:bg-slate-200",
+        ].join(" ")}
+        aria-hidden
+      />
+
+      <span className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl"
+          style={{ backgroundColor: `${catalogColor}22` }}
+          aria-hidden
+        >
+          {catalogIcon ?? "⬤"}
         </span>
-        {catalogIcon ? (
-          <span className="text-base" aria-hidden>
-            {catalogIcon}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-base font-extrabold leading-tight text-slate-900">
+            {instance.name}
           </span>
-        ) : null}
-        {instance.name}
+          <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            {isDragging ? "Moviendo…" : "Operativo"}
+          </span>
+        </span>
       </span>
     </button>
   );

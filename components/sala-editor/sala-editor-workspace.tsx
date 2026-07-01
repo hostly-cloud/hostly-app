@@ -10,6 +10,7 @@ import {
 } from "@/lib/sala-editor/preview/create-preview-espacios";
 import { useSalaEditorDocument } from "@/hooks/useSalaEditorDocument";
 import { useSalaWallDrawing } from "@/hooks/useSalaWallDrawing";
+import { useOperationalElementDragging } from "@/hooks/useOperationalElementDragging";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
 import {
   SalaEditorLeftPanel,
@@ -49,6 +50,8 @@ export function SalaEditorWorkspace({
     selectOperationalElement,
     placeOperationalElementAt,
     selectOperationalElementInstance,
+    clearOperationalElementInstance,
+    updateOperationalElement,
     setPhase,
     selectEspacio,
     addEspacioAndSelect,
@@ -58,6 +61,65 @@ export function SalaEditorWorkspace({
     restaurantId,
     initialEspacios,
   });
+
+  const operationalDragEnabled = document.navigation.phase === "operacion";
+
+  const {
+    draggingInstanceId: draggingOperationalInstanceId,
+    dropAnimatingInstanceId: dropAnimatingOperationalInstanceId,
+    startDragging,
+    updateDragging,
+    finishDragging,
+    cancelDragging,
+    isDragging: isOperationalDragging,
+    handleCanvasPointerDown: operationalCanvasPointerDown,
+  } = useOperationalElementDragging({
+    enabled: operationalDragEnabled,
+    onUpdatePosition: (instanceId, position) => {
+      updateOperationalElement(instanceId, { position });
+    },
+    onSelectInstance: selectOperationalElementInstance,
+    onClearSelection: clearOperationalElementInstance,
+  });
+
+  const handleOperationalCanvasPointerDown = useCallback(
+    (point: { x: number; y: number }) => {
+      operationalCanvasPointerDown(point, () => {
+        placeOperationalElementAt(point);
+      });
+    },
+    [operationalCanvasPointerDown, placeOperationalElementAt],
+  );
+
+  const handleOperationalInstancePointerDown = useCallback(
+    (instanceId: string, _point: { x: number; y: number }) => {
+      startDragging(instanceId);
+    },
+    [startDragging],
+  );
+
+  const handleOperationalInstancePointerMove = useCallback(
+    (instanceId: string, point: { x: number; y: number }) => {
+      updateDragging(instanceId, point);
+    },
+    [updateDragging],
+  );
+
+  const handleOperationalInstancePointerUp = useCallback(
+    (instanceId: string) => {
+      if (isOperationalDragging()) {
+        finishDragging();
+      }
+    },
+    [finishDragging, isOperationalDragging],
+  );
+
+  const handleOperationalInstancePointerCancel = useCallback(
+    (_instanceId: string) => {
+      cancelDragging();
+    },
+    [cancelDragging],
+  );
 
   const wallDrawingEnabled =
     document.navigation.phase === "estructura" &&
@@ -149,8 +211,14 @@ export function SalaEditorWorkspace({
             activeOperationalCatalogItem={activeOperationalCatalogItem}
             operationalElementInstances={operationalElementInstancesInEspacio}
             selectedOperationalElementInstanceId={selectedOperationalElementInstanceId}
-            onPlaceOperationalElement={placeOperationalElementAt}
-            onSelectOperationalElementInstance={selectOperationalElementInstance}
+            draggingOperationalInstanceId={draggingOperationalInstanceId}
+            dropAnimatingOperationalInstanceId={dropAnimatingOperationalInstanceId}
+            isOperationalDragging={isOperationalDragging}
+            onOperationalCanvasPointerDown={handleOperationalCanvasPointerDown}
+            onOperationalInstancePointerDown={handleOperationalInstancePointerDown}
+            onOperationalInstancePointerMove={handleOperationalInstancePointerMove}
+            onOperationalInstancePointerUp={handleOperationalInstancePointerUp}
+            onOperationalInstancePointerCancel={handleOperationalInstancePointerCancel}
             onRequestCreateEspacio={openAddDialog}
           />
         }

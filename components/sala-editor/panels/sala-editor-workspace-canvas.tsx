@@ -25,8 +25,20 @@ export type SalaEditorWorkspaceCanvasProps = {
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
   operationalElementInstances?: OperationalElementInstance[];
   selectedOperationalElementInstanceId?: string | null;
-  onPlaceOperationalElement?: (point: { x: number; y: number }) => void;
-  onSelectOperationalElementInstance?: (instanceId: string) => void;
+  draggingOperationalInstanceId?: string | null;
+  dropAnimatingOperationalInstanceId?: string | null;
+  isOperationalDragging?: () => boolean;
+  onOperationalCanvasPointerDown?: (point: { x: number; y: number }) => void;
+  onOperationalInstancePointerDown?: (
+    instanceId: string,
+    point: { x: number; y: number },
+  ) => void;
+  onOperationalInstancePointerMove?: (
+    instanceId: string,
+    point: { x: number; y: number },
+  ) => void;
+  onOperationalInstancePointerUp?: (instanceId: string) => void;
+  onOperationalInstancePointerCancel?: (instanceId: string) => void;
   onRequestCreateEspacio: () => void;
 };
 
@@ -43,8 +55,14 @@ export function SalaEditorWorkspaceCanvas({
   activeOperationalCatalogItem = null,
   operationalElementInstances = [],
   selectedOperationalElementInstanceId = null,
-  onPlaceOperationalElement,
-  onSelectOperationalElementInstance,
+  draggingOperationalInstanceId = null,
+  dropAnimatingOperationalInstanceId = null,
+  isOperationalDragging,
+  onOperationalCanvasPointerDown,
+  onOperationalInstancePointerDown,
+  onOperationalInstancePointerMove,
+  onOperationalInstancePointerUp,
+  onOperationalInstancePointerCancel,
   onRequestCreateEspacio,
 }: SalaEditorWorkspaceCanvasProps) {
   if (!hasEspacios) {
@@ -102,8 +120,14 @@ export function SalaEditorWorkspaceCanvas({
         catalogItem={activeOperationalCatalogItem}
         instances={operationalElementInstances}
         selectedInstanceId={selectedOperationalElementInstanceId}
-        onCanvasPlace={onPlaceOperationalElement ?? (() => undefined)}
-        onSelectInstance={onSelectOperationalElementInstance ?? (() => undefined)}
+        draggingInstanceId={draggingOperationalInstanceId}
+        dropAnimatingInstanceId={dropAnimatingOperationalInstanceId}
+        isDragging={isOperationalDragging ?? (() => false)}
+        onCanvasPointerDown={onOperationalCanvasPointerDown ?? (() => undefined)}
+        onInstancePointerDown={onOperationalInstancePointerDown ?? (() => undefined)}
+        onInstancePointerMove={onOperationalInstancePointerMove ?? (() => undefined)}
+        onInstancePointerUp={onOperationalInstancePointerUp ?? (() => undefined)}
+        onInstancePointerCancel={onOperationalInstancePointerCancel ?? (() => undefined)}
       />
     );
   }

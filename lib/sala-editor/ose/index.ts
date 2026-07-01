@@ -44,3 +44,10 @@ export {
   countOperationalElementInstancesByType,
   nextOperationalElementInstanceName,
 } from "@/lib/sala-editor/ose/operational-element-naming";
+
+export {
+  selectMultiple,
+  snap,
+  resize,
+  rotate,
+} from "@/lib/sala-editor/ose/operational-element-editor-future";

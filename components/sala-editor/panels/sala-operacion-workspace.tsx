@@ -23,8 +23,14 @@ export type SalaOperacionWorkspaceProps = {
   catalogItem: OperationalElementCatalogItem;
   instances: OperationalElementInstance[];
   selectedInstanceId: string | null;
-  onCanvasPlace: (point: { x: number; y: number }) => void;
-  onSelectInstance: (instanceId: string) => void;
+  draggingInstanceId: string | null;
+  dropAnimatingInstanceId: string | null;
+  isDragging: () => boolean;
+  onCanvasPointerDown: (point: { x: number; y: number }) => void;
+  onInstancePointerDown: (instanceId: string, point: { x: number; y: number }) => void;
+  onInstancePointerMove: (instanceId: string, point: { x: number; y: number }) => void;
+  onInstancePointerUp: (instanceId: string) => void;
+  onInstancePointerCancel: (instanceId: string) => void;
 };
 
 export function SalaOperacionWorkspace({
@@ -32,20 +38,71 @@ export function SalaOperacionWorkspace({
   catalogItem,
   instances,
   selectedInstanceId,
-  onCanvasPlace,
-  onSelectInstance,
+  draggingInstanceId,
+  dropAnimatingInstanceId,
+  isDragging,
+  onCanvasPointerDown,
+  onInstancePointerDown,
+  onInstancePointerMove,
+  onInstancePointerUp,
+  onInstancePointerCancel,
 }: SalaOperacionWorkspaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
 
-  const handlePointerDown = useCallback(
+  const resolvePoint = useCallback((clientX: number, clientY: number) => {
+    const el = surfaceRef.current;
+    if (!el) return null;
+    return clientToCanvasPoint(el, clientX, clientY);
+  }, []);
+
+  const handleCanvasPointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
-      const el = surfaceRef.current;
-      if (!el) return;
-      const point = clientToCanvasPoint(el, event.clientX, event.clientY);
-      onCanvasPlace(point);
+      if (isDragging()) return;
+      const point = resolvePoint(event.clientX, event.clientY);
+      if (!point) return;
+      onCanvasPointerDown(point);
     },
-    [onCanvasPlace],
+    [isDragging, onCanvasPointerDown, resolvePoint],
+  );
+
+  const createInstanceHandlers = useCallback(
+    (instanceId: string) => ({
+      onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+        event.stopPropagation();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        const point = resolvePoint(event.clientX, event.clientY);
+        if (!point) return;
+        onInstancePointerDown(instanceId, point);
+      },
+      onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
+        const point = resolvePoint(event.clientX, event.clientY);
+        if (!point) return;
+        onInstancePointerMove(instanceId, point);
+      },
+      onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        onInstancePointerUp(instanceId);
+      },
+      onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        onInstancePointerCancel(instanceId);
+      },
+    }),
+    [
+      onInstancePointerCancel,
+      onInstancePointerDown,
+      onInstancePointerMove,
+      onInstancePointerUp,
+      resolvePoint,
+    ],
   );
 
   return (
@@ -64,7 +121,12 @@ export function SalaOperacionWorkspace({
           </span>
           <div>
             <p className="text-base font-extrabold text-slate-900">{catalogItem.label}</p>
-            <p className="text-[11px] font-semibold text-slate-500">{espacioName}</p>
+            <p className="text-[11px] font-semibold text-slate-500">
+              {espacioName}
+              {instances.length > 0
+                ? ` · ${instances.length} colocado${instances.length === 1 ? "" : "s"}`
+                : " · Haz clic en el plano para colocar"}
+            </p>
           </div>
         </div>
       </div>
@@ -74,8 +136,8 @@ export function SalaOperacionWorkspace({
         role="application"
         aria-label="Lienzo de elementos operativos"
         className="relative min-h-[320px] flex-1 touch-none select-none"
-        style={{ cursor: "crosshair" }}
-        onPointerDown={handlePointerDown}
+        style={{ cursor: draggingInstanceId ? "grabbing" : "crosshair" }}
+        onPointerDown={handleCanvasPointerDown}
       >
         <div
           className="pointer-events-none absolute inset-0 opacity-60"
@@ -87,8 +149,25 @@ export function SalaOperacionWorkspace({
           aria-hidden
         />
 
+        {instances.length === 0 ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
+            <div className="max-w-sm rounded-2xl border border-dashed border-[color-mix(in_srgb,var(--hostly-accent)_28%,#cbd5e1)] bg-white/85 px-6 py-5 text-center shadow-sm">
+              <p className="text-lg font-extrabold text-slate-800">
+                Haz clic en el plano
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                Aparecerá <span className="text-[var(--hostly-accent)]">{catalogItem.label} 1</span> donde pulses
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {instances.map((instance) => {
           const instanceCatalog = getOperationalElementCatalogItem(instance.elementType);
+          const handlers = createInstanceHandlers(instance.id);
+          const dragging = draggingInstanceId === instance.id;
+          const dropAnimating = dropAnimatingInstanceId === instance.id;
+
           return (
             <div
               key={instance.id}
@@ -96,13 +175,17 @@ export function SalaOperacionWorkspace({
               style={{
                 left: instance.position.x,
                 top: instance.position.y,
+                zIndex: dragging ? 30 : instance.id === selectedInstanceId ? 10 : 1,
               }}
             >
               <SalaOperationalElementInstanceCard
                 instance={instance}
                 catalogIcon={instanceCatalog?.icon}
+                catalogColor={instanceCatalog?.color}
                 selected={instance.id === selectedInstanceId}
-                onSelect={() => onSelectInstance(instance.id)}
+                isDragging={dragging}
+                isDropAnimating={dropAnimating}
+                {...handlers}
               />
             </div>
           );
@@ -110,7 +193,9 @@ export function SalaOperacionWorkspace({
 
         <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4">
           <p className="rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 text-xs font-semibold text-slate-500 shadow-sm backdrop-blur-sm">
-            Haz clic para colocar · {catalogItem.label}
+            {draggingInstanceId
+              ? "Suelta para fijar la posición"
+              : `Haz clic para colocar · ${catalogItem.label}`}
           </p>
         </div>
       </div>
