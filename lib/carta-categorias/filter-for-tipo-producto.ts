@@ -123,3 +123,24 @@ export function cartaCategoriasForProductForm(
   base = base.filter((c) => (c.cartaFamiliaId?.trim() ?? "") === familiaTrim);
   return appendCurrentCategoryIfMissing(base, categorias, currentCategoryId);
 }
+
+/** Orden canónico de categorías en Productos (chips, alta rápida, selectores). */
+export function sortCartaCategoriasForProductosUi(
+  categorias: readonly CartaCategoria[],
+): CartaCategoria[] {
+  return [...categorias].sort(
+    (a, b) =>
+      a.sortOrder - b.sortOrder ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
+}
+
+/**
+ * Lista de categorías para selectores operativos (alta rápida, chips Productos).
+ * Paridad exacta con los chips de la pantalla principal: sin filtro por tipo ni isActive.
+ */
+export function cartaCategoriasForProductSelectorList(
+  categorias: readonly CartaCategoria[],
+): CartaCategoria[] {
+  return sortCartaCategoriasForProductosUi(categorias);
+}

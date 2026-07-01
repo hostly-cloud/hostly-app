@@ -1,6 +1,7 @@
 "use client";
 
 import type { RefObject } from "react";
+import { useMemo } from "react";
 import {
   HostlyDataCell,
   HostlyDataGroupBar,
@@ -47,6 +48,14 @@ import {
   ProductosCartaSortableMobileItem,
   ProductosCartaSortableRoot,
 } from "./productos-carta-sortable";
+import {
+  ProductosInlineActiveToggle,
+  ProductosInlineEditableName,
+  ProductosInlineEditablePrice,
+  ProductosTableInlineEditProvider,
+  type ProductosTableInlineEditConfig,
+} from "./productos-table-inline-edit";
+import { useProductTableInlinePersist } from "./use-product-table-inline-persist";
 
 const TIPO_VENTA_I18N: Record<TipoProductoVenta, string> = {
   plato: "carta.tipoPlato",
@@ -206,6 +215,8 @@ export type ProductosCartaDataViewProps = {
   cartaCategorias?: readonly CartaCategoria[];
   /** Familias de menú (`cartaFamilias`; estación producción heredada). */
   cartaFamilias?: readonly CartaFamilia[];
+  /** Edición inline nombre / precio / activo (Productos V2 · Fase 4). */
+  inlineEdit?: ProductosTableInlineEditConfig;
 };
 
 type ResolverParitySummaryPillTone = "neutral" | "ok" | "warn" | "danger";
@@ -402,6 +413,9 @@ function ProductPrimaryCell({
   onCorrect,
   correctDisabled,
   correctDisabledTitle,
+  inlineEditEnabled,
+  onInlineSaveName,
+  onInlineEditError,
 }: {
   p: PlatoCarta;
   showDragHandle?: boolean;
@@ -413,16 +427,31 @@ function ProductPrimaryCell({
   onCorrect?: OpenProductEditFn;
   correctDisabled?: boolean;
   correctDisabledTitle?: string;
+  inlineEditEnabled?: boolean;
+  onInlineSaveName?: (raw: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onInlineEditError?: (message: string) => void;
 }) {
   const ops = productOperationalFieldsFromPlato(p);
+  const nameClassName = "hostly-data-table-primary__name";
   return (
     <div className="hostly-data-table-primary hostly-data-table-primary--with-thumb hostly-productos-carta-name-cell">
       {showDragHandle ? <ProductosCartaSortableDragHandle /> : null}
       <ProductosCartaNameThumb p={p} />
       <div className="hostly-data-table-primary__stack">
-        <span className="hostly-data-table-primary__name" title={p.nombre}>
-          {p.nombre}
-        </span>
+        {inlineEditEnabled && onInlineSaveName ? (
+          <ProductosInlineEditableName
+            p={p}
+            disabled={correctDisabled}
+            className={nameClassName}
+            title={p.nombre}
+            onSave={onInlineSaveName}
+            onError={onInlineEditError}
+          />
+        ) : (
+          <span className={nameClassName} title={p.nombre}>
+            {p.nombre}
+          </span>
+        )}
         {p.origenAlta === "importacion_ia" ? (
           <HostlyStatusBadge tone="neutral" dot={false} className="hostly-data-table-primary__tag">
             IA
@@ -461,8 +490,9 @@ function renderProductosCartaHeaderCells(args: {
   t: TranslateFn;
   toggleSelectAllDisplayed: () => void;
   reorderMode?: boolean;
+  inlineEditEnabled?: boolean;
 }) {
-  const { allSelected, displayedCount, isLegacyReadOnly, selectAllRef, t, toggleSelectAllDisplayed, reorderMode } = args;
+  const { allSelected, displayedCount, isLegacyReadOnly, selectAllRef, t, toggleSelectAllDisplayed, reorderMode, inlineEditEnabled } = args;
   return (
     <>
       {reorderMode ? null : (
@@ -499,7 +529,7 @@ function renderProductosCartaHeaderCells(args: {
         {t("carta.colPrecio")}
       </HostlyDataCell>
       <HostlyDataCell align="center" col="carta">
-        {t("productos.colCarta")}
+        {inlineEditEnabled ? t("carta.fieldActivo") : t("productos.colCarta")}
       </HostlyDataCell>
       <HostlyDataCell align="center" col="esc">
         <span title={t("productos.colEscandallo")} aria-label={t("productos.colEscandallo")}>
@@ -540,6 +570,11 @@ function renderProductRowCells(args: {
   productionStations?: readonly ProductionStationDocument[];
   cartaCategorias?: readonly CartaCategoria[];
   cartaFamilias?: readonly CartaFamilia[];
+  inlineEditEnabled?: boolean;
+  onInlineSaveName?: (p: PlatoCarta, raw: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onInlineSavePrice?: (p: PlatoCarta, raw: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onInlineToggleActive?: (p: PlatoCarta) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onInlineEditError?: (message: string) => void;
 }) {
   const {
     p,
@@ -568,6 +603,11 @@ function renderProductRowCells(args: {
     productionStations,
     cartaCategorias,
     cartaFamilias,
+    inlineEditEnabled,
+    onInlineSaveName,
+    onInlineSavePrice,
+    onInlineToggleActive,
+    onInlineEditError,
   } = args;
   const tiene = tieneEscandalloForPlato(
     p,
@@ -606,6 +646,11 @@ function renderProductRowCells(args: {
           onCorrect={openEdit}
           correctDisabled={isLegacyReadOnly}
           correctDisabledTitle={isLegacyReadOnly ? PRODUCTOS_CARTA_LEGACY_BLOCKED : undefined}
+          inlineEditEnabled={inlineEditEnabled}
+          onInlineSaveName={
+            onInlineSaveName ? (raw) => onInlineSaveName(p, raw) : undefined
+          }
+          onInlineEditError={onInlineEditError}
         />
       </HostlyDataCell>
       <HostlyDataCell col="tipo">
@@ -666,10 +711,30 @@ function renderProductRowCells(args: {
         />
       </HostlyDataCell>
       <HostlyDataCell align="end" col="price">
-        <span className="hostly-data-table-price">{formatEuro(p.precioVenta, locale)}</span>
+        {inlineEditEnabled && onInlineSavePrice ? (
+          <ProductosInlineEditablePrice
+            p={p}
+            disabled={isLegacyReadOnly}
+            displayValue={formatEuro(p.precioVenta, locale)}
+            onSave={(raw) => onInlineSavePrice(p, raw)}
+            onError={onInlineEditError}
+          />
+        ) : (
+          <span className="hostly-data-table-price">{formatEuro(p.precioVenta, locale)}</span>
+        )}
       </HostlyDataCell>
       <HostlyDataCell align="center" col="carta">
-        <ProductosCartaTableCartaBadge p={p} t={t} locale={locale} />
+        {inlineEditEnabled && onInlineToggleActive ? (
+          <ProductosInlineActiveToggle
+            p={p}
+            disabled={isLegacyReadOnly}
+            t={t}
+            onToggle={() => onInlineToggleActive(p)}
+            onError={onInlineEditError}
+          />
+        ) : (
+          <ProductosCartaTableCartaBadge p={p} t={t} locale={locale} />
+        )}
       </HostlyDataCell>
       <HostlyDataCell align="center" col="esc">
         <ProductosCartaTableEscBadge tiene={tiene} t={t} locale={locale} />
@@ -866,7 +931,38 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     onReorderProducts,
     reorderFocusLayout = false,
     locale,
+    inlineEdit,
   } = props;
+
+  const inlineEditEnabled = Boolean(
+    inlineEdit?.enabled && !reorderMode && !isLegacyReadOnly,
+  );
+
+  const inlinePersist = useProductTableInlinePersist({
+    restaurantId: inlineEdit?.restaurantId ?? "",
+    isCentralCatalog: inlineEdit?.isCentralCatalog ?? false,
+    messages: inlineEdit?.messages ?? { errorNombre: "", errorPrecio: "" },
+  });
+
+  const inlineRowProps = inlineEditEnabled
+    ? {
+        inlineEditEnabled: true as const,
+        onInlineSaveName: inlinePersist.saveName,
+        onInlineSavePrice: inlinePersist.savePrice,
+        onInlineToggleActive: inlinePersist.toggleActive,
+        onInlineEditError: inlineEdit?.onError,
+      }
+    : {
+        inlineEditEnabled: false as const,
+      };
+
+  const inlineTabProductIds = useMemo(() => {
+    if (!inlineEditEnabled) return [];
+    if (viewMode === "grouped") {
+      return groupedByCategoria.flatMap((group) => group.items.map((item) => item.id));
+    }
+    return displayed.map((item) => item.id);
+  }, [inlineEditEnabled, viewMode, groupedByCategoria, displayed]);
 
   const allSelected = displayed.length > 0 && displayed.every((p) => selectedIds.has(p.id));
   const rowCount = displayed.length;
@@ -927,6 +1023,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
   const renderDesktopRow = (p: PlatoCarta, idx: number, count: number, showDragHandle: boolean) => {
     const cells = renderProductRowCells({
       ...props,
+      ...inlineRowProps,
       p,
       selected: selectedIds.has(p.id),
       rowIndex: idx,
@@ -1005,6 +1102,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
               t,
               toggleSelectAllDisplayed,
               reorderMode,
+              inlineEditEnabled,
             })}
           </HostlyDataTableHead>
           <HostlyDataTableBody>
@@ -1039,7 +1137,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
     );
   }
 
-  return (
+  const tableViewport = (
     <div
       className={`hostly-data-table-viewport${reorderMode ? " hostly-data-table-viewport--reorder-mode" : ""}`}
     >
@@ -1081,7 +1179,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
         <>
           <HostlyDataTable
             variant="productos-carta"
-            className={`hostly-data-table--dense-config${reorderMode ? " hostly-data-table--reorder-mode" : ""}`}
+            className={`hostly-data-table--dense-config${reorderMode ? " hostly-data-table--reorder-mode" : ""}${inlineEditEnabled ? " hostly-data-table--inline-edit" : ""}`}
           >
             <HostlyDataTableScroll>
               <HostlyDataTableHead>
@@ -1093,6 +1191,7 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
                   t,
                   toggleSelectAllDisplayed,
                   reorderMode,
+                  inlineEditEnabled,
                 })}
               </HostlyDataTableHead>
               <HostlyDataTableBody>{tableBodyContent}</HostlyDataTableBody>
@@ -1103,4 +1202,14 @@ export function ProductosCartaDataView(props: ProductosCartaDataViewProps) {
       )}
     </div>
   );
+
+  if (inlineEditEnabled) {
+    return (
+      <ProductosTableInlineEditProvider productIds={inlineTabProductIds}>
+        {tableViewport}
+      </ProductosTableInlineEditProvider>
+    );
+  }
+
+  return tableViewport;
 }

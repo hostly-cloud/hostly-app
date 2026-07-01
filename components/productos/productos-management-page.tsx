@@ -47,6 +47,7 @@ import { comparePlatoCarta } from "@/lib/carta/product-sort-order";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
 import {
   cartaCategoriasForProductForm,
+  cartaCategoriasForProductSelectorList,
   categoryRequiresManualTipoVenta,
   defaultCartaCategoriaTipoForTipoProducto,
 } from "@/lib/carta-categorias/filter-for-tipo-producto";
@@ -173,7 +174,12 @@ import {
   ProductFormEscandalloModal,
   ProductFormEscandalloSummaryCard,
 } from "@/components/productos/product-form-escandallo-modal";
-import { ProductFormDrawerZone, ProductFormDrawerSubgroup } from "@/components/productos/product-form-drawer-section";
+import { ProductFormDrawerZone } from "@/components/productos/product-form-drawer-section";
+import {
+  ProductFormDrawerTabPanel,
+  ProductFormDrawerTabs,
+  type ProductFormDrawerTabId,
+} from "@/components/productos/product-form-drawer-tabs";
 import { ProductQuickCreateDrawer } from "@/components/productos/product-quick-create-drawer";
 import { useProductQuickCreate } from "@/components/productos/use-product-quick-create";
 import type { ProductDocument } from "@/lib/firestore/products";
@@ -1420,6 +1426,7 @@ export default function ProductosManagementPage({
   const [formOpen, setFormOpen] = useState(false);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [editFocus, setEditFocus] = useState<ProductEditFocus | null>(null);
+  const [productFormTab, setProductFormTab] = useState<ProductFormDrawerTabId>("basico");
   const routingFocusRef = useRef<HTMLDivElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNombre, setDraftNombre] = useState("");
@@ -1473,6 +1480,25 @@ export default function ProductosManagementPage({
       errorCategoriaTipo: t("carta.errorCategoriaTipo"),
     }),
     [t],
+  );
+  const productTableInlineEdit = useMemo(
+    () => ({
+      enabled: isCentralCatalog && !isLegacyReadOnly,
+      restaurantId: operationalRestaurantId,
+      isCentralCatalog,
+      messages: {
+        errorNombre: productFormSubmitMessages.errorNombre,
+        errorPrecio: productFormSubmitMessages.errorPrecio,
+      },
+      onError: (message: string) => setFormError(message),
+    }),
+    [
+      isCentralCatalog,
+      isLegacyReadOnly,
+      operationalRestaurantId,
+      productFormSubmitMessages.errorNombre,
+      productFormSubmitMessages.errorPrecio,
+    ],
   );
   const quickCreate = useProductQuickCreate({
     restaurantId: operationalRestaurantId,
@@ -1891,12 +1917,14 @@ export default function ProductosManagementPage({
     return [...rows].sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { sensitivity: "base" }));
   }, [catalogListFilteredRows, catalogFoodDrinkSegment]);
 
+  const categoriasForProductosSelector = useMemo(
+    () => cartaCategoriasForProductSelectorList(cartaCategorias),
+    [cartaCategorias],
+  );
+
   const tabOptions = useMemo(() => {
-    const sorted = [...cartaCategorias].sort(
-      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-    );
     const out: { id: string; label: string }[] = [{ id: "__all__", label: t("cartaVisual.categoryAll") }];
-    for (const c of sorted) {
+    for (const c of categoriasForProductosSelector) {
       out.push({ id: c.id, label: c.name });
     }
     let hasUncategorized = false;
@@ -1905,7 +1933,7 @@ export default function ProductosManagementPage({
     }
     if (hasUncategorized) out.push({ id: "__uncat__", label: t("cartaCategories.filterUncat") });
     return out;
-  }, [cartaCategorias, filteredSorted, t]);
+  }, [categoriasForProductosSelector, filteredSorted, t]);
 
   useEffect(() => {
     let alive = true;
@@ -2935,6 +2963,19 @@ export default function ProductosManagementPage({
   }, [formOpen, editFocus, isCentralCatalog, editingId]);
 
   useEffect(() => {
+    if (!formOpen) return;
+    if (editFocus === "routing") {
+      setProductFormTab("produccion");
+      return;
+    }
+    if (editFocus === "recipe") {
+      setProductFormTab("escandallo");
+      return;
+    }
+    setProductFormTab("basico");
+  }, [formOpen, editFocus]);
+
+  useEffect(() => {
     if (!isConfigCartaProductosRoute || !hydrated || operationalCatalog.loading) return;
 
     const productId = searchParams.get("productId")?.trim() ?? "";
@@ -3955,8 +3996,10 @@ export default function ProductosManagementPage({
         <ProductQuickCreateDrawer
           open={quickCreateOpen}
           onClose={closeQuickCreate}
+          categorias={categoriasForProductosSelector}
           quickCreate={quickCreate}
           t={t}
+          addCategoryOpen={addCategoryOpen}
           onCreated={() => {
             /* El listado se actualiza vía listener; feedback inline en el drawer. */
           }}
@@ -3985,7 +4028,7 @@ export default function ProductosManagementPage({
             if (e.currentTarget === e.target) closeForm();
           }}
         >
-          <aside className="hostly-product-form-drawer" onMouseDown={(e) => e.stopPropagation()}>
+          <aside className="hostly-product-form-drawer hostly-product-form-drawer--v3" onMouseDown={(e) => e.stopPropagation()}>
             <div className="hostly-product-form-drawer__header">
               <div className="hostly-product-form-drawer__header-text">
                 <h2 className="hostly-product-form-drawer__title">
@@ -4000,31 +4043,11 @@ export default function ProductosManagementPage({
               </ConfigBtnSecondary>
             </div>
 
-            <div className="hostly-product-form-drawer__body">
-              <section
-                className="hostly-product-form-drawer-primary"
-                aria-label={t("carta.productFormBlockProduct")}
-              >
-                <div className="hostly-product-form-drawer-zones">
-                  <div
-                    ref={routingFocusRef}
-                    className={[
-                      "hostly-product-form-routing-focus",
-                      editFocus === "routing"
-                        ? "hostly-product-form-routing-focus--active"
-                        : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    {editFocus === "routing" ? (
-                      <p
-                        className="hostly-product-form-routing-focus__banner"
-                        role="status"
-                      >
-                        {t("productos.routingEditFocusHint")}
-                      </p>
-                    ) : null}
+            <ProductFormDrawerTabs activeTab={productFormTab} onTabChange={setProductFormTab} />
+
+            <div className="hostly-product-form-drawer__body hostly-product-form-drawer__body--tabbed">
+              <ProductFormDrawerTabPanel tabId="basico" activeTab={productFormTab}>
+                <div className="hostly-product-form-drawer-tab-panel__stack">
                   <ProductFormDrawerZone
                     title={t("carta.productFormBlockCarta")}
                     description={t("carta.productFormBlockCartaHint")}
@@ -4099,6 +4122,54 @@ export default function ProductosManagementPage({
                   </ProductFormDrawerZone>
 
                   <ProductFormDrawerZone
+                    title={t("carta.productFormBlockProduct")}
+                    description={t("carta.productFormBlockProductHint")}
+                  >
+                    <div className="hostly-product-form-drawer-primary__grid">
+                      <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__full">
+                        <span className="hostly-carta-config-form-label">{t("carta.fieldNombre")}</span>
+                        <input
+                          ref={nombreInputRef}
+                          className={drawerInputProminentClass}
+                          value={draftNombre}
+                          onChange={(e) => setDraftNombre(e.target.value)}
+                        />
+                      </label>
+
+                      <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
+                        <span className="hostly-carta-config-form-label">{t("carta.fieldPrecio")}</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="any"
+                          min={0}
+                          className={`${drawerInputProminentClass} tabular-nums`}
+                          value={draftPrecio}
+                          onChange={(e) => setDraftPrecio(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                  </ProductFormDrawerZone>
+                </div>
+              </ProductFormDrawerTabPanel>
+
+              <ProductFormDrawerTabPanel tabId="produccion" activeTab={productFormTab}>
+                <div
+                  ref={routingFocusRef}
+                  className={[
+                    "hostly-product-form-routing-focus hostly-product-form-drawer-tab-panel__stack",
+                    editFocus === "routing" ? "hostly-product-form-routing-focus--active" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {editFocus === "routing" ? (
+                    <p className="hostly-product-form-routing-focus__banner" role="status">
+                      {t("productos.routingEditFocusHint")}
+                    </p>
+                  ) : null}
+
+                  <ProductFormDrawerZone
                     title={t("carta.productFormBlockProduction")}
                     description={t("carta.productFormBlockProductionHint")}
                   >
@@ -4162,46 +4233,68 @@ export default function ProductosManagementPage({
                     </div>
                     <ProductMenuFamilyInheritedHintCard view={draftMenuFamilyInheritedHint} t={t} />
                   </ProductFormDrawerZone>
-                  </div>
+                </div>
+              </ProductFormDrawerTabPanel>
 
+              <ProductFormDrawerTabPanel tabId="venta" activeTab={productFormTab}>
+                <div className="hostly-product-form-drawer-tab-panel__stack">
                   <ProductFormDrawerZone
-                    title={t("carta.productFormBlockProduct")}
-                    description={t("carta.productFormBlockProductHint")}
+                    title={t("carta.productFormSubgroupBehavior")}
+                    description={t("carta.productFormSubgroupBehaviorHint")}
                   >
-                    <ProductFormDrawerSubgroup
-                      title={t("carta.productFormSubgroupCommercial")}
-                      description={t("carta.productFormSubgroupCommercialHint")}
-                    >
-                      <div className="hostly-product-form-drawer-primary__grid">
-                        <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__full">
-                          <span className="hostly-carta-config-form-label">{t("carta.fieldNombre")}</span>
-                          <input
-                            ref={nombreInputRef}
-                            className={drawerInputProminentClass}
-                            value={draftNombre}
-                            onChange={(e) => setDraftNombre(e.target.value)}
-                          />
-                        </label>
+                    <div className="hostly-product-form-drawer-primary__grid">
+                      {isCentralCatalog ? (
+                        <div className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__full hostly-product-form-drawer-grid__cell--composition">
+                          <span className="hostly-carta-config-form-label">
+                            {t("carta.fieldProductCompositionType")}
+                          </span>
+                          <div
+                            className="hostly-product-form-drawer-radio-group hostly-product-form-drawer-radio-group--inline"
+                            role="radiogroup"
+                            aria-label={t("carta.fieldProductCompositionType")}
+                          >
+                            {PRODUCT_COMPOSITION_TYPE_VALUES.map((compositionType) => (
+                              <label
+                                key={compositionType}
+                                className="hostly-product-form-drawer-radio"
+                              >
+                                <input
+                                  type="radio"
+                                  name="product-form-draft-composition-type"
+                                  checked={draftProductCompositionType === compositionType}
+                                  onChange={() => setDraftProductCompositionType(compositionType)}
+                                  disabled={drawerSyncing}
+                                />
+                                {compositionType === "simple"
+                                  ? t("carta.fieldProductCompositionSimple")
+                                  : t("carta.fieldProductCompositionComposed")}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
 
-                        <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
-                          <span className="hostly-carta-config-form-label">{t("carta.fieldPrecio")}</span>
+                      <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--status">
+                        <label className="hostly-product-form-drawer-checkbox">
                           <input
-                            type="number"
-                            inputMode="decimal"
-                            step="any"
-                            min={0}
-                            className={`${drawerInputProminentClass} tabular-nums`}
-                            value={draftPrecio}
-                            onChange={(e) => setDraftPrecio(e.target.value)}
+                            type="checkbox"
+                            checked={draftActivo}
+                            onChange={(e) => setDraftActivo(e.target.checked)}
                           />
+                          <span className="hostly-carta-config-form-label">{t("carta.fieldActivo")}</span>
                         </label>
                       </div>
-                    </ProductFormDrawerSubgroup>
+                    </div>
+                  </ProductFormDrawerZone>
+                </div>
+              </ProductFormDrawerTabPanel>
 
-                    <ProductFormDrawerSubgroup
-                      title={t("carta.productFormSubgroupClassification")}
-                      description={t("carta.productFormSubgroupClassificationHint")}
-                    >
+              <ProductFormDrawerTabPanel tabId="clasificacion" activeTab={productFormTab}>
+                <div className="hostly-product-form-drawer-tab-panel__stack">
+                  <ProductFormDrawerZone
+                    title={t("carta.productFormSubgroupClassification")}
+                    description={t("carta.productFormSubgroupClassificationHint")}
+                  >
                       <div className="hostly-product-form-drawer-primary__grid">
                         <label className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell">
                           <span className="hostly-carta-config-form-label">Familia de producto</span>
@@ -4263,12 +4356,13 @@ export default function ProductosManagementPage({
                           )}
                         </div>
                       </div>
-                    </ProductFormDrawerSubgroup>
+                  </ProductFormDrawerZone>
+                </div>
+              </ProductFormDrawerTabPanel>
 
-                    <ProductFormDrawerSubgroup
-                      title="Modificadores"
-                      description="Los de categoría se aplican automáticamente; los propios solo afectan a este producto."
-                    >
+              <ProductFormDrawerTabPanel tabId="modificadores" activeTab={productFormTab}>
+                <div className="hostly-product-form-drawer-tab-panel__stack">
+                  <ProductFormDrawerZone title="Modificadores" description="Los de categoría se aplican automáticamente; los propios solo afectan a este producto.">
                       {activeModifierGroups.length === 0 ? (
                         <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
                           Sin grupos activos.{" "}
@@ -4364,77 +4458,12 @@ export default function ProductosManagementPage({
                           </div>
                         </div>
                       )}
-                    </ProductFormDrawerSubgroup>
-
-                    <ProductFormDrawerSubgroup
-                      title={t("carta.productFormSubgroupBehavior")}
-                      description={t("carta.productFormSubgroupBehaviorHint")}
-                    >
-                      <div className="hostly-product-form-drawer-primary__grid">
-                        {isCentralCatalog ? (
-                          <div className="hostly-carta-config-form-field hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__full hostly-product-form-drawer-grid__cell--composition">
-                            <span className="hostly-carta-config-form-label">
-                              {t("carta.fieldProductCompositionType")}
-                            </span>
-                            <div
-                              className="hostly-product-form-drawer-radio-group hostly-product-form-drawer-radio-group--inline"
-                              role="radiogroup"
-                              aria-label={t("carta.fieldProductCompositionType")}
-                            >
-                              {PRODUCT_COMPOSITION_TYPE_VALUES.map((compositionType) => (
-                                <label
-                                  key={compositionType}
-                                  className="hostly-product-form-drawer-radio"
-                                >
-                                  <input
-                                    type="radio"
-                                    name="product-form-draft-composition-type"
-                                    checked={draftProductCompositionType === compositionType}
-                                    onChange={() => setDraftProductCompositionType(compositionType)}
-                                    disabled={drawerSyncing}
-                                  />
-                                  {compositionType === "simple"
-                                    ? t("carta.fieldProductCompositionSimple")
-                                    : t("carta.fieldProductCompositionComposed")}
-                                </label>
-                              ))}
-                            </div>
-                            <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
-                              <strong>{t("carta.fieldProductCompositionSimple")}:</strong>{" "}
-                              {t("carta.fieldProductCompositionSimpleHelp")}{" "}
-                              {t("carta.fieldProductCompositionSimpleExamples")}
-                            </p>
-                            <p className="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint">
-                              <strong>{t("carta.fieldProductCompositionComposed")}:</strong>{" "}
-                              {t("carta.fieldProductCompositionComposedHelp")}{" "}
-                              {t("carta.fieldProductCompositionComposedExamples")}
-                            </p>
-                          </div>
-                        ) : null}
-
-                        <div className="hostly-product-form-drawer-grid__cell hostly-product-form-drawer-grid__cell--status">
-                          <label className="hostly-product-form-drawer-checkbox">
-                            <input
-                              type="checkbox"
-                              checked={draftActivo}
-                              onChange={(e) => setDraftActivo(e.target.checked)}
-                            />
-                            <span className="hostly-carta-config-form-label">{t("carta.fieldActivo")}</span>
-                          </label>
-                        </div>
-                      </div>
-                    </ProductFormDrawerSubgroup>
                   </ProductFormDrawerZone>
                 </div>
+              </ProductFormDrawerTabPanel>
 
-                <div className="hostly-product-form-drawer-primary__cards">
-                  <ProductFormCommercialInfoSummaryCard
-                    description={draftDesc}
-                    hasImage={draftCommercialHasImage}
-                    imagePreviewUrl={draftCommercialImagePreviewUrl}
-                    disabled={drawerSyncing}
-                    onEdit={() => setCommercialInfoModalOpen(true)}
-                  />
+              <ProductFormDrawerTabPanel tabId="escandallo" activeTab={productFormTab}>
+                <div className="hostly-product-form-drawer-tab-panel__stack">
                   {isCentralCatalog ? (
                     <ProductFormEscandalloSummaryCard
                       recipeEnabled={draftRecipeEnabled}
@@ -4445,9 +4474,25 @@ export default function ProductosManagementPage({
                       disabled={drawerSyncing}
                       onEdit={() => setEscandalloModalOpen(true)}
                     />
-                  ) : null}
+                  ) : (
+                    <p className="hostly-carta-config-form-hint">
+                      Escandallo disponible con catálogo central.
+                    </p>
+                  )}
                 </div>
-              </section>
+              </ProductFormDrawerTabPanel>
+
+              <ProductFormDrawerTabPanel tabId="comercial" activeTab={productFormTab}>
+                <div className="hostly-product-form-drawer-tab-panel__stack">
+                  <ProductFormCommercialInfoSummaryCard
+                    description={draftDesc}
+                    hasImage={draftCommercialHasImage}
+                    imagePreviewUrl={draftCommercialImagePreviewUrl}
+                    disabled={drawerSyncing}
+                    onEdit={() => setCommercialInfoModalOpen(true)}
+                  />
+                </div>
+              </ProductFormDrawerTabPanel>
 
               {formError ? (
                 <div
@@ -4519,7 +4564,13 @@ export default function ProductosManagementPage({
 
       {addCategoryOpen ? (
         <div
-          className="hostly-carta-config-drawer-backdrop hostly-carta-config-drawer-backdrop--elevated"
+          className={[
+            "hostly-carta-config-drawer-backdrop",
+            "hostly-carta-config-drawer-backdrop--elevated",
+            quickCreateOpen ? "hostly-carta-config-drawer-backdrop--over-quick-create" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
           role="dialog"
           aria-modal="true"
           aria-label={t("cartaCategories.quickAddTitle")}
@@ -4726,6 +4777,7 @@ export default function ProductosManagementPage({
                     productionStations={productionStations}
                     cartaCategorias={cartaCategorias}
                     cartaFamilias={cartaFamilias}
+                    inlineEdit={productTableInlineEdit}
                   />
                   </>
                 )}
@@ -4745,7 +4797,7 @@ export default function ProductosManagementPage({
         <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
         <ConfigCartaWorkbench
           title="Productos"
-          description="Catálogo maestro de productos del restaurante"
+          description=""
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
           visualVariant="productos"
@@ -4753,7 +4805,7 @@ export default function ProductosManagementPage({
         >
           <HostlySection
             stack="sm"
-            className="hostly-productos-config-skin hostly-productos-config-skin--simplified min-h-0 min-w-0 flex-1 overflow-hidden !gap-0"
+            className="hostly-productos-config-skin hostly-productos-config-skin--simplified hostly-productos-v3 min-h-0 min-w-0 flex-1 overflow-hidden !gap-0"
             style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0 }}
           >
             {notice ? (
@@ -4768,7 +4820,8 @@ export default function ProductosManagementPage({
             ) : null}
             <ProductosTableChrome iceVisual embedFlatChrome>
               <>
-              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical hostly-productos-carta-toolbar--config-primary hostly-productos-carta-toolbar--hero-search">
+              <div className="hostly-productos-v3__command-bar">
+              <div className="hostly-productos-carta-toolbar hostly-productos-carta-toolbar--radical hostly-productos-carta-toolbar--config-primary hostly-productos-carta-toolbar--hero-search hostly-productos-v3__search">
               <input
               type="search"
               value={listSearch}
@@ -4778,8 +4831,8 @@ export default function ProductosManagementPage({
               className="hostly-config-canonical-search hostly-productos-carta-search hostly-productos-carta-search--prominent hostly-productos-carta-search--field"
               />
               </div>
-              <div className="hostly-productos-carta-controls-stack hostly-productos-carta-controls-stack--dense">
-                <ConfigCartaCompactFilterRow className="hostly-productos-carta-compact-filters--ops-row">
+              <div className="hostly-productos-v3__command-bar-filters">
+                <ConfigCartaCompactFilterRow className="hostly-productos-carta-compact-filters--ops-row hostly-productos-v3__status-row">
                   <div className="hostly-productos-carta-ops-group">
                     {renderConfigCartaStatusFilterSelect()}
                     {canUseProductReorder ? (
@@ -4793,14 +4846,9 @@ export default function ProductosManagementPage({
                       </button>
                     ) : null}
                   </div>
-                  {!canUseProductReorder ? (
-                    <p className="hostly-productos-reorder-hint hostly-productos-reorder-hint--inline" role="status">
-                      {t("productos.orderModeDisabledHint")}
-                    </p>
-                  ) : null}
                 </ConfigCartaCompactFilterRow>
                 <div
-                  className="hostly-productos-carta-category-rail hostly-productos-carta-category-rail--protagonist hostly-productos-carta-category-rail--premium"
+                  className="hostly-productos-carta-category-rail hostly-productos-carta-category-rail--protagonist hostly-productos-carta-category-rail--premium hostly-productos-v3__category-rail"
                   aria-label={t("cartaCategories.title")}
                   role="tablist"
                 >
@@ -4822,6 +4870,7 @@ export default function ProductosManagementPage({
                       );
                     })}
                 </div>
+              </div>
               </div>
               {configCartaAdvancedOpen ? (
               <div
@@ -4852,7 +4901,7 @@ export default function ProductosManagementPage({
               </div>
               </div>
               ) : null}
-              {items.length > 0 ? (
+              {configCartaAdvancedOpen && items.length > 0 ? (
                 <ProductosResolverParitySummaryStrip
                   summary={resolverParitySummaryForTab}
                   loading={!parityCatalogsLoaded}
@@ -4931,6 +4980,7 @@ export default function ProductosManagementPage({
               productionStations={productionStations}
               cartaCategorias={cartaCategorias}
               cartaFamilias={cartaFamilias}
+              inlineEdit={productTableInlineEdit}
               />
               )}
               </div>

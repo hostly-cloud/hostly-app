@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveProductFamilyFromSelectValue } from "@/lib/carta/category-product-family";
-import { cartaCategoriasForProductForm } from "@/lib/carta-categorias/filter-for-tipo-producto";
+import { cartaCategoriasForProductSelectorList } from "@/lib/carta-categorias/filter-for-tipo-producto";
 import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import { evaluateProductFormPreventiveValidation } from "@/lib/carta/product-form-preventive-validation";
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
@@ -105,19 +105,8 @@ export function useProductQuickCreate(
   );
 
   const categoriasForForm = useMemo(
-    () =>
-      cartaCategoriasForProductForm(
-        [...args.cartaCategorias],
-        inheritedDraft.tipoVenta,
-        inheritedDraft.cartaMenuFamiliaId,
-        { currentCategoryId: draft.categoriaCartaId },
-      ),
-    [
-      args.cartaCategorias,
-      inheritedDraft.tipoVenta,
-      inheritedDraft.cartaMenuFamiliaId,
-      draft.categoriaCartaId,
-    ],
+    () => cartaCategoriasForProductSelectorList(args.cartaCategorias),
+    [args.cartaCategorias],
   );
 
   const inventoryLookupMap = useMemo(

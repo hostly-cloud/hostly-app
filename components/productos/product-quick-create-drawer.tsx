@@ -1,21 +1,24 @@
 "use client";
 
 import { useRef, useEffect, useCallback } from "react";
-import { CategoriaCartaFormField } from "@/components/carta/categoria-carta-form-field";
 import { ConfigBtnPrimary, ConfigBtnSecondary } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
+import { ProductQuickCreateDrinkFormat } from "@/components/productos/product-quick-create-drink-format";
 import type {
   ProductQuickCreateSubmitMode,
   UseProductQuickCreateResult,
 } from "@/components/productos/use-product-quick-create";
+import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import type { ProductQuickCreateDraft } from "@/lib/productos/product-category-inheritance";
 import type { ProductQuickCreateInheritedDraft } from "@/lib/productos/product-category-inheritance";
 
-const drawerInputProminentClass =
-  "hostly-input hostly-carta-config-field-input hostly-product-form-drawer-input hostly-product-form-drawer-input--prominent";
+const drawerInputClass =
+  "hostly-input hostly-carta-config-field-input hostly-product-quick-create-v3__input";
 
 export type ProductQuickCreateDrawerProps = {
   open: boolean;
   onClose: () => void;
+  /** Misma lista que los chips/filtros de Productos (fuente: `cartaCategorias` del tenant). */
+  categorias: readonly CartaCategoria[];
   quickCreate: UseProductQuickCreateResult;
   t: (key: string) => string;
   onCreated?: (productId: string) => void;
@@ -24,40 +27,53 @@ export type ProductQuickCreateDrawerProps = {
     draft: ProductQuickCreateDraft,
     inherited: ProductQuickCreateInheritedDraft,
   ) => void;
+  /** Modal de categoría abierto encima — bloquea interacción con el alta rápida. */
+  addCategoryOpen?: boolean;
 };
 
 /**
- * Drawer de alta rápida (Productos V2) — modo operador con alta continua.
+ * Alta rápida V3 · Fase 3 — flujo lineal, nombre protagonista, sin scroll.
  */
 export function ProductQuickCreateDrawer({
   open,
   onClose,
+  categorias,
   quickCreate,
   t,
   onCreated,
   onOpenAddCategory,
   onOpenAdvancedConfig,
+  addCategoryOpen = false,
 }: ProductQuickCreateDrawerProps) {
   const nombreInputRef = useRef<HTMLInputElement | null>(null);
+  const showDrinkFormat = quickCreate.inheritedDraft.tipoVenta === "bebida";
 
-  const focusNombre = useCallback(() => {
-    window.setTimeout(() => nombreInputRef.current?.focus(), 30);
+  const focusNombre = useCallback((selectAll = false) => {
+    window.setTimeout(() => {
+      const el = nombreInputRef.current;
+      if (!el) return;
+      el.focus();
+      if (selectAll) {
+        el.select();
+      }
+    }, 30);
   }, []);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      if (addCategoryOpen) return;
       if (e.key === "Escape") {
         e.preventDefault();
         onClose();
       }
     };
     window.addEventListener("keydown", onKey);
-    focusNombre();
+    focusNombre(false);
     return () => {
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose, focusNombre]);
+  }, [open, onClose, focusNombre, addCategoryOpen]);
 
   if (!open) return null;
 
@@ -69,43 +85,46 @@ export function ProductQuickCreateDrawer({
       onClose();
       return;
     }
-    focusNombre();
+    focusNombre(true);
   }
 
   return (
     <div
-      className="hostly-product-form-drawer-backdrop hostly-product-quick-create-drawer-backdrop"
+      className={`hostly-product-quick-create-v3-backdrop${addCategoryOpen ? " hostly-product-quick-create-v3-backdrop--blocked" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label={t("carta.newProduct")}
       data-hostly-product-quick-create=""
       onMouseDown={(e) => {
+        if (addCategoryOpen) return;
         if (e.currentTarget === e.target) onClose();
       }}
     >
       <aside
-        className="hostly-product-form-drawer hostly-product-quick-create-drawer"
+        className="hostly-product-quick-create-v3"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="hostly-product-quick-create-drawer__header">
-          <div className="hostly-product-quick-create-drawer__header-text">
-            <h2 className="hostly-product-quick-create-drawer__title">{t("carta.newProduct")}</h2>
-            <p className="hostly-product-quick-create-drawer__subtitle">
-              Alta continua — introduce productos seguidos sin salir.
-            </p>
+        <header className="hostly-product-quick-create-v3__header">
+          <div className="hostly-product-quick-create-v3__header-main">
+            <h2 className="hostly-product-quick-create-v3__title">{t("carta.newProduct")}</h2>
+            {quickCreate.successFlash ? (
+              <span className="hostly-product-quick-create-v3__flash" role="status" aria-live="polite">
+                {quickCreate.successFlash}
+              </span>
+            ) : null}
           </div>
           <button
             type="button"
-            className="hostly-product-quick-create-drawer__close"
+            className="hostly-product-quick-create-v3__close"
             onClick={onClose}
             aria-label={t("common.cancel")}
           >
             ×
           </button>
-        </div>
+        </header>
 
         <form
-          className="hostly-product-quick-create-drawer__form"
+          className="hostly-product-quick-create-v3__form"
           onSubmit={(e) => {
             e.preventDefault();
             if (quickCreate.canSubmit) {
@@ -113,47 +132,66 @@ export function ProductQuickCreateDrawer({
             }
           }}
         >
-          <div className="hostly-product-quick-create-drawer__body">
-            {quickCreate.successFlash ? (
-              <p
-                className="hostly-product-quick-create-drawer__success-flash"
-                role="status"
-                aria-live="polite"
-              >
-                {quickCreate.successFlash}
-              </p>
-            ) : null}
-
-            <label className="hostly-carta-config-form-field">
-              <span className="hostly-carta-config-form-label">{t("carta.fieldNombre")}</span>
+          <div className="hostly-product-quick-create-v3__fields">
+            <label className="hostly-product-quick-create-v3__field hostly-product-quick-create-v3__field--hero">
+              <span className="hostly-product-quick-create-v3__label hostly-product-quick-create-v3__label--hero">
+                Nombre comercial
+              </span>
               <input
                 ref={nombreInputRef}
-                className={drawerInputProminentClass}
+                className={`${drawerInputClass} hostly-product-quick-create-v3__input--hero`}
                 value={quickCreate.draft.nombre}
                 onChange={(e) => quickCreate.setNombre(e.target.value)}
                 autoComplete="off"
-                placeholder="Ej. Croquetas caseras"
+                placeholder="Ej. Fanta Naranja, Croquetas…"
                 disabled={quickCreate.saving}
               />
             </label>
 
-            <CategoriaCartaFormField
-              t={t}
-              categorias={quickCreate.categoriasForForm}
-              selectedId={quickCreate.draft.categoriaCartaId}
-              onSelectId={quickCreate.selectCategory}
-              onOpenAddCategory={onOpenAddCategory ?? (() => undefined)}
-              hintClassName="hostly-carta-config-form-hint hostly-product-quick-create-drawer__hint"
-            />
+            <div className="hostly-product-quick-create-v3__field">
+              <span className="hostly-product-quick-create-v3__label">{t("carta.fieldCategoria")}</span>
+              <div className="hostly-product-quick-create-v3__category-row">
+                <select
+                  className={`${drawerInputClass} hostly-product-quick-create-v3__category-select`}
+                  value={quickCreate.draft.categoriaCartaId ?? ""}
+                  disabled={quickCreate.saving}
+                  aria-label={t("carta.fieldCategoria")}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    quickCreate.selectCategory(v === "" ? null : v);
+                  }}
+                >
+                  <option value="">{t("cartaCategories.selectNone")}</option>
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {!c.isActive ? ` (${t("cartaCategories.inactiveShort")})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {onOpenAddCategory ? (
+                  <button
+                    type="button"
+                    className="hostly-product-quick-create-v3__category-add"
+                    disabled={quickCreate.saving}
+                    aria-label={t("cartaCategories.addFromForm")}
+                    title="Nueva categoría"
+                    onClick={onOpenAddCategory}
+                  >
+                    +
+                  </button>
+                ) : null}
+              </div>
+            </div>
 
-            <label className="hostly-carta-config-form-field">
-              <span className="hostly-carta-config-form-label">{t("carta.fieldPrecio")}</span>
+            <label className="hostly-product-quick-create-v3__field hostly-product-quick-create-v3__field--price">
+              <span className="hostly-product-quick-create-v3__label">{t("carta.fieldPrecio")}</span>
               <input
                 type="number"
                 inputMode="decimal"
                 step="any"
                 min={0}
-                className={`${drawerInputProminentClass} tabular-nums`}
+                className={`${drawerInputClass} tabular-nums hostly-product-quick-create-v3__input--price`}
                 value={quickCreate.draft.precio}
                 onChange={(e) => quickCreate.setPrecio(e.target.value)}
                 placeholder="0.00"
@@ -161,9 +199,15 @@ export function ProductQuickCreateDrawer({
               />
             </label>
 
+            {showDrinkFormat ? (
+              <ProductQuickCreateDrinkFormat
+                compositionType={quickCreate.inheritedDraft.productCompositionType}
+              />
+            ) : null}
+
             {quickCreate.error ? (
               <div
-                className="hostly-carta-config-alert hostly-carta-config-alert--error"
+                className="hostly-carta-config-alert hostly-carta-config-alert--error hostly-product-quick-create-v3__error"
                 role="alert"
               >
                 {quickCreate.error}
@@ -171,38 +215,37 @@ export function ProductQuickCreateDrawer({
             ) : null}
           </div>
 
-          <div className="hostly-product-quick-create-drawer__footer">
-            <div className="hostly-product-quick-create-drawer__actions">
+          <footer className="hostly-product-quick-create-v3__footer">
+            <div className="hostly-product-quick-create-v3__actions">
               <ConfigBtnPrimary
                 type="submit"
-                className="hostly-product-form-drawer__footer-primary hostly-product-quick-create-drawer__save"
+                className="hostly-product-quick-create-v3__save"
                 disabled={quickCreate.saving || !quickCreate.canSubmit}
               >
                 {quickCreate.saving ? t("common.preparing") : t("common.save")}
               </ConfigBtnPrimary>
               <ConfigBtnSecondary
                 type="button"
-                className="hostly-product-quick-create-drawer__save-close"
+                className="hostly-product-quick-create-v3__save-close"
                 disabled={quickCreate.saving || !quickCreate.canSubmit}
                 onClick={() => void handleSubmit("close")}
               >
                 Guardar y cerrar
               </ConfigBtnSecondary>
             </div>
-
             {onOpenAdvancedConfig ? (
               <button
                 type="button"
-                className="hostly-product-quick-create-drawer__advanced-link"
+                className="hostly-product-quick-create-v3__more-options"
                 disabled={quickCreate.saving}
                 onClick={() =>
                   onOpenAdvancedConfig(quickCreate.draft, quickCreate.inheritedDraft)
                 }
               >
-                Configuración avanzada
+                Más opciones
               </button>
             ) : null}
-          </div>
+          </footer>
         </form>
       </aside>
     </div>
