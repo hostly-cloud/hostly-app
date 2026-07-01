@@ -2,5 +2,9 @@ export { SalaEditorLeftPanel } from "@/components/sala-editor/panels/sala-editor
 export { SalaEditorInspectorPanel } from "@/components/sala-editor/panels/sala-editor-inspector-panel";
 export { SalaEditorWorkspaceCanvas } from "@/components/sala-editor/panels/sala-editor-workspace-canvas";
 export { SalaEspaciosSidebar } from "@/components/sala-editor/panels/sala-espacios-sidebar";
+export { SalaEspacioCard } from "@/components/sala-editor/panels/sala-espacio-card";
+export { SalaAddEspacioDialog } from "@/components/sala-editor/panels/sala-add-espacio-dialog";
+export { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-espacios-empty-state";
+export { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
 export { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
 export { SalaOperacionSidebar } from "@/components/sala-editor/panels/sala-operacion-sidebar";

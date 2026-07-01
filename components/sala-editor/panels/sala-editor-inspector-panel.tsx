@@ -1,17 +1,46 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
+import {
+  SALA_ESPACIO_TYPE_OPTIONS,
+  salaEspacioTypeLabel,
+} from "@/lib/sala-editor/catalog/espacio-types";
+import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
+
+function InspectorSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <h4 className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+        {title}
+      </h4>
+      {children}
+    </section>
+  );
+}
+
+function InspectorDivider() {
+  return <div className="h-px bg-slate-200/80" aria-hidden />;
+}
 
 export type SalaEditorInspectorPanelProps = {
   phase: SalaEditorPhase;
   espacio: SalaEspacio | null;
+  elementCount?: number;
   onUpdateEspacio?: (patch: Partial<SalaEspacioDraft>) => void;
 };
 
 export function SalaEditorInspectorPanel({
   phase,
   espacio,
+  elementCount = 0,
   onUpdateEspacio,
 }: SalaEditorInspectorPanelProps) {
   if (phase !== "espacios" || !espacio) {
@@ -26,28 +55,25 @@ export function SalaEditorInspectorPanel({
                 ? "Elementos operativos en preview"
                 : "Sin espacio seleccionado"}
           </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Los detalles editables aparecen en la Fase 1.
-          </p>
         </div>
       </div>
     );
   }
 
+  const handleTipoChange = (tipo: SalaEspacioType) => {
+    onUpdateEspacio?.({ tipo });
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-0.5">
       <div>
-        <h3 className="text-sm font-extrabold text-slate-900">Espacio</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          Edición local — no se guarda en Firestore.
-        </p>
+        <h3 className="text-sm font-extrabold text-slate-900">Inspector</h3>
+        <p className="mt-1 text-xs text-slate-500">Edición local · sin guardar</p>
       </div>
 
-      <div className="space-y-3">
+      <InspectorSection title="General">
         <label className="block space-y-1">
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-slate-400">
-            Nombre
-          </span>
+          <span className="text-xs font-bold text-slate-600">Nombre</span>
           <input
             type="text"
             value={espacio.name}
@@ -57,9 +83,22 @@ export function SalaEditorInspectorPanel({
         </label>
 
         <label className="block space-y-1">
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-slate-400">
-            Color
-          </span>
+          <span className="text-xs font-bold text-slate-600">Tipo</span>
+          <select
+            value={espacio.tipo}
+            onChange={(e) => handleTipoChange(e.target.value as SalaEspacioType)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-[color-mix(in_srgb,var(--hostly-accent)_35%,#cbd5e1)]"
+          >
+            {SALA_ESPACIO_TYPE_OPTIONS.map((option) => (
+              <option key={option.type} value={option.type}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-xs font-bold text-slate-600">Color</span>
           <div className="flex items-center gap-2">
             <input
               type="color"
@@ -67,39 +106,12 @@ export function SalaEditorInspectorPanel({
               onChange={(e) => onUpdateEspacio?.({ color: e.target.value })}
               className="h-10 w-12 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
             />
-            <input
-              type="text"
-              value={espacio.color}
-              onChange={(e) => onUpdateEspacio?.({ color: e.target.value })}
-              className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-[color-mix(in_srgb,var(--hostly-accent)_35%,#cbd5e1)]"
-            />
+            <span className="text-xs font-semibold text-slate-500">{espacio.color}</span>
           </div>
         </label>
 
-        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5">
-          <span className="text-sm font-bold text-slate-700">Visible</span>
-          <input
-            type="checkbox"
-            checked={espacio.visible}
-            onChange={(e) => onUpdateEspacio?.({ visible: e.target.checked })}
-            className="h-4 w-4 accent-[var(--hostly-accent)]"
-          />
-        </label>
-
-        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5">
-          <span className="text-sm font-bold text-slate-700">Activo</span>
-          <input
-            type="checkbox"
-            checked={espacio.active}
-            onChange={(e) => onUpdateEspacio?.({ active: e.target.checked })}
-            className="h-4 w-4 accent-[var(--hostly-accent)]"
-          />
-        </label>
-
         <label className="block space-y-1">
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-slate-400">
-            Orden
-          </span>
+          <span className="text-xs font-bold text-slate-600">Orden</span>
           <input
             type="number"
             min={0}
@@ -113,7 +125,46 @@ export function SalaEditorInspectorPanel({
             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-[color-mix(in_srgb,var(--hostly-accent)_35%,#cbd5e1)]"
           />
         </label>
-      </div>
+      </InspectorSection>
+
+      <InspectorDivider />
+
+      <InspectorSection title="Visibilidad">
+        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5">
+          <span className="text-sm font-bold text-slate-700">Visible</span>
+          <input
+            type="checkbox"
+            checked={espacio.visible}
+            onChange={(e) => onUpdateEspacio?.({ visible: e.target.checked })}
+            className="h-4 w-4 accent-[var(--hostly-accent)]"
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5">
+          <span className="text-sm font-bold text-slate-700">Activo</span>
+          <input
+            type="checkbox"
+            checked={espacio.active}
+            onChange={(e) => onUpdateEspacio?.({ active: e.target.checked })}
+            className="h-4 w-4 accent-[var(--hostly-accent)]"
+          />
+        </label>
+      </InspectorSection>
+
+      <InspectorDivider />
+
+      <InspectorSection title="Información">
+        <div className="rounded-xl border border-slate-200/80 bg-white px-3 py-3">
+          <p className="text-sm font-extrabold text-slate-800">
+            {elementCount} elemento{elementCount === 1 ? "" : "s"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Tipo: {salaEspacioTypeLabel(espacio.tipo)}
+          </p>
+          <p className="mt-2 text-xs font-semibold text-slate-400">
+            Sin estructura creada
+          </p>
+        </div>
+      </InspectorSection>
     </div>
   );
 }

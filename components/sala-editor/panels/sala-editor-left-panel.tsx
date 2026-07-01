@@ -10,18 +10,18 @@ export type SalaEditorLeftPanelProps = {
   phase: SalaEditorPhase;
   espacios: SalaEspacio[];
   selectedEspacioId: string | null;
+  elementCountByEspacioId: Record<string, number>;
   onSelectEspacio: (espacioId: string) => void;
-  onAddEspacio: () => void;
-  canAddEspacio: boolean;
+  onRequestAddEspacio: () => void;
 };
 
 export function SalaEditorLeftPanel({
   phase,
   espacios,
   selectedEspacioId,
+  elementCountByEspacioId,
   onSelectEspacio,
-  onAddEspacio,
-  canAddEspacio,
+  onRequestAddEspacio,
 }: SalaEditorLeftPanelProps) {
   return (
     <aside className="flex min-h-0 w-full flex-col rounded-2xl border border-slate-200/80 bg-slate-50/50 p-3">
@@ -29,9 +29,9 @@ export function SalaEditorLeftPanel({
         <SalaEspaciosSidebar
           espacios={espacios}
           selectedEspacioId={selectedEspacioId}
+          elementCountByEspacioId={elementCountByEspacioId}
           onSelectEspacio={onSelectEspacio}
-          onAddEspacio={onAddEspacio}
-          canAddEspacio={canAddEspacio}
+          onRequestAddEspacio={onRequestAddEspacio}
         />
       ) : null}
       {phase === "estructura" ? <SalaEstructuraSidebar /> : null}

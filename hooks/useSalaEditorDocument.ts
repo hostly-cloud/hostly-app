@@ -46,6 +46,20 @@ export function useSalaEditorDocument({
     [document.espacios, document.navigation.selectedEspacioId],
   );
 
+  const elementCountByEspacioId = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const espacio of document.espacios) {
+      const structural = document.structuralElements.filter(
+        (el) => el.espacioId === espacio.id,
+      ).length;
+      const operational = document.operationalElements.filter(
+        (el) => el.espacioId === espacio.id,
+      ).length;
+      counts[espacio.id] = structural + operational;
+    }
+    return counts;
+  }, [document.espacios, document.structuralElements, document.operationalElements]);
+
   const setPhase = useCallback((phase: SalaEditorPhase) => {
     setDocument((prev) => ({
       ...prev,
@@ -78,6 +92,15 @@ export function useSalaEditorDocument({
     }));
   }, []);
 
+  const addEspacioAndSelect = useCallback((espacio: SalaEspacio) => {
+    setDocument((prev) => ({
+      ...prev,
+      espacios: [...prev.espacios, espacio],
+      navigation: selectSalaEspacioInNavigation(prev.navigation, espacio.id),
+      updatedAt: Date.now(),
+    }));
+  }, []);
+
   const updateEspacio = useCallback(
     (espacioId: string, patch: Partial<SalaEspacioDraft>) => {
       setDocument((prev) => ({
@@ -95,10 +118,12 @@ export function useSalaEditorDocument({
     document,
     disabledPhases,
     selectedEspacio,
+    elementCountByEspacioId,
     setPhase,
     selectEspacio,
     replaceEspacios,
     addEspacio,
+    addEspacioAndSelect,
     updateEspacio,
   };
 }

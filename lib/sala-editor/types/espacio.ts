@@ -3,6 +3,8 @@
  * Contrato canónico futuro; no sustituye aún `Zone` ni `FloorPlan` en Firestore.
  */
 
+import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
+
 export type SalaEspacioId = string;
 
 /** Metadatos de un espacio operativo (sala, terraza, VIP, piscina…). */
@@ -10,6 +12,8 @@ export type SalaEspacio = {
   id: SalaEspacioId;
   restaurantId: string;
   name: string;
+  /** Tipo semántico del espacio (UI y presets). */
+  tipo: SalaEspacioType;
   /** Color identificativo en listados y futuro mapa (hex). */
   color: string;
   /** Orden de presentación en navegación y pickers. */
@@ -30,7 +34,7 @@ export type SalaEspacio = {
 
 export type SalaEspacioDraft = Pick<
   SalaEspacio,
-  "name" | "color" | "sortOrder" | "visible" | "active"
+  "name" | "tipo" | "color" | "sortOrder" | "visible" | "active"
 >;
 
 export const DEFAULT_SALA_ESPACIO_COLOR = "#315f7d";
@@ -40,6 +44,7 @@ export function createDefaultSalaEspacioDraft(
 ): SalaEspacioDraft {
   return {
     name: "",
+    tipo: "sala",
     color: DEFAULT_SALA_ESPACIO_COLOR,
     sortOrder: 0,
     visible: true,

@@ -2,19 +2,16 @@
 
 import Link from "next/link";
 import { SalaEditorWorkspace } from "@/components/sala-editor/sala-editor-workspace";
-import { createPreviewEspaciosFromPresets } from "@/lib/sala-editor/preview/create-preview-espacios";
 import { ConfigModulePageHeader } from "../../_components/config-module-page-header";
 
 const PREVIEW_RESTAURANT_ID = "preview-local";
 
 export default function EditorSalaV2PreviewPage() {
-  const initialEspacios = createPreviewEspaciosFromPresets(PREVIEW_RESTAURANT_ID);
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6 lg:px-8">
       <ConfigModulePageHeader
         title="Editor Sala V2"
-        description="Preview del nuevo flujo por espacios. Sin persistencia ni sustitución del editor actual."
+        description="Gestor visual de espacios — preview local sin persistencia."
         secondaryActions={
           <Link
             href="/dashboard/configuracion/espacios/mesas"
@@ -26,10 +23,7 @@ export default function EditorSalaV2PreviewPage() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <SalaEditorWorkspace
-          restaurantId={PREVIEW_RESTAURANT_ID}
-          initialEspacios={initialEspacios}
-        />
+        <SalaEditorWorkspace restaurantId={PREVIEW_RESTAURANT_ID} />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@
 
 export * from "@/lib/sala-editor/types";
 export * from "@/lib/sala-editor/catalog/espacio-presets";
+export * from "@/lib/sala-editor/catalog/espacio-types";
 export * from "@/lib/sala-editor/catalog/structural-catalog";
 export * from "@/lib/sala-editor/catalog/operational-catalog";
 export * from "@/lib/sala-editor/adapters/legacy-adapters";
