@@ -45,7 +45,7 @@ export type UseSalaEditorDocumentOptions = {
 
 /**
  * Estado local del documento del editor de sala.
- * Sin Firestore ni sessionStorage — solo preview arquitectónico.
+ * La persistencia de borrador vive fuera del hook para no mezclar UI/OSE con Firestore.
  */
 export function useSalaEditorDocument({
   restaurantId,
@@ -65,6 +65,14 @@ export function useSalaEditorDocument({
     useState<ActiveOperationalElementSelection>(null);
   const [selectedOperationalElementInstanceId, setSelectedOperationalElementInstanceId] =
     useState<string | null>(null);
+
+  const replaceDocument = useCallback((nextDocument: SalaEditorDocument) => {
+    if (nextDocument.restaurantId !== restaurantId) return;
+    setDocument(nextDocument);
+    setActiveTool(null);
+    setActiveOperationalElement(null);
+    setSelectedOperationalElementInstanceId(null);
+  }, [restaurantId]);
 
   const disabledPhases = useMemo(
     () => getDisabledSalaEditorPhases(document.espacios, document.navigation),
@@ -417,6 +425,7 @@ export function useSalaEditorDocument({
 
   return {
     document,
+    replaceDocument,
     disabledPhases,
     selectedEspacio,
     elementCountByEspacioId,

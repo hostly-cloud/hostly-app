@@ -335,6 +335,26 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Editor Sala V2 — borrador del mapa operativo.
+      // El documento publicado queda reservado para una fase posterior.
+      match /salaEditorMaps/{mapState} {
+        allow read: if mapState == "draft"
+          && sameRestaurant(restaurantId);
+        allow create: if mapState == "draft"
+          && sameRestaurant(restaurantId)
+          && canManageSettings()
+          && request.resource.data.restaurantId == restaurantId
+          && request.resource.data.state == "draft";
+        allow update: if mapState == "draft"
+          && sameRestaurant(restaurantId)
+          && canManageSettings()
+          && resource.data.restaurantId == restaurantId
+          && resource.data.state == "draft"
+          && request.resource.data.restaurantId == restaurantId
+          && request.resource.data.state == "draft";
+        allow delete: if false;
+      }
+
       // Borradores de importación de carta (IA / OCR — sin publicar productos).
       match /menuImportDrafts/{draftId} {
         allow read: if sameRestaurant(restaurantId);

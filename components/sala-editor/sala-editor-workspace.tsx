@@ -16,6 +16,10 @@ import {
   getOperationalInstanceCanvasSize,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
+import {
+  loadSalaEditorDraft,
+  saveSalaEditorDraft,
+} from "@/lib/sala-editor/persistence/sala-editor-draft-store";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
 import { hasSalaEditorInspectorSelection } from "@/components/sala-editor/sala-editor-inspector-visibility";
 import {
@@ -29,6 +33,8 @@ export type SalaEditorWorkspaceProps = {
   restaurantId: string;
   initialEspacios?: SalaEspacio[];
   legacyEditorHref?: string;
+  currentUserId?: string | null;
+  draftPersistenceEnabled?: boolean;
 };
 
 /**
@@ -39,8 +45,13 @@ export function SalaEditorWorkspace({
   restaurantId,
   initialEspacios = [],
   legacyEditorHref,
+  currentUserId = null,
+  draftPersistenceEnabled = true,
 }: SalaEditorWorkspaceProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [draftReady, setDraftReady] = useState(!draftPersistenceEnabled);
+  const draftLoadSeqRef = useRef(0);
+  const lastDraftSignatureRef = useRef<string | null>(null);
 
   const {
     document,
@@ -54,6 +65,7 @@ export function SalaEditorWorkspace({
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,
     selectedOperationalElementInstance,
+    replaceDocument,
     selectTool,
     selectOperationalElement,
     placeOperationalElementAt,
@@ -72,6 +84,74 @@ export function SalaEditorWorkspace({
     restaurantId,
     initialEspacios,
   });
+  const initialLocalDocumentRef = useRef(document);
+
+  useEffect(() => {
+    if (!draftPersistenceEnabled) {
+      setDraftReady(true);
+      return;
+    }
+
+    const requestId = ++draftLoadSeqRef.current;
+    setDraftReady(false);
+
+    void (async () => {
+      try {
+        const draft = await loadSalaEditorDraft(restaurantId);
+        if (requestId !== draftLoadSeqRef.current) return;
+
+        if (draft) {
+          replaceDocument(draft.document);
+          lastDraftSignatureRef.current = JSON.stringify(draft.document);
+        } else {
+          lastDraftSignatureRef.current = JSON.stringify(
+            initialLocalDocumentRef.current,
+          );
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[SalaEditorV2] No se pudo cargar el borrador", error);
+        }
+        if (requestId !== draftLoadSeqRef.current) return;
+        lastDraftSignatureRef.current = JSON.stringify(
+          initialLocalDocumentRef.current,
+        );
+      } finally {
+        if (requestId === draftLoadSeqRef.current) {
+          setDraftReady(true);
+        }
+      }
+    })();
+  }, [draftPersistenceEnabled, replaceDocument, restaurantId]);
+
+  useEffect(() => {
+    if (!draftPersistenceEnabled || !draftReady) return;
+
+    const signature = JSON.stringify(document);
+    if (signature === lastDraftSignatureRef.current) return;
+
+    const timeout = window.setTimeout(() => {
+      void saveSalaEditorDraft(restaurantId, document, {
+        updatedBy: currentUserId,
+      })
+        .then(() => {
+          lastDraftSignatureRef.current = signature;
+        })
+        .catch((error) => {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("[SalaEditorV2] No se pudo guardar el borrador", error);
+          }
+        });
+    }, 900);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    currentUserId,
+    document,
+    draftPersistenceEnabled,
+    draftReady,
+    restaurantId,
+  ]);
 
   const operationalDragEnabled = document.navigation.phase === "operacion";
 
