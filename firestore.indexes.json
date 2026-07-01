@@ -18,13 +18,6 @@
       ]
     },
     {
-      "collectionGroup": "activityLogs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "restaurant_invites",
       "queryScope": "COLLECTION",
       "fields": [

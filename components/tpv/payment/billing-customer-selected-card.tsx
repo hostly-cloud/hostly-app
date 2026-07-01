@@ -5,6 +5,8 @@ import type { BillingCustomer } from "@/types/billing-customer";
 export type BillingCustomerSelectedCardProps = {
   customer: BillingCustomer;
   compact?: boolean;
+  /** Tarjeta mínima para cobro premium (solo Cambiar). */
+  minimal?: boolean;
   onChange: () => void;
   onClear: () => void;
 };
@@ -12,9 +14,36 @@ export type BillingCustomerSelectedCardProps = {
 export function BillingCustomerSelectedCard({
   customer,
   compact = false,
+  minimal = false,
   onChange,
   onClear,
 }: BillingCustomerSelectedCardProps) {
+  if (minimal) {
+    return (
+      <div className="rounded-xl border border-slate-200/90 bg-slate-50/90 px-2.5 py-2">
+        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+          Empresa
+        </div>
+        <div className="mt-0.5 text-sm font-bold text-slate-900 leading-snug">
+          {customer.companyName}
+        </div>
+        <div className="text-[11px] font-medium text-slate-600 tabular-nums">
+          {customer.taxId}
+        </div>
+        <div className="text-[11px] font-medium text-slate-600 truncate">
+          {customer.email}
+        </div>
+        <button
+          type="button"
+          className="hostly-payment-chip-btn mt-2 min-h-[40px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm touch-manipulation"
+          onClick={onChange}
+        >
+          Cambiar empresa
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       className={
@@ -46,14 +75,14 @@ export function BillingCustomerSelectedCard({
       <div className="flex flex-wrap gap-2 pt-0.5">
         <button
           type="button"
-          className="min-h-[36px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm active:bg-slate-50 touch-manipulation"
+          className="hostly-payment-chip-btn min-h-[36px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm touch-manipulation"
           onClick={onChange}
         >
           Cambiar empresa
         </button>
         <button
           type="button"
-          className="min-h-[36px] rounded-xl px-3 text-xs font-bold text-red-700 hover:bg-red-50 active:bg-red-100/80 touch-manipulation"
+          className="hostly-payment-chip-btn hostly-payment-chip-btn-danger min-h-[36px] rounded-xl border border-transparent px-3 text-xs font-bold text-red-700 touch-manipulation"
           onClick={onClear}
         >
           Eliminar selección

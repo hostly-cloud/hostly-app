@@ -38,6 +38,10 @@ export function NewBillingCustomerModal({
     setError(null);
     setIsSaving(false);
     onError?.(null);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -46,7 +50,7 @@ export function NewBillingCustomerModal({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, onError]);
+  }, [open, onClose]);
 
   const updateField = useCallback(
     <K extends keyof BillingCustomerInput>(key: K, value: BillingCustomerInput[K]) => {

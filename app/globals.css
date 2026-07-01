@@ -1377,6 +1377,202 @@ body {
   box-shadow: var(--hostly-focus-ring);
 }
 
+/* TPV Cobro modal — filas y acciones secundarias (hover/focus discretos) */
+.hostly-payment-dock-row {
+  cursor: pointer;
+  border-radius: 10px;
+  margin-inline: -4px;
+  padding-inline: 4px;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 150ms ease,
+    box-shadow 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-payment-dock-row:hover {
+  background: var(--hostly-accent-soft);
+}
+
+.hostly-payment-dock-row:active {
+  transform: scale(0.98);
+}
+
+.hostly-payment-dock-row:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-payment-dock-row-action {
+  color: #64748b;
+  transition: color 180ms ease;
+}
+
+.hostly-payment-dock-row:hover .hostly-payment-dock-row-action {
+  color: var(--hostly-accent);
+}
+
+.hostly-payment-billing-disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 16%, #e2e8f0);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: var(--hostly-shadow-hairline, 0 1px 0 rgba(15, 23, 42, 0.04));
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 150ms ease,
+    box-shadow 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-payment-billing-disclosure:hover {
+  background: var(--hostly-accent-soft);
+  border-color: color-mix(in srgb, var(--hostly-accent) 28%, #e2e8f0);
+}
+
+.hostly-payment-billing-disclosure:active {
+  transform: scale(0.98);
+}
+
+.hostly-payment-billing-disclosure:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-payment-billing-disclosure-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform 180ms ease, color 180ms ease;
+}
+
+.hostly-payment-billing-disclosure:hover .hostly-payment-billing-disclosure-chevron {
+  color: var(--hostly-accent);
+}
+
+.hostly-payment-billing-disclosure[aria-expanded="true"]
+  .hostly-payment-billing-disclosure-chevron {
+  transform: rotate(90deg);
+}
+
+.hostly-payment-text-action {
+  cursor: pointer;
+  border-radius: 10px;
+  color: var(--hostly-accent);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 150ms ease,
+    box-shadow 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-payment-text-action:hover {
+  background: var(--hostly-accent-soft);
+  color: #244d66;
+}
+
+.hostly-payment-text-action:active {
+  transform: scale(0.98);
+}
+
+.hostly-payment-text-action:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-payment-chip-btn {
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 150ms ease,
+    box-shadow 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-payment-chip-btn:hover {
+  background: var(--hostly-accent-soft);
+  border-color: color-mix(in srgb, var(--hostly-accent) 28%, #e2e8f0);
+  color: var(--hostly-accent);
+}
+
+.hostly-payment-chip-btn:active {
+  transform: scale(0.98);
+}
+
+.hostly-payment-chip-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-payment-list-item {
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    transform 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-payment-list-item:hover {
+  background: var(--hostly-accent-soft);
+}
+
+.hostly-payment-list-item:active {
+  transform: scale(0.98);
+}
+
+.hostly-payment-list-item:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-payment-primary-toggle {
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 150ms ease,
+    box-shadow 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hostly-payment-primary-toggle:hover {
+  background: color-mix(in srgb, var(--hostly-accent-soft) 72%, #eff6ff);
+  border-color: color-mix(in srgb, var(--hostly-accent) 32%, #bfdbfe);
+  color: var(--hostly-accent);
+}
+
+.hostly-payment-primary-toggle:active {
+  transform: scale(0.98);
+}
+
+.hostly-payment-primary-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.hostly-payment-chip-btn-danger:hover {
+  background: rgba(254, 226, 226, 0.85);
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
 .hostly-button-primary:disabled,
 .hostly-button-secondary:disabled,
 .hostly-button-ghost:disabled {

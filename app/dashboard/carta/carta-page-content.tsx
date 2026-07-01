@@ -30,6 +30,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useActiveOperator } from "@/components/tpv/active-operator-context";
 import { ActiveOperatorTopBarButton } from "@/components/tpv/active-operator-top-bar-button";
 import { PaymentBillingSection } from "@/components/tpv/payment/payment-billing-section";
+import { PaymentModalAdjustmentsSection } from "@/components/tpv/payment/payment-modal-adjustments-section";
 import { BillingInvoiceCompletionPanel } from "@/components/tpv/payment/billing-invoice-completion-panel";
 import { createBillingInvoiceFromPayment } from "@/lib/billing/create-billing-invoice-from-payment";
 import { mapTpvOrderLinesToBillingLines } from "@/lib/billing/map-tpv-order-lines-to-billing-lines";
@@ -763,6 +764,14 @@ function generateOrderLineId(): string {
     return crypto.randomUUID();
   }
   return `line-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+const TPV_PRE_ADD_QUANTITY_MAX = 99;
+
+function normalizeTpvPreAddQuantity(value: unknown): number {
+  const numeric = Math.floor(Number(value));
+  if (!Number.isFinite(numeric) || numeric < 1) return 1;
+  return Math.min(numeric, TPV_PRE_ADD_QUANTITY_MAX);
 }
 
 function normalizeOrderLineStatus(raw: unknown): OrderLineStatus {
@@ -2218,6 +2227,12 @@ export function CartaPageContent({
   /** Feedback visual al pulsar un tile de producto (TPV). */
   const [isAddingByProductId, setIsAddingByProductId] = useState<Record<string, number>>({});
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
+  const [preAddQuantity, setPreAddQuantity] = useState(1);
+  const [preAddQuantityInputActive, setPreAddQuantityInputActive] =
+    useState(false);
+  const [modifierModalPreAddQuantity, setModifierModalPreAddQuantity] =
+    useState(1);
+  const preAddQuantityRef = useRef(1);
   const activeProductTimeoutRef = useRef<number | null>(null);
   const addingTimeoutsRef = useRef<Record<string, number>>({});
   const lastClickAtByProductIdRef = useRef<Record<string, number>>({});
@@ -2277,6 +2292,10 @@ export function CartaPageContent({
     setWaiterFilter(readStoredMapWaiterFilter());
     setMyTablesMapScope(readStoredMapMyTablesScope());
   }, []);
+
+  useEffect(() => {
+    preAddQuantityRef.current = normalizeTpvPreAddQuantity(preAddQuantity);
+  }, [preAddQuantity]);
 
   useEffect(() => {
     try {
@@ -5233,10 +5252,12 @@ export function CartaPageContent({
         modifierTotal: number;
         displayName: string;
       },
+      requestedQuantity = 1,
     ) => {
+      const quantityToAdd = normalizeTpvPreAddQuantity(requestedQuantity);
       setIsAddingByProductId((prev) => ({
         ...prev,
-        [product.id]: (prev[product.id] ?? 0) + 1,
+        [product.id]: (prev[product.id] ?? 0) + quantityToAdd,
       }));
       const prevTimeout = addingTimeoutsRef.current[product.id];
       if (prevTimeout) window.clearTimeout(prevTimeout);
@@ -5279,7 +5300,7 @@ export function CartaPageContent({
           const touchedAt = Date.now();
           const bumped: CartOrderLine = {
             ...cur,
-            quantity: cur.quantity + 1,
+            quantity: cur.quantity + quantityToAdd,
             addedAt: touchedAt,
           };
           updated[existingIndex] = bumped;
@@ -5311,7 +5332,7 @@ export function CartaPageContent({
             stationFields,
             opFields,
           ),
-          quantity: 1,
+          quantity: quantityToAdd,
           status: pendingStatus,
           addedAt: Date.now(),
           createdAt: Date.now(),
@@ -5333,8 +5354,29 @@ export function CartaPageContent({
     [updateCurrentTableOrder, operationalShadowCatalogSources],
   );
 
+  const appendPreAddQuantityDigit = useCallback((digit: number) => {
+    if (!Number.isInteger(digit) || digit < 0 || digit > 9) return;
+    setPreAddQuantity((prev) => {
+      const base = preAddQuantityInputActive ? String(prev) : "";
+      const next = Number(`${base}${digit}`);
+      const normalized = normalizeTpvPreAddQuantity(next);
+      preAddQuantityRef.current = normalized;
+      return normalized;
+    });
+    if (digit > 0 || preAddQuantityInputActive) {
+      setPreAddQuantityInputActive(true);
+    }
+  }, [preAddQuantityInputActive]);
+
+  const clearPreAddQuantity = useCallback(() => {
+    preAddQuantityRef.current = 1;
+    setPreAddQuantity(1);
+    setPreAddQuantityInputActive(false);
+  }, []);
+
   const handleProductAddRequest = useCallback(
     (product: Product) => {
+      const quantityToAdd = normalizeTpvPreAddQuantity(preAddQuantityRef.current);
       const category = resolveCategoryForProduct(product, cartaCategories);
       const groups = resolveActiveEffectiveModifierGroups(
         product,
@@ -5342,9 +5384,13 @@ export function CartaPageContent({
         modifierGroups,
       );
       if (groups.length === 0) {
-        appendProductToOrder(product);
+        appendProductToOrder(product, undefined, quantityToAdd);
+        preAddQuantityRef.current = 1;
+        setPreAddQuantity(1);
+        setPreAddQuantityInputActive(false);
         return;
       }
+      setModifierModalPreAddQuantity(quantityToAdd);
       setModifierModalProduct(product);
       setModifierModalGroups(groups);
     },
@@ -12262,15 +12308,135 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   border-bottom: 1px solid rgba(226, 232, 240, 0.9);
 }
 
-.carta-cat-btn-active {
-  background: linear-gradient(
-    180deg,
-    rgba(239, 246, 255, 0.98) 0%,
-    rgba(224, 242, 254, 0.88) 100%
-  ) !important;
-  border-color: rgba(56, 189, 248, 0.38) !important;
-  color: #0f172a !important;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+.carta-cat-btn {
+  min-width: 84px;
+  min-height: 34px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.72);
+  background: rgba(248, 250, 252, 0.78);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.carta-cat-btn:hover {
+  background: var(--hostly-accent-soft);
+  border-color: color-mix(in srgb, var(--hostly-accent) 28%, #e2e8f0);
+  color: var(--hostly-accent);
+}
+
+.carta-cat-btn:active {
+  transform: scale(0.98);
+}
+
+.carta-cat-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.carta-cat-btn--active {
+  background: #ffffff;
+  border-color: color-mix(in srgb, var(--hostly-accent) 42%, #e2e8f0);
+  color: var(--hostly-accent);
+  box-shadow:
+    0 5px 14px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.carta-cat-btn--active:hover {
+  background: #ffffff;
+  border-color: color-mix(in srgb, var(--hostly-accent) 52%, #e2e8f0);
+  color: var(--hostly-accent);
+}
+
+.carta-tpv-preqty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 3px;
+  border-radius: 12px;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.carta-tpv-preqty__badge {
+  min-width: 58px;
+  padding: 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.carta-tpv-preqty__badge--active {
+  color: var(--hostly-accent);
+}
+
+.carta-tpv-preqty__keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.carta-tpv-preqty__key {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #475569;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 120ms ease,
+    box-shadow 150ms ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.carta-tpv-preqty__key:hover {
+  background: var(--hostly-accent-soft);
+  border-color: color-mix(in srgb, var(--hostly-accent) 26%, #e2e8f0);
+  color: var(--hostly-accent);
+}
+
+.carta-tpv-preqty__key:active {
+  transform: scale(0.98);
+}
+
+.carta-tpv-preqty__key:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring);
+}
+
+.carta-tpv-preqty__key--clear {
+  min-width: 34px;
+  color: #64748b;
 }
 
 .carta-current-cat-title {
@@ -13753,16 +13919,68 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 
 .carta-tpv-dock-cobrar,
 .carta-tpv-dock-pre-ticket {
+  width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-family: inherit;
+  line-height: 1.1;
+  cursor: pointer;
   touch-action: manipulation;
   transition:
-    filter 120ms ease,
-    transform 100ms ease,
-    box-shadow 120ms ease,
-    opacity 120ms ease;
+    background-color 170ms ease,
+    border-color 170ms ease,
+    color 170ms ease,
+    filter 140ms ease,
+    transform 120ms ease,
+    box-shadow 170ms ease,
+    opacity 140ms ease;
+}
+
+.carta-tpv-dock-pre-ticket {
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 18%, #cbd5e1);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: var(--hostly-accent);
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.carta-tpv-dock-cobrar {
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 26%, #0ea5e9);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 44%),
+    linear-gradient(180deg, #38bdf8 0%, #0ea5e9 48%, #0284c7 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow:
+    0 10px 24px rgba(14, 165, 233, 0.24),
+    0 2px 6px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .carta-tpv-dock-cobrar:hover:not(:disabled) {
-  filter: brightness(1.035) saturate(1.04);
+  filter: brightness(1.045) saturate(1.05);
+  box-shadow:
+    0 12px 28px rgba(14, 165, 233, 0.3),
+    0 3px 8px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26);
+}
+
+.carta-tpv-dock-pre-ticket:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--hostly-accent) 30%, #cbd5e1);
+  background: color-mix(in srgb, var(--hostly-accent-soft) 54%, #ffffff);
+  color: var(--hostly-accent);
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .carta-tpv-dock-cobrar:active:not(:disabled),
@@ -13776,6 +13994,14 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   box-shadow:
     0 0 0 3px rgba(56, 189, 248, 0.3),
     0 6px 18px rgba(14, 165, 233, 0.2) !important;
+}
+
+.carta-tpv-dock-cobrar:disabled,
+.carta-tpv-dock-pre-ticket:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+  filter: grayscale(0.12);
+  box-shadow: none;
 }
 
 /* Indicador global de unidades pendientes de enviar a cocina/barra.
@@ -15854,10 +16080,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   <button
                     type="button"
                     onClick={handlePrintPreTicket}
-                    className="carta-tpv-dock-pre-ticket w-full py-3 rounded-xl text-sm font-semibold transition border border-amber-200/80 bg-amber-50/90 text-amber-900 hover:bg-amber-100/95 active:bg-amber-100 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-                    style={{ minHeight: 44 }}
+                    className="carta-tpv-dock-pre-ticket"
                   >
-                    Pre-ticket
+                    <span aria-hidden>🧾</span>
+                    <span>Pre-ticket</span>
                   </button>
                 </div>
               </div>
@@ -15920,38 +16146,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           ? "No hay productos en la comanda"
                           : "Cobrar esta mesa",
                       )}
-                      style={{
-                        width: "100%",
-                        padding: "12px 14px",
-                        fontWeight: 900,
-                        fontSize: 14,
-                        cursor:
-                          isPayTableOrderSending ||
-                          order.length === 0 ||
-                          !restaurantId ||
-                          !isFirebaseConfigured ||
-                          !canCharge
-                            ? "not-allowed"
-                            : "pointer",
-                        borderRadius: 14,
-                        border: "1px solid rgba(56, 189, 248, 0.42)",
-                        background:
-                          "linear-gradient(180deg, #38bdf8 0%, #0ea5e9 48%, #0284c7 100%)",
-                        color: "#fff",
-                        boxShadow: "0 4px 16px rgba(14, 165, 233, 0.28)",
-                        opacity:
-                          isPayTableOrderSending ||
-                          order.length === 0 ||
-                          !restaurantId ||
-                          !isFirebaseConfigured ||
-                          !canCharge
-                            ? 0.55
-                            : 1,
-                        minHeight: 44,
-                        lineHeight: 1.1,
-                      }}
                     >
-                      {isPayTableOrderSending ? "…" : "💳 Cobrar"}
+                      {isPayTableOrderSending ? (
+                        "…"
+                      ) : (
+                        <>
+                          <span aria-hidden>💳</span>
+                          <span>Cobrar</span>
+                        </>
+                      )}
                     </button>
                   ) : null}
                 </div>
@@ -16321,56 +16524,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         };
 
                         const keypadTouchClass =
-                          "min-h-[58px] rounded-[20px] border border-slate-100 bg-white text-2xl font-extrabold text-slate-950 shadow-[0_8px_20px_rgba(15,23,42,0.06)] active:scale-[0.985] active:bg-slate-50 touch-manipulation select-none transition";
+                          "min-h-[44px] rounded-[16px] border border-slate-100 bg-white text-xl font-extrabold text-slate-950 shadow-[0_4px_12px_rgba(15,23,42,0.05)] active:scale-[0.985] active:bg-slate-50 touch-manipulation select-none transition";
 
                         const inputMoneyClass =
-                          "w-full min-h-[56px] border border-slate-200 rounded-[20px] px-4 text-center text-2xl font-black tracking-tight text-slate-950 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.06)] touch-manipulation outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10";
-
-                        const cashPaymentHint =
-                          paymentMethod === "cash" &&
-                          cashParsedNum <= MONEY_EPS
-                            ? "Introduce el importe recibido en efectivo."
-                            : null;
+                          "w-full min-h-[44px] border border-slate-200 rounded-[16px] px-3 text-center text-xl font-black tracking-tight text-slate-950 bg-white shadow-[0_6px_16px_rgba(15,23,42,0.05)] touch-manipulation outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10";
 
                         return (
                           <>
-                            <div className="flex-1 min-h-0 overflow-visible space-y-2 pb-2 pr-0.5">
-                            {sessionPaymentHistory.length > 0 ? (
-                              <div className="rounded-[22px] border border-slate-200 bg-white p-3 space-y-2 shadow-sm">
-                                <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                                  Pagos realizados
-                                </div>
-                                <ul className="space-y-2 max-h-32 overflow-y-auto overscroll-contain pr-0.5">
-                                  {sessionPaymentHistory.map((row) => (
-                                    <li
-                                      key={row.id}
-                                      className="flex items-baseline justify-between gap-3 text-base font-semibold text-slate-800"
-                                    >
-                                      <span className="min-w-0 leading-snug">
-                                        <span className="tabular-nums">
-                                          {formatTpveurEs(row.amount)}
-                                        </span>{" "}
-                                        <span className="text-sm font-medium text-slate-500 normal-case">
-                                          {paymentMethodLabelEs(row.method)}
-                                        </span>
-                                      </span>
-                                      {row.createdAt != null ? (
-                                        <span className="shrink-0 text-sm font-medium text-slate-400 tabular-nums">
-                                          {new Date(
-                                            row.createdAt,
-                                          ).toLocaleTimeString("es-ES", {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })}
-                                        </span>
-                                      ) : null}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-
-                            <div className="rounded-[24px] border border-slate-200 bg-white p-3 space-y-2 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 pb-1 pr-0.5">
+                            <div className="rounded-[20px] border border-slate-200 bg-white p-2.5 space-y-1.5 shadow-[0_12px_32px_rgba(15,23,42,0.07)]">
                               {sessionTableAmountPaidSum > MONEY_EPS ? (
                                 <div className="flex justify-between gap-2 text-sm font-semibold text-slate-500">
                                   <span>Total cuenta</span>
@@ -16379,30 +16541,30 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   </span>
                                 </div>
                               ) : null}
-                              <div className="space-y-1 text-center">
-                                <div className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
+                              <div className="space-y-0.5 text-center">
+                                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                                   Pendiente
                                 </div>
-                                <div className="text-5xl sm:text-6xl font-black tabular-nums leading-none tracking-[-0.06em] text-slate-950">
+                                <div className="text-4xl font-black tabular-nums leading-none tracking-[-0.05em] text-slate-950">
                                   {formatTpveurEs(remainingDue)}
                                 </div>
                               </div>
                               {!isZeroAccountClose ? (
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
-                                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <div className="rounded-xl border border-slate-100 bg-slate-50 px-2 py-1.5 text-center">
+                                  <div className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">
                                     Recibido
                                   </div>
-                                  <div className="mt-0.5 text-xl font-black tabular-nums leading-none text-slate-800">
+                                  <div className="mt-0.5 text-lg font-black tabular-nums leading-none text-slate-800">
                                     {formatTpveurEs(receivedDisplay)}
                                   </div>
                                 </div>
-                                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
-                                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                                <div className="rounded-xl border border-slate-100 bg-slate-50 px-2 py-1.5 text-center">
+                                  <div className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">
                                     {paymentMethod === "card" ? "Propina" : "Cambio"}
                                   </div>
                                   <div
-                                    className={`mt-0.5 text-xl font-black tabular-nums leading-none ${
+                                    className={`mt-0.5 text-lg font-black tabular-nums leading-none ${
                                       (paymentMethod === "card"
                                         ? tipRaw
                                         : changeDisplay) > MONEY_EPS
@@ -16428,10 +16590,10 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               </p>
                             ) : (
                               <>
-                            <div className="grid grid-cols-3 gap-1.5 rounded-[22px] bg-slate-100 p-1.5 shadow-inner">
+                            <div className="grid grid-cols-3 gap-1 rounded-[18px] bg-slate-100 p-1 shadow-inner">
                               <button
                                 type="button"
-                                className={`min-h-[48px] rounded-[17px] text-base font-black touch-manipulation select-none transition ${
+                                className={`min-h-[40px] rounded-[14px] text-sm font-black touch-manipulation select-none transition ${
                                   paymentMethod === "cash"
                                     ? "bg-white text-blue-700 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-white"
                                     : "text-slate-500 active:bg-white/70"
@@ -16453,7 +16615,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               </button>
                               <button
                                 type="button"
-                                className={`min-h-[48px] rounded-[17px] text-base font-black touch-manipulation select-none transition ${
+                                className={`min-h-[40px] rounded-[14px] text-sm font-black touch-manipulation select-none transition ${
                                   paymentMethod === "card"
                                     ? "bg-white text-blue-700 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-white"
                                     : "text-slate-500 active:bg-white/70"
@@ -16475,7 +16637,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               </button>
                               <button
                                 type="button"
-                                className={`min-h-[48px] rounded-[17px] text-base font-black touch-manipulation select-none transition ${
+                                className={`min-h-[40px] rounded-[14px] text-sm font-black touch-manipulation select-none transition ${
                                   paymentMethod === "voucher"
                                     ? "bg-white text-blue-700 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-white"
                                     : "text-slate-500 active:bg-white/70"
@@ -16530,7 +16692,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   onChange={(e) =>
                                     setVoucherNumber(e.target.value)
                                   }
-                                  className="w-full min-h-[56px] border border-slate-200 rounded-[20px] px-4 text-lg font-semibold bg-white shadow-sm touch-manipulation outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                                  className="w-full min-h-[44px] border border-slate-200 rounded-[16px] px-3 text-base font-semibold bg-white shadow-sm touch-manipulation outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                                 />
                                 {voucherLookupBalance != null ? (
                                   <div className="col-span-2 text-sm font-medium text-slate-600">
@@ -16587,7 +16749,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                             {paymentMethod === "cash" ||
                             paymentMethod === "card" ||
                             paymentMethod === "voucher" ? (
-                              <div className="grid grid-cols-4 gap-2 pt-0.5">
+                              <div className="grid grid-cols-4 gap-1.5 pt-0.5">
                                 {(
                                   [
                                     "1",
@@ -16673,75 +16835,34 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               </>
                             )}
 
-                            <div className="rounded-[20px] border border-slate-200 bg-slate-50/80 p-2 space-y-2">
-                              <div className="text-[11px] font-black text-slate-400 uppercase tracking-[0.18em]">
-                                Ajustes
-                              </div>
+                            <PaymentBillingSection
+                              variant="dock"
+                              restaurantId={operationalRestaurantId}
+                              selectedCustomer={selectedBillingCustomer}
+                              onSelectedCustomerChange={setSelectedBillingCustomer}
+                            />
 
-                              <div className="grid grid-cols-2 gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="Invitación (€)"
-                                  value={discountAmount}
-                                  onChange={(e) =>
-                                    setDiscountAmount(e.target.value)
-                                  }
-                                  className="min-h-[40px] border border-slate-200 rounded-2xl px-3 text-sm bg-white shadow-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="Descuento (%)"
-                                  value={discountPercent}
-                                  onChange={(e) =>
-                                    setDiscountPercent(e.target.value)
-                                  }
-                                  className="min-h-[40px] border border-slate-200 rounded-2xl px-3 text-sm bg-white shadow-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                                />
-                              </div>
-
-                              <PaymentBillingSection
-                                variant="compact"
-                                restaurantId={operationalRestaurantId}
-                                selectedCustomer={selectedBillingCustomer}
-                                onSelectedCustomerChange={setSelectedBillingCustomer}
-                              />
-
-                              <div className="grid grid-cols-2 gap-2">
-                                <button
-                                  type="button"
-                                  className="min-h-[42px] rounded-2xl text-sm font-bold bg-white text-slate-700 border border-slate-200 shadow-sm active:bg-slate-50 touch-manipulation"
-                                  onClick={handlePrintPreTicket}
-                                >
-                                  Pre-ticket
-                                </button>
-                                <button
-                                  type="button"
-                                  className="min-h-[42px] rounded-2xl text-sm font-bold bg-white text-slate-700 border border-slate-200 shadow-sm active:bg-slate-50 touch-manipulation"
-                                  onClick={() => {
-                                    setIsSplitMode(true);
-                                    setIsSplitEqualMode(false);
-                                    setSplitCount(2);
-                                    setCurrentSplitIndex(1);
-                                  }}
-                                >
-                                  Dividir cuenta
-                                </button>
-                              </div>
-
-                            </div>
+                            <PaymentModalAdjustmentsSection
+                              discountAmount={discountAmount}
+                              discountPercent={discountPercent}
+                              onDiscountAmountChange={setDiscountAmount}
+                              onDiscountPercentChange={setDiscountPercent}
+                              onPrintPreTicket={handlePrintPreTicket}
+                              onSplitAccount={() => {
+                                setIsSplitMode(true);
+                                setIsSplitEqualMode(false);
+                                setSplitCount(2);
+                                setCurrentSplitIndex(1);
+                              }}
+                            />
                             </div>
 
-                            <div className="sticky bottom-0 -mx-3 sm:-mx-4 shrink-0 border-t border-slate-200/80 bg-white/95 px-3 sm:px-4 pt-2 pb-3 space-y-1.5 shadow-[0_-18px_38px_rgba(15,23,42,0.08)] backdrop-blur">
-                              {cashPaymentHint ? (
-                                <p className="text-sm font-medium text-amber-700 text-center px-1">
-                                  {cashPaymentHint}
-                                </p>
-                              ) : null}
+                            <div className="sticky bottom-0 -mx-3 sm:-mx-4 shrink-0 border-t border-slate-200/80 bg-white/95 px-3 sm:px-4 pt-1.5 pb-2.5 space-y-1 shadow-[0_-12px_28px_rgba(15,23,42,0.08)] backdrop-blur">
                               {isZeroAccountClose ? (
                                 <button
                                   type="button"
                                   disabled={isConfirmingPayment || !canCharge}
-                                  className="w-full min-h-[58px] rounded-[20px] text-lg font-black shadow-[0_16px_32px_rgba(37,99,235,0.24)] touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                  className="w-full min-h-[52px] rounded-[18px] text-base font-black shadow-[0_12px_24px_rgba(37,99,235,0.22)] touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
                                   style={{
                                     background:
                                       isConfirmingPayment || !canCharge
@@ -16774,7 +16895,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   isConfirmingPayment ||
                                   !canCharge
                                 }
-                                className="w-full min-h-[58px] rounded-[20px] text-lg font-black shadow-[0_16px_32px_rgba(37,99,235,0.24)] touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="w-full min-h-[52px] rounded-[18px] text-base font-black shadow-[0_12px_24px_rgba(37,99,235,0.22)] touch-manipulation select-none disabled:opacity-60 disabled:cursor-not-allowed"
                                 style={{
                                   background:
                                     paymentMethod === null ||
@@ -18307,6 +18428,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                       !showProductsSpinner &&
                       !catalogLoadError &&
                       products.length > 0 ? (
+                      <>
                       <div
                         role="tablist"
                         aria-label={t("cartaTpv.menuGroupAria")}
@@ -18360,6 +18482,45 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         );
                       })}
                     </div>
+                    <div
+                      className="carta-tpv-preqty"
+                      aria-label="Cantidad previa para añadir producto"
+                    >
+                      <div
+                        className={`carta-tpv-preqty__badge${
+                          preAddQuantity > 1
+                            ? " carta-tpv-preqty__badge--active"
+                            : ""
+                        }`}
+                        aria-live="polite"
+                      >
+                        {preAddQuantity > 1
+                          ? `x${preAddQuantity} activo`
+                          : "x1"}
+                      </div>
+                      <div className="carta-tpv-preqty__keys">
+                        {([1, 2, 3, 4, 5, 6, 7, 8, 9, 0] as const).map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            className="carta-tpv-preqty__key"
+                            onClick={() => appendPreAddQuantityDigit(n)}
+                            aria-label={`Cantidad ${n}`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="carta-tpv-preqty__key carta-tpv-preqty__key--clear"
+                          onClick={clearPreAddQuantity}
+                          aria-label="Borrar cantidad previa"
+                        >
+                          C
+                        </button>
+                      </div>
+                    </div>
+                    </>
                       ) : (
                         <div className="min-w-0 flex-1" aria-hidden />
                       )}
@@ -18389,26 +18550,9 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           key={name}
                           type="button"
                           onClick={() => setSelectedCategory(name)}
-                          className={isSelected ? "carta-cat-btn-active" : undefined}
-                          style={{
-                            minWidth: 84,
-                            padding: "8px 12px",
-                            borderRadius: 999,
-                            border: "1px solid rgba(226, 232, 240, 0.95)",
-                            background: isSelected
-                              ? "linear-gradient(180deg, rgba(239, 246, 255, 0.98) 0%, rgba(224, 242, 254, 0.82) 100%)"
-                              : "rgba(255, 255, 255, 0.65)",
-                            color: isSelected ? "#0f172a" : "#64748b",
-                            fontSize: 12,
-                            fontWeight: 800,
-                            cursor: "pointer",
-                            boxSizing: "border-box",
-                            lineHeight: 1.1,
-                            minHeight: 34,
-                            boxShadow: isSelected
-                              ? "0 1px 3px rgba(15, 23, 42, 0.05)"
-                              : "none",
-                          }}
+                          className={`carta-cat-btn${
+                            isSelected ? " carta-cat-btn--active" : ""
+                          }`}
                         >
                           {name}
                         </button>
@@ -18696,7 +18840,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                         className="hostly-tpv-inline-plus-one"
                                         aria-hidden="true"
                                       >
-                                        +1
+                                        +{isAddingByProductId[product.id]}
                                       </span>
                                     ) : null}
                                     {qty > 0 ? (
@@ -18812,7 +18956,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
             setModifierModalGroups([]);
           }}
           onConfirm={(payload) => {
-            appendProductToOrder(modifierModalProduct, payload);
+            appendProductToOrder(
+              modifierModalProduct,
+              payload,
+              modifierModalPreAddQuantity,
+            );
+            preAddQuantityRef.current = 1;
+            setPreAddQuantity(1);
+            setPreAddQuantityInputActive(false);
+            setModifierModalPreAddQuantity(1);
             setModifierModalProduct(null);
             setModifierModalGroups([]);
           }}
