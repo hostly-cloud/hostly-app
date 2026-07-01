@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import { createEmptySalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
-import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
+import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import {
   getDisabledSalaEditorPhases,
   navigateSalaEditorPhase,
@@ -18,7 +18,7 @@ export type UseSalaEditorDocumentOptions = {
 
 /**
  * Estado local del documento del editor de sala.
- * Sin Firestore ni sessionStorage — solo preparación arquitectónica.
+ * Sin Firestore ni sessionStorage — solo preview arquitectónico.
  */
 export function useSalaEditorDocument({
   restaurantId,
@@ -27,6 +27,10 @@ export function useSalaEditorDocument({
   const [document, setDocument] = useState<SalaEditorDocument>(() => ({
     ...createEmptySalaEditorDocument(restaurantId),
     espacios: initialEspacios,
+    navigation: {
+      phase: "espacios",
+      selectedEspacioId: initialEspacios[0]?.id ?? null,
+    },
   }));
 
   const disabledPhases = useMemo(
@@ -66,6 +70,27 @@ export function useSalaEditorDocument({
     }));
   }, []);
 
+  const addEspacio = useCallback((espacio: SalaEspacio) => {
+    setDocument((prev) => ({
+      ...prev,
+      espacios: [...prev.espacios, espacio],
+      updatedAt: Date.now(),
+    }));
+  }, []);
+
+  const updateEspacio = useCallback(
+    (espacioId: string, patch: Partial<SalaEspacioDraft>) => {
+      setDocument((prev) => ({
+        ...prev,
+        espacios: prev.espacios.map((espacio) =>
+          espacio.id === espacioId ? { ...espacio, ...patch } : espacio,
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    [],
+  );
+
   return {
     document,
     disabledPhases,
@@ -73,5 +98,7 @@ export function useSalaEditorDocument({
     setPhase,
     selectEspacio,
     replaceEspacios,
+    addEspacio,
+    updateEspacio,
   };
 }

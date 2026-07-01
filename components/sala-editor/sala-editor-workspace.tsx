@@ -1,112 +1,113 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
-import { createEmptySalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
-import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
+import { useCallback, useMemo } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
+import type { SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import {
-  getDisabledSalaEditorPhases,
-  navigateSalaEditorPhase,
-  selectSalaEspacioInNavigation,
-} from "@/lib/sala-editor/navigation/editor-phase-routing";
+  createLocalEspacioFromPreset,
+  nextAvailableEspacioPresetKey,
+} from "@/lib/sala-editor/preview/create-preview-espacios";
+import { useSalaEditorDocument } from "@/hooks/useSalaEditorDocument";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
 import {
-  SalaEspaciosPhasePanel,
-  SalaEstructuraPhasePanel,
-  SalaOperacionPhasePanel,
-} from "@/components/sala-editor/phases";
+  SalaEditorLeftPanel,
+  SalaEditorInspectorPanel,
+  SalaEditorWorkspaceCanvas,
+} from "@/components/sala-editor/panels";
 
 export type SalaEditorWorkspaceProps = {
   restaurantId: string;
-  /** Espacios iniciales (p. ej. desde adaptadores legacy). */
   initialEspacios?: SalaEspacio[];
 };
 
 /**
- * Workspace scaffold del editor de sala.
- * Estado 100 % local; no montado en rutas de producción todavía.
+ * Workspace del editor de sala V2.
+ * Estado 100 % local; preview de navegación y paneles.
  */
 export function SalaEditorWorkspace({
   restaurantId,
   initialEspacios = [],
 }: SalaEditorWorkspaceProps) {
-  const [document, setDocument] = useState<SalaEditorDocument>(() => ({
-    ...createEmptySalaEditorDocument(restaurantId),
-    espacios: initialEspacios,
-  }));
+  const {
+    document,
+    disabledPhases,
+    selectedEspacio,
+    setPhase,
+    selectEspacio,
+    addEspacio,
+    updateEspacio,
+  } = useSalaEditorDocument({
+    restaurantId,
+    initialEspacios,
+  });
 
-  const disabledPhases = useMemo(
-    () => getDisabledSalaEditorPhases(document.espacios, document.navigation),
-    [document.espacios, document.navigation],
+  const canAddEspacio = useMemo(
+    () => nextAvailableEspacioPresetKey(document.espacios.map((e) => e.name)) != null,
+    [document.espacios],
   );
 
-  const selectedEspacio = useMemo(
-    () =>
-      document.espacios.find(
-        (e) => e.id === document.navigation.selectedEspacioId,
-      ) ?? null,
-    [document.espacios, document.navigation.selectedEspacioId],
-  );
+  const handleAddEspacio = useCallback(() => {
+    const key = nextAvailableEspacioPresetKey(document.espacios.map((e) => e.name));
+    if (!key) return;
+    const created = createLocalEspacioFromPreset(
+      document.restaurantId,
+      key,
+      document.espacios.map((e) => e.name),
+    );
+    if (!created) return;
+    addEspacio(created);
+    selectEspacio(created.id);
+  }, [addEspacio, document.espacios, document.restaurantId, selectEspacio]);
 
-  const handlePhaseChange = useCallback(
-    (phase: SalaEditorPhase) => {
-      setDocument((prev) => ({
-        ...prev,
-        navigation: navigateSalaEditorPhase(
-          prev.navigation,
-          phase,
-          prev.espacios,
-        ),
-        updatedAt: Date.now(),
-      }));
+  const handleUpdateEspacio = useCallback(
+    (patch: Partial<SalaEspacioDraft>) => {
+      if (!selectedEspacio) return;
+      updateEspacio(selectedEspacio.id, patch);
     },
-    [],
+    [selectedEspacio, updateEspacio],
   );
 
-  const handleSelectEspacio = useCallback((espacioId: string) => {
-    setDocument((prev) => ({
-      ...prev,
-      navigation: selectSalaEspacioInNavigation(prev.navigation, espacioId),
-      updatedAt: Date.now(),
-    }));
-  }, []);
-
-  const phasePanel = (() => {
-    switch (document.navigation.phase) {
-      case "espacios":
-        return (
-          <SalaEspaciosPhasePanel
-            espacios={document.espacios}
-            selectedEspacioId={document.navigation.selectedEspacioId}
-            onSelectEspacio={handleSelectEspacio}
-          />
-        );
-      case "estructura":
-        return (
-          <SalaEstructuraPhasePanel espacioName={selectedEspacio?.name ?? null} />
-        );
-      case "operacion":
-        return (
-          <SalaOperacionPhasePanel espacioName={selectedEspacio?.name ?? null} />
-        );
-      default:
-        return null;
-    }
-  })();
+  const handleSelectEspacio = useCallback(
+    (espacioId: string) => {
+      selectEspacio(espacioId);
+    },
+    [selectEspacio],
+  );
 
   return (
     <SalaEditorShell
       navigation={document.navigation}
       disabledPhases={disabledPhases}
       espaciosCount={document.espacios.length}
-      onPhaseChange={handlePhaseChange}
-    >
-      {phasePanel}
-    </SalaEditorShell>
+      onPhaseChange={setPhase}
+      leftPanel={
+        <SalaEditorLeftPanel
+          phase={document.navigation.phase}
+          espacios={document.espacios}
+          selectedEspacioId={document.navigation.selectedEspacioId}
+          onSelectEspacio={handleSelectEspacio}
+          onAddEspacio={handleAddEspacio}
+          canAddEspacio={canAddEspacio}
+        />
+      }
+      workspace={
+        <SalaEditorWorkspaceCanvas
+          phase={document.navigation.phase}
+          espacioName={selectedEspacio?.name ?? null}
+        />
+      }
+      inspector={
+        <SalaEditorInspectorPanel
+          phase={document.navigation.phase}
+          espacio={selectedEspacio}
+          onUpdateEspacio={handleUpdateEspacio}
+        />
+      }
+    />
   );
 }
 
 export { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
 export { SalaEditorPhaseNav } from "@/components/sala-editor/sala-editor-phase-nav";
 export * from "@/components/sala-editor/phases";
+export * from "@/components/sala-editor/panels";

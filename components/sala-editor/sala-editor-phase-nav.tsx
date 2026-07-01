@@ -45,7 +45,7 @@ export function SalaEditorPhaseNav({
             ].join(" ")}
           >
             <span className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
-              Fase {index + 1}
+              {index + 1 === 1 ? "①" : index + 1 === 2 ? "②" : "③"}
             </span>
             <span className="text-sm font-extrabold leading-tight">
               {SALA_EDITOR_PHASE_LABELS[item]}

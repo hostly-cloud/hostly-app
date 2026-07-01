@@ -12,3 +12,4 @@ export * from "@/lib/sala-editor/catalog/structural-catalog";
 export * from "@/lib/sala-editor/catalog/operational-catalog";
 export * from "@/lib/sala-editor/adapters/legacy-adapters";
 export * from "@/lib/sala-editor/navigation/editor-phase-routing";
+export * from "@/lib/sala-editor/preview/create-preview-espacios";
