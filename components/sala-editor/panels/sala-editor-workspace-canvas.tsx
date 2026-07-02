@@ -15,7 +15,6 @@ import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operation
 import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import type { WallPointerPayload } from "@/lib/sala-editor/canvas/wall-interaction";
-import type { WallSnapGuide } from "@/lib/sala-editor/canvas/wall-snap";
 import type { OperationalSnapGuides } from "@/lib/sala-editor/canvas/operational-snap";
 import {
   createSpaceWorkspaceScope,
@@ -32,15 +31,10 @@ export type SalaEditorWorkspaceCanvasProps = {
   walls?: SalaWallSegment[];
   wallDraft?: SalaWallDrawingDraft | null;
   selectedWallId?: string | null;
-  draggingWallId?: string | null;
-  resizingWallId?: string | null;
-  wallSnapGuide?: WallSnapGuide | null;
   onWallPointerDown?: (payload: WallPointerPayload) => void;
   onWallPointerMove?: (payload: WallPointerPayload) => void;
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
-  onWallDuplicate?: (wallId: string) => void;
-  onWallDelete?: (wallId: string) => void;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
   operationalElementInstances?: OperationalElementInstance[];
   selectedOperationalElementInstanceId?: string | null;
@@ -84,15 +78,10 @@ export function SalaEditorWorkspaceCanvas({
   walls = [],
   wallDraft = null,
   selectedWallId = null,
-  draggingWallId = null,
-  resizingWallId = null,
-  wallSnapGuide = null,
   onWallPointerDown,
   onWallPointerMove,
   onWallPointerUp,
   onWallPointerCancel,
-  onWallDuplicate,
-  onWallDelete,
   activeOperationalCatalogItem = null,
   operationalElementInstances = [],
   selectedOperationalElementInstanceId = null,
@@ -160,15 +149,10 @@ export function SalaEditorWorkspaceCanvas({
           walls={walls}
           wallDraft={wallDraft}
           selectedWallId={selectedWallId}
-          draggingWallId={draggingWallId}
-          resizingWallId={resizingWallId}
-          wallSnapGuide={wallSnapGuide}
           onWallPointerDown={onWallPointerDown}
           onWallPointerMove={onWallPointerMove}
           onWallPointerUp={onWallPointerUp}
           onWallPointerCancel={onWallPointerCancel}
-          onWallDuplicate={onWallDuplicate}
-          onWallDelete={onWallDelete}
         />
       </div>
     );

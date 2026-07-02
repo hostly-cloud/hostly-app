@@ -2897,72 +2897,14 @@
   opacity: 0.7;
 }
 
-/* ─── Structure Engine Pass 2 · Editable walls ─── */
+/* ─── Structure · Pass 1 · Wall draw tool ─── */
 
-.hostly-sala-wall-selection-anchor {
+.hostly-sala-wall--selected line {
+  filter: drop-shadow(0 1px 4px rgba(49, 95, 125, 0.18));
+}
+
+.hostly-sala-wall-draft line {
   pointer-events: none;
-  position: absolute;
-  z-index: 34;
-  width: 0;
-  height: 0;
-  transform: translate(-50%, -50%);
-}
-
-.hostly-sala-wall-selection-anchor .hostly-sala-canvas-toolbar {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateX(-50%) translateY(-34px);
-}
-
-.hostly-sala-wall-selection-anchor.is-editing .hostly-sala-canvas-toolbar {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.hostly-sala-wall-endpoint-handle {
-  position: absolute;
-  z-index: 36;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--hostly-accent, #315f7d);
-  border-radius: 999px;
-  background: #fff;
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 14%, transparent),
-    0 2px 8px rgba(15, 23, 42, 0.12);
-  cursor: grab;
-  touch-action: none;
-  transform: translate(-50%, -50%);
-}
-
-.hostly-sala-wall-endpoint-handle::before {
-  content: "";
-  position: absolute;
-  inset: -14px;
-}
-
-.hostly-sala-wall-endpoint-handle:active {
-  cursor: grabbing;
-}
-
-.hostly-sala-wall-snap-guide line {
-  stroke: color-mix(in srgb, var(--hostly-accent, #315f7d) 42%, #94a3b8);
-  stroke-width: 1.5;
-  stroke-dasharray: 5 5;
-  stroke-linecap: round;
-  opacity: 0.72;
-}
-
-.hostly-sala-wall-snap-guide circle {
-  fill: color-mix(in srgb, var(--hostly-accent, #315f7d) 16%, white);
-  stroke: var(--hostly-accent, #315f7d);
-  stroke-width: 1.5;
-}
-
-.hostly-sala-wall--editing line {
-  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.12));
 }
 
 /* Base phase — configuration panel */

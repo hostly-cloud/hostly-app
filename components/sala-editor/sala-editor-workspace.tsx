@@ -19,7 +19,6 @@ import {
   getOperationalInstanceCanvasSize,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
-import type { WallEditMode } from "@/lib/sala-editor/canvas/wall-interaction";
 import {
   EMPTY_OPERATIONAL_SNAP_GUIDES,
   snapOperationalCenterPosition,
@@ -31,6 +30,7 @@ import {
   saveSalaEditorDraft,
 } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
 import { loadLegacySalaEditorDocument } from "@/lib/sala-editor/adapters/legacy-adapters";
+import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
 import { hasSalaEditorInspectorSelection } from "@/components/sala-editor/sala-editor-inspector-visibility";
 import {
@@ -104,9 +104,6 @@ export function SalaEditorWorkspace({
     updateEspacio,
     updateEspacioBase,
     addWall,
-    updateWall,
-    removeWall,
-    duplicateWall,
   } = useSalaEditorDocument({
     restaurantId,
     initialEspacios,
@@ -400,35 +397,16 @@ export function SalaEditorWorkspace({
     document.navigation.phase === "estructura" &&
     activeStructuralToolKind === "wall";
 
-  const handleWallEditSessionStart = useCallback(() => {
-    historyApi.beginTransaction(documentSnapshotRef.current!);
-  }, [historyApi]);
-
-  const handleWallEditSessionEnd = useCallback(
-    (mode: WallEditMode, outcome: "complete" | "cancel") => {
-      if (outcome === "complete") {
-        historyApi.commitTransaction(
-          mode === "move" ? "wall.move" : "wall.resize",
-          documentSnapshotRef.current!,
-        );
-        return;
-      }
-
-      historyApi.discardTransaction();
-    },
-    [historyApi],
-  );
+  const wallGridSize = selectedEspacio
+    ? normalizeSalaEspacioBase(selectedEspacio.base).grid.size
+    : 16;
 
   const {
     wallsInEspacio,
     draft: wallDraft,
-    draggingWallId,
-    resizingWallId,
-    snapGuide: wallSnapGuide,
     selectedWallId,
     selectedWall,
-    selectWall,
-    cancelEditing: cancelWallEditing,
+    cancelDrawing: cancelWallDrawing,
     handlePointerDown: handleWallPointerDown,
     handlePointerMove: handleWallPointerMove,
     handlePointerUp: handleWallPointerUp,
@@ -437,29 +415,9 @@ export function SalaEditorWorkspace({
     espacioId: selectedEspacio?.id ?? null,
     walls: document.walls,
     enabled: wallDrawingEnabled,
+    gridSize: wallGridSize,
     onAddWall: addWall,
-    onUpdateWall: updateWall,
-    onEditSessionStart: handleWallEditSessionStart,
-    onEditSessionEnd: handleWallEditSessionEnd,
   });
-
-  const handleDuplicateWall = useCallback(
-    (wallId: string) => {
-      const duplicateId = duplicateWall(wallId);
-      if (duplicateId) {
-        selectWall(duplicateId);
-      }
-    },
-    [duplicateWall, selectWall],
-  );
-
-  const handleDeleteWall = useCallback(
-    (wallId: string) => {
-      removeWall(wallId);
-      selectWall(null);
-    },
-    [removeWall, selectWall],
-  );
 
   const handleCreateEspacio = useCallback(
     (payload: { name: string; tipo: SalaEspacioType; color: string }) => {
@@ -500,7 +458,7 @@ export function SalaEditorWorkspace({
     ) {
       cancelDragging();
       cancelResize();
-      cancelWallEditing();
+      cancelWallDrawing();
       clearOperationalSnapGuides();
       historyApi.discardTransaction();
     }
@@ -508,7 +466,7 @@ export function SalaEditorWorkspace({
   }, [
     cancelDragging,
     cancelResize,
-    cancelWallEditing,
+    cancelWallDrawing,
     clearOperationalSnapGuides,
     historyApi,
     selectedEspacio?.id,
@@ -521,7 +479,7 @@ export function SalaEditorWorkspace({
   const handleUndo = useCallback(() => {
     cancelDragging();
     cancelResize();
-    cancelWallEditing();
+    cancelWallDrawing();
     clearOperationalSnapGuides();
     historyApi.discardTransaction();
     historyApi.flushScheduledCommits(getDocumentSnapshot);
@@ -533,7 +491,7 @@ export function SalaEditorWorkspace({
   }, [
     cancelDragging,
     cancelResize,
-    cancelWallEditing,
+    cancelWallDrawing,
     clearOperationalSnapGuides,
     getDocumentSnapshot,
     historyApi,
@@ -543,7 +501,7 @@ export function SalaEditorWorkspace({
   const handleRedo = useCallback(() => {
     cancelDragging();
     cancelResize();
-    cancelWallEditing();
+    cancelWallDrawing();
     clearOperationalSnapGuides();
     historyApi.discardTransaction();
     historyApi.flushScheduledCommits(getDocumentSnapshot);
@@ -555,7 +513,7 @@ export function SalaEditorWorkspace({
   }, [
     cancelDragging,
     cancelResize,
-    cancelWallEditing,
+    cancelWallDrawing,
     clearOperationalSnapGuides,
     getDocumentSnapshot,
     historyApi,
@@ -622,15 +580,10 @@ export function SalaEditorWorkspace({
             walls={wallsInEspacio}
             wallDraft={wallDraft}
             selectedWallId={selectedWallId}
-            draggingWallId={draggingWallId}
-            resizingWallId={resizingWallId}
-            wallSnapGuide={wallSnapGuide}
             onWallPointerDown={wallDrawingEnabled ? handleWallPointerDown : undefined}
             onWallPointerMove={wallDrawingEnabled ? handleWallPointerMove : undefined}
             onWallPointerUp={wallDrawingEnabled ? handleWallPointerUp : undefined}
             onWallPointerCancel={wallDrawingEnabled ? handleWallPointerCancel : undefined}
-            onWallDuplicate={handleDuplicateWall}
-            onWallDelete={handleDeleteWall}
             activeOperationalCatalogItem={activeOperationalCatalogItem}
             operationalElementInstances={operationalElementInstancesInEspacio}
             selectedOperationalElementInstanceId={selectedOperationalElementInstanceId}

@@ -7,6 +7,23 @@ import {
   type SalaWallEndpoint,
 } from "@/lib/sala-editor/geometry/wall-geometry";
 
+/** Offset del dot-grid del lienzo (mitad del tamaño de celda). */
+export function getWallGridOffset(gridSize: number): number {
+  return gridSize / 2;
+}
+
+/** Ajuste duro al centro de celda de la cuadrícula del mapa. */
+export function snapWallPointToGrid(
+  point: SalaPoint,
+  gridSize: number,
+): SalaPoint {
+  const offset = getWallGridOffset(gridSize);
+  return {
+    x: Math.round((point.x - offset) / gridSize) * gridSize + offset,
+    y: Math.round((point.y - offset) / gridSize) * gridSize + offset,
+  };
+}
+
 export const WALL_ENDPOINT_SNAP_DISTANCE_PX = 12;
 export const WALL_ANGLE_SNAP_STEP_DEG = 45;
 export const WALL_ANGLE_SNAP_THRESHOLD_DEG = 7;

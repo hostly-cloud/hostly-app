@@ -4,7 +4,7 @@
 
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 
-export const SALA_WALL_STROKE_WIDTH = 8;
+export const SALA_WALL_STROKE_WIDTH = 10;
 export const SALA_WALL_MIN_LENGTH = 6;
 /** Umbral de selección en px (hit test sobre el trazo). */
 export const SALA_WALL_HIT_THRESHOLD = 10;

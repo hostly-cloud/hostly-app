@@ -13,7 +13,7 @@ export function hasSalaEditorInspectorSelection(params: {
   const { phase, espacio, selectedWall, selectedOperationalElementInstance } = params;
 
   if (phase === "espacios") return espacio != null;
-  if (phase === "estructura") return selectedWall != null;
+  if (phase === "estructura") return false;
   if (phase === "operacion") return selectedOperationalElementInstance != null;
   return false;
 }

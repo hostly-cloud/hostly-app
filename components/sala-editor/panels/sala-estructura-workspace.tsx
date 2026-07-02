@@ -5,7 +5,11 @@ import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import type { WallPointerPayload } from "@/lib/sala-editor/canvas/wall-interaction";
-import type { WallSnapGuide } from "@/lib/sala-editor/canvas/wall-snap";
+import {
+  getBaseFloorCatalogEntry,
+  type BaseFloorCatalogKind,
+} from "@/lib/sala-editor/catalog/base-floor-catalog";
+import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
 import { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas";
 
@@ -16,15 +20,10 @@ export type SalaEstructuraWorkspaceProps = {
   walls?: SalaWallSegment[];
   wallDraft?: SalaWallDrawingDraft | null;
   selectedWallId?: string | null;
-  draggingWallId?: string | null;
-  resizingWallId?: string | null;
-  wallSnapGuide?: WallSnapGuide | null;
   onWallPointerDown?: (payload: WallPointerPayload) => void;
   onWallPointerMove?: (payload: WallPointerPayload) => void;
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
-  onWallDuplicate?: (wallId: string) => void;
-  onWallDelete?: (wallId: string) => void;
 };
 
 export function SalaEstructuraWorkspace({
@@ -34,15 +33,10 @@ export function SalaEstructuraWorkspace({
   walls = [],
   wallDraft = null,
   selectedWallId = null,
-  draggingWallId = null,
-  resizingWallId = null,
-  wallSnapGuide = null,
   onWallPointerDown,
   onWallPointerMove,
   onWallPointerUp,
   onWallPointerCancel,
-  onWallDuplicate,
-  onWallDelete,
 }: SalaEstructuraWorkspaceProps) {
   const isWallTool = tool.kind === "wall";
   const wallDrawingEnabled =
@@ -52,23 +46,34 @@ export function SalaEstructuraWorkspace({
     onWallPointerUp &&
     onWallPointerCancel;
 
+  const base = normalizeSalaEspacioBase(espacio.base);
+  const floorEntry = getBaseFloorCatalogEntry(
+    (base.floor.kind === "wood" ||
+    base.floor.kind === "stone" ||
+    base.floor.kind === "grass" ||
+    base.floor.kind === "sand" ||
+    base.floor.kind === "neutral"
+      ? base.floor.kind
+      : "neutral") as BaseFloorCatalogKind,
+  );
+
   return (
-    <SalaEspacioCanvasFrame espacio={espacio} restaurantId={restaurantId}>
+    <SalaEspacioCanvasFrame
+      espacio={espacio}
+      restaurantId={restaurantId}
+      basePreview={base}
+      floorBackground={floorEntry.background}
+    >
       {wallDrawingEnabled ? (
         <SalaWallCanvas
           walls={walls}
           draft={wallDraft}
           selectedWallId={selectedWallId}
-          draggingWallId={draggingWallId}
-          resizingWallId={resizingWallId}
-          snapGuide={wallSnapGuide}
           hint={tool.workspaceHint}
           onPointerDown={onWallPointerDown}
           onPointerMove={onWallPointerMove}
           onPointerUp={onWallPointerUp}
           onPointerCancel={onWallPointerCancel}
-          onDuplicateWall={onWallDuplicate}
-          onDeleteWall={onWallDelete}
           embedded
         />
       ) : (
