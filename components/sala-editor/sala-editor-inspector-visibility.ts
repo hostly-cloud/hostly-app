@@ -14,6 +14,6 @@ export function hasSalaEditorInspectorSelection(params: {
 
   if (phase === "espacios") return espacio != null;
   if (phase === "estructura") return false;
-  if (phase === "operacion") return selectedOperationalElementInstance != null;
+  if (phase === "operacion") return false;
   return false;
 }

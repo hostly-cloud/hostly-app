@@ -186,12 +186,6 @@ function SalaOperacionCanvasContent({
 }: SalaOperacionCanvasContentProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
-  const fitScale = canvasViewport?.scale ?? 1;
-  const activeResizeCornerRef = useRef<OperationalInstanceResizeCorner | null>(null);
-  const resizePointerBaselineRef = useRef<{ clientX: number; clientY: number } | null>(
-    null,
-  );
-
   const resolveLogicalPoint = useCallback(
     (clientX: number, clientY: number) => {
       const fromViewport = canvasViewport?.resolveStagePoint(clientX, clientY);
@@ -227,7 +221,7 @@ function SalaOperacionCanvasContent({
   );
 
   const createMoveHandlers = useCallback(
-    (instanceId: string) => ({
+    (instance: OperationalElementInstance) => ({
       onBodyPointerDown: (event: PointerEvent<HTMLDivElement>) => {
         if (event.button !== 0) return;
         if (isResizing()) return;
@@ -235,7 +229,7 @@ function SalaOperacionCanvasContent({
         event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
-        onInstancePointerDown(instanceId, {
+        onInstancePointerDown(instance.id, {
           point,
           clientX: event.clientX,
           clientY: event.clientY,
@@ -246,7 +240,7 @@ function SalaOperacionCanvasContent({
         if (isResizing()) return;
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
-        onInstancePointerMove(instanceId, {
+        onInstancePointerMove(instance.id, {
           point,
           clientX: event.clientX,
           clientY: event.clientY,
@@ -258,14 +252,14 @@ function SalaOperacionCanvasContent({
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
-        onInstancePointerUp(instanceId);
+        onInstancePointerUp(instance.id);
       },
       onBodyPointerCancel: (event: PointerEvent<HTMLDivElement>) => {
         event.stopPropagation();
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
-        onInstancePointerCancel(instanceId);
+        onInstancePointerCancel(instance.id);
       },
     }),
     [
@@ -275,67 +269,6 @@ function SalaOperacionCanvasContent({
       onInstancePointerMove,
       onInstancePointerUp,
       resolveLogicalPoint,
-    ],
-  );
-
-  const createResizeHandlers = useCallback(
-    (instanceId: string) => ({
-      onResizePointerDown: (
-        corner: OperationalInstanceResizeCorner,
-        event: PointerEvent<HTMLButtonElement>,
-      ) => {
-        if (event.button !== 0) return;
-        event.stopPropagation();
-        event.preventDefault();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        activeResizeCornerRef.current = corner;
-        resizePointerBaselineRef.current = {
-          clientX: event.clientX,
-          clientY: event.clientY,
-        };
-        onResizeStart(instanceId, corner, event.clientX, event.clientY);
-      },
-      onResizePointerMove: (event: PointerEvent<HTMLButtonElement>) => {
-        if (!isResizing()) return;
-        event.stopPropagation();
-        const baseline = resizePointerBaselineRef.current;
-        if (!baseline || fitScale === 1) {
-          onResizeMove(event.clientX, event.clientY);
-          return;
-        }
-        onResizeMove(
-          baseline.clientX +
-            (event.clientX - baseline.clientX) / fitScale,
-          baseline.clientY +
-            (event.clientY - baseline.clientY) / fitScale,
-        );
-      },
-      onResizePointerUp: (event: PointerEvent<HTMLButtonElement>) => {
-        event.stopPropagation();
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        activeResizeCornerRef.current = null;
-        resizePointerBaselineRef.current = null;
-        onResizeEnd();
-      },
-      onResizePointerCancel: (event: PointerEvent<HTMLButtonElement>) => {
-        event.stopPropagation();
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        activeResizeCornerRef.current = null;
-        resizePointerBaselineRef.current = null;
-        onResizeCancel();
-      },
-    }),
-    [
-      isResizing,
-      onResizeCancel,
-      onResizeEnd,
-      onResizeMove,
-      onResizeStart,
-      fitScale,
     ],
   );
 
@@ -349,8 +282,7 @@ function SalaOperacionCanvasContent({
       {scaledSnapGuides ? <SalaCanvasSnapGuides guides={scaledSnapGuides} /> : null}
       {instances.map((instance) => {
         const instanceCatalog = getOperationalElementCatalogItem(instance.elementType);
-        const moveHandlers = createMoveHandlers(instance.id);
-        const resizeHandlers = createResizeHandlers(instance.id);
+        const moveHandlers = createMoveHandlers(instance);
         const dragging = draggingInstanceId === instance.id;
         const resizing = resizingInstanceId === instance.id;
         const dropAnimating = dropAnimatingInstanceId === instance.id;
@@ -373,10 +305,8 @@ function SalaOperacionCanvasContent({
               isDragging={dragging}
               isResizing={resizing}
               isDropAnimating={dropAnimating}
-              onDuplicate={() => onDuplicateInstance(instance.id)}
               onDelete={() => onDeleteInstance(instance.id)}
               {...moveHandlers}
-              {...resizeHandlers}
             />
           </div>
         );

@@ -3,12 +3,8 @@
 import type { PointerEvent } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { OperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
-import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import { resolveOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
-import { SalaCanvasSelectionToolbar } from "@/components/sala-editor/panels/sala-canvas-selection-toolbar";
 import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
-
-const RESIZE_CORNERS: OperationalInstanceResizeCorner[] = ["nw", "ne", "sw", "se"];
 
 export type SalaOperationalInstanceCanvasObjectProps = {
   instance: OperationalElementInstance;
@@ -22,14 +18,6 @@ export type SalaOperationalInstanceCanvasObjectProps = {
   onBodyPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerCancel: (event: PointerEvent<HTMLDivElement>) => void;
-  onResizePointerDown: (
-    corner: OperationalInstanceResizeCorner,
-    event: PointerEvent<HTMLButtonElement>,
-  ) => void;
-  onResizePointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
-  onResizePointerUp: (event: PointerEvent<HTMLButtonElement>) => void;
-  onResizePointerCancel: (event: PointerEvent<HTMLButtonElement>) => void;
-  onDuplicate: () => void;
   onDelete: () => void;
 };
 
@@ -45,11 +33,6 @@ export function SalaOperationalInstanceCanvasObject({
   onBodyPointerMove,
   onBodyPointerUp,
   onBodyPointerCancel,
-  onResizePointerDown,
-  onResizePointerMove,
-  onResizePointerUp,
-  onResizePointerCancel,
-  onDuplicate,
   onDelete,
 }: SalaOperationalInstanceCanvasObjectProps) {
   const chromeVisible = selected && !isDragging && !isResizing;
@@ -81,30 +64,19 @@ export function SalaOperationalInstanceCanvasObject({
       {selected ? (
         <>
           <div className="hostly-sala-canvas-object__frame" aria-hidden />
-          <SalaCanvasSelectionToolbar onDuplicate={onDuplicate} onDelete={onDelete} />
           <button
             type="button"
-            className="hostly-sala-canvas-object__rotate-handle"
-            aria-label="Rotación — próximamente"
-            title="Rotación — próximamente"
-            disabled
-            tabIndex={-1}
-          />
-          {RESIZE_CORNERS.map((corner) => (
-            <button
-              key={corner}
-              type="button"
-              aria-label={`Redimensionar esquina ${corner}`}
-              className={[
-                "hostly-sala-canvas-object__handle",
-                `hostly-sala-canvas-object__handle--${corner}`,
-              ].join(" ")}
-              onPointerDown={(event) => onResizePointerDown(corner, event)}
-              onPointerMove={onResizePointerMove}
-              onPointerUp={onResizePointerUp}
-              onPointerCancel={onResizePointerCancel}
-            />
-          ))}
+            className="hostly-sala-canvas-object__delete-btn"
+            aria-label="Eliminar mesa"
+            title="Eliminar"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+          >
+            <span aria-hidden>🗑</span>
+          </button>
         </>
       ) : null}
 

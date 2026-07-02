@@ -365,12 +365,16 @@ export function SalaEditorWorkspace({
   const handleOperationalInstancePointerDown = useCallback(
     (instanceId: string, payload: OperationalInstancePointerPayload) => {
       if (isOperationalResizing()) return;
+      const instance = operationalElementInstancesInEspacio.find(
+        (item) => item.id === instanceId,
+      );
+      if (!instance) return;
       beginInstancePointer(instanceId, {
         ...payload,
         canvasPoint: payload.point,
-      });
+      }, instance.position);
     },
-    [beginInstancePointer, isOperationalResizing],
+    [beginInstancePointer, isOperationalResizing, operationalElementInstancesInEspacio],
   );
 
   const handleOperationalInstancePointerMove = useCallback(
