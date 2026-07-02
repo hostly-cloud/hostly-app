@@ -25,6 +25,10 @@ import {
   type OperationalSnapGuides,
 } from "@/lib/sala-editor/canvas/operational-snap";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
+import type {
+  WallEditMode,
+  WallEditOutcome,
+} from "@/lib/sala-editor/canvas/wall-interaction";
 import {
   loadSalaEditorDraft,
   saveSalaEditorDraft,
@@ -104,6 +108,7 @@ export function SalaEditorWorkspace({
     updateEspacio,
     updateEspacioBase,
     addWall,
+    updateWall,
     removeWall,
   } = useSalaEditorDocument({
     restaurantId,
@@ -402,12 +407,35 @@ export function SalaEditorWorkspace({
     ? normalizeSalaEspacioBase(selectedEspacio.base).grid.size
     : 16;
 
+  const handleWallEditSessionStart = useCallback(
+    () => {
+      historyApi.beginTransaction(documentSnapshotRef.current!);
+    },
+    [historyApi],
+  );
+
+  const handleWallEditSessionEnd = useCallback(
+    (mode: WallEditMode, outcome: WallEditOutcome) => {
+      if (outcome !== "complete") {
+        historyApi.discardTransaction();
+        return;
+      }
+
+      historyApi.commitTransaction(
+        mode === "move" ? "wall.move" : "wall.resize",
+        documentSnapshotRef.current!,
+      );
+    },
+    [historyApi],
+  );
+
   const {
     wallsInEspacio,
     draft: wallDraft,
     selectedWallId,
     selectedWall,
     cancelDrawing: cancelWallDrawing,
+    cancelEditSession: cancelWallEditSession,
     clearWallSelection,
     handlePointerDown: handleWallPointerDown,
     handlePointerMove: handleWallPointerMove,
@@ -419,6 +447,9 @@ export function SalaEditorWorkspace({
     enabled: wallDrawingEnabled,
     gridSize: wallGridSize,
     onAddWall: addWall,
+    onUpdateWall: updateWall,
+    onEditSessionStart: handleWallEditSessionStart,
+    onEditSessionEnd: handleWallEditSessionEnd,
   });
 
   const handleDeleteWall = useCallback(
@@ -469,6 +500,7 @@ export function SalaEditorWorkspace({
       cancelDragging();
       cancelResize();
       cancelWallDrawing();
+      cancelWallEditSession();
       clearOperationalSnapGuides();
       historyApi.discardTransaction();
     }
@@ -476,6 +508,7 @@ export function SalaEditorWorkspace({
   }, [
     cancelDragging,
     cancelResize,
+    cancelWallEditSession,
     cancelWallDrawing,
     clearOperationalSnapGuides,
     historyApi,
@@ -490,6 +523,7 @@ export function SalaEditorWorkspace({
     cancelDragging();
     cancelResize();
     cancelWallDrawing();
+    cancelWallEditSession();
     clearOperationalSnapGuides();
     historyApi.discardTransaction();
     historyApi.flushScheduledCommits(getDocumentSnapshot);
@@ -501,6 +535,7 @@ export function SalaEditorWorkspace({
   }, [
     cancelDragging,
     cancelResize,
+    cancelWallEditSession,
     cancelWallDrawing,
     clearOperationalSnapGuides,
     getDocumentSnapshot,
@@ -512,6 +547,7 @@ export function SalaEditorWorkspace({
     cancelDragging();
     cancelResize();
     cancelWallDrawing();
+    cancelWallEditSession();
     clearOperationalSnapGuides();
     historyApi.discardTransaction();
     historyApi.flushScheduledCommits(getDocumentSnapshot);
@@ -523,6 +559,7 @@ export function SalaEditorWorkspace({
   }, [
     cancelDragging,
     cancelResize,
+    cancelWallEditSession,
     cancelWallDrawing,
     clearOperationalSnapGuides,
     getDocumentSnapshot,

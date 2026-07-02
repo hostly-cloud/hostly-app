@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, type PointerEvent } from "react";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import {
+  getWallEndpoint,
   getWallCenter,
   isWallLengthValid,
   SALA_WALL_STROKE_COLOR,
@@ -125,6 +126,12 @@ export function SalaWallCanvas({
   const selectedWallCenter = selectedScaledWall
     ? getWallCenter(selectedScaledWall)
     : null;
+  const selectedWallStart = selectedScaledWall
+    ? getWallEndpoint(selectedScaledWall, "start")
+    : null;
+  const selectedWallEnd = selectedScaledWall
+    ? getWallEndpoint(selectedScaledWall, "end")
+    : null;
   const draftValid =
     draft != null &&
     isWallLengthValid({
@@ -194,6 +201,39 @@ export function SalaWallCanvas({
       onPointerMove(payload);
     },
     [createPayload, onPointerMove],
+  );
+
+  const createTargetPointerHandlers = useCallback(
+    (target: WallInteractionTarget) => ({
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
+        if (event.button !== 0) return;
+        event.stopPropagation();
+        const payload = createPayload(event, target);
+        if (!payload) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onPointerDown(payload);
+      },
+      onPointerMove: (event: PointerEvent<HTMLElement>) => {
+        const payload = createPayload(event, target);
+        if (!payload) return;
+        onPointerMove(payload);
+      },
+      onPointerUp: (event: PointerEvent<HTMLElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        onPointerUp();
+      },
+      onPointerCancel: (event: PointerEvent<HTMLElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        onPointerCancel();
+      },
+    }),
+    [createPayload, onPointerCancel, onPointerDown, onPointerMove, onPointerUp],
   );
 
   return (
@@ -295,6 +335,59 @@ export function SalaWallCanvas({
             <span aria-hidden>🗑</span>
           </button>
         </div>
+      ) : null}
+
+      {selectedWall && selectedWallCenter && !draft ? (
+        <button
+          type="button"
+          className="hostly-sala-wall-interaction-handle hostly-sala-wall-interaction-handle--move"
+          aria-label="Mover pared"
+          title="Mover pared"
+          style={{
+            left: selectedWallCenter.x,
+            top: selectedWallCenter.y,
+          }}
+          {...createTargetPointerHandlers({
+            type: "wall-move",
+            wallId: selectedWall.id,
+          })}
+        />
+      ) : null}
+
+      {selectedWall && selectedWallStart && !draft ? (
+        <button
+          type="button"
+          className="hostly-sala-wall-interaction-handle hostly-sala-wall-interaction-handle--endpoint"
+          aria-label="Editar inicio de pared"
+          title="Editar inicio"
+          style={{
+            left: selectedWallStart.x,
+            top: selectedWallStart.y,
+          }}
+          {...createTargetPointerHandlers({
+            type: "wall-endpoint",
+            wallId: selectedWall.id,
+            endpoint: "start",
+          })}
+        />
+      ) : null}
+
+      {selectedWall && selectedWallEnd && !draft ? (
+        <button
+          type="button"
+          className="hostly-sala-wall-interaction-handle hostly-sala-wall-interaction-handle--endpoint"
+          aria-label="Editar final de pared"
+          title="Editar final"
+          style={{
+            left: selectedWallEnd.x,
+            top: selectedWallEnd.y,
+          }}
+          {...createTargetPointerHandlers({
+            type: "wall-endpoint",
+            wallId: selectedWall.id,
+            endpoint: "end",
+          })}
+        />
       ) : null}
 
       {!draft ? (

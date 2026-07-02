@@ -2972,6 +2972,48 @@
   transform: translate(-50%, calc(-50% - 28px)) scale(0.96);
 }
 
+.hostly-sala-wall-interaction-handle {
+  position: absolute;
+  z-index: 33;
+  border: 2px solid #ffffff;
+  background: var(--hostly-accent, #315f7d);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--hostly-accent, #315f7d) 42%, transparent),
+    0 4px 12px rgba(15, 23, 42, 0.16);
+  touch-action: none;
+}
+
+.hostly-sala-wall-interaction-handle::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+.hostly-sala-wall-interaction-handle--move {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  cursor: grab;
+  transform: translate(-50%, -50%);
+}
+
+.hostly-sala-wall-interaction-handle--move:active {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(0.96);
+}
+
+.hostly-sala-wall-interaction-handle--endpoint {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  cursor: crosshair;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.hostly-sala-wall-interaction-handle--endpoint:active {
+  transform: translate(-50%, -50%) rotate(45deg) scale(0.94);
+}
+
 /* Base phase — configuration panel */
 .hostly-sala-editor-toolbox--base-config {
   min-height: 0;
