@@ -4,6 +4,7 @@ import { useCallback, useRef, type PointerEvent } from "react";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import {
+  getWallCenter,
   isWallLengthValid,
   SALA_WALL_STROKE_COLOR,
   SALA_WALL_STROKE_WIDTH,
@@ -22,6 +23,7 @@ export type SalaWallCanvasProps = {
   onPointerMove: (payload: WallPointerPayload) => void;
   onPointerUp: () => void;
   onPointerCancel: () => void;
+  onDeleteWall?: (wallId: string) => void;
   /** Dentro del frame de espacio — sin chrome propio. */
   embedded?: boolean;
 };
@@ -47,9 +49,12 @@ export function SalaWallCanvas({
   onPointerMove,
   onPointerUp,
   onPointerCancel,
+  onDeleteWall,
   embedded = false,
 }: SalaWallCanvasProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const selectedWall = walls.find((wall) => wall.id === selectedWallId) ?? null;
+  const selectedWallCenter = selectedWall ? getWallCenter(selectedWall) : null;
   const draftValid =
     draft != null &&
     isWallLengthValid({
@@ -193,6 +198,30 @@ export function SalaWallCanvas({
           </g>
         ) : null}
       </svg>
+
+      {selectedWall && selectedWallCenter && !draft && onDeleteWall ? (
+        <div
+          className="hostly-sala-wall-selection-action"
+          style={{
+            left: selectedWallCenter.x,
+            top: selectedWallCenter.y,
+          }}
+        >
+          <button
+            type="button"
+            className="hostly-sala-wall-delete-btn"
+            aria-label="Eliminar pared"
+            title="Eliminar"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteWall(selectedWall.id);
+            }}
+          >
+            <span aria-hidden>🗑</span>
+          </button>
+        </div>
+      ) : null}
 
       {!draft ? (
         <div className="hostly-sala-editor-canvas-hint">{hint}</div>

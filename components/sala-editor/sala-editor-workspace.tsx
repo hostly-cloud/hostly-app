@@ -104,6 +104,7 @@ export function SalaEditorWorkspace({
     updateEspacio,
     updateEspacioBase,
     addWall,
+    removeWall,
   } = useSalaEditorDocument({
     restaurantId,
     initialEspacios,
@@ -407,6 +408,7 @@ export function SalaEditorWorkspace({
     selectedWallId,
     selectedWall,
     cancelDrawing: cancelWallDrawing,
+    clearWallSelection,
     handlePointerDown: handleWallPointerDown,
     handlePointerMove: handleWallPointerMove,
     handlePointerUp: handleWallPointerUp,
@@ -418,6 +420,14 @@ export function SalaEditorWorkspace({
     gridSize: wallGridSize,
     onAddWall: addWall,
   });
+
+  const handleDeleteWall = useCallback(
+    (wallId: string) => {
+      removeWall(wallId);
+      clearWallSelection();
+    },
+    [clearWallSelection, removeWall],
+  );
 
   const handleCreateEspacio = useCallback(
     (payload: { name: string; tipo: SalaEspacioType; color: string }) => {
@@ -584,6 +594,7 @@ export function SalaEditorWorkspace({
             onWallPointerMove={wallDrawingEnabled ? handleWallPointerMove : undefined}
             onWallPointerUp={wallDrawingEnabled ? handleWallPointerUp : undefined}
             onWallPointerCancel={wallDrawingEnabled ? handleWallPointerCancel : undefined}
+            onWallDelete={wallDrawingEnabled ? handleDeleteWall : undefined}
             activeOperationalCatalogItem={activeOperationalCatalogItem}
             operationalElementInstances={operationalElementInstancesInEspacio}
             selectedOperationalElementInstanceId={selectedOperationalElementInstanceId}

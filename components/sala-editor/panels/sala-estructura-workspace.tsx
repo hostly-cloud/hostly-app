@@ -24,6 +24,7 @@ export type SalaEstructuraWorkspaceProps = {
   onWallPointerMove?: (payload: WallPointerPayload) => void;
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
+  onWallDelete?: (wallId: string) => void;
 };
 
 export function SalaEstructuraWorkspace({
@@ -37,6 +38,7 @@ export function SalaEstructuraWorkspace({
   onWallPointerMove,
   onWallPointerUp,
   onWallPointerCancel,
+  onWallDelete,
 }: SalaEstructuraWorkspaceProps) {
   const isWallTool = tool.kind === "wall";
   const wallDrawingEnabled =
@@ -74,6 +76,7 @@ export function SalaEstructuraWorkspace({
           onPointerMove={onWallPointerMove}
           onPointerUp={onWallPointerUp}
           onPointerCancel={onWallPointerCancel}
+          onDeleteWall={onWallDelete}
           embedded
         />
       ) : (

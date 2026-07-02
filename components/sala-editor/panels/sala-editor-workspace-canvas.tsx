@@ -35,6 +35,7 @@ export type SalaEditorWorkspaceCanvasProps = {
   onWallPointerMove?: (payload: WallPointerPayload) => void;
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
+  onWallDelete?: (wallId: string) => void;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
   operationalElementInstances?: OperationalElementInstance[];
   selectedOperationalElementInstanceId?: string | null;
@@ -82,6 +83,7 @@ export function SalaEditorWorkspaceCanvas({
   onWallPointerMove,
   onWallPointerUp,
   onWallPointerCancel,
+  onWallDelete,
   activeOperationalCatalogItem = null,
   operationalElementInstances = [],
   selectedOperationalElementInstanceId = null,
@@ -153,6 +155,7 @@ export function SalaEditorWorkspaceCanvas({
           onWallPointerMove={onWallPointerMove}
           onWallPointerUp={onWallPointerUp}
           onWallPointerCancel={onWallPointerCancel}
+          onWallDelete={onWallDelete}
         />
       </div>
     );

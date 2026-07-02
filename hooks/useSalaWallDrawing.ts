@@ -8,8 +8,6 @@ import { DEFAULT_SALA_ESPACIO_BASE_GRID_SIZE } from "@/lib/sala-editor/types/esp
 import {
   findWallAtPoint,
   isWallLengthValid,
-  SALA_WALL_MIN_LENGTH,
-  wallSegmentLength,
   type SalaPoint,
 } from "@/lib/sala-editor/geometry/wall-geometry";
 import { snapWallPointToGrid } from "@/lib/sala-editor/canvas/wall-snap";
@@ -155,14 +153,19 @@ export function useSalaWallDrawing({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || !draft) return;
+      if (event.key !== "Escape") return;
+      if (!draft && !selectedWallId) return;
       event.preventDefault();
-      cancelDrawing();
+      if (draft) {
+        cancelDrawing();
+        return;
+      }
+      clearWallSelection();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cancelDrawing, draft, enabled]);
+  }, [cancelDrawing, clearWallSelection, draft, enabled, selectedWallId]);
 
   useEffect(() => {
     setDraft(null);
