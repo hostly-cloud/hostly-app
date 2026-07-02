@@ -8,6 +8,7 @@ import type { SalaStructuralElement } from "@/lib/sala-editor/types/elementos-es
 import type { SalaOperationalElement } from "@/lib/sala-editor/types/elementos-operativos";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
+import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
 import type { SalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 import { createDefaultSalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 
@@ -19,6 +20,8 @@ export type SalaEditorDocument = {
   espacios: SalaEspacio[];
   /** Paredes dibujadas localmente (Fase 2.3). */
   walls: SalaWallSegment[];
+  /** Elementos estructurales anclados a paredes; resuelven posición desde wallId + ratio. */
+  wallAttachments: SalaWallAttachment[];
   structuralElements: SalaStructuralElement[];
   operationalElements: SalaOperationalElement[];
   /** Instancias OSE colocadas localmente (Fase 2). */
@@ -36,6 +39,7 @@ export function createEmptySalaEditorDocument(
     restaurantId: rid,
     espacios: [],
     walls: [],
+    wallAttachments: [],
     structuralElements: [],
     operationalElements: [],
     operationalElementInstances: [],

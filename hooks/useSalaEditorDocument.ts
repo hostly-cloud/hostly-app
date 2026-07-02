@@ -17,6 +17,7 @@ import {
 } from "@/lib/sala-editor/types/editor-tool";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import { createSalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
+import { removeWallAttachmentsForWall } from "@/lib/sala-editor/types/wall-attachment";
 import {
   getStructuralToolboxItem,
 } from "@/lib/sala-editor/catalog/structural-toolbox";
@@ -449,6 +450,10 @@ export function useSalaEditorDocument({
       nextDocument = {
         ...prev,
         walls: prev.walls.filter((wall) => wall.id !== wallId),
+        wallAttachments: removeWallAttachmentsForWall(
+          prev.wallAttachments,
+          wallId,
+        ),
         updatedAt: Date.now(),
       };
       return nextDocument;

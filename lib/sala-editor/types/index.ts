@@ -74,6 +74,20 @@ export type {
   SalaWallSegmentId,
 } from "@/lib/sala-editor/types/wall-segment";
 export { createSalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
+export type {
+  SalaWallAttachment,
+  SalaWallAttachmentDraft,
+  SalaWallAttachmentId,
+  SalaWallAttachmentKind,
+  SalaWallAttachmentOffset,
+} from "@/lib/sala-editor/types/wall-attachment";
+export {
+  clampWallAttachmentPosition,
+  createSalaWallAttachment,
+  normalizeWallAttachment,
+  normalizeWallAttachments,
+  removeWallAttachmentsForWall,
+} from "@/lib/sala-editor/types/wall-attachment";
 export type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 export {
   SALA_EDITOR_DOCUMENT_VERSION,
