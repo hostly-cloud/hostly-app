@@ -70,6 +70,7 @@ export function SalaEspacioCanvasFrame({
           style={{ "--espacio-accent": espacio.color } as CSSProperties}
         >
           <div className="hostly-sala-espacio-frame__header">
+            <span className="hostly-sala-espacio-frame__header-plan-label">Plano</span>
             <span
               className="hostly-sala-espacio-frame__header-swatch"
               style={{ backgroundColor: espacio.color }}
@@ -88,11 +89,12 @@ export function SalaEspacioCanvasFrame({
           <div
             ref={stageRef}
             role={stageRole}
-            aria-label={stageAriaLabel ?? `Lienzo de ${espacio.name}`}
-            className="hostly-sala-espacio-frame__stage hostly-sala-espacio-frame__stage--workspace"
+            aria-label={stageAriaLabel ?? `Plano de ${espacio.name}`}
+            className="hostly-sala-espacio-frame__stage hostly-sala-espacio-frame__stage--workspace hostly-sala-espacio-frame__stage--bounded-plan"
             style={stageStyle}
             onPointerDown={onStagePointerDown}
           >
+            <div className="hostly-sala-espacio-frame__plan-corners" aria-hidden />
             <div className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft" aria-hidden />
             {children}
             {hint}

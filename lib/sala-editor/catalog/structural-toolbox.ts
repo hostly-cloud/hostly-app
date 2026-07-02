@@ -11,6 +11,8 @@ export type StructuralToolboxItem = {
   description: string;
   workspaceHint: string;
   upcomingActions: readonly string[];
+  /** Solo herramientas disponibles son seleccionables en el panel. */
+  available: boolean;
 };
 
 export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
@@ -21,6 +23,7 @@ export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
     description: "Divide espacios.",
     workspaceHint: "Haz clic sobre el plano para comenzar una pared.",
     upcomingActions: ["Dibujar", "Duplicar", "Girar", "Bloquear"],
+    available: true,
   },
   {
     kind: "glass",
@@ -29,6 +32,7 @@ export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
     description: "Separación transparente o mampara.",
     workspaceHint: "Haz clic para colocar un cristal.",
     upcomingActions: ["Dibujar", "Duplicar", "Girar", "Bloquear"],
+    available: false,
   },
   {
     kind: "door",
@@ -37,6 +41,7 @@ export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
     description: "Acceso entre espacios o al exterior.",
     workspaceHint: "Haz clic para colocar una puerta.",
     upcomingActions: ["Dibujar", "Duplicar", "Girar", "Bloquear"],
+    available: false,
   },
   {
     kind: "bar",
@@ -45,6 +50,7 @@ export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
     description: "Mostrador o barra de servicio.",
     workspaceHint: "Haz clic para crear una barra.",
     upcomingActions: ["Dibujar", "Duplicar", "Girar", "Bloquear"],
+    available: false,
   },
   {
     kind: "planter",
@@ -53,6 +59,7 @@ export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
     description: "Macizo o separador vegetal.",
     workspaceHint: "Haz clic para colocar una jardinera.",
     upcomingActions: ["Dibujar", "Duplicar", "Girar", "Bloquear"],
+    available: false,
   },
   {
     kind: "separator",
@@ -61,8 +68,17 @@ export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
     description: "Delimitación ligera entre zonas.",
     workspaceHint: "Haz clic para colocar un separador.",
     upcomingActions: ["Dibujar", "Duplicar", "Girar", "Bloquear"],
+    available: false,
   },
 ] as const;
+
+export const AVAILABLE_STRUCTURAL_TOOLBOX_ITEMS = STRUCTURAL_TOOLBOX_ITEMS.filter(
+  (item) => item.available,
+);
+
+export const UPCOMING_STRUCTURAL_TOOLBOX_ITEMS = STRUCTURAL_TOOLBOX_ITEMS.filter(
+  (item) => !item.available,
+);
 
 export function getStructuralToolboxItem(
   kind: SalaStructuralElementKind,

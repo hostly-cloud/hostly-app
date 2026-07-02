@@ -91,16 +91,47 @@ export function SalaWallCanvas({
         {walls.map((wall) => {
           const selected = wall.id === selectedWallId;
           return (
-            <line
-              key={wall.id}
-              x1={wall.x1}
-              y1={wall.y1}
-              x2={wall.x2}
-              y2={wall.y2}
-              stroke={selected ? "var(--hostly-accent, #315f7d)" : SALA_WALL_STROKE_COLOR}
-              strokeWidth={selected ? SALA_WALL_STROKE_WIDTH + 2 : SALA_WALL_STROKE_WIDTH}
-              strokeLinecap="round"
-            />
+            <g key={wall.id} className={selected ? "hostly-sala-wall--selected" : undefined}>
+              {selected ? (
+                <>
+                  <line
+                    x1={wall.x1}
+                    y1={wall.y1}
+                    x2={wall.x2}
+                    y2={wall.y2}
+                    stroke="var(--hostly-accent, #315f7d)"
+                    strokeWidth={SALA_WALL_STROKE_WIDTH + 10}
+                    strokeLinecap="round"
+                    opacity={0.18}
+                  />
+                  <circle
+                    cx={wall.x1}
+                    cy={wall.y1}
+                    r={6}
+                    fill="white"
+                    stroke="var(--hostly-accent, #315f7d)"
+                    strokeWidth={2}
+                  />
+                  <circle
+                    cx={wall.x2}
+                    cy={wall.y2}
+                    r={6}
+                    fill="white"
+                    stroke="var(--hostly-accent, #315f7d)"
+                    strokeWidth={2}
+                  />
+                </>
+              ) : null}
+              <line
+                x1={wall.x1}
+                y1={wall.y1}
+                x2={wall.x2}
+                y2={wall.y2}
+                stroke={selected ? "var(--hostly-accent, #315f7d)" : SALA_WALL_STROKE_COLOR}
+                strokeWidth={selected ? SALA_WALL_STROKE_WIDTH + 2 : SALA_WALL_STROKE_WIDTH}
+                strokeLinecap="round"
+              />
+            </g>
           );
         })}
 

@@ -29,12 +29,14 @@ export function SalaOperationalElementCard({
         .join(" ")}
       style={{ "--tool-accent": item.color } as CSSProperties}
     >
-      <SalaOperationalElementVisual
-        elementType={item.type}
-        label={item.label}
-        color={item.color}
-        mini
-      />
+      <span className="hostly-sala-editor-tool-chip__preview" aria-hidden>
+        <SalaOperationalElementVisual
+          elementType={item.type}
+          label={item.label}
+          color={item.color}
+          mini
+        />
+      </span>
       <span className="hostly-sala-editor-tool-chip__caption">{item.label}</span>
     </button>
   );
