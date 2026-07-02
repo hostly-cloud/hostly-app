@@ -23,6 +23,25 @@
   padding-bottom: 0 !important;
 }
 
+@media (min-width: 1024px) {
+  [data-hostly-config-shell]:has(.hostly-sala-editor-page) {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  [data-hostly-config-shell]:has(.hostly-sala-editor-page) [data-hostly-config-workspace],
+  [data-hostly-config-shell]:has(.hostly-sala-editor-page) [data-hostly-config-content] {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .hostly-sala-editor-page {
+    height: 100%;
+    max-height: 100%;
+  }
+}
+
 .hostly-sala-editor-workbench {
   box-sizing: border-box;
   display: flex;
@@ -217,6 +236,17 @@
 
 .hostly-sala-editor-workbench__panel--toolbox .hostly-sala-editor-workbench__panel-inner {
   padding: 6px 4px;
+}
+
+.hostly-sala-editor-workbench__panel-inner > .hostly-sala-editor-toolbox--spaces-switcher {
+  flex-shrink: 0;
+}
+
+.hostly-sala-editor-workbench__panel-inner > .hostly-sala-editor-toolbox--library,
+.hostly-sala-editor-workbench__panel-inner > .hostly-sala-editor-toolbox--base-config {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .hostly-sala-editor-workbench__panel--inspector-subtle {
@@ -2643,41 +2673,82 @@
 .hostly-sala-space-workspace-root {
   display: flex;
   min-height: 0;
+  min-width: 0;
   flex: 1;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .hostly-sala-editor-canvas-frame--space-workspace {
-  background: #e3e8ef;
+  background: transparent;
+  box-shadow: none;
 }
 
 .hostly-sala-editor-canvas-frame--space-workspace .hostly-sala-editor-canvas-frame__surface {
-  background: #e3e8ef;
+  background: transparent;
 }
 
 .hostly-sala-espacio-frame-viewport {
   display: flex;
   min-height: 0;
+  min-width: 0;
   flex: 1;
   align-items: center;
   justify-content: center;
-  overflow: auto;
-  padding: 14px 16px;
-  scroll-behavior: smooth;
+  overflow: hidden;
+  padding: 0;
+}
+
+.hostly-sala-espacio-frame-fit {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.hostly-sala-espacio-frame-fit__content {
+  flex-shrink: 0;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.hostly-sala-espacio-frame-fluid {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .hostly-sala-espacio-frame--active-workspace {
   display: flex;
-  width: min(100%, 100%);
-  height: min(100%, 100%);
-  min-height: 260px;
+  min-height: 0;
   min-width: 0;
-  flex: 1 1 auto;
-  max-height: 100%;
-  max-width: 100%;
+  flex-direction: column;
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--espacio-accent, #315f7d) 22%, rgba(148, 163, 184, 0.28)),
-    0 14px 36px rgba(15, 23, 42, 0.1);
+    0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.hostly-sala-espacio-frame--active-workspace.hostly-sala-espacio-frame--bounded {
+  width: max-content;
+  height: max-content;
+  flex: 0 0 auto;
+}
+
+.hostly-sala-espacio-frame--active-workspace.hostly-sala-espacio-frame--fluid {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+}
+
+.hostly-sala-espacio-frame--active-workspace .hostly-sala-espacio-frame__plan-corners {
+  display: none;
 }
 
 .hostly-sala-espacio-frame__header-swatch {
@@ -2875,10 +2946,6 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--espacio-accent, #315f7d) 48%, #94a3b8);
-}
-
-.hostly-sala-espacio-frame--active-workspace {
-  border: 2px solid color-mix(in srgb, var(--espacio-accent, #315f7d) 30%, #cbd5e1);
 }
 
 .hostly-sala-espacio-frame__stage--bounded-plan {
@@ -3171,7 +3238,7 @@
 
 .hostly-sala-espacio-frame__stage--base-preview {
   align-self: center;
-  margin: 12px auto;
+  margin: 0 auto;
 }
 
 .hostly-sala-base-workspace__hero {

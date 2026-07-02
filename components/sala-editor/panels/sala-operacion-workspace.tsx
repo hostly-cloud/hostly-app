@@ -11,6 +11,11 @@ import {
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import type { OperationalSnapGuides } from "@/lib/sala-editor/canvas/operational-snap";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
+import {
+  getBaseFloorCatalogEntry,
+  type BaseFloorCatalogKind,
+} from "@/lib/sala-editor/catalog/base-floor-catalog";
+import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { SalaCanvasSnapGuides } from "@/components/sala-editor/panels/sala-canvas-snap-guides";
 import { SalaOperationalInstanceCanvasObject } from "@/components/sala-editor/panels/sala-operational-instance-canvas-object";
 
@@ -86,6 +91,16 @@ export function SalaOperacionWorkspace({
 }: SalaOperacionWorkspaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const activeResizeCornerRef = useRef<OperationalInstanceResizeCorner | null>(null);
+  const base = normalizeSalaEspacioBase(espacio.base);
+  const floorEntry = getBaseFloorCatalogEntry(
+    (base.floor.kind === "wood" ||
+    base.floor.kind === "stone" ||
+    base.floor.kind === "grass" ||
+    base.floor.kind === "sand" ||
+    base.floor.kind === "neutral"
+      ? base.floor.kind
+      : "neutral") as BaseFloorCatalogKind,
+  );
 
   const resolvePoint = useCallback((clientX: number, clientY: number) => {
     const el = surfaceRef.current;
@@ -198,6 +213,8 @@ export function SalaOperacionWorkspace({
     <SalaEspacioCanvasFrame
       espacio={espacio}
       restaurantId={restaurantId}
+      basePreview={base}
+      floorBackground={floorEntry.background}
       stageRef={surfaceRef}
       stageRole="application"
       stageAriaLabel="Lienzo de elementos operativos"
