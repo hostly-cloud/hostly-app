@@ -1,9 +1,11 @@
 "use client";
 
 import { useLayoutEffect, useState, type RefObject } from "react";
+import { computeCanvasFitScale } from "@/lib/sala-editor/canvas/canvas-viewport";
 
 /**
- * Escala un plano acotado para caber en el viewport del editor sin scroll de página.
+ * Calcula escala de ajuste cuando el plano acotado no cabe en el viewport.
+ * No escala por encima de 1 (tamaño operativo normal).
  */
 export function useCanvasFitScale(
   viewportRef: RefObject<HTMLElement | null>,
@@ -24,27 +26,14 @@ export function useCanvasFitScale(
     if (!viewport || !content) return;
 
     const updateScale = () => {
-      const viewportWidth = viewport.clientWidth;
-      const viewportHeight = viewport.clientHeight;
-      const contentWidth = content.offsetWidth;
-      const contentHeight = content.offsetHeight;
-
-      if (
-        viewportWidth <= 0 ||
-        viewportHeight <= 0 ||
-        contentWidth <= 0 ||
-        contentHeight <= 0
-      ) {
-        setScale(1);
-        return;
-      }
-
-      const nextScale = Math.min(
-        1,
-        viewportWidth / contentWidth,
-        viewportHeight / contentHeight,
+      setScale(
+        computeCanvasFitScale(
+          viewport.clientWidth,
+          viewport.clientHeight,
+          content.offsetWidth,
+          content.offsetHeight,
+        ),
       );
-      setScale(Number(nextScale.toFixed(4)));
     };
 
     updateScale();

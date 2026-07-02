@@ -10,6 +10,12 @@ import {
   SALA_WALL_STROKE_WIDTH,
 } from "@/lib/sala-editor/geometry/wall-geometry";
 import { buildWallCanvasVisualModel } from "@/lib/sala-editor/canvas/wall-junction-render";
+import { clientToStagePoint } from "@/lib/sala-editor/canvas/canvas-viewport";
+import {
+  scaleEditorWallSegment,
+  unscaleEditorPoint,
+} from "@/lib/sala-editor/canvas/editor-visual-scale";
+import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import type {
   WallInteractionTarget,
   WallPointerPayload,
@@ -30,18 +36,6 @@ export type SalaWallCanvasProps = {
   /** Dentro del frame de espacio — sin chrome propio. */
   embedded?: boolean;
 };
-
-function clientToCanvasPoint(
-  element: HTMLElement,
-  clientX: number,
-  clientY: number,
-): { x: number; y: number } {
-  const rect = element.getBoundingClientRect();
-  return {
-    x: clientX - rect.left,
-    y: clientY - rect.top,
-  };
-}
 
 function renderWallStroke(
   segment: {
@@ -109,8 +103,28 @@ export function SalaWallCanvas({
   embedded = false,
 }: SalaWallCanvasProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const canvasViewport = useCanvasViewport();
+  const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const selectedWall = walls.find((wall) => wall.id === selectedWallId) ?? null;
-  const selectedWallCenter = selectedWall ? getWallCenter(selectedWall) : null;
+  const scaledWalls = useMemo(
+    () => walls.map((wall) => scaleEditorWallSegment(wall, coordinateScale)),
+    [coordinateScale, walls],
+  );
+  const scaledDraft = useMemo(() => {
+    if (!draft) return null;
+    return {
+      ...draft,
+      x1: draft.x1 * coordinateScale,
+      y1: draft.y1 * coordinateScale,
+      previewX: draft.previewX * coordinateScale,
+      previewY: draft.previewY * coordinateScale,
+    };
+  }, [coordinateScale, draft]);
+  const selectedScaledWall =
+    scaledWalls.find((wall) => wall.id === selectedWallId) ?? null;
+  const selectedWallCenter = selectedScaledWall
+    ? getWallCenter(selectedScaledWall)
+    : null;
   const draftValid =
     draft != null &&
     isWallLengthValid({
@@ -123,27 +137,34 @@ export function SalaWallCanvas({
   const visualModel = useMemo(
     () =>
       buildWallCanvasVisualModel({
-        walls,
-        draft,
+        walls: scaledWalls,
+        draft: scaledDraft,
         strokeWidth: SALA_WALL_STROKE_WIDTH,
         junctionFill: SALA_WALL_STROKE_COLOR,
       }),
-    [draft, walls],
+    [scaledDraft, scaledWalls],
   );
 
-  const resolvePoint = useCallback((clientX: number, clientY: number) => {
-    const el = surfaceRef.current;
-    if (!el) return null;
-    return clientToCanvasPoint(el, clientX, clientY);
-  }, []);
+  const resolvePoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const fromViewport = canvasViewport?.resolveStagePoint(clientX, clientY);
+      if (fromViewport) return fromViewport;
+
+      const el = surfaceRef.current;
+      if (!el) return null;
+      return clientToStagePoint(el, clientX, clientY);
+    },
+    [canvasViewport],
+  );
 
   const createPayload = useCallback(
     (
       event: PointerEvent<HTMLElement>,
       target: WallInteractionTarget,
     ): WallPointerPayload | null => {
-      const point = resolvePoint(event.clientX, event.clientY);
-      if (!point) return null;
+      const displayPoint = resolvePoint(event.clientX, event.clientY);
+      if (!displayPoint) return null;
+      const point = unscaleEditorPoint(displayPoint, coordinateScale);
       return {
         point,
         clientX: event.clientX,
@@ -152,7 +173,7 @@ export function SalaWallCanvas({
         target,
       };
     },
-    [resolvePoint],
+    [coordinateScale, resolvePoint],
   );
 
   const handlePointerDown = useCallback(

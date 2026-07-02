@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useRef, type PointerEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  type PointerEvent,
+  type RefObject,
+} from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
@@ -16,20 +22,11 @@ import {
   type BaseFloorCatalogKind,
 } from "@/lib/sala-editor/catalog/base-floor-catalog";
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
+import { clientToStagePoint } from "@/lib/sala-editor/canvas/canvas-viewport";
+import { unscaleEditorPoint } from "@/lib/sala-editor/canvas/editor-visual-scale";
+import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import { SalaCanvasSnapGuides } from "@/components/sala-editor/panels/sala-canvas-snap-guides";
 import { SalaOperationalInstanceCanvasObject } from "@/components/sala-editor/panels/sala-operational-instance-canvas-object";
-
-function clientToCanvasPoint(
-  element: HTMLElement,
-  clientX: number,
-  clientY: number,
-): { x: number; y: number } {
-  const rect = element.getBoundingClientRect();
-  return {
-    x: clientX - rect.left,
-    y: clientY - rect.top,
-  };
-}
 
 export type SalaOperacionWorkspaceProps = {
   espacio: SalaEspacio;
@@ -66,6 +63,13 @@ export type SalaOperacionWorkspaceProps = {
   onDeleteInstance: (instanceId: string) => void;
 };
 
+type SalaOperacionCanvasContentProps = Omit<
+  SalaOperacionWorkspaceProps,
+  "espacio" | "restaurantId"
+> & {
+  surfaceRef: RefObject<HTMLDivElement | null>;
+};
+
 export function SalaOperacionWorkspace({
   espacio,
   restaurantId,
@@ -90,7 +94,6 @@ export function SalaOperacionWorkspace({
   onDeleteInstance,
 }: SalaOperacionWorkspaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const activeResizeCornerRef = useRef<OperationalInstanceResizeCorner | null>(null);
   const base = normalizeSalaEspacioBase(espacio.base);
   const floorEntry = getBaseFloorCatalogEntry(
     (base.floor.kind === "wood" ||
@@ -102,21 +105,125 @@ export function SalaOperacionWorkspace({
       : "neutral") as BaseFloorCatalogKind,
   );
 
-  const resolvePoint = useCallback((clientX: number, clientY: number) => {
-    const el = surfaceRef.current;
-    if (!el) return null;
-    return clientToCanvasPoint(el, clientX, clientY);
-  }, []);
+  return (
+    <SalaEspacioCanvasFrame
+      espacio={espacio}
+      restaurantId={restaurantId}
+      basePreview={base}
+      floorBackground={floorEntry.background}
+      stageRef={surfaceRef}
+      stageRole="application"
+      stageAriaLabel="Lienzo de elementos operativos"
+      stageStyle={{
+        cursor: draggingInstanceId
+          ? "grabbing"
+          : resizingInstanceId
+            ? "nwse-resize"
+            : "crosshair",
+      }}
+      hint={
+        <>
+          {instances.length === 0 ? (
+            <div className="hostly-sala-editor-canvas-hint">
+              Clic en el plano para colocar
+            </div>
+          ) : null}
+          {draggingInstanceId ? (
+            <div className="hostly-sala-editor-canvas-hint hostly-sala-editor-canvas-hint--floating">
+              Suelta para fijar
+            </div>
+          ) : null}
+        </>
+      }
+    >
+      <SalaOperacionCanvasContent
+        surfaceRef={surfaceRef}
+        instances={instances}
+        selectedInstanceId={selectedInstanceId}
+        draggingInstanceId={draggingInstanceId}
+        resizingInstanceId={resizingInstanceId}
+        dropAnimatingInstanceId={dropAnimatingInstanceId}
+        snapGuides={snapGuides}
+        isDragging={isDragging}
+        isResizing={isResizing}
+        onCanvasPointerDown={onCanvasPointerDown}
+        onInstancePointerDown={onInstancePointerDown}
+        onInstancePointerMove={onInstancePointerMove}
+        onInstancePointerUp={onInstancePointerUp}
+        onInstancePointerCancel={onInstancePointerCancel}
+        onResizeStart={onResizeStart}
+        onResizeMove={onResizeMove}
+        onResizeEnd={onResizeEnd}
+        onResizeCancel={onResizeCancel}
+        onDuplicateInstance={onDuplicateInstance}
+        onDeleteInstance={onDeleteInstance}
+      />
+    </SalaEspacioCanvasFrame>
+  );
+}
+
+function SalaOperacionCanvasContent({
+  surfaceRef,
+  instances,
+  selectedInstanceId,
+  draggingInstanceId,
+  resizingInstanceId,
+  dropAnimatingInstanceId,
+  snapGuides,
+  isDragging,
+  isResizing,
+  onCanvasPointerDown,
+  onInstancePointerDown,
+  onInstancePointerMove,
+  onInstancePointerUp,
+  onInstancePointerCancel,
+  onResizeStart,
+  onResizeMove,
+  onResizeEnd,
+  onResizeCancel,
+  onDuplicateInstance,
+  onDeleteInstance,
+}: SalaOperacionCanvasContentProps) {
+  const canvasViewport = useCanvasViewport();
+  const coordinateScale = canvasViewport?.coordinateScale ?? 1;
+  const fitScale = canvasViewport?.scale ?? 1;
+  const activeResizeCornerRef = useRef<OperationalInstanceResizeCorner | null>(null);
+  const resizePointerBaselineRef = useRef<{ clientX: number; clientY: number } | null>(
+    null,
+  );
+
+  const resolveLogicalPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const fromViewport = canvasViewport?.resolveStagePoint(clientX, clientY);
+      const displayPoint =
+        fromViewport ??
+        (surfaceRef.current
+          ? clientToStagePoint(surfaceRef.current, clientX, clientY)
+          : null);
+      if (!displayPoint) return null;
+      return unscaleEditorPoint(displayPoint, coordinateScale);
+    },
+    [canvasViewport, coordinateScale],
+  );
+
+  const scaledSnapGuides = useMemo(() => {
+    if (!snapGuides) return undefined;
+    if (coordinateScale === 1) return snapGuides;
+    return {
+      v: snapGuides.v.map((x) => x * coordinateScale),
+      h: snapGuides.h.map((y) => y * coordinateScale),
+    };
+  }, [coordinateScale, snapGuides]);
 
   const handleCanvasPointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
       if (isDragging() || isResizing()) return;
-      const point = resolvePoint(event.clientX, event.clientY);
+      const point = resolveLogicalPoint(event.clientX, event.clientY);
       if (!point) return;
       onCanvasPointerDown(point);
     },
-    [isDragging, isResizing, onCanvasPointerDown, resolvePoint],
+    [isDragging, isResizing, onCanvasPointerDown, resolveLogicalPoint],
   );
 
   const createMoveHandlers = useCallback(
@@ -126,7 +233,7 @@ export function SalaOperacionWorkspace({
         if (isResizing()) return;
         event.stopPropagation();
         event.currentTarget.setPointerCapture(event.pointerId);
-        const point = resolvePoint(event.clientX, event.clientY);
+        const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
         onInstancePointerDown(instanceId, {
           point,
@@ -137,7 +244,7 @@ export function SalaOperacionWorkspace({
       },
       onBodyPointerMove: (event: PointerEvent<HTMLDivElement>) => {
         if (isResizing()) return;
-        const point = resolvePoint(event.clientX, event.clientY);
+        const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
         onInstancePointerMove(instanceId, {
           point,
@@ -167,7 +274,7 @@ export function SalaOperacionWorkspace({
       onInstancePointerDown,
       onInstancePointerMove,
       onInstancePointerUp,
-      resolvePoint,
+      resolveLogicalPoint,
     ],
   );
 
@@ -182,12 +289,26 @@ export function SalaOperacionWorkspace({
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
         activeResizeCornerRef.current = corner;
+        resizePointerBaselineRef.current = {
+          clientX: event.clientX,
+          clientY: event.clientY,
+        };
         onResizeStart(instanceId, corner, event.clientX, event.clientY);
       },
       onResizePointerMove: (event: PointerEvent<HTMLButtonElement>) => {
         if (!isResizing()) return;
         event.stopPropagation();
-        onResizeMove(event.clientX, event.clientY);
+        const baseline = resizePointerBaselineRef.current;
+        if (!baseline || fitScale === 1) {
+          onResizeMove(event.clientX, event.clientY);
+          return;
+        }
+        onResizeMove(
+          baseline.clientX +
+            (event.clientX - baseline.clientX) / fitScale,
+          baseline.clientY +
+            (event.clientY - baseline.clientY) / fitScale,
+        );
       },
       onResizePointerUp: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -195,6 +316,7 @@ export function SalaOperacionWorkspace({
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
         activeResizeCornerRef.current = null;
+        resizePointerBaselineRef.current = null;
         onResizeEnd();
       },
       onResizePointerCancel: (event: PointerEvent<HTMLButtonElement>) => {
@@ -203,45 +325,28 @@ export function SalaOperacionWorkspace({
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
         activeResizeCornerRef.current = null;
+        resizePointerBaselineRef.current = null;
         onResizeCancel();
       },
     }),
-    [isResizing, onResizeCancel, onResizeEnd, onResizeMove, onResizeStart],
+    [
+      isResizing,
+      onResizeCancel,
+      onResizeEnd,
+      onResizeMove,
+      onResizeStart,
+      fitScale,
+    ],
   );
 
   return (
-    <SalaEspacioCanvasFrame
-      espacio={espacio}
-      restaurantId={restaurantId}
-      basePreview={base}
-      floorBackground={floorEntry.background}
-      stageRef={surfaceRef}
-      stageRole="application"
-      stageAriaLabel="Lienzo de elementos operativos"
-      stageStyle={{
-        cursor: draggingInstanceId
-          ? "grabbing"
-          : resizingInstanceId
-            ? "nwse-resize"
-            : "crosshair",
-      }}
-      onStagePointerDown={handleCanvasPointerDown}
-      hint={
-        <>
-          {instances.length === 0 ? (
-            <div className="hostly-sala-editor-canvas-hint">
-              Clic en el plano para colocar
-            </div>
-          ) : null}
-          {draggingInstanceId ? (
-            <div className="hostly-sala-editor-canvas-hint hostly-sala-editor-canvas-hint--floating">
-              Suelta para fijar
-            </div>
-          ) : null}
-        </>
-      }
-    >
-      {snapGuides ? <SalaCanvasSnapGuides guides={snapGuides} /> : null}
+    <>
+      <div
+        className="absolute inset-0"
+        aria-hidden
+        onPointerDown={handleCanvasPointerDown}
+      />
+      {scaledSnapGuides ? <SalaCanvasSnapGuides guides={scaledSnapGuides} /> : null}
       {instances.map((instance) => {
         const instanceCatalog = getOperationalElementCatalogItem(instance.elementType);
         const moveHandlers = createMoveHandlers(instance.id);
@@ -256,8 +361,8 @@ export function SalaOperacionWorkspace({
             key={instance.id}
             className="absolute"
             style={{
-              left: instance.position.x,
-              top: instance.position.y,
+              left: instance.position.x * coordinateScale,
+              top: instance.position.y * coordinateScale,
             }}
           >
             <SalaOperationalInstanceCanvasObject
@@ -276,6 +381,6 @@ export function SalaOperacionWorkspace({
           </div>
         );
       })}
-    </SalaEspacioCanvasFrame>
+    </>
   );
 }

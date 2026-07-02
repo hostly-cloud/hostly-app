@@ -49,10 +49,10 @@
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--hostly-table-divider-soft) 88%, #cbd5e1);
-  background: color-mix(in srgb, #ffffff 96%, var(--hostly-surface-page-soft));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  border-radius: 0;
+  border: none;
+  background: #e7ecf3;
+  box-shadow: none;
 }
 
 .hostly-sala-editor-workbench__toolbar {
@@ -177,23 +177,23 @@
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(0, 148px) minmax(0, 1fr);
-  gap: 1px;
+  grid-template-columns: minmax(0, 124px) minmax(0, 1fr);
+  gap: 0;
   overflow: hidden;
-  background: var(--hostly-table-divider-faint);
+  background: #e2e8f1;
 }
 
 .hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
-  grid-template-columns: minmax(0, 148px) minmax(0, 1fr) minmax(0, 168px);
+  grid-template-columns: minmax(0, 124px) minmax(0, 1fr) minmax(0, 132px);
 }
 
 @media (max-width: 1023px) {
   .hostly-sala-editor-workbench__body {
-    grid-template-columns: minmax(0, 132px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 112px) minmax(0, 1fr);
   }
 
   .hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
-    grid-template-columns: minmax(0, 132px) minmax(0, 1fr) minmax(0, 152px);
+    grid-template-columns: minmax(0, 112px) minmax(0, 1fr) minmax(0, 118px);
   }
 }
 
@@ -203,7 +203,7 @@
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--hostly-surface-page-soft) 78%, white);
+  background: color-mix(in srgb, var(--hostly-surface-page-soft) 84%, #f8fafc);
 }
 
 .hostly-sala-editor-workbench__panel-inner {
@@ -212,7 +212,7 @@
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  padding: 4px;
+  padding: 3px;
 }
 
 .hostly-sala-editor-workbench__canvas {
@@ -222,7 +222,7 @@
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  background: #eef1f6;
+  background: #e2e8f1;
 }
 
 .hostly-sala-editor-workbench__canvas > * {
@@ -231,11 +231,12 @@
 }
 
 .hostly-sala-editor-workbench__panel--toolbox {
-  background: #f1f3f6;
+  background: #f6f8fb;
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .hostly-sala-editor-workbench__panel--toolbox .hostly-sala-editor-workbench__panel-inner {
-  padding: 6px 4px;
+  padding: 4px 3px;
 }
 
 .hostly-sala-editor-workbench__panel-inner > .hostly-sala-editor-toolbox--spaces-switcher {
@@ -250,8 +251,9 @@
 }
 
 .hostly-sala-editor-workbench__panel--inspector-subtle {
-  background: color-mix(in srgb, var(--hostly-surface-page-soft) 88%, #eef1f5);
-  opacity: 0.94;
+  background: color-mix(in srgb, var(--hostly-surface-page-soft) 92%, #f8fafc);
+  border-left: 1px solid rgba(148, 163, 184, 0.14);
+  opacity: 0.84;
 }
 
 .hostly-sala-editor-workbench__inspector-scroll {
@@ -262,7 +264,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 4px 6px;
+  padding: 4px;
 }
 
 /* Phase nav — compact toolbar tabs */
@@ -1474,26 +1476,26 @@
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .hostly-sala-library__head {
   flex-shrink: 0;
-  padding: 2px 4px 0;
+  padding: 1px 2px 0;
 }
 
 .hostly-sala-library__title {
-  margin: 0 0 6px;
-  font-size: 9px;
+  margin: 0 0 4px;
+  font-size: 8px;
   font-weight: 820;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--hostly-ink-muted);
+  color: #a3adbb;
 }
 
 .hostly-sala-library__hint {
   margin: 2px 0 0;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: #94a3b8;
 }
@@ -1501,12 +1503,12 @@
 .hostly-sala-library__search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  border-radius: 9px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: white;
-  padding: 0 8px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  gap: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0 6px;
+  box-shadow: none;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease;
@@ -1519,9 +1521,9 @@
 
 .hostly-sala-library__search-icon {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1;
-  opacity: 0.72;
+  opacity: 0.54;
 }
 
 .hostly-sala-library__search-input {
@@ -1529,8 +1531,8 @@
   flex: 1;
   border: none;
   background: transparent;
-  padding: 8px 0;
-  font-size: 11px;
+  padding: 6px 0;
+  font-size: 10px;
   font-weight: 650;
   color: #1e293b;
   outline: none;
@@ -1568,18 +1570,18 @@
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 2px 4px;
+  padding: 0 1px 4px;
 }
 
 .hostly-sala-library__category {
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease,
@@ -1587,9 +1589,9 @@
 }
 
 .hostly-sala-library__category.is-expanded {
-  border-color: color-mix(in srgb, var(--hostly-accent) 22%, #e2e8f0);
-  background: white;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: none;
 }
 
 .hostly-sala-library__category.is-upcoming:not(.is-expanded) {
@@ -1607,8 +1609,8 @@
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 8px;
-  padding: 10px 10px;
+  gap: 6px;
+  padding: 7px 6px;
   text-align: left;
   color: inherit;
 }
@@ -1637,10 +1639,10 @@
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: none;
   background: transparent;
-  padding: 10px 10px;
+  padding: 7px 6px;
   text-align: left;
   cursor: pointer;
   font: inherit;
@@ -1668,13 +1670,13 @@
 .hostly-sala-library__category-icon {
   display: inline-flex;
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--hostly-accent-soft) 42%, white);
-  font-size: 14px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--hostly-accent-soft) 28%, white);
+  font-size: 12px;
   line-height: 1;
 }
 
@@ -1687,13 +1689,13 @@
 }
 
 .hostly-sala-library__category-label {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 780;
-  color: #1e293b;
+  color: #475569;
 }
 
 .hostly-sala-library__category-meta {
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 650;
   color: #94a3b8;
 }
@@ -1719,7 +1721,7 @@
 .hostly-sala-library__items {
   margin: 0;
   list-style: none;
-  padding: 0 8px 8px;
+  padding: 0 4px 6px;
 }
 
 .hostly-sala-library__item + .hostly-sala-library__item {
@@ -1730,11 +1732,11 @@
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 8px;
-  border-radius: 8px;
+  gap: 6px;
+  border-radius: 7px;
   border: 1px solid transparent;
   background: transparent;
-  padding: 7px 8px;
+  padding: 6px;
   text-align: left;
   cursor: pointer;
   font: inherit;
@@ -1774,7 +1776,7 @@
 .hostly-sala-library__item-label {
   min-width: 0;
   flex: 1;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -2279,32 +2281,6 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
 }
 
-.hostly-sala-espacio-frame__header {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 5px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-  background: color-mix(in srgb, var(--espacio-accent, #315f7d) 5%, #f8fafc);
-  padding: 4px 8px;
-}
-
-.hostly-sala-espacio-frame__header-icon {
-  font-size: 11px;
-  line-height: 1;
-  opacity: 0.85;
-}
-
-.hostly-sala-espacio-frame__header-name {
-  overflow: hidden;
-  font-size: 10px;
-  font-weight: 780;
-  letter-spacing: 0.01em;
-  color: color-mix(in srgb, var(--espacio-accent, #315f7d) 55%, #475569);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .hostly-sala-espacio-frame--blueprint .hostly-sala-espacio-frame__stage {
   border-radius: 0 0 7px 7px;
   background: #fbfdff;
@@ -2382,13 +2358,13 @@
 }
 
 .hostly-sala-editor-workbench__panel--inspector-subtle {
-  background: #f3f5f8;
-  opacity: 0.88;
+  background: #f7f9fc;
+  opacity: 0.76;
 }
 
 .hostly-sala-editor-inspector {
   gap: 4px;
-  opacity: 0.82;
+  opacity: 0.72;
 }
 
 .hostly-sala-editor-inspector__section {
@@ -2423,9 +2399,9 @@
 
 .hostly-sala-editor-inspector__card,
 .hostly-sala-editor-inspector__toggle-row {
-  border-color: rgba(148, 163, 184, 0.12);
-  background: rgba(255, 255, 255, 0.42);
-  padding: 6px;
+  border-color: rgba(148, 163, 184, 0.1);
+  background: rgba(255, 255, 255, 0.34);
+  padding: 5px;
   font-size: 10px;
   color: #94a3b8;
 }
@@ -2680,12 +2656,13 @@
 }
 
 .hostly-sala-editor-canvas-frame--space-workspace {
-  background: transparent;
+  background: #e2e8f1;
+  border: none;
   box-shadow: none;
 }
 
 .hostly-sala-editor-canvas-frame--space-workspace .hostly-sala-editor-canvas-frame__surface {
-  background: transparent;
+  background: #e2e8f1;
 }
 
 .hostly-sala-espacio-frame-viewport {
@@ -2713,7 +2690,6 @@
 .hostly-sala-espacio-frame-fit__content {
   flex-shrink: 0;
   transform-origin: center center;
-  will-change: transform;
 }
 
 .hostly-sala-espacio-frame-fluid {
@@ -2730,9 +2706,9 @@
   min-height: 0;
   min-width: 0;
   flex-direction: column;
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--espacio-accent, #315f7d) 22%, rgba(148, 163, 184, 0.28)),
-    0 10px 24px rgba(15, 23, 42, 0.08);
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .hostly-sala-espacio-frame--active-workspace.hostly-sala-espacio-frame--bounded {
@@ -2751,39 +2727,21 @@
   display: none;
 }
 
-.hostly-sala-espacio-frame__header-swatch {
-  width: 8px;
-  height: 8px;
-  flex-shrink: 0;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
-}
-
-.hostly-sala-espacio-frame--active-workspace .hostly-sala-espacio-frame__header {
-  border-bottom-color: color-mix(in srgb, var(--espacio-accent, #315f7d) 16%, rgba(148, 163, 184, 0.14));
-  background: color-mix(in srgb, var(--espacio-accent, #315f7d) 8%, #f8fafc);
-}
-
-.hostly-sala-espacio-frame--active-workspace .hostly-sala-espacio-frame__header-name {
-  color: color-mix(in srgb, var(--espacio-accent, #315f7d) 68%, #334155);
-  font-weight: 820;
-}
-
 .hostly-sala-espacio-frame__stage--workspace {
-  background: color-mix(in srgb, #ffffff 92%, var(--espacio-accent, #315f7d) 3%);
+  background: color-mix(in srgb, #ffffff 95%, var(--espacio-accent, #315f7d) 2%);
 }
 
 .hostly-sala-editor-toolbox--spaces-switcher {
   flex-shrink: 0;
-  gap: 4px;
-  margin-bottom: 6px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  gap: 3px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
 .hostly-sala-editor-space-switcher__label {
   margin: 0 2px;
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 820;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2791,13 +2749,13 @@
 }
 
 .hostly-sala-editor-toolbox--spaces-switcher .hostly-sala-editor-space-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .hostly-sala-editor-toolbox--spaces-switcher .hostly-sala-editor-space-chip__icon {
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
 }
 
 .hostly-sala-editor-space-chip.is-selected {
@@ -2939,19 +2897,12 @@
   border: none !important;
 }
 
-.hostly-sala-espacio-frame__header-plan-label {
-  flex-shrink: 0;
-  font-size: 8px;
-  font-weight: 820;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--espacio-accent, #315f7d) 48%, #94a3b8);
-}
-
 .hostly-sala-espacio-frame__stage--bounded-plan {
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--espacio-accent, #315f7d) 18%, rgba(100, 116, 139, 0.22));
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--espacio-accent, #315f7d) 10%, rgba(148, 163, 184, 0.18)),
-    inset 0 2px 12px rgba(15, 23, 42, 0.03);
+    0 1px 0 rgba(255, 255, 255, 0.86),
+    0 14px 32px rgba(15, 23, 42, 0.1);
 }
 
 .hostly-sala-espacio-frame__plan-corners {
@@ -3032,11 +2983,11 @@
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 2px 4px 6px;
+  padding: 1px 2px 5px;
 }
 
 .hostly-sala-base-config--empty {
@@ -3055,13 +3006,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 0 2px;
+  gap: 6px;
+  padding: 0 1px;
 }
 
 .hostly-sala-base-config__title {
   margin: 0;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 820;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -3070,8 +3021,8 @@
 
 .hostly-sala-base-config__status {
   border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 9px;
+  padding: 2px 6px;
+  font-size: 7px;
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -3093,22 +3044,22 @@
 }
 
 .hostly-sala-base-config__section {
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.82);
-  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.66);
+  padding: 7px;
 }
 
 .hostly-sala-base-config__section-title {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 780;
   color: #1e293b;
 }
 
 .hostly-sala-base-config__section-hint {
-  margin: 4px 0 8px;
-  font-size: 10px;
+  margin: 3px 0 6px;
+  font-size: 9px;
   font-weight: 600;
   line-height: 1.4;
   color: #94a3b8;
@@ -3117,7 +3068,7 @@
 .hostly-sala-base-config__dimension-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 5px;
 }
 
 .hostly-sala-base-config__field {
@@ -3135,11 +3086,11 @@
 
 .hostly-sala-base-config__input {
   width: 100%;
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background: white;
-  padding: 7px 8px;
-  font-size: 11px;
+  padding: 6px;
+  font-size: 10px;
   font-weight: 650;
   color: #1e293b;
   outline: none;
@@ -3175,7 +3126,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .hostly-sala-base-config__preset {
@@ -3183,8 +3134,8 @@
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: white;
-  padding: 4px 8px;
-  font-size: 10px;
+  padding: 3px 6px;
+  font-size: 9px;
   font-weight: 750;
   color: #64748b;
   cursor: pointer;
@@ -3198,18 +3149,18 @@
 
 .hostly-sala-base-config__floor-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: 1fr;
+  gap: 4px;
 }
 
 .hostly-sala-base-config__floor {
   display: flex;
   align-items: center;
-  gap: 8px;
-  border-radius: 9px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: white;
-  padding: 7px 8px;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 6px;
   text-align: left;
   cursor: pointer;
   transition:
@@ -3223,15 +3174,15 @@
 }
 
 .hostly-sala-base-config__floor-swatch {
-  width: 28px;
-  height: 22px;
+  width: 22px;
+  height: 18px;
   flex-shrink: 0;
   border-radius: 6px;
   border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .hostly-sala-base-config__floor-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 750;
   color: #334155;
 }

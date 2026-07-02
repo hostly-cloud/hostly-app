@@ -9,9 +9,10 @@ import {
 } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
-import { salaEspacioTypeIcon } from "@/lib/sala-editor/catalog/espacio-types";
 import { getSpaceWorkspaceKey, createSpaceWorkspaceScope } from "@/lib/sala-editor/canvas/space-workspace";
-import { useCanvasFitScale } from "@/lib/sala-editor/canvas/use-canvas-fit-scale";
+import { getEditorCoordinateScale, scaleEditorGridSize } from "@/lib/sala-editor/canvas/editor-visual-scale";
+import { useEditorVisualLayout } from "@/lib/sala-editor/canvas/use-editor-visual-layout";
+import { CanvasViewportProvider } from "@/components/sala-editor/canvas/canvas-viewport-context";
 
 export type SalaEspacioCanvasFrameProps = {
   espacio: SalaEspacio;
@@ -27,6 +28,11 @@ export type SalaEspacioCanvasFrameProps = {
   hint?: ReactNode;
 };
 
+function assignRef<T>(ref: RefObject<T | null> | undefined, value: T | null) {
+  if (!ref) return;
+  ref.current = value;
+}
+
 export function SalaEspacioCanvasFrame({
   espacio,
   restaurantId,
@@ -40,31 +46,32 @@ export function SalaEspacioCanvasFrame({
   children,
   hint,
 }: SalaEspacioCanvasFrameProps) {
-  const icon = salaEspacioTypeIcon(espacio.tipo);
   const viewportRef = useRef<HTMLDivElement>(null);
   const fitContentRef = useRef<HTMLDivElement>(null);
+  const stageElementRef = useRef<HTMLDivElement>(null);
 
   const workspaceKey =
     restaurantId != null
       ? getSpaceWorkspaceKey(createSpaceWorkspaceScope(restaurantId, espacio.id))
       : espacio.id;
 
-  const previewWidth = basePreview
-    ? Math.round(basePreview.dimensions.width * basePreview.scale.pixelsPerUnit)
-    : undefined;
-  const previewHeight = basePreview
-    ? Math.round(basePreview.dimensions.height * basePreview.scale.pixelsPerUnit)
-    : undefined;
-  const hasBoundedPlan = previewWidth != null && previewHeight != null;
-  const gridSize = basePreview?.grid.size ?? 16;
-  const gridOffset = gridSize / 2;
-
-  const fitScale = useCanvasFitScale(
+  const hasBoundedPlan = basePreview != null;
+  const visualLayout = useEditorVisualLayout(
     viewportRef,
-    fitContentRef,
+    basePreview,
     hasBoundedPlan,
-    [espacio.id, previewWidth, previewHeight],
+    [espacio.id, basePreview?.dimensions.width, basePreview?.dimensions.height],
   );
+
+  const previewWidth = hasBoundedPlan ? visualLayout.stageWidth : undefined;
+  const previewHeight = hasBoundedPlan ? visualLayout.stageHeight : undefined;
+  const coordinateScale = hasBoundedPlan ? getEditorCoordinateScale(visualLayout) : 1;
+  const gridSize = basePreview?.grid.size ?? 16;
+  const displayGridSize = hasBoundedPlan
+    ? scaleEditorGridSize(gridSize, coordinateScale)
+    : gridSize;
+  const gridOffset = displayGridSize / 2;
+  const fitScale = hasBoundedPlan ? visualLayout.fitScale : 1;
 
   const frame = (
     <div
@@ -77,27 +84,16 @@ export function SalaEspacioCanvasFrame({
         .join(" ")}
       data-space-workspace-id={espacio.id}
       data-space-workspace-key={workspaceKey}
+      data-canvas-fit-scale={fitScale}
+      data-canvas-display-ppu={visualLayout.displayPixelsPerUnit}
+      data-canvas-logical-ppu={visualLayout.logicalPixelsPerUnit}
       style={{ "--espacio-accent": espacio.color } as CSSProperties}
     >
-      <div className="hostly-sala-espacio-frame__header">
-        <span className="hostly-sala-espacio-frame__header-plan-label">Plano</span>
-        <span
-          className="hostly-sala-espacio-frame__header-swatch"
-          style={{ backgroundColor: espacio.color }}
-          aria-hidden
-        />
-        <span
-          className="hostly-sala-espacio-frame__header-icon"
-          style={{ color: espacio.color }}
-          aria-hidden
-        >
-          {icon}
-        </span>
-        <span className="hostly-sala-espacio-frame__header-name">{espacio.name}</span>
-      </div>
-
       <div
-        ref={stageRef}
+        ref={(node) => {
+          assignRef(stageElementRef, node);
+          assignRef(stageRef, node);
+        }}
         role={stageRole}
         aria-label={stageAriaLabel ?? `Plano de ${espacio.name}`}
         className={[
@@ -121,22 +117,30 @@ export function SalaEspacioCanvasFrame({
         }}
         onPointerDown={onStagePointerDown}
       >
-        <div className="hostly-sala-espacio-frame__plan-corners" aria-hidden />
-        {basePreview?.grid.visible !== false ? (
-          <div
-            className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft"
-            aria-hidden
-            style={{
-              backgroundSize: `${gridSize}px ${gridSize}px`,
-              backgroundPosition: `${gridOffset}px ${gridOffset}px`,
-            }}
-          />
-        ) : null}
-        {!basePreview ? (
-          <div className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft" aria-hidden />
-        ) : null}
-        {children}
-        {hint}
+        <CanvasViewportProvider
+          stageRef={stageElementRef}
+          scale={fitScale}
+          displayPixelsPerUnit={visualLayout.displayPixelsPerUnit}
+          logicalPixelsPerUnit={visualLayout.logicalPixelsPerUnit}
+          coordinateScale={coordinateScale}
+        >
+          <div className="hostly-sala-espacio-frame__plan-corners" aria-hidden />
+          {basePreview?.grid.visible !== false ? (
+            <div
+              className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft"
+              aria-hidden
+              style={{
+                backgroundSize: `${displayGridSize}px ${displayGridSize}px`,
+                backgroundPosition: `${gridOffset}px ${gridOffset}px`,
+              }}
+            />
+          ) : null}
+          {!basePreview ? (
+            <div className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft" aria-hidden />
+          ) : null}
+          {children}
+          {hint}
+        </CanvasViewportProvider>
       </div>
     </div>
   );
@@ -152,7 +156,7 @@ export function SalaEspacioCanvasFrame({
             <div
               className="hostly-sala-espacio-frame-fit__content"
               style={{
-                transform: `scale(${fitScale})`,
+                transform: fitScale === 1 ? undefined : `scale(${fitScale})`,
               }}
             >
               {frame}
