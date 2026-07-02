@@ -7,7 +7,8 @@ export type SalaEditorHistoryActionKind =
   | "operational.delete"
   | "operational.duplicate"
   | "espacio.create"
-  | "espacio.update";
+  | "espacio.update"
+  | "history.navigation";
 
 export type SalaEditorHistoryEntry = {
   id: string;

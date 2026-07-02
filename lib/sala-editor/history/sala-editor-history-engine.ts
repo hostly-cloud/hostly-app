@@ -37,6 +37,7 @@ export class SalaEditorHistoryEngine {
   private readonly espacioUpdateDebounceMs: number;
   private espacioUpdateBaseline: SalaEditorDocument | null = null;
   private espacioUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+  private changeListener: (() => void) | null = null;
 
   constructor(options?: SalaEditorHistoryEngineOptions) {
     this.maxPast = options?.maxPast ?? DEFAULT_MAX_PAST;
@@ -52,11 +53,54 @@ export class SalaEditorHistoryEngine {
     };
   }
 
+  setChangeListener(listener: (() => void) | null): void {
+    this.changeListener = listener;
+  }
+
+  canUndo(): boolean {
+    return this.past.length > 0;
+  }
+
+  canRedo(): boolean {
+    return this.future.length > 0;
+  }
+
+  undo(present: SalaEditorDocument): SalaEditorDocument | null {
+    if (this.past.length === 0) return null;
+
+    this.discardTransaction();
+    this.clearEspacioUpdateSchedule();
+
+    const target = this.past.pop()!;
+    this.future.push(
+      createHistoryEntry("history.navigation", present),
+    );
+
+    this.emitChange();
+    return cloneSalaEditorDocument(target.document);
+  }
+
+  redo(present: SalaEditorDocument): SalaEditorDocument | null {
+    if (this.future.length === 0) return null;
+
+    this.discardTransaction();
+    this.clearEspacioUpdateSchedule();
+
+    const target = this.future.pop()!;
+    this.past.push(
+      createHistoryEntry("history.navigation", present),
+    );
+
+    this.emitChange();
+    return cloneSalaEditorDocument(target.document);
+  }
+
   reset(): void {
     this.past = [];
     this.future = [];
     this.transactionBaseline = null;
     this.clearEspacioUpdateSchedule();
+    this.emitChange();
   }
 
   beginTransaction(baseline: SalaEditorDocument): void {
@@ -140,6 +184,11 @@ export class SalaEditorHistoryEngine {
       this.past.shift();
     }
     this.future = [];
+    this.emitChange();
+  }
+
+  private emitChange(): void {
+    this.changeListener?.();
   }
 
   private clearEspacioUpdateSchedule(): void {

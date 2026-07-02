@@ -80,6 +80,14 @@ export function useSalaEditorDocument({
     historyApi?.reset();
   }, [historyApi, restaurantId]);
 
+  const restoreDocumentSnapshot = useCallback((nextDocument: SalaEditorDocument) => {
+    if (nextDocument.restaurantId !== restaurantId) return;
+    setDocument(nextDocument);
+    setActiveTool(null);
+    setActiveOperationalElement(null);
+    setSelectedOperationalElementInstanceId(null);
+  }, [restaurantId]);
+
   const disabledPhases = useMemo(
     () => getDisabledSalaEditorPhases(document.espacios, document.navigation),
     [document.espacios, document.navigation],
@@ -452,6 +460,7 @@ export function useSalaEditorDocument({
   return {
     document,
     replaceDocument,
+    restoreDocumentSnapshot,
     disabledPhases,
     selectedEspacio,
     elementCountByEspacioId,

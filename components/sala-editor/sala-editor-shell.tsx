@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { SalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
 import { SalaEditorPhaseNav } from "@/components/sala-editor/sala-editor-phase-nav";
+import { SalaEditorHistoryControls } from "@/components/sala-editor/sala-editor-history-controls";
 import "@/components/sala-editor/sala-editor-workbench.css";
 
 export type SalaEditorShellProps = {
@@ -17,6 +18,10 @@ export type SalaEditorShellProps = {
   workspace: ReactNode;
   inspector: ReactNode;
   legacyEditorHref?: string;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 };
 
 /**
@@ -32,6 +37,10 @@ export function SalaEditorShell({
   workspace,
   inspector,
   legacyEditorHref,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
 }: SalaEditorShellProps) {
   return (
     <section
@@ -43,11 +52,21 @@ export function SalaEditorShell({
         .join(" ")}
     >
       <header className="hostly-sala-editor-workbench__toolbar">
-        <SalaEditorPhaseNav
-          phase={navigation.phase}
-          disabledPhases={disabledPhases}
-          onPhaseChange={onPhaseChange}
-        />
+        <div className="hostly-sala-editor-workbench__toolbar-start">
+          <SalaEditorPhaseNav
+            phase={navigation.phase}
+            disabledPhases={disabledPhases}
+            onPhaseChange={onPhaseChange}
+          />
+          {onUndo && onRedo ? (
+            <SalaEditorHistoryControls
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onUndo={onUndo}
+              onRedo={onRedo}
+            />
+          ) : null}
+        </div>
         <div className="hostly-sala-editor-workbench__toolbar-meta">
           <span className="hostly-sala-editor-workbench__count">
             {espaciosCount} espacio{espaciosCount === 1 ? "" : "s"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
@@ -65,7 +65,7 @@ export function SalaEditorWorkspace({
   const lastDraftSignatureRef = useRef<string | null>(null);
   const documentSnapshotRef = useRef<SalaEditorDocument | null>(null);
 
-  const { historyApi } = useSalaEditorHistory();
+  const { historyApi, historyRevision } = useSalaEditorHistory();
 
   const getDocumentSnapshot = useCallback(() => {
     return documentSnapshotRef.current!;
@@ -84,6 +84,7 @@ export function SalaEditorWorkspace({
     selectedOperationalElementInstanceId,
     selectedOperationalElementInstance,
     replaceDocument,
+    restoreDocumentSnapshot,
     selectTool,
     selectOperationalElement,
     placeOperationalElementAt,
@@ -437,6 +438,55 @@ export function SalaEditorWorkspace({
     setAddDialogOpen(true);
   }, []);
 
+  const handleUndo = useCallback(() => {
+    cancelDragging();
+    cancelResize();
+    clearOperationalSnapGuides();
+    historyApi.discardTransaction();
+    historyApi.flushScheduledCommits(getDocumentSnapshot);
+
+    const nextDocument = historyApi.undo(documentSnapshotRef.current!);
+    if (!nextDocument) return;
+
+    restoreDocumentSnapshot(nextDocument);
+  }, [
+    cancelDragging,
+    cancelResize,
+    clearOperationalSnapGuides,
+    getDocumentSnapshot,
+    historyApi,
+    restoreDocumentSnapshot,
+  ]);
+
+  const handleRedo = useCallback(() => {
+    cancelDragging();
+    cancelResize();
+    clearOperationalSnapGuides();
+    historyApi.discardTransaction();
+    historyApi.flushScheduledCommits(getDocumentSnapshot);
+
+    const nextDocument = historyApi.redo(documentSnapshotRef.current!);
+    if (!nextDocument) return;
+
+    restoreDocumentSnapshot(nextDocument);
+  }, [
+    cancelDragging,
+    cancelResize,
+    clearOperationalSnapGuides,
+    getDocumentSnapshot,
+    historyApi,
+    restoreDocumentSnapshot,
+  ]);
+
+  const canUndoHistory = useMemo(
+    () => historyApi.canUndo(),
+    [historyApi, historyRevision],
+  );
+  const canRedoHistory = useMemo(
+    () => historyApi.canRedo(),
+    [historyApi, historyRevision],
+  );
+
   const selectedElementCount = selectedEspacio
     ? (elementCountByEspacioId[selectedEspacio.id] ?? 0)
     : 0;
@@ -457,6 +507,10 @@ export function SalaEditorWorkspace({
         inspectorOpen={inspectorOpen}
         onPhaseChange={setPhase}
         legacyEditorHref={legacyEditorHref}
+        canUndo={canUndoHistory}
+        canRedo={canRedoHistory}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
         leftPanel={
           <SalaEditorLeftPanel
             phase={document.navigation.phase}
