@@ -2903,6 +2903,15 @@
   filter: drop-shadow(0 1px 4px rgba(49, 95, 125, 0.18));
 }
 
+.hostly-sala-wall-junctions {
+  pointer-events: none;
+}
+
+.hostly-sala-wall-junctions circle,
+.hostly-sala-wall-junctions path {
+  pointer-events: none;
+}
+
 .hostly-sala-wall-draft line {
   pointer-events: none;
 }

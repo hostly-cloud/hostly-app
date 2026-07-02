@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, type PointerEvent } from "react";
+import { useCallback, useMemo, useRef, type PointerEvent } from "react";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import {
@@ -9,10 +9,13 @@ import {
   SALA_WALL_STROKE_COLOR,
   SALA_WALL_STROKE_WIDTH,
 } from "@/lib/sala-editor/geometry/wall-geometry";
+import { buildWallCanvasVisualModel } from "@/lib/sala-editor/canvas/wall-junction-render";
 import type {
   WallInteractionTarget,
   WallPointerPayload,
 } from "@/lib/sala-editor/canvas/wall-interaction";
+
+const WALL_ACCENT_COLOR = "var(--hostly-accent, #315f7d)";
 
 export type SalaWallCanvasProps = {
   walls: SalaWallSegment[];
@@ -40,6 +43,59 @@ function clientToCanvasPoint(
   };
 }
 
+function renderWallStroke(
+  segment: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    capStart: "round" | "butt";
+    capEnd: "round" | "butt";
+  },
+  stroke: string,
+  strokeWidth: number,
+  extraProps?: {
+    opacity?: number;
+    strokeDasharray?: string;
+  },
+) {
+  const halfWidth = strokeWidth / 2;
+
+  return (
+    <>
+      <line
+        x1={segment.x1}
+        y1={segment.y1}
+        x2={segment.x2}
+        y2={segment.y2}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        strokeLinecap="butt"
+        opacity={extraProps?.opacity}
+        strokeDasharray={extraProps?.strokeDasharray}
+      />
+      {segment.capStart === "round" ? (
+        <circle
+          cx={segment.x1}
+          cy={segment.y1}
+          r={halfWidth}
+          fill={stroke}
+          opacity={extraProps?.opacity}
+        />
+      ) : null}
+      {segment.capEnd === "round" ? (
+        <circle
+          cx={segment.x2}
+          cy={segment.y2}
+          r={halfWidth}
+          fill={stroke}
+          opacity={extraProps?.opacity}
+        />
+      ) : null}
+    </>
+  );
+}
+
 export function SalaWallCanvas({
   walls,
   draft,
@@ -63,6 +119,17 @@ export function SalaWallCanvas({
       x2: draft.previewX,
       y2: draft.previewY,
     });
+
+  const visualModel = useMemo(
+    () =>
+      buildWallCanvasVisualModel({
+        walls,
+        draft,
+        strokeWidth: SALA_WALL_STROKE_WIDTH,
+        junctionFill: SALA_WALL_STROKE_COLOR,
+      }),
+    [draft, walls],
+  );
 
   const resolvePoint = useCallback((clientX: number, clientY: number) => {
     const el = surfaceRef.current;
@@ -130,71 +197,57 @@ export function SalaWallCanvas({
         className="pointer-events-none absolute inset-0 h-full w-full"
         aria-hidden
       >
-        {walls.map((wall) => {
-          const selected = wall.id === selectedWallId;
+        <g className="hostly-sala-wall-junctions">
+          {visualModel.junctions.map((junction) =>
+            junction.kind === "circle" ? (
+              <circle
+                key={junction.key}
+                cx={junction.cx}
+                cy={junction.cy}
+                r={junction.r}
+                fill={junction.fill}
+              />
+            ) : (
+              <path key={junction.key} d={junction.d} fill={junction.fill} />
+            ),
+          )}
+        </g>
+
+        {visualModel.segments.map((segment) => {
+          const selected = segment.id === selectedWallId;
           return (
             <g
-              key={wall.id}
+              key={segment.id}
               className={selected ? "hostly-sala-wall--selected" : undefined}
             >
-              {selected ? (
-                <line
-                  x1={wall.x1}
-                  y1={wall.y1}
-                  x2={wall.x2}
-                  y2={wall.y2}
-                  stroke="var(--hostly-accent, #315f7d)"
-                  strokeWidth={SALA_WALL_STROKE_WIDTH + 12}
-                  strokeLinecap="round"
-                  opacity={0.2}
-                />
-              ) : null}
-              <line
-                x1={wall.x1}
-                y1={wall.y1}
-                x2={wall.x2}
-                y2={wall.y2}
-                stroke={
-                  selected
-                    ? "var(--hostly-accent, #315f7d)"
-                    : SALA_WALL_STROKE_COLOR
-                }
-                strokeWidth={SALA_WALL_STROKE_WIDTH}
-                strokeLinecap="round"
-              />
+              {selected
+                ? renderWallStroke(
+                    segment,
+                    WALL_ACCENT_COLOR,
+                    SALA_WALL_STROKE_WIDTH + 12,
+                    { opacity: 0.2 },
+                  )
+                : null}
+              {renderWallStroke(
+                segment,
+                selected ? WALL_ACCENT_COLOR : SALA_WALL_STROKE_COLOR,
+                SALA_WALL_STROKE_WIDTH,
+              )}
             </g>
           );
         })}
 
-        {draft ? (
+        {visualModel.draftSegment ? (
           <g className="hostly-sala-wall-draft">
-            <circle
-              cx={draft.x1}
-              cy={draft.y1}
-              r={5}
-              fill="var(--hostly-accent, #315f7d)"
-              opacity={0.9}
-            />
-            <line
-              x1={draft.x1}
-              y1={draft.y1}
-              x2={draft.previewX}
-              y2={draft.previewY}
-              stroke="var(--hostly-accent, #315f7d)"
-              strokeWidth={SALA_WALL_STROKE_WIDTH}
-              strokeLinecap="round"
-              strokeDasharray={draftValid ? undefined : "6 6"}
-              opacity={draftValid ? 0.92 : 0.55}
-            />
-            <circle
-              cx={draft.previewX}
-              cy={draft.previewY}
-              r={4}
-              fill="white"
-              stroke="var(--hostly-accent, #315f7d)"
-              strokeWidth={2}
-              opacity={draftValid ? 1 : 0.7}
-            />
+            {renderWallStroke(
+              visualModel.draftSegment,
+              WALL_ACCENT_COLOR,
+              SALA_WALL_STROKE_WIDTH,
+              {
+                opacity: draftValid ? 0.92 : 0.55,
+                strokeDasharray: draftValid ? undefined : "6 6",
+              },
+            )}
           </g>
         ) : null}
       </svg>
