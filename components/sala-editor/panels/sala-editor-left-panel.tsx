@@ -5,6 +5,7 @@ import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espa
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
+import type { SalaEspacioBasePatch } from "@/lib/sala-editor/base/espacio-base-editor";
 import { SalaEspaciosSidebar } from "@/components/sala-editor/panels/sala-espacios-sidebar";
 import { SalaBaseSidebar } from "@/components/sala-editor/panels/sala-base-sidebar";
 import { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
@@ -26,6 +27,10 @@ export type SalaEditorLeftPanelProps = {
     visualVariant?: OperationalVisualVariant,
   ) => void;
   onUpdateEspacio?: (espacioId: string, patch: Partial<SalaEspacioDraft>) => void;
+  onUpdateEspacioBase?: (
+    espacioId: string,
+    patch: SalaEspacioBasePatch,
+  ) => void;
 };
 
 export function SalaEditorLeftPanel({
@@ -41,7 +46,13 @@ export function SalaEditorLeftPanel({
   onSelectStructuralTool,
   onSelectOperationalElement,
   onUpdateEspacio,
+  onUpdateEspacioBase,
 }: SalaEditorLeftPanelProps) {
+  const selectedEspacio =
+    selectedEspacioId != null
+      ? espacios.find((espacio) => espacio.id === selectedEspacioId) ?? null
+      : null;
+
   return (
     <>
       {espacios.length > 0 && phase !== "espacios" ? (
@@ -66,7 +77,12 @@ export function SalaEditorLeftPanel({
           onUpdateEspacio={onUpdateEspacio}
         />
       ) : null}
-      {phase === "base" ? <SalaBaseSidebar /> : null}
+      {phase === "base" ? (
+        <SalaBaseSidebar
+          espacio={selectedEspacio}
+          onUpdateBase={(espacioId, patch) => onUpdateEspacioBase?.(espacioId, patch)}
+        />
+      ) : null}
       {phase === "estructura" ? (
         <SalaEstructuraSidebar
           activeToolKind={activeStructuralToolKind}

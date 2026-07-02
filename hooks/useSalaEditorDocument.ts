@@ -6,6 +6,8 @@ import { createEmptySalaEditorDocument } from "@/lib/sala-editor/types/editor-do
 import { normalizeSalaEditorDocument } from "@/lib/sala-editor/normalize/normalize-sala-editor-document";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
+import type { SalaEspacioBasePatch } from "@/lib/sala-editor/base/espacio-base-editor";
+import { applySalaEspacioBasePatch } from "@/lib/sala-editor/base/espacio-base-editor";
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { SalaEditorActiveTool } from "@/lib/sala-editor/types/editor-tool";
 import {
@@ -587,6 +589,30 @@ export function useSalaEditorDocument({
     [getDocumentSnapshot, historyApi],
   );
 
+  const updateEspacioBase = useCallback(
+    (espacioId: string, patch: SalaEspacioBasePatch) => {
+      setDocument((prev) => {
+        const next = {
+          ...prev,
+          espacios: prev.espacios.map((espacio) =>
+            espacio.id === espacioId
+              ? {
+                  ...espacio,
+                  base: applySalaEspacioBasePatch(espacio.base, patch),
+                }
+              : espacio,
+          ),
+          updatedAt: Date.now(),
+        };
+        if (historyApi && getDocumentSnapshot) {
+          historyApi.scheduleEspacioUpdateCommit(prev, getDocumentSnapshot);
+        }
+        return next;
+      });
+    },
+    [getDocumentSnapshot, historyApi],
+  );
+
   return {
     document,
     replaceDocument,
@@ -627,6 +653,7 @@ export function useSalaEditorDocument({
     addEspacio,
     addEspacioAndSelect,
     updateEspacio,
+    updateEspacioBase,
     addWall,
     updateWall,
     removeWall,

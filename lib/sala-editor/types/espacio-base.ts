@@ -99,6 +99,35 @@ function normalizeOrientationDegrees(value: unknown): number {
   return normalized < 0 ? normalized + 360 : normalized;
 }
 
+function nearlyEqualBaseNumber(a: number, b: number, epsilon = 0.01): boolean {
+  return Math.abs(a - b) <= epsilon;
+}
+
+export function isDefaultSalaEspacioBase(base: SalaEspacioBase): boolean {
+  return (
+    nearlyEqualBaseNumber(base.dimensions.width, DEFAULT_SALA_ESPACIO_BASE_DIMENSIONS.width) &&
+    nearlyEqualBaseNumber(base.dimensions.height, DEFAULT_SALA_ESPACIO_BASE_DIMENSIONS.height) &&
+    base.floor.kind === DEFAULT_SALA_ESPACIO_BASE_FLOOR.kind &&
+    base.grid.visible === true &&
+    base.grid.size === DEFAULT_SALA_ESPACIO_BASE_GRID_SIZE
+  );
+}
+
+export function meetsSalaEspacioBaseListaCriteria(base: SalaEspacioBase): boolean {
+  return (
+    base.dimensions.width >= 1 &&
+    base.dimensions.height >= 1 &&
+    base.grid.size >= 4 &&
+    base.grid.size <= 128
+  );
+}
+
+export function deriveSalaEspacioBaseStatus(base: SalaEspacioBase): SalaEspacioBaseStatus {
+  if (isDefaultSalaEspacioBase(base)) return "pendiente";
+  if (meetsSalaEspacioBaseListaCriteria(base)) return "lista";
+  return "incompleta";
+}
+
 export function createDefaultSalaEspacioBase(
   overrides?: Partial<SalaEspacioBase>,
 ): SalaEspacioBase {
@@ -152,11 +181,6 @@ export function normalizeSalaEspacioBase(
       ? floorRaw.color.trim()
       : DEFAULT_SALA_ESPACIO_BASE_FLOOR.color;
 
-  const status =
-    raw?.status === "pendiente" || raw?.status === "incompleta" || raw?.status === "lista"
-      ? raw.status
-      : "pendiente";
-
   const shapeType = raw?.shapeType === "rectangular" ? raw.shapeType : "rectangular";
 
   const gridSize = isPositiveFiniteNumber(gridRaw?.size)
@@ -168,8 +192,8 @@ export function normalizeSalaEspacioBase(
       ? raw.updatedAt
       : undefined;
 
-  return {
-    status,
+  const baseWithoutStatus: SalaEspacioBase = {
+    status: "pendiente",
     shapeType,
     dimensions: { width, height },
     unit: "metros",
@@ -195,5 +219,10 @@ export function normalizeSalaEspacioBase(
       size: gridSize,
     },
     ...(updatedAt !== undefined ? { updatedAt } : {}),
+  };
+
+  return {
+    ...baseWithoutStatus,
+    status: deriveSalaEspacioBaseStatus(baseWithoutStatus),
   };
 }

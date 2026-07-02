@@ -9,12 +9,15 @@ import {
   type RefObject,
 } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
+import type { SalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { salaEspacioTypeIcon } from "@/lib/sala-editor/catalog/espacio-types";
 import { getSpaceWorkspaceKey, createSpaceWorkspaceScope } from "@/lib/sala-editor/canvas/space-workspace";
 
 export type SalaEspacioCanvasFrameProps = {
   espacio: SalaEspacio;
   restaurantId?: string;
+  basePreview?: SalaEspacioBase;
+  floorBackground?: string;
   stageRef?: RefObject<HTMLDivElement | null>;
   stageRole?: string;
   stageAriaLabel?: string;
@@ -27,6 +30,8 @@ export type SalaEspacioCanvasFrameProps = {
 export function SalaEspacioCanvasFrame({
   espacio,
   restaurantId,
+  basePreview,
+  floorBackground,
   stageRef,
   stageRole,
   stageAriaLabel,
@@ -55,6 +60,15 @@ export function SalaEspacioCanvasFrame({
       behavior: "smooth",
     });
   }, [espacio.id]);
+
+  const previewWidth = basePreview
+    ? Math.round(basePreview.dimensions.width * basePreview.scale.pixelsPerUnit)
+    : undefined;
+  const previewHeight = basePreview
+    ? Math.round(basePreview.dimensions.height * basePreview.scale.pixelsPerUnit)
+    : undefined;
+  const gridSize = basePreview?.grid.size ?? 16;
+  const gridOffset = gridSize / 2;
 
   return (
     <div className="hostly-sala-editor-canvas-frame hostly-sala-editor-canvas-frame--canvas hostly-sala-editor-canvas-frame--blueprint hostly-sala-editor-canvas-frame--space-workspace">
@@ -90,12 +104,41 @@ export function SalaEspacioCanvasFrame({
             ref={stageRef}
             role={stageRole}
             aria-label={stageAriaLabel ?? `Plano de ${espacio.name}`}
-            className="hostly-sala-espacio-frame__stage hostly-sala-espacio-frame__stage--workspace hostly-sala-espacio-frame__stage--bounded-plan"
-            style={stageStyle}
+            className={[
+              "hostly-sala-espacio-frame__stage hostly-sala-espacio-frame__stage--workspace hostly-sala-espacio-frame__stage--bounded-plan",
+              basePreview ? "hostly-sala-espacio-frame__stage--base-preview" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            style={{
+              ...stageStyle,
+              ...(previewWidth != null && previewHeight != null
+                ? {
+                    width: previewWidth,
+                    height: previewHeight,
+                    minWidth: previewWidth,
+                    minHeight: previewHeight,
+                    flex: "0 0 auto",
+                  }
+                : {}),
+              ...(floorBackground ? { background: floorBackground } : {}),
+            }}
             onPointerDown={onStagePointerDown}
           >
             <div className="hostly-sala-espacio-frame__plan-corners" aria-hidden />
-            <div className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft" aria-hidden />
+            {basePreview?.grid.visible !== false ? (
+              <div
+                className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft"
+                aria-hidden
+                style={{
+                  backgroundSize: `${gridSize}px ${gridSize}px`,
+                  backgroundPosition: `${gridOffset}px ${gridOffset}px`,
+                }}
+              />
+            ) : null}
+            {!basePreview ? (
+              <div className="hostly-sala-editor-dot-grid hostly-sala-editor-dot-grid--soft" aria-hidden />
+            ) : null}
             {children}
             {hint}
           </div>

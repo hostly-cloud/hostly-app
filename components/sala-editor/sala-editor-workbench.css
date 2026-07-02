@@ -2964,3 +2964,227 @@
 .hostly-sala-wall--editing line {
   filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.12));
 }
+
+/* Base phase — configuration panel */
+.hostly-sala-editor-toolbox--base-config {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hostly-sala-base-config {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 4px 6px;
+}
+
+.hostly-sala-base-config--empty {
+  padding: 12px 8px;
+}
+
+.hostly-sala-base-config__empty {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.hostly-sala-base-config__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.hostly-sala-base-config__title {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-sala-base-config__status {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.hostly-sala-base-config__status.is-pending {
+  background: rgba(148, 163, 184, 0.16);
+  color: #64748b;
+}
+
+.hostly-sala-base-config__status.is-progress {
+  background: rgba(251, 191, 36, 0.16);
+  color: #b45309;
+}
+
+.hostly-sala-base-config__status.is-ready {
+  background: color-mix(in srgb, var(--hostly-accent-soft) 70%, white);
+  color: var(--hostly-accent);
+}
+
+.hostly-sala-base-config__section {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 10px;
+}
+
+.hostly-sala-base-config__section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 780;
+  color: #1e293b;
+}
+
+.hostly-sala-base-config__section-hint {
+  margin: 4px 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
+.hostly-sala-base-config__dimension-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.hostly-sala-base-config__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.hostly-sala-base-config__field--grid {
+  margin-top: 8px;
+}
+
+.hostly-sala-base-config__input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: white;
+  padding: 7px 8px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #1e293b;
+  outline: none;
+}
+
+.hostly-sala-base-config__input:focus {
+  border-color: color-mix(in srgb, var(--hostly-accent) 34%, #cbd5e1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hostly-accent-soft) 55%, transparent);
+}
+
+.hostly-sala-base-config__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.hostly-sala-base-config__grid-size-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hostly-sala-base-config__unit {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.hostly-sala-base-config__preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.hostly-sala-base-config__preset {
+  min-width: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: white;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 750;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.hostly-sala-base-config__preset.is-active {
+  border-color: color-mix(in srgb, var(--hostly-accent) 30%, #cbd5e1);
+  background: color-mix(in srgb, var(--hostly-accent-soft) 55%, white);
+  color: var(--hostly-accent);
+}
+
+.hostly-sala-base-config__floor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.hostly-sala-base-config__floor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: white;
+  padding: 7px 8px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.hostly-sala-base-config__floor.is-selected {
+  border-color: color-mix(in srgb, var(--hostly-accent) 32%, #cbd5e1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hostly-accent-soft) 50%, transparent);
+}
+
+.hostly-sala-base-config__floor-swatch {
+  width: 28px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.hostly-sala-base-config__floor-label {
+  font-size: 10px;
+  font-weight: 750;
+  color: #334155;
+}
+
+.hostly-sala-espacio-frame__stage--base-preview {
+  align-self: center;
+  margin: 12px auto;
+}
+
+.hostly-sala-base-workspace__hero {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.72));
+}

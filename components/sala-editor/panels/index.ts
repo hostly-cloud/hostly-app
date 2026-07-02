@@ -7,6 +7,7 @@ export { SalaAddEspacioDialog } from "@/components/sala-editor/panels/sala-add-e
 export { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-espacios-empty-state";
 export { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
 export { SalaBaseSidebar } from "@/components/sala-editor/panels/sala-base-sidebar";
+export { SalaBaseConfigPanel } from "@/components/sala-editor/panels/sala-base-config-panel";
 export { SalaBaseWorkspace } from "@/components/sala-editor/panels/sala-base-workspace";
 export { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
 export { SalaStructuralToolCard } from "@/components/sala-editor/panels/sala-structural-tool-card";

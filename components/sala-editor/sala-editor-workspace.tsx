@@ -102,6 +102,7 @@ export function SalaEditorWorkspace({
     selectEspacio,
     addEspacioAndSelect,
     updateEspacio,
+    updateEspacioBase,
     addWall,
     updateWall,
     removeWall,
@@ -608,6 +609,7 @@ export function SalaEditorWorkspace({
             onSelectStructuralTool={selectTool}
             onSelectOperationalElement={selectOperationalElement}
             onUpdateEspacio={updateEspacio}
+            onUpdateEspacioBase={updateEspacioBase}
           />
         }
         workspace={
