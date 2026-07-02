@@ -1453,7 +1453,7 @@
 }
 
 .hostly-sala-library__title {
-  margin: 0;
+  margin: 0 0 6px;
   font-size: 9px;
   font-weight: 820;
   letter-spacing: 0.06em;
@@ -1466,6 +1466,71 @@
   font-size: 10px;
   font-weight: 600;
   color: #94a3b8;
+}
+
+.hostly-sala-library__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: white;
+  padding: 0 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.hostly-sala-library__search:focus-within {
+  border-color: color-mix(in srgb, var(--hostly-accent) 34%, #cbd5e1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hostly-accent-soft) 55%, transparent);
+}
+
+.hostly-sala-library__search-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.72;
+}
+
+.hostly-sala-library__search-input {
+  min-width: 0;
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px 0;
+  font-size: 11px;
+  font-weight: 650;
+  color: #1e293b;
+  outline: none;
+}
+
+.hostly-sala-library__search-input::placeholder {
+  color: #94a3b8;
+}
+
+.hostly-sala-library__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 12px;
+  text-align: center;
+}
+
+.hostly-sala-library__empty-icon {
+  font-size: 22px;
+  line-height: 1;
+  opacity: 0.72;
+}
+
+.hostly-sala-library__empty-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
 }
 
 .hostly-sala-library__scroll {
@@ -1499,6 +1564,43 @@
 
 .hostly-sala-library__category.is-upcoming:not(.is-expanded) {
   opacity: 0.88;
+}
+
+.hostly-sala-library__category.is-empty.is-disabled {
+  opacity: 0.72;
+  border-style: dashed;
+  background: rgba(248, 250, 252, 0.88);
+  box-shadow: none;
+}
+
+.hostly-sala-library__category-toggle--static {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px;
+  text-align: left;
+  color: inherit;
+}
+
+.hostly-sala-library__category-count {
+  font-weight: 700;
+  color: #64748b;
+}
+
+.hostly-sala-library__category.is-disabled .hostly-sala-library__category-label,
+.hostly-sala-library__category.is-disabled .hostly-sala-library__category-count {
+  color: #94a3b8;
+}
+
+.hostly-sala-library__category.is-disabled .hostly-sala-library__category-meta {
+  color: #94a3b8;
+  font-style: normal;
+}
+
+.hostly-sala-library__category.is-disabled .hostly-sala-library__category-icon {
+  opacity: 0.72;
+  filter: grayscale(0.25);
 }
 
 .hostly-sala-library__category-toggle {

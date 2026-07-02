@@ -3,36 +3,59 @@
 import type { ReactNode } from "react";
 import type { SalaEditorLibraryCategory } from "@/lib/sala-editor/library/types";
 import { countAvailableLibraryItems } from "@/lib/sala-editor/library/editor-library-catalog";
+import { isLibraryCategoryInteractive } from "@/lib/sala-editor/library/filter-library-catalog";
 
 export type SalaEditorLibraryCategoryProps = {
   category: SalaEditorLibraryCategory;
   expanded: boolean;
+  disabled?: boolean;
   onToggle: () => void;
   children: ReactNode;
 };
 
-function categoryMetaLabel(category: SalaEditorLibraryCategory): string {
-  if (category.upcoming) return "Próximamente";
-  const count = countAvailableLibraryItems(category);
-  if (count === 0) return "Próximamente";
-  return `${count} elemento${count === 1 ? "" : "s"}`;
-}
-
 export function SalaEditorLibraryCategorySection({
   category,
   expanded,
+  disabled = false,
   onToggle,
   children,
 }: SalaEditorLibraryCategoryProps) {
   const panelId = `sala-library-panel-${category.id}`;
-  const meta = categoryMetaLabel(category);
+  const availableCount = countAvailableLibraryItems(category);
+  const isInteractive = !disabled && isLibraryCategoryInteractive(category);
+
+  if (!isInteractive) {
+    return (
+      <section className="hostly-sala-library__category is-empty is-disabled">
+        <div className="hostly-sala-library__category-toggle hostly-sala-library__category-toggle--static">
+          <span className="hostly-sala-library__category-chevron" aria-hidden>
+            ▸
+          </span>
+          <span className="hostly-sala-library__category-icon" aria-hidden>
+            {category.icon}
+          </span>
+          <span className="hostly-sala-library__category-copy">
+            <span className="hostly-sala-library__category-label">
+              {category.label}
+              <span className="hostly-sala-library__category-count">
+                {" "}
+                · {availableCount}
+              </span>
+            </span>
+            <span className="hostly-sala-library__category-meta">
+              Disponible próximamente
+            </span>
+          </span>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
       className={[
         "hostly-sala-library__category",
         expanded ? "is-expanded" : "",
-        category.upcoming ? "is-upcoming" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -51,8 +74,13 @@ export function SalaEditorLibraryCategorySection({
           {category.icon}
         </span>
         <span className="hostly-sala-library__category-copy">
-          <span className="hostly-sala-library__category-label">{category.label}</span>
-          <span className="hostly-sala-library__category-meta">{meta}</span>
+          <span className="hostly-sala-library__category-label">
+            {category.label}
+            <span className="hostly-sala-library__category-count">
+              {" "}
+              · {availableCount}
+            </span>
+          </span>
         </span>
       </button>
 

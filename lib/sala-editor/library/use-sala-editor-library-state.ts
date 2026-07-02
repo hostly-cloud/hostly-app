@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  filterSalaEditorLibraryCategories,
+  normalizeLibrarySearchQuery,
+} from "@/lib/sala-editor/library/filter-library-catalog";
 import {
   getDefaultExpandedLibraryCategoryId,
   getSalaEditorLibraryCategories,
@@ -42,37 +46,82 @@ function resolveExpandedIds(phase: SalaEditorLibraryPhase): string[] {
 
 export function useSalaEditorLibraryState(phase: SalaEditorLibraryPhase) {
   const categories = getSalaEditorLibraryCategories(phase);
-  const [expandedIds, setExpandedIds] = useState<string[]>(() =>
+  const [searchQuery, setSearchQuery] = useState("");
+  const [manualExpandedIds, setManualExpandedIds] = useState<string[]>(() =>
     resolveExpandedIds(phase),
+  );
+  const preSearchExpandedIdsRef = useRef<string[] | null>(null);
+  const manualExpandedIdsRef = useRef(manualExpandedIds);
+  manualExpandedIdsRef.current = manualExpandedIds;
+
+  const normalizedSearch = normalizeLibrarySearchQuery(searchQuery);
+  const isSearching = normalizedSearch.length > 0;
+
+  const filteredCategories = useMemo(
+    () => filterSalaEditorLibraryCategories(categories, searchQuery),
+    [categories, searchQuery],
+  );
+
+  const searchExpandedIds = useMemo(
+    () => filteredCategories.map((entry) => entry.category.id),
+    [filteredCategories],
   );
 
   useEffect(() => {
-    setExpandedIds(resolveExpandedIds(phase));
+    setSearchQuery("");
+    preSearchExpandedIdsRef.current = null;
+    setManualExpandedIds(resolveExpandedIds(phase));
   }, [phase]);
 
   useEffect(() => {
+    if (isSearching) {
+      if (preSearchExpandedIdsRef.current === null) {
+        preSearchExpandedIdsRef.current = manualExpandedIdsRef.current;
+      }
+      return;
+    }
+
+    if (preSearchExpandedIdsRef.current !== null) {
+      setManualExpandedIds(preSearchExpandedIdsRef.current);
+      preSearchExpandedIdsRef.current = null;
+    }
+  }, [isSearching]);
+
+  useEffect(() => {
+    if (isSearching) return;
     writeExpandedState({
       ...readExpandedState(),
-      [phase]: expandedIds,
+      [phase]: manualExpandedIds,
     });
-  }, [expandedIds, phase]);
+  }, [isSearching, manualExpandedIds, phase]);
 
-  const toggleCategory = useCallback((categoryId: string) => {
-    setExpandedIds((current) =>
-      current.includes(categoryId)
-        ? current.filter((id) => id !== categoryId)
-        : [...current, categoryId],
-    );
-  }, []);
+  const toggleCategory = useCallback(
+    (categoryId: string) => {
+      if (isSearching) return;
+      setManualExpandedIds((current) =>
+        current.includes(categoryId)
+          ? current.filter((id) => id !== categoryId)
+          : [...current, categoryId],
+      );
+    },
+    [isSearching],
+  );
 
   const isExpanded = useCallback(
-    (categoryId: string) => expandedIds.includes(categoryId),
-    [expandedIds],
+    (categoryId: string) => {
+      if (isSearching) return searchExpandedIds.includes(categoryId);
+      return manualExpandedIds.includes(categoryId);
+    },
+    [isSearching, manualExpandedIds, searchExpandedIds],
   );
 
   return {
     categories,
-    expandedIds,
+    filteredCategories,
+    searchQuery,
+    setSearchQuery,
+    isSearching,
+    hasSearchResults: !isSearching || filteredCategories.length > 0,
     toggleCategory,
     isExpanded,
   };
