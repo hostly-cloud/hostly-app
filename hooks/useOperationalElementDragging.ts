@@ -7,6 +7,8 @@ import {
   type OperationalInstancePointerPayload,
 } from "@/lib/sala-editor/canvas/pointer-interaction";
 
+export type OperationalDragSessionOutcome = "complete" | "cancel";
+
 export type UseOperationalElementDraggingOptions = {
   enabled: boolean;
   onUpdatePosition: (
@@ -15,6 +17,8 @@ export type UseOperationalElementDraggingOptions = {
   ) => void;
   onSelectInstance: (instanceId: string) => void;
   onClearSelection: () => void;
+  onDragSessionStart?: () => void;
+  onDragSessionEnd?: (outcome: OperationalDragSessionOutcome) => void;
 };
 
 export type OperationalInstancePointerSample = OperationalInstancePointerPayload & {
@@ -36,6 +40,8 @@ export function useOperationalElementDragging({
   onUpdatePosition,
   onSelectInstance,
   onClearSelection,
+  onDragSessionStart,
+  onDragSessionEnd,
 }: UseOperationalElementDraggingOptions) {
   const [draggingInstanceId, setDraggingInstanceId] = useState<string | null>(
     null,
@@ -52,6 +58,13 @@ export function useOperationalElementDragging({
     draggingInstanceIdRef.current = instanceId;
     setDraggingInstanceId(instanceId);
   }, []);
+
+  const notifyDragSessionEnd = useCallback(
+    (outcome: OperationalDragSessionOutcome) => {
+      onDragSessionEnd?.(outcome);
+    },
+    [onDragSessionEnd],
+  );
 
   const isDragging = useCallback((): boolean => {
     return draggingInstanceIdRef.current !== null;
@@ -93,12 +106,13 @@ export function useOperationalElementDragging({
         }
         pending.active = true;
         syncDraggingRef(instanceId);
+        onDragSessionStart?.();
       }
 
       if (draggingInstanceIdRef.current !== instanceId) return;
       onUpdatePosition(instanceId, sample.canvasPoint);
     },
-    [enabled, onUpdatePosition, syncDraggingRef],
+    [enabled, onDragSessionStart, onUpdatePosition, syncDraggingRef],
   );
 
   const endInstancePointer = useCallback(
@@ -115,9 +129,12 @@ export function useOperationalElementDragging({
       }
 
       const finishedId = draggingInstanceIdRef.current;
+      const hadActiveDrag = finishedId != null;
       syncDraggingRef(null);
 
       if (!finishedId) return;
+
+      notifyDragSessionEnd("complete");
 
       if (dropTimeoutRef.current) {
         clearTimeout(dropTimeoutRef.current);
@@ -129,7 +146,7 @@ export function useOperationalElementDragging({
         dropTimeoutRef.current = null;
       }, DROP_ANIMATION_MS);
     },
-    [syncDraggingRef],
+    [notifyDragSessionEnd, syncDraggingRef],
   );
 
   const cancelInstancePointer = useCallback(
@@ -140,6 +157,7 @@ export function useOperationalElementDragging({
       }
       if (draggingInstanceIdRef.current === instanceId) {
         syncDraggingRef(null);
+        notifyDragSessionEnd("cancel");
       }
       setDropAnimatingInstanceId(null);
       if (dropTimeoutRef.current) {
@@ -147,7 +165,7 @@ export function useOperationalElementDragging({
         dropTimeoutRef.current = null;
       }
     },
-    [syncDraggingRef],
+    [notifyDragSessionEnd, syncDraggingRef],
   );
 
   const finishDragging = useCallback(() => {
@@ -156,6 +174,8 @@ export function useOperationalElementDragging({
     syncDraggingRef(null);
 
     if (!finishedId) return;
+
+    notifyDragSessionEnd("complete");
 
     if (dropTimeoutRef.current) {
       clearTimeout(dropTimeoutRef.current);
@@ -166,17 +186,21 @@ export function useOperationalElementDragging({
       setDropAnimatingInstanceId(null);
       dropTimeoutRef.current = null;
     }, DROP_ANIMATION_MS);
-  }, [syncDraggingRef]);
+  }, [notifyDragSessionEnd, syncDraggingRef]);
 
   const cancelDragging = useCallback(() => {
+    const hadActiveDrag = draggingInstanceIdRef.current != null;
     pendingDragRef.current = null;
     syncDraggingRef(null);
+    if (hadActiveDrag) {
+      notifyDragSessionEnd("cancel");
+    }
     setDropAnimatingInstanceId(null);
     if (dropTimeoutRef.current) {
       clearTimeout(dropTimeoutRef.current);
       dropTimeoutRef.current = null;
     }
-  }, [syncDraggingRef]);
+  }, [notifyDragSessionEnd, syncDraggingRef]);
 
   const handleCanvasPointerDown = useCallback(
     (position: OperationalElementPosition, onPlace: () => void) => {

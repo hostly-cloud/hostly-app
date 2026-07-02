@@ -8,6 +8,8 @@ import {
   type OperationalInstanceResizeCorner,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
 
+export type OperationalResizeSessionOutcome = "complete" | "cancel";
+
 export type UseOperationalElementResizingOptions = {
   enabled: boolean;
   onResize: (
@@ -18,6 +20,7 @@ export type UseOperationalElementResizingOptions = {
     },
   ) => void;
   onSelectInstance: (instanceId: string) => void;
+  onResizeSessionEnd?: (outcome: OperationalResizeSessionOutcome) => void;
 };
 
 type ResizeSession = {
@@ -33,6 +36,7 @@ export function useOperationalElementResizing({
   enabled,
   onResize,
   onSelectInstance,
+  onResizeSessionEnd,
 }: UseOperationalElementResizingOptions) {
   const [resizingInstanceId, setResizingInstanceId] = useState<string | null>(null);
   const sessionRef = useRef<ResizeSession | null>(null);
@@ -90,14 +94,22 @@ export function useOperationalElementResizing({
   );
 
   const finishResize = useCallback(() => {
+    const hadSession = sessionRef.current != null;
     sessionRef.current = null;
     syncResizing(null);
-  }, [syncResizing]);
+    if (hadSession) {
+      onResizeSessionEnd?.("complete");
+    }
+  }, [onResizeSessionEnd, syncResizing]);
 
   const cancelResize = useCallback(() => {
+    const hadSession = sessionRef.current != null;
     sessionRef.current = null;
     syncResizing(null);
-  }, [syncResizing]);
+    if (hadSession) {
+      onResizeSessionEnd?.("cancel");
+    }
+  }, [onResizeSessionEnd, syncResizing]);
 
   useEffect(() => {
     if (!enabled) cancelResize();

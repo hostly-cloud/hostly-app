@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
+import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
 import {
   createLocalEspacio,
   nextEspacioSortOrder,
 } from "@/lib/sala-editor/preview/create-preview-espacios";
 import { useSalaEditorDocument } from "@/hooks/useSalaEditorDocument";
+import { useSalaEditorHistory } from "@/hooks/useSalaEditorHistory";
 import { useSalaWallDrawing } from "@/hooks/useSalaWallDrawing";
 import { useOperationalElementDragging } from "@/hooks/useOperationalElementDragging";
 import { useOperationalElementResizing } from "@/hooks/useOperationalElementResizing";
@@ -61,6 +63,13 @@ export function SalaEditorWorkspace({
   const [draftReady, setDraftReady] = useState(!draftPersistenceEnabled);
   const draftLoadSeqRef = useRef(0);
   const lastDraftSignatureRef = useRef<string | null>(null);
+  const documentSnapshotRef = useRef<SalaEditorDocument | null>(null);
+
+  const { historyApi } = useSalaEditorHistory();
+
+  const getDocumentSnapshot = useCallback(() => {
+    return documentSnapshotRef.current!;
+  }, []);
 
   const {
     document,
@@ -92,8 +101,11 @@ export function SalaEditorWorkspace({
   } = useSalaEditorDocument({
     restaurantId,
     initialEspacios,
+    historyApi,
+    getDocumentSnapshot,
   });
   const initialLocalDocumentRef = useRef(document);
+  documentSnapshotRef.current = document;
 
   useEffect(() => {
     if (!draftPersistenceEnabled) {
@@ -140,6 +152,7 @@ export function SalaEditorWorkspace({
     if (signature === lastDraftSignatureRef.current) return;
 
     const timeout = window.setTimeout(() => {
+      historyApi.flushScheduledCommits(getDocumentSnapshot);
       void saveSalaEditorDraft(restaurantId, document, {
         updatedBy: currentUserId,
       })
@@ -159,10 +172,28 @@ export function SalaEditorWorkspace({
     document,
     draftPersistenceEnabled,
     draftReady,
+    getDocumentSnapshot,
+    historyApi,
     restaurantId,
   ]);
 
   const operationalDragEnabled = document.navigation.phase === "operacion";
+
+  const commitOperationalMoveHistory = useCallback(() => {
+    historyApi.commitTransaction("operational.move", documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const discardOperationalMoveHistory = useCallback(() => {
+    historyApi.discardTransaction();
+  }, [historyApi]);
+
+  const commitOperationalResizeHistory = useCallback(() => {
+    historyApi.commitTransaction("operational.resize", documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const discardOperationalResizeHistory = useCallback(() => {
+    historyApi.discardTransaction();
+  }, [historyApi]);
 
   const clearOperationalSnapGuides = useCallback(() => {
     setOperationalSnapGuides(EMPTY_OPERATIONAL_SNAP_GUIDES);
@@ -214,6 +245,16 @@ export function SalaEditorWorkspace({
     },
     onSelectInstance: selectOperationalElementInstance,
     onClearSelection: clearOperationalElementInstance,
+    onDragSessionStart: () => {
+      historyApi.beginTransaction(documentSnapshotRef.current!);
+    },
+    onDragSessionEnd: (outcome) => {
+      if (outcome === "complete") {
+        commitOperationalMoveHistory();
+      } else {
+        discardOperationalMoveHistory();
+      }
+    },
   });
 
   const {
@@ -227,6 +268,13 @@ export function SalaEditorWorkspace({
     enabled: operationalDragEnabled,
     onSelectInstance: selectOperationalElementInstance,
     onResize: resizeOperationalElementInstance,
+    onResizeSessionEnd: (outcome) => {
+      if (outcome === "complete") {
+        commitOperationalResizeHistory();
+      } else {
+        discardOperationalResizeHistory();
+      }
+    },
   });
 
   const handleOperationalResizeStart = useCallback(
@@ -240,6 +288,7 @@ export function SalaEditorWorkspace({
         (item) => item.id === instanceId,
       );
       if (!instance) return;
+      historyApi.beginTransaction(documentSnapshotRef.current!);
       startResize(
         instanceId,
         corner,
@@ -249,7 +298,7 @@ export function SalaEditorWorkspace({
         instance.position,
       );
     },
-    [operationalElementInstancesInEspacio, startResize],
+    [historyApi, operationalElementInstancesInEspacio, startResize],
   );
 
   const handleOperationalCanvasPointerDown = useCallback(
@@ -373,9 +422,16 @@ export function SalaEditorWorkspace({
       cancelDragging();
       cancelResize();
       clearOperationalSnapGuides();
+      historyApi.discardTransaction();
     }
     previousEspacioIdRef.current = nextId;
-  }, [cancelDragging, cancelResize, clearOperationalSnapGuides, selectedEspacio?.id]);
+  }, [
+    cancelDragging,
+    cancelResize,
+    clearOperationalSnapGuides,
+    historyApi,
+    selectedEspacio?.id,
+  ]);
 
   const openAddDialog = useCallback(() => {
     setAddDialogOpen(true);

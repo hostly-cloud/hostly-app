@@ -37,10 +37,13 @@ import {
   navigateSalaEditorPhase,
   selectSalaEspacioInNavigation,
 } from "@/lib/sala-editor/navigation/editor-phase-routing";
+import type { SalaEditorHistoryApi } from "@/hooks/useSalaEditorHistory";
 
 export type UseSalaEditorDocumentOptions = {
   restaurantId: string;
   initialEspacios?: SalaEspacio[];
+  historyApi?: SalaEditorHistoryApi | null;
+  getDocumentSnapshot?: () => SalaEditorDocument;
 };
 
 /**
@@ -50,6 +53,8 @@ export type UseSalaEditorDocumentOptions = {
 export function useSalaEditorDocument({
   restaurantId,
   initialEspacios = [],
+  historyApi = null,
+  getDocumentSnapshot,
 }: UseSalaEditorDocumentOptions) {
   const [document, setDocument] = useState<SalaEditorDocument>(() => ({
     ...createEmptySalaEditorDocument(restaurantId),
@@ -72,7 +77,8 @@ export function useSalaEditorDocument({
     setActiveTool(null);
     setActiveOperationalElement(null);
     setSelectedOperationalElementInstanceId(null);
-  }, [restaurantId]);
+    historyApi?.reset();
+  }, [historyApi, restaurantId]);
 
   const disabledPhases = useMemo(
     () => getDisabledSalaEditorPhases(document.espacios, document.navigation),
@@ -170,26 +176,34 @@ export function useSalaEditorDocument({
   }, []);
 
   const addOperationalElement = useCallback((instance: OperationalElementInstance) => {
-    setDocument((prev) => ({
-      ...prev,
-      operationalElementInstances: [...prev.operationalElementInstances, instance],
-      updatedAt: Date.now(),
-    }));
+    setDocument((prev) => {
+      const next = {
+        ...prev,
+        operationalElementInstances: [...prev.operationalElementInstances, instance],
+        updatedAt: Date.now(),
+      };
+      historyApi?.recordCommit("operational.create", prev, next);
+      return next;
+    });
     setSelectedOperationalElementInstanceId(instance.id);
-  }, []);
+  }, [historyApi]);
 
   const removeOperationalElement = useCallback((instanceId: string) => {
-    setDocument((prev) => ({
-      ...prev,
-      operationalElementInstances: prev.operationalElementInstances.filter(
-        (instance) => instance.id !== instanceId,
-      ),
-      updatedAt: Date.now(),
-    }));
+    setDocument((prev) => {
+      const next = {
+        ...prev,
+        operationalElementInstances: prev.operationalElementInstances.filter(
+          (instance) => instance.id !== instanceId,
+        ),
+        updatedAt: Date.now(),
+      };
+      historyApi?.recordCommit("operational.delete", prev, next);
+      return next;
+    });
     setSelectedOperationalElementInstanceId((current) =>
       current === instanceId ? null : current,
     );
-  }, []);
+  }, [historyApi]);
 
   const updateOperationalElement = useCallback(
     (
@@ -240,7 +254,7 @@ export function useSalaEditorDocument({
 
       duplicateId = duplicate.id;
 
-      return {
+      const next = {
         ...prev,
         operationalElementInstances: [
           ...prev.operationalElementInstances,
@@ -248,12 +262,14 @@ export function useSalaEditorDocument({
         ],
         updatedAt: Date.now(),
       };
+      historyApi?.recordCommit("operational.duplicate", prev, next);
+      return next;
     });
 
     if (duplicateId) {
       setSelectedOperationalElementInstanceId(duplicateId);
     }
-  }, []);
+  }, [historyApi]);
 
   const resizeOperationalElementInstance = useCallback(
     (
@@ -402,25 +418,35 @@ export function useSalaEditorDocument({
   }, []);
 
   const addEspacioAndSelect = useCallback((espacio: SalaEspacio) => {
-    setDocument((prev) => ({
-      ...prev,
-      espacios: [...prev.espacios, espacio],
-      navigation: selectSalaEspacioInNavigation(prev.navigation, espacio.id),
-      updatedAt: Date.now(),
-    }));
-  }, []);
+    setDocument((prev) => {
+      const next = {
+        ...prev,
+        espacios: [...prev.espacios, espacio],
+        navigation: selectSalaEspacioInNavigation(prev.navigation, espacio.id),
+        updatedAt: Date.now(),
+      };
+      historyApi?.recordCommit("espacio.create", prev, next);
+      return next;
+    });
+  }, [historyApi]);
 
   const updateEspacio = useCallback(
     (espacioId: string, patch: Partial<SalaEspacioDraft>) => {
-      setDocument((prev) => ({
-        ...prev,
-        espacios: prev.espacios.map((espacio) =>
-          espacio.id === espacioId ? { ...espacio, ...patch } : espacio,
-        ),
-        updatedAt: Date.now(),
-      }));
+      setDocument((prev) => {
+        const next = {
+          ...prev,
+          espacios: prev.espacios.map((espacio) =>
+            espacio.id === espacioId ? { ...espacio, ...patch } : espacio,
+          ),
+          updatedAt: Date.now(),
+        };
+        if (historyApi && getDocumentSnapshot) {
+          historyApi.scheduleEspacioUpdateCommit(prev, getDocumentSnapshot);
+        }
+        return next;
+      });
     },
-    [],
+    [getDocumentSnapshot, historyApi],
   );
 
   return {
