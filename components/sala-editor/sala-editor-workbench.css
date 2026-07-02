@@ -3008,8 +3008,13 @@
   border: 0;
   background: transparent;
   transform-origin: center;
-  cursor: pointer;
+  cursor: grab;
   touch-action: manipulation;
+}
+
+.hostly-sala-wall-attachment.is-dragging {
+  z-index: 35;
+  cursor: grabbing;
 }
 
 .hostly-sala-wall-attachment::before {
@@ -3050,6 +3055,38 @@
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--hostly-accent, #315f7d) 16%, transparent),
     0 4px 10px rgba(15, 23, 42, 0.14);
+}
+
+.hostly-sala-wall-attachment.is-dragging .hostly-sala-wall-attachment__door-panel {
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--hostly-accent, #315f7d) 18%, transparent),
+    0 8px 18px rgba(15, 23, 42, 0.16);
+}
+
+.hostly-sala-wall-attachment__delete-btn {
+  position: absolute;
+  z-index: 36;
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 10%, transparent),
+    0 6px 18px rgba(15, 23, 42, 0.12);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translate(-50%, calc(-50% - 34px));
+  touch-action: manipulation;
+}
+
+.hostly-sala-wall-attachment__delete-btn:hover {
+  border-color: rgba(220, 38, 38, 0.24);
+  background: #fef2f2;
 }
 
 .hostly-sala-wall-interaction-handle {

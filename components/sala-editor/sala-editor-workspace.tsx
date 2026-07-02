@@ -29,6 +29,7 @@ import type {
   WallEditMode,
   WallEditOutcome,
 } from "@/lib/sala-editor/canvas/wall-interaction";
+import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
 import {
   loadSalaEditorDraft,
   saveSalaEditorDraft,
@@ -114,6 +115,8 @@ export function SalaEditorWorkspace({
     addWallAttachment,
     selectWallAttachment,
     clearWallAttachmentSelection,
+    updateWallAttachment,
+    removeWallAttachment,
   } = useSalaEditorDocument({
     restaurantId,
     initialEspacios,
@@ -503,6 +506,24 @@ export function SalaEditorWorkspace({
     [clearWallSelection, selectWallAttachment],
   );
 
+  const handleWallAttachmentMoveStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleWallAttachmentMoveEnd = useCallback(
+    (outcome: WallAttachmentEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction(
+          "wallAttachment.move",
+          documentSnapshotRef.current!,
+        );
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
   const handleCreateEspacio = useCallback(
     (payload: { name: string; tipo: SalaEspacioType; color: string }) => {
       const created = createLocalEspacio({
@@ -680,6 +701,10 @@ export function SalaEditorWorkspace({
             onWallAttachmentPlace={handlePlaceDoorAttachment}
             onWallAttachmentSelect={handleSelectWallAttachment}
             onWallAttachmentClearSelection={clearWallAttachmentSelection}
+            onWallAttachmentUpdate={updateWallAttachment}
+            onWallAttachmentDelete={removeWallAttachment}
+            onWallAttachmentMoveStart={handleWallAttachmentMoveStart}
+            onWallAttachmentMoveEnd={handleWallAttachmentMoveEnd}
             activeOperationalCatalogItem={activeOperationalCatalogItem}
             operationalElementInstances={operationalElementInstancesInEspacio}
             selectedOperationalElementInstanceId={selectedOperationalElementInstanceId}

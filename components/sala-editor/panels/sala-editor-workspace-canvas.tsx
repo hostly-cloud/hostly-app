@@ -5,6 +5,7 @@ import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
+import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
 import { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-espacios-empty-state";
@@ -42,6 +43,13 @@ export type SalaEditorWorkspaceCanvasProps = {
   onWallAttachmentPlace?: (wallId: string, positionRatio: number) => void;
   onWallAttachmentSelect?: (attachmentId: string) => void;
   onWallAttachmentClearSelection?: () => void;
+  onWallAttachmentUpdate?: (
+    attachmentId: string,
+    patch: Partial<Pick<SalaWallAttachment, "positionRatio" | "offset">>,
+  ) => void;
+  onWallAttachmentDelete?: (attachmentId: string) => void;
+  onWallAttachmentMoveStart?: () => void;
+  onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
   operationalElementInstances?: OperationalElementInstance[];
   selectedOperationalElementInstanceId?: string | null;
@@ -95,6 +103,10 @@ export function SalaEditorWorkspaceCanvas({
   onWallAttachmentPlace,
   onWallAttachmentSelect,
   onWallAttachmentClearSelection,
+  onWallAttachmentUpdate,
+  onWallAttachmentDelete,
+  onWallAttachmentMoveStart,
+  onWallAttachmentMoveEnd,
   activeOperationalCatalogItem = null,
   operationalElementInstances = [],
   selectedOperationalElementInstanceId = null,
@@ -172,6 +184,10 @@ export function SalaEditorWorkspaceCanvas({
           onWallAttachmentPlace={onWallAttachmentPlace}
           onWallAttachmentSelect={onWallAttachmentSelect}
           onWallAttachmentClearSelection={onWallAttachmentClearSelection}
+          onWallAttachmentUpdate={onWallAttachmentUpdate}
+          onWallAttachmentDelete={onWallAttachmentDelete}
+          onWallAttachmentMoveStart={onWallAttachmentMoveStart}
+          onWallAttachmentMoveEnd={onWallAttachmentMoveEnd}
         />
       </div>
     );

@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type {
   SalaWallAttachment,
@@ -30,6 +37,11 @@ import type {
   WallInteractionTarget,
   WallPointerPayload,
 } from "@/lib/sala-editor/canvas/wall-interaction";
+import type {
+  WallAttachmentEditOutcome,
+  WallAttachmentInteractionSession,
+} from "@/lib/sala-editor/canvas/wall-attachment-interaction";
+import { snapWallAttachmentPositionRatio } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
 
 const WALL_ACCENT_COLOR = "var(--hostly-accent, #315f7d)";
 const WALL_ATTACHMENT_HIT_THRESHOLD = 18;
@@ -50,6 +62,13 @@ export type SalaWallCanvasProps = {
   onPlaceWallAttachment?: (wallId: string, positionRatio: number) => void;
   onSelectWallAttachment?: (attachmentId: string) => void;
   onClearWallAttachmentSelection?: () => void;
+  onUpdateWallAttachment?: (
+    attachmentId: string,
+    patch: Partial<Pick<SalaWallAttachment, "positionRatio" | "offset">>,
+  ) => void;
+  onDeleteWallAttachment?: (attachmentId: string) => void;
+  onWallAttachmentMoveStart?: () => void;
+  onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
   /** Dentro del frame de espacio — sin chrome propio. */
   embedded?: boolean;
 };
@@ -123,12 +142,18 @@ export function SalaWallCanvas({
   onPlaceWallAttachment,
   onSelectWallAttachment,
   onClearWallAttachmentSelection,
+  onUpdateWallAttachment,
+  onDeleteWallAttachment,
+  onWallAttachmentMoveStart,
+  onWallAttachmentMoveEnd,
   embedded = false,
 }: SalaWallCanvasProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [hoveredAttachmentWallId, setHoveredAttachmentWallId] = useState<string | null>(
     null,
   );
+  const [attachmentEditSession, setAttachmentEditSession] =
+    useState<WallAttachmentInteractionSession | null>(null);
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const attachmentPlacementEnabled =
@@ -236,6 +261,30 @@ export function SalaWallCanvas({
     [coordinateScale, resolvePoint],
   );
 
+  const cancelAttachmentEditSession = useCallback(() => {
+    setAttachmentEditSession((session) => {
+      if (!session) return null;
+      if (session.active) {
+        onUpdateWallAttachment?.(session.objectId, {
+          positionRatio: session.originObject.positionRatio,
+          offset: session.originObject.offset,
+        });
+        onWallAttachmentMoveEnd?.("cancel");
+      }
+      return null;
+    });
+  }, [onUpdateWallAttachment, onWallAttachmentMoveEnd]);
+
+  const finishAttachmentEditSession = useCallback(() => {
+    setAttachmentEditSession((session) => {
+      if (!session) return null;
+      if (session.active) {
+        onWallAttachmentMoveEnd?.("complete");
+      }
+      return null;
+    });
+  }, [onWallAttachmentMoveEnd]);
+
   const findAttachmentTargetWall = useCallback(
     (point: { x: number; y: number }) => {
       for (let i = walls.length - 1; i >= 0; i -= 1) {
@@ -336,6 +385,101 @@ export function SalaWallCanvas({
     [createPayload, onPointerCancel, onPointerDown, onPointerMove, onPointerUp],
   );
 
+  const createAttachmentPointerHandlers = useCallback(
+    (attachment: SalaWallAttachment) => ({
+      onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+        event.stopPropagation();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onSelectWallAttachment?.(attachment.id);
+
+        const displayPoint = resolvePoint(event.clientX, event.clientY);
+        if (!displayPoint) return;
+        const point = unscaleEditorPoint(displayPoint, coordinateScale);
+
+        setAttachmentEditSession({
+          objectId: attachment.id,
+          wallId: attachment.wallId,
+          mode: "move",
+          originPointer: point,
+          originObject: attachment,
+          active: false,
+        });
+      },
+      onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
+        const session = attachmentEditSession;
+        if (!session || session.objectId !== attachment.id) return;
+        event.stopPropagation();
+
+        const wall = walls.find((item) => item.id === session.wallId);
+        const displayPoint = resolvePoint(event.clientX, event.clientY);
+        if (!wall || !displayPoint) return;
+
+        const point = unscaleEditorPoint(displayPoint, coordinateScale);
+        const positionRatio = snapWallAttachmentPositionRatio(
+          projectPointToWallAttachmentPosition(wall, point),
+        );
+        if (!session.active) {
+          setAttachmentEditSession((current) =>
+            current?.objectId === session.objectId
+              ? { ...current, active: true }
+              : current,
+          );
+          onWallAttachmentMoveStart?.();
+        }
+        onUpdateWallAttachment?.(attachment.id, { positionRatio });
+      },
+      onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        finishAttachmentEditSession();
+      },
+      onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        cancelAttachmentEditSession();
+      },
+    }),
+    [
+      attachmentEditSession,
+      cancelAttachmentEditSession,
+      coordinateScale,
+      finishAttachmentEditSession,
+      onSelectWallAttachment,
+      onUpdateWallAttachment,
+      onWallAttachmentMoveStart,
+      resolvePoint,
+      walls,
+    ],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (attachmentEditSession) {
+        event.preventDefault();
+        cancelAttachmentEditSession();
+        return;
+      }
+      if (selectedWallAttachmentId) {
+        event.preventDefault();
+        onClearWallAttachmentSelection?.();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    attachmentEditSession,
+    cancelAttachmentEditSession,
+    onClearWallAttachmentSelection,
+    selectedWallAttachmentId,
+  ]);
+
   return (
     <div
       ref={surfaceRef}
@@ -422,36 +566,57 @@ export function SalaWallCanvas({
 
       {renderedWallAttachments.map(({ attachment, resolved }) => {
         const selected = attachment.id === selectedWallAttachmentId;
+        const editing = attachmentEditSession?.objectId === attachment.id;
+        const attachmentHandlers = createAttachmentPointerHandlers(attachment);
         return (
-          <button
-            key={attachment.id}
-            type="button"
-            className={[
-              "hostly-sala-wall-attachment",
-              "hostly-sala-wall-attachment--door",
-              selected ? "is-selected" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            aria-pressed={selected}
-            aria-label="Puerta simple"
-            title="Puerta simple"
-            style={{
-              left: resolved.point.x,
-              top: resolved.point.y,
-              transform: `translate(-50%, -50%) rotate(${resolved.angleRad}rad)`,
-            }}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelectWallAttachment?.(attachment.id);
-            }}
-          >
-            <span className="hostly-sala-wall-attachment__door-panel" aria-hidden />
-            <span className="hostly-sala-wall-attachment__door-swing" aria-hidden />
-          </button>
+          <div key={attachment.id}>
+            <button
+              type="button"
+              className={[
+                "hostly-sala-wall-attachment",
+                "hostly-sala-wall-attachment--door",
+                selected ? "is-selected" : "",
+                editing ? "is-dragging" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-pressed={selected}
+              aria-label="Puerta simple"
+              title="Puerta simple"
+              style={{
+                left: resolved.point.x,
+                top: resolved.point.y,
+                transform: `translate(-50%, -50%) rotate(${resolved.angleRad}rad)`,
+              }}
+              {...attachmentHandlers}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectWallAttachment?.(attachment.id);
+              }}
+            >
+              <span className="hostly-sala-wall-attachment__door-panel" aria-hidden />
+              <span className="hostly-sala-wall-attachment__door-swing" aria-hidden />
+            </button>
+            {selected && !editing && onDeleteWallAttachment ? (
+              <button
+                type="button"
+                className="hostly-sala-wall-attachment__delete-btn"
+                aria-label="Eliminar puerta"
+                title="Eliminar"
+                style={{
+                  left: resolved.point.x,
+                  top: resolved.point.y,
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDeleteWallAttachment(attachment.id);
+                }}
+              >
+                <span aria-hidden>🗑</span>
+              </button>
+            ) : null}
+          </div>
         );
       })}
 

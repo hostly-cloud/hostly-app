@@ -531,6 +531,55 @@ export function useSalaEditorDocument({
     setSelectedWallAttachmentId(null);
   }, []);
 
+  const updateWallAttachment = useCallback(
+    (
+      attachmentId: string,
+      patch: Partial<Pick<SalaWallAttachment, "positionRatio" | "offset">>,
+    ) => {
+      setDocument((prev) => ({
+        ...prev,
+        wallAttachments: prev.wallAttachments.map((attachment) =>
+          attachment.id === attachmentId
+            ? { ...attachment, ...patch }
+            : attachment,
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    [],
+  );
+
+  const removeWallAttachment = useCallback((attachmentId: string) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      if (!prev.wallAttachments.some((attachment) => attachment.id === attachmentId)) {
+        return prev;
+      }
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        wallAttachments: prev.wallAttachments.filter(
+          (attachment) => attachment.id !== attachmentId,
+        ),
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit(
+        "wallAttachment.delete",
+        previousDocument,
+        nextDocument,
+      );
+    }
+    setSelectedWallAttachmentId((current) =>
+      current === attachmentId ? null : current,
+    );
+  }, [historyApi]);
+
   const duplicateWall = useCallback((wallId: string): string | null => {
     let duplicateId: string | null = null;
     let previousDocument: SalaEditorDocument | null = null;
@@ -734,5 +783,7 @@ export function useSalaEditorDocument({
     addWallAttachment,
     selectWallAttachment,
     clearWallAttachmentSelection,
+    updateWallAttachment,
+    removeWallAttachment,
   };
 }

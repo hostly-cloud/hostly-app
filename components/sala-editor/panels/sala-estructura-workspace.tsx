@@ -6,6 +6,7 @@ import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import type { WallPointerPayload } from "@/lib/sala-editor/canvas/wall-interaction";
+import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
 import {
   getBaseFloorCatalogEntry,
   type BaseFloorCatalogKind,
@@ -31,6 +32,13 @@ export type SalaEstructuraWorkspaceProps = {
   onWallAttachmentPlace?: (wallId: string, positionRatio: number) => void;
   onWallAttachmentSelect?: (attachmentId: string) => void;
   onWallAttachmentClearSelection?: () => void;
+  onWallAttachmentUpdate?: (
+    attachmentId: string,
+    patch: Partial<Pick<SalaWallAttachment, "positionRatio" | "offset">>,
+  ) => void;
+  onWallAttachmentDelete?: (attachmentId: string) => void;
+  onWallAttachmentMoveStart?: () => void;
+  onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
 };
 
 export function SalaEstructuraWorkspace({
@@ -50,6 +58,10 @@ export function SalaEstructuraWorkspace({
   onWallAttachmentPlace,
   onWallAttachmentSelect,
   onWallAttachmentClearSelection,
+  onWallAttachmentUpdate,
+  onWallAttachmentDelete,
+  onWallAttachmentMoveStart,
+  onWallAttachmentMoveEnd,
 }: SalaEstructuraWorkspaceProps) {
   const isWallTool = tool.kind === "wall";
   const isDoorTool = tool.kind === "door";
@@ -95,6 +107,10 @@ export function SalaEstructuraWorkspace({
           onPlaceWallAttachment={onWallAttachmentPlace}
           onSelectWallAttachment={onWallAttachmentSelect}
           onClearWallAttachmentSelection={onWallAttachmentClearSelection}
+          onUpdateWallAttachment={onWallAttachmentUpdate}
+          onDeleteWallAttachment={onWallAttachmentDelete}
+          onWallAttachmentMoveStart={onWallAttachmentMoveStart}
+          onWallAttachmentMoveEnd={onWallAttachmentMoveEnd}
           embedded
         />
       ) : (
