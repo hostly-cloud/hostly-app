@@ -34,10 +34,19 @@ export function SalaEditorLibrary({
     isExpanded,
   } = useSalaEditorLibraryState(phase);
 
-  const visibleCategories = isSearching ? filteredCategories : categories.map((category) => ({
-    category,
-    items: category.items.filter((item) => item.status === "available"),
-  }));
+  const visibleCategories = isSearching
+    ? filteredCategories
+    : categories.map((category) => {
+        const hasAvailableItems = category.items.some(
+          (item) => item.status === "available",
+        );
+        return {
+          category,
+          items: hasAvailableItems
+            ? category.items
+            : category.items.filter((item) => item.status === "available"),
+        };
+      });
 
   return (
     <div className="hostly-sala-library">

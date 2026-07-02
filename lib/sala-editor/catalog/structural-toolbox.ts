@@ -39,9 +39,9 @@ export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
     label: "Puerta",
     icon: "🚪",
     description: "Acceso dentro del mapa o al exterior.",
-    workspaceHint: "Haz clic para colocar una puerta.",
-    upcomingActions: ["Dibujar", "Duplicar", "Girar", "Bloquear"],
-    available: false,
+    workspaceHint: "Acércate a un muro y haz clic para colocar una puerta.",
+    upcomingActions: ["Puerta doble", "Corredera", "Cambiar sentido", "Bloquear"],
+    available: true,
   },
   {
     kind: "bar",

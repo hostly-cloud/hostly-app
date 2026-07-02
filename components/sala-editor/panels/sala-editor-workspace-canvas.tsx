@@ -4,6 +4,7 @@ import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation"
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
+import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
 import { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-espacios-empty-state";
@@ -29,13 +30,18 @@ export type SalaEditorWorkspaceCanvasProps = {
   hasEspacios: boolean;
   activeStructuralToolboxItem: StructuralToolboxItem | null;
   walls?: SalaWallSegment[];
+  wallAttachments?: SalaWallAttachment[];
   wallDraft?: SalaWallDrawingDraft | null;
   selectedWallId?: string | null;
+  selectedWallAttachmentId?: string | null;
   onWallPointerDown?: (payload: WallPointerPayload) => void;
   onWallPointerMove?: (payload: WallPointerPayload) => void;
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
   onWallDelete?: (wallId: string) => void;
+  onWallAttachmentPlace?: (wallId: string, positionRatio: number) => void;
+  onWallAttachmentSelect?: (attachmentId: string) => void;
+  onWallAttachmentClearSelection?: () => void;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
   operationalElementInstances?: OperationalElementInstance[];
   selectedOperationalElementInstanceId?: string | null;
@@ -77,13 +83,18 @@ export function SalaEditorWorkspaceCanvas({
   hasEspacios,
   activeStructuralToolboxItem,
   walls = [],
+  wallAttachments = [],
   wallDraft = null,
   selectedWallId = null,
+  selectedWallAttachmentId = null,
   onWallPointerDown,
   onWallPointerMove,
   onWallPointerUp,
   onWallPointerCancel,
   onWallDelete,
+  onWallAttachmentPlace,
+  onWallAttachmentSelect,
+  onWallAttachmentClearSelection,
   activeOperationalCatalogItem = null,
   operationalElementInstances = [],
   selectedOperationalElementInstanceId = null,
@@ -149,13 +160,18 @@ export function SalaEditorWorkspaceCanvas({
           restaurantId={restaurantId}
           tool={activeStructuralToolboxItem}
           walls={walls}
+          wallAttachments={wallAttachments}
           wallDraft={wallDraft}
           selectedWallId={selectedWallId}
+          selectedWallAttachmentId={selectedWallAttachmentId}
           onWallPointerDown={onWallPointerDown}
           onWallPointerMove={onWallPointerMove}
           onWallPointerUp={onWallPointerUp}
           onWallPointerCancel={onWallPointerCancel}
           onWallDelete={onWallDelete}
+          onWallAttachmentPlace={onWallAttachmentPlace}
+          onWallAttachmentSelect={onWallAttachmentSelect}
+          onWallAttachmentClearSelection={onWallAttachmentClearSelection}
         />
       </div>
     );

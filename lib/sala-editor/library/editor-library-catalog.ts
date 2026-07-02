@@ -50,8 +50,26 @@ const ESTRUCTURA_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
     id: "puertas",
     label: "Puertas",
     icon: "🚪",
-    upcoming: true,
-    items: [],
+    items: [
+      {
+        id: "puerta-simple",
+        label: "Puerta simple",
+        status: "available",
+        structuralKind: "door",
+      },
+      {
+        id: "puerta-doble",
+        label: "Puerta doble",
+        status: "upcoming",
+        structuralKind: "door",
+      },
+      {
+        id: "puerta-corredera",
+        label: "Puerta corredera",
+        status: "upcoming",
+        structuralKind: "door",
+      },
+    ],
   },
   {
     id: "cristales",

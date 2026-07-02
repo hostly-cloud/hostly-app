@@ -11,6 +11,7 @@ export type SalaEditorHistoryActionKind =
   | "wall.resize"
   | "wall.delete"
   | "wall.duplicate"
+  | "wallAttachment.create"
   | "espacio.create"
   | "espacio.update"
   | "history.navigation";

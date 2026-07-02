@@ -2,6 +2,7 @@
 
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
+import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import type { WallPointerPayload } from "@/lib/sala-editor/canvas/wall-interaction";
@@ -18,13 +19,18 @@ export type SalaEstructuraWorkspaceProps = {
   restaurantId: string;
   tool: StructuralToolboxItem;
   walls?: SalaWallSegment[];
+  wallAttachments?: SalaWallAttachment[];
   wallDraft?: SalaWallDrawingDraft | null;
   selectedWallId?: string | null;
+  selectedWallAttachmentId?: string | null;
   onWallPointerDown?: (payload: WallPointerPayload) => void;
   onWallPointerMove?: (payload: WallPointerPayload) => void;
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
   onWallDelete?: (wallId: string) => void;
+  onWallAttachmentPlace?: (wallId: string, positionRatio: number) => void;
+  onWallAttachmentSelect?: (attachmentId: string) => void;
+  onWallAttachmentClearSelection?: () => void;
 };
 
 export function SalaEstructuraWorkspace({
@@ -32,15 +38,21 @@ export function SalaEstructuraWorkspace({
   restaurantId,
   tool,
   walls = [],
+  wallAttachments = [],
   wallDraft = null,
   selectedWallId = null,
+  selectedWallAttachmentId = null,
   onWallPointerDown,
   onWallPointerMove,
   onWallPointerUp,
   onWallPointerCancel,
   onWallDelete,
+  onWallAttachmentPlace,
+  onWallAttachmentSelect,
+  onWallAttachmentClearSelection,
 }: SalaEstructuraWorkspaceProps) {
   const isWallTool = tool.kind === "wall";
+  const isDoorTool = tool.kind === "door";
   const wallDrawingEnabled =
     isWallTool &&
     onWallPointerDown &&
@@ -66,17 +78,23 @@ export function SalaEstructuraWorkspace({
       basePreview={base}
       floorBackground={floorEntry.background}
     >
-      {wallDrawingEnabled ? (
+      {wallDrawingEnabled || isDoorTool ? (
         <SalaWallCanvas
           walls={walls}
+          wallAttachments={wallAttachments}
           draft={wallDraft}
           selectedWallId={selectedWallId}
+          selectedWallAttachmentId={selectedWallAttachmentId}
+          attachmentPlacementKind={isDoorTool ? "door" : null}
           hint={tool.workspaceHint}
           onPointerDown={onWallPointerDown}
           onPointerMove={onWallPointerMove}
           onPointerUp={onWallPointerUp}
           onPointerCancel={onWallPointerCancel}
           onDeleteWall={onWallDelete}
+          onPlaceWallAttachment={onWallAttachmentPlace}
+          onSelectWallAttachment={onWallAttachmentSelect}
+          onClearWallAttachmentSelection={onWallAttachmentClearSelection}
           embedded
         />
       ) : (

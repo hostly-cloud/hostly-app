@@ -17,7 +17,11 @@ import {
 } from "@/lib/sala-editor/types/editor-tool";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import { createSalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
-import { removeWallAttachmentsForWall } from "@/lib/sala-editor/types/wall-attachment";
+import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
+import {
+  createSalaWallAttachment,
+  removeWallAttachmentsForWall,
+} from "@/lib/sala-editor/types/wall-attachment";
 import {
   getStructuralToolboxItem,
 } from "@/lib/sala-editor/catalog/structural-toolbox";
@@ -79,6 +83,8 @@ export function useSalaEditorDocument({
     useState<ActiveOperationalElementSelection>(null);
   const [selectedOperationalElementInstanceId, setSelectedOperationalElementInstanceId] =
     useState<string | null>(null);
+  const [selectedWallAttachmentId, setSelectedWallAttachmentId] =
+    useState<string | null>(null);
 
   const replaceDocument = useCallback((nextDocument: SalaEditorDocument) => {
     if (nextDocument.restaurantId !== restaurantId) return;
@@ -86,6 +92,7 @@ export function useSalaEditorDocument({
     setActiveTool(null);
     setActiveOperationalElement(null);
     setSelectedOperationalElementInstanceId(null);
+    setSelectedWallAttachmentId(null);
     historyApi?.reset();
   }, [historyApi, restaurantId]);
 
@@ -95,6 +102,7 @@ export function useSalaEditorDocument({
     setActiveTool(null);
     setActiveOperationalElement(null);
     setSelectedOperationalElementInstanceId(null);
+    setSelectedWallAttachmentId(null);
   }, [restaurantId]);
 
   const disabledPhases = useMemo(
@@ -444,9 +452,21 @@ export function useSalaEditorDocument({
   const removeWall = useCallback((wallId: string) => {
     let previousDocument: SalaEditorDocument | null = null;
     let nextDocument: SalaEditorDocument | null = null;
+    let shouldClearAttachmentSelection = false;
 
     setDocument((prev) => {
       previousDocument = prev;
+      const removedAttachmentIds = new Set(
+        prev.wallAttachments
+          .filter((attachment) => attachment.wallId === wallId)
+          .map((attachment) => attachment.id),
+      );
+      if (
+        selectedWallAttachmentId &&
+        removedAttachmentIds.has(selectedWallAttachmentId)
+      ) {
+        shouldClearAttachmentSelection = true;
+      }
       nextDocument = {
         ...prev,
         walls: prev.walls.filter((wall) => wall.id !== wallId),
@@ -462,7 +482,54 @@ export function useSalaEditorDocument({
     if (previousDocument && nextDocument) {
       historyApi?.recordCommit("wall.delete", previousDocument, nextDocument);
     }
-  }, [historyApi]);
+    if (shouldClearAttachmentSelection) {
+      setSelectedWallAttachmentId(null);
+    }
+  }, [historyApi, selectedWallAttachmentId]);
+
+  const addWallAttachment = useCallback(
+    (draft: Omit<SalaWallAttachment, "id">): SalaWallAttachment | null => {
+      let created: SalaWallAttachment | null = null;
+      let previousDocument: SalaEditorDocument | null = null;
+      let nextDocument: SalaEditorDocument | null = null;
+
+      setDocument((prev) => {
+        if (!prev.walls.some((wall) => wall.id === draft.wallId)) return prev;
+        created = createSalaWallAttachment(draft);
+        previousDocument = prev;
+        nextDocument = {
+          ...prev,
+          wallAttachments: [...prev.wallAttachments, created],
+          updatedAt: Date.now(),
+        };
+        return nextDocument;
+      });
+
+      if (previousDocument && nextDocument) {
+        historyApi?.recordCommit(
+          "wallAttachment.create",
+          previousDocument,
+          nextDocument,
+        );
+      }
+
+      const createdAttachment = created as SalaWallAttachment | null;
+      if (createdAttachment) {
+        setSelectedWallAttachmentId(createdAttachment.id);
+      }
+
+      return createdAttachment;
+    },
+    [historyApi],
+  );
+
+  const selectWallAttachment = useCallback((attachmentId: string) => {
+    setSelectedWallAttachmentId(attachmentId);
+  }, []);
+
+  const clearWallAttachmentSelection = useCallback(() => {
+    setSelectedWallAttachmentId(null);
+  }, []);
 
   const duplicateWall = useCallback((wallId: string): string | null => {
     let duplicateId: string | null = null;
@@ -637,6 +704,7 @@ export function useSalaEditorDocument({
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,
     selectedOperationalElementInstance,
+    selectedWallAttachmentId,
     selectOperationalElement,
     clearOperationalElement,
     isOperationalElementSelected,
@@ -663,5 +731,8 @@ export function useSalaEditorDocument({
     updateWall,
     removeWall,
     duplicateWall,
+    addWallAttachment,
+    selectWallAttachment,
+    clearWallAttachmentSelection,
   };
 }

@@ -91,6 +91,7 @@ export function SalaEditorWorkspace({
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,
     selectedOperationalElementInstance,
+    selectedWallAttachmentId,
     replaceDocument,
     restoreDocumentSnapshot,
     selectTool,
@@ -110,6 +111,9 @@ export function SalaEditorWorkspace({
     addWall,
     updateWall,
     removeWall,
+    addWallAttachment,
+    selectWallAttachment,
+    clearWallAttachmentSelection,
   } = useSalaEditorDocument({
     restaurantId,
     initialEspacios,
@@ -456,12 +460,47 @@ export function SalaEditorWorkspace({
     onEditSessionEnd: handleWallEditSessionEnd,
   });
 
+  const wallAttachmentsInEspacio = useMemo(() => {
+    const wallIds = new Set(wallsInEspacio.map((wall) => wall.id));
+    return document.wallAttachments.filter((attachment) =>
+      wallIds.has(attachment.wallId),
+    );
+  }, [document.wallAttachments, wallsInEspacio]);
+
+  const handleStructuralWallPointerDown = useCallback(
+    (payload: Parameters<typeof handleWallPointerDown>[0]) => {
+      clearWallAttachmentSelection();
+      handleWallPointerDown(payload);
+    },
+    [clearWallAttachmentSelection, handleWallPointerDown],
+  );
+
   const handleDeleteWall = useCallback(
     (wallId: string) => {
       removeWall(wallId);
       clearWallSelection();
     },
     [clearWallSelection, removeWall],
+  );
+
+  const handlePlaceDoorAttachment = useCallback(
+    (wallId: string, positionRatio: number) => {
+      clearWallSelection();
+      addWallAttachment({
+        wallId,
+        kind: "door",
+        positionRatio,
+      });
+    },
+    [addWallAttachment, clearWallSelection],
+  );
+
+  const handleSelectWallAttachment = useCallback(
+    (attachmentId: string) => {
+      clearWallSelection();
+      selectWallAttachment(attachmentId);
+    },
+    [clearWallSelection, selectWallAttachment],
   );
 
   const handleCreateEspacio = useCallback(
@@ -629,13 +668,18 @@ export function SalaEditorWorkspace({
             hasEspacios={document.espacios.length > 0}
             activeStructuralToolboxItem={activeStructuralToolboxItem}
             walls={wallsInEspacio}
+            wallAttachments={wallAttachmentsInEspacio}
             wallDraft={wallDraft}
             selectedWallId={selectedWallId}
-            onWallPointerDown={wallDrawingEnabled ? handleWallPointerDown : undefined}
+            selectedWallAttachmentId={selectedWallAttachmentId}
+            onWallPointerDown={wallDrawingEnabled ? handleStructuralWallPointerDown : undefined}
             onWallPointerMove={wallDrawingEnabled ? handleWallPointerMove : undefined}
             onWallPointerUp={wallDrawingEnabled ? handleWallPointerUp : undefined}
             onWallPointerCancel={wallDrawingEnabled ? handleWallPointerCancel : undefined}
             onWallDelete={wallDrawingEnabled ? handleDeleteWall : undefined}
+            onWallAttachmentPlace={handlePlaceDoorAttachment}
+            onWallAttachmentSelect={handleSelectWallAttachment}
+            onWallAttachmentClearSelection={clearWallAttachmentSelection}
             activeOperationalCatalogItem={activeOperationalCatalogItem}
             operationalElementInstances={operationalElementInstancesInEspacio}
             selectedOperationalElementInstanceId={selectedOperationalElementInstanceId}
