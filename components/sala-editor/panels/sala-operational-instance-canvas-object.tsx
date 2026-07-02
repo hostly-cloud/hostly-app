@@ -4,6 +4,7 @@ import type { PointerEvent } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { OperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import { resolveOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import { SalaCanvasSelectionToolbar } from "@/components/sala-editor/panels/sala-canvas-selection-toolbar";
 import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
 
@@ -52,6 +53,10 @@ export function SalaOperationalInstanceCanvasObject({
   onDelete,
 }: SalaOperationalInstanceCanvasObjectProps) {
   const chromeVisible = selected && !isDragging && !isResizing;
+  const visualVariant = resolveOperationalVisualVariant(
+    instance.metadata,
+    instance.elementType,
+  );
 
   return (
     <div
@@ -124,6 +129,7 @@ export function SalaOperationalInstanceCanvasObject({
           elementType={instance.elementType}
           label={instance.name}
           color={catalogColor}
+          visualVariant={visualVariant}
         />
       </div>
     </div>

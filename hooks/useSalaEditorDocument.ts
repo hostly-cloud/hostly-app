@@ -29,6 +29,8 @@ import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operatio
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { buildOperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { nextOperationalElementInstanceName } from "@/lib/sala-editor/ose/operational-element-naming";
+import { withOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
+import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import {
   getDefaultOperationalInstanceCanvasSize,
   withOperationalInstanceCanvasSize,
@@ -149,6 +151,11 @@ export function useSalaEditorDocument({
     return activeOperationalElement.type;
   }, [activeOperationalElement]);
 
+  const activeOperationalVisualVariant = useMemo(() => {
+    if (activeOperationalElement?.layer !== "operacion") return null;
+    return activeOperationalElement.visualVariant ?? null;
+  }, [activeOperationalElement]);
+
   const operationalElementInstancesInEspacio = useMemo(
     () =>
       selectedEspacio
@@ -182,10 +189,13 @@ export function useSalaEditorDocument({
     setSelectedOperationalElementInstanceId(instanceId);
   }, []);
 
-  const selectOperationalElement = useCallback((type: OperationalElementType) => {
-    setActiveOperationalElement(createActiveOperationalElement(type));
-    setSelectedOperationalElementInstanceId(null);
-  }, []);
+  const selectOperationalElement = useCallback(
+    (type: OperationalElementType, visualVariant?: OperationalVisualVariant) => {
+      setActiveOperationalElement(createActiveOperationalElement(type, visualVariant));
+      setSelectedOperationalElementInstanceId(null);
+    },
+    [],
+  );
 
   const addOperationalElement = useCallback((instance: OperationalElementInstance) => {
     let previousDocument: SalaEditorDocument | null = null;
@@ -351,18 +361,27 @@ export function useSalaEditorDocument({
         activeOperationalElementType,
       );
 
+      let metadata = withOperationalInstanceCanvasSize({}, defaultSize);
+      if (activeOperationalElement?.visualVariant) {
+        metadata = withOperationalVisualVariant(
+          metadata,
+          activeOperationalElement.visualVariant,
+        );
+      }
+
       const instance = buildOperationalElementInstance({
         spaceId: selectedEspacio.id,
         elementType: activeOperationalElementType,
         name,
         position,
         capacity: catalogItem.defaultCapacity,
-        metadata: withOperationalInstanceCanvasSize({}, defaultSize),
+        metadata,
       });
 
       addOperationalElement(instance);
     },
     [
+      activeOperationalElement,
       activeOperationalElementType,
       addOperationalElement,
       document.operationalElementInstances,
@@ -582,6 +601,7 @@ export function useSalaEditorDocument({
     activeOperationalElement,
     setActiveOperationalElement,
     activeOperationalElementType,
+    activeOperationalVisualVariant,
     activeOperationalCatalogItem,
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,

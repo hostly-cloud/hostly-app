@@ -59,7 +59,11 @@ export function isLibraryItemSelected(
     return selection.structuralKind === item.structuralKind;
   }
   if (item.operationalType != null) {
-    return selection.operationalType === item.operationalType;
+    if (selection.operationalType !== item.operationalType) return false;
+    if (item.visualVariant != null) {
+      return selection.visualVariant === item.visualVariant;
+    }
+    return selection.visualVariant == null;
   }
   if (item.baseToolId != null) {
     return selection.baseToolId === item.baseToolId;

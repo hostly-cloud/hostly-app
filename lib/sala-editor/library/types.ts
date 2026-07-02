@@ -5,6 +5,7 @@
 
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
+import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 
 export type SalaEditorLibraryPhase = "base" | "estructura" | "operacion";
 
@@ -18,6 +19,8 @@ export type SalaEditorLibraryItem = {
   structuralKind?: SalaStructuralElementKind;
   /** Enlace opcional a tipo operativo OSE existente. */
   operationalType?: OperationalElementType;
+  /** Variante visual ligera (p. ej. mesa redonda sobre TABLE). */
+  visualVariant?: OperationalVisualVariant;
   /** Identificador futuro de herramienta Base. */
   baseToolId?: string;
 };
@@ -34,5 +37,6 @@ export type SalaEditorLibraryCategory = {
 export type SalaEditorLibrarySelection = {
   structuralKind?: SalaStructuralElementKind | null;
   operationalType?: OperationalElementType | null;
+  visualVariant?: OperationalVisualVariant | null;
   baseToolId?: string | null;
 };

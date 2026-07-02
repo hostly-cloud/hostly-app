@@ -4,6 +4,7 @@ import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation"
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
+import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import { SalaEspaciosSidebar } from "@/components/sala-editor/panels/sala-espacios-sidebar";
 import { SalaBaseSidebar } from "@/components/sala-editor/panels/sala-base-sidebar";
 import { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
@@ -16,10 +17,14 @@ export type SalaEditorLeftPanelProps = {
   elementCountByEspacioId: Record<string, number>;
   activeStructuralToolKind: SalaStructuralElementKind | null;
   activeOperationalElementType: OperationalElementType | null;
+  activeOperationalVisualVariant?: OperationalVisualVariant | null;
   onSelectEspacio: (espacioId: string) => void;
   onRequestAddEspacio: () => void;
   onSelectStructuralTool: (kind: SalaStructuralElementKind) => void;
-  onSelectOperationalElement: (type: OperationalElementType) => void;
+  onSelectOperationalElement: (
+    type: OperationalElementType,
+    visualVariant?: OperationalVisualVariant,
+  ) => void;
   onUpdateEspacio?: (espacioId: string, patch: Partial<SalaEspacioDraft>) => void;
 };
 
@@ -30,6 +35,7 @@ export function SalaEditorLeftPanel({
   elementCountByEspacioId,
   activeStructuralToolKind,
   activeOperationalElementType,
+  activeOperationalVisualVariant = null,
   onSelectEspacio,
   onRequestAddEspacio,
   onSelectStructuralTool,
@@ -70,6 +76,7 @@ export function SalaEditorLeftPanel({
       {phase === "operacion" ? (
         <SalaOperacionSidebar
           activeElementType={activeOperationalElementType}
+          activeVisualVariant={activeOperationalVisualVariant}
           onSelectElementType={onSelectOperationalElement}
         />
       ) : null}

@@ -82,6 +82,7 @@ export function SalaEditorWorkspace({
     activeStructuralToolKind,
     activeStructuralToolboxItem,
     activeOperationalElementType,
+    activeOperationalVisualVariant,
     activeOperationalCatalogItem,
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,
@@ -601,6 +602,7 @@ export function SalaEditorWorkspace({
             elementCountByEspacioId={elementCountByEspacioId}
             activeStructuralToolKind={activeStructuralToolKind}
             activeOperationalElementType={activeOperationalElementType}
+            activeOperationalVisualVariant={activeOperationalVisualVariant}
             onSelectEspacio={handleSelectEspacio}
             onRequestAddEspacio={openAddDialog}
             onSelectStructuralTool={selectTool}
