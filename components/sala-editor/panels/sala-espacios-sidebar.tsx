@@ -44,13 +44,13 @@ export function SalaEspaciosSidebar({
         .join(" ")}
     >
       {isSwitcher ? (
-        <p className="hostly-sala-editor-space-switcher__label">Espacio activo</p>
+        <p className="hostly-sala-editor-space-switcher__label">Mapa activo</p>
       ) : (
         <button
           type="button"
           onClick={onRequestAddEspacio}
           className="hostly-sala-editor-toolbox__add hostly-sala-editor-toolbox__add--icon"
-          title="Añadir espacio"
+          title="Añadir mapa"
         >
           <span aria-hidden>+</span>
         </button>

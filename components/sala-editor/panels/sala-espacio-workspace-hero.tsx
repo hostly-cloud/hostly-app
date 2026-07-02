@@ -16,7 +16,7 @@ export function SalaEspacioWorkspaceHero({
     <SalaEspacioCanvasFrame espacio={espacio} restaurantId={restaurantId}
       hint={
         <div className="hostly-sala-espacio-frame__hero">
-          <p className="hostly-sala-espacio-frame__hero-title">Tu espacio está listo</p>
+          <p className="hostly-sala-espacio-frame__hero-title">Tu mapa está listo</p>
           <p className="hostly-sala-espacio-frame__hero-hint">
             Pasa a Estructura para dibujar · Operación para colocar mesas
           </p>

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import { createEmptySalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
+import { normalizeSalaEditorDocument } from "@/lib/sala-editor/normalize/normalize-sala-editor-document";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
@@ -13,6 +14,7 @@ import {
   isToolSelected,
 } from "@/lib/sala-editor/types/editor-tool";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
+import { createSalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import {
   getStructuralToolboxItem,
 } from "@/lib/sala-editor/catalog/structural-toolbox";
@@ -56,14 +58,16 @@ export function useSalaEditorDocument({
   historyApi = null,
   getDocumentSnapshot,
 }: UseSalaEditorDocumentOptions) {
-  const [document, setDocument] = useState<SalaEditorDocument>(() => ({
-    ...createEmptySalaEditorDocument(restaurantId),
-    espacios: initialEspacios,
-    navigation: {
-      phase: "espacios",
-      selectedEspacioId: initialEspacios[0]?.id ?? null,
-    },
-  }));
+  const [document, setDocument] = useState<SalaEditorDocument>(() =>
+    normalizeSalaEditorDocument({
+      ...createEmptySalaEditorDocument(restaurantId),
+      espacios: initialEspacios,
+      navigation: {
+        phase: "espacios",
+        selectedEspacioId: initialEspacios[0]?.id ?? null,
+      },
+    }),
+  );
 
   const [activeTool, setActiveTool] = useState<SalaEditorActiveTool>(null);
   const [activeOperationalElement, setActiveOperationalElement] =
@@ -73,7 +77,7 @@ export function useSalaEditorDocument({
 
   const replaceDocument = useCallback((nextDocument: SalaEditorDocument) => {
     if (nextDocument.restaurantId !== restaurantId) return;
-    setDocument(nextDocument);
+    setDocument(normalizeSalaEditorDocument(nextDocument));
     setActiveTool(null);
     setActiveOperationalElement(null);
     setSelectedOperationalElementInstanceId(null);
@@ -82,7 +86,7 @@ export function useSalaEditorDocument({
 
   const restoreDocumentSnapshot = useCallback((nextDocument: SalaEditorDocument) => {
     if (nextDocument.restaurantId !== restaurantId) return;
-    setDocument(nextDocument);
+    setDocument(normalizeSalaEditorDocument(nextDocument));
     setActiveTool(null);
     setActiveOperationalElement(null);
     setSelectedOperationalElementInstanceId(null);
@@ -184,30 +188,44 @@ export function useSalaEditorDocument({
   }, []);
 
   const addOperationalElement = useCallback((instance: OperationalElementInstance) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
     setDocument((prev) => {
-      const next = {
+      previousDocument = prev;
+      nextDocument = {
         ...prev,
         operationalElementInstances: [...prev.operationalElementInstances, instance],
         updatedAt: Date.now(),
       };
-      historyApi?.recordCommit("operational.create", prev, next);
-      return next;
+      return nextDocument;
     });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("operational.create", previousDocument, nextDocument);
+    }
     setSelectedOperationalElementInstanceId(instance.id);
   }, [historyApi]);
 
   const removeOperationalElement = useCallback((instanceId: string) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
     setDocument((prev) => {
-      const next = {
+      previousDocument = prev;
+      nextDocument = {
         ...prev,
         operationalElementInstances: prev.operationalElementInstances.filter(
           (instance) => instance.id !== instanceId,
         ),
         updatedAt: Date.now(),
       };
-      historyApi?.recordCommit("operational.delete", prev, next);
-      return next;
+      return nextDocument;
     });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("operational.delete", previousDocument, nextDocument);
+    }
     setSelectedOperationalElementInstanceId((current) =>
       current === instanceId ? null : current,
     );
@@ -232,6 +250,8 @@ export function useSalaEditorDocument({
 
   const duplicateOperationalElement = useCallback((instanceId: string) => {
     let duplicateId: string | null = null;
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
 
     setDocument((prev) => {
       const source = prev.operationalElementInstances.find(
@@ -262,7 +282,8 @@ export function useSalaEditorDocument({
 
       duplicateId = duplicate.id;
 
-      const next = {
+      previousDocument = prev;
+      nextDocument = {
         ...prev,
         operationalElementInstances: [
           ...prev.operationalElementInstances,
@@ -270,9 +291,12 @@ export function useSalaEditorDocument({
         ],
         updatedAt: Date.now(),
       };
-      historyApi?.recordCommit("operational.duplicate", prev, next);
-      return next;
+      return nextDocument;
     });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("operational.duplicate", previousDocument, nextDocument);
+    }
 
     if (duplicateId) {
       setSelectedOperationalElementInstanceId(duplicateId);
@@ -361,12 +385,92 @@ export function useSalaEditorDocument({
   }, []);
 
   const addWall = useCallback((wall: SalaWallSegment) => {
-    setDocument((prev) => ({
-      ...prev,
-      walls: [...prev.walls, wall],
-      updatedAt: Date.now(),
-    }));
-  }, []);
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        walls: [...prev.walls, wall],
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("wall.create", previousDocument, nextDocument);
+    }
+  }, [historyApi]);
+
+  const updateWall = useCallback(
+    (
+      wallId: string,
+      patch: Partial<Pick<SalaWallSegment, "x1" | "y1" | "x2" | "y2">>,
+    ) => {
+      setDocument((prev) => ({
+        ...prev,
+        walls: prev.walls.map((wall) =>
+          wall.id === wallId ? { ...wall, ...patch } : wall,
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    [],
+  );
+
+  const removeWall = useCallback((wallId: string) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        walls: prev.walls.filter((wall) => wall.id !== wallId),
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("wall.delete", previousDocument, nextDocument);
+    }
+  }, [historyApi]);
+
+  const duplicateWall = useCallback((wallId: string): string | null => {
+    let duplicateId: string | null = null;
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      const source = prev.walls.find((wall) => wall.id === wallId);
+      if (!source) return prev;
+
+      const duplicate = createSalaWallSegment({
+        espacioId: source.espacioId,
+        x1: source.x1 + 24,
+        y1: source.y1 + 24,
+        x2: source.x2 + 24,
+        y2: source.y2 + 24,
+      });
+
+      duplicateId = duplicate.id;
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        walls: [...prev.walls, duplicate],
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("wall.duplicate", previousDocument, nextDocument);
+    }
+
+    return duplicateId;
+  }, [historyApi]);
 
   const isStructuralToolSelected = useCallback(
     (kind: SalaStructuralElementKind) => isToolSelected(activeTool, kind),
@@ -426,16 +530,23 @@ export function useSalaEditorDocument({
   }, []);
 
   const addEspacioAndSelect = useCallback((espacio: SalaEspacio) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
     setDocument((prev) => {
-      const next = {
+      previousDocument = prev;
+      nextDocument = {
         ...prev,
         espacios: [...prev.espacios, espacio],
         navigation: selectSalaEspacioInNavigation(prev.navigation, espacio.id),
         updatedAt: Date.now(),
       };
-      historyApi?.recordCommit("espacio.create", prev, next);
-      return next;
+      return nextDocument;
     });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("espacio.create", previousDocument, nextDocument);
+    }
   }, [historyApi]);
 
   const updateEspacio = useCallback(
@@ -497,5 +608,8 @@ export function useSalaEditorDocument({
     addEspacioAndSelect,
     updateEspacio,
     addWall,
+    updateWall,
+    removeWall,
+    duplicateWall,
   };
 }

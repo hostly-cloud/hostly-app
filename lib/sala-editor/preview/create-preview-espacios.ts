@@ -5,6 +5,7 @@ import {
 } from "@/lib/sala-editor/catalog/espacio-presets";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
+import { createDefaultSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 
 /** Presets cargados por defecto en la ruta preview del editor V2. */
 export const PREVIEW_ESPACIO_PRESET_KEYS: readonly SalaEspacioPresetKey[] = [
@@ -41,12 +42,13 @@ export function createLocalEspacio(input: CreateLocalEspacioInput): SalaEspacio 
   return {
     id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     restaurantId: rid,
-    name: name || "Nuevo espacio",
+    name: name || "Nuevo mapa",
     tipo: input.tipo,
     color: input.color,
     sortOrder: input.sortOrder,
     visible: true,
     active: true,
+    base: createDefaultSalaEspacioBase(),
   };
 }
 
@@ -73,6 +75,7 @@ export function createPreviewEspaciosFromPresets(
         sortOrder: preset.defaultSortOrder,
         visible: true,
         active: true,
+        base: createDefaultSalaEspacioBase(),
       },
     ];
   });
@@ -104,6 +107,7 @@ export function createLocalEspacioFromPreset(
     sortOrder: preset.defaultSortOrder,
     visible: true,
     active: true,
+    base: createDefaultSalaEspacioBase(),
   };
 }
 

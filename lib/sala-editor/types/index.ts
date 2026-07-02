@@ -10,6 +10,30 @@ export {
 } from "@/lib/sala-editor/types/espacio";
 
 export type {
+  SalaEspacioBase,
+  SalaEspacioBaseDimensions,
+  SalaEspacioBaseFloor,
+  SalaEspacioBaseGrid,
+  SalaEspacioBaseOrientation,
+  SalaEspacioBaseScale,
+  SalaEspacioBaseShapeType,
+  SalaEspacioBaseStatus,
+  SalaEspacioBaseUnit,
+} from "@/lib/sala-editor/types/espacio-base";
+export {
+  DEFAULT_SALA_ESPACIO_BASE_DIMENSIONS,
+  DEFAULT_SALA_ESPACIO_BASE_FLOOR,
+  DEFAULT_SALA_ESPACIO_BASE_GRID_SIZE,
+  DEFAULT_SALA_ESPACIO_BASE_SCALE,
+  SALA_ESPACIO_BASE_FLOOR_LABELS,
+  SALA_ESPACIO_BASE_SHAPE_LABELS,
+  SALA_ESPACIO_BASE_STATUS_LABELS,
+  createDefaultSalaEspacioBase,
+  createSalaEspacioBaseFromCanvasSize,
+  normalizeSalaEspacioBase,
+} from "@/lib/sala-editor/types/espacio-base";
+
+export type {
   SalaStructuralElement,
   SalaStructuralElementConfig,
   SalaStructuralElementId,

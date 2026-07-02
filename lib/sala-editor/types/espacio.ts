@@ -4,6 +4,7 @@
  */
 
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
+import type { SalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 
 export type SalaEspacioId = string;
 
@@ -28,6 +29,8 @@ export type SalaEspacio = {
    */
   legacyFloorPlanId?: string;
   legacyZoneId?: string;
+  /** Preparación fundacional del mapa (forma, escala, suelo, cuadrícula). */
+  base?: SalaEspacioBase;
   createdAt?: number;
   updatedAt?: number;
 };

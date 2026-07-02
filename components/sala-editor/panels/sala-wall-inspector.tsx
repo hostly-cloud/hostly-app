@@ -23,7 +23,7 @@ function InspectorSection({
   );
 }
 
-const WALL_UPCOMING_ACTIONS = ["Girar", "Duplicar", "Bloquear"] as const;
+const WALL_UPCOMING_ACTIONS = ["Girar", "Bloquear"] as const;
 
 export type SalaWallInspectorProps = {
   wall: SalaWallSegment;

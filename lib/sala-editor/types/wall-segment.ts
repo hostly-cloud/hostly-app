@@ -14,6 +14,7 @@ export type SalaWallSegment = {
   y1: number;
   x2: number;
   y2: number;
+  metadata?: Record<string, unknown>;
 };
 
 export type SalaWallSegmentDraft = Omit<SalaWallSegment, "id">;

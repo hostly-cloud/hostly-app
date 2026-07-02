@@ -5,6 +5,7 @@ import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espa
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
 import { SalaEspaciosSidebar } from "@/components/sala-editor/panels/sala-espacios-sidebar";
+import { SalaBaseSidebar } from "@/components/sala-editor/panels/sala-base-sidebar";
 import { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
 import { SalaOperacionSidebar } from "@/components/sala-editor/panels/sala-operacion-sidebar";
 
@@ -59,6 +60,7 @@ export function SalaEditorLeftPanel({
           onUpdateEspacio={onUpdateEspacio}
         />
       ) : null}
+      {phase === "base" ? <SalaBaseSidebar /> : null}
       {phase === "estructura" ? (
         <SalaEstructuraSidebar
           activeToolKind={activeStructuralToolKind}

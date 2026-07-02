@@ -1,8 +1,8 @@
 "use client";
 
 import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
-import { OPERATIONAL_ELEMENT_CATALOG } from "@/lib/sala-editor/ose/operational-element-catalog";
-import { SalaOperationalElementCard } from "@/components/sala-editor/panels/sala-operational-element-card";
+import type { SalaEditorLibraryItem } from "@/lib/sala-editor/library/types";
+import { SalaEditorLibrary } from "@/components/sala-editor/library/sala-editor-library";
 
 export type SalaOperacionSidebarProps = {
   activeElementType: OperationalElementType | null;
@@ -14,18 +14,14 @@ export function SalaOperacionSidebar({
   onSelectElementType,
 }: SalaOperacionSidebarProps) {
   return (
-    <div className="hostly-sala-editor-toolbox">
-      <ul className="hostly-sala-editor-tool-chip-grid">
-        {OPERATIONAL_ELEMENT_CATALOG.map((item) => (
-          <li key={item.type}>
-            <SalaOperationalElementCard
-              item={item}
-              selected={activeElementType === item.type}
-              onSelect={() => onSelectElementType(item.type)}
-            />
-          </li>
-        ))}
-      </ul>
+    <div className="hostly-sala-editor-toolbox hostly-sala-editor-toolbox--library">
+      <SalaEditorLibrary
+        phase="operacion"
+        selection={{ operationalType: activeElementType }}
+        onSelectItem={(item: SalaEditorLibraryItem) => {
+          if (item.operationalType) onSelectElementType(item.operationalType);
+        }}
+      />
     </div>
   );
 }

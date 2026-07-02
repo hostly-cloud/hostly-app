@@ -13,9 +13,9 @@ export function SalaEspaciosEmptyState({
     return (
       <div className="hostly-sala-editor-toolbox">
         <p className="hostly-sala-editor-toolbox__label" style={{ padding: "2px" }}>
-          Sin espacios
+          Sin mapas
         </p>
-        <button type="button" onClick={onCreateEspacio} className="hostly-sala-editor-toolbox__add" title="Crear espacio">
+        <button type="button" onClick={onCreateEspacio} className="hostly-sala-editor-toolbox__add" title="Crear mapa">
           <span aria-hidden>+</span>
         </button>
       </div>
@@ -31,14 +31,14 @@ export function SalaEspaciosEmptyState({
           <span className="hostly-sala-editor-empty__glyph" aria-hidden>
             ◫
           </span>
-          <p className="hostly-sala-editor-empty__title">Crea tu primer espacio</p>
-          <p className="hostly-sala-editor-empty__hint">Empieza diseñando la sala.</p>
+          <p className="hostly-sala-editor-empty__title">Crea tu primer mapa</p>
+          <p className="hostly-sala-editor-empty__hint">Empieza diseñando un plano operativo.</p>
           <button
             type="button"
             onClick={onCreateEspacio}
             className="hostly-sala-editor-sidebar-action mt-3 max-w-[200px]"
           >
-            Crear espacio
+            Crear mapa
           </button>
         </div>
       </div>

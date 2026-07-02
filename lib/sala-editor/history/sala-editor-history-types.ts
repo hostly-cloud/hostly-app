@@ -6,6 +6,11 @@ export type SalaEditorHistoryActionKind =
   | "operational.resize"
   | "operational.delete"
   | "operational.duplicate"
+  | "wall.create"
+  | "wall.move"
+  | "wall.resize"
+  | "wall.delete"
+  | "wall.duplicate"
   | "espacio.create"
   | "espacio.update"
   | "history.navigation";

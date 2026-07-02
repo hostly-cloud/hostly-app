@@ -7,12 +7,15 @@ import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
 import { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-espacios-empty-state";
+import { SalaBaseWorkspace } from "@/components/sala-editor/panels/sala-base-workspace";
 import { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-estructura-workspace";
 import { SalaOperacionWorkspace } from "@/components/sala-editor/panels/sala-operacion-workspace";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
+import type { WallPointerPayload } from "@/lib/sala-editor/canvas/wall-interaction";
+import type { WallSnapGuide } from "@/lib/sala-editor/canvas/wall-snap";
 import type { OperationalSnapGuides } from "@/lib/sala-editor/canvas/operational-snap";
 import {
   createSpaceWorkspaceScope,
@@ -29,8 +32,15 @@ export type SalaEditorWorkspaceCanvasProps = {
   walls?: SalaWallSegment[];
   wallDraft?: SalaWallDrawingDraft | null;
   selectedWallId?: string | null;
-  onWallPointerDown?: (point: { x: number; y: number }) => void;
-  onWallPointerMove?: (point: { x: number; y: number }) => void;
+  draggingWallId?: string | null;
+  resizingWallId?: string | null;
+  wallSnapGuide?: WallSnapGuide | null;
+  onWallPointerDown?: (payload: WallPointerPayload) => void;
+  onWallPointerMove?: (payload: WallPointerPayload) => void;
+  onWallPointerUp?: () => void;
+  onWallPointerCancel?: () => void;
+  onWallDuplicate?: (wallId: string) => void;
+  onWallDelete?: (wallId: string) => void;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
   operationalElementInstances?: OperationalElementInstance[];
   selectedOperationalElementInstanceId?: string | null;
@@ -74,8 +84,15 @@ export function SalaEditorWorkspaceCanvas({
   walls = [],
   wallDraft = null,
   selectedWallId = null,
+  draggingWallId = null,
+  resizingWallId = null,
+  wallSnapGuide = null,
   onWallPointerDown,
   onWallPointerMove,
+  onWallPointerUp,
+  onWallPointerCancel,
+  onWallDuplicate,
+  onWallDelete,
   activeOperationalCatalogItem = null,
   operationalElementInstances = [],
   selectedOperationalElementInstanceId = null,
@@ -118,10 +135,18 @@ export function SalaEditorWorkspaceCanvas({
   if (!espacio) {
     return (
       <SalaEditorEmptyState
-        title="Selecciona un espacio en el panel izquierdo."
-        hint="Necesitas un espacio activo para diseñar estructura u operación."
+        title="Selecciona un mapa en el panel izquierdo."
+        hint="Necesitas un mapa activo para preparar base, estructura u operación."
         glyph="▢"
       />
+    );
+  }
+
+  if (phase === "base") {
+    return (
+      <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
+        <SalaBaseWorkspace espacio={espacio} restaurantId={restaurantId} />
+      </div>
     );
   }
 
@@ -135,8 +160,15 @@ export function SalaEditorWorkspaceCanvas({
           walls={walls}
           wallDraft={wallDraft}
           selectedWallId={selectedWallId}
+          draggingWallId={draggingWallId}
+          resizingWallId={resizingWallId}
+          wallSnapGuide={wallSnapGuide}
           onWallPointerDown={onWallPointerDown}
           onWallPointerMove={onWallPointerMove}
+          onWallPointerUp={onWallPointerUp}
+          onWallPointerCancel={onWallPointerCancel}
+          onWallDuplicate={onWallDuplicate}
+          onWallDelete={onWallDelete}
         />
       </div>
     );
@@ -195,7 +227,7 @@ export function SalaEditorWorkspaceCanvas({
   return (
     <SalaEditorEmptyState
       title={espacio.name}
-      hint="Espacio seleccionado."
+      hint="Mapa seleccionado."
       glyph="◫"
     />
   );

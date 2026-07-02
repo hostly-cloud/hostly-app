@@ -1,11 +1,11 @@
 /**
  * Navegación del editor de sala por fases.
- * Fase 1 → espacios · Fase 2 → estructura · Fase 3 → operación.
+ * Fase 1 → mapas · Fase 2 → base · Fase 3 → estructura · Fase 4 → operación.
  */
 
 import type { SalaEspacioId } from "@/lib/sala-editor/types/espacio";
 
-export type SalaEditorPhase = "espacios" | "estructura" | "operacion";
+export type SalaEditorPhase = "espacios" | "base" | "estructura" | "operacion";
 
 export type SalaEditorNavigation = {
   phase: SalaEditorPhase;
@@ -15,18 +15,21 @@ export type SalaEditorNavigation = {
 
 export const SALA_EDITOR_PHASE_ORDER: readonly SalaEditorPhase[] = [
   "espacios",
+  "base",
   "estructura",
   "operacion",
 ] as const;
 
 export const SALA_EDITOR_PHASE_LABELS: Record<SalaEditorPhase, string> = {
-  espacios: "Espacios",
+  espacios: "Mapas",
+  base: "Base",
   estructura: "Estructura",
   operacion: "Operación",
 };
 
 export const SALA_EDITOR_PHASE_DESCRIPTIONS: Record<SalaEditorPhase, string> = {
-  espacios: "Define salas, terrazas y zonas del local.",
+  espacios: "Define los mapas operativos del restaurante.",
+  base: "Prepara forma, escala, suelo y referencias del mapa.",
   estructura: "Paredes, barras, puertas y elementos fijos.",
   operacion: "Mesas, asientos y superficies de servicio.",
 };

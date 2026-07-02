@@ -23,7 +23,7 @@ export function canEnterSalaEditorPhase(
   const hasActiveEspacio = espacios.some((e) => e.active);
   if (!hasActiveEspacio) return false;
 
-  if (phase === "estructura" || phase === "operacion") {
+  if (phase === "base" || phase === "estructura" || phase === "operacion") {
     return navigation.selectedEspacioId != null;
   }
 
@@ -77,6 +77,7 @@ export function isSalaEditorPhaseComplete(
   },
 ): boolean {
   if (phase === "espacios") return counts.espacios > 0;
+  if (phase === "base") return counts.espacios > 0;
   if (phase === "estructura") return counts.structuralElements > 0;
   if (phase === "operacion") return counts.operationalElements > 0;
   return false;

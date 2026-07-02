@@ -15,7 +15,7 @@ export const SALA_STRUCTURAL_CATALOG: readonly SalaStructuralCatalogItem[] = [
   {
     kind: "wall",
     label: "Pared",
-    description: "Límite o tabique del espacio.",
+    description: "Límite o tabique del mapa.",
     defaultSize: { width: 280, height: 12 },
   },
   {
@@ -27,7 +27,7 @@ export const SALA_STRUCTURAL_CATALOG: readonly SalaStructuralCatalogItem[] = [
   {
     kind: "door",
     label: "Puerta",
-    description: "Acceso entre espacios o al exterior.",
+    description: "Acceso dentro del mapa o al exterior.",
     defaultSize: { width: 36, height: 112 },
   },
   {

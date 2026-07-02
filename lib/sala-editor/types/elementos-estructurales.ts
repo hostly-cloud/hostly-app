@@ -29,6 +29,8 @@ export type SalaStructuralElementConfig = {
   blocksPlacement?: boolean;
 };
 
+export type SalaStructuralElementMetadata = Record<string, unknown>;
+
 /** Elemento estructural posicionado en el lienzo del espacio. */
 export type SalaStructuralElement = {
   id: SalaStructuralElementId;
@@ -41,6 +43,7 @@ export type SalaStructuralElement = {
   rotation?: number;
   locked?: boolean;
   config?: SalaStructuralElementConfig;
+  metadata?: SalaStructuralElementMetadata;
   createdAt?: number;
   updatedAt?: number;
 };

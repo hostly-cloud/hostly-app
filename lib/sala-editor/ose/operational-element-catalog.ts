@@ -102,7 +102,7 @@ export const OPERATIONAL_ELEMENT_CATALOG: readonly OperationalElementCatalogItem
       type: "ROOM",
       icon: "🚪",
       label: "Sala privada",
-      description: "Espacio cerrado o reservable como unidad.",
+      description: "Área cerrada o reservable como unidad.",
       defaultCapacity: 8,
       color: "#b45309",
       supportsReservations: true,

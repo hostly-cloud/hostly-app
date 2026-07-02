@@ -18,7 +18,7 @@ export function SalaOperacionPhasePanel({
       <p className="text-sm text-slate-600">
         {espacioName
           ? `En «${espacioName}» colocarás mesas, hamacas y asientos de servicio.`
-          : "Selecciona un espacio para añadir elementos operativos."}
+          : "Selecciona un mapa para añadir elementos operativos."}
       </p>
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {SALA_OPERATIONAL_CATALOG.map((item) => (

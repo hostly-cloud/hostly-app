@@ -8,6 +8,7 @@ import {
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import { SALA_EDITOR_DOCUMENT_VERSION } from "@/lib/sala-editor/types/editor-document";
+import { normalizeSalaEditorDocument } from "@/lib/sala-editor/normalize/normalize-sala-editor-document";
 
 export const SALA_EDITOR_MAPS_COLLECTION = "salaEditorMaps" as const;
 export const SALA_EDITOR_DRAFT_DOC_ID = "draft" as const;
@@ -93,7 +94,7 @@ function parseSalaEditorDocument(
     throw new Error("sala-editor-draft: estructura incompleta");
   }
 
-  return raw as SalaEditorDocument;
+  return normalizeSalaEditorDocument(raw as SalaEditorDocument);
 }
 
 function parseDraftDocument(

@@ -1,7 +1,7 @@
 "use client";
 
 const DEFAULT_MESSAGE =
-  "Selecciona un espacio o un elemento para editar sus propiedades.";
+  "Selecciona un mapa o un elemento para editar sus propiedades.";
 
 export function SalaEditorInspectorEmpty({
   message = DEFAULT_MESSAGE,
