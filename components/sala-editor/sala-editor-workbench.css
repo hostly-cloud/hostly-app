@@ -122,7 +122,9 @@
 
 .hostly-sala-context-action-bar {
   display: flex;
+  height: 38px;
   min-height: 38px;
+  max-height: 38px;
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
@@ -130,7 +132,17 @@
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   background: color-mix(in srgb, var(--hostly-surface-page-soft) 84%, white);
   padding: 4px 8px;
+  overflow: hidden;
+}
+
+.hostly-sala-context-action-bar.is-active {
   animation: hostly-sala-context-bar-in 145ms ease-out;
+}
+
+.hostly-sala-context-action-bar.is-empty {
+  border-bottom-color: transparent;
+  background: transparent;
+  pointer-events: none;
 }
 
 .hostly-sala-context-action-bar__target {
@@ -334,6 +346,34 @@
 
 .hostly-sala-editor-workbench__panel--toolbox .hostly-sala-editor-workbench__panel-inner {
   padding: 4px 3px;
+}
+
+.hostly-sala-editor-left-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hostly-sala-editor-left-panel__scroll {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hostly-sala-editor-left-panel__scroll > .hostly-sala-editor-toolbox--library,
+.hostly-sala-editor-left-panel__scroll > .hostly-sala-editor-toolbox--base-config,
+.hostly-sala-editor-left-panel__scroll > .hostly-sala-editor-toolbox--spaces {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.hostly-sala-editor-left-panel > .hostly-sala-editor-space-switcher {
+  flex: 0 0 auto;
 }
 
 .hostly-sala-editor-workbench__panel-inner > .hostly-sala-editor-toolbox--spaces-switcher {
@@ -2514,12 +2554,15 @@
 }
 
 .hostly-sala-op-visual__name {
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 9.5px;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--op-accent, #315f7d) 48%, #64748b);
-  text-shadow: none;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: color-mix(in srgb, var(--op-accent, #315f7d) 34%, #0f172a);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 4px rgba(255, 255, 255, 0.72);
 }
 
 .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph,
@@ -2527,24 +2570,24 @@
   width: 72%;
   height: 52%;
   border-radius: 6px;
-  border: 1.5px solid color-mix(in srgb, var(--op-accent, #315f7d) 55%, #64748b);
-  background: color-mix(in srgb, var(--op-accent, #315f7d) 10%, #eef4fa);
+  border: 1.5px solid color-mix(in srgb, var(--op-accent, #315f7d) 72%, #475569);
+  background: color-mix(in srgb, var(--op-accent, #315f7d) 16%, #f8fafc);
 }
 
 .hostly-sala-op-visual[data-type="TABLE"][data-visual-variant="round"] .hostly-sala-op-visual__glyph {
   width: 58%;
   height: 58%;
   border-radius: 999px;
-  border: 1.5px solid color-mix(in srgb, var(--op-accent, #315f7d) 55%, #64748b);
-  background: color-mix(in srgb, var(--op-accent, #315f7d) 10%, #eef4fa);
+  border: 1.5px solid color-mix(in srgb, var(--op-accent, #315f7d) 72%, #475569);
+  background: color-mix(in srgb, var(--op-accent, #315f7d) 16%, #f8fafc);
 }
 
 .hostly-sala-op-visual[data-type="TABLE"][data-visual-variant="square"] .hostly-sala-op-visual__glyph {
   width: 52%;
   height: 52%;
   border-radius: 6px;
-  border: 1.5px solid color-mix(in srgb, var(--op-accent, #315f7d) 55%, #64748b);
-  background: color-mix(in srgb, var(--op-accent, #315f7d) 10%, #eef4fa);
+  border: 1.5px solid color-mix(in srgb, var(--op-accent, #315f7d) 72%, #475569);
+  background: color-mix(in srgb, var(--op-accent, #315f7d) 16%, #f8fafc);
 }
 
 .hostly-sala-op-visual[data-type="HIGH_TABLE"] .hostly-sala-op-visual__glyph {
@@ -2834,6 +2877,7 @@
 }
 
 .hostly-sala-editor-toolbox--spaces-switcher {
+  flex: 0 0 auto;
   flex-shrink: 0;
   gap: 3px;
   margin-bottom: 4px;
@@ -2841,8 +2885,18 @@
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
+.hostly-sala-editor-space-switcher {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+  padding: 0 1px 4px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
 .hostly-sala-editor-space-switcher__label {
-  margin: 0 2px;
+  margin: 0 2px 1px;
   font-size: 7px;
   font-weight: 820;
   letter-spacing: 0.04em;
@@ -2850,14 +2904,105 @@
   color: #94a3b8;
 }
 
-.hostly-sala-editor-toolbox--spaces-switcher .hostly-sala-editor-space-grid {
-  grid-template-columns: 1fr;
+.hostly-sala-editor-space-switcher__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.hostly-sala-editor-toolbox--spaces-switcher .hostly-sala-editor-space-chip__icon {
-  width: 26px;
-  height: 26px;
-  font-size: 12px;
+.hostly-sala-editor-space-switcher__item {
+  display: flex;
+  width: 100%;
+  min-height: 22px;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  padding: 2px 5px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.hostly-sala-editor-space-switcher__item:hover {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.hostly-sala-editor-space-switcher__item.is-selected {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--espacio-accent, var(--hostly-accent)) 24%, rgba(148, 163, 184, 0.18));
+}
+
+.hostly-sala-editor-space-switcher__item.is-inactive {
+  opacity: 0.62;
+}
+
+.hostly-sala-editor-space-switcher__dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.hostly-sala-editor-space-switcher__name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 9.5px;
+  font-weight: 760;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--hostly-ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostly-sala-editor-space-switcher__item.is-selected .hostly-sala-editor-space-switcher__name {
+  color: color-mix(in srgb, var(--espacio-accent, var(--hostly-accent)) 68%, #334155);
+}
+
+.hostly-sala-editor-space-switcher__add {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  padding: 2px 5px;
+  font-size: 9px;
+  font-weight: 780;
+  color: #64748b;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.hostly-sala-editor-space-switcher__add:hover {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-sala-editor-space-switcher__add span {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
 }
 
 .hostly-sala-editor-space-chip.is-selected {
@@ -3516,41 +3661,53 @@
 
 .hostly-sala-surface-object {
   position: absolute;
-  border: 1.5px solid color-mix(in srgb, var(--surface-color, #94a3b8) 72%, #0f172a);
-  border-radius: 12px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0)),
-    color-mix(in srgb, var(--surface-color, #94a3b8) 42%, transparent);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.46);
+  box-sizing: border-box;
+  border: none;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-color, #94a3b8) 26%, #f7f9fc);
+  box-shadow: none;
   cursor: grab;
+  opacity: 0.78;
   pointer-events: auto;
   touch-action: none;
   transition:
-    border-color 160ms ease,
     box-shadow 160ms ease,
-    filter 160ms ease;
+    filter 160ms ease,
+    outline-color 160ms ease;
 }
 
 .hostly-sala-surface-object-wrap > .hostly-sala-surface-object {
   inset: 0;
+  width: calc(100% + 1px);
+  height: calc(100% + 1px);
+}
+
+.hostly-sala-surface-object-wrap > .hostly-sala-surface-object.is-selected,
+.hostly-sala-surface-object-wrap > .hostly-sala-surface-object.hostly-sala-surface-object--preview {
   width: 100%;
   height: 100%;
 }
 
+.hostly-sala-surface-object:not(.is-readonly):not(.is-selected):not(.hostly-sala-surface-object--preview):hover {
+  cursor: pointer;
+}
+
 .hostly-sala-surface-object.is-selected {
-  border-color: color-mix(in srgb, var(--surface-color, #94a3b8) 42%, var(--hostly-accent, #315f7d));
+  outline: 2px solid color-mix(in srgb, var(--hostly-accent, #315f7d) 72%, var(--surface-color, #94a3b8));
+  outline-offset: -1px;
+  opacity: 0.88;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.64),
-    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 18%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--hostly-accent, #315f7d) 18%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24);
 }
 
 .hostly-sala-surface-object.is-dragging {
   cursor: grabbing;
-  filter: saturate(1.08);
+  filter: saturate(0.82);
 }
 
 .hostly-sala-surface-object.is-resizing {
-  filter: saturate(1.1);
+  filter: saturate(0.82);
 }
 
 .hostly-sala-surface-object.is-readonly {
@@ -3560,11 +3717,11 @@
 
 .hostly-sala-surface-object--preview {
   z-index: 2;
-  border-style: dashed;
-  background: color-mix(in srgb, var(--surface-color, #94a3b8) 28%, transparent);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.68),
-    0 12px 28px rgba(15, 23, 42, 0.08);
+  border: 1px dashed color-mix(in srgb, var(--surface-color, #94a3b8) 72%, #0f172a);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-color, #94a3b8) 24%, transparent);
+  box-shadow: none;
+  opacity: 0.54;
   pointer-events: none;
 }
 
@@ -4017,5 +4174,73 @@
 
 .hostly-sala-editor-tool-hint__text {
   min-width: 0;
+}
+
+/* ─── Editor V2 · UX Stability Pass 2 ─── */
+
+.hostly-sala-editor-left-panel__scroll,
+.hostly-sala-editor-left-panel__scroll > .hostly-sala-editor-toolbox,
+.hostly-sala-editor-toolbox--library,
+.hostly-sala-library {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hostly-sala-editor-toolbox--library,
+.hostly-sala-library {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.hostly-sala-library__head {
+  flex: 0 0 auto;
+}
+
+.hostly-sala-library__scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.hostly-sala-surface-object:not(.is-selected):not(.is-dragging):not(.is-resizing) {
+  box-shadow: none;
+  filter: saturate(0.62) contrast(0.9);
+}
+
+.hostly-sala-surface-object:not(.is-readonly):not(.is-selected):not(.is-dragging):not(.is-resizing):hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-color, #94a3b8) 22%, transparent);
+  filter: saturate(0.68) contrast(0.94);
+}
+
+.hostly-sala-surface-object.is-selected {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--hostly-accent, #315f7d) 16%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  filter: saturate(0.76) contrast(0.96);
+}
+
+.hostly-sala-surface-object.is-dragging,
+.hostly-sala-surface-object.is-resizing {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--hostly-accent, #315f7d) 18%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  filter: saturate(0.74) contrast(0.96);
+}
+
+.hostly-sala-operational-layer {
+  z-index: 8;
+}
+
+.hostly-sala-canvas-object__body {
+  filter: drop-shadow(0 4px 9px rgba(15, 23, 42, 0.11));
+}
+
+.hostly-sala-canvas-object.is-dragging .hostly-sala-canvas-object__body,
+.hostly-sala-canvas-object.is-resizing .hostly-sala-canvas-object__body {
+  filter: drop-shadow(0 8px 16px rgba(15, 23, 42, 0.16));
 }
 

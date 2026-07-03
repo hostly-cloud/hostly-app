@@ -60,7 +60,7 @@ export function SalaEditorLeftPanel({
       : null;
 
   return (
-    <>
+    <div className="hostly-sala-editor-left-panel">
       {espacios.length > 0 && phase !== "espacios" ? (
         <SalaEspaciosSidebar
           mode="switcher"
@@ -72,42 +72,44 @@ export function SalaEditorLeftPanel({
           onUpdateEspacio={onUpdateEspacio}
         />
       ) : null}
-      {phase === "espacios" ? (
-        <SalaEspaciosSidebar
-          mode="primary"
-          espacios={espacios}
-          selectedEspacioId={selectedEspacioId}
-          elementCountByEspacioId={elementCountByEspacioId}
-          onSelectEspacio={onSelectEspacio}
-          onRequestAddEspacio={onRequestAddEspacio}
-          onUpdateEspacio={onUpdateEspacio}
-        />
-      ) : null}
-      {phase === "base" ? (
-        <SalaBaseSidebar
-          espacio={selectedEspacio}
-          onUpdateBase={(espacioId, patch) => onUpdateEspacioBase?.(espacioId, patch)}
-        />
-      ) : null}
-      {phase === "terreno" ? (
-        <SalaTerrenoSidebar
-          activeSurfaceMaterial={activeSurfaceMaterial}
-          onSelectSurfaceMaterial={onSelectSurfaceMaterial}
-        />
-      ) : null}
-      {phase === "estructura" ? (
-        <SalaEstructuraSidebar
-          activeToolKind={activeStructuralToolKind}
-          onSelectTool={onSelectStructuralTool}
-        />
-      ) : null}
-      {phase === "operacion" ? (
-        <SalaOperacionSidebar
-          activeElementType={activeOperationalElementType}
-          activeVisualVariant={activeOperationalVisualVariant}
-          onSelectElementType={onSelectOperationalElement}
-        />
-      ) : null}
-    </>
+      <div className="hostly-sala-editor-left-panel__scroll">
+        {phase === "espacios" ? (
+          <SalaEspaciosSidebar
+            mode="primary"
+            espacios={espacios}
+            selectedEspacioId={selectedEspacioId}
+            elementCountByEspacioId={elementCountByEspacioId}
+            onSelectEspacio={onSelectEspacio}
+            onRequestAddEspacio={onRequestAddEspacio}
+            onUpdateEspacio={onUpdateEspacio}
+          />
+        ) : null}
+        {phase === "base" ? (
+          <SalaBaseSidebar
+            espacio={selectedEspacio}
+            onUpdateBase={(espacioId, patch) => onUpdateEspacioBase?.(espacioId, patch)}
+          />
+        ) : null}
+        {phase === "terreno" ? (
+          <SalaTerrenoSidebar
+            activeSurfaceMaterial={activeSurfaceMaterial}
+            onSelectSurfaceMaterial={onSelectSurfaceMaterial}
+          />
+        ) : null}
+        {phase === "estructura" ? (
+          <SalaEstructuraSidebar
+            activeToolKind={activeStructuralToolKind}
+            onSelectTool={onSelectStructuralTool}
+          />
+        ) : null}
+        {phase === "operacion" ? (
+          <SalaOperacionSidebar
+            activeElementType={activeOperationalElementType}
+            activeVisualVariant={activeOperationalVisualVariant}
+            onSelectElementType={onSelectOperationalElement}
+          />
+        ) : null}
+      </div>
+    </div>
   );
 }

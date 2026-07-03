@@ -117,6 +117,10 @@ const SURFACE_RESIZE_HANDLES: readonly SurfaceResizeHandle[] = [
   "se",
 ] as const;
 
+function snapSurfaceDisplayLength(value: number): number {
+  return Math.round(value);
+}
+
 function createSurfaceStyle(
   rect: SurfaceRect,
   material: SurfaceMaterialKind,
@@ -125,10 +129,10 @@ function createSurfaceStyle(
   const materialEntry = getSurfaceMaterialCatalogItem(material);
   const color = materialEntry?.swatch ?? "#94a3b8";
   return {
-    left: rect.x * coordinateScale,
-    top: rect.y * coordinateScale,
-    width: rect.width * coordinateScale,
-    height: rect.height * coordinateScale,
+    left: snapSurfaceDisplayLength(rect.x * coordinateScale),
+    top: snapSurfaceDisplayLength(rect.y * coordinateScale),
+    width: snapSurfaceDisplayLength(rect.width * coordinateScale),
+    height: snapSurfaceDisplayLength(rect.height * coordinateScale),
     "--surface-color": color,
   } as CSSProperties;
 }
@@ -222,6 +226,7 @@ function SalaTerrenoCanvasContent({
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const creationPointerIdRef = useRef<number | null>(null);
   const [draft, setDraft] = useState<SurfaceCreationDraft | null>(null);
   const [moveSession, setMoveSession] = useState<SurfaceMoveSession | null>(null);
   const [resizeSession, setResizeSession] =
@@ -253,12 +258,15 @@ function SalaTerrenoCanvasContent({
   const handlePointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
+      if (event.target !== event.currentTarget) return;
+      if (draft || moveSession || resizeSession) return;
       onSurfaceObjectClearSelection?.();
       if (!activeSurfaceMaterial) return;
       const point = resolveLogicalPoint(event.clientX, event.clientY);
       if (!point) return;
 
       event.currentTarget.setPointerCapture(event.pointerId);
+      creationPointerIdRef.current = event.pointerId;
       setDraft({
         material: activeSurfaceMaterial,
         origin: point,
@@ -266,11 +274,19 @@ function SalaTerrenoCanvasContent({
         rect: createSurfaceRectFromPoints(point, point),
       });
     },
-    [activeSurfaceMaterial, onSurfaceObjectClearSelection, resolveLogicalPoint],
+    [
+      activeSurfaceMaterial,
+      draft,
+      moveSession,
+      onSurfaceObjectClearSelection,
+      resizeSession,
+      resolveLogicalPoint,
+    ],
   );
 
   const handlePointerMove = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
+      if (creationPointerIdRef.current !== event.pointerId) return;
       const point = resolveLogicalPoint(event.clientX, event.clientY);
       if (!point) return;
 
@@ -342,6 +358,8 @@ function SalaTerrenoCanvasContent({
       onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
         if (event.button !== 0) return;
         event.stopPropagation();
+        creationPointerIdRef.current = null;
+        setDraft(null);
         event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
@@ -407,6 +425,8 @@ function SalaTerrenoCanvasContent({
       onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
         if (event.button !== 0) return;
         event.stopPropagation();
+        creationPointerIdRef.current = null;
+        setDraft(null);
         event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
@@ -480,9 +500,11 @@ function SalaTerrenoCanvasContent({
 
   const finishDraft = useCallback(
     (event: PointerEvent<HTMLDivElement>, create: boolean) => {
+      if (creationPointerIdRef.current !== event.pointerId) return;
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
+      creationPointerIdRef.current = null;
 
       setDraft((current) => {
         if (create && current && isSurfaceRectUsable(current.rect)) {
@@ -508,6 +530,7 @@ function SalaTerrenoCanvasContent({
       if (event.key !== "Escape") return;
       if (draft) {
         event.preventDefault();
+        creationPointerIdRef.current = null;
         setDraft(null);
         return;
       }
