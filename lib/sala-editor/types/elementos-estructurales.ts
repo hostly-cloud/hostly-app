@@ -80,6 +80,8 @@ export function createSalaStructuralElement(
   return {
     id: `struct-${now}-${Math.random().toString(36).slice(2, 9)}`,
     ...draft,
+    ...(draft.config ? { config: { ...draft.config } } : {}),
+    ...(draft.metadata ? { metadata: { ...draft.metadata } } : {}),
     createdAt: now,
     updatedAt: now,
   };
@@ -105,6 +107,10 @@ function isSalaStructuralElementKind(value: unknown): value is SalaStructuralEle
   );
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function normalizeSalaStructuralElements(
   elements: readonly unknown[],
   validEspacioIds: ReadonlySet<string>,
@@ -112,7 +118,7 @@ export function normalizeSalaStructuralElements(
   const normalized: SalaStructuralElement[] = [];
 
   for (const raw of elements) {
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
+    if (!isPlainObject(raw)) continue;
     const entry = raw as Partial<SalaStructuralElement>;
     if (typeof entry.id !== "string" || entry.id.trim() === "") continue;
     if (typeof entry.espacioId !== "string" || !validEspacioIds.has(entry.espacioId)) {
@@ -140,11 +146,11 @@ export function normalizeSalaStructuralElements(
       height: entry.height,
       ...(isFiniteNumber(entry.rotation) ? { rotation: entry.rotation } : {}),
       ...(entry.locked != null ? { locked: entry.locked === true } : {}),
-      ...(entry.config && typeof entry.config === "object"
-        ? { config: entry.config }
+      ...(isPlainObject(entry.config)
+        ? { config: { ...entry.config } }
         : {}),
-      ...(entry.metadata && typeof entry.metadata === "object"
-        ? { metadata: entry.metadata }
+      ...(isPlainObject(entry.metadata)
+        ? { metadata: { ...entry.metadata } }
         : {}),
       ...(isFiniteNumber(entry.createdAt) ? { createdAt: entry.createdAt } : {}),
       ...(isFiniteNumber(entry.updatedAt) ? { updatedAt: entry.updatedAt } : {}),
