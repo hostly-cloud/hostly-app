@@ -57,7 +57,6 @@ export type SalaEditorWorkspaceCanvasProps = {
     surfaceId: string,
     patch: Partial<Omit<SurfaceObject, "id">>,
   ) => void;
-  onSurfaceObjectDelete?: (surfaceId: string) => void;
   onSurfaceObjectMoveStart?: () => void;
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
   onSurfaceObjectResizeStart?: () => void;
@@ -71,7 +70,6 @@ export type SalaEditorWorkspaceCanvasProps = {
   onWallPointerMove?: (payload: WallPointerPayload) => void;
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
-  onWallDelete?: (wallId: string) => void;
   onWallAttachmentPlace?: (
     wallId: string,
     positionRatio: number,
@@ -83,7 +81,6 @@ export type SalaEditorWorkspaceCanvasProps = {
     attachmentId: string,
     patch: Partial<Pick<SalaWallAttachment, "positionRatio" | "offset">>,
   ) => void;
-  onWallAttachmentDelete?: (attachmentId: string) => void;
   onWallAttachmentMoveStart?: () => void;
   onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
@@ -116,7 +113,6 @@ export type SalaEditorWorkspaceCanvasProps = {
   onOperationalResizeEnd?: () => void;
   onOperationalResizeCancel?: () => void;
   onOperationalDuplicateInstance?: (instanceId: string) => void;
-  onOperationalDeleteInstance?: (instanceId: string) => void;
   onRequestCreateEspacio: () => void;
 };
 
@@ -133,7 +129,6 @@ export function SalaEditorWorkspaceCanvas({
   onSurfaceObjectSelect,
   onSurfaceObjectClearSelection,
   onSurfaceObjectUpdate,
-  onSurfaceObjectDelete,
   onSurfaceObjectMoveStart,
   onSurfaceObjectMoveEnd,
   onSurfaceObjectResizeStart,
@@ -147,12 +142,10 @@ export function SalaEditorWorkspaceCanvas({
   onWallPointerMove,
   onWallPointerUp,
   onWallPointerCancel,
-  onWallDelete,
   onWallAttachmentPlace,
   onWallAttachmentSelect,
   onWallAttachmentClearSelection,
   onWallAttachmentUpdate,
-  onWallAttachmentDelete,
   onWallAttachmentMoveStart,
   onWallAttachmentMoveEnd,
   activeOperationalCatalogItem = null,
@@ -174,7 +167,6 @@ export function SalaEditorWorkspaceCanvas({
   onOperationalResizeEnd,
   onOperationalResizeCancel,
   onOperationalDuplicateInstance,
-  onOperationalDeleteInstance,
   onRequestCreateEspacio,
 }: SalaEditorWorkspaceCanvasProps) {
   const spaceWorkspaceKey =
@@ -268,7 +260,6 @@ export function SalaEditorWorkspaceCanvas({
           onSurfaceObjectSelect={onSurfaceObjectSelect}
           onSurfaceObjectClearSelection={onSurfaceObjectClearSelection}
           onSurfaceObjectUpdate={onSurfaceObjectUpdate}
-          onSurfaceObjectDelete={onSurfaceObjectDelete}
           onSurfaceObjectMoveStart={onSurfaceObjectMoveStart}
           onSurfaceObjectMoveEnd={onSurfaceObjectMoveEnd}
           onSurfaceObjectResizeStart={onSurfaceObjectResizeStart}
@@ -300,12 +291,10 @@ export function SalaEditorWorkspaceCanvas({
           onWallPointerMove={onWallPointerMove}
           onWallPointerUp={onWallPointerUp}
           onWallPointerCancel={onWallPointerCancel}
-          onWallDelete={onWallDelete}
           onWallAttachmentPlace={onWallAttachmentPlace}
           onWallAttachmentSelect={onWallAttachmentSelect}
           onWallAttachmentClearSelection={onWallAttachmentClearSelection}
           onWallAttachmentUpdate={onWallAttachmentUpdate}
-          onWallAttachmentDelete={onWallAttachmentDelete}
           onWallAttachmentMoveStart={onWallAttachmentMoveStart}
           onWallAttachmentMoveEnd={onWallAttachmentMoveEnd}
           canvasLayers={
@@ -353,7 +342,6 @@ export function SalaEditorWorkspaceCanvas({
         onResizeEnd={onOperationalResizeEnd ?? (() => undefined)}
         onResizeCancel={onOperationalResizeCancel ?? (() => undefined)}
         onDuplicateInstance={onOperationalDuplicateInstance ?? (() => undefined)}
-        onDeleteInstance={onOperationalDeleteInstance ?? (() => undefined)}
           canvasLayers={
             <>
               {terrainLayer}

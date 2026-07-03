@@ -61,7 +61,6 @@ export type SalaOperacionWorkspaceProps = {
   onResizeEnd: () => void;
   onResizeCancel: () => void;
   onDuplicateInstance: (instanceId: string) => void;
-  onDeleteInstance: (instanceId: string) => void;
   canvasLayers?: ReactNode;
 };
 
@@ -88,7 +87,6 @@ export type SalaOperationalInstancesLayerProps = {
   createMoveHandlers?: (
     instance: OperationalElementInstance,
   ) => OperationalInstanceMoveHandlers;
-  onDeleteInstance?: (instanceId: string) => void;
   readOnly?: boolean;
 };
 
@@ -113,7 +111,6 @@ export function SalaOperacionWorkspace({
   onResizeEnd,
   onResizeCancel,
   onDuplicateInstance,
-  onDeleteInstance,
   canvasLayers = null,
 }: SalaOperacionWorkspaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -180,7 +177,6 @@ export function SalaOperacionWorkspace({
         onResizeEnd={onResizeEnd}
         onResizeCancel={onResizeCancel}
         onDuplicateInstance={onDuplicateInstance}
-        onDeleteInstance={onDeleteInstance}
       />
     </SalaEspacioCanvasFrame>
   );
@@ -206,7 +202,6 @@ function SalaOperacionCanvasContent({
   onResizeEnd,
   onResizeCancel,
   onDuplicateInstance,
-  onDeleteInstance,
 }: SalaOperacionCanvasContentProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
@@ -311,7 +306,6 @@ function SalaOperacionCanvasContent({
         resizingInstanceId={resizingInstanceId}
         dropAnimatingInstanceId={dropAnimatingInstanceId}
         createMoveHandlers={createMoveHandlers}
-        onDeleteInstance={onDeleteInstance}
       />
     </>
   );
@@ -324,7 +318,6 @@ export function SalaOperationalInstancesLayer({
   resizingInstanceId = null,
   dropAnimatingInstanceId = null,
   createMoveHandlers,
-  onDeleteInstance,
   readOnly = false,
 }: SalaOperationalInstancesLayerProps) {
   const canvasViewport = useCanvasViewport();
@@ -364,7 +357,6 @@ export function SalaOperationalInstancesLayer({
               isDragging={dragging}
               isResizing={resizing}
               isDropAnimating={dropAnimating}
-              onDelete={() => onDeleteInstance?.(instance.id)}
               {...moveHandlers}
             />
           </div>

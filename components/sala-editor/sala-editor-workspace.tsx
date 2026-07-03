@@ -40,6 +40,7 @@ import {
 import { loadLegacySalaEditorDocument } from "@/lib/sala-editor/adapters/legacy-adapters";
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
+import type { SalaEditorContextActionTarget } from "@/components/sala-editor/sala-editor-context-action-bar";
 import { hasSalaEditorInspectorSelection } from "@/components/sala-editor/sala-editor-inspector-visibility";
 import {
   SalaEditorLeftPanel,
@@ -697,6 +698,74 @@ export function SalaEditorWorkspace({
     selectedOperationalElementInstance: selectedOperationalElementInstance ?? null,
   });
 
+  const selectedSurfaceObject = useMemo(
+    () =>
+      selectedSurfaceObjectId
+        ? surfaceObjectsInEspacio.find((surface) => surface.id === selectedSurfaceObjectId) ?? null
+        : null,
+    [selectedSurfaceObjectId, surfaceObjectsInEspacio],
+  );
+
+  const selectedWallAttachment = useMemo(
+    () =>
+      selectedWallAttachmentId
+        ? wallAttachmentsInEspacio.find(
+            (attachment) => attachment.id === selectedWallAttachmentId,
+          ) ?? null
+        : null,
+    [selectedWallAttachmentId, wallAttachmentsInEspacio],
+  );
+
+  const contextActionTarget = useMemo((): SalaEditorContextActionTarget | null => {
+    if (selectedSurfaceObject) {
+      return {
+        kind: "surface",
+        label: "Superficie",
+        icon: "▧",
+        onDelete: () => removeSurfaceObject(selectedSurfaceObject.id),
+      };
+    }
+
+    if (selectedWallAttachment) {
+      const isGlass = selectedWallAttachment.kind === "glass";
+      return {
+        kind: isGlass ? "glass" : "door",
+        label: isGlass ? "Cristal" : "Puerta",
+        icon: isGlass ? "▥" : "▭",
+        onDelete: () => removeWallAttachment(selectedWallAttachment.id),
+      };
+    }
+
+    if (selectedWall) {
+      return {
+        kind: "wall",
+        label: "Muro",
+        icon: "━",
+        onDelete: () => handleDeleteWall(selectedWall.id),
+      };
+    }
+
+    if (selectedOperationalElementInstance) {
+      return {
+        kind: "operational",
+        label: "Mesa",
+        icon: "◉",
+        onDelete: () => removeOperationalElement(selectedOperationalElementInstance.id),
+      };
+    }
+
+    return null;
+  }, [
+    handleDeleteWall,
+    removeOperationalElement,
+    removeSurfaceObject,
+    removeWallAttachment,
+    selectedOperationalElementInstance,
+    selectedSurfaceObject,
+    selectedWall,
+    selectedWallAttachment,
+  ]);
+
   return (
     <>
       <SalaEditorShell
@@ -710,6 +779,7 @@ export function SalaEditorWorkspace({
         canRedo={canRedoHistory}
         onUndo={handleUndo}
         onRedo={handleRedo}
+        contextActionTarget={contextActionTarget}
         leftPanel={
           <SalaEditorLeftPanel
             phase={document.navigation.phase}
@@ -745,7 +815,6 @@ export function SalaEditorWorkspace({
             onSurfaceObjectSelect={selectSurfaceObject}
             onSurfaceObjectClearSelection={clearSurfaceSelection}
             onSurfaceObjectUpdate={updateSurfaceObject}
-            onSurfaceObjectDelete={removeSurfaceObject}
             onSurfaceObjectMoveStart={handleSurfaceMoveStart}
             onSurfaceObjectMoveEnd={handleSurfaceMoveEnd}
             onSurfaceObjectResizeStart={handleSurfaceResizeStart}
@@ -759,12 +828,10 @@ export function SalaEditorWorkspace({
             onWallPointerMove={wallDrawingEnabled ? handleWallPointerMove : undefined}
             onWallPointerUp={wallDrawingEnabled ? handleWallPointerUp : undefined}
             onWallPointerCancel={wallDrawingEnabled ? handleWallPointerCancel : undefined}
-            onWallDelete={wallDrawingEnabled ? handleDeleteWall : undefined}
             onWallAttachmentPlace={handlePlaceWallAttachment}
             onWallAttachmentSelect={handleSelectWallAttachment}
             onWallAttachmentClearSelection={clearWallAttachmentSelection}
             onWallAttachmentUpdate={updateWallAttachment}
-            onWallAttachmentDelete={removeWallAttachment}
             onWallAttachmentMoveStart={handleWallAttachmentMoveStart}
             onWallAttachmentMoveEnd={handleWallAttachmentMoveEnd}
             activeOperationalCatalogItem={activeOperationalCatalogItem}
@@ -786,7 +853,6 @@ export function SalaEditorWorkspace({
             onOperationalResizeEnd={finishResize}
             onOperationalResizeCancel={cancelResize}
             onOperationalDuplicateInstance={duplicateOperationalElement}
-            onOperationalDeleteInstance={removeOperationalElement}
             onRequestCreateEspacio={openAddDialog}
           />
         }

@@ -120,6 +120,103 @@
   opacity: 0.42;
 }
 
+.hostly-sala-context-action-bar {
+  display: flex;
+  min-height: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: color-mix(in srgb, var(--hostly-surface-page-soft) 84%, white);
+  padding: 4px 8px;
+  animation: hostly-sala-context-bar-in 145ms ease-out;
+}
+
+.hostly-sala-context-action-bar__target {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.hostly-sala-context-action-bar__icon {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--hostly-accent) 22%, rgba(148, 163, 184, 0.26));
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--hostly-accent);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.hostly-sala-context-action-bar__label {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  color: var(--hostly-ink-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostly-sala-context-action-bar__actions {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.hostly-sala-context-action-bar__action {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 780;
+  color: var(--hostly-ink-soft);
+  transition:
+    border-color 145ms ease,
+    background-color 145ms ease,
+    color 145ms ease,
+    opacity 145ms ease;
+}
+
+.hostly-sala-context-action-bar__action:not(:disabled):hover {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: #fef2f2;
+}
+
+.hostly-sala-context-action-bar__action--danger {
+  color: #b91c1c;
+}
+
+.hostly-sala-context-action-bar__action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+@keyframes hostly-sala-context-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .hostly-sala-editor-workbench__history-btn-icon {
   font-size: 13px;
   line-height: 1;
@@ -1098,34 +1195,6 @@
   border-radius: 12px;
   border: 2px solid var(--hostly-accent);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
-}
-
-.hostly-sala-canvas-object__delete-btn {
-  position: absolute;
-  top: -32px;
-  left: 50%;
-  z-index: 4;
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 10%, transparent),
-    0 6px 18px rgba(15, 23, 42, 0.12);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transform: translateX(-50%);
-  touch-action: manipulation;
-}
-
-.hostly-sala-canvas-object__delete-btn:hover {
-  border-color: rgba(220, 38, 38, 0.24);
-  background: #fef2f2;
 }
 
 .hostly-sala-canvas-object__handle {
@@ -2976,35 +3045,6 @@
   transform: translate(-50%, -50%);
 }
 
-.hostly-sala-wall-delete-btn {
-  pointer-events: auto;
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 10%, transparent),
-    0 6px 18px rgba(15, 23, 42, 0.12);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  touch-action: manipulation;
-  transform: translate(-50%, calc(-50% - 28px));
-}
-
-.hostly-sala-wall-delete-btn:hover {
-  background: #fef2f2;
-  border-color: rgba(220, 38, 38, 0.24);
-}
-
-.hostly-sala-wall-delete-btn:active {
-  transform: translate(-50%, calc(-50% - 28px)) scale(0.96);
-}
-
 .hostly-sala-wall-attachment {
   position: absolute;
   z-index: 32;
@@ -3087,32 +3127,6 @@
   box-shadow:
     0 0 0 5px color-mix(in srgb, var(--hostly-accent, #315f7d) 18%, transparent),
     0 8px 18px rgba(15, 23, 42, 0.16);
-}
-
-.hostly-sala-wall-attachment__delete-btn {
-  position: absolute;
-  z-index: 36;
-  display: inline-flex;
-  width: 30px;
-  height: 30px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 10%, transparent),
-    0 6px 18px rgba(15, 23, 42, 0.12);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transform: translate(-50%, calc(-50% - 34px));
-  touch-action: manipulation;
-}
-
-.hostly-sala-wall-attachment__delete-btn:hover {
-  border-color: rgba(220, 38, 38, 0.24);
-  background: #fef2f2;
 }
 
 .hostly-sala-wall-interaction-handle {
@@ -3554,26 +3568,6 @@
   pointer-events: none;
 }
 
-.hostly-sala-surface-object__delete-btn {
-  position: absolute;
-  top: -14px;
-  right: -14px;
-  z-index: 4;
-  display: inline-flex;
-  width: 30px;
-  height: 30px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid rgba(248, 113, 113, 0.36);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
-  color: #b91c1c;
-  font-size: 13px;
-  pointer-events: auto;
-  touch-action: manipulation;
-}
-
 .hostly-sala-surface-object__resize-handle {
   position: absolute;
   z-index: 5;
@@ -3753,26 +3747,3 @@
   inset: var(--hostly-editor-selection-touch-inset);
 }
 
-.hostly-sala-canvas-object__delete-btn,
-.hostly-sala-wall-delete-btn,
-.hostly-sala-wall-attachment__delete-btn,
-.hostly-sala-surface-object__delete-btn {
-  width: var(--hostly-editor-action-size);
-  height: var(--hostly-editor-action-size);
-  border-color: var(--hostly-editor-action-border);
-  background: var(--hostly-editor-action-bg);
-  box-shadow: var(--hostly-editor-action-shadow);
-  transition:
-    border-color var(--hostly-editor-selection-transition),
-    background-color var(--hostly-editor-selection-transition),
-    box-shadow var(--hostly-editor-selection-transition),
-    transform var(--hostly-editor-selection-transition);
-}
-
-.hostly-sala-canvas-object__delete-btn:hover,
-.hostly-sala-wall-delete-btn:hover,
-.hostly-sala-wall-attachment__delete-btn:hover,
-.hostly-sala-surface-object__delete-btn:hover {
-  border-color: rgba(220, 38, 38, 0.28);
-  background: #fef2f2;
-}

@@ -75,7 +75,6 @@ export type SalaWallCanvasProps = {
   onPointerMove?: (payload: WallPointerPayload) => void;
   onPointerUp?: () => void;
   onPointerCancel?: () => void;
-  onDeleteWall?: (wallId: string) => void;
   onPlaceWallAttachment?: (
     wallId: string,
     positionRatio: number,
@@ -87,7 +86,6 @@ export type SalaWallCanvasProps = {
     attachmentId: string,
     patch: Partial<Pick<SalaWallAttachment, "positionRatio" | "offset">>,
   ) => void;
-  onDeleteWallAttachment?: (attachmentId: string) => void;
   onWallAttachmentMoveStart?: () => void;
   onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
   /** Dentro del frame de espacio — sin chrome propio. */
@@ -160,12 +158,10 @@ export function SalaWallCanvas({
   onPointerMove,
   onPointerUp,
   onPointerCancel,
-  onDeleteWall,
   onPlaceWallAttachment,
   onSelectWallAttachment,
   onClearWallAttachmentSelection,
   onUpdateWallAttachment,
-  onDeleteWallAttachment,
   onWallAttachmentMoveStart,
   onWallAttachmentMoveEnd,
   embedded = false,
@@ -703,52 +699,9 @@ export function SalaWallCanvas({
                 <span className="hostly-sala-wall-attachment__door-swing" aria-hidden />
               ) : null}
             </button>
-            {selected && !editing && onDeleteWallAttachment ? (
-              <button
-                type="button"
-                className="hostly-sala-wall-attachment__delete-btn"
-                aria-label={`Eliminar ${label.toLowerCase()}`}
-                title="Eliminar"
-                style={{
-                  left: resolved.point.x,
-                  top: resolved.point.y,
-                }}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDeleteWallAttachment(attachment.id);
-                }}
-              >
-                <span aria-hidden>🗑</span>
-              </button>
-            ) : null}
           </div>
         );
       })}
-
-      {selectedWall && selectedWallCenter && !draft && onDeleteWall ? (
-        <div
-          className="hostly-sala-wall-selection-action"
-          style={{
-            left: selectedWallCenter.x,
-            top: selectedWallCenter.y,
-          }}
-        >
-          <button
-            type="button"
-            className="hostly-sala-wall-delete-btn"
-            aria-label="Eliminar pared"
-            title="Eliminar"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDeleteWall(selectedWall.id);
-            }}
-          >
-            <span aria-hidden>🗑</span>
-          </button>
-        </div>
-      ) : null}
 
       {selectedWall && selectedWallCenter && !draft ? (
         <button

@@ -32,7 +32,6 @@ export type SalaEstructuraWorkspaceProps = {
   onWallPointerMove?: (payload: WallPointerPayload) => void;
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
-  onWallDelete?: (wallId: string) => void;
   onWallAttachmentPlace?: (
     wallId: string,
     positionRatio: number,
@@ -44,7 +43,6 @@ export type SalaEstructuraWorkspaceProps = {
     attachmentId: string,
     patch: Partial<Pick<SalaWallAttachment, "positionRatio" | "offset">>,
   ) => void;
-  onWallAttachmentDelete?: (attachmentId: string) => void;
   onWallAttachmentMoveStart?: () => void;
   onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
   canvasLayers?: ReactNode;
@@ -63,12 +61,10 @@ export function SalaEstructuraWorkspace({
   onWallPointerMove,
   onWallPointerUp,
   onWallPointerCancel,
-  onWallDelete,
   onWallAttachmentPlace,
   onWallAttachmentSelect,
   onWallAttachmentClearSelection,
   onWallAttachmentUpdate,
-  onWallAttachmentDelete,
   onWallAttachmentMoveStart,
   onWallAttachmentMoveEnd,
   canvasLayers = null,
@@ -115,12 +111,10 @@ export function SalaEstructuraWorkspace({
           onPointerMove={onWallPointerMove}
           onPointerUp={onWallPointerUp}
           onPointerCancel={onWallPointerCancel}
-          onDeleteWall={onWallDelete}
           onPlaceWallAttachment={onWallAttachmentPlace}
           onSelectWallAttachment={onWallAttachmentSelect}
           onClearWallAttachmentSelection={onWallAttachmentClearSelection}
           onUpdateWallAttachment={onWallAttachmentUpdate}
-          onDeleteWallAttachment={onWallAttachmentDelete}
           onWallAttachmentMoveStart={onWallAttachmentMoveStart}
           onWallAttachmentMoveEnd={onWallAttachmentMoveEnd}
           embedded

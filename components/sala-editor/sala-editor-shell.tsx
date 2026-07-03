@@ -6,6 +6,8 @@ import type { SalaEditorNavigation } from "@/lib/sala-editor/types/editor-naviga
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
 import { SalaEditorPhaseNav } from "@/components/sala-editor/sala-editor-phase-nav";
 import { SalaEditorHistoryControls } from "@/components/sala-editor/sala-editor-history-controls";
+import type { SalaEditorContextActionTarget } from "@/components/sala-editor/sala-editor-context-action-bar";
+import { SalaEditorContextActionBar } from "@/components/sala-editor/sala-editor-context-action-bar";
 import "@/components/sala-editor/sala-editor-workbench.css";
 
 export type SalaEditorShellProps = {
@@ -22,6 +24,7 @@ export type SalaEditorShellProps = {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  contextActionTarget?: SalaEditorContextActionTarget | null;
 };
 
 /**
@@ -41,6 +44,7 @@ export function SalaEditorShell({
   canRedo = false,
   onUndo,
   onRedo,
+  contextActionTarget = null,
 }: SalaEditorShellProps) {
   return (
     <section
@@ -78,6 +82,8 @@ export function SalaEditorShell({
           ) : null}
         </div>
       </header>
+
+      <SalaEditorContextActionBar target={contextActionTarget} />
 
       <div className="hostly-sala-editor-workbench__body">
         <aside className="hostly-sala-editor-workbench__panel hostly-sala-editor-workbench__panel--toolbox">

@@ -53,7 +53,6 @@ export type SalaTerrenoWorkspaceProps = {
     surfaceId: string,
     patch: Partial<Omit<SurfaceObject, "id">>,
   ) => void;
-  onSurfaceObjectDelete?: (surfaceId: string) => void;
   onSurfaceObjectMoveStart?: () => void;
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
   onSurfaceObjectResizeStart?: () => void;
@@ -74,7 +73,6 @@ type SurfaceCanvasContentProps = {
     surfaceId: string,
     patch: Partial<Omit<SurfaceObject, "id">>,
   ) => void;
-  onSurfaceObjectDelete?: (surfaceId: string) => void;
   onSurfaceObjectMoveStart?: () => void;
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
   onSurfaceObjectResizeStart?: () => void;
@@ -103,7 +101,6 @@ export type SalaSurfaceObjectsLayerProps = {
     onPointerUp: (event: PointerEvent<HTMLButtonElement>) => void;
     onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => void;
   };
-  onSurfaceObjectDelete?: (surfaceId: string) => void;
   readOnly?: boolean;
 };
 
@@ -137,7 +134,6 @@ export function SalaSurfaceObjectsLayer({
   resizeSession = null,
   createSurfacePointerHandlers,
   createSurfaceResizeHandlers,
-  onSurfaceObjectDelete,
   readOnly = false,
 }: SalaSurfaceObjectsLayerProps) {
   const canvasViewport = useCanvasViewport();
@@ -195,21 +191,6 @@ export function SalaSurfaceObjectsLayer({
                     />
                   ))
                 : null}
-              {selected ? (
-                <button
-                  type="button"
-                  className="hostly-sala-surface-object__delete-btn"
-                  aria-label="Eliminar superficie"
-                  title="Eliminar superficie"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSurfaceObjectDelete?.(surface.id);
-                  }}
-                >
-                  🗑
-                </button>
-              ) : null}
             </div>
           );
         })}
@@ -227,7 +208,6 @@ function SalaTerrenoCanvasContent({
   onSurfaceObjectSelect,
   onSurfaceObjectClearSelection,
   onSurfaceObjectUpdate,
-  onSurfaceObjectDelete,
   onSurfaceObjectMoveStart,
   onSurfaceObjectMoveEnd,
   onSurfaceObjectResizeStart,
@@ -562,7 +542,6 @@ function SalaTerrenoCanvasContent({
         resizeSession={resizeSession}
         createSurfacePointerHandlers={createSurfacePointerHandlers}
         createSurfaceResizeHandlers={createSurfaceResizeHandlers}
-        onSurfaceObjectDelete={onSurfaceObjectDelete}
       />
       <div className="hostly-sala-terreno-preview-layer" aria-hidden>
         {draft && previewStyle ? (
@@ -612,7 +591,6 @@ export function SalaTerrenoWorkspace({
   onSurfaceObjectSelect,
   onSurfaceObjectClearSelection,
   onSurfaceObjectUpdate,
-  onSurfaceObjectDelete,
   onSurfaceObjectMoveStart,
   onSurfaceObjectMoveEnd,
   onSurfaceObjectResizeStart,
@@ -648,7 +626,6 @@ export function SalaTerrenoWorkspace({
         onSurfaceObjectSelect={onSurfaceObjectSelect}
         onSurfaceObjectClearSelection={onSurfaceObjectClearSelection}
         onSurfaceObjectUpdate={onSurfaceObjectUpdate}
-        onSurfaceObjectDelete={onSurfaceObjectDelete}
         onSurfaceObjectMoveStart={onSurfaceObjectMoveStart}
         onSurfaceObjectMoveEnd={onSurfaceObjectMoveEnd}
         onSurfaceObjectResizeStart={onSurfaceObjectResizeStart}

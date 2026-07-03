@@ -18,7 +18,6 @@ export type SalaOperationalInstanceCanvasObjectProps = {
   onBodyPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerCancel: (event: PointerEvent<HTMLDivElement>) => void;
-  onDelete: () => void;
 };
 
 export function SalaOperationalInstanceCanvasObject({
@@ -33,7 +32,6 @@ export function SalaOperationalInstanceCanvasObject({
   onBodyPointerMove,
   onBodyPointerUp,
   onBodyPointerCancel,
-  onDelete,
 }: SalaOperationalInstanceCanvasObjectProps) {
   const chromeVisible = selected && !isDragging && !isResizing;
   const visualVariant = resolveOperationalVisualVariant(
@@ -61,24 +59,7 @@ export function SalaOperationalInstanceCanvasObject({
         zIndex: isDragging || isResizing ? 40 : selected ? 20 : 1,
       }}
     >
-      {selected ? (
-        <>
-          <div className="hostly-sala-canvas-object__frame" aria-hidden />
-          <button
-            type="button"
-            className="hostly-sala-canvas-object__delete-btn"
-            aria-label="Eliminar mesa"
-            title="Eliminar"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete();
-            }}
-          >
-            <span aria-hidden>🗑</span>
-          </button>
-        </>
-      ) : null}
+      {selected ? <div className="hostly-sala-canvas-object__frame" aria-hidden /> : null}
 
       <div
         role="button"
