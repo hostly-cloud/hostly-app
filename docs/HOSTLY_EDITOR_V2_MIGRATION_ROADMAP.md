@@ -7,6 +7,11 @@
 **Autoridad:** subordinado a `00_HOSTLY_PRODUCT_BIBLE.md`, `01_HOSTLY_ARCHITECTURE_GUIDE.md` y `09_HOSTLY_PATTERNS.md`  
 **Ultima revision:** 2026-07-02  
 
+> Nota de autoridad documental: este documento conserva la estrategia de migracion y
+> coexistencia con legacy. El estado tecnico actual del Editor Sala V2 vive en
+> `docs/HOSTLY_EDITOR_V2_TECHNICAL_REFERENCE.md` y prevalece para arquitectura
+> implementada, sistemas actuales, historial, documento V2 y pendientes reales.
+
 ---
 
 ## 1. Estado actual

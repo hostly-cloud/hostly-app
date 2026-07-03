@@ -134,6 +134,23 @@ compatibilidad, pero ninguna funcionalidad nueva debe elegirlos como patrÃ³n p
 Toda decisiÃ³n visual debe responder primero a velocidad, comprensiÃ³n, prevenciÃ³n de
 errores y uso tÃ¡ctil.
 
+### H-016 - `HOSTLY_EDITOR_V2_TECHNICAL_REFERENCE.md` es la referencia tecnica actual del Editor V2
+
+**Estado:** aceptada.
+
+El estado tecnico vigente del Editor Sala V2 se documenta en
+`docs/HOSTLY_EDITOR_V2_TECHNICAL_REFERENCE.md`. El roadmap de migracion conserva la
+estrategia de coexistencia con legacy, pero no debe usarse como fuente principal para
+conocer la arquitectura implementada, sistemas de interaccion, historial, documento V2
+o pendientes reales del editor.
+
+Consecuencias:
+
+- Las iteraciones futuras del Editor V2 deben consultar primero la referencia tecnica.
+- Los cambios estructurales del editor deben actualizar esa referencia cuando alteren
+  fases, canvas, documento, historial, Smart Snap, seleccion o persistencia.
+- Las funcionalidades pendientes no deben documentarse como implementadas.
+
 ---
 
 ## Decisiones pendientes de cierre
