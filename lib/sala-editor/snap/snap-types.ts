@@ -10,6 +10,13 @@ export type SnapRect = {
   height: number;
 };
 
+export type SnapResizableEdges = {
+  left?: boolean;
+  right?: boolean;
+  top?: boolean;
+  bottom?: boolean;
+};
+
 export type SnapGuide = {
   axis: SnapAxis;
   position: number;
@@ -20,6 +27,7 @@ export type SnapGuide = {
 
 export type SnapEngineOptions = {
   threshold?: number;
+  activeEdges?: SnapResizableEdges;
 };
 
 export type SnapEngineResult = {

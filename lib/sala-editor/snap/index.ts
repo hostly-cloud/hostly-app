@@ -6,5 +6,6 @@ export type {
   SnapEngineResult,
   SnapGuide,
   SnapPointKind,
+  SnapResizableEdges,
   SnapRect,
 } from "@/lib/sala-editor/snap/snap-types";

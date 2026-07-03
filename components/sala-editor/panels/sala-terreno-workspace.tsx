@@ -41,6 +41,7 @@ import {
   SNAP_DISTANCE_PX,
   snapRectToPeers,
   type SnapGuide,
+  type SnapResizableEdges,
   type SnapRect,
 } from "@/lib/sala-editor/snap";
 import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
@@ -124,13 +125,28 @@ const SURFACE_RESIZE_HANDLES: readonly SurfaceResizeHandle[] = [
   "se",
 ] as const;
 
-function surfaceToSnapRect(surface: SurfaceObject): SnapRect {
+function createSurfaceSnapRect(id: string, rect: SurfaceRect): SnapRect {
   return {
-    id: surface.id,
-    x: surface.x,
-    y: surface.y,
-    width: surface.width,
-    height: surface.height,
+    id,
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function surfaceToSnapRect(surface: SurfaceObject): SnapRect {
+  return createSurfaceSnapRect(surface.id, surface);
+}
+
+function getSurfaceResizeActiveEdges(
+  handle: SurfaceResizeHandle,
+): SnapResizableEdges {
+  return {
+    left: handle === "nw" || handle === "sw",
+    right: handle === "ne" || handle === "se",
+    top: handle === "nw" || handle === "ne",
+    bottom: handle === "sw" || handle === "se",
   };
 }
 
@@ -273,6 +289,40 @@ function SalaTerrenoCanvasContent({
     return createSurfaceStyle(draft.rect, draft.material, coordinateScale);
   }, [coordinateScale, draft]);
 
+  const resolveSmartSnap = useCallback(
+    (
+      surfaceId: string,
+      rect: SurfaceRect,
+      activeEdges?: SnapResizableEdges,
+    ) => {
+      const peers = surfaceObjects
+        .filter(
+          (candidate) =>
+            candidate.id !== surfaceId && candidate.visible !== false,
+        )
+        .map(surfaceToSnapRect);
+      const snapResult = snapRectToPeers(
+        createSurfaceSnapRect(surfaceId, rect),
+        peers,
+        {
+          activeEdges,
+          threshold: SNAP_DISTANCE_PX / Math.max(coordinateScale, 0.001),
+        },
+      );
+
+      if (!isSurfaceRectUsable(snapResult.rect)) {
+        return {
+          rect,
+          guides: [],
+          snapped: false,
+        };
+      }
+
+      return snapResult;
+    },
+    [coordinateScale, surfaceObjects],
+  );
+
   const handlePointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
@@ -338,6 +388,7 @@ function SalaTerrenoCanvasContent({
 
   const cancelResizeSession = useCallback(() => {
     setResizeSession((session) => {
+      setSmartSnapGuides([]);
       if (!session) return null;
       if (session.active) {
         onSurfaceObjectUpdate?.(session.objectId, {
@@ -365,6 +416,7 @@ function SalaTerrenoCanvasContent({
 
   const finishResizeSession = useCallback(() => {
     setResizeSession((session) => {
+      setSmartSnapGuides([]);
       if (!session) return null;
       if (session.active) {
         onSurfaceObjectResizeEnd?.("complete");
@@ -410,15 +462,7 @@ function SalaTerrenoCanvasContent({
           if (!session.active) onSurfaceObjectMoveStart?.();
 
           const moved = translateSurfaceObject(session.originObject, delta, gridSize);
-          const peers = surfaceObjects
-            .filter(
-              (candidate) =>
-                candidate.id !== surface.id && candidate.visible !== false,
-            )
-            .map(surfaceToSnapRect);
-          const snapResult = snapRectToPeers(surfaceToSnapRect(moved), peers, {
-            threshold: SNAP_DISTANCE_PX / Math.max(coordinateScale, 0.001),
-          });
+          const snapResult = resolveSmartSnap(surface.id, moved);
           onSurfaceObjectUpdate?.(surface.id, {
             x: snapResult.rect.x,
             y: snapResult.rect.y,
@@ -446,12 +490,11 @@ function SalaTerrenoCanvasContent({
       cancelMoveSession,
       finishMoveSession,
       gridSize,
-      coordinateScale,
       onSurfaceObjectMoveStart,
       onSurfaceObjectSelect,
       onSurfaceObjectUpdate,
       resolveLogicalPoint,
-      surfaceObjects,
+      resolveSmartSnap,
     ],
   );
 
@@ -498,12 +541,18 @@ function SalaTerrenoCanvasContent({
             delta,
             gridSize,
           );
+          const snapResult = resolveSmartSnap(
+            surface.id,
+            resized,
+            getSurfaceResizeActiveEdges(session.resizeHandle),
+          );
           onSurfaceObjectUpdate?.(surface.id, {
-            x: resized.x,
-            y: resized.y,
-            width: resized.width,
-            height: resized.height,
+            x: snapResult.rect.x,
+            y: snapResult.rect.y,
+            width: snapResult.rect.width,
+            height: snapResult.rect.height,
           });
+          setSmartSnapGuides(snapResult.guides);
           return { ...session, active: true };
         });
       },
@@ -530,6 +579,7 @@ function SalaTerrenoCanvasContent({
       onSurfaceObjectSelect,
       onSurfaceObjectUpdate,
       resolveLogicalPoint,
+      resolveSmartSnap,
     ],
   );
 

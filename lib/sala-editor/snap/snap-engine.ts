@@ -9,6 +9,7 @@ import type {
   SnapEngineResult,
   SnapGuide,
   SnapPointKind,
+  SnapResizableEdges,
   SnapRect,
 } from "@/lib/sala-editor/snap/snap-types";
 
@@ -19,6 +20,7 @@ type AxisSnapCandidate = {
   distance: number;
   peer: SnapRect;
   guide: SnapGuide;
+  movingAnchor: Anchor;
 };
 
 type Anchor = {
@@ -42,9 +44,75 @@ function getAxisAnchors(rect: SnapRect, axis: SnapAxis): Anchor[] {
   ];
 }
 
+function getMovingAxisAnchors(
+  rect: SnapRect,
+  axis: SnapAxis,
+  activeEdges?: SnapResizableEdges,
+): Anchor[] {
+  if (!activeEdges) return getAxisAnchors(rect, axis);
+
+  if (axis === "x") {
+    const anchors: Anchor[] = [];
+    if (activeEdges.left) anchors.push({ value: rect.x, kind: "edge" });
+    if (activeEdges.left || activeEdges.right) {
+      anchors.push({ value: rect.x + rect.width / 2, kind: "center" });
+    }
+    if (activeEdges.right) anchors.push({ value: rect.x + rect.width, kind: "edge" });
+    return anchors;
+  }
+
+  const anchors: Anchor[] = [];
+  if (activeEdges.top) anchors.push({ value: rect.y, kind: "edge" });
+  if (activeEdges.top || activeEdges.bottom) {
+    anchors.push({ value: rect.y + rect.height / 2, kind: "center" });
+  }
+  if (activeEdges.bottom) anchors.push({ value: rect.y + rect.height, kind: "edge" });
+  return anchors;
+}
+
 function moveRectOnAxis(rect: SnapRect, axis: SnapAxis, delta: number): SnapRect {
   if (axis === "x") return { ...rect, x: rect.x + delta };
   return { ...rect, y: rect.y + delta };
+}
+
+function resizeRectOnAxis(
+  rect: SnapRect,
+  axis: SnapAxis,
+  delta: number,
+  anchorKind: SnapPointKind,
+  activeEdges?: SnapResizableEdges,
+): SnapRect {
+  if (!activeEdges) return moveRectOnAxis(rect, axis, delta);
+
+  if (axis === "x") {
+    const edgeDelta =
+      anchorKind === "center" && activeEdges.left !== activeEdges.right
+        ? delta * 2
+        : delta;
+
+    if (activeEdges.left && !activeEdges.right) {
+      return { ...rect, x: rect.x + edgeDelta, width: rect.width - edgeDelta };
+    }
+    if (activeEdges.right && !activeEdges.left) {
+      return { ...rect, width: rect.width + edgeDelta };
+    }
+  }
+
+  if (axis === "y") {
+    const edgeDelta =
+      anchorKind === "center" && activeEdges.top !== activeEdges.bottom
+        ? delta * 2
+        : delta;
+
+    if (activeEdges.top && !activeEdges.bottom) {
+      return { ...rect, y: rect.y + edgeDelta, height: rect.height - edgeDelta };
+    }
+    if (activeEdges.bottom && !activeEdges.top) {
+      return { ...rect, height: rect.height + edgeDelta };
+    }
+  }
+
+  return moveRectOnAxis(rect, axis, delta);
 }
 
 function resolveGuideKind(a: Anchor, b: Anchor): SnapPointKind {
@@ -68,9 +136,10 @@ function getBestAxisCandidate(
   peers: readonly SnapRect[],
   axis: SnapAxis,
   threshold: number,
+  activeEdges?: SnapResizableEdges,
 ): AxisSnapCandidate | null {
   let best: AxisSnapCandidate | null = null;
-  const movingAnchors = getAxisAnchors(moving, axis);
+  const movingAnchors = getMovingAxisAnchors(moving, axis, activeEdges);
 
   for (const peer of peers) {
     if (peer.id === moving.id) continue;
@@ -83,8 +152,14 @@ function getBestAxisCandidate(
         if (distance > threshold) continue;
         if (best && distance >= best.distance) continue;
 
-        const snappedRect = moveRectOnAxis(moving, axis, delta);
         const guideKind = resolveGuideKind(movingAnchor, peerAnchor);
+        const snappedRect = resizeRectOnAxis(
+          moving,
+          axis,
+          delta,
+          movingAnchor.kind,
+          activeEdges,
+        );
 
         best = {
           axis,
@@ -92,6 +167,7 @@ function getBestAxisCandidate(
           delta,
           distance,
           peer,
+          movingAnchor,
           guide: createGuideForAxis(
             axis,
             peerAnchor.value,
@@ -113,10 +189,38 @@ export function snapRectToPeers(
   options: SnapEngineOptions = {},
 ): SnapEngineResult {
   const threshold = options.threshold ?? SNAP_DISTANCE_PX;
-  const xCandidate = getBestAxisCandidate(moving, peers, "x", threshold);
-  const afterX = xCandidate ? moveRectOnAxis(moving, "x", xCandidate.delta) : moving;
-  const yCandidate = getBestAxisCandidate(afterX, peers, "y", threshold);
-  const snappedRect = yCandidate ? moveRectOnAxis(afterX, "y", yCandidate.delta) : afterX;
+  const xCandidate = getBestAxisCandidate(
+    moving,
+    peers,
+    "x",
+    threshold,
+    options.activeEdges,
+  );
+  const afterX = xCandidate
+    ? resizeRectOnAxis(
+        moving,
+        "x",
+        xCandidate.delta,
+        xCandidate.movingAnchor.kind,
+        options.activeEdges,
+      )
+    : moving;
+  const yCandidate = getBestAxisCandidate(
+    afterX,
+    peers,
+    "y",
+    threshold,
+    options.activeEdges,
+  );
+  const snappedRect = yCandidate
+    ? resizeRectOnAxis(
+        afterX,
+        "y",
+        yCandidate.delta,
+        yCandidate.movingAnchor.kind,
+        options.activeEdges,
+      )
+    : afterX;
   const guides = [xCandidate?.guide, yCandidate?.guide].filter(
     (guide): guide is SnapGuide => guide != null,
   );
