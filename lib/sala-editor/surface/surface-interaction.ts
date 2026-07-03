@@ -19,13 +19,23 @@ export type SurfaceCreationDraft = {
   rect: SurfaceRect;
 };
 
-export type SurfaceInteractionMode = "move";
+export type SurfaceInteractionMode = "move" | "resize";
 export type SurfaceEditOutcome = "complete" | "cancel";
+export type SurfaceResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export type SurfaceMoveSession = EditorInteractionSession<
   SurfaceObject,
   SurfaceInteractionMode
 > & {
+  active: boolean;
+  pointerType: string;
+};
+
+export type SurfaceResizeSession = EditorInteractionSession<
+  SurfaceObject,
+  SurfaceInteractionMode
+> & {
+  resizeHandle: SurfaceResizeHandle;
   active: boolean;
   pointerType: string;
 };
@@ -79,5 +89,68 @@ export function translateSurfaceObject(
     ...surface,
     x: snapped.x,
     y: snapped.y,
+  };
+}
+
+function getResizePoints(
+  surface: SurfaceObject,
+  handle: SurfaceResizeHandle,
+): { anchor: SalaPoint; dragged: SalaPoint } {
+  const left = surface.x;
+  const top = surface.y;
+  const right = surface.x + surface.width;
+  const bottom = surface.y + surface.height;
+
+  if (handle === "nw") {
+    return { anchor: { x: right, y: bottom }, dragged: { x: left, y: top } };
+  }
+  if (handle === "ne") {
+    return { anchor: { x: left, y: bottom }, dragged: { x: right, y: top } };
+  }
+  if (handle === "sw") {
+    return { anchor: { x: right, y: top }, dragged: { x: left, y: bottom } };
+  }
+  return { anchor: { x: left, y: top }, dragged: { x: right, y: bottom } };
+}
+
+function enforceMinDistance(
+  anchor: number,
+  desired: number,
+  originalDragged: number,
+): number {
+  if (Math.abs(desired - anchor) >= SURFACE_MIN_RECT_SIZE) return desired;
+  const direction = desired === anchor
+    ? originalDragged < anchor
+      ? -1
+      : 1
+    : desired < anchor
+      ? -1
+      : 1;
+  return anchor + direction * SURFACE_MIN_RECT_SIZE;
+}
+
+export function resizeSurfaceObject(
+  surface: SurfaceObject,
+  handle: SurfaceResizeHandle,
+  delta: SalaPoint,
+  gridSize: number,
+): SurfaceObject {
+  const { anchor, dragged } = getResizePoints(surface, handle);
+  const snappedDragged = snapSurfacePointToGrid(
+    {
+      x: dragged.x + delta.x,
+      y: dragged.y + delta.y,
+    },
+    gridSize,
+  );
+  const adjustedDragged = {
+    x: enforceMinDistance(anchor.x, snappedDragged.x, dragged.x),
+    y: enforceMinDistance(anchor.y, snappedDragged.y, dragged.y),
+  };
+  const rect = createSurfaceRectFromPoints(anchor, adjustedDragged);
+
+  return {
+    ...surface,
+    ...rect,
   };
 }

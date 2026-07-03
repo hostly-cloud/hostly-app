@@ -16,6 +16,7 @@ export type SalaEditorHistoryActionKind =
   | "wallAttachment.delete"
   | "surface.create"
   | "surface.move"
+  | "surface.resize"
   | "surface.delete"
   | "espacio.create"
   | "espacio.update"

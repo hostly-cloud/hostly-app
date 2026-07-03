@@ -60,6 +60,8 @@ export type SalaEditorWorkspaceCanvasProps = {
   onSurfaceObjectDelete?: (surfaceId: string) => void;
   onSurfaceObjectMoveStart?: () => void;
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
+  onSurfaceObjectResizeStart?: () => void;
+  onSurfaceObjectResizeEnd?: (outcome: SurfaceEditOutcome) => void;
   walls?: SalaWallSegment[];
   wallAttachments?: SalaWallAttachment[];
   wallDraft?: SalaWallDrawingDraft | null;
@@ -134,6 +136,8 @@ export function SalaEditorWorkspaceCanvas({
   onSurfaceObjectDelete,
   onSurfaceObjectMoveStart,
   onSurfaceObjectMoveEnd,
+  onSurfaceObjectResizeStart,
+  onSurfaceObjectResizeEnd,
   walls = [],
   wallAttachments = [],
   wallDraft = null,
@@ -267,6 +271,8 @@ export function SalaEditorWorkspaceCanvas({
           onSurfaceObjectDelete={onSurfaceObjectDelete}
           onSurfaceObjectMoveStart={onSurfaceObjectMoveStart}
           onSurfaceObjectMoveEnd={onSurfaceObjectMoveEnd}
+          onSurfaceObjectResizeStart={onSurfaceObjectResizeStart}
+          onSurfaceObjectResizeEnd={onSurfaceObjectResizeEnd}
           canvasLayers={
             <>
               {structureLayer}

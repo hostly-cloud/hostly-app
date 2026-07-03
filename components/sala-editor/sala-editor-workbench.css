@@ -3535,6 +3535,10 @@
   filter: saturate(1.08);
 }
 
+.hostly-sala-surface-object.is-resizing {
+  filter: saturate(1.1);
+}
+
 .hostly-sala-surface-object.is-readonly {
   cursor: default;
   pointer-events: none;
@@ -3568,6 +3572,51 @@
   font-size: 13px;
   pointer-events: auto;
   touch-action: manipulation;
+}
+
+.hostly-sala-surface-object__resize-handle {
+  position: absolute;
+  z-index: 5;
+  width: 14px;
+  height: 14px;
+  border-radius: 5px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: color-mix(in srgb, var(--surface-color, #94a3b8) 64%, var(--hostly-accent, #315f7d));
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.16),
+    0 6px 14px rgba(15, 23, 42, 0.16);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.hostly-sala-surface-object__resize-handle::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+}
+
+.hostly-sala-surface-object__resize-handle--nw {
+  top: -7px;
+  left: -7px;
+  cursor: nwse-resize;
+}
+
+.hostly-sala-surface-object__resize-handle--ne {
+  top: -7px;
+  right: -7px;
+  cursor: nesw-resize;
+}
+
+.hostly-sala-surface-object__resize-handle--sw {
+  bottom: -7px;
+  left: -7px;
+  cursor: nesw-resize;
+}
+
+.hostly-sala-surface-object__resize-handle--se {
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
 }
 
 .hostly-sala-terreno-cursor-hint {

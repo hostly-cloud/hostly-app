@@ -20,12 +20,15 @@ import { getSurfaceMaterialCatalogItem } from "@/lib/sala-editor/surface/surface
 import {
   createSurfaceRectFromPoints,
   isSurfaceRectUsable,
+  resizeSurfaceObject,
   snapSurfacePointToGrid,
   translateSurfaceObject,
   type SurfaceCreationDraft,
   type SurfaceEditOutcome,
   type SurfaceMoveSession,
   type SurfaceRect,
+  type SurfaceResizeHandle,
+  type SurfaceResizeSession,
 } from "@/lib/sala-editor/surface/surface-interaction";
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import {
@@ -53,6 +56,8 @@ export type SalaTerrenoWorkspaceProps = {
   onSurfaceObjectDelete?: (surfaceId: string) => void;
   onSurfaceObjectMoveStart?: () => void;
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
+  onSurfaceObjectResizeStart?: () => void;
+  onSurfaceObjectResizeEnd?: (outcome: SurfaceEditOutcome) => void;
   canvasLayers?: ReactNode;
 };
 
@@ -72,14 +77,26 @@ type SurfaceCanvasContentProps = {
   onSurfaceObjectDelete?: (surfaceId: string) => void;
   onSurfaceObjectMoveStart?: () => void;
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
+  onSurfaceObjectResizeStart?: () => void;
+  onSurfaceObjectResizeEnd?: (outcome: SurfaceEditOutcome) => void;
 };
 
 export type SalaSurfaceObjectsLayerProps = {
   surfaceObjects: readonly SurfaceObject[];
   selectedSurfaceObjectId?: string | null;
   moveSession?: SurfaceMoveSession | null;
+  resizeSession?: SurfaceResizeSession | null;
   createSurfacePointerHandlers?: (
     surface: SurfaceObject,
+  ) => {
+    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
+    onPointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
+    onPointerUp: (event: PointerEvent<HTMLButtonElement>) => void;
+    onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => void;
+  };
+  createSurfaceResizeHandlers?: (
+    surface: SurfaceObject,
+    handle: SurfaceResizeHandle,
   ) => {
     onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
     onPointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
@@ -89,6 +106,13 @@ export type SalaSurfaceObjectsLayerProps = {
   onSurfaceObjectDelete?: (surfaceId: string) => void;
   readOnly?: boolean;
 };
+
+const SURFACE_RESIZE_HANDLES: readonly SurfaceResizeHandle[] = [
+  "nw",
+  "ne",
+  "sw",
+  "se",
+] as const;
 
 function createSurfaceStyle(
   rect: SurfaceRect,
@@ -110,7 +134,9 @@ export function SalaSurfaceObjectsLayer({
   surfaceObjects,
   selectedSurfaceObjectId = null,
   moveSession = null,
+  resizeSession = null,
   createSurfacePointerHandlers,
+  createSurfaceResizeHandlers,
   onSurfaceObjectDelete,
   readOnly = false,
 }: SalaSurfaceObjectsLayerProps) {
@@ -125,6 +151,8 @@ export function SalaSurfaceObjectsLayer({
           const selected = !readOnly && surface.id === selectedSurfaceObjectId;
           const dragging =
             !readOnly && moveSession?.objectId === surface.id && moveSession.active;
+          const resizing =
+            !readOnly && resizeSession?.objectId === surface.id && resizeSession.active;
           const handlers =
             !readOnly && createSurfacePointerHandlers
               ? createSurfacePointerHandlers(surface)
@@ -142,6 +170,7 @@ export function SalaSurfaceObjectsLayer({
                   "hostly-sala-surface-object",
                   selected ? "is-selected" : "",
                   dragging ? "is-dragging" : "",
+                  resizing ? "is-resizing" : "",
                   readOnly ? "is-readonly" : "",
                 ]
                   .filter(Boolean)
@@ -151,6 +180,21 @@ export function SalaSurfaceObjectsLayer({
                 tabIndex={readOnly ? -1 : 0}
                 {...handlers}
               />
+              {selected
+                ? SURFACE_RESIZE_HANDLES.map((handle) => (
+                    <button
+                      key={handle}
+                      type="button"
+                      className={[
+                        "hostly-sala-surface-object__resize-handle",
+                        `hostly-sala-surface-object__resize-handle--${handle}`,
+                      ].join(" ")}
+                      aria-label={`Redimensionar superficie ${handle}`}
+                      title="Redimensionar"
+                      {...createSurfaceResizeHandlers?.(surface, handle)}
+                    />
+                  ))
+                : null}
               {selected ? (
                 <button
                   type="button"
@@ -186,12 +230,16 @@ function SalaTerrenoCanvasContent({
   onSurfaceObjectDelete,
   onSurfaceObjectMoveStart,
   onSurfaceObjectMoveEnd,
+  onSurfaceObjectResizeStart,
+  onSurfaceObjectResizeEnd,
 }: SurfaceCanvasContentProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<SurfaceCreationDraft | null>(null);
   const [moveSession, setMoveSession] = useState<SurfaceMoveSession | null>(null);
+  const [resizeSession, setResizeSession] =
+    useState<SurfaceResizeSession | null>(null);
   const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
 
   const resolveLogicalPoint = useCallback(
@@ -267,6 +315,22 @@ function SalaTerrenoCanvasContent({
     });
   }, [onSurfaceObjectMoveEnd, onSurfaceObjectUpdate]);
 
+  const cancelResizeSession = useCallback(() => {
+    setResizeSession((session) => {
+      if (!session) return null;
+      if (session.active) {
+        onSurfaceObjectUpdate?.(session.objectId, {
+          x: session.originObject.x,
+          y: session.originObject.y,
+          width: session.originObject.width,
+          height: session.originObject.height,
+        });
+        onSurfaceObjectResizeEnd?.("cancel");
+      }
+      return null;
+    });
+  }, [onSurfaceObjectResizeEnd, onSurfaceObjectUpdate]);
+
   const finishMoveSession = useCallback(() => {
     setMoveSession((session) => {
       if (!session) return null;
@@ -276,6 +340,16 @@ function SalaTerrenoCanvasContent({
       return null;
     });
   }, [onSurfaceObjectMoveEnd]);
+
+  const finishResizeSession = useCallback(() => {
+    setResizeSession((session) => {
+      if (!session) return null;
+      if (session.active) {
+        onSurfaceObjectResizeEnd?.("complete");
+      }
+      return null;
+    });
+  }, [onSurfaceObjectResizeEnd]);
 
   const createSurfacePointerHandlers = useCallback(
     (surface: SurfaceObject) => ({
@@ -342,6 +416,82 @@ function SalaTerrenoCanvasContent({
     ],
   );
 
+  const createSurfaceResizeHandlers = useCallback(
+    (surface: SurfaceObject, handle: SurfaceResizeHandle) => ({
+      onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+        event.stopPropagation();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        const point = resolveLogicalPoint(event.clientX, event.clientY);
+        if (!point) return;
+        onSurfaceObjectSelect?.(surface.id);
+        setResizeSession({
+          objectId: surface.id,
+          mode: "resize",
+          resizeHandle: handle,
+          originPointer: point,
+          originObject: surface,
+          active: false,
+          pointerType: event.pointerType,
+        });
+      },
+      onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        const point = resolveLogicalPoint(event.clientX, event.clientY);
+        if (!point) return;
+
+        setResizeSession((session) => {
+          if (!session || session.objectId !== surface.id) return session;
+          const delta = {
+            x: point.x - session.originPointer.x,
+            y: point.y - session.originPointer.y,
+          };
+          const shouldActivate =
+            session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
+          if (!shouldActivate) return session;
+          if (!session.active) onSurfaceObjectResizeStart?.();
+
+          const resized = resizeSurfaceObject(
+            session.originObject,
+            session.resizeHandle,
+            delta,
+            gridSize,
+          );
+          onSurfaceObjectUpdate?.(surface.id, {
+            x: resized.x,
+            y: resized.y,
+            width: resized.width,
+            height: resized.height,
+          });
+          return { ...session, active: true };
+        });
+      },
+      onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        finishResizeSession();
+      },
+      onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        cancelResizeSession();
+      },
+    }),
+    [
+      cancelResizeSession,
+      finishResizeSession,
+      gridSize,
+      onSurfaceObjectResizeStart,
+      onSurfaceObjectSelect,
+      onSurfaceObjectUpdate,
+      resolveLogicalPoint,
+    ],
+  );
+
   const finishDraft = useCallback(
     (event: PointerEvent<HTMLDivElement>, create: boolean) => {
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -380,6 +530,11 @@ function SalaTerrenoCanvasContent({
         cancelMoveSession();
         return;
       }
+      if (resizeSession) {
+        event.preventDefault();
+        cancelResizeSession();
+        return;
+      }
       if (selectedSurfaceObjectId) {
         event.preventDefault();
         onSurfaceObjectClearSelection?.();
@@ -390,10 +545,12 @@ function SalaTerrenoCanvasContent({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     cancelMoveSession,
+    cancelResizeSession,
     draft,
     moveSession,
     onSurfaceObjectClearSelection,
     selectedSurfaceObjectId,
+    resizeSession,
   ]);
 
   return (
@@ -402,7 +559,9 @@ function SalaTerrenoCanvasContent({
         surfaceObjects={surfaceObjects}
         selectedSurfaceObjectId={selectedSurfaceObjectId}
         moveSession={moveSession}
+        resizeSession={resizeSession}
         createSurfacePointerHandlers={createSurfacePointerHandlers}
+        createSurfaceResizeHandlers={createSurfaceResizeHandlers}
         onSurfaceObjectDelete={onSurfaceObjectDelete}
       />
       <div className="hostly-sala-terreno-preview-layer" aria-hidden>
@@ -456,6 +615,8 @@ export function SalaTerrenoWorkspace({
   onSurfaceObjectDelete,
   onSurfaceObjectMoveStart,
   onSurfaceObjectMoveEnd,
+  onSurfaceObjectResizeStart,
+  onSurfaceObjectResizeEnd,
   canvasLayers = null,
 }: SalaTerrenoWorkspaceProps) {
   const base = normalizeSalaEspacioBase(espacio.base);
@@ -490,6 +651,8 @@ export function SalaTerrenoWorkspace({
         onSurfaceObjectDelete={onSurfaceObjectDelete}
         onSurfaceObjectMoveStart={onSurfaceObjectMoveStart}
         onSurfaceObjectMoveEnd={onSurfaceObjectMoveEnd}
+        onSurfaceObjectResizeStart={onSurfaceObjectResizeStart}
+        onSurfaceObjectResizeEnd={onSurfaceObjectResizeEnd}
       />
       {canvasLayers}
       {!activeMaterial && surfaceObjects.length === 0 ? (

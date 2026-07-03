@@ -529,6 +529,21 @@ export function SalaEditorWorkspace({
     [historyApi],
   );
 
+  const handleSurfaceResizeStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleSurfaceResizeEnd = useCallback(
+    (outcome: SurfaceEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction("surface.resize", documentSnapshotRef.current!);
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
   const handleSelectWallAttachment = useCallback(
     (attachmentId: string) => {
       clearWallSelection();
@@ -733,6 +748,8 @@ export function SalaEditorWorkspace({
             onSurfaceObjectDelete={removeSurfaceObject}
             onSurfaceObjectMoveStart={handleSurfaceMoveStart}
             onSurfaceObjectMoveEnd={handleSurfaceMoveEnd}
+            onSurfaceObjectResizeStart={handleSurfaceResizeStart}
+            onSurfaceObjectResizeEnd={handleSurfaceResizeEnd}
             walls={wallsInEspacio}
             wallAttachments={wallAttachmentsInEspacio}
             wallDraft={wallDraft}
