@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
+import type { SalaWallAttachmentKind } from "@/lib/sala-editor/types/wall-attachment";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
 import {
   createLocalEspacio,
@@ -486,12 +487,16 @@ export function SalaEditorWorkspace({
     [clearWallSelection, removeWall],
   );
 
-  const handlePlaceDoorAttachment = useCallback(
-    (wallId: string, positionRatio: number) => {
+  const handlePlaceWallAttachment = useCallback(
+    (
+      wallId: string,
+      positionRatio: number,
+      kind: SalaWallAttachmentKind,
+    ) => {
       clearWallSelection();
       addWallAttachment({
         wallId,
-        kind: "door",
+        kind,
         positionRatio,
       });
     },
@@ -698,7 +703,7 @@ export function SalaEditorWorkspace({
             onWallPointerUp={wallDrawingEnabled ? handleWallPointerUp : undefined}
             onWallPointerCancel={wallDrawingEnabled ? handleWallPointerCancel : undefined}
             onWallDelete={wallDrawingEnabled ? handleDeleteWall : undefined}
-            onWallAttachmentPlace={handlePlaceDoorAttachment}
+            onWallAttachmentPlace={handlePlaceWallAttachment}
             onWallAttachmentSelect={handleSelectWallAttachment}
             onWallAttachmentClearSelection={clearWallAttachmentSelection}
             onWallAttachmentUpdate={updateWallAttachment}

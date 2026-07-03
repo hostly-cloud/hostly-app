@@ -2,7 +2,10 @@
 
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
-import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
+import type {
+  SalaWallAttachment,
+  SalaWallAttachmentKind,
+} from "@/lib/sala-editor/types/wall-attachment";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import type { WallPointerPayload } from "@/lib/sala-editor/canvas/wall-interaction";
@@ -29,7 +32,11 @@ export type SalaEstructuraWorkspaceProps = {
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
   onWallDelete?: (wallId: string) => void;
-  onWallAttachmentPlace?: (wallId: string, positionRatio: number) => void;
+  onWallAttachmentPlace?: (
+    wallId: string,
+    positionRatio: number,
+    kind: SalaWallAttachmentKind,
+  ) => void;
   onWallAttachmentSelect?: (attachmentId: string) => void;
   onWallAttachmentClearSelection?: () => void;
   onWallAttachmentUpdate?: (
@@ -64,7 +71,8 @@ export function SalaEstructuraWorkspace({
   onWallAttachmentMoveEnd,
 }: SalaEstructuraWorkspaceProps) {
   const isWallTool = tool.kind === "wall";
-  const isDoorTool = tool.kind === "door";
+  const attachmentPlacementKind =
+    tool.kind === "door" || tool.kind === "glass" ? tool.kind : null;
   const wallDrawingEnabled =
     isWallTool &&
     onWallPointerDown &&
@@ -90,14 +98,14 @@ export function SalaEstructuraWorkspace({
       basePreview={base}
       floorBackground={floorEntry.background}
     >
-      {wallDrawingEnabled || isDoorTool ? (
+      {wallDrawingEnabled || attachmentPlacementKind ? (
         <SalaWallCanvas
           walls={walls}
           wallAttachments={wallAttachments}
           draft={wallDraft}
           selectedWallId={selectedWallId}
           selectedWallAttachmentId={selectedWallAttachmentId}
-          attachmentPlacementKind={isDoorTool ? "door" : null}
+          attachmentPlacementKind={attachmentPlacementKind}
           hint={tool.workspaceHint}
           onPointerDown={onWallPointerDown}
           onPointerMove={onWallPointerMove}

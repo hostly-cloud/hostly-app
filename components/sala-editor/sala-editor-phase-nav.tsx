@@ -4,7 +4,7 @@ import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation"
 import {
   SALA_EDITOR_PHASE_DESCRIPTIONS,
   SALA_EDITOR_PHASE_LABELS,
-  SALA_EDITOR_PHASE_ORDER,
+  SALA_EDITOR_VISIBLE_PHASE_ORDER,
 } from "@/lib/sala-editor/types/editor-navigation";
 
 export type SalaEditorPhaseNavProps = {
@@ -14,8 +14,9 @@ export type SalaEditorPhaseNavProps = {
 };
 
 const PHASE_INDEX: Record<SalaEditorPhase, string> = {
-  espacios: "①",
-  base: "②",
+  espacios: "•",
+  base: "①",
+  terreno: "②",
   estructura: "③",
   operacion: "④",
 };
@@ -26,13 +27,14 @@ export function SalaEditorPhaseNav({
   onPhaseChange,
 }: SalaEditorPhaseNavProps) {
   const disabled = new Set(disabledPhases);
-  const activeIndex = SALA_EDITOR_PHASE_ORDER.indexOf(phase);
+  const visiblePhase = phase === "espacios" ? "base" : phase;
+  const activeIndex = SALA_EDITOR_VISIBLE_PHASE_ORDER.indexOf(visiblePhase);
 
   return (
     <nav className="hostly-sala-editor-stepper" aria-label="Fases del editor de sala">
       <ol className="hostly-sala-editor-stepper__track">
-        {SALA_EDITOR_PHASE_ORDER.map((item, index) => {
-          const isActive = item === phase;
+        {SALA_EDITOR_VISIBLE_PHASE_ORDER.map((item, index) => {
+          const isActive = item === visiblePhase;
           const isDisabled = disabled.has(item);
           const isComplete = activeIndex > index;
           const isPending = !isActive && !isComplete;
@@ -65,7 +67,7 @@ export function SalaEditorPhaseNav({
                 </span>
               </button>
 
-              {index < SALA_EDITOR_PHASE_ORDER.length - 1 ? (
+              {index < SALA_EDITOR_VISIBLE_PHASE_ORDER.length - 1 ? (
                 <span className="hostly-sala-editor-stepper__rail" aria-hidden />
               ) : null}
             </li>

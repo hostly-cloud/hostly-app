@@ -4,12 +4,16 @@ import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation"
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
-import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
+import type {
+  SalaWallAttachment,
+  SalaWallAttachmentKind,
+} from "@/lib/sala-editor/types/wall-attachment";
 import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
 import { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-espacios-empty-state";
 import { SalaBaseWorkspace } from "@/components/sala-editor/panels/sala-base-workspace";
+import { SalaTerrenoWorkspace } from "@/components/sala-editor/panels/sala-terreno-workspace";
 import { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-estructura-workspace";
 import { SalaOperacionWorkspace } from "@/components/sala-editor/panels/sala-operacion-workspace";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
@@ -40,7 +44,11 @@ export type SalaEditorWorkspaceCanvasProps = {
   onWallPointerUp?: () => void;
   onWallPointerCancel?: () => void;
   onWallDelete?: (wallId: string) => void;
-  onWallAttachmentPlace?: (wallId: string, positionRatio: number) => void;
+  onWallAttachmentPlace?: (
+    wallId: string,
+    positionRatio: number,
+    kind: SalaWallAttachmentKind,
+  ) => void;
   onWallAttachmentSelect?: (attachmentId: string) => void;
   onWallAttachmentClearSelection?: () => void;
   onWallAttachmentUpdate?: (
@@ -150,7 +158,7 @@ export function SalaEditorWorkspaceCanvas({
     return (
       <SalaEditorEmptyState
         title="Selecciona un mapa en el panel izquierdo."
-        hint="Necesitas un mapa activo para preparar base, estructura u operación."
+        hint="Necesitas un mapa activo para preparar base, terreno, estructura u operación."
         glyph="▢"
       />
     );
@@ -160,6 +168,14 @@ export function SalaEditorWorkspaceCanvas({
     return (
       <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
         <SalaBaseWorkspace espacio={espacio} restaurantId={restaurantId} />
+      </div>
+    );
+  }
+
+  if (phase === "terreno") {
+    return (
+      <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
+        <SalaTerrenoWorkspace espacio={espacio} restaurantId={restaurantId} />
       </div>
     );
   }

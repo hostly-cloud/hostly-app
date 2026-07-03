@@ -55,6 +55,7 @@ export {
   SALA_EDITOR_PHASE_DESCRIPTIONS,
   SALA_EDITOR_PHASE_LABELS,
   SALA_EDITOR_PHASE_ORDER,
+  SALA_EDITOR_VISIBLE_PHASE_ORDER,
   createDefaultSalaEditorNavigation,
 } from "@/lib/sala-editor/types/editor-navigation";
 

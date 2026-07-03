@@ -30,9 +30,9 @@ export const STRUCTURAL_TOOLBOX_ITEMS: readonly StructuralToolboxItem[] = [
     label: "Cristal",
     icon: "🟦",
     description: "Separación transparente o mampara.",
-    workspaceHint: "Haz clic para colocar un cristal.",
-    upcomingActions: ["Dibujar", "Duplicar", "Girar", "Bloquear"],
-    available: false,
+    workspaceHint: "Acércate a un muro y haz clic para colocar un cristal.",
+    upcomingActions: ["Corredero", "Abatible", "Mampara", "Bloquear"],
+    available: true,
   },
   {
     kind: "door",

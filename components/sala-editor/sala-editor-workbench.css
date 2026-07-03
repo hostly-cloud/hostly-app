@@ -3023,7 +3023,7 @@
   inset: -10px -8px;
 }
 
-.hostly-sala-wall-attachment__door-panel {
+.hostly-sala-wall-attachment__panel {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -3038,6 +3038,27 @@
   transform: translate(-50%, -50%);
 }
 
+.hostly-sala-wall-attachment--door .hostly-sala-wall-attachment__panel {
+  width: 32px;
+  height: 5px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border-color: color-mix(in srgb, var(--hostly-accent, #315f7d) 68%, #64748b);
+}
+
+.hostly-sala-wall-attachment--glass .hostly-sala-wall-attachment__panel {
+  width: 46px;
+  height: 7px;
+  border-radius: 999px;
+  border-color: rgba(14, 165, 233, 0.72);
+  background: linear-gradient(
+    90deg,
+    rgba(224, 242, 254, 0.42),
+    rgba(125, 211, 252, 0.82),
+    rgba(224, 242, 254, 0.42)
+  );
+}
+
 .hostly-sala-wall-attachment__door-swing {
   position: absolute;
   left: 50%;
@@ -3050,14 +3071,14 @@
   transform: translate(-1px, -1px);
 }
 
-.hostly-sala-wall-attachment.is-selected .hostly-sala-wall-attachment__door-panel {
+.hostly-sala-wall-attachment.is-selected .hostly-sala-wall-attachment__panel {
   border-color: var(--hostly-accent, #315f7d);
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--hostly-accent, #315f7d) 16%, transparent),
     0 4px 10px rgba(15, 23, 42, 0.14);
 }
 
-.hostly-sala-wall-attachment.is-dragging .hostly-sala-wall-attachment__door-panel {
+.hostly-sala-wall-attachment.is-dragging .hostly-sala-wall-attachment__panel {
   box-shadow:
     0 0 0 5px color-mix(in srgb, var(--hostly-accent, #315f7d) 18%, transparent),
     0 8px 18px rgba(15, 23, 42, 0.16);
@@ -3353,4 +3374,67 @@
 
 .hostly-sala-base-workspace__hero {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.72));
+}
+
+.hostly-sala-terreno-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  pointer-events: none;
+}
+
+.hostly-sala-terreno-placeholder__card {
+  max-width: 460px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08);
+  padding: 22px;
+  text-align: center;
+}
+
+.hostly-sala-terreno-placeholder__eyebrow {
+  display: inline-flex;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hostly-accent, #315f7d) 10%, white);
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--hostly-accent, #315f7d);
+}
+
+.hostly-sala-terreno-placeholder__title {
+  margin-top: 12px;
+  font-size: 22px;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  color: var(--hostly-ink-strong);
+}
+
+.hostly-sala-terreno-placeholder__text {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-sala-terreno-placeholder__chips {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+}
+
+.hostly-sala-terreno-placeholder__chip {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.92);
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--hostly-ink-soft);
 }

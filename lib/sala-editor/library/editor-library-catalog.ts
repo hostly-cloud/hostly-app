@@ -75,8 +75,26 @@ const ESTRUCTURA_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
     id: "cristales",
     label: "Cristales",
     icon: "🪟",
-    upcoming: true,
-    items: [],
+    items: [
+      {
+        id: "cristal-fijo",
+        label: "Cristal fijo",
+        status: "available",
+        structuralKind: "glass",
+      },
+      {
+        id: "cristal-corredero",
+        label: "Cristal corredero",
+        status: "upcoming",
+        structuralKind: "glass",
+      },
+      {
+        id: "mampara",
+        label: "Mampara",
+        status: "upcoming",
+        structuralKind: "glass",
+      },
+    ],
   },
   {
     id: "columnas",
