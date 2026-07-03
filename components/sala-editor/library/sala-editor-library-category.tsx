@@ -38,8 +38,7 @@ export function SalaEditorLibraryCategorySection({
             <span className="hostly-sala-library__category-label">
               {category.label}
               <span className="hostly-sala-library__category-count">
-                {" "}
-                · {availableCount}
+                {availableCount}
               </span>
             </span>
             <span className="hostly-sala-library__category-meta">
@@ -77,8 +76,7 @@ export function SalaEditorLibraryCategorySection({
           <span className="hostly-sala-library__category-label">
             {category.label}
             <span className="hostly-sala-library__category-count">
-              {" "}
-              · {availableCount}
+              {availableCount}
             </span>
           </span>
         </span>
