@@ -4,6 +4,7 @@ import {
   useCallback,
   useMemo,
   useRef,
+  type ReactNode,
   type PointerEvent,
   type RefObject,
 } from "react";
@@ -61,6 +62,7 @@ export type SalaOperacionWorkspaceProps = {
   onResizeCancel: () => void;
   onDuplicateInstance: (instanceId: string) => void;
   onDeleteInstance: (instanceId: string) => void;
+  canvasLayers?: ReactNode;
 };
 
 type SalaOperacionCanvasContentProps = Omit<
@@ -68,6 +70,26 @@ type SalaOperacionCanvasContentProps = Omit<
   "espacio" | "restaurantId"
 > & {
   surfaceRef: RefObject<HTMLDivElement | null>;
+};
+
+type OperationalInstanceMoveHandlers = {
+  onBodyPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
+  onBodyPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
+  onBodyPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
+  onBodyPointerCancel: (event: PointerEvent<HTMLDivElement>) => void;
+};
+
+export type SalaOperationalInstancesLayerProps = {
+  instances: OperationalElementInstance[];
+  selectedInstanceId?: string | null;
+  draggingInstanceId?: string | null;
+  resizingInstanceId?: string | null;
+  dropAnimatingInstanceId?: string | null;
+  createMoveHandlers?: (
+    instance: OperationalElementInstance,
+  ) => OperationalInstanceMoveHandlers;
+  onDeleteInstance?: (instanceId: string) => void;
+  readOnly?: boolean;
 };
 
 export function SalaOperacionWorkspace({
@@ -92,6 +114,7 @@ export function SalaOperacionWorkspace({
   onResizeCancel,
   onDuplicateInstance,
   onDeleteInstance,
+  canvasLayers = null,
 }: SalaOperacionWorkspaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const base = normalizeSalaEspacioBase(espacio.base);
@@ -136,6 +159,7 @@ export function SalaOperacionWorkspace({
         </>
       }
     >
+      {canvasLayers}
       <SalaOperacionCanvasContent
         surfaceRef={surfaceRef}
         instances={instances}
@@ -280,11 +304,46 @@ function SalaOperacionCanvasContent({
         onPointerDown={handleCanvasPointerDown}
       />
       {scaledSnapGuides ? <SalaCanvasSnapGuides guides={scaledSnapGuides} /> : null}
+      <SalaOperationalInstancesLayer
+        instances={instances}
+        selectedInstanceId={selectedInstanceId}
+        draggingInstanceId={draggingInstanceId}
+        resizingInstanceId={resizingInstanceId}
+        dropAnimatingInstanceId={dropAnimatingInstanceId}
+        createMoveHandlers={createMoveHandlers}
+        onDeleteInstance={onDeleteInstance}
+      />
+    </>
+  );
+}
+
+export function SalaOperationalInstancesLayer({
+  instances,
+  selectedInstanceId = null,
+  draggingInstanceId = null,
+  resizingInstanceId = null,
+  dropAnimatingInstanceId = null,
+  createMoveHandlers,
+  onDeleteInstance,
+  readOnly = false,
+}: SalaOperationalInstancesLayerProps) {
+  const canvasViewport = useCanvasViewport();
+  const coordinateScale = canvasViewport?.coordinateScale ?? 1;
+  const noopHandlers: OperationalInstanceMoveHandlers = {
+    onBodyPointerDown: () => undefined,
+    onBodyPointerMove: () => undefined,
+    onBodyPointerUp: () => undefined,
+    onBodyPointerCancel: () => undefined,
+  };
+
+  return (
+    <div className={readOnly ? "hostly-sala-operational-layer is-readonly" : "hostly-sala-operational-layer"}>
       {instances.map((instance) => {
         const instanceCatalog = getOperationalElementCatalogItem(instance.elementType);
-        const moveHandlers = createMoveHandlers(instance);
-        const dragging = draggingInstanceId === instance.id;
-        const resizing = resizingInstanceId === instance.id;
+        const moveHandlers =
+          !readOnly && createMoveHandlers ? createMoveHandlers(instance) : noopHandlers;
+        const dragging = !readOnly && draggingInstanceId === instance.id;
+        const resizing = !readOnly && resizingInstanceId === instance.id;
         const dropAnimating = dropAnimatingInstanceId === instance.id;
         const size = getOperationalInstanceCanvasSize(instance);
 
@@ -301,16 +360,16 @@ function SalaOperacionCanvasContent({
               instance={instance}
               catalogColor={instanceCatalog?.color}
               size={size}
-              selected={instance.id === selectedInstanceId}
+              selected={!readOnly && instance.id === selectedInstanceId}
               isDragging={dragging}
               isResizing={resizing}
               isDropAnimating={dropAnimating}
-              onDelete={() => onDeleteInstance(instance.id)}
+              onDelete={() => onDeleteInstance?.(instance.id)}
               {...moveHandlers}
             />
           </div>
         );
       })}
-    </>
+    </div>
   );
 }

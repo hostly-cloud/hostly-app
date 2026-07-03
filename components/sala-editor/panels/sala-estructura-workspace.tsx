@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { StructuralToolboxItem } from "@/lib/sala-editor/catalog/structural-toolbox";
 import type {
@@ -46,6 +47,7 @@ export type SalaEstructuraWorkspaceProps = {
   onWallAttachmentDelete?: (attachmentId: string) => void;
   onWallAttachmentMoveStart?: () => void;
   onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
+  canvasLayers?: ReactNode;
 };
 
 export function SalaEstructuraWorkspace({
@@ -69,6 +71,7 @@ export function SalaEstructuraWorkspace({
   onWallAttachmentDelete,
   onWallAttachmentMoveStart,
   onWallAttachmentMoveEnd,
+  canvasLayers = null,
 }: SalaEstructuraWorkspaceProps) {
   const isWallTool = tool.kind === "wall";
   const attachmentPlacementKind =
@@ -98,6 +101,7 @@ export function SalaEstructuraWorkspace({
       basePreview={base}
       floorBackground={floorEntry.background}
     >
+      {canvasLayers}
       {wallDrawingEnabled || attachmentPlacementKind ? (
         <SalaWallCanvas
           walls={walls}

@@ -19,9 +19,16 @@ import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
 import { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-espacios-empty-state";
 import { SalaBaseWorkspace } from "@/components/sala-editor/panels/sala-base-workspace";
-import { SalaTerrenoWorkspace } from "@/components/sala-editor/panels/sala-terreno-workspace";
+import {
+  SalaSurfaceObjectsLayer,
+  SalaTerrenoWorkspace,
+} from "@/components/sala-editor/panels/sala-terreno-workspace";
 import { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-estructura-workspace";
-import { SalaOperacionWorkspace } from "@/components/sala-editor/panels/sala-operacion-workspace";
+import {
+  SalaOperationalInstancesLayer,
+  SalaOperacionWorkspace,
+} from "@/components/sala-editor/panels/sala-operacion-workspace";
+import { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
@@ -193,10 +200,53 @@ export function SalaEditorWorkspaceCanvas({
     );
   }
 
+  const terrainLayer =
+    surfaceObjects.length > 0 ? (
+      <SalaSurfaceObjectsLayer
+        key="terrain-layer"
+        surfaceObjects={surfaceObjects}
+        readOnly
+      />
+    ) : null;
+
+  const structureLayer =
+    walls.length > 0 || wallAttachments.length > 0 ? (
+      <SalaWallCanvas
+        key="structure-layer"
+        walls={walls}
+        wallAttachments={wallAttachments}
+        draft={null}
+        selectedWallId={null}
+        selectedWallAttachmentId={null}
+        hint=""
+        embedded
+        readOnly
+      />
+    ) : null;
+
+  const operationLayer =
+    operationalElementInstances.length > 0 ? (
+      <SalaOperationalInstancesLayer
+        key="operation-layer"
+        instances={operationalElementInstances}
+        readOnly
+      />
+    ) : null;
+
   if (phase === "base") {
     return (
       <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
-        <SalaBaseWorkspace espacio={espacio} restaurantId={restaurantId} />
+        <SalaBaseWorkspace
+          espacio={espacio}
+          restaurantId={restaurantId}
+          canvasLayers={
+            <>
+              {terrainLayer}
+              {structureLayer}
+              {operationLayer}
+            </>
+          }
+        />
       </div>
     );
   }
@@ -217,6 +267,12 @@ export function SalaEditorWorkspaceCanvas({
           onSurfaceObjectDelete={onSurfaceObjectDelete}
           onSurfaceObjectMoveStart={onSurfaceObjectMoveStart}
           onSurfaceObjectMoveEnd={onSurfaceObjectMoveEnd}
+          canvasLayers={
+            <>
+              {structureLayer}
+              {operationLayer}
+            </>
+          }
         />
       </div>
     );
@@ -246,6 +302,12 @@ export function SalaEditorWorkspaceCanvas({
           onWallAttachmentDelete={onWallAttachmentDelete}
           onWallAttachmentMoveStart={onWallAttachmentMoveStart}
           onWallAttachmentMoveEnd={onWallAttachmentMoveEnd}
+          canvasLayers={
+            <>
+              {terrainLayer}
+              {operationLayer}
+            </>
+          }
         />
       </div>
     );
@@ -286,6 +348,12 @@ export function SalaEditorWorkspaceCanvas({
         onResizeCancel={onOperationalResizeCancel ?? (() => undefined)}
         onDuplicateInstance={onOperationalDuplicateInstance ?? (() => undefined)}
         onDeleteInstance={onOperationalDeleteInstance ?? (() => undefined)}
+          canvasLayers={
+            <>
+              {terrainLayer}
+              {structureLayer}
+            </>
+          }
         />
       </div>
     );

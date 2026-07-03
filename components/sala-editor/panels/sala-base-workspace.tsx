@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import {
   getBaseFloorCatalogEntry,
@@ -14,6 +15,7 @@ import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-esp
 export type SalaBaseWorkspaceProps = {
   espacio: SalaEspacio;
   restaurantId: string;
+  canvasLayers?: ReactNode;
 };
 
 function formatDimension(value: number): string {
@@ -23,6 +25,7 @@ function formatDimension(value: number): string {
 export function SalaBaseWorkspace({
   espacio,
   restaurantId,
+  canvasLayers = null,
 }: SalaBaseWorkspaceProps) {
   const base = normalizeSalaEspacioBase(espacio.base);
   const floorEntry = getBaseFloorCatalogEntry(
@@ -53,6 +56,8 @@ export function SalaBaseWorkspace({
           </p>
         </div>
       }
-    />
+    >
+      {canvasLayers}
+    </SalaEspacioCanvasFrame>
   );
 }

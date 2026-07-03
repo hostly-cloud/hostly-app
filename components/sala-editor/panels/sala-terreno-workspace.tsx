@@ -8,6 +8,7 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent,
+  type ReactNode,
 } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type {
@@ -52,6 +53,7 @@ export type SalaTerrenoWorkspaceProps = {
   onSurfaceObjectDelete?: (surfaceId: string) => void;
   onSurfaceObjectMoveStart?: () => void;
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
+  canvasLayers?: ReactNode;
 };
 
 type SurfaceCanvasContentProps = {
@@ -72,6 +74,22 @@ type SurfaceCanvasContentProps = {
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
 };
 
+export type SalaSurfaceObjectsLayerProps = {
+  surfaceObjects: readonly SurfaceObject[];
+  selectedSurfaceObjectId?: string | null;
+  moveSession?: SurfaceMoveSession | null;
+  createSurfacePointerHandlers?: (
+    surface: SurfaceObject,
+  ) => {
+    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
+    onPointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
+    onPointerUp: (event: PointerEvent<HTMLButtonElement>) => void;
+    onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => void;
+  };
+  onSurfaceObjectDelete?: (surfaceId: string) => void;
+  readOnly?: boolean;
+};
+
 function createSurfaceStyle(
   rect: SurfaceRect,
   material: SurfaceMaterialKind,
@@ -86,6 +104,73 @@ function createSurfaceStyle(
     height: rect.height * coordinateScale,
     "--surface-color": color,
   } as CSSProperties;
+}
+
+export function SalaSurfaceObjectsLayer({
+  surfaceObjects,
+  selectedSurfaceObjectId = null,
+  moveSession = null,
+  createSurfacePointerHandlers,
+  onSurfaceObjectDelete,
+  readOnly = false,
+}: SalaSurfaceObjectsLayerProps) {
+  const canvasViewport = useCanvasViewport();
+  const coordinateScale = canvasViewport?.coordinateScale ?? 1;
+
+  return (
+    <div className="hostly-sala-terreno-surfaces">
+      {surfaceObjects
+        .filter((surface) => surface.visible !== false)
+        .map((surface) => {
+          const selected = !readOnly && surface.id === selectedSurfaceObjectId;
+          const dragging =
+            !readOnly && moveSession?.objectId === surface.id && moveSession.active;
+          const handlers =
+            !readOnly && createSurfacePointerHandlers
+              ? createSurfacePointerHandlers(surface)
+              : undefined;
+
+          return (
+            <div
+              key={surface.id}
+              className="hostly-sala-surface-object-wrap"
+              style={createSurfaceStyle(surface, surface.material, coordinateScale)}
+            >
+              <button
+                type="button"
+                className={[
+                  "hostly-sala-surface-object",
+                  selected ? "is-selected" : "",
+                  dragging ? "is-dragging" : "",
+                  readOnly ? "is-readonly" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                aria-label={`Superficie de ${getSurfaceMaterialCatalogItem(surface.material)?.label ?? "material"}`}
+                title="Superficie"
+                tabIndex={readOnly ? -1 : 0}
+                {...handlers}
+              />
+              {selected ? (
+                <button
+                  type="button"
+                  className="hostly-sala-surface-object__delete-btn"
+                  aria-label="Eliminar superficie"
+                  title="Eliminar superficie"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSurfaceObjectDelete?.(surface.id);
+                  }}
+                >
+                  🗑
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+    </div>
+  );
 }
 
 function SalaTerrenoCanvasContent({
@@ -313,49 +398,14 @@ function SalaTerrenoCanvasContent({
 
   return (
     <>
-      <div className="hostly-sala-terreno-surfaces">
-        {surfaceObjects
-          .filter((surface) => surface.visible !== false)
-          .map((surface) => {
-            const selected = surface.id === selectedSurfaceObjectId;
-            const dragging = moveSession?.objectId === surface.id && moveSession.active;
-            return (
-              <div
-                key={surface.id}
-                className="hostly-sala-surface-object-wrap"
-                style={createSurfaceStyle(surface, surface.material, coordinateScale)}
-              >
-                <button
-                  type="button"
-                  className={[
-                    "hostly-sala-surface-object",
-                    selected ? "is-selected" : "",
-                    dragging ? "is-dragging" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-label={`Superficie de ${getSurfaceMaterialCatalogItem(surface.material)?.label ?? "material"}`}
-                  title="Superficie"
-                  {...createSurfacePointerHandlers(surface)}
-                />
-                {selected ? (
-                  <button
-                    type="button"
-                    className="hostly-sala-surface-object__delete-btn"
-                    aria-label="Eliminar superficie"
-                    title="Eliminar superficie"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSurfaceObjectDelete?.(surface.id);
-                    }}
-                  >
-                    🗑
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
+      <SalaSurfaceObjectsLayer
+        surfaceObjects={surfaceObjects}
+        selectedSurfaceObjectId={selectedSurfaceObjectId}
+        moveSession={moveSession}
+        createSurfacePointerHandlers={createSurfacePointerHandlers}
+        onSurfaceObjectDelete={onSurfaceObjectDelete}
+      />
+      <div className="hostly-sala-terreno-preview-layer" aria-hidden>
         {draft && previewStyle ? (
           <div
             className="hostly-sala-surface-object hostly-sala-surface-object--preview"
@@ -406,6 +456,7 @@ export function SalaTerrenoWorkspace({
   onSurfaceObjectDelete,
   onSurfaceObjectMoveStart,
   onSurfaceObjectMoveEnd,
+  canvasLayers = null,
 }: SalaTerrenoWorkspaceProps) {
   const base = normalizeSalaEspacioBase(espacio.base);
   const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
@@ -440,6 +491,7 @@ export function SalaTerrenoWorkspace({
         onSurfaceObjectMoveStart={onSurfaceObjectMoveStart}
         onSurfaceObjectMoveEnd={onSurfaceObjectMoveEnd}
       />
+      {canvasLayers}
       {!activeMaterial && surfaceObjects.length === 0 ? (
         <div className="hostly-sala-terreno-placeholder">
           <div className="hostly-sala-terreno-placeholder__card">

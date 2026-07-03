@@ -1302,8 +1302,13 @@
 .hostly-sala-espacio-frame__wall-stage {
   position: absolute;
   inset: 0;
+  z-index: 4;
   touch-action: none;
   user-select: none;
+}
+
+.hostly-sala-espacio-frame__wall-stage.is-readonly {
+  pointer-events: none;
 }
 
 .hostly-sala-espacio-frame__placeholder,
@@ -3466,6 +3471,13 @@
 .hostly-sala-terreno-surfaces {
   position: absolute;
   inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.hostly-sala-terreno-preview-layer {
+  position: absolute;
+  inset: 0;
   z-index: 3;
   pointer-events: none;
 }
@@ -3473,7 +3485,7 @@
 .hostly-sala-terreno-hit-area {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 1;
   cursor: default;
   touch-action: none;
 }
@@ -3523,6 +3535,11 @@
   filter: saturate(1.08);
 }
 
+.hostly-sala-surface-object.is-readonly {
+  cursor: default;
+  pointer-events: none;
+}
+
 .hostly-sala-surface-object--preview {
   z-index: 2;
   border-style: dashed;
@@ -3570,5 +3587,15 @@
   font-size: 12px;
   font-weight: 800;
   color: var(--hostly-ink-soft);
+  pointer-events: none;
+}
+
+.hostly-sala-operational-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+}
+
+.hostly-sala-operational-layer.is-readonly {
   pointer-events: none;
 }

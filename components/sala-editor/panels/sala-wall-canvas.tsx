@@ -92,6 +92,7 @@ export type SalaWallCanvasProps = {
   onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
   /** Dentro del frame de espacio — sin chrome propio. */
   embedded?: boolean;
+  readOnly?: boolean;
 };
 
 function renderWallStroke(
@@ -168,6 +169,7 @@ export function SalaWallCanvas({
   onWallAttachmentMoveStart,
   onWallAttachmentMoveEnd,
   embedded = false,
+  readOnly = false,
 }: SalaWallCanvasProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [hoveredAttachmentWallId, setHoveredAttachmentWallId] = useState<string | null>(
@@ -181,6 +183,7 @@ export function SalaWallCanvas({
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const attachmentPlacementEnabled =
+    !readOnly &&
     attachmentPlacementKind != null && onPlaceWallAttachment != null;
   const selectedWall = walls.find((wall) => wall.id === selectedWallId) ?? null;
   const scaledWalls = useMemo(
@@ -560,20 +563,26 @@ export function SalaWallCanvas({
       aria-label={embedded ? undefined : "Lienzo de paredes"}
       className={
         embedded
-          ? "hostly-sala-espacio-frame__wall-stage"
+          ? [
+              "hostly-sala-espacio-frame__wall-stage",
+              readOnly ? "is-readonly" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
           : "hostly-sala-editor-canvas-frame__surface"
       }
-      style={{ cursor: "crosshair" }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
+      style={{ cursor: readOnly ? "default" : "crosshair" }}
+      onPointerDown={readOnly ? undefined : handlePointerDown}
+      onPointerMove={readOnly ? undefined : handlePointerMove}
       onPointerLeave={() => {
         if (attachmentPlacementEnabled) {
           setHoveredAttachmentWallId(null);
           setBlockedAttachmentWallId(null);
         }
       }}
-      onPointerUp={() => onPointerUp?.()}
+      onPointerUp={readOnly ? undefined : () => onPointerUp?.()}
       onPointerCancel={() => {
+        if (readOnly) return;
         setHoveredAttachmentWallId(null);
         setBlockedAttachmentWallId(null);
         onPointerCancel?.();
@@ -602,7 +611,7 @@ export function SalaWallCanvas({
         </g>
 
         {visualModel.segments.map((segment) => {
-          const selected = segment.id === selectedWallId;
+          const selected = !readOnly && segment.id === selectedWallId;
           const attachmentHover = segment.id === hoveredAttachmentWallId;
           const attachmentBlocked = segment.id === blockedAttachmentWallId;
           return (
@@ -643,9 +652,11 @@ export function SalaWallCanvas({
       </svg>
 
       {renderedWallAttachments.map(({ attachment, resolved }) => {
-        const selected = attachment.id === selectedWallAttachmentId;
-        const editing = attachmentEditSession?.objectId === attachment.id;
-        const attachmentHandlers = createAttachmentPointerHandlers(attachment);
+        const selected = !readOnly && attachment.id === selectedWallAttachmentId;
+        const editing = !readOnly && attachmentEditSession?.objectId === attachment.id;
+        const attachmentHandlers = readOnly
+          ? {}
+          : createAttachmentPointerHandlers(attachment);
         const label = getWallAttachmentLabel(attachment.kind);
         const attachmentLength = Math.max(
           24,
@@ -666,6 +677,7 @@ export function SalaWallCanvas({
               aria-pressed={selected}
               aria-label={label}
               title={label}
+              tabIndex={readOnly ? -1 : 0}
               style={{
                 left: resolved.point.x,
                 top: resolved.point.y,
@@ -673,10 +685,14 @@ export function SalaWallCanvas({
                 transform: `translate(-50%, -50%) rotate(${resolved.angleRad}rad)`,
               }}
               {...attachmentHandlers}
-              onClick={(event) => {
-                event.stopPropagation();
-                onSelectWallAttachment?.(attachment.id);
-              }}
+              onClick={
+                readOnly
+                  ? undefined
+                  : (event) => {
+                      event.stopPropagation();
+                      onSelectWallAttachment?.(attachment.id);
+                    }
+              }
             >
               <span
                 className="hostly-sala-wall-attachment__panel"
