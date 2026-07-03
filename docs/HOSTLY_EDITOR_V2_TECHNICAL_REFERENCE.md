@@ -745,6 +745,219 @@ La duplicacion operativa existe en codigo como accion/historial, pero no es el f
 
 ---
 
+# Visual Assets Architecture
+
+## Objetivo
+
+Visual Assets es la arquitectura canonica para representar recursos visuales complejos del Editor V2 sin mezclar apariencia con comportamiento.
+
+Su objetivo es separar completamente:
+
+- modelo;
+- interaccion;
+- render;
+- apariencia visual.
+
+Un mismo objeto del editor podra cambiar completamente de aspecto sin modificar su comportamiento. Una superficie podra pasar de un rectangulo plano a una textura de madera sin cambiar su modelo de superficie. Una mesa podra usar una representacion realista sin cambiar su logica operativa. Un muro podra renderizarse con otra apariencia sin dejar de ser un muro.
+
+Visual Assets no renderiza nada por si mismo en el estado actual. Define el contrato que futuras capas de render usaran para asociar recursos visuales independientes a objetos existentes del editor.
+
+## Filosofia
+
+Un muro sigue siendo un muro. Una mesa sigue siendo una mesa. Una superficie sigue siendo una superficie.
+
+Visual Assets solo describe como se representa visualmente un objeto. Nunca cambia:
+
+- la logica de negocio;
+- la geometria canonica;
+- la seleccion;
+- el movimiento;
+- el resize;
+- Smart Snap;
+- historial;
+- persistencia operativa;
+- permisos;
+- estado TPV.
+
+El comportamiento nunca debe depender del aspecto visual. Si un elemento parece madera, piedra, agua, sofa o iluminacion, esa apariencia no debe modificar como se selecciona, mueve, redimensiona, publica o valida.
+
+## Arquitectura
+
+El modulo vive en `lib/sala-editor/visual-assets`.
+
+### VisualAsset
+
+`VisualAsset` representa una descripcion visual independiente.
+
+Campos:
+
+- `id`: identificador interno del asset visual.
+- `type`: tipo general del recurso visual.
+- `category`: categoria funcional/visual.
+- `assetKey`: clave estable para localizar una definicion visual.
+- `variant`: variante opcional del asset.
+- `scale`: escala visual del recurso.
+- `rotation`: rotacion visual del recurso.
+- `opacity`: opacidad visual normalizada.
+- `visualZIndex`: orden visual relativo para futuras capas de render.
+- `renderMode`: modo de render previsto.
+- `aiFlags`: flags semanticos para futuras capacidades de IA.
+
+`VisualAsset` no contiene logica. No decide si un objeto se puede mover, borrar, publicar, cobrar o bloquear.
+
+### VisualAssetAssignment
+
+`VisualAssetAssignment` describe una asociacion entre un asset visual y un target del editor.
+
+Responsabilidades:
+
+- identificar el target mediante `family` e `id`;
+- asociar un `VisualAsset` a ese target;
+- permitir que futuras capas sepan que recurso visual corresponde a un objeto sin modificar el modelo del objeto.
+
+Familias de target previstas:
+
+- `surface`;
+- `wall`;
+- `wallAttachment`;
+- `structuralElement`;
+- `operationalInstance`;
+- `spaceBase`.
+
+Esta asociacion no esta integrada en Documento V2 persistido en el estado actual.
+
+### VisualAssetCatalog
+
+`VisualAssetCatalog` es el catalogo de definiciones visuales disponibles para futuras iteraciones.
+
+Responsabilidades:
+
+- declarar `assetKey` conocidos;
+- agruparlos por tipo y categoria;
+- definir etiquetas y descripciones;
+- declarar variantes disponibles;
+- declarar defaults de escala, rotacion, opacidad, z-index visual y modo de render;
+- declarar flags semanticos para IA futura.
+
+El catalogo no contiene imagenes, SVGs, texturas binarias ni componentes de render. Solo contiene definiciones.
+
+### assetKey
+
+`assetKey` es la clave estable del recurso visual.
+
+Ejemplos de formato:
+
+- `surface.wood.default`
+- `surface.stone.default`
+- `water.pool.default`
+- `vegetation.palm.default`
+- `structure.bar.default`
+
+La clave debe ser estable aunque cambie el archivo, proveedor o implementacion de render en el futuro.
+
+### variant
+
+`variant` permite elegir una variante de un asset sin cambiar de `assetKey`.
+
+Ejemplos futuros:
+
+- madera `oak`, `walnut`, `deck`;
+- piedra `light`, `dark`, `irregular`;
+- palmera `short`, `tall`, `wide`.
+
+### scale
+
+`scale` describe escala visual. No modifica el tamano logico ni la geometria canonica del objeto.
+
+### rotation
+
+`rotation` describe rotacion visual del asset. No sustituye la rotacion funcional de un objeto si esa rotacion existe en el modelo del sistema correspondiente.
+
+### opacity
+
+`opacity` describe transparencia visual. No cambia disponibilidad, seleccion, permisos ni logica operativa.
+
+### visualZIndex
+
+`visualZIndex` prepara orden visual relativo para futuras capas realistas. No debe confundirse con jerarquia de interaccion ni ownership de datos.
+
+### renderMode
+
+`renderMode` describe como una futura capa podria pintar el recurso:
+
+- `fill`;
+- `tile`;
+- `cover`;
+- `contain`;
+- `stamp`;
+- `pattern`.
+
+El modo de render no existe como comportamiento visual activo en el canvas actual.
+
+### aiFlags
+
+`aiFlags` prepara integracion futura con IA.
+
+Campos:
+
+- `suggestable`: el asset puede ser sugerido.
+- `replaceable`: el asset puede ser sustituido con confirmacion humana.
+- `generatable`: el asset podria generarse por pipeline futura.
+- `semanticTags`: etiquetas semanticas para busqueda o asistente.
+
+La IA nunca debe publicar, migrar, sustituir o confirmar cambios visuales sin confirmacion humana.
+
+## Relacion con el Editor
+
+Visual Assets sera compartido por:
+
+- Terreno;
+- Estructura;
+- Operacion;
+- Decoracion;
+- IA.
+
+Terreno podra asociar texturas/materiales a superficies. Estructura podra asociar recursos visuales a muros, puertas, cristales, columnas, pilares, separadores o barras. Operacion podra asociar representaciones visuales a mesas, sofas, hamacas u otros elementos operativos. Decoracion podra representar objetos ambientales sin convertirlos en mesas cobrables. IA podra sugerir assets visuales, pero no alterar comportamiento ni publicar sin confirmacion.
+
+Visual Assets no debe modificar Surface System, Structure System ni Operation System. Es una capa de descripcion visual desacoplada.
+
+## Casos de Uso Futuros
+
+Ejemplos previstos, no implementados como render activo:
+
+- madera;
+- piedra;
+- cesped;
+- arena;
+- baldosas;
+- hormigon;
+- agua;
+- piscina;
+- arbol;
+- palmera;
+- olivo;
+- jardinera;
+- roca;
+- fuente;
+- barra;
+- sofa;
+- iluminacion.
+
+Estos ejemplos son claves semanticas y casos de uso para futuras iteraciones. No implican que existan texturas, imagenes, render realista, herramientas nuevas ni integracion en canvas.
+
+## Principios
+
+- El comportamiento nunca depende del aspecto visual.
+- El aspecto visual puede cambiar sin modificar el modelo.
+- Los assets nunca contienen logica.
+- El render debe permanecer desacoplado.
+- Las texturas, iconos o imagenes complejas no deben incrustarse dentro de Surface System, Structure System u Operation System.
+- Toda representacion visual compleja debe pasar por Visual Assets.
+- Visual Assets no sustituye Smart Snap, historial, seleccion, interaccion ni persistencia.
+- Visual Assets no convierte decoracion en operacion.
+
+---
+
 ## 6. Smart Snap Engine
 
 ### 6.1 Arquitectura
@@ -1196,6 +1409,7 @@ Esto protege documentos anteriores a Surface System y Structure Family Pass 1.
 - Historial unico con undo/redo sobre snapshots.
 - Persistencia de borrador V2 en `salaEditorMaps/draft`.
 - Normalizacion de drafts antiguos para arrays opcionales.
+- Arquitectura Visual Assets como contrato independiente para apariencia visual futura, sin render activo ni integracion en Documento V2 persistido.
 
 ---
 
@@ -1263,6 +1477,7 @@ Esto protege documentos anteriores a Surface System y Structure Family Pass 1.
 
 ### Decoracion
 
+- Integracion real con Visual Assets.
 - Familias decorativas reales.
 - Criterio de que es estructura, decoracion u operacion.
 - Evitar que decoracion se publique como mesa cobrable.
@@ -1272,6 +1487,7 @@ Esto protege documentos anteriores a Surface System y Structure Family Pass 1.
 - Asistente V2 que genere `SalaEditorDocument`.
 - Importacion asistida desde legacy.
 - Sugerencias revisables.
+- Sugerencias de Visual Assets con confirmacion humana.
 - Confirmacion humana obligatoria antes de publicar.
 
 ---
@@ -1285,10 +1501,13 @@ Esto protege documentos anteriores a Surface System y Structure Family Pass 1.
 - Mantener canvas unificado por capas.
 - Mantener Smart Snap como motor compartido.
 - Mantener historial unico.
+- Mantener Visual Assets como unica arquitectura para representacion visual compleja.
 - Mantener separacion entre UI, documento, adaptadores y persistencia.
 - Mantener `restaurantId` como frontera obligatoria en persistencia.
 - No introducir logica Firestore dentro de componentes visuales.
 - No mezclar elementos decorativos con mesas operativas.
+- No incrustar texturas, iconos o imagenes complejas dentro de Surface System, Structure System u Operation System.
+- No hacer depender comportamiento, seleccion, Smart Snap, historial o persistencia del asset visual.
 - No documentar placeholders como funcionalidades reales.
 - No crear una tercera fuente de verdad para mapas/mesas sin decision arquitectonica.
 - No romper TPV, KDS, Carta, Firestore ni runtime de produccion al iterar el Editor V2.

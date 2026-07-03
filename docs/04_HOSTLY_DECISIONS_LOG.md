@@ -151,6 +151,28 @@ Consecuencias:
   fases, canvas, documento, historial, Smart Snap, seleccion o persistencia.
 - Las funcionalidades pendientes no deben documentarse como implementadas.
 
+### H-017 - Visual Assets es la arquitectura canonica para visuales complejos del Editor V2
+
+**Estado:** aceptada.
+
+Visual Assets sera la unica arquitectura permitida para representar elementos visuales
+complejos del Editor V2. No se permitira incrustar texturas, iconos, imagenes,
+recursos graficos complejos o decisiones de apariencia realista directamente dentro de
+Surface System, Structure System u Operation System.
+
+La apariencia visual debe permanecer desacoplada del comportamiento. Un muro sigue
+siendo un muro, una mesa sigue siendo una mesa y una superficie sigue siendo una
+superficie, aunque su representacion visual cambie.
+
+Consecuencias:
+
+- Toda representacion visual compleja debera pasar por Visual Assets.
+- Los modelos de interaccion, Smart Snap, historial y persistencia no deben depender
+  de texturas, imagenes ni variantes visuales.
+- Los assets no contendran logica de negocio ni reglas de interaccion.
+- La IA podra sugerir Visual Assets en el futuro, pero no podra sustituirlos,
+  publicarlos ni confirmarlos sin intervencion humana.
+
 ---
 
 ## Decisiones pendientes de cierre
