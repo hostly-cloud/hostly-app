@@ -14,6 +14,7 @@ import type {
   SurfaceObjectDraft,
 } from "@/lib/sala-editor/surface/surface-object";
 import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
+import type { SurfaceEditOutcome } from "@/lib/sala-editor/surface/surface-interaction";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
 import { SalaEspaciosEmptyState } from "@/components/sala-editor/panels/sala-espacios-empty-state";
@@ -41,7 +42,17 @@ export type SalaEditorWorkspaceCanvasProps = {
   activeStructuralToolboxItem: StructuralToolboxItem | null;
   activeSurfaceMaterial?: SurfaceMaterialKind | null;
   surfaceObjects?: SurfaceObject[];
+  selectedSurfaceObjectId?: string | null;
   onSurfaceObjectCreate?: (draft: SurfaceObjectDraft) => void;
+  onSurfaceObjectSelect?: (surfaceId: string | null) => void;
+  onSurfaceObjectClearSelection?: () => void;
+  onSurfaceObjectUpdate?: (
+    surfaceId: string,
+    patch: Partial<Omit<SurfaceObject, "id">>,
+  ) => void;
+  onSurfaceObjectDelete?: (surfaceId: string) => void;
+  onSurfaceObjectMoveStart?: () => void;
+  onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
   walls?: SalaWallSegment[];
   wallAttachments?: SalaWallAttachment[];
   wallDraft?: SalaWallDrawingDraft | null;
@@ -108,7 +119,14 @@ export function SalaEditorWorkspaceCanvas({
   activeStructuralToolboxItem,
   activeSurfaceMaterial = null,
   surfaceObjects = [],
+  selectedSurfaceObjectId = null,
   onSurfaceObjectCreate,
+  onSurfaceObjectSelect,
+  onSurfaceObjectClearSelection,
+  onSurfaceObjectUpdate,
+  onSurfaceObjectDelete,
+  onSurfaceObjectMoveStart,
+  onSurfaceObjectMoveEnd,
   walls = [],
   wallAttachments = [],
   wallDraft = null,
@@ -191,7 +209,14 @@ export function SalaEditorWorkspaceCanvas({
           restaurantId={restaurantId}
           activeSurfaceMaterial={activeSurfaceMaterial}
           surfaceObjects={surfaceObjects}
+          selectedSurfaceObjectId={selectedSurfaceObjectId}
           onSurfaceObjectCreate={onSurfaceObjectCreate}
+          onSurfaceObjectSelect={onSurfaceObjectSelect}
+          onSurfaceObjectClearSelection={onSurfaceObjectClearSelection}
+          onSurfaceObjectUpdate={onSurfaceObjectUpdate}
+          onSurfaceObjectDelete={onSurfaceObjectDelete}
+          onSurfaceObjectMoveStart={onSurfaceObjectMoveStart}
+          onSurfaceObjectMoveEnd={onSurfaceObjectMoveEnd}
         />
       </div>
     );

@@ -1,5 +1,9 @@
 import type { SalaPoint } from "@/lib/sala-editor/geometry/wall-geometry";
-import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
+import type {
+  SurfaceMaterialKind,
+  SurfaceObject,
+} from "@/lib/sala-editor/surface/surface-object";
+import type { EditorInteractionSession } from "@/lib/sala-editor/canvas/editor-interaction";
 
 export type SurfaceRect = {
   x: number;
@@ -13,6 +17,17 @@ export type SurfaceCreationDraft = {
   origin: SalaPoint;
   current: SalaPoint;
   rect: SurfaceRect;
+};
+
+export type SurfaceInteractionMode = "move";
+export type SurfaceEditOutcome = "complete" | "cancel";
+
+export type SurfaceMoveSession = EditorInteractionSession<
+  SurfaceObject,
+  SurfaceInteractionMode
+> & {
+  active: boolean;
+  pointerType: string;
 };
 
 export const SURFACE_MIN_RECT_SIZE = 8;
@@ -45,4 +60,24 @@ export function createSurfaceRectFromPoints(
 
 export function isSurfaceRectUsable(rect: SurfaceRect): boolean {
   return rect.width >= SURFACE_MIN_RECT_SIZE && rect.height >= SURFACE_MIN_RECT_SIZE;
+}
+
+export function translateSurfaceObject(
+  surface: SurfaceObject,
+  delta: SalaPoint,
+  gridSize: number,
+): SurfaceObject {
+  const snapped = snapSurfacePointToGrid(
+    {
+      x: surface.x + delta.x,
+      y: surface.y + delta.y,
+    },
+    gridSize,
+  );
+
+  return {
+    ...surface,
+    x: snapped.x,
+    y: snapped.y,
+  };
 }

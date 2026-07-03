@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -19,7 +20,10 @@ import {
   createSurfaceRectFromPoints,
   isSurfaceRectUsable,
   snapSurfacePointToGrid,
+  translateSurfaceObject,
   type SurfaceCreationDraft,
+  type SurfaceEditOutcome,
+  type SurfaceMoveSession,
   type SurfaceRect,
 } from "@/lib/sala-editor/surface/surface-interaction";
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
@@ -37,7 +41,17 @@ export type SalaTerrenoWorkspaceProps = {
   restaurantId: string;
   activeSurfaceMaterial?: SurfaceMaterialKind | null;
   surfaceObjects?: SurfaceObject[];
+  selectedSurfaceObjectId?: string | null;
   onSurfaceObjectCreate?: (draft: SurfaceObjectDraft) => void;
+  onSurfaceObjectSelect?: (surfaceId: string | null) => void;
+  onSurfaceObjectClearSelection?: () => void;
+  onSurfaceObjectUpdate?: (
+    surfaceId: string,
+    patch: Partial<Omit<SurfaceObject, "id">>,
+  ) => void;
+  onSurfaceObjectDelete?: (surfaceId: string) => void;
+  onSurfaceObjectMoveStart?: () => void;
+  onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
 };
 
 type SurfaceCanvasContentProps = {
@@ -45,7 +59,17 @@ type SurfaceCanvasContentProps = {
   gridSize: number;
   activeSurfaceMaterial: SurfaceMaterialKind | null;
   surfaceObjects: readonly SurfaceObject[];
+  selectedSurfaceObjectId: string | null;
   onSurfaceObjectCreate?: (draft: SurfaceObjectDraft) => void;
+  onSurfaceObjectSelect?: (surfaceId: string | null) => void;
+  onSurfaceObjectClearSelection?: () => void;
+  onSurfaceObjectUpdate?: (
+    surfaceId: string,
+    patch: Partial<Omit<SurfaceObject, "id">>,
+  ) => void;
+  onSurfaceObjectDelete?: (surfaceId: string) => void;
+  onSurfaceObjectMoveStart?: () => void;
+  onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
 };
 
 function createSurfaceStyle(
@@ -69,12 +93,20 @@ function SalaTerrenoCanvasContent({
   gridSize,
   activeSurfaceMaterial,
   surfaceObjects,
+  selectedSurfaceObjectId,
   onSurfaceObjectCreate,
+  onSurfaceObjectSelect,
+  onSurfaceObjectClearSelection,
+  onSurfaceObjectUpdate,
+  onSurfaceObjectDelete,
+  onSurfaceObjectMoveStart,
+  onSurfaceObjectMoveEnd,
 }: SurfaceCanvasContentProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<SurfaceCreationDraft | null>(null);
+  const [moveSession, setMoveSession] = useState<SurfaceMoveSession | null>(null);
   const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
 
   const resolveLogicalPoint = useCallback(
@@ -102,6 +134,7 @@ function SalaTerrenoCanvasContent({
   const handlePointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
+      onSurfaceObjectClearSelection?.();
       if (!activeSurfaceMaterial) return;
       const point = resolveLogicalPoint(event.clientX, event.clientY);
       if (!point) return;
@@ -114,7 +147,7 @@ function SalaTerrenoCanvasContent({
         rect: createSurfaceRectFromPoints(point, point),
       });
     },
-    [activeSurfaceMaterial, resolveLogicalPoint],
+    [activeSurfaceMaterial, onSurfaceObjectClearSelection, resolveLogicalPoint],
   );
 
   const handlePointerMove = useCallback(
@@ -133,6 +166,95 @@ function SalaTerrenoCanvasContent({
       );
     },
     [resolveLogicalPoint],
+  );
+
+  const cancelMoveSession = useCallback(() => {
+    setMoveSession((session) => {
+      if (!session) return null;
+      if (session.active) {
+        onSurfaceObjectUpdate?.(session.objectId, {
+          x: session.originObject.x,
+          y: session.originObject.y,
+        });
+        onSurfaceObjectMoveEnd?.("cancel");
+      }
+      return null;
+    });
+  }, [onSurfaceObjectMoveEnd, onSurfaceObjectUpdate]);
+
+  const finishMoveSession = useCallback(() => {
+    setMoveSession((session) => {
+      if (!session) return null;
+      if (session.active) {
+        onSurfaceObjectMoveEnd?.("complete");
+      }
+      return null;
+    });
+  }, [onSurfaceObjectMoveEnd]);
+
+  const createSurfacePointerHandlers = useCallback(
+    (surface: SurfaceObject) => ({
+      onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+        event.stopPropagation();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        const point = resolveLogicalPoint(event.clientX, event.clientY);
+        if (!point) return;
+        onSurfaceObjectSelect?.(surface.id);
+        setMoveSession({
+          objectId: surface.id,
+          mode: "move",
+          originPointer: point,
+          originObject: surface,
+          active: false,
+          pointerType: event.pointerType,
+        });
+      },
+      onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        const point = resolveLogicalPoint(event.clientX, event.clientY);
+        if (!point) return;
+
+        setMoveSession((session) => {
+          if (!session || session.objectId !== surface.id) return session;
+          const delta = {
+            x: point.x - session.originPointer.x,
+            y: point.y - session.originPointer.y,
+          };
+          const shouldActivate =
+            session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
+          if (!shouldActivate) return session;
+          if (!session.active) onSurfaceObjectMoveStart?.();
+
+          const moved = translateSurfaceObject(session.originObject, delta, gridSize);
+          onSurfaceObjectUpdate?.(surface.id, { x: moved.x, y: moved.y });
+          return { ...session, active: true };
+        });
+      },
+      onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        finishMoveSession();
+      },
+      onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        cancelMoveSession();
+      },
+    }),
+    [
+      cancelMoveSession,
+      finishMoveSession,
+      gridSize,
+      onSurfaceObjectMoveStart,
+      onSurfaceObjectSelect,
+      onSurfaceObjectUpdate,
+      resolveLogicalPoint,
+    ],
   );
 
   const finishDraft = useCallback(
@@ -160,18 +282,80 @@ function SalaTerrenoCanvasContent({
     [espacioId, onSurfaceObjectCreate],
   );
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (draft) {
+        event.preventDefault();
+        setDraft(null);
+        return;
+      }
+      if (moveSession) {
+        event.preventDefault();
+        cancelMoveSession();
+        return;
+      }
+      if (selectedSurfaceObjectId) {
+        event.preventDefault();
+        onSurfaceObjectClearSelection?.();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    cancelMoveSession,
+    draft,
+    moveSession,
+    onSurfaceObjectClearSelection,
+    selectedSurfaceObjectId,
+  ]);
+
   return (
     <>
-      <div className="hostly-sala-terreno-surfaces" aria-hidden>
+      <div className="hostly-sala-terreno-surfaces">
         {surfaceObjects
           .filter((surface) => surface.visible !== false)
-          .map((surface) => (
-            <div
-              key={surface.id}
-              className="hostly-sala-surface-object"
-              style={createSurfaceStyle(surface, surface.material, coordinateScale)}
-            />
-          ))}
+          .map((surface) => {
+            const selected = surface.id === selectedSurfaceObjectId;
+            const dragging = moveSession?.objectId === surface.id && moveSession.active;
+            return (
+              <div
+                key={surface.id}
+                className="hostly-sala-surface-object-wrap"
+                style={createSurfaceStyle(surface, surface.material, coordinateScale)}
+              >
+                <button
+                  type="button"
+                  className={[
+                    "hostly-sala-surface-object",
+                    selected ? "is-selected" : "",
+                    dragging ? "is-dragging" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-label={`Superficie de ${getSurfaceMaterialCatalogItem(surface.material)?.label ?? "material"}`}
+                  title="Superficie"
+                  {...createSurfacePointerHandlers(surface)}
+                />
+                {selected ? (
+                  <button
+                    type="button"
+                    className="hostly-sala-surface-object__delete-btn"
+                    aria-label="Eliminar superficie"
+                    title="Eliminar superficie"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSurfaceObjectDelete?.(surface.id);
+                    }}
+                  >
+                    🗑
+                  </button>
+                ) : null}
+              </div>
+            );
+          })}
         {draft && previewStyle ? (
           <div
             className="hostly-sala-surface-object hostly-sala-surface-object--preview"
@@ -214,7 +398,14 @@ export function SalaTerrenoWorkspace({
   restaurantId,
   activeSurfaceMaterial = null,
   surfaceObjects = [],
+  selectedSurfaceObjectId = null,
   onSurfaceObjectCreate,
+  onSurfaceObjectSelect,
+  onSurfaceObjectClearSelection,
+  onSurfaceObjectUpdate,
+  onSurfaceObjectDelete,
+  onSurfaceObjectMoveStart,
+  onSurfaceObjectMoveEnd,
 }: SalaTerrenoWorkspaceProps) {
   const base = normalizeSalaEspacioBase(espacio.base);
   const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
@@ -240,7 +431,14 @@ export function SalaTerrenoWorkspace({
         gridSize={base.grid.size}
         activeSurfaceMaterial={activeSurfaceMaterial}
         surfaceObjects={surfaceObjects}
+        selectedSurfaceObjectId={selectedSurfaceObjectId}
         onSurfaceObjectCreate={onSurfaceObjectCreate}
+        onSurfaceObjectSelect={onSurfaceObjectSelect}
+        onSurfaceObjectClearSelection={onSurfaceObjectClearSelection}
+        onSurfaceObjectUpdate={onSurfaceObjectUpdate}
+        onSurfaceObjectDelete={onSurfaceObjectDelete}
+        onSurfaceObjectMoveStart={onSurfaceObjectMoveStart}
+        onSurfaceObjectMoveEnd={onSurfaceObjectMoveEnd}
       />
       {!activeMaterial && surfaceObjects.length === 0 ? (
         <div className="hostly-sala-terreno-placeholder">

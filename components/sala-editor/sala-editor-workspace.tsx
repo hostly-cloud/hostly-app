@@ -32,6 +32,7 @@ import type {
   WallEditOutcome,
 } from "@/lib/sala-editor/canvas/wall-interaction";
 import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
+import type { SurfaceEditOutcome } from "@/lib/sala-editor/surface/surface-interaction";
 import {
   loadSalaEditorDraft,
   saveSalaEditorDraft,
@@ -90,6 +91,7 @@ export function SalaEditorWorkspace({
     activeStructuralToolboxItem,
     activeSurfaceMaterial,
     surfaceObjectsInEspacio,
+    selectedSurfaceObjectId,
     activeOperationalElementType,
     activeOperationalVisualVariant,
     activeOperationalCatalogItem,
@@ -102,6 +104,10 @@ export function SalaEditorWorkspace({
     selectTool,
     selectSurfaceMaterial,
     addSurfaceObject,
+    updateSurfaceObject,
+    removeSurfaceObject,
+    selectSurfaceObject,
+    clearSurfaceSelection,
     selectOperationalElement,
     placeOperationalElementAt,
     selectOperationalElementInstance,
@@ -508,6 +514,21 @@ export function SalaEditorWorkspace({
     [addWallAttachment, clearWallSelection],
   );
 
+  const handleSurfaceMoveStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleSurfaceMoveEnd = useCallback(
+    (outcome: SurfaceEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction("surface.move", documentSnapshotRef.current!);
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
   const handleSelectWallAttachment = useCallback(
     (attachmentId: string) => {
       clearWallSelection();
@@ -702,9 +723,16 @@ export function SalaEditorWorkspace({
             activeStructuralToolboxItem={activeStructuralToolboxItem}
             activeSurfaceMaterial={activeSurfaceMaterial}
             surfaceObjects={surfaceObjectsInEspacio}
+            selectedSurfaceObjectId={selectedSurfaceObjectId}
             onSurfaceObjectCreate={(draft: SurfaceObjectDraft) => {
               addSurfaceObject(draft);
             }}
+            onSurfaceObjectSelect={selectSurfaceObject}
+            onSurfaceObjectClearSelection={clearSurfaceSelection}
+            onSurfaceObjectUpdate={updateSurfaceObject}
+            onSurfaceObjectDelete={removeSurfaceObject}
+            onSurfaceObjectMoveStart={handleSurfaceMoveStart}
+            onSurfaceObjectMoveEnd={handleSurfaceMoveEnd}
             walls={wallsInEspacio}
             wallAttachments={wallAttachmentsInEspacio}
             wallDraft={wallDraft}

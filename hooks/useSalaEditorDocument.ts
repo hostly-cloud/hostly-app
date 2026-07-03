@@ -89,6 +89,8 @@ export function useSalaEditorDocument({
     useState<ActiveOperationalElementSelection>(null);
   const [activeSurfaceMaterial, setActiveSurfaceMaterial] =
     useState<SurfaceMaterialKind | null>(null);
+  const [selectedSurfaceObjectId, setSelectedSurfaceObjectId] =
+    useState<string | null>(null);
   const [selectedOperationalElementInstanceId, setSelectedOperationalElementInstanceId] =
     useState<string | null>(null);
   const [selectedWallAttachmentId, setSelectedWallAttachmentId] =
@@ -100,6 +102,7 @@ export function useSalaEditorDocument({
     setActiveTool(null);
     setActiveOperationalElement(null);
     setActiveSurfaceMaterial(null);
+    setSelectedSurfaceObjectId(null);
     setSelectedOperationalElementInstanceId(null);
     setSelectedWallAttachmentId(null);
     historyApi?.reset();
@@ -111,6 +114,7 @@ export function useSalaEditorDocument({
     setActiveTool(null);
     setActiveOperationalElement(null);
     setActiveSurfaceMaterial(null);
+    setSelectedSurfaceObjectId(null);
     setSelectedOperationalElementInstanceId(null);
     setSelectedWallAttachmentId(null);
   }, [restaurantId]);
@@ -183,6 +187,7 @@ export function useSalaEditorDocument({
 
   const selectSurfaceMaterial = useCallback((material: SurfaceMaterialKind) => {
     setActiveSurfaceMaterial(material);
+    setSelectedSurfaceObjectId(null);
   }, []);
 
   const surfaceObjectsInEspacio = useMemo(
@@ -197,12 +202,68 @@ export function useSalaEditorDocument({
 
   const addSurfaceObject = useCallback((draft: SurfaceObjectDraft): SurfaceObject => {
     const surface = createSurfaceObject(draft);
-    setDocument((prev) => ({
-      ...prev,
-      surfaceObjects: [...prev.surfaceObjects, surface],
-      updatedAt: Date.now(),
-    }));
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        surfaceObjects: [...prev.surfaceObjects, surface],
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("surface.create", previousDocument, nextDocument);
+    }
+
+    setSelectedSurfaceObjectId(surface.id);
     return surface;
+  }, [historyApi]);
+
+  const updateSurfaceObject = useCallback(
+    (surfaceId: string, patch: Partial<Omit<SurfaceObject, "id">>) => {
+      setDocument((prev) => ({
+        ...prev,
+        surfaceObjects: prev.surfaceObjects.map((surface) =>
+          surface.id === surfaceId ? { ...surface, ...patch } : surface,
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    [],
+  );
+
+  const removeSurfaceObject = useCallback((surfaceId: string) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        surfaceObjects: prev.surfaceObjects.filter(
+          (surface) => surface.id !== surfaceId,
+        ),
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("surface.delete", previousDocument, nextDocument);
+    }
+    setSelectedSurfaceObjectId((current) => (current === surfaceId ? null : current));
+  }, [historyApi]);
+
+  const selectSurfaceObject = useCallback((surfaceId: string | null) => {
+    setSelectedSurfaceObjectId(surfaceId);
+  }, []);
+
+  const clearSurfaceSelection = useCallback(() => {
+    setSelectedSurfaceObjectId(null);
   }, []);
 
   const operationalElementInstancesInEspacio = useMemo(
@@ -669,6 +730,7 @@ export function useSalaEditorDocument({
         setActiveTool(createStructuralActiveTool(DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND));
         setActiveOperationalElement(null);
         setActiveSurfaceMaterial(null);
+        setSelectedSurfaceObjectId(null);
         setSelectedOperationalElementInstanceId(null);
       } else if (phase === "terreno") {
         setActiveTool(null);
@@ -677,6 +739,7 @@ export function useSalaEditorDocument({
       } else if (phase === "operacion") {
         setActiveTool(null);
         setActiveSurfaceMaterial(null);
+        setSelectedSurfaceObjectId(null);
         setActiveOperationalElement(
           createActiveOperationalElement(DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE),
         );
@@ -685,6 +748,7 @@ export function useSalaEditorDocument({
         setActiveTool(null);
         setActiveOperationalElement(null);
         setActiveSurfaceMaterial(null);
+        setSelectedSurfaceObjectId(null);
         setSelectedOperationalElementInstanceId(null);
       }
     },
@@ -697,6 +761,7 @@ export function useSalaEditorDocument({
       navigation: selectSalaEspacioInNavigation(prev.navigation, espacioId),
       updatedAt: Date.now(),
     }));
+    setSelectedSurfaceObjectId(null);
     setSelectedOperationalElementInstanceId(null);
   }, []);
 
@@ -797,7 +862,12 @@ export function useSalaEditorDocument({
     activeSurfaceMaterial,
     selectSurfaceMaterial,
     surfaceObjectsInEspacio,
+    selectedSurfaceObjectId,
+    selectSurfaceObject,
+    clearSurfaceSelection,
     addSurfaceObject,
+    updateSurfaceObject,
+    removeSurfaceObject,
     activeOperationalCatalogItem,
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,
