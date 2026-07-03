@@ -7,8 +7,8 @@ export function BenefitsSection() {
       <MarketingContainer>
         <SectionHeading
           eyebrow="Beneficios"
-          title="Menos fricción. Más control. Mejor servicio."
-          description="Hostly convierte operaciones complejas en flujos claros para dueños, gerencia y equipo de sala."
+          title="Menos clics. Más control. Operación más rápida."
+          description="Hostly convierte el trabajo diario del restaurante en flujos claros para gerencia, sala, barra y cocina."
           align="center"
           className="mx-auto"
         />

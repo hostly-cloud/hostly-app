@@ -7,8 +7,8 @@ export function ProblemsSection() {
       <MarketingContainer>
         <SectionHeading
           eyebrow="El problema"
-          title="La hostelería moderna no puede operar con herramientas del pasado."
-          description="Cada día se pierde margen, velocidad y calidad de servicio por fricción operativa evitable."
+          title="La hostelería moderna necesita una operación más visual."
+          description="Cuando la sala, la carta y el TPV no están conectados, el equipo pierde velocidad y contexto en pleno servicio."
         />
 
         <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-5">

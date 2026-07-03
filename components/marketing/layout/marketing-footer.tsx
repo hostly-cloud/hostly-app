@@ -38,7 +38,7 @@ export function MarketingFooter() {
               wordmarkClassName="text-[15px] font-semibold tracking-[-0.03em]"
             />
             <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-[color:var(--hostly-ink-muted)]">
-              Plataforma operativa premium para restaurantes que quieren centralizar servicio, cocina, stock y decisiones.
+              Plataforma SaaS visual para restaurantes que quieren conectar TPV, carta, mesas y operación diaria.
             </p>
             <a
               href={`mailto:${marketingFooter.contactEmail}`}

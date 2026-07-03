@@ -2,7 +2,6 @@
 
 import {
   useCallback,
-  useMemo,
   useRef,
   type ReactNode,
   type PointerEvent,
@@ -19,8 +18,9 @@ import {
   type OperationalInstanceResizeCorner,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
-import type { OperationalSnapGuides } from "@/lib/sala-editor/canvas/operational-snap";
+import type { SnapGuide } from "@/lib/sala-editor/snap";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
+import { SalaSmartSnapGuidesLayer } from "@/components/sala-editor/panels/sala-smart-snap-guides-layer";
 import { SalaEditorCanvasToolHint } from "@/components/sala-editor/sala-editor-canvas-tool-hint";
 import {
   getOperationalToolHint,
@@ -35,7 +35,6 @@ import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { clientToStagePoint } from "@/lib/sala-editor/canvas/canvas-viewport";
 import { unscaleEditorPoint } from "@/lib/sala-editor/canvas/editor-visual-scale";
 import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
-import { SalaCanvasSnapGuides } from "@/components/sala-editor/panels/sala-canvas-snap-guides";
 import { SalaOperationalInstanceCanvasObject } from "@/components/sala-editor/panels/sala-operational-instance-canvas-object";
 
 export type SalaOperacionWorkspaceProps = {
@@ -47,7 +46,7 @@ export type SalaOperacionWorkspaceProps = {
   draggingInstanceId: string | null;
   resizingInstanceId: string | null;
   dropAnimatingInstanceId: string | null;
-  snapGuides?: OperationalSnapGuides;
+  snapGuides?: SnapGuide[];
   isDragging: () => boolean;
   isResizing: () => boolean;
   onCanvasPointerDown: (point: { x: number; y: number }) => void;
@@ -223,15 +222,6 @@ function SalaOperacionCanvasContent({
     [canvasViewport, coordinateScale],
   );
 
-  const scaledSnapGuides = useMemo(() => {
-    if (!snapGuides) return undefined;
-    if (coordinateScale === 1) return snapGuides;
-    return {
-      v: snapGuides.v.map((x) => x * coordinateScale),
-      h: snapGuides.h.map((y) => y * coordinateScale),
-    };
-  }, [coordinateScale, snapGuides]);
-
   const handleCanvasPointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
@@ -302,7 +292,10 @@ function SalaOperacionCanvasContent({
         aria-hidden
         onPointerDown={handleCanvasPointerDown}
       />
-      {scaledSnapGuides ? <SalaCanvasSnapGuides guides={scaledSnapGuides} /> : null}
+      <SalaSmartSnapGuidesLayer
+        guides={snapGuides ?? []}
+        coordinateScale={coordinateScale}
+      />
       <SalaOperationalInstancesLayer
         instances={instances}
         selectedInstanceId={selectedInstanceId}

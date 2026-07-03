@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import "@/components/marketing/marketing.css";
 
 export const metadata: Metadata = {
-  title: "Hostly — Plataforma operativa para restaurantes",
+  title: "Hostly — Plataforma SaaS visual para hostelería",
   description:
-    "Gestiona TPV, cocina, stock, reservas, compras, analytics e IA desde una sola plataforma premium para hostelería.",
+    "Controla TPV, carta, mesas y operación desde un único sistema visual diseñado para restaurantes, terrazas, hoteles y negocios con varios espacios.",
   openGraph: {
-    title: "Hostly — Plataforma operativa para restaurantes",
+    title: "Hostly — Plataforma SaaS visual para hostelería",
     description:
-      "TPV, cocina, stock, reservas, compras, análisis e inteligencia artificial en una sola plataforma.",
+      "TPV, carta, mesas y operación conectados en una sola plataforma visual para hostelería.",
     type: "website",
     images: [
       {
@@ -21,9 +21,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Hostly — Plataforma operativa para restaurantes",
+    title: "Hostly — Plataforma SaaS visual para hostelería",
     description:
-      "TPV, cocina, stock, reservas, compras, análisis e inteligencia artificial en una sola plataforma.",
+      "TPV, carta, mesas y operación conectados en una sola plataforma visual para hostelería.",
     images: ["/branding/og-image.png"],
   },
 };

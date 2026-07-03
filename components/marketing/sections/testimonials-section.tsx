@@ -6,9 +6,9 @@ export function TestimonialsSection() {
     <section id="testimonios" className="marketing-section scroll-mt-24">
       <MarketingContainer>
         <SectionHeading
-          eyebrow="Clientes"
-          title="Equipos reales. Resultados reales."
-          description="Restauradores que buscaban claridad operativa y encontraron una plataforma que se siente enterprise desde el primer día."
+          eyebrow="Casos de uso"
+          title="Diseñado para operaciones reales de hostelería."
+          description="Hostly encaja en negocios donde la sala, la carta, las mesas y los espacios cambian durante el servicio."
           align="center"
           className="mx-auto"
         />

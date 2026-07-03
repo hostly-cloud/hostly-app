@@ -21,11 +21,16 @@ import {
   getOperationalInstanceCanvasSize,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
+import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import {
-  EMPTY_OPERATIONAL_SNAP_GUIDES,
   snapOperationalCenterPosition,
-  type OperationalSnapGuides,
 } from "@/lib/sala-editor/canvas/operational-snap";
+import {
+  SNAP_DISTANCE_PX,
+  snapRectToPeers,
+  type SnapGuide,
+  type SnapRect,
+} from "@/lib/sala-editor/snap";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import type {
   WallEditMode,
@@ -57,6 +62,42 @@ export type SalaEditorWorkspaceProps = {
   draftPersistenceEnabled?: boolean;
 };
 
+const EMPTY_SMART_SNAP_GUIDES: SnapGuide[] = [];
+
+function operationalInstanceToSnapRect(
+  instance: OperationalElementInstance,
+): SnapRect {
+  const size = getOperationalInstanceCanvasSize(instance);
+  return {
+    id: instance.id,
+    x: instance.position.x - size.width / 2,
+    y: instance.position.y - size.height / 2,
+    width: size.width,
+    height: size.height,
+  };
+}
+
+function operationalPositionToSnapRect(
+  instance: OperationalElementInstance,
+  position: OperationalElementPosition,
+): SnapRect {
+  const size = getOperationalInstanceCanvasSize(instance);
+  return {
+    id: instance.id,
+    x: position.x - size.width / 2,
+    y: position.y - size.height / 2,
+    width: size.width,
+    height: size.height,
+  };
+}
+
+function snapRectToOperationalPosition(rect: SnapRect): OperationalElementPosition {
+  return {
+    x: Math.round(rect.x + rect.width / 2),
+    y: Math.round(rect.y + rect.height / 2),
+  };
+}
+
 /**
  * Workspace del editor de sala V2.
  * Estado 100 % local; gestor visual + herramienta activa + paredes (Fase 2.3).
@@ -70,7 +111,7 @@ export function SalaEditorWorkspace({
 }: SalaEditorWorkspaceProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [operationalSnapGuides, setOperationalSnapGuides] =
-    useState<OperationalSnapGuides>(EMPTY_OPERATIONAL_SNAP_GUIDES);
+    useState<SnapGuide[]>(EMPTY_SMART_SNAP_GUIDES);
   const [draftReady, setDraftReady] = useState(!draftPersistenceEnabled);
   const [legacyHydratedReadOnly, setLegacyHydratedReadOnly] = useState(false);
   const draftLoadSeqRef = useRef(0);
@@ -251,22 +292,35 @@ export function SalaEditorWorkspace({
   }, [historyApi]);
 
   const clearOperationalSnapGuides = useCallback(() => {
-    setOperationalSnapGuides(EMPTY_OPERATIONAL_SNAP_GUIDES);
+    setOperationalSnapGuides(EMPTY_SMART_SNAP_GUIDES);
   }, []);
 
   const applyOperationalSnap = useCallback(
     (
       instanceId: string,
       raw: OperationalElementPosition,
-      size: { width: number; height: number },
+      instance: OperationalElementInstance,
     ) => {
-      const result = snapOperationalCenterPosition(raw, {
-        draggingInstanceId: instanceId,
-        instances: operationalElementInstancesInEspacio,
-        size,
-      });
+      if (instance.elementType !== "TABLE") {
+        setOperationalSnapGuides(EMPTY_SMART_SNAP_GUIDES);
+        return raw;
+      }
+
+      const peers = operationalElementInstancesInEspacio
+        .filter(
+          (candidate) =>
+            candidate.id !== instanceId && candidate.elementType === "TABLE",
+        )
+        .map(operationalInstanceToSnapRect);
+
+      const result = snapRectToPeers(
+        operationalPositionToSnapRect(instance, raw),
+        peers,
+        { threshold: SNAP_DISTANCE_PX },
+      );
+
       setOperationalSnapGuides(result.guides);
-      return result.position;
+      return snapRectToOperationalPosition(result.rect);
     },
     [operationalElementInstancesInEspacio],
   );
@@ -294,7 +348,7 @@ export function SalaEditorWorkspace({
       const snapped = applyOperationalSnap(
         instanceId,
         position,
-        getOperationalInstanceCanvasSize(instance),
+        instance,
       );
       updateOperationalElement(instanceId, { position: snapped });
     },

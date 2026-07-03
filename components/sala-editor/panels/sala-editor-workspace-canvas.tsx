@@ -34,7 +34,7 @@ import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operation
 import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import type { WallPointerPayload } from "@/lib/sala-editor/canvas/wall-interaction";
-import type { OperationalSnapGuides } from "@/lib/sala-editor/canvas/operational-snap";
+import type { SnapGuide } from "@/lib/sala-editor/snap";
 import {
   createSpaceWorkspaceScope,
   getSpaceWorkspaceKey,
@@ -89,7 +89,7 @@ export type SalaEditorWorkspaceCanvasProps = {
   draggingOperationalInstanceId?: string | null;
   resizingOperationalInstanceId?: string | null;
   dropAnimatingOperationalInstanceId?: string | null;
-  operationalSnapGuides?: OperationalSnapGuides;
+  operationalSnapGuides?: SnapGuide[];
   isOperationalDragging?: () => boolean;
   isOperationalResizing?: () => boolean;
   onOperationalCanvasPointerDown?: (point: { x: number; y: number }) => void;

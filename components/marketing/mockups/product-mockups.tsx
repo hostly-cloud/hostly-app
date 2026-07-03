@@ -178,10 +178,10 @@ function FloorMapPanel() {
 }
 
 const heroTabs = [
-  { id: "analytics", label: "Analytics", icon: BarChart3, panel: AnalyticsPanel },
+  { id: "analytics", label: "Operación", icon: BarChart3, panel: AnalyticsPanel },
   { id: "tpv", label: "TPV", icon: Receipt, panel: TpvPanel },
   { id: "kds", label: "Cocina", icon: ChefHat, panel: KdsPanel },
-  { id: "mesas", label: "Mesas", icon: LayoutGrid, panel: FloorMapPanel },
+  { id: "mesas", label: "Mapa visual", icon: LayoutGrid, panel: FloorMapPanel },
 ] as const;
 
 export function HeroProductMockup() {
@@ -191,7 +191,7 @@ export function HeroProductMockup() {
 
   return (
     <div className="marketing-mockup-shell marketing-rise marketing-rise-delay-2">
-      <MockupChrome title="Hostly · Vista operativa" />
+      <MockupChrome title="Hostly · Sistema visual" />
       <div className="border-b border-[color:var(--hostly-table-divider-soft)] bg-white/80 px-4 py-3">
         <div className="flex flex-wrap gap-2">
           {heroTabs.map((tab) => {
@@ -221,10 +221,10 @@ export function HeroProductMockup() {
 }
 
 const desktopShowcase = [
-  { id: "analytics", label: "Analytics", icon: BarChart3, panel: AnalyticsPanel },
+  { id: "analytics", label: "Operación", icon: BarChart3, panel: AnalyticsPanel },
   { id: "tpv", label: "TPV táctil", icon: Receipt, panel: TpvPanel },
-  { id: "kds", label: "Cocina / KDS", icon: ChefHat, panel: KdsPanel },
-  { id: "mesas", label: "Mapa mesas", icon: LayoutGrid, panel: FloorMapPanel },
+  { id: "kds", label: "Cocina / Barra", icon: ChefHat, panel: KdsPanel },
+  { id: "mesas", label: "Mapa visual", icon: LayoutGrid, panel: FloorMapPanel },
 ] as const;
 
 function MobileWaiterMock() {
@@ -258,9 +258,9 @@ function MobileReservationsMock() {
   return (
     <div className="space-y-2 p-4">
       {[
-        { time: "20:30", name: "Laura P.", pax: "4 pax" },
-        { time: "21:00", name: "Grupo Vega", pax: "8 pax" },
-        { time: "21:15", name: "Marc T.", pax: "2 pax" },
+        { time: "M12", name: "Salón", pax: "4 pax" },
+        { time: "M7", name: "Terraza", pax: "Cuenta" },
+        { time: "B2", name: "Barra", pax: "Activo" },
       ].map((row) => (
         <div key={row.time} className="grid grid-cols-[52px_1fr_auto] items-center gap-2 rounded-xl border border-[color:var(--hostly-table-divider-soft)] bg-white px-3 py-2 text-[11px]">
           <span className="font-semibold">{row.time}</span>
@@ -293,7 +293,7 @@ function MobileMetricsMock() {
 const mobileShowcase = [
   { id: "waiter", label: "Camarero", icon: Users, panel: MobileWaiterMock },
   { id: "orders", label: "Comandas", icon: Receipt, panel: MobileOrdersMock },
-  { id: "reservas", label: "Reservas", icon: CalendarDays, panel: MobileReservationsMock },
+  { id: "reservas", label: "Mesas", icon: CalendarDays, panel: MobileReservationsMock },
   { id: "metrics", label: "Métricas", icon: BarChart3, panel: MobileMetricsMock },
 ] as const;
 
@@ -372,7 +372,7 @@ export function ProductShowcaseMockups() {
 export function AiVisualMockup() {
   return (
     <div className="marketing-mockup-shell">
-      <MockupChrome title="Hostly IA · Importación de carta" />
+      <MockupChrome title="Hostly IA · Carta asistida" />
       <div className="grid gap-4 p-5 lg:grid-cols-[220px_1fr]">
         <div className="rounded-xl border border-dashed border-[color:var(--hostly-accent)] bg-[color:var(--hostly-accent-soft)] p-4 text-center">
           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--hostly-navy-deep)]">Foto de carta</div>
