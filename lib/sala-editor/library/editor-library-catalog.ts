@@ -7,6 +7,7 @@ import type {
   SalaEditorLibraryCategory,
   SalaEditorLibraryPhase,
 } from "@/lib/sala-editor/library/types";
+import { SURFACE_MATERIAL_CATALOG } from "@/lib/sala-editor/surface/surface-material-catalog";
 
 const BASE_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   {
@@ -140,6 +141,20 @@ const ESTRUCTURA_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   },
 ] as const;
 
+const TERRENO_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
+  {
+    id: "superficies",
+    label: "Superficies",
+    icon: "◼",
+    items: SURFACE_MATERIAL_CATALOG.map((material) => ({
+      id: `surface-${material.kind}`,
+      label: material.label,
+      status: "available",
+      surfaceMaterial: material.kind,
+    })),
+  },
+] as const;
+
 const OPERACION_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   {
     id: "mesas",
@@ -225,6 +240,7 @@ const LIBRARY_BY_PHASE: Record<
   readonly SalaEditorLibraryCategory[]
 > = {
   base: BASE_LIBRARY_CATEGORIES,
+  terreno: TERRENO_LIBRARY_CATEGORIES,
   estructura: ESTRUCTURA_LIBRARY_CATEGORIES,
   operacion: OPERACION_LIBRARY_CATEGORIES,
 };

@@ -68,5 +68,8 @@ export function isLibraryItemSelected(
   if (item.baseToolId != null) {
     return selection.baseToolId === item.baseToolId;
   }
+  if (item.surfaceMaterial != null) {
+    return selection.surfaceMaterial === item.surfaceMaterial;
+  }
   return false;
 }

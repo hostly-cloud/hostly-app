@@ -5,9 +5,11 @@ import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espa
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
+import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
 import type { SalaEspacioBasePatch } from "@/lib/sala-editor/base/espacio-base-editor";
 import { SalaEspaciosSidebar } from "@/components/sala-editor/panels/sala-espacios-sidebar";
 import { SalaBaseSidebar } from "@/components/sala-editor/panels/sala-base-sidebar";
+import { SalaTerrenoSidebar } from "@/components/sala-editor/panels/sala-terreno-sidebar";
 import { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
 import { SalaOperacionSidebar } from "@/components/sala-editor/panels/sala-operacion-sidebar";
 
@@ -19,9 +21,11 @@ export type SalaEditorLeftPanelProps = {
   activeStructuralToolKind: SalaStructuralElementKind | null;
   activeOperationalElementType: OperationalElementType | null;
   activeOperationalVisualVariant?: OperationalVisualVariant | null;
+  activeSurfaceMaterial?: SurfaceMaterialKind | null;
   onSelectEspacio: (espacioId: string) => void;
   onRequestAddEspacio: () => void;
   onSelectStructuralTool: (kind: SalaStructuralElementKind) => void;
+  onSelectSurfaceMaterial: (material: SurfaceMaterialKind) => void;
   onSelectOperationalElement: (
     type: OperationalElementType,
     visualVariant?: OperationalVisualVariant,
@@ -41,9 +45,11 @@ export function SalaEditorLeftPanel({
   activeStructuralToolKind,
   activeOperationalElementType,
   activeOperationalVisualVariant = null,
+  activeSurfaceMaterial = null,
   onSelectEspacio,
   onRequestAddEspacio,
   onSelectStructuralTool,
+  onSelectSurfaceMaterial,
   onSelectOperationalElement,
   onUpdateEspacio,
   onUpdateEspacioBase,
@@ -81,6 +87,12 @@ export function SalaEditorLeftPanel({
         <SalaBaseSidebar
           espacio={selectedEspacio}
           onUpdateBase={(espacioId, patch) => onUpdateEspacioBase?.(espacioId, patch)}
+        />
+      ) : null}
+      {phase === "terreno" ? (
+        <SalaTerrenoSidebar
+          activeSurfaceMaterial={activeSurfaceMaterial}
+          onSelectSurfaceMaterial={onSelectSurfaceMaterial}
         />
       ) : null}
       {phase === "estructura" ? (

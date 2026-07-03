@@ -27,6 +27,7 @@ import {
 } from "@/lib/sala-editor/catalog/structural-toolbox";
 import type { ActiveOperationalElementSelection } from "@/lib/sala-editor/ose/active-operational-element";
 import type { OperationalElementType, OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
+import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
 import {
   createActiveOperationalElement,
   DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE,
@@ -81,6 +82,8 @@ export function useSalaEditorDocument({
   const [activeTool, setActiveTool] = useState<SalaEditorActiveTool>(null);
   const [activeOperationalElement, setActiveOperationalElement] =
     useState<ActiveOperationalElementSelection>(null);
+  const [activeSurfaceMaterial, setActiveSurfaceMaterial] =
+    useState<SurfaceMaterialKind | null>(null);
   const [selectedOperationalElementInstanceId, setSelectedOperationalElementInstanceId] =
     useState<string | null>(null);
   const [selectedWallAttachmentId, setSelectedWallAttachmentId] =
@@ -91,6 +94,7 @@ export function useSalaEditorDocument({
     setDocument(normalizeSalaEditorDocument(nextDocument));
     setActiveTool(null);
     setActiveOperationalElement(null);
+    setActiveSurfaceMaterial(null);
     setSelectedOperationalElementInstanceId(null);
     setSelectedWallAttachmentId(null);
     historyApi?.reset();
@@ -101,6 +105,7 @@ export function useSalaEditorDocument({
     setDocument(normalizeSalaEditorDocument(nextDocument));
     setActiveTool(null);
     setActiveOperationalElement(null);
+    setActiveSurfaceMaterial(null);
     setSelectedOperationalElementInstanceId(null);
     setSelectedWallAttachmentId(null);
   }, [restaurantId]);
@@ -166,6 +171,10 @@ export function useSalaEditorDocument({
     if (activeOperationalElement?.layer !== "operacion") return null;
     return activeOperationalElement.visualVariant ?? null;
   }, [activeOperationalElement]);
+
+  const selectSurfaceMaterial = useCallback((material: SurfaceMaterialKind) => {
+    setActiveSurfaceMaterial(material);
+  }, []);
 
   const operationalElementInstancesInEspacio = useMemo(
     () =>
@@ -630,9 +639,15 @@ export function useSalaEditorDocument({
       if (phase === "estructura") {
         setActiveTool(createStructuralActiveTool(DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND));
         setActiveOperationalElement(null);
+        setActiveSurfaceMaterial(null);
+        setSelectedOperationalElementInstanceId(null);
+      } else if (phase === "terreno") {
+        setActiveTool(null);
+        setActiveOperationalElement(null);
         setSelectedOperationalElementInstanceId(null);
       } else if (phase === "operacion") {
         setActiveTool(null);
+        setActiveSurfaceMaterial(null);
         setActiveOperationalElement(
           createActiveOperationalElement(DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE),
         );
@@ -640,6 +655,7 @@ export function useSalaEditorDocument({
       } else {
         setActiveTool(null);
         setActiveOperationalElement(null);
+        setActiveSurfaceMaterial(null);
         setSelectedOperationalElementInstanceId(null);
       }
     },
@@ -749,6 +765,8 @@ export function useSalaEditorDocument({
     setActiveOperationalElement,
     activeOperationalElementType,
     activeOperationalVisualVariant,
+    activeSurfaceMaterial,
+    selectSurfaceMaterial,
     activeOperationalCatalogItem,
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,

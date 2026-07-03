@@ -87,6 +87,7 @@ export function SalaEditorWorkspace({
     elementCountByEspacioId,
     activeStructuralToolKind,
     activeStructuralToolboxItem,
+    activeSurfaceMaterial,
     activeOperationalElementType,
     activeOperationalVisualVariant,
     activeOperationalCatalogItem,
@@ -97,6 +98,7 @@ export function SalaEditorWorkspace({
     replaceDocument,
     restoreDocumentSnapshot,
     selectTool,
+    selectSurfaceMaterial,
     selectOperationalElement,
     placeOperationalElementAt,
     selectOperationalElementInstance,
@@ -676,11 +678,13 @@ export function SalaEditorWorkspace({
             selectedEspacioId={document.navigation.selectedEspacioId}
             elementCountByEspacioId={elementCountByEspacioId}
             activeStructuralToolKind={activeStructuralToolKind}
+            activeSurfaceMaterial={activeSurfaceMaterial}
             activeOperationalElementType={activeOperationalElementType}
             activeOperationalVisualVariant={activeOperationalVisualVariant}
             onSelectEspacio={handleSelectEspacio}
             onRequestAddEspacio={openAddDialog}
             onSelectStructuralTool={selectTool}
+            onSelectSurfaceMaterial={selectSurfaceMaterial}
             onSelectOperationalElement={selectOperationalElement}
             onUpdateEspacio={updateEspacio}
             onUpdateEspacioBase={updateEspacioBase}
@@ -693,6 +697,7 @@ export function SalaEditorWorkspace({
             espacio={selectedEspacio}
             hasEspacios={document.espacios.length > 0}
             activeStructuralToolboxItem={activeStructuralToolboxItem}
+            activeSurfaceMaterial={activeSurfaceMaterial}
             walls={wallsInEspacio}
             wallAttachments={wallAttachmentsInEspacio}
             wallDraft={wallDraft}

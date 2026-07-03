@@ -1,6 +1,8 @@
 "use client";
 
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
+import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
+import { getSurfaceMaterialCatalogItem } from "@/lib/sala-editor/surface/surface-material-catalog";
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import {
   getBaseFloorCatalogEntry,
@@ -11,22 +13,16 @@ import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-esp
 export type SalaTerrenoWorkspaceProps = {
   espacio: SalaEspacio;
   restaurantId: string;
+  activeSurfaceMaterial?: SurfaceMaterialKind | null;
 };
-
-const TERRAIN_SURFACES = [
-  "Madera",
-  "Piedra",
-  "Césped",
-  "Arena",
-  "Tarima",
-  "Agua / piscina",
-] as const;
 
 export function SalaTerrenoWorkspace({
   espacio,
   restaurantId,
+  activeSurfaceMaterial = null,
 }: SalaTerrenoWorkspaceProps) {
   const base = normalizeSalaEspacioBase(espacio.base);
+  const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
   const floorEntry = getBaseFloorCatalogEntry(
     (base.floor.kind === "wood" ||
     base.floor.kind === "stone" ||
@@ -47,23 +43,28 @@ export function SalaTerrenoWorkspace({
       <div className="hostly-sala-terreno-placeholder">
         <div className="hostly-sala-terreno-placeholder__card">
           <span className="hostly-sala-terreno-placeholder__eyebrow">
-            Próxima fase visual
+            Surface Objects
           </span>
           <h2 className="hostly-sala-terreno-placeholder__title">
-            Construye el terreno del mapa
+            {activeMaterial
+              ? `${activeMaterial.label} preparado`
+              : "Selecciona un material para comenzar a construir el terreno."}
           </h2>
           <p className="hostly-sala-terreno-placeholder__text">
-            Aquí se añadirán superficies dentro del mapa: madera, piedra,
-            césped, arena, tarima y agua o piscina. En esta fase no se dibujan
-            muros ni se colocan mesas.
+            {activeMaterial
+              ? "El cursor queda preparado para la siguiente iteración. Todavía no se crea ningún objeto ni se dibuja geometría."
+              : "La biblioteca de Terreno ya separa materiales como madera, piedra, césped, arena, agua y tarima. En esta fase no se dibujan muros ni se colocan mesas."}
           </p>
-          <div className="hostly-sala-terreno-placeholder__chips" aria-label="Superficies previstas">
-            {TERRAIN_SURFACES.map((surface) => (
-              <span key={surface} className="hostly-sala-terreno-placeholder__chip">
-                {surface}
-              </span>
-            ))}
-          </div>
+          {activeMaterial ? (
+            <div className="hostly-sala-terreno-placeholder__ready">
+              <span
+                className="hostly-sala-terreno-placeholder__swatch"
+                style={{ background: activeMaterial.swatch }}
+                aria-hidden
+              />
+              <span>{activeMaterial.description}</span>
+            </div>
+          ) : null}
         </div>
       </div>
     </SalaEspacioCanvasFrame>

@@ -3438,3 +3438,27 @@
   font-weight: 750;
   color: var(--hostly-ink-soft);
 }
+
+.hostly-sala-terreno-placeholder__ready {
+  margin-top: 16px;
+  display: inline-flex;
+  max-width: 360px;
+  align-items: center;
+  gap: 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.92);
+  padding: 7px 11px;
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--hostly-ink-soft);
+}
+
+.hostly-sala-terreno-placeholder__swatch {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.86);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.32);
+}

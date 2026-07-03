@@ -8,6 +8,7 @@ import type {
   SalaWallAttachment,
   SalaWallAttachmentKind,
 } from "@/lib/sala-editor/types/wall-attachment";
+import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
 import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
@@ -34,6 +35,7 @@ export type SalaEditorWorkspaceCanvasProps = {
   espacio: SalaEspacio | null;
   hasEspacios: boolean;
   activeStructuralToolboxItem: StructuralToolboxItem | null;
+  activeSurfaceMaterial?: SurfaceMaterialKind | null;
   walls?: SalaWallSegment[];
   wallAttachments?: SalaWallAttachment[];
   wallDraft?: SalaWallDrawingDraft | null;
@@ -98,6 +100,7 @@ export function SalaEditorWorkspaceCanvas({
   espacio,
   hasEspacios,
   activeStructuralToolboxItem,
+  activeSurfaceMaterial = null,
   walls = [],
   wallAttachments = [],
   wallDraft = null,
@@ -175,7 +178,11 @@ export function SalaEditorWorkspaceCanvas({
   if (phase === "terreno") {
     return (
       <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
-        <SalaTerrenoWorkspace espacio={espacio} restaurantId={restaurantId} />
+        <SalaTerrenoWorkspace
+          espacio={espacio}
+          restaurantId={restaurantId}
+          activeSurfaceMaterial={activeSurfaceMaterial}
+        />
       </div>
     );
   }

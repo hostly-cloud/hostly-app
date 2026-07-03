@@ -94,3 +94,12 @@ export {
   SALA_EDITOR_DOCUMENT_VERSION,
   createEmptySalaEditorDocument,
 } from "@/lib/sala-editor/types/editor-document";
+export type {
+  SurfaceMaterialKind,
+  SurfaceObject,
+  SurfaceObjectDraft,
+  SurfaceObjectGeometry,
+  SurfaceObjectId,
+  SurfaceObjectKind,
+} from "@/lib/sala-editor/surface/surface-object";
+export { createSurfaceObject } from "@/lib/sala-editor/surface/surface-object";
