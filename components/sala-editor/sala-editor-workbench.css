@@ -3648,3 +3648,131 @@
 .hostly-sala-operational-layer.is-readonly {
   pointer-events: none;
 }
+
+/* ─── Editor V2 · Unified Selection System ─── */
+
+.hostly-sala-editor-workbench {
+  --hostly-editor-selection-color: var(--hostly-accent, #315f7d);
+  --hostly-editor-selection-border: color-mix(in srgb, var(--hostly-editor-selection-color) 76%, #64748b);
+  --hostly-editor-selection-halo: 0 0 0 3px color-mix(in srgb, var(--hostly-editor-selection-color) 18%, transparent);
+  --hostly-editor-selection-halo-strong: 0 0 0 4px color-mix(in srgb, var(--hostly-editor-selection-color) 22%, transparent);
+  --hostly-editor-selection-hover: 0 0 0 2px color-mix(in srgb, var(--hostly-editor-selection-color) 10%, transparent);
+  --hostly-editor-selection-shadow: 0 8px 18px rgba(15, 23, 42, 0.13);
+  --hostly-editor-selection-shadow-soft: 0 4px 12px rgba(15, 23, 42, 0.1);
+  --hostly-editor-selection-handle-size: 14px;
+  --hostly-editor-selection-handle-radius: 5px;
+  --hostly-editor-selection-handle-bg: #f8fafc;
+  --hostly-editor-selection-handle-border: 2px solid rgba(255, 255, 255, 0.96);
+  --hostly-editor-selection-handle-shadow:
+    0 0 0 1px color-mix(in srgb, var(--hostly-editor-selection-color) 34%, transparent),
+    var(--hostly-editor-selection-shadow-soft);
+  --hostly-editor-selection-transition: 145ms ease;
+  --hostly-editor-selection-touch-inset: -14px;
+  --hostly-editor-action-size: 30px;
+  --hostly-editor-action-bg: rgba(255, 255, 255, 0.96);
+  --hostly-editor-action-border: rgba(148, 163, 184, 0.32);
+  --hostly-editor-action-shadow:
+    0 0 0 3px color-mix(in srgb, var(--hostly-editor-selection-color) 10%, transparent),
+    0 6px 18px rgba(15, 23, 42, 0.12);
+}
+
+.hostly-sala-canvas-object__body,
+.hostly-sala-surface-object,
+.hostly-sala-wall-attachment__panel,
+.hostly-sala-wall-interaction-handle,
+.hostly-sala-canvas-object__frame,
+.hostly-sala-surface-object__resize-handle {
+  transition:
+    border-color var(--hostly-editor-selection-transition),
+    box-shadow var(--hostly-editor-selection-transition),
+    opacity var(--hostly-editor-selection-transition),
+    filter var(--hostly-editor-selection-transition),
+    background-color var(--hostly-editor-selection-transition);
+}
+
+.hostly-sala-canvas-object:hover .hostly-sala-canvas-object__body,
+.hostly-sala-surface-object:not(.is-readonly):hover,
+.hostly-sala-wall-attachment:hover .hostly-sala-wall-attachment__panel {
+  box-shadow:
+    var(--hostly-editor-selection-hover),
+    var(--hostly-editor-selection-shadow-soft);
+}
+
+.hostly-sala-canvas-object__frame,
+.hostly-sala-surface-object.is-selected,
+.hostly-sala-wall-attachment.is-selected .hostly-sala-wall-attachment__panel {
+  border-color: var(--hostly-editor-selection-border);
+  box-shadow:
+    var(--hostly-editor-selection-halo),
+    var(--hostly-editor-selection-shadow-soft);
+}
+
+.hostly-sala-canvas-object__frame {
+  inset: -3px;
+  border-width: 1.5px;
+  border-radius: 8px;
+}
+
+.hostly-sala-wall--selected line {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--hostly-editor-selection-color) 24%, transparent));
+}
+
+.hostly-sala-canvas-object.is-dragging .hostly-sala-canvas-object__body,
+.hostly-sala-canvas-object.is-resizing .hostly-sala-canvas-object__body,
+.hostly-sala-surface-object.is-dragging,
+.hostly-sala-surface-object.is-resizing,
+.hostly-sala-wall-attachment.is-dragging .hostly-sala-wall-attachment__panel {
+  box-shadow:
+    var(--hostly-editor-selection-halo-strong),
+    var(--hostly-editor-selection-shadow);
+}
+
+.hostly-sala-canvas-object__handle,
+.hostly-sala-wall-interaction-handle,
+.hostly-sala-surface-object__resize-handle {
+  width: var(--hostly-editor-selection-handle-size);
+  height: var(--hostly-editor-selection-handle-size);
+  border: var(--hostly-editor-selection-handle-border);
+  border-radius: var(--hostly-editor-selection-handle-radius);
+  background: var(--hostly-editor-selection-handle-bg);
+  box-shadow: var(--hostly-editor-selection-handle-shadow);
+}
+
+.hostly-sala-wall-interaction-handle--move {
+  border-radius: 999px;
+  background: var(--hostly-editor-selection-color);
+}
+
+.hostly-sala-wall-interaction-handle--endpoint {
+  border-radius: var(--hostly-editor-selection-handle-radius);
+}
+
+.hostly-sala-canvas-object__handle::before,
+.hostly-sala-wall-interaction-handle::before,
+.hostly-sala-surface-object__resize-handle::before {
+  inset: var(--hostly-editor-selection-touch-inset);
+}
+
+.hostly-sala-canvas-object__delete-btn,
+.hostly-sala-wall-delete-btn,
+.hostly-sala-wall-attachment__delete-btn,
+.hostly-sala-surface-object__delete-btn {
+  width: var(--hostly-editor-action-size);
+  height: var(--hostly-editor-action-size);
+  border-color: var(--hostly-editor-action-border);
+  background: var(--hostly-editor-action-bg);
+  box-shadow: var(--hostly-editor-action-shadow);
+  transition:
+    border-color var(--hostly-editor-selection-transition),
+    background-color var(--hostly-editor-selection-transition),
+    box-shadow var(--hostly-editor-selection-transition),
+    transform var(--hostly-editor-selection-transition);
+}
+
+.hostly-sala-canvas-object__delete-btn:hover,
+.hostly-sala-wall-delete-btn:hover,
+.hostly-sala-wall-attachment__delete-btn:hover,
+.hostly-sala-surface-object__delete-btn:hover {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: #fef2f2;
+}
