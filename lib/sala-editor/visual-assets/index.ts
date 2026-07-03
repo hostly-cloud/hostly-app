@@ -27,3 +27,15 @@ export {
   createVisualAssetDraftFromKey,
   getVisualAssetDefinition,
 } from "@/lib/sala-editor/visual-assets/visual-asset-catalog";
+
+export type {
+  VisualMaterial,
+  VisualMaterialCategory,
+  VisualMaterialId,
+} from "@/lib/sala-editor/visual-assets/visual-material-system";
+export {
+  VISUAL_MATERIAL_CATALOG,
+  getTableSafeVisualMaterials,
+  getVisualMaterial,
+  getVisualMaterialsByCategory,
+} from "@/lib/sala-editor/visual-assets/visual-material-system";
