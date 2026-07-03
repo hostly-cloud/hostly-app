@@ -39,6 +39,12 @@ import { clientToStagePoint } from "@/lib/sala-editor/canvas/canvas-viewport";
 import { unscaleEditorPoint } from "@/lib/sala-editor/canvas/editor-visual-scale";
 import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
+import { SalaEditorCanvasToolHint } from "@/components/sala-editor/sala-editor-canvas-tool-hint";
+import {
+  getSurfaceMaterialToolHint,
+  resolveEditorToolHint,
+  resolveSurfaceInteractionState,
+} from "@/lib/sala-editor/ux/editor-tool-hints";
 
 export type SalaTerrenoWorkspaceProps = {
   espacio: SalaEspacio;
@@ -533,6 +539,19 @@ function SalaTerrenoCanvasContent({
     resizeSession,
   ]);
 
+  const toolHintProfile = activeSurfaceMaterial
+    ? getSurfaceMaterialToolHint(activeSurfaceMaterial)
+    : null;
+  const toolHintState = resolveSurfaceInteractionState({
+    draftActive: Boolean(draft),
+    moveActive: Boolean(moveSession?.active),
+    resizeActive: Boolean(resizeSession?.active),
+  });
+  const toolHint =
+    toolHintProfile != null
+      ? resolveEditorToolHint(toolHintProfile, toolHintState)
+      : null;
+
   return (
     <>
       <SalaSurfaceObjectsLayer
@@ -560,6 +579,7 @@ function SalaTerrenoCanvasContent({
         ]
           .filter(Boolean)
           .join(" ")}
+        style={toolHint ? { cursor: toolHint.cursor } : undefined}
         role="presentation"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -567,15 +587,12 @@ function SalaTerrenoCanvasContent({
         onPointerCancel={(event) => finishDraft(event, false)}
       />
 
-      {activeMaterial ? (
-        <div className="hostly-sala-terreno-cursor-hint">
-          <span
-            className="hostly-sala-terreno-placeholder__swatch"
-            style={{ background: activeMaterial.swatch }}
-            aria-hidden
-          />
-          Arrastra para crear superficie de {activeMaterial.label.toLowerCase()}.
-        </div>
+      {toolHint ? (
+        <SalaEditorCanvasToolHint
+          icon={toolHint.icon}
+          swatch={activeMaterial?.swatch}
+          text={toolHint.text}
+        />
       ) : null}
     </>
   );

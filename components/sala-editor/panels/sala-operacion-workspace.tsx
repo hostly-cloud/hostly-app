@@ -10,7 +10,10 @@ import {
 } from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
-import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
+import {
+  getOperationalElementCatalogItem,
+  type OperationalElementCatalogItem,
+} from "@/lib/sala-editor/ose/operational-element-catalog";
 import {
   getOperationalInstanceCanvasSize,
   type OperationalInstanceResizeCorner,
@@ -18,6 +21,12 @@ import {
 import type { OperationalInstancePointerPayload } from "@/lib/sala-editor/canvas/pointer-interaction";
 import type { OperationalSnapGuides } from "@/lib/sala-editor/canvas/operational-snap";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
+import { SalaEditorCanvasToolHint } from "@/components/sala-editor/sala-editor-canvas-tool-hint";
+import {
+  getOperationalToolHint,
+  resolveEditorToolHint,
+  resolveOperationalInteractionState,
+} from "@/lib/sala-editor/ux/editor-tool-hints";
 import {
   getBaseFloorCatalogEntry,
   type BaseFloorCatalogKind,
@@ -32,6 +41,7 @@ import { SalaOperationalInstanceCanvasObject } from "@/components/sala-editor/pa
 export type SalaOperacionWorkspaceProps = {
   espacio: SalaEspacio;
   restaurantId: string;
+  activeCatalogItem: OperationalElementCatalogItem;
   instances: OperationalElementInstance[];
   selectedInstanceId: string | null;
   draggingInstanceId: string | null;
@@ -66,7 +76,7 @@ export type SalaOperacionWorkspaceProps = {
 
 type SalaOperacionCanvasContentProps = Omit<
   SalaOperacionWorkspaceProps,
-  "espacio" | "restaurantId"
+  "espacio" | "restaurantId" | "activeCatalogItem"
 > & {
   surfaceRef: RefObject<HTMLDivElement | null>;
 };
@@ -93,6 +103,7 @@ export type SalaOperationalInstancesLayerProps = {
 export function SalaOperacionWorkspace({
   espacio,
   restaurantId,
+  activeCatalogItem,
   instances,
   selectedInstanceId,
   draggingInstanceId,
@@ -115,6 +126,14 @@ export function SalaOperacionWorkspace({
 }: SalaOperacionWorkspaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const base = normalizeSalaEspacioBase(espacio.base);
+  const toolHintProfile = getOperationalToolHint(activeCatalogItem);
+  const toolHint = resolveEditorToolHint(
+    toolHintProfile,
+    resolveOperationalInteractionState({
+      dragging: Boolean(draggingInstanceId),
+      resizing: Boolean(resizingInstanceId),
+    }),
+  );
   const floorEntry = getBaseFloorCatalogEntry(
     (base.floor.kind === "wood" ||
     base.floor.kind === "stone" ||
@@ -135,25 +154,10 @@ export function SalaOperacionWorkspace({
       stageRole="application"
       stageAriaLabel="Lienzo de elementos operativos"
       stageStyle={{
-        cursor: draggingInstanceId
-          ? "grabbing"
-          : resizingInstanceId
-            ? "nwse-resize"
-            : "crosshair",
+        cursor: toolHint.cursor,
       }}
       hint={
-        <>
-          {instances.length === 0 ? (
-            <div className="hostly-sala-editor-canvas-hint">
-              Clic en el plano para colocar
-            </div>
-          ) : null}
-          {draggingInstanceId ? (
-            <div className="hostly-sala-editor-canvas-hint hostly-sala-editor-canvas-hint--floating">
-              Suelta para fijar
-            </div>
-          ) : null}
-        </>
+        <SalaEditorCanvasToolHint icon={toolHint.icon} text={toolHint.text} />
       }
     >
       {canvasLayers}

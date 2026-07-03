@@ -16,6 +16,7 @@ import {
   type BaseFloorCatalogKind,
 } from "@/lib/sala-editor/catalog/base-floor-catalog";
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
+import { getStructuralToolHintFromItem } from "@/lib/sala-editor/ux/editor-tool-hints";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
 import { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas";
 
@@ -70,6 +71,7 @@ export function SalaEstructuraWorkspace({
   canvasLayers = null,
 }: SalaEstructuraWorkspaceProps) {
   const isWallTool = tool.kind === "wall";
+  const toolHintProfile = getStructuralToolHintFromItem(tool);
   const attachmentPlacementKind =
     tool.kind === "door" || tool.kind === "glass" ? tool.kind : null;
   const wallDrawingEnabled =
@@ -106,7 +108,7 @@ export function SalaEstructuraWorkspace({
           selectedWallId={selectedWallId}
           selectedWallAttachmentId={selectedWallAttachmentId}
           attachmentPlacementKind={attachmentPlacementKind}
-          hint={tool.workspaceHint}
+          toolHintProfile={toolHintProfile}
           onPointerDown={onWallPointerDown}
           onPointerMove={onWallPointerMove}
           onPointerUp={onWallPointerUp}

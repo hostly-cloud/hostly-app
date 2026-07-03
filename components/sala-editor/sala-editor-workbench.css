@@ -3613,26 +3613,6 @@
   cursor: nwse-resize;
 }
 
-.hostly-sala-terreno-cursor-hint {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  z-index: 4;
-  display: inline-flex;
-  max-width: min(420px, calc(100% - 28px));
-  align-items: center;
-  gap: 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--hostly-ink-soft);
-  pointer-events: none;
-}
-
 .hostly-sala-operational-layer {
   position: absolute;
   inset: 0;
@@ -3977,5 +3957,65 @@
   padding: 2px 6px;
   font-size: 7px;
   color: var(--hostly-ink-muted);
+}
+
+/* ─── Editor V2 · Tool hints & cursors ─── */
+
+.hostly-sala-editor-tool-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 12;
+  display: inline-flex;
+  max-width: min(460px, calc(100% - 28px));
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+  padding: 7px 12px;
+  font-size: 11.5px;
+  font-weight: 760;
+  line-height: 1.25;
+  color: var(--hostly-ink-soft);
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+  animation: hostly-sala-editor-tool-hint-enter 180ms ease;
+}
+
+@keyframes hostly-sala-editor-tool-hint-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.hostly-sala-editor-tool-hint__icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.hostly-sala-editor-tool-hint__swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.86);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.32);
+}
+
+.hostly-sala-editor-tool-hint__text {
+  min-width: 0;
 }
 

@@ -214,7 +214,6 @@ export function SalaEditorWorkspaceCanvas({
         draft={null}
         selectedWallId={null}
         selectedWallAttachmentId={null}
-        hint=""
         embedded
         readOnly
       />
@@ -324,6 +323,7 @@ export function SalaEditorWorkspaceCanvas({
         <SalaOperacionWorkspace
           espacio={espacio}
           restaurantId={restaurantId}
+          activeCatalogItem={activeOperationalCatalogItem}
           instances={operationalElementInstances}
         selectedInstanceId={selectedOperationalElementInstanceId}
         draggingInstanceId={draggingOperationalInstanceId}

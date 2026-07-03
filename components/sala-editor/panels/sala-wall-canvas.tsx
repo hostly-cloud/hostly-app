@@ -45,6 +45,12 @@ import {
   getWallAttachmentLogicalLength,
   resolveConstrainedWallAttachmentPosition,
 } from "@/lib/sala-editor/canvas/wall-attachment-constraints";
+import {
+  resolveEditorToolHint,
+  resolveWallInteractionState,
+  type EditorToolHintProfile,
+} from "@/lib/sala-editor/ux/editor-tool-hints";
+import { SalaEditorCanvasToolHint } from "@/components/sala-editor/sala-editor-canvas-tool-hint";
 
 const WALL_ACCENT_COLOR = "var(--hostly-accent, #315f7d)";
 const WALL_BLOCKED_COLOR = "#dc2626";
@@ -70,7 +76,7 @@ export type SalaWallCanvasProps = {
   selectedWallId: string | null;
   selectedWallAttachmentId?: string | null;
   attachmentPlacementKind?: SalaWallAttachmentKind | null;
-  hint: string;
+  toolHintProfile?: EditorToolHintProfile;
   onPointerDown?: (payload: WallPointerPayload) => void;
   onPointerMove?: (payload: WallPointerPayload) => void;
   onPointerUp?: () => void;
@@ -153,7 +159,7 @@ export function SalaWallCanvas({
   selectedWallId,
   selectedWallAttachmentId = null,
   attachmentPlacementKind = null,
-  hint,
+  toolHintProfile,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -552,6 +558,16 @@ export function SalaWallCanvas({
     selectedWallAttachmentId,
   ]);
 
+  const toolHint = toolHintProfile
+    ? resolveEditorToolHint(
+        toolHintProfile,
+        resolveWallInteractionState({
+          draftActive: Boolean(draft),
+          blocked: Boolean(blockedAttachmentWallId),
+        }),
+      )
+    : null;
+
   return (
     <div
       ref={surfaceRef}
@@ -567,7 +583,7 @@ export function SalaWallCanvas({
               .join(" ")
           : "hostly-sala-editor-canvas-frame__surface"
       }
-      style={{ cursor: readOnly ? "default" : "crosshair" }}
+      style={{ cursor: readOnly ? "default" : toolHint?.cursor ?? "crosshair" }}
       onPointerDown={readOnly ? undefined : handlePointerDown}
       onPointerMove={readOnly ? undefined : handlePointerMove}
       onPointerLeave={() => {
@@ -756,15 +772,9 @@ export function SalaWallCanvas({
         />
       ) : null}
 
-      {!draft ? (
-        <div className="hostly-sala-editor-canvas-hint">
-          {blockedAttachmentWallId ? "No cabe en este hueco" : hint}
-        </div>
-      ) : (
-        <div className="hostly-sala-editor-canvas-hint hostly-sala-editor-canvas-hint--floating">
-          Segundo clic para fijar · Esc cancelar
-        </div>
-      )}
+      {!readOnly && toolHint ? (
+        <SalaEditorCanvasToolHint icon={toolHint.icon} text={toolHint.text} />
+      ) : null}
     </div>
   );
 }
