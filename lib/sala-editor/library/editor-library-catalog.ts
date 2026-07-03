@@ -101,8 +101,20 @@ const ESTRUCTURA_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
     id: "columnas",
     label: "Columnas",
     icon: "🏛",
-    upcoming: true,
-    items: [],
+    items: [
+      {
+        id: "columna-cuadrada",
+        label: "Columna cuadrada",
+        status: "available",
+        structuralKind: "squareColumn",
+      },
+      {
+        id: "columna-circular",
+        label: "Columna circular",
+        status: "available",
+        structuralKind: "roundColumn",
+      },
+    ],
   },
   {
     id: "barras-fijas",
@@ -122,8 +134,14 @@ const ESTRUCTURA_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
     id: "separadores",
     label: "Separadores",
     icon: "⬜",
-    upcoming: true,
-    items: [],
+    items: [
+      {
+        id: "separador-fijo",
+        label: "Separador fijo",
+        status: "available",
+        structuralKind: "divider",
+      },
+    ],
   },
   {
     id: "piscinas",

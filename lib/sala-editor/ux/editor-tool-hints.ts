@@ -52,6 +52,27 @@ const STRUCTURAL_TOOL_HINTS: Record<
     idleHint: "Haz clic sobre un muro para colocar un cristal.",
     blockedHint: "No cabe en este hueco.",
   },
+  squareColumn: {
+    icon: "■",
+    cursor: "crosshair",
+    idleHint: "Haz clic para colocar una columna cuadrada.",
+    draggingHint: "Suelta para fijar la columna.",
+    resizingHint: "Suelta para confirmar el tamaño.",
+  },
+  roundColumn: {
+    icon: "●",
+    cursor: "crosshair",
+    idleHint: "Haz clic para colocar una columna circular.",
+    draggingHint: "Suelta para fijar la columna.",
+    resizingHint: "Suelta para confirmar el tamaño.",
+  },
+  divider: {
+    icon: "▭",
+    cursor: "crosshair",
+    idleHint: "Haz clic para colocar un separador fijo.",
+    draggingHint: "Suelta para fijar el separador.",
+    resizingHint: "Suelta para confirmar el tamaño.",
+  },
   bar: {
     icon: "▭",
     cursor: "crosshair",

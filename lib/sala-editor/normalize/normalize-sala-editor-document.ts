@@ -5,13 +5,16 @@ import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment
 import { normalizeWallAttachments } from "@/lib/sala-editor/types/wall-attachment";
 import type { SurfaceObject } from "@/lib/sala-editor/surface/surface-object";
 import { normalizeSurfaceObjects } from "@/lib/sala-editor/surface/surface-object";
+import type { SalaStructuralElement } from "@/lib/sala-editor/types/elementos-estructurales";
+import { normalizeSalaStructuralElements } from "@/lib/sala-editor/types/elementos-estructurales";
 
 type NormalizableSalaEditorDocument = Omit<
   SalaEditorDocument,
-  "wallAttachments" | "surfaceObjects"
+  "wallAttachments" | "surfaceObjects" | "structuralElements"
 > & {
   wallAttachments?: SalaWallAttachment[];
   surfaceObjects?: SurfaceObject[];
+  structuralElements?: SalaStructuralElement[];
 };
 
 export function withNormalizedSalaEspacioBase(espacio: SalaEspacio): SalaEspacio {
@@ -33,6 +36,10 @@ export function normalizeSalaEditorDocument(
     espacios: document.espacios.map(withNormalizedSalaEspacioBase),
     surfaceObjects: normalizeSurfaceObjects(
       document.surfaceObjects ?? [],
+      validEspacioIds,
+    ),
+    structuralElements: normalizeSalaStructuralElements(
+      document.structuralElements ?? [],
       validEspacioIds,
     ),
     wallAttachments: normalizeWallAttachments(

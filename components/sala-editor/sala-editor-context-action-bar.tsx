@@ -5,6 +5,7 @@ export type SalaEditorContextActionTargetKind =
   | "wall"
   | "door"
   | "glass"
+  | "structural"
   | "operational";
 
 export type SalaEditorContextActionTarget = {

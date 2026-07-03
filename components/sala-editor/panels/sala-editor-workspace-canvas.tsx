@@ -13,6 +13,10 @@ import type {
   SurfaceObject,
   SurfaceObjectDraft,
 } from "@/lib/sala-editor/surface/surface-object";
+import type {
+  SalaStructuralElement,
+  SalaStructuralElementDraft,
+} from "@/lib/sala-editor/types/elementos-estructurales";
 import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
 import type { SurfaceEditOutcome } from "@/lib/sala-editor/surface/surface-interaction";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
@@ -29,6 +33,7 @@ import {
   SalaOperacionWorkspace,
 } from "@/components/sala-editor/panels/sala-operacion-workspace";
 import { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas";
+import { SalaStructureObjectsLayer } from "@/components/sala-editor/panels/sala-structure-objects-layer";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { OperationalInstanceResizeCorner } from "@/lib/sala-editor/canvas/operational-instance-layout";
@@ -39,6 +44,7 @@ import {
   createSpaceWorkspaceScope,
   getSpaceWorkspaceKey,
 } from "@/lib/sala-editor/canvas/space-workspace";
+import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { SalaEditorEmptyState } from "@/components/sala-editor/panels/sala-editor-empty-state";
 
 export type SalaEditorWorkspaceCanvasProps = {
@@ -61,6 +67,19 @@ export type SalaEditorWorkspaceCanvasProps = {
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
   onSurfaceObjectResizeStart?: () => void;
   onSurfaceObjectResizeEnd?: (outcome: SurfaceEditOutcome) => void;
+  structuralElements?: SalaStructuralElement[];
+  selectedStructuralElementId?: string | null;
+  onStructuralElementCreate?: (draft: SalaStructuralElementDraft) => void;
+  onStructuralElementSelect?: (elementId: string | null) => void;
+  onStructuralElementClearSelection?: () => void;
+  onStructuralElementUpdate?: (
+    elementId: string,
+    patch: Partial<Omit<SalaStructuralElement, "id">>,
+  ) => void;
+  onStructuralElementMoveStart?: () => void;
+  onStructuralElementMoveEnd?: (outcome: SurfaceEditOutcome) => void;
+  onStructuralElementResizeStart?: () => void;
+  onStructuralElementResizeEnd?: (outcome: SurfaceEditOutcome) => void;
   walls?: SalaWallSegment[];
   wallAttachments?: SalaWallAttachment[];
   wallDraft?: SalaWallDrawingDraft | null;
@@ -133,6 +152,16 @@ export function SalaEditorWorkspaceCanvas({
   onSurfaceObjectMoveEnd,
   onSurfaceObjectResizeStart,
   onSurfaceObjectResizeEnd,
+  structuralElements = [],
+  selectedStructuralElementId = null,
+  onStructuralElementCreate,
+  onStructuralElementSelect,
+  onStructuralElementClearSelection,
+  onStructuralElementUpdate,
+  onStructuralElementMoveStart,
+  onStructuralElementMoveEnd,
+  onStructuralElementResizeStart,
+  onStructuralElementResizeEnd,
   walls = [],
   wallAttachments = [],
   wallDraft = null,
@@ -196,6 +225,9 @@ export function SalaEditorWorkspaceCanvas({
     );
   }
 
+  const base = normalizeSalaEspacioBase(espacio.base);
+  const gridSize = base.grid.size;
+
   const terrainLayer =
     surfaceObjects.length > 0 ? (
       <SalaSurfaceObjectsLayer
@@ -206,17 +238,32 @@ export function SalaEditorWorkspaceCanvas({
     ) : null;
 
   const structureLayer =
-    walls.length > 0 || wallAttachments.length > 0 ? (
-      <SalaWallCanvas
-        key="structure-layer"
-        walls={walls}
-        wallAttachments={wallAttachments}
-        draft={null}
-        selectedWallId={null}
-        selectedWallAttachmentId={null}
-        embedded
-        readOnly
-      />
+    walls.length > 0 ||
+    wallAttachments.length > 0 ||
+    structuralElements.length > 0 ? (
+      <>
+        {walls.length > 0 || wallAttachments.length > 0 ? (
+          <SalaWallCanvas
+            key="structure-wall-layer"
+            walls={walls}
+            wallAttachments={wallAttachments}
+            draft={null}
+            selectedWallId={null}
+            selectedWallAttachmentId={null}
+            embedded
+            readOnly
+          />
+        ) : null}
+        {structuralElements.length > 0 ? (
+          <SalaStructureObjectsLayer
+            key="structure-objects-layer"
+            espacioId={espacio.id}
+            gridSize={gridSize}
+            structuralElements={structuralElements}
+            readOnly
+          />
+        ) : null}
+      </>
     ) : null;
 
   const operationLayer =
@@ -296,6 +343,16 @@ export function SalaEditorWorkspaceCanvas({
           onWallAttachmentUpdate={onWallAttachmentUpdate}
           onWallAttachmentMoveStart={onWallAttachmentMoveStart}
           onWallAttachmentMoveEnd={onWallAttachmentMoveEnd}
+          structuralElements={structuralElements}
+          selectedStructuralElementId={selectedStructuralElementId}
+          onStructuralElementCreate={onStructuralElementCreate}
+          onStructuralElementSelect={onStructuralElementSelect}
+          onStructuralElementClearSelection={onStructuralElementClearSelection}
+          onStructuralElementUpdate={onStructuralElementUpdate}
+          onStructuralElementMoveStart={onStructuralElementMoveStart}
+          onStructuralElementMoveEnd={onStructuralElementMoveEnd}
+          onStructuralElementResizeStart={onStructuralElementResizeStart}
+          onStructuralElementResizeEnd={onStructuralElementResizeEnd}
           canvasLayers={
             <>
               {terrainLayer}

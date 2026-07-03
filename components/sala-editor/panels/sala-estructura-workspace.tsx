@@ -8,9 +8,15 @@ import type {
   SalaWallAttachmentKind,
 } from "@/lib/sala-editor/types/wall-attachment";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
+import type {
+  SalaStructuralElement,
+  SalaStructuralElementDraft,
+} from "@/lib/sala-editor/types/elementos-estructurales";
+import { isSalaStructuralObjectKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import type { WallPointerPayload } from "@/lib/sala-editor/canvas/wall-interaction";
 import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
+import type { SurfaceEditOutcome } from "@/lib/sala-editor/surface/surface-interaction";
 import {
   getBaseFloorCatalogEntry,
   type BaseFloorCatalogKind,
@@ -19,6 +25,7 @@ import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { getStructuralToolHintFromItem } from "@/lib/sala-editor/ux/editor-tool-hints";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
 import { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas";
+import { SalaStructureObjectsLayer } from "@/components/sala-editor/panels/sala-structure-objects-layer";
 
 export type SalaEstructuraWorkspaceProps = {
   espacio: SalaEspacio;
@@ -26,6 +33,8 @@ export type SalaEstructuraWorkspaceProps = {
   tool: StructuralToolboxItem;
   walls?: SalaWallSegment[];
   wallAttachments?: SalaWallAttachment[];
+  structuralElements?: SalaStructuralElement[];
+  selectedStructuralElementId?: string | null;
   wallDraft?: SalaWallDrawingDraft | null;
   selectedWallId?: string | null;
   selectedWallAttachmentId?: string | null;
@@ -46,6 +55,17 @@ export type SalaEstructuraWorkspaceProps = {
   ) => void;
   onWallAttachmentMoveStart?: () => void;
   onWallAttachmentMoveEnd?: (outcome: WallAttachmentEditOutcome) => void;
+  onStructuralElementCreate?: (draft: SalaStructuralElementDraft) => void;
+  onStructuralElementSelect?: (elementId: string | null) => void;
+  onStructuralElementClearSelection?: () => void;
+  onStructuralElementUpdate?: (
+    elementId: string,
+    patch: Partial<Omit<SalaStructuralElement, "id">>,
+  ) => void;
+  onStructuralElementMoveStart?: () => void;
+  onStructuralElementMoveEnd?: (outcome: SurfaceEditOutcome) => void;
+  onStructuralElementResizeStart?: () => void;
+  onStructuralElementResizeEnd?: (outcome: SurfaceEditOutcome) => void;
   canvasLayers?: ReactNode;
 };
 
@@ -55,6 +75,8 @@ export function SalaEstructuraWorkspace({
   tool,
   walls = [],
   wallAttachments = [],
+  structuralElements = [],
+  selectedStructuralElementId = null,
   wallDraft = null,
   selectedWallId = null,
   selectedWallAttachmentId = null,
@@ -68,6 +90,14 @@ export function SalaEstructuraWorkspace({
   onWallAttachmentUpdate,
   onWallAttachmentMoveStart,
   onWallAttachmentMoveEnd,
+  onStructuralElementCreate,
+  onStructuralElementSelect,
+  onStructuralElementClearSelection,
+  onStructuralElementUpdate,
+  onStructuralElementMoveStart,
+  onStructuralElementMoveEnd,
+  onStructuralElementResizeStart,
+  onStructuralElementResizeEnd,
   canvasLayers = null,
 }: SalaEstructuraWorkspaceProps) {
   const isWallTool = tool.kind === "wall";
@@ -80,6 +110,15 @@ export function SalaEstructuraWorkspace({
     onWallPointerMove &&
     onWallPointerUp &&
     onWallPointerCancel;
+  const activeStructureObjectKind = isSalaStructuralObjectKind(tool.kind)
+    ? tool.kind
+    : null;
+  const wallCanvasVisible = Boolean(
+    wallDrawingEnabled ||
+      attachmentPlacementKind ||
+      walls.length > 0 ||
+      wallAttachments.length > 0,
+  );
 
   const base = normalizeSalaEspacioBase(espacio.base);
   const floorEntry = getBaseFloorCatalogEntry(
@@ -100,13 +139,15 @@ export function SalaEstructuraWorkspace({
       floorBackground={floorEntry.background}
     >
       {canvasLayers}
-      {wallDrawingEnabled || attachmentPlacementKind ? (
+      {wallCanvasVisible ? (
         <SalaWallCanvas
           walls={walls}
           wallAttachments={wallAttachments}
           draft={wallDraft}
-          selectedWallId={selectedWallId}
-          selectedWallAttachmentId={selectedWallAttachmentId}
+          selectedWallId={wallDrawingEnabled ? selectedWallId : null}
+          selectedWallAttachmentId={
+            attachmentPlacementKind ? selectedWallAttachmentId : null
+          }
           attachmentPlacementKind={attachmentPlacementKind}
           toolHintProfile={toolHintProfile}
           onPointerDown={onWallPointerDown}
@@ -120,12 +161,29 @@ export function SalaEstructuraWorkspace({
           onWallAttachmentMoveStart={onWallAttachmentMoveStart}
           onWallAttachmentMoveEnd={onWallAttachmentMoveEnd}
           embedded
+          readOnly={!wallDrawingEnabled && !attachmentPlacementKind}
         />
-      ) : (
+      ) : null}
+      <SalaStructureObjectsLayer
+        espacioId={espacio.id}
+        gridSize={base.grid.size}
+        activeToolKind={activeStructureObjectKind}
+        structuralElements={structuralElements}
+        selectedStructuralElementId={selectedStructuralElementId}
+        onCreateStructuralElement={onStructuralElementCreate}
+        onSelectStructuralElement={onStructuralElementSelect}
+        onClearStructuralElementSelection={onStructuralElementClearSelection}
+        onUpdateStructuralElement={onStructuralElementUpdate}
+        onMoveStart={onStructuralElementMoveStart}
+        onMoveEnd={onStructuralElementMoveEnd}
+        onResizeStart={onStructuralElementResizeStart}
+        onResizeEnd={onStructuralElementResizeEnd}
+      />
+      {!wallCanvasVisible && !activeStructureObjectKind ? (
         <div className="hostly-sala-espacio-frame__placeholder">
           <p>{tool.workspaceHint}</p>
         </div>
-      )}
+      ) : null}
     </SalaEspacioCanvasFrame>
   );
 }

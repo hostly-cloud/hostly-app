@@ -9,6 +9,11 @@ import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espa
 import type { SalaEspacioBasePatch } from "@/lib/sala-editor/base/espacio-base-editor";
 import { applySalaEspacioBasePatch } from "@/lib/sala-editor/base/espacio-base-editor";
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
+import type {
+  SalaStructuralElement,
+  SalaStructuralElementDraft,
+} from "@/lib/sala-editor/types/elementos-estructurales";
+import { createSalaStructuralElement } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { SalaEditorActiveTool } from "@/lib/sala-editor/types/editor-tool";
 import {
   createStructuralActiveTool,
@@ -91,6 +96,8 @@ export function useSalaEditorDocument({
     useState<SurfaceMaterialKind | null>(null);
   const [selectedSurfaceObjectId, setSelectedSurfaceObjectId] =
     useState<string | null>(null);
+  const [selectedStructuralElementId, setSelectedStructuralElementId] =
+    useState<string | null>(null);
   const [selectedOperationalElementInstanceId, setSelectedOperationalElementInstanceId] =
     useState<string | null>(null);
   const [selectedWallAttachmentId, setSelectedWallAttachmentId] =
@@ -103,6 +110,7 @@ export function useSalaEditorDocument({
     setActiveOperationalElement(null);
     setActiveSurfaceMaterial(null);
     setSelectedSurfaceObjectId(null);
+    setSelectedStructuralElementId(null);
     setSelectedOperationalElementInstanceId(null);
     setSelectedWallAttachmentId(null);
     historyApi?.reset();
@@ -115,6 +123,7 @@ export function useSalaEditorDocument({
     setActiveOperationalElement(null);
     setActiveSurfaceMaterial(null);
     setSelectedSurfaceObjectId(null);
+    setSelectedStructuralElementId(null);
     setSelectedOperationalElementInstanceId(null);
     setSelectedWallAttachmentId(null);
   }, [restaurantId]);
@@ -188,6 +197,7 @@ export function useSalaEditorDocument({
   const selectSurfaceMaterial = useCallback((material: SurfaceMaterialKind) => {
     setActiveSurfaceMaterial(material);
     setSelectedSurfaceObjectId(null);
+    setSelectedStructuralElementId(null);
   }, []);
 
   const surfaceObjectsInEspacio = useMemo(
@@ -260,10 +270,124 @@ export function useSalaEditorDocument({
 
   const selectSurfaceObject = useCallback((surfaceId: string | null) => {
     setSelectedSurfaceObjectId(surfaceId);
+    if (surfaceId) {
+      setSelectedStructuralElementId(null);
+    }
   }, []);
 
   const clearSurfaceSelection = useCallback(() => {
     setSelectedSurfaceObjectId(null);
+  }, []);
+
+  const structuralElementsInEspacio = useMemo(
+    () =>
+      selectedEspacio
+        ? document.structuralElements.filter(
+            (element) => element.espacioId === selectedEspacio.id,
+          )
+        : [],
+    [document.structuralElements, selectedEspacio],
+  );
+
+  const selectedStructuralElement = useMemo(
+    () =>
+      selectedStructuralElementId
+        ? structuralElementsInEspacio.find(
+            (element) => element.id === selectedStructuralElementId,
+          ) ?? null
+        : null,
+    [selectedStructuralElementId, structuralElementsInEspacio],
+  );
+
+  const addStructuralElement = useCallback(
+    (draft: SalaStructuralElementDraft): SalaStructuralElement => {
+      const element = createSalaStructuralElement(draft);
+      let previousDocument: SalaEditorDocument | null = null;
+      let nextDocument: SalaEditorDocument | null = null;
+
+      setDocument((prev) => {
+        previousDocument = prev;
+        nextDocument = {
+          ...prev,
+          structuralElements: [...prev.structuralElements, element],
+          updatedAt: Date.now(),
+        };
+        return nextDocument;
+      });
+
+      if (previousDocument && nextDocument) {
+        historyApi?.recordCommit("structural.create", previousDocument, nextDocument);
+      }
+
+      setSelectedStructuralElementId(element.id);
+      setSelectedSurfaceObjectId(null);
+      setSelectedOperationalElementInstanceId(null);
+      setSelectedWallAttachmentId(null);
+      return element;
+    },
+    [historyApi],
+  );
+
+  const updateStructuralElement = useCallback(
+    (
+      elementId: string,
+      patch: Partial<Omit<SalaStructuralElement, "id">>,
+    ) => {
+      setDocument((prev) => ({
+        ...prev,
+        structuralElements: prev.structuralElements.map((element) =>
+          element.id === elementId
+            ? { ...element, ...patch, updatedAt: Date.now() }
+            : element,
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    [],
+  );
+
+  const removeStructuralElement = useCallback(
+    (elementId: string) => {
+      let previousDocument: SalaEditorDocument | null = null;
+      let nextDocument: SalaEditorDocument | null = null;
+
+      setDocument((prev) => {
+        if (!prev.structuralElements.some((element) => element.id === elementId)) {
+          return prev;
+        }
+        previousDocument = prev;
+        nextDocument = {
+          ...prev,
+          structuralElements: prev.structuralElements.filter(
+            (element) => element.id !== elementId,
+          ),
+          updatedAt: Date.now(),
+        };
+        return nextDocument;
+      });
+
+      if (previousDocument && nextDocument) {
+        historyApi?.recordCommit("structural.delete", previousDocument, nextDocument);
+      }
+
+      setSelectedStructuralElementId((current) =>
+        current === elementId ? null : current,
+      );
+    },
+    [historyApi],
+  );
+
+  const selectStructuralElement = useCallback((elementId: string | null) => {
+    setSelectedStructuralElementId(elementId);
+    if (elementId) {
+      setSelectedSurfaceObjectId(null);
+      setSelectedOperationalElementInstanceId(null);
+      setSelectedWallAttachmentId(null);
+    }
+  }, []);
+
+  const clearStructuralElementSelection = useCallback(() => {
+    setSelectedStructuralElementId(null);
   }, []);
 
   const operationalElementInstancesInEspacio = useMemo(
@@ -297,12 +421,16 @@ export function useSalaEditorDocument({
 
   const selectOperationalElementInstance = useCallback((instanceId: string | null) => {
     setSelectedOperationalElementInstanceId(instanceId);
+    if (instanceId) {
+      setSelectedStructuralElementId(null);
+    }
   }, []);
 
   const selectOperationalElement = useCallback(
     (type: OperationalElementType, visualVariant?: OperationalVisualVariant) => {
       setActiveOperationalElement(createActiveOperationalElement(type, visualVariant));
       setSelectedOperationalElementInstanceId(null);
+      setSelectedStructuralElementId(null);
     },
     [],
   );
@@ -511,6 +639,8 @@ export function useSalaEditorDocument({
 
   const selectTool = useCallback((kind: SalaStructuralElementKind) => {
     setActiveTool(createStructuralActiveTool(kind));
+    setSelectedSurfaceObjectId(null);
+    setSelectedOperationalElementInstanceId(null);
   }, []);
 
   const addWall = useCallback((wall: SalaWallSegment) => {
@@ -735,11 +865,13 @@ export function useSalaEditorDocument({
       } else if (phase === "terreno") {
         setActiveTool(null);
         setActiveOperationalElement(null);
+        setSelectedStructuralElementId(null);
         setSelectedOperationalElementInstanceId(null);
       } else if (phase === "operacion") {
         setActiveTool(null);
         setActiveSurfaceMaterial(null);
         setSelectedSurfaceObjectId(null);
+        setSelectedStructuralElementId(null);
         setActiveOperationalElement(
           createActiveOperationalElement(DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE),
         );
@@ -749,6 +881,7 @@ export function useSalaEditorDocument({
         setActiveOperationalElement(null);
         setActiveSurfaceMaterial(null);
         setSelectedSurfaceObjectId(null);
+        setSelectedStructuralElementId(null);
         setSelectedOperationalElementInstanceId(null);
       }
     },
@@ -762,6 +895,7 @@ export function useSalaEditorDocument({
       updatedAt: Date.now(),
     }));
     setSelectedSurfaceObjectId(null);
+    setSelectedStructuralElementId(null);
     setSelectedOperationalElementInstanceId(null);
   }, []);
 
@@ -868,6 +1002,14 @@ export function useSalaEditorDocument({
     addSurfaceObject,
     updateSurfaceObject,
     removeSurfaceObject,
+    structuralElementsInEspacio,
+    selectedStructuralElementId,
+    selectedStructuralElement,
+    addStructuralElement,
+    updateStructuralElement,
+    removeStructuralElement,
+    selectStructuralElement,
+    clearStructuralElementSelection,
     activeOperationalCatalogItem,
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,

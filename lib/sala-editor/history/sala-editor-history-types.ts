@@ -18,6 +18,10 @@ export type SalaEditorHistoryActionKind =
   | "surface.move"
   | "surface.resize"
   | "surface.delete"
+  | "structural.create"
+  | "structural.move"
+  | "structural.resize"
+  | "structural.delete"
   | "espacio.create"
   | "espacio.update"
   | "history.navigation";

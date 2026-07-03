@@ -12,6 +12,9 @@ export type SalaStructuralElementKind =
   | "wall"
   | "glass"
   | "door"
+  | "squareColumn"
+  | "roundColumn"
+  | "divider"
   | "bar"
   | "stage"
   | "decoration"
@@ -47,3 +50,106 @@ export type SalaStructuralElement = {
   createdAt?: number;
   updatedAt?: number;
 };
+
+export type SalaStructuralObjectKind = "squareColumn" | "roundColumn" | "divider";
+
+export type SalaStructuralElementDraft = Omit<
+  SalaStructuralElement,
+  "id" | "createdAt" | "updatedAt"
+>;
+
+export const STRUCTURAL_OBJECT_DEFAULT_SIZE: Record<
+  SalaStructuralObjectKind,
+  { width: number; height: number }
+> = {
+  squareColumn: { width: 48, height: 48 },
+  roundColumn: { width: 48, height: 48 },
+  divider: { width: 128, height: 24 },
+};
+
+export function isSalaStructuralObjectKind(
+  kind: SalaStructuralElementKind | null | undefined,
+): kind is SalaStructuralObjectKind {
+  return kind === "squareColumn" || kind === "roundColumn" || kind === "divider";
+}
+
+export function createSalaStructuralElement(
+  draft: SalaStructuralElementDraft,
+): SalaStructuralElement {
+  const now = Date.now();
+  return {
+    id: `struct-${now}-${Math.random().toString(36).slice(2, 9)}`,
+    ...draft,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isSalaStructuralElementKind(value: unknown): value is SalaStructuralElementKind {
+  return (
+    value === "wall" ||
+    value === "glass" ||
+    value === "door" ||
+    value === "squareColumn" ||
+    value === "roundColumn" ||
+    value === "divider" ||
+    value === "bar" ||
+    value === "stage" ||
+    value === "decoration" ||
+    value === "planter" ||
+    value === "separator"
+  );
+}
+
+export function normalizeSalaStructuralElements(
+  elements: readonly unknown[],
+  validEspacioIds: ReadonlySet<string>,
+): SalaStructuralElement[] {
+  const normalized: SalaStructuralElement[] = [];
+
+  for (const raw of elements) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
+    const entry = raw as Partial<SalaStructuralElement>;
+    if (typeof entry.id !== "string" || entry.id.trim() === "") continue;
+    if (typeof entry.espacioId !== "string" || !validEspacioIds.has(entry.espacioId)) {
+      continue;
+    }
+    if (!isSalaStructuralElementKind(entry.kind)) continue;
+    if (
+      !isFiniteNumber(entry.x) ||
+      !isFiniteNumber(entry.y) ||
+      !isFiniteNumber(entry.width) ||
+      !isFiniteNumber(entry.height) ||
+      entry.width <= 0 ||
+      entry.height <= 0
+    ) {
+      continue;
+    }
+
+    normalized.push({
+      id: entry.id,
+      espacioId: entry.espacioId,
+      kind: entry.kind,
+      x: entry.x,
+      y: entry.y,
+      width: entry.width,
+      height: entry.height,
+      ...(isFiniteNumber(entry.rotation) ? { rotation: entry.rotation } : {}),
+      ...(entry.locked != null ? { locked: entry.locked === true } : {}),
+      ...(entry.config && typeof entry.config === "object"
+        ? { config: entry.config }
+        : {}),
+      ...(entry.metadata && typeof entry.metadata === "object"
+        ? { metadata: entry.metadata }
+        : {}),
+      ...(isFiniteNumber(entry.createdAt) ? { createdAt: entry.createdAt } : {}),
+      ...(isFiniteNumber(entry.updatedAt) ? { updatedAt: entry.updatedAt } : {}),
+    });
+  }
+
+  return normalized;
+}

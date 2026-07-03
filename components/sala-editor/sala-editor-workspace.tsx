@@ -134,6 +134,9 @@ export function SalaEditorWorkspace({
     activeSurfaceMaterial,
     surfaceObjectsInEspacio,
     selectedSurfaceObjectId,
+    structuralElementsInEspacio,
+    selectedStructuralElementId,
+    selectedStructuralElement,
     activeOperationalElementType,
     activeOperationalVisualVariant,
     activeOperationalCatalogItem,
@@ -150,6 +153,11 @@ export function SalaEditorWorkspace({
     removeSurfaceObject,
     selectSurfaceObject,
     clearSurfaceSelection,
+    addStructuralElement,
+    updateStructuralElement,
+    removeStructuralElement,
+    selectStructuralElement,
+    clearStructuralElementSelection,
     selectOperationalElement,
     placeOperationalElementAt,
     selectOperationalElementInstance,
@@ -540,9 +548,10 @@ export function SalaEditorWorkspace({
   const handleStructuralWallPointerDown = useCallback(
     (payload: Parameters<typeof handleWallPointerDown>[0]) => {
       clearWallAttachmentSelection();
+      clearStructuralElementSelection();
       handleWallPointerDown(payload);
     },
-    [clearWallAttachmentSelection, handleWallPointerDown],
+    [clearStructuralElementSelection, clearWallAttachmentSelection, handleWallPointerDown],
   );
 
   const handleDeleteWall = useCallback(
@@ -560,13 +569,14 @@ export function SalaEditorWorkspace({
       kind: SalaWallAttachmentKind,
     ) => {
       clearWallSelection();
+      clearStructuralElementSelection();
       addWallAttachment({
         wallId,
         kind,
         positionRatio,
       });
     },
-    [addWallAttachment, clearWallSelection],
+    [addWallAttachment, clearStructuralElementSelection, clearWallSelection],
   );
 
   const handleSurfaceMoveStart = useCallback(() => {
@@ -599,12 +609,66 @@ export function SalaEditorWorkspace({
     [historyApi],
   );
 
+  const handleStructuralElementMoveStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleStructuralElementMoveEnd = useCallback(
+    (outcome: SurfaceEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction("structural.move", documentSnapshotRef.current!);
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
+  const handleStructuralElementResizeStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleStructuralElementResizeEnd = useCallback(
+    (outcome: SurfaceEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction(
+          "structural.resize",
+          documentSnapshotRef.current!,
+        );
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
+  const handleCreateStructuralElement = useCallback(
+    (draft: Parameters<typeof addStructuralElement>[0]) => {
+      clearWallSelection();
+      clearWallAttachmentSelection();
+      addStructuralElement(draft);
+    },
+    [addStructuralElement, clearWallAttachmentSelection, clearWallSelection],
+  );
+
+  const handleSelectStructuralElement = useCallback(
+    (elementId: string | null) => {
+      if (elementId) {
+        clearWallSelection();
+        clearWallAttachmentSelection();
+      }
+      selectStructuralElement(elementId);
+    },
+    [clearWallAttachmentSelection, clearWallSelection, selectStructuralElement],
+  );
+
   const handleSelectWallAttachment = useCallback(
     (attachmentId: string) => {
       clearWallSelection();
+      clearStructuralElementSelection();
       selectWallAttachment(attachmentId);
     },
-    [clearWallSelection, selectWallAttachment],
+    [clearStructuralElementSelection, clearWallSelection, selectWallAttachment],
   );
 
   const handleWallAttachmentMoveStart = useCallback(() => {
@@ -771,6 +835,26 @@ export function SalaEditorWorkspace({
   );
 
   const contextActionTarget = useMemo((): SalaEditorContextActionTarget | null => {
+    if (selectedStructuralElement) {
+      const labels = {
+        squareColumn: "Columna cuadrada",
+        roundColumn: "Columna circular",
+        divider: "Separador fijo",
+      } as const;
+      const icons = {
+        squareColumn: "■",
+        roundColumn: "●",
+        divider: "▭",
+      } as const;
+      const kind = selectedStructuralElement.kind;
+      return {
+        kind: "structural",
+        label: kind in labels ? labels[kind as keyof typeof labels] : "Estructura",
+        icon: kind in icons ? icons[kind as keyof typeof icons] : "▣",
+        onDelete: () => removeStructuralElement(selectedStructuralElement.id),
+      };
+    }
+
     if (selectedSurfaceObject) {
       return {
         kind: "surface",
@@ -813,9 +897,11 @@ export function SalaEditorWorkspace({
     handleDeleteWall,
     removeOperationalElement,
     removeSurfaceObject,
+    removeStructuralElement,
     removeWallAttachment,
     selectedOperationalElementInstance,
     selectedSurfaceObject,
+    selectedStructuralElement,
     selectedWall,
     selectedWallAttachment,
   ]);
@@ -873,6 +959,16 @@ export function SalaEditorWorkspace({
             onSurfaceObjectMoveEnd={handleSurfaceMoveEnd}
             onSurfaceObjectResizeStart={handleSurfaceResizeStart}
             onSurfaceObjectResizeEnd={handleSurfaceResizeEnd}
+            structuralElements={structuralElementsInEspacio}
+            selectedStructuralElementId={selectedStructuralElementId}
+            onStructuralElementCreate={handleCreateStructuralElement}
+            onStructuralElementSelect={handleSelectStructuralElement}
+            onStructuralElementClearSelection={clearStructuralElementSelection}
+            onStructuralElementUpdate={updateStructuralElement}
+            onStructuralElementMoveStart={handleStructuralElementMoveStart}
+            onStructuralElementMoveEnd={handleStructuralElementMoveEnd}
+            onStructuralElementResizeStart={handleStructuralElementResizeStart}
+            onStructuralElementResizeEnd={handleStructuralElementResizeEnd}
             walls={wallsInEspacio}
             wallAttachments={wallAttachmentsInEspacio}
             wallDraft={wallDraft}
