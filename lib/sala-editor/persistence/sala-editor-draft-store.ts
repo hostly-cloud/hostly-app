@@ -87,6 +87,7 @@ function parseSalaEditorDocument(
     !Array.isArray(raw.espacios) ||
     !Array.isArray(raw.walls) ||
     (raw.wallAttachments !== undefined && !Array.isArray(raw.wallAttachments)) ||
+    (raw.surfaceObjects !== undefined && !Array.isArray(raw.surfaceObjects)) ||
     !Array.isArray(raw.structuralElements) ||
     !Array.isArray(raw.operationalElements) ||
     !Array.isArray(raw.operationalElementInstances) ||

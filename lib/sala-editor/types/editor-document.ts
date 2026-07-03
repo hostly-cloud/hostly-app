@@ -9,6 +9,7 @@ import type { SalaOperationalElement } from "@/lib/sala-editor/types/elementos-o
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
+import type { SurfaceObject } from "@/lib/sala-editor/surface/surface-object";
 import type { SalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 import { createDefaultSalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 
@@ -22,6 +23,8 @@ export type SalaEditorDocument = {
   walls: SalaWallSegment[];
   /** Elementos estructurales anclados a paredes; resuelven posición desde wallId + ratio. */
   wallAttachments: SalaWallAttachment[];
+  /** Superficies de Terreno dibujadas localmente. */
+  surfaceObjects: SurfaceObject[];
   structuralElements: SalaStructuralElement[];
   operationalElements: SalaOperationalElement[];
   /** Instancias OSE colocadas localmente (Fase 2). */
@@ -40,6 +43,7 @@ export function createEmptySalaEditorDocument(
     espacios: [],
     walls: [],
     wallAttachments: [],
+    surfaceObjects: [],
     structuralElements: [],
     operationalElements: [],
     operationalElementInstances: [],

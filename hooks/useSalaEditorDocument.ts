@@ -27,7 +27,12 @@ import {
 } from "@/lib/sala-editor/catalog/structural-toolbox";
 import type { ActiveOperationalElementSelection } from "@/lib/sala-editor/ose/active-operational-element";
 import type { OperationalElementType, OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
-import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
+import type {
+  SurfaceMaterialKind,
+  SurfaceObject,
+  SurfaceObjectDraft,
+} from "@/lib/sala-editor/surface/surface-object";
+import { createSurfaceObject } from "@/lib/sala-editor/surface/surface-object";
 import {
   createActiveOperationalElement,
   DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE,
@@ -136,7 +141,10 @@ export function useSalaEditorDocument({
       const operational = document.operationalElements.filter(
         (el) => el.espacioId === espacio.id,
       ).length;
-      counts[espacio.id] = walls + structural + oseOperational + operational;
+      const surfaces = document.surfaceObjects.filter(
+        (surface) => surface.espacioId === espacio.id,
+      ).length;
+      counts[espacio.id] = walls + structural + oseOperational + operational + surfaces;
     }
     return counts;
   }, [
@@ -145,6 +153,7 @@ export function useSalaEditorDocument({
     document.structuralElements,
     document.operationalElements,
     document.operationalElementInstances,
+    document.surfaceObjects,
   ]);
 
   const activeStructuralToolKind = useMemo((): SalaStructuralElementKind | null => {
@@ -174,6 +183,26 @@ export function useSalaEditorDocument({
 
   const selectSurfaceMaterial = useCallback((material: SurfaceMaterialKind) => {
     setActiveSurfaceMaterial(material);
+  }, []);
+
+  const surfaceObjectsInEspacio = useMemo(
+    () =>
+      selectedEspacio
+        ? document.surfaceObjects.filter(
+            (surface) => surface.espacioId === selectedEspacio.id,
+          )
+        : [],
+    [document.surfaceObjects, selectedEspacio],
+  );
+
+  const addSurfaceObject = useCallback((draft: SurfaceObjectDraft): SurfaceObject => {
+    const surface = createSurfaceObject(draft);
+    setDocument((prev) => ({
+      ...prev,
+      surfaceObjects: [...prev.surfaceObjects, surface],
+      updatedAt: Date.now(),
+    }));
+    return surface;
   }, []);
 
   const operationalElementInstancesInEspacio = useMemo(
@@ -767,6 +796,8 @@ export function useSalaEditorDocument({
     activeOperationalVisualVariant,
     activeSurfaceMaterial,
     selectSurfaceMaterial,
+    surfaceObjectsInEspacio,
+    addSurfaceObject,
     activeOperationalCatalogItem,
     operationalElementInstancesInEspacio,
     selectedOperationalElementInstanceId,

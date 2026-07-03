@@ -5,6 +5,7 @@ import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import type { SalaWallAttachmentKind } from "@/lib/sala-editor/types/wall-attachment";
+import type { SurfaceObjectDraft } from "@/lib/sala-editor/surface/surface-object";
 import type { SalaEspacioType } from "@/lib/sala-editor/catalog/espacio-types";
 import {
   createLocalEspacio,
@@ -88,6 +89,7 @@ export function SalaEditorWorkspace({
     activeStructuralToolKind,
     activeStructuralToolboxItem,
     activeSurfaceMaterial,
+    surfaceObjectsInEspacio,
     activeOperationalElementType,
     activeOperationalVisualVariant,
     activeOperationalCatalogItem,
@@ -99,6 +101,7 @@ export function SalaEditorWorkspace({
     restoreDocumentSnapshot,
     selectTool,
     selectSurfaceMaterial,
+    addSurfaceObject,
     selectOperationalElement,
     placeOperationalElementAt,
     selectOperationalElementInstance,
@@ -698,6 +701,10 @@ export function SalaEditorWorkspace({
             hasEspacios={document.espacios.length > 0}
             activeStructuralToolboxItem={activeStructuralToolboxItem}
             activeSurfaceMaterial={activeSurfaceMaterial}
+            surfaceObjects={surfaceObjectsInEspacio}
+            onSurfaceObjectCreate={(draft: SurfaceObjectDraft) => {
+              addSurfaceObject(draft);
+            }}
             walls={wallsInEspacio}
             wallAttachments={wallAttachmentsInEspacio}
             wallDraft={wallDraft}

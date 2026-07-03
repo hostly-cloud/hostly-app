@@ -98,8 +98,9 @@ export type {
   SurfaceMaterialKind,
   SurfaceObject,
   SurfaceObjectDraft,
-  SurfaceObjectGeometry,
   SurfaceObjectId,
-  SurfaceObjectKind,
 } from "@/lib/sala-editor/surface/surface-object";
-export { createSurfaceObject } from "@/lib/sala-editor/surface/surface-object";
+export {
+  createSurfaceObject,
+  normalizeSurfaceObjects,
+} from "@/lib/sala-editor/surface/surface-object";

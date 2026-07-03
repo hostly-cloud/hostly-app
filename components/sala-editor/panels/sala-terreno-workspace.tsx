@@ -1,25 +1,220 @@
 "use client";
 
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+} from "react";
 import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
-import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
+import type {
+  SurfaceMaterialKind,
+  SurfaceObject,
+  SurfaceObjectDraft,
+} from "@/lib/sala-editor/surface/surface-object";
 import { getSurfaceMaterialCatalogItem } from "@/lib/sala-editor/surface/surface-material-catalog";
+import {
+  createSurfaceRectFromPoints,
+  isSurfaceRectUsable,
+  snapSurfacePointToGrid,
+  type SurfaceCreationDraft,
+  type SurfaceRect,
+} from "@/lib/sala-editor/surface/surface-interaction";
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import {
   getBaseFloorCatalogEntry,
   type BaseFloorCatalogKind,
 } from "@/lib/sala-editor/catalog/base-floor-catalog";
+import { clientToStagePoint } from "@/lib/sala-editor/canvas/canvas-viewport";
+import { unscaleEditorPoint } from "@/lib/sala-editor/canvas/editor-visual-scale";
+import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
 
 export type SalaTerrenoWorkspaceProps = {
   espacio: SalaEspacio;
   restaurantId: string;
   activeSurfaceMaterial?: SurfaceMaterialKind | null;
+  surfaceObjects?: SurfaceObject[];
+  onSurfaceObjectCreate?: (draft: SurfaceObjectDraft) => void;
 };
+
+type SurfaceCanvasContentProps = {
+  espacioId: string;
+  gridSize: number;
+  activeSurfaceMaterial: SurfaceMaterialKind | null;
+  surfaceObjects: readonly SurfaceObject[];
+  onSurfaceObjectCreate?: (draft: SurfaceObjectDraft) => void;
+};
+
+function createSurfaceStyle(
+  rect: SurfaceRect,
+  material: SurfaceMaterialKind,
+  coordinateScale: number,
+): CSSProperties {
+  const materialEntry = getSurfaceMaterialCatalogItem(material);
+  const color = materialEntry?.swatch ?? "#94a3b8";
+  return {
+    left: rect.x * coordinateScale,
+    top: rect.y * coordinateScale,
+    width: rect.width * coordinateScale,
+    height: rect.height * coordinateScale,
+    "--surface-color": color,
+  } as CSSProperties;
+}
+
+function SalaTerrenoCanvasContent({
+  espacioId,
+  gridSize,
+  activeSurfaceMaterial,
+  surfaceObjects,
+  onSurfaceObjectCreate,
+}: SurfaceCanvasContentProps) {
+  const canvasViewport = useCanvasViewport();
+  const coordinateScale = canvasViewport?.coordinateScale ?? 1;
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<SurfaceCreationDraft | null>(null);
+  const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
+
+  const resolveLogicalPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const fromViewport = canvasViewport?.resolveStagePoint(clientX, clientY);
+      const displayPoint =
+        fromViewport ??
+        (surfaceRef.current
+          ? clientToStagePoint(surfaceRef.current, clientX, clientY)
+          : null);
+      if (!displayPoint) return null;
+      return snapSurfacePointToGrid(
+        unscaleEditorPoint(displayPoint, coordinateScale),
+        gridSize,
+      );
+    },
+    [canvasViewport, coordinateScale, gridSize],
+  );
+
+  const previewStyle = useMemo(() => {
+    if (!draft) return null;
+    return createSurfaceStyle(draft.rect, draft.material, coordinateScale);
+  }, [coordinateScale, draft]);
+
+  const handlePointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      if (!activeSurfaceMaterial) return;
+      const point = resolveLogicalPoint(event.clientX, event.clientY);
+      if (!point) return;
+
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setDraft({
+        material: activeSurfaceMaterial,
+        origin: point,
+        current: point,
+        rect: createSurfaceRectFromPoints(point, point),
+      });
+    },
+    [activeSurfaceMaterial, resolveLogicalPoint],
+  );
+
+  const handlePointerMove = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const point = resolveLogicalPoint(event.clientX, event.clientY);
+      if (!point) return;
+
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              current: point,
+              rect: createSurfaceRectFromPoints(current.origin, point),
+            }
+          : null,
+      );
+    },
+    [resolveLogicalPoint],
+  );
+
+  const finishDraft = useCallback(
+    (event: PointerEvent<HTMLDivElement>, create: boolean) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+
+      setDraft((current) => {
+        if (create && current && isSurfaceRectUsable(current.rect)) {
+          onSurfaceObjectCreate?.({
+            espacioId,
+            material: current.material,
+            x: current.rect.x,
+            y: current.rect.y,
+            width: current.rect.width,
+            height: current.rect.height,
+            visible: true,
+            locked: false,
+          });
+        }
+        return null;
+      });
+    },
+    [espacioId, onSurfaceObjectCreate],
+  );
+
+  return (
+    <>
+      <div className="hostly-sala-terreno-surfaces" aria-hidden>
+        {surfaceObjects
+          .filter((surface) => surface.visible !== false)
+          .map((surface) => (
+            <div
+              key={surface.id}
+              className="hostly-sala-surface-object"
+              style={createSurfaceStyle(surface, surface.material, coordinateScale)}
+            />
+          ))}
+        {draft && previewStyle ? (
+          <div
+            className="hostly-sala-surface-object hostly-sala-surface-object--preview"
+            style={previewStyle}
+          />
+        ) : null}
+      </div>
+
+      <div
+        ref={surfaceRef}
+        className={[
+          "hostly-sala-terreno-hit-area",
+          activeSurfaceMaterial ? "is-creating" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        role="presentation"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={(event) => finishDraft(event, true)}
+        onPointerCancel={(event) => finishDraft(event, false)}
+      />
+
+      {activeMaterial ? (
+        <div className="hostly-sala-terreno-cursor-hint">
+          <span
+            className="hostly-sala-terreno-placeholder__swatch"
+            style={{ background: activeMaterial.swatch }}
+            aria-hidden
+          />
+          Arrastra para crear superficie de {activeMaterial.label.toLowerCase()}.
+        </div>
+      ) : null}
+    </>
+  );
+}
 
 export function SalaTerrenoWorkspace({
   espacio,
   restaurantId,
   activeSurfaceMaterial = null,
+  surfaceObjects = [],
+  onSurfaceObjectCreate,
 }: SalaTerrenoWorkspaceProps) {
   const base = normalizeSalaEspacioBase(espacio.base);
   const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
@@ -40,33 +235,30 @@ export function SalaTerrenoWorkspace({
       basePreview={base}
       floorBackground={floorEntry.background}
     >
-      <div className="hostly-sala-terreno-placeholder">
-        <div className="hostly-sala-terreno-placeholder__card">
-          <span className="hostly-sala-terreno-placeholder__eyebrow">
-            Surface Objects
-          </span>
-          <h2 className="hostly-sala-terreno-placeholder__title">
-            {activeMaterial
-              ? `${activeMaterial.label} preparado`
-              : "Selecciona un material para comenzar a construir el terreno."}
-          </h2>
-          <p className="hostly-sala-terreno-placeholder__text">
-            {activeMaterial
-              ? "El cursor queda preparado para la siguiente iteración. Todavía no se crea ningún objeto ni se dibuja geometría."
-              : "La biblioteca de Terreno ya separa materiales como madera, piedra, césped, arena, agua y tarima. En esta fase no se dibujan muros ni se colocan mesas."}
-          </p>
-          {activeMaterial ? (
-            <div className="hostly-sala-terreno-placeholder__ready">
-              <span
-                className="hostly-sala-terreno-placeholder__swatch"
-                style={{ background: activeMaterial.swatch }}
-                aria-hidden
-              />
-              <span>{activeMaterial.description}</span>
-            </div>
-          ) : null}
+      <SalaTerrenoCanvasContent
+        espacioId={espacio.id}
+        gridSize={base.grid.size}
+        activeSurfaceMaterial={activeSurfaceMaterial}
+        surfaceObjects={surfaceObjects}
+        onSurfaceObjectCreate={onSurfaceObjectCreate}
+      />
+      {!activeMaterial && surfaceObjects.length === 0 ? (
+        <div className="hostly-sala-terreno-placeholder">
+          <div className="hostly-sala-terreno-placeholder__card">
+            <span className="hostly-sala-terreno-placeholder__eyebrow">
+              Surface Objects
+            </span>
+            <h2 className="hostly-sala-terreno-placeholder__title">
+              Selecciona un material para comenzar a construir el terreno.
+            </h2>
+            <p className="hostly-sala-terreno-placeholder__text">
+              La biblioteca de Terreno ya separa materiales como madera, piedra,
+              césped, arena, agua y tarima. En esta fase no se dibujan muros ni
+              se colocan mesas.
+            </p>
+          </div>
         </div>
-      </div>
+      ) : null}
     </SalaEspacioCanvasFrame>
   );
 }

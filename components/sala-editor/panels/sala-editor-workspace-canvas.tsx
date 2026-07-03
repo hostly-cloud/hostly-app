@@ -8,7 +8,11 @@ import type {
   SalaWallAttachment,
   SalaWallAttachmentKind,
 } from "@/lib/sala-editor/types/wall-attachment";
-import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
+import type {
+  SurfaceMaterialKind,
+  SurfaceObject,
+  SurfaceObjectDraft,
+} from "@/lib/sala-editor/surface/surface-object";
 import type { WallAttachmentEditOutcome } from "@/lib/sala-editor/canvas/wall-attachment-interaction";
 import type { SalaWallDrawingDraft } from "@/hooks/useSalaWallDrawing";
 import { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-espacio-workspace-hero";
@@ -36,6 +40,8 @@ export type SalaEditorWorkspaceCanvasProps = {
   hasEspacios: boolean;
   activeStructuralToolboxItem: StructuralToolboxItem | null;
   activeSurfaceMaterial?: SurfaceMaterialKind | null;
+  surfaceObjects?: SurfaceObject[];
+  onSurfaceObjectCreate?: (draft: SurfaceObjectDraft) => void;
   walls?: SalaWallSegment[];
   wallAttachments?: SalaWallAttachment[];
   wallDraft?: SalaWallDrawingDraft | null;
@@ -101,6 +107,8 @@ export function SalaEditorWorkspaceCanvas({
   hasEspacios,
   activeStructuralToolboxItem,
   activeSurfaceMaterial = null,
+  surfaceObjects = [],
+  onSurfaceObjectCreate,
   walls = [],
   wallAttachments = [],
   wallDraft = null,
@@ -182,6 +190,8 @@ export function SalaEditorWorkspaceCanvas({
           espacio={espacio}
           restaurantId={restaurantId}
           activeSurfaceMaterial={activeSurfaceMaterial}
+          surfaceObjects={surfaceObjects}
+          onSurfaceObjectCreate={onSurfaceObjectCreate}
         />
       </div>
     );
