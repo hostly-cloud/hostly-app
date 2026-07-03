@@ -37,8 +37,15 @@ import {
 } from "@/lib/sala-editor/catalog/base-floor-catalog";
 import { clientToStagePoint } from "@/lib/sala-editor/canvas/canvas-viewport";
 import { unscaleEditorPoint } from "@/lib/sala-editor/canvas/editor-visual-scale";
+import {
+  SNAP_DISTANCE_PX,
+  snapRectToPeers,
+  type SnapGuide,
+  type SnapRect,
+} from "@/lib/sala-editor/snap";
 import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import { SalaEspacioCanvasFrame } from "@/components/sala-editor/panels/sala-espacio-canvas-frame";
+import { SalaSmartSnapGuidesLayer } from "@/components/sala-editor/panels/sala-smart-snap-guides-layer";
 import { SalaEditorCanvasToolHint } from "@/components/sala-editor/sala-editor-canvas-tool-hint";
 import {
   getSurfaceMaterialToolHint,
@@ -116,6 +123,16 @@ const SURFACE_RESIZE_HANDLES: readonly SurfaceResizeHandle[] = [
   "sw",
   "se",
 ] as const;
+
+function surfaceToSnapRect(surface: SurfaceObject): SnapRect {
+  return {
+    id: surface.id,
+    x: surface.x,
+    y: surface.y,
+    width: surface.width,
+    height: surface.height,
+  };
+}
 
 function snapSurfaceDisplayLength(value: number): number {
   return Math.round(value);
@@ -231,6 +248,7 @@ function SalaTerrenoCanvasContent({
   const [moveSession, setMoveSession] = useState<SurfaceMoveSession | null>(null);
   const [resizeSession, setResizeSession] =
     useState<SurfaceResizeSession | null>(null);
+  const [smartSnapGuides, setSmartSnapGuides] = useState<SnapGuide[]>([]);
   const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
 
   const resolveLogicalPoint = useCallback(
@@ -305,6 +323,7 @@ function SalaTerrenoCanvasContent({
 
   const cancelMoveSession = useCallback(() => {
     setMoveSession((session) => {
+      setSmartSnapGuides([]);
       if (!session) return null;
       if (session.active) {
         onSurfaceObjectUpdate?.(session.objectId, {
@@ -335,6 +354,7 @@ function SalaTerrenoCanvasContent({
 
   const finishMoveSession = useCallback(() => {
     setMoveSession((session) => {
+      setSmartSnapGuides([]);
       if (!session) return null;
       if (session.active) {
         onSurfaceObjectMoveEnd?.("complete");
@@ -390,7 +410,20 @@ function SalaTerrenoCanvasContent({
           if (!session.active) onSurfaceObjectMoveStart?.();
 
           const moved = translateSurfaceObject(session.originObject, delta, gridSize);
-          onSurfaceObjectUpdate?.(surface.id, { x: moved.x, y: moved.y });
+          const peers = surfaceObjects
+            .filter(
+              (candidate) =>
+                candidate.id !== surface.id && candidate.visible !== false,
+            )
+            .map(surfaceToSnapRect);
+          const snapResult = snapRectToPeers(surfaceToSnapRect(moved), peers, {
+            threshold: SNAP_DISTANCE_PX / Math.max(coordinateScale, 0.001),
+          });
+          onSurfaceObjectUpdate?.(surface.id, {
+            x: snapResult.rect.x,
+            y: snapResult.rect.y,
+          });
+          setSmartSnapGuides(snapResult.guides);
           return { ...session, active: true };
         });
       },
@@ -413,10 +446,12 @@ function SalaTerrenoCanvasContent({
       cancelMoveSession,
       finishMoveSession,
       gridSize,
+      coordinateScale,
       onSurfaceObjectMoveStart,
       onSurfaceObjectSelect,
       onSurfaceObjectUpdate,
       resolveLogicalPoint,
+      surfaceObjects,
     ],
   );
 
@@ -593,6 +628,10 @@ function SalaTerrenoCanvasContent({
           />
         ) : null}
       </div>
+      <SalaSmartSnapGuidesLayer
+        guides={smartSnapGuides}
+        coordinateScale={coordinateScale}
+      />
 
       <div
         ref={surfaceRef}
