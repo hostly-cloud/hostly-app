@@ -631,6 +631,26 @@ export function SalaEditorWorkspace({
     ],
   );
 
+  const handleCreateSurfaceObject = useCallback(
+    (draft: SurfaceObjectDraft) => {
+      clearWallSelection();
+      clearWallAttachmentSelection();
+      addSurfaceObject(draft);
+    },
+    [addSurfaceObject, clearWallAttachmentSelection, clearWallSelection],
+  );
+
+  const handleSelectSurfaceObject = useCallback(
+    (surfaceId: string | null) => {
+      if (surfaceId) {
+        clearWallSelection();
+        clearWallAttachmentSelection();
+      }
+      selectSurfaceObject(surfaceId);
+    },
+    [clearWallAttachmentSelection, clearWallSelection, selectSurfaceObject],
+  );
+
   const handleSurfaceMoveStart = useCallback(() => {
     historyApi.beginTransaction(documentSnapshotRef.current!);
   }, [historyApi]);
@@ -907,6 +927,12 @@ export function SalaEditorWorkspace({
     selectedEspacio?.id,
   ]);
 
+  useEffect(() => {
+    if (document.navigation.phase !== "operacion") {
+      clearOperationalSnapGuides();
+    }
+  }, [clearOperationalSnapGuides, document.navigation.phase]);
+
   const openAddDialog = useCallback(() => {
     setAddDialogOpen(true);
   }, []);
@@ -998,7 +1024,9 @@ export function SalaEditorWorkspace({
   );
 
   const contextActionTarget = useMemo((): SalaEditorContextActionTarget | null => {
-    if (selectedStructuralElement) {
+    const phase = document.navigation.phase;
+
+    if (phase === "estructura" && selectedStructuralElement) {
       const labels = {
         squareColumn: "Columna cuadrada",
         roundColumn: "Columna circular",
@@ -1018,7 +1046,7 @@ export function SalaEditorWorkspace({
       };
     }
 
-    if (selectedSurfaceObject) {
+    if (phase === "terreno" && selectedSurfaceObject) {
       return {
         kind: "surface",
         label: "Superficie",
@@ -1027,7 +1055,7 @@ export function SalaEditorWorkspace({
       };
     }
 
-    if (selectedZone) {
+    if (phase === "zonas" && selectedZone) {
       return {
         kind: "zone",
         label: selectedZone.name,
@@ -1036,7 +1064,7 @@ export function SalaEditorWorkspace({
       };
     }
 
-    if (selectedLandscapeElement) {
+    if (phase === "paisajismo" && selectedLandscapeElement) {
       const item = getLandscapeToolboxItem(selectedLandscapeElement.kind);
       return {
         kind: "landscape",
@@ -1046,7 +1074,7 @@ export function SalaEditorWorkspace({
       };
     }
 
-    if (selectedWallAttachment) {
+    if (phase === "estructura" && selectedWallAttachment) {
       const isGlass = selectedWallAttachment.kind === "glass";
       return {
         kind: isGlass ? "glass" : "door",
@@ -1056,7 +1084,7 @@ export function SalaEditorWorkspace({
       };
     }
 
-    if (selectedWall) {
+    if (phase === "estructura" && selectedWall) {
       return {
         kind: "wall",
         label: "Muro",
@@ -1065,7 +1093,7 @@ export function SalaEditorWorkspace({
       };
     }
 
-    if (selectedOperationalElementInstance) {
+    if (phase === "operacion" && selectedOperationalElementInstance) {
       const catalogItem = getOperationalElementCatalogItem(
         selectedOperationalElementInstance.elementType,
       );
@@ -1079,6 +1107,7 @@ export function SalaEditorWorkspace({
 
     return null;
   }, [
+    document.navigation.phase,
     handleDeleteWall,
     removeOperationalElement,
     removeLandscapeElement,
@@ -1142,10 +1171,8 @@ export function SalaEditorWorkspace({
             activeSurfaceMaterial={activeSurfaceMaterial}
             surfaceObjects={surfaceObjectsInEspacio}
             selectedSurfaceObjectId={selectedSurfaceObjectId}
-            onSurfaceObjectCreate={(draft: SurfaceObjectDraft) => {
-              addSurfaceObject(draft);
-            }}
-            onSurfaceObjectSelect={selectSurfaceObject}
+            onSurfaceObjectCreate={handleCreateSurfaceObject}
+            onSurfaceObjectSelect={handleSelectSurfaceObject}
             onSurfaceObjectClearSelection={clearSurfaceSelection}
             onSurfaceObjectUpdate={updateSurfaceObject}
             onSurfaceObjectMoveStart={handleSurfaceMoveStart}

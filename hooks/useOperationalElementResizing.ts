@@ -103,13 +103,20 @@ export function useOperationalElementResizing({
   }, [onResizeSessionEnd, syncResizing]);
 
   const cancelResize = useCallback(() => {
-    const hadSession = sessionRef.current != null;
+    const session = sessionRef.current;
+    const hadSession = session != null;
+    if (session) {
+      onResize(session.instanceId, {
+        size: session.originSize,
+        position: session.originPosition,
+      });
+    }
     sessionRef.current = null;
     syncResizing(null);
     if (hadSession) {
       onResizeSessionEnd?.("cancel");
     }
-  }, [onResizeSessionEnd, syncResizing]);
+  }, [onResize, onResizeSessionEnd, syncResizing]);
 
   useEffect(() => {
     if (!enabled) cancelResize();

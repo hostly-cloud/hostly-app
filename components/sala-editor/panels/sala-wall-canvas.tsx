@@ -461,12 +461,11 @@ export function SalaWallCanvas({
       onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
         if (event.button !== 0) return;
         event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        onSelectWallAttachment?.(attachment.id);
-
         const displayPoint = resolvePoint(event.clientX, event.clientY);
         if (!displayPoint) return;
         const point = unscaleEditorPoint(displayPoint, coordinateScale);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onSelectWallAttachment?.(attachment.id);
 
         setAttachmentEditSession({
           objectId: attachment.id,

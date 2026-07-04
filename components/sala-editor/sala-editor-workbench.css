@@ -3212,11 +3212,16 @@
 
 .hostly-sala-editor-space-switcher__list {
   display: flex;
+  max-height: 92px;
   flex-direction: column;
   gap: 1px;
   margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0;
   list-style: none;
+  scrollbar-gutter: stable;
 }
 
 .hostly-sala-editor-space-switcher__item {
@@ -5040,7 +5045,7 @@
 
 .hostly-sala-zone-wrap {
   position: absolute;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .hostly-sala-zone {

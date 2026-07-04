@@ -478,9 +478,9 @@ function SalaTerrenoCanvasContent({
         event.stopPropagation();
         creationPointerIdRef.current = null;
         setDraft(null);
-        event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
         onSurfaceObjectSelect?.(surface.id);
         setMoveSession({
           objectId: surface.id,
@@ -551,9 +551,9 @@ function SalaTerrenoCanvasContent({
         event.stopPropagation();
         creationPointerIdRef.current = null;
         setDraft(null);
-        event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
         onSurfaceObjectSelect?.(surface.id);
         setResizeSession({
           objectId: surface.id,

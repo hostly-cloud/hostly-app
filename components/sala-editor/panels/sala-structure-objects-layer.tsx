@@ -353,9 +353,9 @@ export function SalaStructureObjectsLayer({
       onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
         if (readOnly || event.button !== 0) return;
         event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
         onSelectStructuralElement?.(element.id);
         setMoveSession({
           objectId: element.id,
@@ -423,9 +423,9 @@ export function SalaStructureObjectsLayer({
       onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
         if (readOnly || event.button !== 0) return;
         event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
         onSelectStructuralElement?.(element.id);
         setResizeSession({
           objectId: element.id,

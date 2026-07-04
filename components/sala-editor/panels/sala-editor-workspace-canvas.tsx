@@ -393,8 +393,8 @@ export function SalaEditorWorkspaceCanvas({
           onSurfaceObjectResizeEnd={onSurfaceObjectResizeEnd}
           canvasLayers={
             <>
-              {structureLayer}
               {zoneLayer}
+              {structureLayer}
               {landscapeLayer}
               {operationLayer}
             </>

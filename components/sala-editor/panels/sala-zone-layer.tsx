@@ -287,9 +287,9 @@ export function SalaZoneLayer({
       onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
         if (readOnly || event.button !== 0) return;
         event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
         onSelectZone?.(zone.id);
         setMoveSession({
           objectId: zone.id,
@@ -352,9 +352,9 @@ export function SalaZoneLayer({
       onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
         if (readOnly || event.button !== 0) return;
         event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
         onSelectZone?.(zone.id);
         setResizeSession({
           objectId: zone.id,

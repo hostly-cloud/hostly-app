@@ -239,9 +239,9 @@ function SalaOperacionCanvasContent({
         if (event.button !== 0) return;
         if (isResizing()) return;
         event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
         onInstancePointerDown(instance.id, {
           point,
           clientX: event.clientX,
