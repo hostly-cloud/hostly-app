@@ -27,6 +27,7 @@ import {
 } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
+import { getLandscapeToolboxItem } from "@/lib/sala-editor/catalog/landscape-toolbox";
 import {
   snapOperationalCenterPosition,
 } from "@/lib/sala-editor/canvas/operational-snap";
@@ -147,11 +148,15 @@ export function SalaEditorWorkspace({
     activeStructuralToolKind,
     activeStructuralToolboxItem,
     activeSurfaceMaterial,
+    activeLandscapeKind,
     surfaceObjectsInEspacio,
     selectedSurfaceObjectId,
     structuralElementsInEspacio,
     selectedStructuralElementId,
     selectedStructuralElement,
+    landscapeElementsInEspacio,
+    selectedLandscapeElementId,
+    selectedLandscapeElement,
     activeOperationalElementType,
     activeOperationalVisualVariant,
     activeOperationalCatalogItem,
@@ -163,6 +168,7 @@ export function SalaEditorWorkspace({
     restoreDocumentSnapshot,
     selectTool,
     selectSurfaceMaterial,
+    selectLandscapeKind,
     addSurfaceObject,
     updateSurfaceObject,
     removeSurfaceObject,
@@ -173,6 +179,11 @@ export function SalaEditorWorkspace({
     removeStructuralElement,
     selectStructuralElement,
     clearStructuralElementSelection,
+    addLandscapeElement,
+    updateLandscapeElement,
+    removeLandscapeElement,
+    selectLandscapeElement,
+    clearLandscapeSelection,
     selectOperationalElement,
     placeOperationalElementAt,
     selectOperationalElementInstance,
@@ -564,9 +575,15 @@ export function SalaEditorWorkspace({
     (payload: Parameters<typeof handleWallPointerDown>[0]) => {
       clearWallAttachmentSelection();
       clearStructuralElementSelection();
+      clearLandscapeSelection();
       handleWallPointerDown(payload);
     },
-    [clearStructuralElementSelection, clearWallAttachmentSelection, handleWallPointerDown],
+    [
+      clearLandscapeSelection,
+      clearStructuralElementSelection,
+      clearWallAttachmentSelection,
+      handleWallPointerDown,
+    ],
   );
 
   const handleDeleteWall = useCallback(
@@ -585,13 +602,19 @@ export function SalaEditorWorkspace({
     ) => {
       clearWallSelection();
       clearStructuralElementSelection();
+      clearLandscapeSelection();
       addWallAttachment({
         wallId,
         kind,
         positionRatio,
       });
     },
-    [addWallAttachment, clearStructuralElementSelection, clearWallSelection],
+    [
+      addWallAttachment,
+      clearLandscapeSelection,
+      clearStructuralElementSelection,
+      clearWallSelection,
+    ],
   );
 
   const handleSurfaceMoveStart = useCallback(() => {
@@ -657,6 +680,36 @@ export function SalaEditorWorkspace({
     [historyApi],
   );
 
+  const handleLandscapeElementMoveStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleLandscapeElementMoveEnd = useCallback(
+    (outcome: SurfaceEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction("landscape.move", documentSnapshotRef.current!);
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
+  const handleLandscapeElementResizeStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleLandscapeElementResizeEnd = useCallback(
+    (outcome: SurfaceEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction("landscape.resize", documentSnapshotRef.current!);
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
   const handleCreateStructuralElement = useCallback(
     (draft: Parameters<typeof addStructuralElement>[0]) => {
       clearWallSelection();
@@ -677,13 +730,39 @@ export function SalaEditorWorkspace({
     [clearWallAttachmentSelection, clearWallSelection, selectStructuralElement],
   );
 
+  const handleCreateLandscapeElement = useCallback(
+    (draft: Parameters<typeof addLandscapeElement>[0]) => {
+      clearWallSelection();
+      clearWallAttachmentSelection();
+      addLandscapeElement(draft);
+    },
+    [addLandscapeElement, clearWallAttachmentSelection, clearWallSelection],
+  );
+
+  const handleSelectLandscapeElement = useCallback(
+    (elementId: string | null) => {
+      if (elementId) {
+        clearWallSelection();
+        clearWallAttachmentSelection();
+      }
+      selectLandscapeElement(elementId);
+    },
+    [clearWallAttachmentSelection, clearWallSelection, selectLandscapeElement],
+  );
+
   const handleSelectWallAttachment = useCallback(
     (attachmentId: string) => {
       clearWallSelection();
       clearStructuralElementSelection();
+      clearLandscapeSelection();
       selectWallAttachment(attachmentId);
     },
-    [clearStructuralElementSelection, clearWallSelection, selectWallAttachment],
+    [
+      clearLandscapeSelection,
+      clearStructuralElementSelection,
+      clearWallSelection,
+      selectWallAttachment,
+    ],
   );
 
   const handleWallAttachmentMoveStart = useCallback(() => {
@@ -879,6 +958,16 @@ export function SalaEditorWorkspace({
       };
     }
 
+    if (selectedLandscapeElement) {
+      const item = getLandscapeToolboxItem(selectedLandscapeElement.kind);
+      return {
+        kind: "landscape",
+        label: item?.label ?? "Paisajismo",
+        icon: item?.icon ?? "♧",
+        onDelete: () => removeLandscapeElement(selectedLandscapeElement.id),
+      };
+    }
+
     if (selectedWallAttachment) {
       const isGlass = selectedWallAttachment.kind === "glass";
       return {
@@ -914,10 +1003,12 @@ export function SalaEditorWorkspace({
   }, [
     handleDeleteWall,
     removeOperationalElement,
+    removeLandscapeElement,
     removeSurfaceObject,
     removeStructuralElement,
     removeWallAttachment,
     selectedOperationalElementInstance,
+    selectedLandscapeElement,
     selectedSurfaceObject,
     selectedStructuralElement,
     selectedWall,
@@ -945,12 +1036,14 @@ export function SalaEditorWorkspace({
             selectedEspacioId={document.navigation.selectedEspacioId}
             elementCountByEspacioId={elementCountByEspacioId}
             activeStructuralToolKind={activeStructuralToolKind}
+            activeLandscapeKind={activeLandscapeKind}
             activeSurfaceMaterial={activeSurfaceMaterial}
             activeOperationalElementType={activeOperationalElementType}
             activeOperationalVisualVariant={activeOperationalVisualVariant}
             onSelectEspacio={handleSelectEspacio}
             onRequestAddEspacio={openAddDialog}
             onSelectStructuralTool={selectTool}
+            onSelectLandscapeKind={selectLandscapeKind}
             onSelectSurfaceMaterial={selectSurfaceMaterial}
             onSelectOperationalElement={selectOperationalElement}
             onUpdateEspacio={updateEspacio}
@@ -987,6 +1080,17 @@ export function SalaEditorWorkspace({
             onStructuralElementMoveEnd={handleStructuralElementMoveEnd}
             onStructuralElementResizeStart={handleStructuralElementResizeStart}
             onStructuralElementResizeEnd={handleStructuralElementResizeEnd}
+            activeLandscapeKind={activeLandscapeKind}
+            landscapeElements={landscapeElementsInEspacio}
+            selectedLandscapeElementId={selectedLandscapeElementId}
+            onLandscapeElementCreate={handleCreateLandscapeElement}
+            onLandscapeElementSelect={handleSelectLandscapeElement}
+            onLandscapeElementClearSelection={clearLandscapeSelection}
+            onLandscapeElementUpdate={updateLandscapeElement}
+            onLandscapeElementMoveStart={handleLandscapeElementMoveStart}
+            onLandscapeElementMoveEnd={handleLandscapeElementMoveEnd}
+            onLandscapeElementResizeStart={handleLandscapeElementResizeStart}
+            onLandscapeElementResizeEnd={handleLandscapeElementResizeEnd}
             walls={wallsInEspacio}
             wallAttachments={wallAttachmentsInEspacio}
             wallDraft={wallDraft}

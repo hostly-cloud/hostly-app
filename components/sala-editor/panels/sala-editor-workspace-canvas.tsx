@@ -14,6 +14,11 @@ import type {
   SurfaceObjectDraft,
 } from "@/lib/sala-editor/surface/surface-object";
 import type {
+  LandscapeElement,
+  LandscapeElementDraft,
+  LandscapeElementKind,
+} from "@/lib/sala-editor/landscape/landscape-element";
+import type {
   SalaStructuralElement,
   SalaStructuralElementDraft,
 } from "@/lib/sala-editor/types/elementos-estructurales";
@@ -28,6 +33,8 @@ import {
   SalaTerrenoWorkspace,
 } from "@/components/sala-editor/panels/sala-terreno-workspace";
 import { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-estructura-workspace";
+import { SalaPaisajismoWorkspace } from "@/components/sala-editor/panels/sala-paisajismo-workspace";
+import { SalaLandscapeElementsLayer } from "@/components/sala-editor/panels/sala-landscape-elements-layer";
 import {
   SalaOperationalInstancesLayer,
   SalaOperacionWorkspace,
@@ -80,6 +87,20 @@ export type SalaEditorWorkspaceCanvasProps = {
   onStructuralElementMoveEnd?: (outcome: SurfaceEditOutcome) => void;
   onStructuralElementResizeStart?: () => void;
   onStructuralElementResizeEnd?: (outcome: SurfaceEditOutcome) => void;
+  activeLandscapeKind?: LandscapeElementKind | null;
+  landscapeElements?: LandscapeElement[];
+  selectedLandscapeElementId?: string | null;
+  onLandscapeElementCreate?: (draft: LandscapeElementDraft) => void;
+  onLandscapeElementSelect?: (elementId: string | null) => void;
+  onLandscapeElementClearSelection?: () => void;
+  onLandscapeElementUpdate?: (
+    elementId: string,
+    patch: Partial<Omit<LandscapeElement, "id">>,
+  ) => void;
+  onLandscapeElementMoveStart?: () => void;
+  onLandscapeElementMoveEnd?: (outcome: SurfaceEditOutcome) => void;
+  onLandscapeElementResizeStart?: () => void;
+  onLandscapeElementResizeEnd?: (outcome: SurfaceEditOutcome) => void;
   walls?: SalaWallSegment[];
   wallAttachments?: SalaWallAttachment[];
   wallDraft?: SalaWallDrawingDraft | null;
@@ -162,6 +183,17 @@ export function SalaEditorWorkspaceCanvas({
   onStructuralElementMoveEnd,
   onStructuralElementResizeStart,
   onStructuralElementResizeEnd,
+  activeLandscapeKind = null,
+  landscapeElements = [],
+  selectedLandscapeElementId = null,
+  onLandscapeElementCreate,
+  onLandscapeElementSelect,
+  onLandscapeElementClearSelection,
+  onLandscapeElementUpdate,
+  onLandscapeElementMoveStart,
+  onLandscapeElementMoveEnd,
+  onLandscapeElementResizeStart,
+  onLandscapeElementResizeEnd,
   walls = [],
   wallAttachments = [],
   wallDraft = null,
@@ -266,6 +298,17 @@ export function SalaEditorWorkspaceCanvas({
       </>
     ) : null;
 
+  const landscapeLayer =
+    landscapeElements.length > 0 ? (
+      <SalaLandscapeElementsLayer
+        key="landscape-layer"
+        espacioId={espacio.id}
+        gridSize={gridSize}
+        landscapeElements={landscapeElements}
+        readOnly
+      />
+    ) : null;
+
   const operationLayer =
     operationalElementInstances.length > 0 ? (
       <SalaOperationalInstancesLayer
@@ -285,6 +328,7 @@ export function SalaEditorWorkspaceCanvas({
             <>
               {terrainLayer}
               {structureLayer}
+              {landscapeLayer}
               {operationLayer}
             </>
           }
@@ -313,6 +357,7 @@ export function SalaEditorWorkspaceCanvas({
           canvasLayers={
             <>
               {structureLayer}
+              {landscapeLayer}
               {operationLayer}
             </>
           }
@@ -356,6 +401,7 @@ export function SalaEditorWorkspaceCanvas({
           canvasLayers={
             <>
               {terrainLayer}
+              {landscapeLayer}
               {operationLayer}
             </>
           }
@@ -371,6 +417,35 @@ export function SalaEditorWorkspaceCanvas({
         hint="Pared, cristal, puerta u otra estructura."
         glyph="⎔"
       />
+    );
+  }
+
+  if (phase === "paisajismo") {
+    return (
+      <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
+        <SalaPaisajismoWorkspace
+          espacio={espacio}
+          restaurantId={restaurantId}
+          activeLandscapeKind={activeLandscapeKind}
+          landscapeElements={landscapeElements}
+          selectedLandscapeElementId={selectedLandscapeElementId}
+          onLandscapeElementCreate={onLandscapeElementCreate}
+          onLandscapeElementSelect={onLandscapeElementSelect}
+          onLandscapeElementClearSelection={onLandscapeElementClearSelection}
+          onLandscapeElementUpdate={onLandscapeElementUpdate}
+          onLandscapeElementMoveStart={onLandscapeElementMoveStart}
+          onLandscapeElementMoveEnd={onLandscapeElementMoveEnd}
+          onLandscapeElementResizeStart={onLandscapeElementResizeStart}
+          onLandscapeElementResizeEnd={onLandscapeElementResizeEnd}
+          canvasLayers={
+            <>
+              {terrainLayer}
+              {structureLayer}
+              {operationLayer}
+            </>
+          }
+        />
+      </div>
     );
   }
 
@@ -403,6 +478,7 @@ export function SalaEditorWorkspaceCanvas({
             <>
               {terrainLayer}
               {structureLayer}
+              {landscapeLayer}
             </>
           }
         />

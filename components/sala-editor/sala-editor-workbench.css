@@ -4339,6 +4339,224 @@
   cursor: crosshair;
 }
 
+.hostly-sala-landscape-elements {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.hostly-sala-landscape-element-wrap {
+  position: absolute;
+  pointer-events: none;
+}
+
+.hostly-sala-landscape-element {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 1px solid color-mix(in srgb, #3f6212 34%, transparent);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(132, 152, 79, 0.32), transparent 64%),
+    color-mix(in srgb, #7f9f70 28%, #f8fafc);
+  box-shadow:
+    0 5px 12px rgba(15, 23, 42, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  transition:
+    border-color var(--hostly-editor-selection-transition),
+    box-shadow var(--hostly-editor-selection-transition),
+    filter var(--hostly-editor-selection-transition),
+    transform var(--hostly-editor-selection-transition);
+}
+
+.hostly-sala-landscape-element::before,
+.hostly-sala-landscape-element::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.hostly-sala-landscape-element--rectangularPlanter {
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 38%),
+    linear-gradient(90deg, #7b5f43 0%, #9b7654 16%, #6b4f36 100%);
+}
+
+.hostly-sala-landscape-element--rectangularPlanter::before {
+  inset: 7px 10px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 18% 50%, #7f9f70 0 18%, transparent 20%),
+    radial-gradient(circle at 40% 45%, #637f58 0 20%, transparent 22%),
+    radial-gradient(circle at 62% 56%, #8ca36d 0 18%, transparent 20%),
+    radial-gradient(circle at 82% 48%, #526f47 0 17%, transparent 19%);
+  opacity: 0.82;
+}
+
+.hostly-sala-landscape-element--roundPlanter {
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 40% 34%, rgba(255, 255, 255, 0.22), transparent 32%),
+    radial-gradient(circle at 50% 50%, #8b6a4a 0%, #68472f 74%, #4a3324 100%);
+}
+
+.hostly-sala-landscape-element--roundPlanter::before {
+  inset: 16%;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 42% 38%, #8fa878 0 22%, transparent 24%),
+    radial-gradient(circle at 62% 56%, #587449 0 24%, transparent 26%),
+    radial-gradient(circle at 34% 62%, #6f8f5c 0 20%, transparent 22%);
+}
+
+.hostly-sala-landscape-element--palm {
+  border: none;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 52%, rgba(112, 86, 49, 0.2), transparent 58%);
+  box-shadow: none;
+}
+
+.hostly-sala-landscape-element--palm::before {
+  inset: 7%;
+  border-radius: 999px;
+  background:
+    conic-gradient(
+      from 18deg,
+      transparent 0 7%,
+      rgba(83, 122, 58, 0.78) 7% 13%,
+      transparent 13% 20%,
+      rgba(102, 145, 68, 0.76) 20% 27%,
+      transparent 27% 36%,
+      rgba(74, 111, 54, 0.78) 36% 43%,
+      transparent 43% 54%,
+      rgba(112, 154, 76, 0.72) 54% 61%,
+      transparent 61% 72%,
+      rgba(69, 104, 51, 0.78) 72% 80%,
+      transparent 80% 100%
+    );
+  filter: blur(0.15px);
+}
+
+.hostly-sala-landscape-element--palm::after {
+  inset: 42%;
+  border-radius: 999px;
+  background: #8a653e;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+
+.hostly-sala-landscape-element--olive {
+  border: none;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 52%, rgba(78, 94, 58, 0.12), transparent 62%);
+  box-shadow: none;
+}
+
+.hostly-sala-landscape-element--olive::before {
+  inset: 10%;
+  border-radius: 42% 58% 48% 54%;
+  background:
+    radial-gradient(circle at 36% 42%, #9aa978 0 17%, transparent 19%),
+    radial-gradient(circle at 58% 36%, #74885f 0 20%, transparent 22%),
+    radial-gradient(circle at 62% 62%, #879b6d 0 18%, transparent 20%),
+    radial-gradient(circle at 40% 64%, #647a55 0 17%, transparent 19%);
+  opacity: 0.9;
+}
+
+.hostly-sala-landscape-element--olive::after {
+  inset: 43%;
+  border-radius: 999px;
+  background: #7b6147;
+}
+
+.hostly-sala-landscape-element:not(.is-readonly):hover {
+  border-color: var(--hostly-editor-selection-border);
+  box-shadow:
+    var(--hostly-editor-selection-hover),
+    0 7px 14px rgba(15, 23, 42, 0.09);
+}
+
+.hostly-sala-landscape-element.is-selected {
+  border-color: var(--hostly-editor-selection-border);
+  box-shadow:
+    var(--hostly-editor-selection-halo),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    var(--hostly-editor-selection-shadow-soft);
+}
+
+.hostly-sala-landscape-element.is-dragging {
+  cursor: grabbing;
+  filter: saturate(0.92) contrast(1.02);
+}
+
+.hostly-sala-landscape-element.is-resizing {
+  filter: saturate(0.92) contrast(1.02);
+}
+
+.hostly-sala-landscape-element.is-readonly {
+  cursor: default;
+  pointer-events: none;
+}
+
+.hostly-sala-landscape-element__resize-handle {
+  position: absolute;
+  z-index: 7;
+  width: var(--hostly-editor-selection-handle-size);
+  height: var(--hostly-editor-selection-handle-size);
+  border: var(--hostly-editor-selection-handle-border);
+  border-radius: var(--hostly-editor-selection-handle-radius);
+  background: var(--hostly-editor-selection-handle-bg);
+  box-shadow: var(--hostly-editor-selection-handle-shadow);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.hostly-sala-landscape-element__resize-handle::before {
+  content: "";
+  position: absolute;
+  inset: var(--hostly-editor-selection-touch-inset);
+}
+
+.hostly-sala-landscape-element__resize-handle--nw {
+  top: -7px;
+  left: -7px;
+  cursor: nwse-resize;
+}
+
+.hostly-sala-landscape-element__resize-handle--ne {
+  top: -7px;
+  right: -7px;
+  cursor: nesw-resize;
+}
+
+.hostly-sala-landscape-element__resize-handle--sw {
+  bottom: -7px;
+  left: -7px;
+  cursor: nesw-resize;
+}
+
+.hostly-sala-landscape-element__resize-handle--se {
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
+}
+
+.hostly-sala-landscape-placement-hit-area {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.hostly-sala-landscape-placement-hit-area.is-creating {
+  cursor: crosshair;
+}
+
 .hostly-sala-operational-layer {
   position: absolute;
   inset: 0;
