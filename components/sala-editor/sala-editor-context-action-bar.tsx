@@ -2,10 +2,12 @@
 
 export type SalaEditorContextActionTargetKind =
   | "surface"
+  | "zone"
   | "wall"
   | "door"
   | "glass"
   | "structural"
+  | "landscape"
   | "operational";
 
 export type SalaEditorContextActionTarget = {

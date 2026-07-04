@@ -7,14 +7,21 @@ import type { SurfaceObject } from "@/lib/sala-editor/surface/surface-object";
 import { normalizeSurfaceObjects } from "@/lib/sala-editor/surface/surface-object";
 import type { SalaStructuralElement } from "@/lib/sala-editor/types/elementos-estructurales";
 import { normalizeSalaStructuralElements } from "@/lib/sala-editor/types/elementos-estructurales";
+import type { LandscapeElement } from "@/lib/sala-editor/landscape/landscape-element";
+import { normalizeLandscapeElements } from "@/lib/sala-editor/landscape/landscape-element";
+import type { Zone } from "@/lib/sala-editor/zones/zone";
+import { normalizeZones } from "@/lib/sala-editor/zones/zone";
 
 type NormalizableSalaEditorDocument = Omit<
   SalaEditorDocument,
-  "wallAttachments" | "surfaceObjects" | "structuralElements"
+  "wallAttachments" | "surfaceObjects" | "structuralElements" | "landscapeElements"
+  | "zones"
 > & {
   wallAttachments?: SalaWallAttachment[];
   surfaceObjects?: SurfaceObject[];
+  zones?: Zone[];
   structuralElements?: SalaStructuralElement[];
+  landscapeElements?: LandscapeElement[];
 };
 
 export function withNormalizedSalaEspacioBase(espacio: SalaEspacio): SalaEspacio {
@@ -38,8 +45,13 @@ export function normalizeSalaEditorDocument(
       document.surfaceObjects ?? [],
       validEspacioIds,
     ),
+    zones: normalizeZones(document.zones ?? [], validEspacioIds),
     structuralElements: normalizeSalaStructuralElements(
       document.structuralElements ?? [],
+      validEspacioIds,
+    ),
+    landscapeElements: normalizeLandscapeElements(
+      document.landscapeElements ?? [],
       validEspacioIds,
     ),
     wallAttachments: normalizeWallAttachments(

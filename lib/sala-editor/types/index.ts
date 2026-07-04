@@ -104,3 +104,29 @@ export {
   createSurfaceObject,
   normalizeSurfaceObjects,
 } from "@/lib/sala-editor/surface/surface-object";
+export type {
+  LandscapeElement,
+  LandscapeElementDraft,
+  LandscapeElementId,
+  LandscapeElementKind,
+  ResizableLandscapeElementKind,
+} from "@/lib/sala-editor/landscape/landscape-element";
+export {
+  LANDSCAPE_ELEMENT_DEFAULT_SIZE,
+  createLandscapeElement,
+  isLandscapeElementKind,
+  isResizableLandscapeElementKind,
+  normalizeLandscapeElements,
+} from "@/lib/sala-editor/landscape/landscape-element";
+export type {
+  Zone,
+  ZoneDraft,
+  ZoneId,
+  ZoneType,
+} from "@/lib/sala-editor/zones/zone";
+export {
+  DEFAULT_ZONE_SIZE,
+  createZone,
+  isZoneType,
+  normalizeZones,
+} from "@/lib/sala-editor/zones/zone";

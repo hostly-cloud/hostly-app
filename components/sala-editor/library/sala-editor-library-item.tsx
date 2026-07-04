@@ -65,6 +65,12 @@ export function isLibraryItemSelected(
     }
     return selection.visualVariant == null;
   }
+  if (item.landscapeKind != null) {
+    return selection.landscapeKind === item.landscapeKind;
+  }
+  if (item.zoneType != null) {
+    return selection.zoneType === item.zoneType;
+  }
   if (item.baseToolId != null) {
     return selection.baseToolId === item.baseToolId;
   }

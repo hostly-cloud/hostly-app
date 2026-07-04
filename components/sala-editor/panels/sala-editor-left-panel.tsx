@@ -5,12 +5,16 @@ import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espa
 import type { SalaStructuralElementKind } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
+import type { LandscapeElementKind } from "@/lib/sala-editor/landscape/landscape-element";
+import type { ZoneType } from "@/lib/sala-editor/zones/zone";
 import type { SurfaceMaterialKind } from "@/lib/sala-editor/surface/surface-object";
 import type { SalaEspacioBasePatch } from "@/lib/sala-editor/base/espacio-base-editor";
 import { SalaEspaciosSidebar } from "@/components/sala-editor/panels/sala-espacios-sidebar";
 import { SalaBaseSidebar } from "@/components/sala-editor/panels/sala-base-sidebar";
 import { SalaTerrenoSidebar } from "@/components/sala-editor/panels/sala-terreno-sidebar";
+import { SalaZonasSidebar } from "@/components/sala-editor/panels/sala-zonas-sidebar";
 import { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
+import { SalaPaisajismoSidebar } from "@/components/sala-editor/panels/sala-paisajismo-sidebar";
 import { SalaOperacionSidebar } from "@/components/sala-editor/panels/sala-operacion-sidebar";
 
 export type SalaEditorLeftPanelProps = {
@@ -19,12 +23,16 @@ export type SalaEditorLeftPanelProps = {
   selectedEspacioId: string | null;
   elementCountByEspacioId: Record<string, number>;
   activeStructuralToolKind: SalaStructuralElementKind | null;
+  activeZoneType: ZoneType | null;
+  activeLandscapeKind: LandscapeElementKind | null;
   activeOperationalElementType: OperationalElementType | null;
   activeOperationalVisualVariant?: OperationalVisualVariant | null;
   activeSurfaceMaterial?: SurfaceMaterialKind | null;
   onSelectEspacio: (espacioId: string) => void;
   onRequestAddEspacio: () => void;
   onSelectStructuralTool: (kind: SalaStructuralElementKind) => void;
+  onSelectZoneType: (type: ZoneType) => void;
+  onSelectLandscapeKind: (kind: LandscapeElementKind) => void;
   onSelectSurfaceMaterial: (material: SurfaceMaterialKind) => void;
   onSelectOperationalElement: (
     type: OperationalElementType,
@@ -43,12 +51,16 @@ export function SalaEditorLeftPanel({
   selectedEspacioId,
   elementCountByEspacioId,
   activeStructuralToolKind,
+  activeZoneType,
+  activeLandscapeKind,
   activeOperationalElementType,
   activeOperationalVisualVariant = null,
   activeSurfaceMaterial = null,
   onSelectEspacio,
   onRequestAddEspacio,
   onSelectStructuralTool,
+  onSelectZoneType,
+  onSelectLandscapeKind,
   onSelectSurfaceMaterial,
   onSelectOperationalElement,
   onUpdateEspacio,
@@ -96,10 +108,22 @@ export function SalaEditorLeftPanel({
             onSelectSurfaceMaterial={onSelectSurfaceMaterial}
           />
         ) : null}
+        {phase === "zonas" ? (
+          <SalaZonasSidebar
+            activeZoneType={activeZoneType}
+            onSelectZoneType={onSelectZoneType}
+          />
+        ) : null}
         {phase === "estructura" ? (
           <SalaEstructuraSidebar
             activeToolKind={activeStructuralToolKind}
             onSelectTool={onSelectStructuralTool}
+          />
+        ) : null}
+        {phase === "paisajismo" ? (
+          <SalaPaisajismoSidebar
+            activeLandscapeKind={activeLandscapeKind}
+            onSelectLandscapeKind={onSelectLandscapeKind}
           />
         ) : null}
         {phase === "operacion" ? (

@@ -25,8 +25,10 @@ export function canEnterSalaEditorPhase(
 
   if (
     phase === "base" ||
+    phase === "zonas" ||
     phase === "terreno" ||
     phase === "estructura" ||
+    phase === "paisajismo" ||
     phase === "operacion"
   ) {
     return navigation.selectedEspacioId != null;
@@ -77,14 +79,18 @@ export function isSalaEditorPhaseComplete(
   phase: SalaEditorPhase,
   counts: {
     espacios: number;
+    zones?: number;
     structuralElements: number;
+    landscapeElements?: number;
     operationalElements: number;
   },
 ): boolean {
   if (phase === "espacios") return counts.espacios > 0;
   if (phase === "base") return counts.espacios > 0;
+  if (phase === "zonas") return (counts.zones ?? 0) > 0;
   if (phase === "terreno") return counts.espacios > 0;
   if (phase === "estructura") return counts.structuralElements > 0;
+  if (phase === "paisajismo") return (counts.landscapeElements ?? 0) > 0;
   if (phase === "operacion") return counts.operationalElements > 0;
   return false;
 }

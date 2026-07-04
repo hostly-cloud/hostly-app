@@ -18,6 +18,7 @@ import type {
   LandscapeElementDraft,
   LandscapeElementKind,
 } from "@/lib/sala-editor/landscape/landscape-element";
+import type { Zone, ZoneDraft, ZoneType } from "@/lib/sala-editor/zones/zone";
 import type {
   SalaStructuralElement,
   SalaStructuralElementDraft,
@@ -32,6 +33,8 @@ import {
   SalaSurfaceObjectsLayer,
   SalaTerrenoWorkspace,
 } from "@/components/sala-editor/panels/sala-terreno-workspace";
+import { SalaZonasWorkspace } from "@/components/sala-editor/panels/sala-zonas-workspace";
+import { SalaZoneLayer } from "@/components/sala-editor/panels/sala-zone-layer";
 import { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-estructura-workspace";
 import { SalaPaisajismoWorkspace } from "@/components/sala-editor/panels/sala-paisajismo-workspace";
 import { SalaLandscapeElementsLayer } from "@/components/sala-editor/panels/sala-landscape-elements-layer";
@@ -74,6 +77,17 @@ export type SalaEditorWorkspaceCanvasProps = {
   onSurfaceObjectMoveEnd?: (outcome: SurfaceEditOutcome) => void;
   onSurfaceObjectResizeStart?: () => void;
   onSurfaceObjectResizeEnd?: (outcome: SurfaceEditOutcome) => void;
+  activeZoneType?: ZoneType | null;
+  zones?: Zone[];
+  selectedZoneId?: string | null;
+  onZoneCreate?: (draft: ZoneDraft) => void;
+  onZoneSelect?: (zoneId: string | null) => void;
+  onZoneClearSelection?: () => void;
+  onZoneUpdate?: (zoneId: string, patch: Partial<Omit<Zone, "id">>) => void;
+  onZoneMoveStart?: () => void;
+  onZoneMoveEnd?: (outcome: SurfaceEditOutcome) => void;
+  onZoneResizeStart?: () => void;
+  onZoneResizeEnd?: (outcome: SurfaceEditOutcome) => void;
   structuralElements?: SalaStructuralElement[];
   selectedStructuralElementId?: string | null;
   onStructuralElementCreate?: (draft: SalaStructuralElementDraft) => void;
@@ -173,6 +187,17 @@ export function SalaEditorWorkspaceCanvas({
   onSurfaceObjectMoveEnd,
   onSurfaceObjectResizeStart,
   onSurfaceObjectResizeEnd,
+  activeZoneType = null,
+  zones = [],
+  selectedZoneId = null,
+  onZoneCreate,
+  onZoneSelect,
+  onZoneClearSelection,
+  onZoneUpdate,
+  onZoneMoveStart,
+  onZoneMoveEnd,
+  onZoneResizeStart,
+  onZoneResizeEnd,
   structuralElements = [],
   selectedStructuralElementId = null,
   onStructuralElementCreate,
@@ -269,6 +294,17 @@ export function SalaEditorWorkspaceCanvas({
       />
     ) : null;
 
+  const zoneLayer =
+    zones.length > 0 ? (
+      <SalaZoneLayer
+        key="zone-layer"
+        espacioId={espacio.id}
+        gridSize={gridSize}
+        zones={zones}
+        readOnly
+      />
+    ) : null;
+
   const structureLayer =
     walls.length > 0 ||
     wallAttachments.length > 0 ||
@@ -327,6 +363,7 @@ export function SalaEditorWorkspaceCanvas({
           canvasLayers={
             <>
               {terrainLayer}
+              {zoneLayer}
               {structureLayer}
               {landscapeLayer}
               {operationLayer}
@@ -356,6 +393,37 @@ export function SalaEditorWorkspaceCanvas({
           onSurfaceObjectResizeEnd={onSurfaceObjectResizeEnd}
           canvasLayers={
             <>
+              {structureLayer}
+              {zoneLayer}
+              {landscapeLayer}
+              {operationLayer}
+            </>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (phase === "zonas") {
+    return (
+      <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
+        <SalaZonasWorkspace
+          espacio={espacio}
+          restaurantId={restaurantId}
+          activeZoneType={activeZoneType}
+          zones={zones}
+          selectedZoneId={selectedZoneId}
+          onZoneCreate={onZoneCreate}
+          onZoneSelect={onZoneSelect}
+          onZoneClearSelection={onZoneClearSelection}
+          onZoneUpdate={onZoneUpdate}
+          onZoneMoveStart={onZoneMoveStart}
+          onZoneMoveEnd={onZoneMoveEnd}
+          onZoneResizeStart={onZoneResizeStart}
+          onZoneResizeEnd={onZoneResizeEnd}
+          canvasLayers={
+            <>
+              {terrainLayer}
               {structureLayer}
               {landscapeLayer}
               {operationLayer}
@@ -401,6 +469,7 @@ export function SalaEditorWorkspaceCanvas({
           canvasLayers={
             <>
               {terrainLayer}
+              {zoneLayer}
               {landscapeLayer}
               {operationLayer}
             </>
@@ -440,6 +509,7 @@ export function SalaEditorWorkspaceCanvas({
           canvasLayers={
             <>
               {terrainLayer}
+              {zoneLayer}
               {structureLayer}
               {operationLayer}
             </>
@@ -477,6 +547,7 @@ export function SalaEditorWorkspaceCanvas({
           canvasLayers={
             <>
               {terrainLayer}
+              {zoneLayer}
               {structureLayer}
               {landscapeLayer}
             </>

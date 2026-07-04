@@ -9,9 +9,14 @@ export { SalaEspacioWorkspaceHero } from "@/components/sala-editor/panels/sala-e
 export { SalaBaseSidebar } from "@/components/sala-editor/panels/sala-base-sidebar";
 export { SalaBaseConfigPanel } from "@/components/sala-editor/panels/sala-base-config-panel";
 export { SalaBaseWorkspace } from "@/components/sala-editor/panels/sala-base-workspace";
+export { SalaZonasSidebar } from "@/components/sala-editor/panels/sala-zonas-sidebar";
+export { SalaZoneLayer } from "@/components/sala-editor/panels/sala-zone-layer";
+export { SalaZonasWorkspace } from "@/components/sala-editor/panels/sala-zonas-workspace";
 export { SalaEstructuraSidebar } from "@/components/sala-editor/panels/sala-estructura-sidebar";
 export { SalaStructuralToolCard } from "@/components/sala-editor/panels/sala-structural-tool-card";
 export { SalaEstructuraWorkspace } from "@/components/sala-editor/panels/sala-estructura-workspace";
+export { SalaPaisajismoSidebar } from "@/components/sala-editor/panels/sala-paisajismo-sidebar";
+export { SalaPaisajismoWorkspace } from "@/components/sala-editor/panels/sala-paisajismo-workspace";
 export { SalaStructuralToolInspector } from "@/components/sala-editor/panels/sala-structural-tool-inspector";
 export { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas";
 export { SalaWallInspector } from "@/components/sala-editor/panels/sala-wall-inspector";

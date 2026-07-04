@@ -8,8 +8,10 @@ import type { SalaEspacioId } from "@/lib/sala-editor/types/espacio";
 export type SalaEditorPhase =
   | "espacios"
   | "base"
+  | "zonas"
   | "terreno"
   | "estructura"
+  | "paisajismo"
   | "operacion";
 
 export type SalaEditorNavigation = {
@@ -21,31 +23,39 @@ export type SalaEditorNavigation = {
 export const SALA_EDITOR_PHASE_ORDER: readonly SalaEditorPhase[] = [
   "espacios",
   "base",
+  "zonas",
   "terreno",
   "estructura",
+  "paisajismo",
   "operacion",
 ] as const;
 
 export const SALA_EDITOR_VISIBLE_PHASE_ORDER: readonly SalaEditorPhase[] = [
   "base",
+  "zonas",
   "terreno",
   "estructura",
+  "paisajismo",
   "operacion",
 ] as const;
 
 export const SALA_EDITOR_PHASE_LABELS: Record<SalaEditorPhase, string> = {
   espacios: "Mapas",
   base: "Base",
+  zonas: "Zonas",
   terreno: "Terreno",
   estructura: "Estructura",
+  paisajismo: "Paisajismo",
   operacion: "Operación",
 };
 
 export const SALA_EDITOR_PHASE_DESCRIPTIONS: Record<SalaEditorPhase, string> = {
   espacios: "Define los mapas operativos del restaurante.",
   base: "Define dimensiones, escala, cuadrícula y fondo neutro.",
+  zonas: "Agrupa áreas funcionales del restaurante.",
   terreno: "Construye superficies y materiales dentro del mapa.",
   estructura: "Paredes, barras, puertas y elementos fijos.",
+  paisajismo: "Jardineras, árboles y elementos naturales del espacio.",
   operacion: "Mesas, asientos y superficies de servicio.",
 };
 

@@ -44,6 +44,8 @@ import type {
   LandscapeElementKind,
 } from "@/lib/sala-editor/landscape/landscape-element";
 import { createLandscapeElement } from "@/lib/sala-editor/landscape/landscape-element";
+import type { Zone, ZoneDraft, ZoneType } from "@/lib/sala-editor/zones/zone";
+import { createZone } from "@/lib/sala-editor/zones/zone";
 import {
   createActiveOperationalElement,
   DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE,
@@ -100,10 +102,12 @@ export function useSalaEditorDocument({
     useState<ActiveOperationalElementSelection>(null);
   const [activeSurfaceMaterial, setActiveSurfaceMaterial] =
     useState<SurfaceMaterialKind | null>(null);
+  const [activeZoneType, setActiveZoneType] = useState<ZoneType | null>(null);
   const [activeLandscapeKind, setActiveLandscapeKind] =
     useState<LandscapeElementKind | null>(null);
   const [selectedSurfaceObjectId, setSelectedSurfaceObjectId] =
     useState<string | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [selectedLandscapeElementId, setSelectedLandscapeElementId] =
     useState<string | null>(null);
   const [selectedStructuralElementId, setSelectedStructuralElementId] =
@@ -119,8 +123,10 @@ export function useSalaEditorDocument({
     setActiveTool(null);
     setActiveOperationalElement(null);
     setActiveSurfaceMaterial(null);
+    setActiveZoneType(null);
     setActiveLandscapeKind(null);
     setSelectedSurfaceObjectId(null);
+    setSelectedZoneId(null);
     setSelectedLandscapeElementId(null);
     setSelectedStructuralElementId(null);
     setSelectedOperationalElementInstanceId(null);
@@ -134,8 +140,10 @@ export function useSalaEditorDocument({
     setActiveTool(null);
     setActiveOperationalElement(null);
     setActiveSurfaceMaterial(null);
+    setActiveZoneType(null);
     setActiveLandscapeKind(null);
     setSelectedSurfaceObjectId(null);
+    setSelectedZoneId(null);
     setSelectedLandscapeElementId(null);
     setSelectedStructuralElementId(null);
     setSelectedOperationalElementInstanceId(null);
@@ -171,11 +179,14 @@ export function useSalaEditorDocument({
       const surfaces = document.surfaceObjects.filter(
         (surface) => surface.espacioId === espacio.id,
       ).length;
+      const zones = document.zones.filter(
+        (zone) => zone.espacioId === espacio.id,
+      ).length;
       const landscape = document.landscapeElements.filter(
         (element) => element.espacioId === espacio.id,
       ).length;
       counts[espacio.id] =
-        walls + structural + landscape + oseOperational + operational + surfaces;
+        walls + structural + zones + landscape + oseOperational + operational + surfaces;
     }
     return counts;
   }, [
@@ -185,6 +196,7 @@ export function useSalaEditorDocument({
     document.operationalElements,
     document.operationalElementInstances,
     document.surfaceObjects,
+    document.zones,
     document.landscapeElements,
   ]);
 
@@ -215,15 +227,31 @@ export function useSalaEditorDocument({
 
   const selectSurfaceMaterial = useCallback((material: SurfaceMaterialKind) => {
     setActiveSurfaceMaterial(material);
+    setActiveZoneType(null);
     setActiveLandscapeKind(null);
     setSelectedSurfaceObjectId(null);
+    setSelectedZoneId(null);
     setSelectedLandscapeElementId(null);
     setSelectedStructuralElementId(null);
   }, []);
 
+  const selectZoneType = useCallback((type: ZoneType) => {
+    setActiveZoneType(type);
+    setActiveSurfaceMaterial(null);
+    setActiveLandscapeKind(null);
+    setSelectedZoneId(null);
+    setSelectedSurfaceObjectId(null);
+    setSelectedLandscapeElementId(null);
+    setSelectedStructuralElementId(null);
+    setSelectedOperationalElementInstanceId(null);
+    setSelectedWallAttachmentId(null);
+  }, []);
+
   const selectLandscapeKind = useCallback((kind: LandscapeElementKind) => {
     setActiveLandscapeKind(kind);
+    setActiveZoneType(null);
     setActiveSurfaceMaterial(null);
+    setSelectedZoneId(null);
     setSelectedLandscapeElementId(null);
     setSelectedSurfaceObjectId(null);
     setSelectedStructuralElementId(null);
@@ -261,8 +289,103 @@ export function useSalaEditorDocument({
     }
 
     setSelectedSurfaceObjectId(surface.id);
+    setSelectedZoneId(null);
+    setSelectedLandscapeElementId(null);
+    setSelectedStructuralElementId(null);
     return surface;
   }, [historyApi]);
+
+  const zonesInEspacio = useMemo(
+    () =>
+      selectedEspacio
+        ? document.zones.filter((zone) => zone.espacioId === selectedEspacio.id)
+        : [],
+    [document.zones, selectedEspacio],
+  );
+
+  const selectedZone = useMemo(
+    () =>
+      selectedZoneId
+        ? zonesInEspacio.find((zone) => zone.id === selectedZoneId) ?? null
+        : null,
+    [selectedZoneId, zonesInEspacio],
+  );
+
+  const addZone = useCallback((draft: ZoneDraft): Zone => {
+    const zone = createZone(draft);
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        zones: [...prev.zones, zone],
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("zone.create", previousDocument, nextDocument);
+    }
+
+    setSelectedZoneId(zone.id);
+    setSelectedSurfaceObjectId(null);
+    setSelectedLandscapeElementId(null);
+    setSelectedStructuralElementId(null);
+    setSelectedOperationalElementInstanceId(null);
+    setSelectedWallAttachmentId(null);
+    return zone;
+  }, [historyApi]);
+
+  const updateZone = useCallback(
+    (zoneId: string, patch: Partial<Omit<Zone, "id">>) => {
+      setDocument((prev) => ({
+        ...prev,
+        zones: prev.zones.map((zone) =>
+          zone.id === zoneId ? { ...zone, ...patch, updatedAt: Date.now() } : zone,
+        ),
+        updatedAt: Date.now(),
+      }));
+    },
+    [],
+  );
+
+  const removeZone = useCallback((zoneId: string) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        zones: prev.zones.filter((zone) => zone.id !== zoneId),
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("zone.delete", previousDocument, nextDocument);
+    }
+    setSelectedZoneId((current) => (current === zoneId ? null : current));
+  }, [historyApi]);
+
+  const selectZone = useCallback((zoneId: string | null) => {
+    setSelectedZoneId(zoneId);
+    if (zoneId) {
+      setSelectedSurfaceObjectId(null);
+      setSelectedLandscapeElementId(null);
+      setSelectedStructuralElementId(null);
+      setSelectedOperationalElementInstanceId(null);
+      setSelectedWallAttachmentId(null);
+    }
+  }, []);
+
+  const clearZoneSelection = useCallback(() => {
+    setSelectedZoneId(null);
+  }, []);
 
   const landscapeElementsInEspacio = useMemo(
     () =>
@@ -304,6 +427,10 @@ export function useSalaEditorDocument({
     }
 
     setSelectedLandscapeElementId(element.id);
+    setSelectedZoneId(null);
+    setSelectedSurfaceObjectId(null);
+    setSelectedStructuralElementId(null);
+    setSelectedOperationalElementInstanceId(null);
     return element;
   }, [historyApi]);
 
@@ -349,6 +476,7 @@ export function useSalaEditorDocument({
   const selectLandscapeElement = useCallback((elementId: string | null) => {
     setSelectedLandscapeElementId(elementId);
     if (elementId) {
+      setSelectedZoneId(null);
       setSelectedSurfaceObjectId(null);
       setSelectedStructuralElementId(null);
       setSelectedOperationalElementInstanceId(null);
@@ -398,6 +526,7 @@ export function useSalaEditorDocument({
   const selectSurfaceObject = useCallback((surfaceId: string | null) => {
     setSelectedSurfaceObjectId(surfaceId);
     if (surfaceId) {
+      setSelectedZoneId(null);
       setSelectedLandscapeElementId(null);
       setSelectedStructuralElementId(null);
       setSelectedOperationalElementInstanceId(null);
@@ -449,6 +578,7 @@ export function useSalaEditorDocument({
       }
 
       setSelectedStructuralElementId(element.id);
+      setSelectedZoneId(null);
       setSelectedSurfaceObjectId(null);
       setSelectedLandscapeElementId(null);
       setSelectedOperationalElementInstanceId(null);
@@ -510,6 +640,7 @@ export function useSalaEditorDocument({
   const selectStructuralElement = useCallback((elementId: string | null) => {
     setSelectedStructuralElementId(elementId);
     if (elementId) {
+      setSelectedZoneId(null);
       setSelectedSurfaceObjectId(null);
       setSelectedLandscapeElementId(null);
       setSelectedOperationalElementInstanceId(null);
@@ -553,6 +684,7 @@ export function useSalaEditorDocument({
   const selectOperationalElementInstance = useCallback((instanceId: string | null) => {
     setSelectedOperationalElementInstanceId(instanceId);
     if (instanceId) {
+      setSelectedZoneId(null);
       setSelectedSurfaceObjectId(null);
       setSelectedLandscapeElementId(null);
       setSelectedStructuralElementId(null);
@@ -563,6 +695,8 @@ export function useSalaEditorDocument({
     (type: OperationalElementType, visualVariant?: OperationalVisualVariant) => {
       setActiveOperationalElement(createActiveOperationalElement(type, visualVariant));
       setSelectedOperationalElementInstanceId(null);
+      setSelectedZoneId(null);
+      setSelectedSurfaceObjectId(null);
       setSelectedLandscapeElementId(null);
       setSelectedStructuralElementId(null);
     },
@@ -587,6 +721,7 @@ export function useSalaEditorDocument({
       historyApi?.recordCommit("operational.create", previousDocument, nextDocument);
     }
     setSelectedOperationalElementInstanceId(instance.id);
+    setSelectedZoneId(null);
     setSelectedSurfaceObjectId(null);
     setSelectedLandscapeElementId(null);
     setSelectedStructuralElementId(null);
@@ -685,6 +820,10 @@ export function useSalaEditorDocument({
 
     if (duplicateId) {
       setSelectedOperationalElementInstanceId(duplicateId);
+      setSelectedZoneId(null);
+      setSelectedSurfaceObjectId(null);
+      setSelectedLandscapeElementId(null);
+      setSelectedStructuralElementId(null);
     }
   }, [historyApi]);
 
@@ -776,7 +915,9 @@ export function useSalaEditorDocument({
 
   const selectTool = useCallback((kind: SalaStructuralElementKind) => {
     setActiveTool(createStructuralActiveTool(kind));
+    setActiveZoneType(null);
     setSelectedSurfaceObjectId(null);
+    setSelectedZoneId(null);
     setSelectedOperationalElementInstanceId(null);
   }, []);
 
@@ -891,6 +1032,11 @@ export function useSalaEditorDocument({
 
   const selectWallAttachment = useCallback((attachmentId: string) => {
     setSelectedWallAttachmentId(attachmentId);
+    setSelectedZoneId(null);
+    setSelectedSurfaceObjectId(null);
+    setSelectedLandscapeElementId(null);
+    setSelectedStructuralElementId(null);
+    setSelectedOperationalElementInstanceId(null);
   }, []);
 
   const clearWallAttachmentSelection = useCallback(() => {
@@ -995,31 +1141,49 @@ export function useSalaEditorDocument({
 
       if (phase === "estructura") {
         setActiveTool(createStructuralActiveTool(DEFAULT_STRUCTURAL_ACTIVE_TOOL_KIND));
+        setActiveZoneType(null);
         setActiveOperationalElement(null);
         setActiveSurfaceMaterial(null);
         setActiveLandscapeKind(null);
+        setSelectedZoneId(null);
         setSelectedSurfaceObjectId(null);
         setSelectedLandscapeElementId(null);
         setSelectedOperationalElementInstanceId(null);
-      } else if (phase === "terreno") {
+      } else if (phase === "zonas") {
         setActiveTool(null);
         setActiveOperationalElement(null);
+        setActiveSurfaceMaterial(null);
         setActiveLandscapeKind(null);
+        setActiveZoneType("dining");
+        setSelectedSurfaceObjectId(null);
+        setSelectedLandscapeElementId(null);
+        setSelectedStructuralElementId(null);
+        setSelectedOperationalElementInstanceId(null);
+      } else if (phase === "terreno") {
+        setActiveTool(null);
+        setActiveZoneType(null);
+        setActiveOperationalElement(null);
+        setActiveLandscapeKind(null);
+        setSelectedZoneId(null);
         setSelectedLandscapeElementId(null);
         setSelectedStructuralElementId(null);
         setSelectedOperationalElementInstanceId(null);
       } else if (phase === "paisajismo") {
         setActiveTool(null);
+        setActiveZoneType(null);
         setActiveOperationalElement(null);
         setActiveSurfaceMaterial(null);
         setActiveLandscapeKind("rectangularPlanter");
+        setSelectedZoneId(null);
         setSelectedSurfaceObjectId(null);
         setSelectedStructuralElementId(null);
         setSelectedOperationalElementInstanceId(null);
       } else if (phase === "operacion") {
         setActiveTool(null);
+        setActiveZoneType(null);
         setActiveSurfaceMaterial(null);
         setActiveLandscapeKind(null);
+        setSelectedZoneId(null);
         setSelectedSurfaceObjectId(null);
         setSelectedLandscapeElementId(null);
         setSelectedStructuralElementId(null);
@@ -1029,9 +1193,11 @@ export function useSalaEditorDocument({
         setSelectedOperationalElementInstanceId(null);
       } else {
         setActiveTool(null);
+        setActiveZoneType(null);
         setActiveOperationalElement(null);
         setActiveSurfaceMaterial(null);
         setActiveLandscapeKind(null);
+        setSelectedZoneId(null);
         setSelectedSurfaceObjectId(null);
         setSelectedLandscapeElementId(null);
         setSelectedStructuralElementId(null);
@@ -1048,6 +1214,7 @@ export function useSalaEditorDocument({
       updatedAt: Date.now(),
     }));
     setSelectedSurfaceObjectId(null);
+    setSelectedZoneId(null);
     setSelectedLandscapeElementId(null);
     setSelectedStructuralElementId(null);
     setSelectedOperationalElementInstanceId(null);
@@ -1148,8 +1315,10 @@ export function useSalaEditorDocument({
     activeOperationalElementType,
     activeOperationalVisualVariant,
     activeSurfaceMaterial,
+    activeZoneType,
     activeLandscapeKind,
     selectSurfaceMaterial,
+    selectZoneType,
     selectLandscapeKind,
     surfaceObjectsInEspacio,
     selectedSurfaceObjectId,
@@ -1158,6 +1327,14 @@ export function useSalaEditorDocument({
     addSurfaceObject,
     updateSurfaceObject,
     removeSurfaceObject,
+    zonesInEspacio,
+    selectedZoneId,
+    selectedZone,
+    addZone,
+    updateZone,
+    removeZone,
+    selectZone,
+    clearZoneSelection,
     structuralElementsInEspacio,
     selectedStructuralElementId,
     selectedStructuralElement,

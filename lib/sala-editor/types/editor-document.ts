@@ -7,6 +7,8 @@ import type { SalaEspacio } from "@/lib/sala-editor/types/espacio";
 import type { SalaStructuralElement } from "@/lib/sala-editor/types/elementos-estructurales";
 import type { SalaOperationalElement } from "@/lib/sala-editor/types/elementos-operativos";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
+import type { LandscapeElement } from "@/lib/sala-editor/landscape/landscape-element";
+import type { Zone } from "@/lib/sala-editor/zones/zone";
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { SalaWallAttachment } from "@/lib/sala-editor/types/wall-attachment";
 import type { SurfaceObject } from "@/lib/sala-editor/surface/surface-object";
@@ -25,7 +27,11 @@ export type SalaEditorDocument = {
   wallAttachments: SalaWallAttachment[];
   /** Superficies de Terreno dibujadas localmente. */
   surfaceObjects: SurfaceObject[];
+  /** Zonas funcionales del mapa, independientes del suelo y la operación. */
+  zones: Zone[];
   structuralElements: SalaStructuralElement[];
+  /** Elementos Landscape independientes de terreno, estructura y operación. */
+  landscapeElements: LandscapeElement[];
   operationalElements: SalaOperationalElement[];
   /** Instancias OSE colocadas localmente (Fase 2). */
   operationalElementInstances: OperationalElementInstance[];
@@ -44,7 +50,9 @@ export function createEmptySalaEditorDocument(
     walls: [],
     wallAttachments: [],
     surfaceObjects: [],
+    zones: [],
     structuralElements: [],
+    landscapeElements: [],
     operationalElements: [],
     operationalElementInstances: [],
     navigation: createDefaultSalaEditorNavigation(),

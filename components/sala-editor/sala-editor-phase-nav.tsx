@@ -16,9 +16,11 @@ export type SalaEditorPhaseNavProps = {
 const PHASE_INDEX: Record<SalaEditorPhase, string> = {
   espacios: "•",
   base: "①",
-  terreno: "②",
-  estructura: "③",
-  operacion: "④",
+  zonas: "②",
+  terreno: "③",
+  estructura: "④",
+  paisajismo: "⑤",
+  operacion: "⑥",
 };
 
 export function SalaEditorPhaseNav({

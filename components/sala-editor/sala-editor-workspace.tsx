@@ -148,9 +148,13 @@ export function SalaEditorWorkspace({
     activeStructuralToolKind,
     activeStructuralToolboxItem,
     activeSurfaceMaterial,
+    activeZoneType,
     activeLandscapeKind,
     surfaceObjectsInEspacio,
     selectedSurfaceObjectId,
+    zonesInEspacio,
+    selectedZoneId,
+    selectedZone,
     structuralElementsInEspacio,
     selectedStructuralElementId,
     selectedStructuralElement,
@@ -168,12 +172,18 @@ export function SalaEditorWorkspace({
     restoreDocumentSnapshot,
     selectTool,
     selectSurfaceMaterial,
+    selectZoneType,
     selectLandscapeKind,
     addSurfaceObject,
     updateSurfaceObject,
     removeSurfaceObject,
     selectSurfaceObject,
     clearSurfaceSelection,
+    addZone,
+    updateZone,
+    removeZone,
+    selectZone,
+    clearZoneSelection,
     addStructuralElement,
     updateStructuralElement,
     removeStructuralElement,
@@ -575,12 +585,14 @@ export function SalaEditorWorkspace({
     (payload: Parameters<typeof handleWallPointerDown>[0]) => {
       clearWallAttachmentSelection();
       clearStructuralElementSelection();
+      clearZoneSelection();
       clearLandscapeSelection();
       handleWallPointerDown(payload);
     },
     [
       clearLandscapeSelection,
       clearStructuralElementSelection,
+      clearZoneSelection,
       clearWallAttachmentSelection,
       handleWallPointerDown,
     ],
@@ -602,6 +614,7 @@ export function SalaEditorWorkspace({
     ) => {
       clearWallSelection();
       clearStructuralElementSelection();
+      clearZoneSelection();
       clearLandscapeSelection();
       addWallAttachment({
         wallId,
@@ -613,6 +626,7 @@ export function SalaEditorWorkspace({
       addWallAttachment,
       clearLandscapeSelection,
       clearStructuralElementSelection,
+      clearZoneSelection,
       clearWallSelection,
     ],
   );
@@ -640,6 +654,36 @@ export function SalaEditorWorkspace({
     (outcome: SurfaceEditOutcome) => {
       if (outcome === "complete") {
         historyApi.commitTransaction("surface.resize", documentSnapshotRef.current!);
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
+  const handleZoneMoveStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleZoneMoveEnd = useCallback(
+    (outcome: SurfaceEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction("zone.move", documentSnapshotRef.current!);
+      } else {
+        historyApi.discardTransaction();
+      }
+    },
+    [historyApi],
+  );
+
+  const handleZoneResizeStart = useCallback(() => {
+    historyApi.beginTransaction(documentSnapshotRef.current!);
+  }, [historyApi]);
+
+  const handleZoneResizeEnd = useCallback(
+    (outcome: SurfaceEditOutcome) => {
+      if (outcome === "complete") {
+        historyApi.commitTransaction("zone.resize", documentSnapshotRef.current!);
       } else {
         historyApi.discardTransaction();
       }
@@ -712,22 +756,44 @@ export function SalaEditorWorkspace({
 
   const handleCreateStructuralElement = useCallback(
     (draft: Parameters<typeof addStructuralElement>[0]) => {
+      clearZoneSelection();
       clearWallSelection();
       clearWallAttachmentSelection();
       addStructuralElement(draft);
     },
-    [addStructuralElement, clearWallAttachmentSelection, clearWallSelection],
+    [addStructuralElement, clearWallAttachmentSelection, clearWallSelection, clearZoneSelection],
   );
 
   const handleSelectStructuralElement = useCallback(
     (elementId: string | null) => {
       if (elementId) {
+        clearZoneSelection();
         clearWallSelection();
         clearWallAttachmentSelection();
       }
       selectStructuralElement(elementId);
     },
-    [clearWallAttachmentSelection, clearWallSelection, selectStructuralElement],
+    [clearWallAttachmentSelection, clearWallSelection, clearZoneSelection, selectStructuralElement],
+  );
+
+  const handleCreateZone = useCallback(
+    (draft: Parameters<typeof addZone>[0]) => {
+      clearWallSelection();
+      clearWallAttachmentSelection();
+      addZone(draft);
+    },
+    [addZone, clearWallAttachmentSelection, clearWallSelection],
+  );
+
+  const handleSelectZone = useCallback(
+    (zoneId: string | null) => {
+      if (zoneId) {
+        clearWallSelection();
+        clearWallAttachmentSelection();
+      }
+      selectZone(zoneId);
+    },
+    [clearWallAttachmentSelection, clearWallSelection, selectZone],
   );
 
   const handleCreateLandscapeElement = useCallback(
@@ -742,24 +808,27 @@ export function SalaEditorWorkspace({
   const handleSelectLandscapeElement = useCallback(
     (elementId: string | null) => {
       if (elementId) {
+        clearZoneSelection();
         clearWallSelection();
         clearWallAttachmentSelection();
       }
       selectLandscapeElement(elementId);
     },
-    [clearWallAttachmentSelection, clearWallSelection, selectLandscapeElement],
+    [clearWallAttachmentSelection, clearWallSelection, clearZoneSelection, selectLandscapeElement],
   );
 
   const handleSelectWallAttachment = useCallback(
     (attachmentId: string) => {
       clearWallSelection();
       clearStructuralElementSelection();
+      clearZoneSelection();
       clearLandscapeSelection();
       selectWallAttachment(attachmentId);
     },
     [
       clearLandscapeSelection,
       clearStructuralElementSelection,
+      clearZoneSelection,
       clearWallSelection,
       selectWallAttachment,
     ],
@@ -958,6 +1027,15 @@ export function SalaEditorWorkspace({
       };
     }
 
+    if (selectedZone) {
+      return {
+        kind: "zone",
+        label: selectedZone.name,
+        icon: "◫",
+        onDelete: () => removeZone(selectedZone.id),
+      };
+    }
+
     if (selectedLandscapeElement) {
       const item = getLandscapeToolboxItem(selectedLandscapeElement.kind);
       return {
@@ -1004,11 +1082,13 @@ export function SalaEditorWorkspace({
     handleDeleteWall,
     removeOperationalElement,
     removeLandscapeElement,
+    removeZone,
     removeSurfaceObject,
     removeStructuralElement,
     removeWallAttachment,
     selectedOperationalElementInstance,
     selectedLandscapeElement,
+    selectedZone,
     selectedSurfaceObject,
     selectedStructuralElement,
     selectedWall,
@@ -1036,6 +1116,7 @@ export function SalaEditorWorkspace({
             selectedEspacioId={document.navigation.selectedEspacioId}
             elementCountByEspacioId={elementCountByEspacioId}
             activeStructuralToolKind={activeStructuralToolKind}
+            activeZoneType={activeZoneType}
             activeLandscapeKind={activeLandscapeKind}
             activeSurfaceMaterial={activeSurfaceMaterial}
             activeOperationalElementType={activeOperationalElementType}
@@ -1043,6 +1124,7 @@ export function SalaEditorWorkspace({
             onSelectEspacio={handleSelectEspacio}
             onRequestAddEspacio={openAddDialog}
             onSelectStructuralTool={selectTool}
+            onSelectZoneType={selectZoneType}
             onSelectLandscapeKind={selectLandscapeKind}
             onSelectSurfaceMaterial={selectSurfaceMaterial}
             onSelectOperationalElement={selectOperationalElement}
@@ -1070,6 +1152,17 @@ export function SalaEditorWorkspace({
             onSurfaceObjectMoveEnd={handleSurfaceMoveEnd}
             onSurfaceObjectResizeStart={handleSurfaceResizeStart}
             onSurfaceObjectResizeEnd={handleSurfaceResizeEnd}
+            activeZoneType={activeZoneType}
+            zones={zonesInEspacio}
+            selectedZoneId={selectedZoneId}
+            onZoneCreate={handleCreateZone}
+            onZoneSelect={handleSelectZone}
+            onZoneClearSelection={clearZoneSelection}
+            onZoneUpdate={updateZone}
+            onZoneMoveStart={handleZoneMoveStart}
+            onZoneMoveEnd={handleZoneMoveEnd}
+            onZoneResizeStart={handleZoneResizeStart}
+            onZoneResizeEnd={handleZoneResizeEnd}
             structuralElements={structuralElementsInEspacio}
             selectedStructuralElementId={selectedStructuralElementId}
             onStructuralElementCreate={handleCreateStructuralElement}

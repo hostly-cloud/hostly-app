@@ -8,6 +8,8 @@ import type {
   SalaEditorLibraryPhase,
 } from "@/lib/sala-editor/library/types";
 import { SURFACE_MATERIAL_CATALOG } from "@/lib/sala-editor/surface/surface-material-catalog";
+import { LANDSCAPE_TOOLBOX_ITEMS } from "@/lib/sala-editor/catalog/landscape-toolbox";
+import { ZONE_CATALOG } from "@/lib/sala-editor/zones/zone-catalog";
 
 const BASE_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   {
@@ -173,6 +175,66 @@ const TERRENO_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   },
 ] as const;
 
+const ZONAS_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
+  {
+    id: "zone-catalog",
+    label: "ZoneCatalog",
+    icon: "◫",
+    items: ZONE_CATALOG.map((zone) => ({
+      id: `zone-${zone.type}`,
+      label: zone.label,
+      status: "available" as const,
+      zoneType: zone.type,
+    })),
+  },
+] as const;
+
+const PAISAJISMO_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
+  {
+    id: "paisajismo",
+    label: "Paisajismo",
+    icon: "🌿",
+    items: [
+      ...LANDSCAPE_TOOLBOX_ITEMS.map((item) => ({
+        id: `landscape-${item.kind}`,
+        label: item.label,
+        status: "available" as const,
+        landscapeKind: item.kind,
+      })),
+      {
+        id: "landscape-tree",
+        label: "Árbol",
+        status: "upcoming",
+      },
+      {
+        id: "landscape-shrub",
+        label: "Arbusto",
+        status: "upcoming",
+      },
+      {
+        id: "landscape-hedge",
+        label: "Seto",
+        status: "upcoming",
+      },
+      {
+        id: "landscape-flowers",
+        label: "Flores",
+        status: "upcoming",
+      },
+      {
+        id: "landscape-rock",
+        label: "Roca",
+        status: "upcoming",
+      },
+      {
+        id: "landscape-fountain",
+        label: "Fuente",
+        status: "upcoming",
+      },
+    ],
+  },
+] as const;
+
 const OPERACION_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   {
     id: "mesas",
@@ -323,8 +385,10 @@ const LIBRARY_BY_PHASE: Record<
   readonly SalaEditorLibraryCategory[]
 > = {
   base: BASE_LIBRARY_CATEGORIES,
+  zonas: ZONAS_LIBRARY_CATEGORIES,
   terreno: TERRENO_LIBRARY_CATEGORIES,
   estructura: ESTRUCTURA_LIBRARY_CATEGORIES,
+  paisajismo: PAISAJISMO_LIBRARY_CATEGORIES,
   operacion: OPERACION_LIBRARY_CATEGORIES,
 };
 

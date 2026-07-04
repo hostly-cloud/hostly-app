@@ -5031,3 +5031,124 @@
   filter: drop-shadow(0 8px 16px rgba(15, 23, 42, 0.16));
 }
 
+.hostly-sala-zone-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.hostly-sala-zone-wrap {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.hostly-sala-zone {
+  --zone-color: #315f7d;
+  width: 100%;
+  height: 100%;
+  border: 1px dashed color-mix(in srgb, var(--zone-color) 36%, transparent);
+  border-radius: 20px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--zone-color) 10%, transparent),
+      color-mix(in srgb, var(--zone-color) 4%, transparent)
+    );
+  color: color-mix(in srgb, var(--zone-color) 72%, #1f2937);
+  cursor: grab;
+  opacity: 0.72;
+  pointer-events: auto;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    opacity 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.hostly-sala-zone:hover {
+  opacity: 0.88;
+  border-color: color-mix(in srgb, var(--zone-color) 52%, transparent);
+}
+
+.hostly-sala-zone.is-selected {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--zone-color) 70%, white);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--zone-color) 18%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 28%, transparent);
+}
+
+.hostly-sala-zone.is-dragging,
+.hostly-sala-zone.is-resizing {
+  cursor: grabbing;
+  opacity: 0.96;
+}
+
+.hostly-sala-zone.is-readonly {
+  cursor: default;
+  pointer-events: none;
+}
+
+.hostly-sala-zone__label {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  max-width: calc(100% - 28px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.hostly-sala-zone__resize-handle {
+  position: absolute;
+  z-index: 3;
+  width: 10px;
+  height: 10px;
+  border: 1px solid color-mix(in srgb, var(--zone-color, #315f7d) 72%, white);
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 14%);
+}
+
+.hostly-sala-zone__resize-handle--nw {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+
+.hostly-sala-zone__resize-handle--ne {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+
+.hostly-sala-zone__resize-handle--sw {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+
+.hostly-sala-zone__resize-handle--se {
+  right: -5px;
+  bottom: -5px;
+  cursor: nwse-resize;
+}
+
+.hostly-sala-zone-placement-hit-area {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.hostly-sala-zone-placement-hit-area.is-creating {
+  pointer-events: auto;
+}
+
