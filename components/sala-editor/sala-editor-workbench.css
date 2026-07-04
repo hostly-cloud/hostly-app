@@ -2038,6 +2038,10 @@
   justify-content: center;
   gap: 3px;
   padding: 4px;
+  --op-table-top: #fff4df;
+  --op-table-side: #d5ad73;
+  --op-table-edge: #8a6235;
+  --op-table-ink: #172033;
 }
 
 .hostly-sala-op-visual__glyph {
@@ -2060,6 +2064,26 @@
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
+.hostly-sala-op-visual__table-number {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  max-width: 82%;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--op-table-ink);
+  font-size: clamp(18px, 2.15rem, 30px);
+  font-weight: 950;
+  letter-spacing: -0.055em;
+  line-height: 0.92;
+  text-overflow: ellipsis;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.72),
+    0 0 1px rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+
 .hostly-sala-op-visual--mini {
   gap: 0;
   padding: 0;
@@ -2072,44 +2096,93 @@
 }
 
 /* TABLE — variantes visuales sobre tipo operativo TABLE */
+.hostly-sala-op-visual[data-type="TABLE"] {
+  gap: 4px;
+  padding: 5px;
+}
+
+.hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.54) 0%,
+      transparent 28%
+    ),
+    linear-gradient(
+      160deg,
+      var(--op-table-top) 0%,
+      #efd1a2 62%,
+      var(--op-table-side) 100%
+    );
+  box-shadow:
+    0 7px 14px rgba(15, 23, 42, 0.16),
+    0 1px 2px rgba(15, 23, 42, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.64),
+    inset 0 -3px 5px rgba(122, 83, 42, 0.16);
+}
+
 .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph,
 .hostly-sala-op-visual[data-type="TABLE"][data-visual-variant="rectangular"] .hostly-sala-op-visual__glyph {
-  width: 78%;
-  height: 58%;
-  max-width: 96px;
-  max-height: 52px;
-  border-radius: 8px;
-  border: 2px solid color-mix(in srgb, var(--op-accent, #315f7d) 35%, #8b6914);
-  background: linear-gradient(180deg, #f5e6cc 0%, #c9a66b 72%, #a67c3a 100%);
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, 0.35),
-    0 2px 6px rgba(15, 23, 42, 0.12);
+  width: 82%;
+  height: 62%;
+  max-width: 104px;
+  max-height: 58px;
+  border-radius: 11px;
+  border: 2px solid color-mix(in srgb, var(--op-table-edge) 82%, var(--op-accent, #315f7d));
 }
 
 .hostly-sala-op-visual[data-type="TABLE"][data-visual-variant="round"] .hostly-sala-op-visual__glyph {
+  width: 66%;
+  height: 66%;
+  max-width: 80px;
+  max-height: 80px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--op-table-edge) 82%, var(--op-accent, #315f7d));
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.56), transparent 34%),
+    radial-gradient(circle at 50% 52%, var(--op-table-top), #e7c38d 68%, var(--op-table-side));
+}
+
+.hostly-sala-op-visual[data-type="TABLE"][data-visual-variant="square"] .hostly-sala-op-visual__glyph {
   width: 62%;
   height: 62%;
   max-width: 72px;
   max-height: 72px;
-  border-radius: 999px;
-  border: 2px solid color-mix(in srgb, var(--op-accent, #315f7d) 35%, #8b6914);
-  background: radial-gradient(circle at 35% 30%, #f5e6cc, #c9a66b 68%, #a67c3a);
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, 0.35),
-    0 2px 6px rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  border: 2px solid color-mix(in srgb, var(--op-table-edge) 82%, var(--op-accent, #315f7d));
 }
 
-.hostly-sala-op-visual[data-type="TABLE"][data-visual-variant="square"] .hostly-sala-op-visual__glyph {
-  width: 56%;
-  height: 56%;
-  max-width: 64px;
-  max-height: 64px;
-  border-radius: 10px;
-  border: 2px solid color-mix(in srgb, var(--op-accent, #315f7d) 35%, #8b6914);
-  background: linear-gradient(145deg, #f5e6cc 0%, #c9a66b 70%, #a67c3a 100%);
+.hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__name {
+  max-width: 92%;
+  color: rgba(30, 41, 59, 0.68);
+  font-size: 8px;
+  font-weight: 780;
+  letter-spacing: 0.015em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.hostly-sala-canvas-object.is-selected .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph {
+  border-color: color-mix(in srgb, var(--hostly-accent, #315f7d) 62%, var(--op-table-edge));
   box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, 0.35),
-    0 2px 6px rgba(15, 23, 42, 0.12);
+    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 13%, transparent),
+    0 8px 16px rgba(15, 23, 42, 0.17),
+    0 1px 2px rgba(15, 23, 42, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66),
+    inset 0 -3px 5px rgba(122, 83, 42, 0.16);
+}
+
+.hostly-sala-canvas-object.is-dragging .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph,
+.hostly-sala-canvas-object.is-resizing .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph {
+  box-shadow:
+    0 10px 18px rgba(15, 23, 42, 0.2),
+    0 1px 2px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66),
+    inset 0 -3px 5px rgba(122, 83, 42, 0.16);
 }
 
 /* HIGH_TABLE — mesa alta */
