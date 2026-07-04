@@ -22,6 +22,8 @@ const DEFAULT_SIZE_BY_TYPE: Record<OperationalElementType, OperationalInstanceCa
   TABLE: { width: 116, height: 76 },
   HIGH_TABLE: { width: 72, height: 72 },
   BAR_SEAT: { width: 44, height: 44 },
+  BAR_STRAIGHT: { width: 220, height: 68 },
+  BAR_L: { width: 180, height: 140 },
   SOFA: { width: 180, height: 90 },
   SUNBED: { width: 200, height: 52 },
   BALINESE_BED: { width: 160, height: 110 },

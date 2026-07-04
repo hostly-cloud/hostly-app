@@ -1,7 +1,10 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import type { OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
+import {
+  isOperationalBarElementType,
+  type OperationalElementType,
+} from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 
 export type SalaOperationalElementVisualProps = {
@@ -43,6 +46,7 @@ export function SalaOperationalElementVisual({
 }: SalaOperationalElementVisualProps) {
   const tableLabel =
     elementType === "TABLE" && !mini ? resolveTableVisualLabel(label) : null;
+  const showName = !mini && (!tableLabel || tableLabel.name);
 
   return (
     <div
@@ -63,10 +67,13 @@ export function SalaOperationalElementVisual({
           </span>
         ) : null}
       </div>
-      {!mini && (!tableLabel || tableLabel.name) ? (
+      {showName ? (
         <span className="hostly-sala-op-visual__name">
           {tableLabel?.name ?? label}
         </span>
+      ) : null}
+      {!mini && isOperationalBarElementType(elementType) ? (
+        <span className="hostly-sala-op-visual__bar-badge">Barra</span>
       ) : null}
     </div>
   );

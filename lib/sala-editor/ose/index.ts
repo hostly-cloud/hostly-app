@@ -1,5 +1,6 @@
 export type {
   OperationalElement,
+  OperationalBarElementType,
   OperationalElementDraft,
   OperationalElementId,
   OperationalElementMetadata,
@@ -10,6 +11,7 @@ export type {
 export {
   DEFAULT_OPERATIONAL_ELEMENT_STATE,
   createOperationalElement,
+  isOperationalBarElementType,
 } from "@/lib/sala-editor/ose/operational-element";
 
 export type {

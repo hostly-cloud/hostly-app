@@ -20,8 +20,12 @@ import {
   getDefaultOperationalInstanceCanvasSize,
   getOperationalInstanceCanvasSize,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
-import type { OperationalElementPosition } from "@/lib/sala-editor/ose/operational-element";
+import {
+  isOperationalBarElementType,
+  type OperationalElementPosition,
+} from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
+import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import {
   snapOperationalCenterPosition,
 } from "@/lib/sala-editor/canvas/operational-snap";
@@ -75,6 +79,15 @@ function operationalInstanceToSnapRect(
     width: size.width,
     height: size.height,
   };
+}
+
+function isOperationalSmartSnapType(
+  instance: OperationalElementInstance,
+): boolean {
+  return (
+    instance.elementType === "TABLE" ||
+    isOperationalBarElementType(instance.elementType)
+  );
 }
 
 function operationalPositionToSnapRect(
@@ -309,7 +322,7 @@ export function SalaEditorWorkspace({
       raw: OperationalElementPosition,
       instance: OperationalElementInstance,
     ) => {
-      if (instance.elementType !== "TABLE") {
+      if (!isOperationalSmartSnapType(instance)) {
         setOperationalSnapGuides(EMPTY_SMART_SNAP_GUIDES);
         return raw;
       }
@@ -317,7 +330,7 @@ export function SalaEditorWorkspace({
       const peers = operationalElementInstancesInEspacio
         .filter(
           (candidate) =>
-            candidate.id !== instanceId && candidate.elementType === "TABLE",
+            candidate.id !== instanceId && isOperationalSmartSnapType(candidate),
         )
         .map(operationalInstanceToSnapRect);
 
@@ -884,10 +897,13 @@ export function SalaEditorWorkspace({
     }
 
     if (selectedOperationalElementInstance) {
+      const catalogItem = getOperationalElementCatalogItem(
+        selectedOperationalElementInstance.elementType,
+      );
       return {
         kind: "operational",
-        label: "Mesa",
-        icon: "◉",
+        label: catalogItem?.label ?? "Elemento operativo",
+        icon: catalogItem?.icon ?? "◉",
         onDelete: () => removeOperationalElement(selectedOperationalElementInstance.id),
       };
     }

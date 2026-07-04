@@ -213,8 +213,35 @@ const OPERACION_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
     id: "barras",
     label: "Barras",
     icon: "🍸",
-    upcoming: true,
-    items: [],
+    items: [
+      {
+        id: "barra-recta",
+        label: "Barra recta",
+        status: "available",
+        operationalType: "BAR_STRAIGHT",
+      },
+      {
+        id: "barra-l",
+        label: "Barra en L",
+        status: "available",
+        operationalType: "BAR_L",
+      },
+      {
+        id: "barra-u",
+        label: "Barra en U",
+        status: "upcoming",
+      },
+      {
+        id: "barra-curva",
+        label: "Barra curva",
+        status: "upcoming",
+      },
+      {
+        id: "isla-central",
+        label: "Isla central",
+        status: "upcoming",
+      },
+    ],
   },
   {
     id: "servicio",

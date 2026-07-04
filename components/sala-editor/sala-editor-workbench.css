@@ -2084,6 +2084,16 @@
   white-space: nowrap;
 }
 
+.hostly-sala-op-visual__bar-badge {
+  margin-top: -2px;
+  color: rgba(71, 85, 105, 0.74);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .hostly-sala-op-visual--mini {
   gap: 0;
   padding: 0;
@@ -2183,6 +2193,94 @@
     0 1px 2px rgba(15, 23, 42, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.66),
     inset 0 -3px 5px rgba(122, 83, 42, 0.16);
+}
+
+/* BARS — mostradores operativos permanentes */
+.hostly-sala-op-visual[data-type="BAR_STRAIGHT"],
+.hostly-sala-op-visual[data-type="BAR_L"] {
+  gap: 3px;
+  padding: 5px;
+}
+
+.hostly-sala-op-visual[data-type="BAR_STRAIGHT"] .hostly-sala-op-visual__glyph,
+.hostly-sala-op-visual[data-type="BAR_L"] .hostly-sala-op-visual__glyph {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--op-accent, #475569) 76%, #1f2937);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 34%),
+    linear-gradient(160deg, #6b7280 0%, #475569 58%, #334155 100%);
+  box-shadow:
+    0 8px 15px rgba(15, 23, 42, 0.18),
+    0 1px 2px rgba(15, 23, 42, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -4px 0 rgba(15, 23, 42, 0.14);
+}
+
+.hostly-sala-op-visual[data-type="BAR_STRAIGHT"] .hostly-sala-op-visual__glyph::before,
+.hostly-sala-op-visual[data-type="BAR_L"] .hostly-sala-op-visual__glyph::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  pointer-events: none;
+}
+
+.hostly-sala-op-visual[data-type="BAR_STRAIGHT"] .hostly-sala-op-visual__glyph {
+  width: 88%;
+  height: 58%;
+  max-width: 190px;
+  max-height: 46px;
+  border-radius: 10px;
+}
+
+.hostly-sala-op-visual[data-type="BAR_L"] .hostly-sala-op-visual__glyph {
+  width: 76%;
+  height: 76%;
+  max-width: 132px;
+  max-height: 104px;
+  border-radius: 12px;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% 42%,
+    44% 42%,
+    44% 100%,
+    0 100%
+  );
+}
+
+.hostly-sala-op-visual[data-type="BAR_STRAIGHT"] .hostly-sala-op-visual__name,
+.hostly-sala-op-visual[data-type="BAR_L"] .hostly-sala-op-visual__name {
+  max-width: 94%;
+  color: rgba(15, 23, 42, 0.78);
+  font-size: 8px;
+  font-weight: 860;
+  letter-spacing: -0.005em;
+  line-height: 1;
+}
+
+.hostly-sala-canvas-object.is-selected .hostly-sala-op-visual[data-type="BAR_STRAIGHT"] .hostly-sala-op-visual__glyph,
+.hostly-sala-canvas-object.is-selected .hostly-sala-op-visual[data-type="BAR_L"] .hostly-sala-op-visual__glyph {
+  border-color: color-mix(in srgb, var(--hostly-accent, #315f7d) 58%, #1f2937);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 13%, transparent),
+    0 9px 16px rgba(15, 23, 42, 0.19),
+    0 1px 2px rgba(15, 23, 42, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -4px 0 rgba(15, 23, 42, 0.14);
+}
+
+.hostly-sala-canvas-object.is-dragging .hostly-sala-op-visual[data-type="BAR_STRAIGHT"] .hostly-sala-op-visual__glyph,
+.hostly-sala-canvas-object.is-dragging .hostly-sala-op-visual[data-type="BAR_L"] .hostly-sala-op-visual__glyph,
+.hostly-sala-canvas-object.is-resizing .hostly-sala-op-visual[data-type="BAR_STRAIGHT"] .hostly-sala-op-visual__glyph,
+.hostly-sala-canvas-object.is-resizing .hostly-sala-op-visual[data-type="BAR_L"] .hostly-sala-op-visual__glyph {
+  box-shadow:
+    0 11px 20px rgba(15, 23, 42, 0.22),
+    0 1px 2px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -4px 0 rgba(15, 23, 42, 0.14);
 }
 
 /* HIGH_TABLE — mesa alta */

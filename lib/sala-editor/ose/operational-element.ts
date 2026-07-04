@@ -12,6 +12,8 @@ export type OperationalElementType =
   | "TABLE"
   | "HIGH_TABLE"
   | "BAR_SEAT"
+  | "BAR_STRAIGHT"
+  | "BAR_L"
   | "SOFA"
   | "SUNBED"
   | "BALINESE_BED"
@@ -19,6 +21,8 @@ export type OperationalElementType =
   | "CABANA"
   | "PICKUP_POINT"
   | "CUSTOM";
+
+export type OperationalBarElementType = "BAR_STRAIGHT" | "BAR_L";
 
 export type OperationalElementState =
   | "libre"
@@ -54,6 +58,12 @@ export type OperationalElement = {
 export type OperationalElementDraft = Omit<OperationalElement, "id">;
 
 export const DEFAULT_OPERATIONAL_ELEMENT_STATE: OperationalElementState = "libre";
+
+export function isOperationalBarElementType(
+  value: OperationalElementType,
+): value is OperationalBarElementType {
+  return value === "BAR_STRAIGHT" || value === "BAR_L";
+}
 
 export function createOperationalElement(
   draft: OperationalElementDraft,
