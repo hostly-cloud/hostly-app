@@ -39,3 +39,20 @@ export {
   getVisualMaterial,
   getVisualMaterialsByCategory,
 } from "@/lib/sala-editor/visual-assets/visual-material-system";
+
+export type {
+  VisualAssetProfile,
+  VisualAssetProfileCategory,
+  VisualAssetProfileId,
+  VisualAssetProfileInteractionStyle,
+  VisualAssetProfileOutlineStyle,
+  VisualAssetProfileShadowStyle,
+  VisualAssetProfileZoomVisibility,
+} from "@/lib/sala-editor/visual-assets/visual-asset-profiles";
+export {
+  VISUAL_ASSET_PROFILE_CATALOG,
+  getVisualAssetProfile,
+  getVisualAssetProfilesByCategory,
+  getVisualAssetProfilesByMaterial,
+  getVisualAssetProfilesForInteraction,
+} from "@/lib/sala-editor/visual-assets/visual-asset-profiles";
