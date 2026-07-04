@@ -53,6 +53,11 @@ import {
   resolveEditorToolHint,
   resolveSurfaceInteractionState,
 } from "@/lib/sala-editor/ux/editor-tool-hints";
+import {
+  getVisualMaterial,
+  type VisualMaterial,
+  type VisualMaterialId,
+} from "@/lib/sala-editor/visual-assets";
 
 export type SalaTerrenoWorkspaceProps = {
   espacio: SalaEspacio;
@@ -154,19 +159,59 @@ function snapSurfaceDisplayLength(value: number): number {
   return Math.round(value);
 }
 
+const SURFACE_VISUAL_MATERIAL_BY_KIND: Record<SurfaceMaterialKind, VisualMaterialId> = {
+  wood: "wood.oak",
+  stone: "stone.natural",
+  grass: "vegetation.grass-soft",
+  sand: "sand.default",
+  water: "water.pool",
+  deck: "deck.default",
+  carpet: "textile.rug-neutral",
+  tile: "tile.default",
+  custom: "neutral.warm",
+};
+
+function resolveSurfaceVisualMaterial(material: SurfaceMaterialKind): VisualMaterial {
+  const materialId = SURFACE_VISUAL_MATERIAL_BY_KIND[material];
+  return getVisualMaterial(materialId) ?? getVisualMaterial("neutral.warm")!;
+}
+
+function toPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function getSurfaceTextureAlpha(material: VisualMaterial): string {
+  const baseAlpha = material.supportsTables || material.discreet ? 0.08 : 0.16;
+  const priorityBoost = material.visualPriority / 1000;
+  return String(Math.min(0.22, baseAlpha + priorityBoost).toFixed(3));
+}
+
 function createSurfaceStyle(
   rect: SurfaceRect,
   material: SurfaceMaterialKind,
   coordinateScale: number,
 ): CSSProperties {
   const materialEntry = getSurfaceMaterialCatalogItem(material);
-  const color = materialEntry?.swatch ?? "#94a3b8";
+  const visualMaterial = resolveSurfaceVisualMaterial(material);
+  const fallbackColor = materialEntry?.swatch ?? visualMaterial.baseColor;
+  const toneMix = Math.max(18, Math.min(44, visualMaterial.visualPriority));
+  const textureAlpha = Number(getSurfaceTextureAlpha(visualMaterial));
   return {
     left: snapSurfaceDisplayLength(rect.x * coordinateScale),
     top: snapSurfaceDisplayLength(rect.y * coordinateScale),
     width: snapSurfaceDisplayLength(rect.width * coordinateScale),
     height: snapSurfaceDisplayLength(rect.height * coordinateScale),
-    "--surface-color": color,
+    "--surface-color": fallbackColor,
+    "--surface-base-color": visualMaterial.baseColor,
+    "--surface-secondary-color": visualMaterial.secondaryColor,
+    "--surface-opacity": String(visualMaterial.recommendedOpacity),
+    "--surface-saturation": toPercent(visualMaterial.saturation),
+    "--surface-contrast": toPercent(0.86 + visualMaterial.contrast * 0.28),
+    "--surface-texture-alpha": String(textureAlpha),
+    "--surface-texture-alpha-soft": String((textureAlpha * 0.55).toFixed(3)),
+    "--surface-texture-alpha-muted": String((textureAlpha * 0.72).toFixed(3)),
+    "--surface-tone-mix": `${toneMix}%`,
+    "--surface-secondary-mix": `${Math.round(toneMix * 0.72)}%`,
   } as CSSProperties;
 }
 
@@ -214,6 +259,7 @@ export function SalaSurfaceObjectsLayer({
                 ]
                   .filter(Boolean)
                   .join(" ")}
+                data-surface-material={surface.material}
                 aria-label={`Superficie de ${getSurfaceMaterialCatalogItem(surface.material)?.label ?? "material"}`}
                 title="Superficie"
                 tabIndex={readOnly ? -1 : 0}
