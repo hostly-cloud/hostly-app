@@ -22,6 +22,7 @@ import {
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import {
   isOperationalBarElementType,
+  isOperationalServiceAreaElementType,
   type OperationalElementPosition,
 } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
@@ -86,7 +87,8 @@ function isOperationalSmartSnapType(
 ): boolean {
   return (
     instance.elementType === "TABLE" ||
-    isOperationalBarElementType(instance.elementType)
+    isOperationalBarElementType(instance.elementType) ||
+    isOperationalServiceAreaElementType(instance.elementType)
   );
 }
 

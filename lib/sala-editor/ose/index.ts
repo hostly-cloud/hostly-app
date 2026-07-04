@@ -5,6 +5,7 @@ export type {
   OperationalElementId,
   OperationalElementMetadata,
   OperationalElementPosition,
+  OperationalServiceAreaElementType,
   OperationalElementState,
   OperationalElementType,
 } from "@/lib/sala-editor/ose/operational-element";
@@ -12,6 +13,7 @@ export {
   DEFAULT_OPERATIONAL_ELEMENT_STATE,
   createOperationalElement,
   isOperationalBarElementType,
+  isOperationalServiceAreaElementType,
 } from "@/lib/sala-editor/ose/operational-element";
 
 export type {

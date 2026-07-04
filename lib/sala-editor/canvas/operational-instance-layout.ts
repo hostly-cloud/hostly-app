@@ -24,12 +24,14 @@ const DEFAULT_SIZE_BY_TYPE: Record<OperationalElementType, OperationalInstanceCa
   BAR_SEAT: { width: 44, height: 44 },
   BAR_STRAIGHT: { width: 220, height: 68 },
   BAR_L: { width: 180, height: 140 },
+  RECEPTION: { width: 132, height: 82 },
+  WAITER_STATION: { width: 118, height: 76 },
   SOFA: { width: 180, height: 90 },
   SUNBED: { width: 200, height: 52 },
   BALINESE_BED: { width: 160, height: 110 },
   ROOM: { width: 140, height: 100 },
   CABANA: { width: 150, height: 110 },
-  PICKUP_POINT: { width: 96, height: 56 },
+  PICKUP_POINT: { width: 132, height: 72 },
   CUSTOM: { width: 116, height: 76 },
 };
 

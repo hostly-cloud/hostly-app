@@ -14,6 +14,8 @@ export type OperationalElementType =
   | "BAR_SEAT"
   | "BAR_STRAIGHT"
   | "BAR_L"
+  | "RECEPTION"
+  | "WAITER_STATION"
   | "SOFA"
   | "SUNBED"
   | "BALINESE_BED"
@@ -23,6 +25,10 @@ export type OperationalElementType =
   | "CUSTOM";
 
 export type OperationalBarElementType = "BAR_STRAIGHT" | "BAR_L";
+export type OperationalServiceAreaElementType =
+  | "RECEPTION"
+  | "WAITER_STATION"
+  | "PICKUP_POINT";
 
 export type OperationalElementState =
   | "libre"
@@ -63,6 +69,16 @@ export function isOperationalBarElementType(
   value: OperationalElementType,
 ): value is OperationalBarElementType {
   return value === "BAR_STRAIGHT" || value === "BAR_L";
+}
+
+export function isOperationalServiceAreaElementType(
+  value: OperationalElementType,
+): value is OperationalServiceAreaElementType {
+  return (
+    value === "RECEPTION" ||
+    value === "WAITER_STATION" ||
+    value === "PICKUP_POINT"
+  );
 }
 
 export function createOperationalElement(

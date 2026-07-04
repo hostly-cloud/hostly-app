@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import {
   isOperationalBarElementType,
+  isOperationalServiceAreaElementType,
   type OperationalElementType,
 } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
@@ -74,6 +75,9 @@ export function SalaOperationalElementVisual({
       ) : null}
       {!mini && isOperationalBarElementType(elementType) ? (
         <span className="hostly-sala-op-visual__bar-badge">Barra</span>
+      ) : null}
+      {!mini && isOperationalServiceAreaElementType(elementType) ? (
+        <span className="hostly-sala-op-visual__service-badge">Servicio</span>
       ) : null}
     </div>
   );

@@ -245,10 +245,48 @@ const OPERACION_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   },
   {
     id: "servicio",
-    label: "Servicio",
+    label: "Service Areas",
     icon: "🛎",
-    upcoming: true,
-    items: [],
+    items: [
+      {
+        id: "recepcion",
+        label: "Recepción",
+        status: "available",
+        operationalType: "RECEPTION",
+      },
+      {
+        id: "estacion-camareros",
+        label: "Estación de camareros",
+        status: "available",
+        operationalType: "WAITER_STATION",
+      },
+      {
+        id: "punto-recogida",
+        label: "Punto de recogida",
+        status: "available",
+        operationalType: "PICKUP_POINT",
+      },
+      {
+        id: "office",
+        label: "Office",
+        status: "upcoming",
+      },
+      {
+        id: "lavado",
+        label: "Lavado",
+        status: "upcoming",
+      },
+      {
+        id: "caja",
+        label: "Caja",
+        status: "upcoming",
+      },
+      {
+        id: "espera-delivery",
+        label: "Espera Delivery",
+        status: "upcoming",
+      },
+    ],
   },
   {
     id: "exterior",
