@@ -24,6 +24,8 @@ export type VisualAssetCategory =
   | "vegetation"
   | "water"
   | "furniture"
+  | "exterior"
+  | "shade"
   | "decor"
   | "lighting";
 
@@ -164,6 +166,8 @@ function isVisualAssetCategory(value: unknown): value is VisualAssetCategory {
     value === "vegetation" ||
     value === "water" ||
     value === "furniture" ||
+    value === "exterior" ||
+    value === "shade" ||
     value === "decor" ||
     value === "lighting"
   );

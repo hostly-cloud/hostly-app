@@ -9,13 +9,18 @@
 export type VisualMaterialId = string;
 
 export type VisualMaterialCategory =
+  | "neutral"
   | "wood"
   | "concrete"
   | "stone"
+  | "marble"
   | "vegetation"
   | "sand"
   | "water"
   | "tile"
+  | "textile"
+  | "metal"
+  | "ceramic"
   | "deck"
   | "asphalt"
   | "earth";
@@ -72,6 +77,19 @@ function createVisualMaterial(
 }
 
 export const VISUAL_MATERIAL_CATALOG: readonly VisualMaterial[] = [
+  createVisualMaterial({
+    id: "neutral.warm",
+    label: "Suelo neutro calido",
+    category: "neutral",
+    baseColor: "#e8e3d8",
+    secondaryColor: "#c9c2b7",
+    saturation: 0.1,
+    contrast: 0.18,
+    visualPriority: 8,
+    recommendedOpacity: 0.78,
+    supportsTables: true,
+    discreet: true,
+  }),
   createVisualMaterial({
     id: "wood.oak",
     label: "Roble",
@@ -140,7 +158,7 @@ export const VISUAL_MATERIAL_CATALOG: readonly VisualMaterial[] = [
   createVisualMaterial({
     id: "stone.marble",
     label: "Marmol",
-    category: "stone",
+    category: "marble",
     baseColor: "#e5e7eb",
     secondaryColor: "#a8adb5",
     saturation: 0.12,
@@ -149,6 +167,19 @@ export const VISUAL_MATERIAL_CATALOG: readonly VisualMaterial[] = [
     recommendedOpacity: 0.88,
     supportsTables: true,
     discreet: false,
+  }),
+  createVisualMaterial({
+    id: "textile.rug-neutral",
+    label: "Alfombra neutra",
+    category: "textile",
+    baseColor: "#b8afa3",
+    secondaryColor: "#7c7167",
+    saturation: 0.22,
+    contrast: 0.34,
+    visualPriority: 32,
+    recommendedOpacity: 0.74,
+    supportsTables: true,
+    discreet: true,
   }),
   createVisualMaterial({
     id: "vegetation.grass-soft",
@@ -175,6 +206,45 @@ export const VISUAL_MATERIAL_CATALOG: readonly VisualMaterial[] = [
     recommendedOpacity: 0.78,
     supportsTables: false,
     discreet: false,
+  }),
+  createVisualMaterial({
+    id: "vegetation.flower-soft",
+    label: "Flores suaves",
+    category: "vegetation",
+    baseColor: "#d8b4c6",
+    secondaryColor: "#8f5f76",
+    saturation: 0.38,
+    contrast: 0.34,
+    visualPriority: 36,
+    recommendedOpacity: 0.68,
+    supportsTables: false,
+    discreet: false,
+  }),
+  createVisualMaterial({
+    id: "vegetation.shrub-soft",
+    label: "Arbusto suave",
+    category: "vegetation",
+    baseColor: "#7f9f70",
+    secondaryColor: "#4f6f46",
+    saturation: 0.42,
+    contrast: 0.32,
+    visualPriority: 28,
+    recommendedOpacity: 0.7,
+    supportsTables: false,
+    discreet: true,
+  }),
+  createVisualMaterial({
+    id: "vegetation.hedge-dark",
+    label: "Seto oscuro",
+    category: "vegetation",
+    baseColor: "#4d6b43",
+    secondaryColor: "#2f4729",
+    saturation: 0.42,
+    contrast: 0.4,
+    visualPriority: 34,
+    recommendedOpacity: 0.76,
+    supportsTables: false,
+    discreet: true,
   }),
   createVisualMaterial({
     id: "sand.default",
@@ -229,6 +299,19 @@ export const VISUAL_MATERIAL_CATALOG: readonly VisualMaterial[] = [
     discreet: true,
   }),
   createVisualMaterial({
+    id: "ceramic.terracotta",
+    label: "Ceramica terracota",
+    category: "ceramic",
+    baseColor: "#c26f45",
+    secondaryColor: "#8f4526",
+    saturation: 0.46,
+    contrast: 0.38,
+    visualPriority: 34,
+    recommendedOpacity: 0.78,
+    supportsTables: true,
+    discreet: true,
+  }),
+  createVisualMaterial({
     id: "deck.default",
     label: "Tarima",
     category: "deck",
@@ -240,6 +323,32 @@ export const VISUAL_MATERIAL_CATALOG: readonly VisualMaterial[] = [
     recommendedOpacity: 0.84,
     supportsTables: true,
     discreet: true,
+  }),
+  createVisualMaterial({
+    id: "metal.matte-black",
+    label: "Metal negro mate",
+    category: "metal",
+    baseColor: "#2f343b",
+    secondaryColor: "#111827",
+    saturation: 0.08,
+    contrast: 0.46,
+    visualPriority: 36,
+    recommendedOpacity: 0.86,
+    supportsTables: true,
+    discreet: true,
+  }),
+  createVisualMaterial({
+    id: "metal.brass-soft",
+    label: "Laton suave",
+    category: "metal",
+    baseColor: "#b08d57",
+    secondaryColor: "#6f542f",
+    saturation: 0.36,
+    contrast: 0.42,
+    visualPriority: 42,
+    recommendedOpacity: 0.82,
+    supportsTables: false,
+    discreet: false,
   }),
   createVisualMaterial({
     id: "asphalt.default",
