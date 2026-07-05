@@ -4386,96 +4386,132 @@
 }
 
 .hostly-sala-landscape-element--rectangularPlanter {
-  border-radius: 12px;
+  border: 1px solid rgba(77, 61, 45, 0.2);
+  border-radius: 11px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 38%),
-    linear-gradient(90deg, #7b5f43 0%, #9b7654 16%, #6b4f36 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 42%),
+    linear-gradient(90deg, #755f49 0%, #9a8065 16%, #6b553f 100%);
+  box-shadow:
+    0 5px 12px rgba(15, 23, 42, 0.055),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.16),
+    inset 0 -5px 9px rgba(56, 41, 29, 0.14);
 }
 
 .hostly-sala-landscape-element--rectangularPlanter::before {
-  inset: 7px 10px;
+  inset: 7px 11px;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 18% 50%, #7f9f70 0 18%, transparent 20%),
-    radial-gradient(circle at 40% 45%, #637f58 0 20%, transparent 22%),
-    radial-gradient(circle at 62% 56%, #8ca36d 0 18%, transparent 20%),
-    radial-gradient(circle at 82% 48%, #526f47 0 17%, transparent 19%);
-  opacity: 0.82;
+    radial-gradient(ellipse at 15% 52%, #7d9167 0 18%, transparent 20%),
+    radial-gradient(ellipse at 32% 43%, #596f4f 0 21%, transparent 23%),
+    radial-gradient(ellipse at 52% 56%, #8a9b6d 0 20%, transparent 22%),
+    radial-gradient(ellipse at 70% 45%, #667d58 0 18%, transparent 20%),
+    radial-gradient(ellipse at 87% 53%, #4f6749 0 17%, transparent 19%),
+    linear-gradient(180deg, rgba(62, 51, 39, 0.16), rgba(62, 51, 39, 0.06));
+  opacity: 0.86;
+}
+
+.hostly-sala-landscape-element--rectangularPlanter::after {
+  inset: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 41, 29, 0.12);
+  box-shadow: inset 0 2px 5px rgba(35, 28, 21, 0.16);
 }
 
 .hostly-sala-landscape-element--roundPlanter {
+  border: 1px solid rgba(77, 61, 45, 0.2);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 40% 34%, rgba(255, 255, 255, 0.22), transparent 32%),
-    radial-gradient(circle at 50% 50%, #8b6a4a 0%, #68472f 74%, #4a3324 100%);
+    radial-gradient(circle at 38% 32%, rgba(255, 255, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 50% 50%, #8b7158 0%, #6b513b 72%, #493829 100%);
+  box-shadow:
+    0 4px 10px rgba(15, 23, 42, 0.055),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.14),
+    inset 0 -5px 10px rgba(56, 41, 29, 0.16);
 }
 
 .hostly-sala-landscape-element--roundPlanter::before {
-  inset: 16%;
-  border-radius: 999px;
+  inset: 14%;
+  border-radius: 48% 52% 46% 54%;
   background:
-    radial-gradient(circle at 42% 38%, #8fa878 0 22%, transparent 24%),
-    radial-gradient(circle at 62% 56%, #587449 0 24%, transparent 26%),
-    radial-gradient(circle at 34% 62%, #6f8f5c 0 20%, transparent 22%);
+    radial-gradient(circle at 36% 36%, #8b9b70 0 21%, transparent 23%),
+    radial-gradient(circle at 61% 44%, #667d58 0 24%, transparent 26%),
+    radial-gradient(circle at 45% 68%, #748b61 0 20%, transparent 22%),
+    radial-gradient(circle at 66% 66%, #4f6749 0 16%, transparent 18%),
+    radial-gradient(circle at 50% 50%, rgba(67, 51, 38, 0.18) 0 46%, transparent 48%);
+  opacity: 0.9;
+}
+
+.hostly-sala-landscape-element--roundPlanter::after {
+  inset: 13%;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 41, 29, 0.13);
+  box-shadow: inset 0 2px 5px rgba(35, 28, 21, 0.16);
 }
 
 .hostly-sala-landscape-element--palm {
   border: none;
   border-radius: 999px;
-  background: radial-gradient(circle at 50% 52%, rgba(112, 86, 49, 0.2), transparent 58%);
+  background:
+    radial-gradient(circle at 50% 53%, rgba(104, 83, 54, 0.16), transparent 34%),
+    radial-gradient(circle at 50% 54%, rgba(83, 104, 67, 0.08), transparent 66%);
   box-shadow: none;
 }
 
 .hostly-sala-landscape-element--palm::before {
-  inset: 7%;
-  border-radius: 999px;
+  inset: 6%;
+  border-radius: 46% 54% 48% 52%;
   background:
-    conic-gradient(
-      from 18deg,
-      transparent 0 7%,
-      rgba(83, 122, 58, 0.78) 7% 13%,
-      transparent 13% 20%,
-      rgba(102, 145, 68, 0.76) 20% 27%,
-      transparent 27% 36%,
-      rgba(74, 111, 54, 0.78) 36% 43%,
-      transparent 43% 54%,
-      rgba(112, 154, 76, 0.72) 54% 61%,
-      transparent 61% 72%,
-      rgba(69, 104, 51, 0.78) 72% 80%,
-      transparent 80% 100%
-    );
-  filter: blur(0.15px);
+    radial-gradient(ellipse 19% 44% at 50% 10%, rgba(72, 112, 58, 0.8) 0 58%, transparent 61%),
+    radial-gradient(ellipse 19% 42% at 78% 25%, rgba(89, 126, 63, 0.76) 0 56%, transparent 59%),
+    radial-gradient(ellipse 18% 40% at 90% 55%, rgba(63, 98, 51, 0.74) 0 54%, transparent 57%),
+    radial-gradient(ellipse 19% 43% at 66% 86%, rgba(102, 135, 71, 0.68) 0 55%, transparent 58%),
+    radial-gradient(ellipse 18% 40% at 30% 84%, rgba(69, 105, 54, 0.74) 0 54%, transparent 57%),
+    radial-gradient(ellipse 19% 42% at 10% 53%, rgba(91, 127, 65, 0.72) 0 55%, transparent 58%),
+    radial-gradient(ellipse 18% 40% at 23% 24%, rgba(60, 94, 49, 0.72) 0 54%, transparent 57%);
+  filter: blur(0.1px) saturate(0.9);
 }
 
 .hostly-sala-landscape-element--palm::after {
-  inset: 42%;
+  inset: 41%;
   border-radius: 999px;
-  background: #8a653e;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  background:
+    radial-gradient(circle at 42% 36%, #9a7a55 0 28%, transparent 30%),
+    #745a3e;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.16),
+    0 0 0 2px rgba(90, 118, 66, 0.16);
 }
 
 .hostly-sala-landscape-element--olive {
   border: none;
-  border-radius: 999px;
-  background: radial-gradient(circle at 50% 52%, rgba(78, 94, 58, 0.12), transparent 62%);
+  border-radius: 46% 54% 50% 52%;
+  background:
+    radial-gradient(circle at 48% 52%, rgba(72, 83, 61, 0.1), transparent 58%),
+    radial-gradient(ellipse at 50% 56%, rgba(85, 70, 52, 0.08), transparent 66%);
   box-shadow: none;
 }
 
 .hostly-sala-landscape-element--olive::before {
-  inset: 10%;
-  border-radius: 42% 58% 48% 54%;
+  inset: 8%;
+  border-radius: 41% 57% 46% 55%;
   background:
-    radial-gradient(circle at 36% 42%, #9aa978 0 17%, transparent 19%),
-    radial-gradient(circle at 58% 36%, #74885f 0 20%, transparent 22%),
-    radial-gradient(circle at 62% 62%, #879b6d 0 18%, transparent 20%),
-    radial-gradient(circle at 40% 64%, #647a55 0 17%, transparent 19%);
-  opacity: 0.9;
+    radial-gradient(ellipse at 34% 38%, #98a47a 0 18%, transparent 20%),
+    radial-gradient(ellipse at 58% 30%, #758662 0 21%, transparent 23%),
+    radial-gradient(ellipse at 71% 54%, #87936d 0 18%, transparent 20%),
+    radial-gradient(ellipse at 54% 71%, #647659 0 20%, transparent 22%),
+    radial-gradient(ellipse at 29% 63%, #7f8d68 0 17%, transparent 19%),
+    radial-gradient(ellipse at 47% 50%, rgba(226, 224, 202, 0.24) 0 5%, transparent 7%);
+  opacity: 0.88;
+  filter: saturate(0.82) contrast(0.98);
 }
 
 .hostly-sala-landscape-element--olive::after {
-  inset: 43%;
+  inset: 42%;
   border-radius: 999px;
-  background: #7b6147;
+  background: #735f49;
+  box-shadow:
+    -8px -2px 0 -7px rgba(98, 80, 58, 0.5),
+    7px 3px 0 -7px rgba(98, 80, 58, 0.42);
 }
 
 .hostly-sala-landscape-element:not(.is-readonly):hover {
@@ -4996,6 +5032,220 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+/* ─── Editor V2 · Library UX Pass V1 ─── */
+
+.hostly-sala-editor-workbench__body {
+  grid-template-columns: minmax(216px, 232px) minmax(0, 1fr);
+}
+
+.hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
+  grid-template-columns: minmax(216px, 232px) minmax(0, 1fr) minmax(0, 152px);
+}
+
+@media (max-width: 1023px) {
+  .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(196px, 208px) minmax(0, 1fr);
+  }
+
+  .hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(196px, 208px) minmax(0, 1fr) minmax(0, 140px);
+  }
+}
+
+.hostly-sala-editor-workbench__panel--toolbox {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(246, 248, 251, 0.94)),
+    #f6f8fb;
+  border-right-color: rgba(148, 163, 184, 0.18);
+}
+
+.hostly-sala-editor-workbench__panel--toolbox .hostly-sala-editor-workbench__panel-inner {
+  padding: 8px 7px;
+}
+
+.hostly-sala-editor-left-panel {
+  gap: 8px;
+}
+
+.hostly-sala-editor-left-panel__scroll {
+  gap: 8px;
+}
+
+.hostly-sala-editor-space-switcher {
+  gap: 5px;
+  margin-bottom: 0;
+  border-bottom-color: rgba(148, 163, 184, 0.14);
+  padding: 0 0 8px;
+}
+
+.hostly-sala-editor-space-switcher__label {
+  margin: 0 4px;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.hostly-sala-editor-space-switcher__list {
+  max-height: 118px;
+  gap: 3px;
+  padding-right: 1px;
+}
+
+.hostly-sala-editor-space-switcher__item {
+  min-height: 34px;
+  gap: 8px;
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+
+.hostly-sala-editor-space-switcher__dot {
+  width: 9px;
+  height: 9px;
+}
+
+.hostly-sala-editor-space-switcher__name {
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.hostly-sala-editor-space-switcher__add {
+  min-height: 32px;
+  border-radius: 10px;
+  padding: 5px 8px;
+  font-size: 10.5px;
+}
+
+.hostly-sala-editor-toolbox--library {
+  --hostly-library-radius: 14px;
+  --hostly-library-radius-sm: 11px;
+  --hostly-library-surface: rgba(255, 255, 255, 0.78);
+  --hostly-library-surface-strong: rgba(255, 255, 255, 0.94);
+  --hostly-library-hover: color-mix(in srgb, var(--hostly-accent-soft) 32%, #ffffff);
+  --hostly-library-selected: color-mix(in srgb, var(--hostly-accent-soft) 54%, #ffffff);
+}
+
+.hostly-sala-library {
+  gap: 10px;
+}
+
+.hostly-sala-library__head {
+  gap: 8px;
+  padding: 0 1px 2px;
+}
+
+.hostly-sala-library__title {
+  padding-left: 4px;
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.hostly-sala-library__search {
+  min-height: 42px;
+  gap: 9px;
+  border-radius: 14px;
+  padding: 0 11px;
+}
+
+.hostly-sala-library__search-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.hostly-sala-library__search-input {
+  padding: 9px 0;
+  font-size: 12px;
+}
+
+.hostly-sala-library__scroll {
+  gap: 8px;
+  padding: 0 2px 8px 0;
+}
+
+.hostly-sala-library__category {
+  border-radius: var(--hostly-library-radius);
+}
+
+.hostly-sala-library__category.is-expanded {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.58),
+    0 8px 18px rgba(15, 23, 42, 0.035);
+}
+
+.hostly-sala-library__category-toggle,
+.hostly-sala-library__category-toggle--static {
+  min-height: 44px;
+  gap: 9px;
+  padding: 8px 9px;
+}
+
+.hostly-sala-library__category-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.hostly-sala-library__category-label {
+  font-size: 11.5px;
+  font-weight: 850;
+  line-height: 1.16;
+}
+
+.hostly-sala-library__category-meta {
+  font-size: 8.5px;
+  letter-spacing: 0.01em;
+}
+
+.hostly-sala-library__items {
+  padding: 2px 7px 8px;
+}
+
+.hostly-sala-library__item + .hostly-sala-library__item {
+  margin-top: 5px;
+}
+
+.hostly-sala-library__item-btn {
+  min-height: 44px;
+  gap: 9px;
+  border-radius: var(--hostly-library-radius-sm);
+  padding: 8px 9px;
+}
+
+.hostly-sala-library__item-btn:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+
+.hostly-sala-library__item-btn.is-selected {
+  box-shadow:
+    inset 3px 0 0 var(--hostly-accent),
+    inset 0 0 0 1px var(--hostly-library-border-strong);
+}
+
+.hostly-sala-library__item-marker {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+}
+
+.hostly-sala-library__item-btn:not(.is-upcoming) .hostly-sala-library__item-marker::before {
+  width: 6px;
+  height: 6px;
+}
+
+.hostly-sala-library__item-label {
+  font-size: 12px;
+  line-height: 1.22;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.hostly-sala-library__item-badge {
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hostly-sala-surface-object:not(.is-selected):not(.is-dragging):not(.is-resizing) {
