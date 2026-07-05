@@ -2,9 +2,19 @@
 
 import type { PointerEvent } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
-import type { OperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import type {
+  OperationalInstanceCanvasSize,
+  OperationalInstanceResizeCorner,
+} from "@/lib/sala-editor/canvas/operational-instance-layout";
 import { resolveOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
+
+const RESIZE_CORNERS: readonly OperationalInstanceResizeCorner[] = [
+  "nw",
+  "ne",
+  "sw",
+  "se",
+];
 
 export type SalaOperationalInstanceCanvasObjectProps = {
   instance: OperationalElementInstance;
@@ -18,6 +28,15 @@ export type SalaOperationalInstanceCanvasObjectProps = {
   onBodyPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerCancel: (event: PointerEvent<HTMLDivElement>) => void;
+  onResizeStart: (
+    instanceId: string,
+    corner: OperationalInstanceResizeCorner,
+    clientX: number,
+    clientY: number,
+  ) => void;
+  onResizeMove: (clientX: number, clientY: number) => void;
+  onResizeEnd: () => void;
+  onResizeCancel: () => void;
 };
 
 export function SalaOperationalInstanceCanvasObject({
@@ -32,12 +51,47 @@ export function SalaOperationalInstanceCanvasObject({
   onBodyPointerMove,
   onBodyPointerUp,
   onBodyPointerCancel,
+  onResizeStart,
+  onResizeMove,
+  onResizeEnd,
+  onResizeCancel,
 }: SalaOperationalInstanceCanvasObjectProps) {
   const chromeVisible = selected && !isDragging && !isResizing;
   const visualVariant = resolveOperationalVisualVariant(
     instance.metadata,
     instance.elementType,
   );
+  const createResizePointerHandlers = (corner: OperationalInstanceResizeCorner) => ({
+    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      onResizeStart(instance.id, corner, event.clientX, event.clientY);
+    },
+    onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onResizeMove(event.clientX, event.clientY);
+    },
+    onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      onResizeEnd();
+    },
+    onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      onResizeCancel();
+    },
+  });
 
   return (
     <div
@@ -85,6 +139,21 @@ export function SalaOperationalInstanceCanvasObject({
           visualVariant={visualVariant}
         />
       </div>
+
+      {selected
+        ? RESIZE_CORNERS.map((corner) => (
+            <button
+              key={corner}
+              type="button"
+              className={[
+                "hostly-sala-canvas-object__handle",
+                `hostly-sala-canvas-object__handle--${corner}`,
+              ].join(" ")}
+              aria-label={`Redimensionar ${instance.name}`}
+              {...createResizePointerHandlers(corner)}
+            />
+          ))
+        : null}
     </div>
   );
 }

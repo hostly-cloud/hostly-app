@@ -96,6 +96,15 @@ export type SalaOperationalInstancesLayerProps = {
   createMoveHandlers?: (
     instance: OperationalElementInstance,
   ) => OperationalInstanceMoveHandlers;
+  onResizeStart?: (
+    instanceId: string,
+    corner: OperationalInstanceResizeCorner,
+    clientX: number,
+    clientY: number,
+  ) => void;
+  onResizeMove?: (clientX: number, clientY: number) => void;
+  onResizeEnd?: () => void;
+  onResizeCancel?: () => void;
   readOnly?: boolean;
 };
 
@@ -303,6 +312,10 @@ function SalaOperacionCanvasContent({
         resizingInstanceId={resizingInstanceId}
         dropAnimatingInstanceId={dropAnimatingInstanceId}
         createMoveHandlers={createMoveHandlers}
+        onResizeStart={onResizeStart}
+        onResizeMove={onResizeMove}
+        onResizeEnd={onResizeEnd}
+        onResizeCancel={onResizeCancel}
       />
     </>
   );
@@ -315,6 +328,10 @@ export function SalaOperationalInstancesLayer({
   resizingInstanceId = null,
   dropAnimatingInstanceId = null,
   createMoveHandlers,
+  onResizeStart,
+  onResizeMove,
+  onResizeEnd,
+  onResizeCancel,
   readOnly = false,
 }: SalaOperationalInstancesLayerProps) {
   const canvasViewport = useCanvasViewport();
@@ -332,6 +349,14 @@ export function SalaOperationalInstancesLayer({
         const instanceCatalog = getOperationalElementCatalogItem(instance.elementType);
         const moveHandlers =
           !readOnly && createMoveHandlers ? createMoveHandlers(instance) : noopHandlers;
+        const resizeHandlers = {
+          onResizeStart:
+            !readOnly && onResizeStart ? onResizeStart : () => undefined,
+          onResizeMove: !readOnly && onResizeMove ? onResizeMove : () => undefined,
+          onResizeEnd: !readOnly && onResizeEnd ? onResizeEnd : () => undefined,
+          onResizeCancel:
+            !readOnly && onResizeCancel ? onResizeCancel : () => undefined,
+        };
         const dragging = !readOnly && draggingInstanceId === instance.id;
         const resizing = !readOnly && resizingInstanceId === instance.id;
         const dropAnimating = dropAnimatingInstanceId === instance.id;
@@ -355,6 +380,7 @@ export function SalaOperationalInstancesLayer({
               isResizing={resizing}
               isDropAnimating={dropAnimating}
               {...moveHandlers}
+              {...resizeHandlers}
             />
           </div>
         );
