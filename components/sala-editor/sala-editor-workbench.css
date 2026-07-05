@@ -716,11 +716,11 @@
   margin-top: 4px;
 }
 
-/* Stepper — flujo conectado (no botones) */
+/* Stepper — orientación ligera entre áreas del restaurante */
 .hostly-sala-editor-stepper {
-  flex: 1;
+  flex: 0 1 500px;
   min-width: 0;
-  max-width: 520px;
+  max-width: 500px;
 }
 
 .hostly-sala-editor-stepper__track {
@@ -766,18 +766,18 @@
 
 .hostly-sala-editor-stepper__marker {
   display: inline-flex;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 2px solid rgba(148, 163, 184, 0.35);
-  background: #f8fafc;
-  font-size: 10px;
-  font-weight: 800;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.82);
+  font-size: 12px;
+  font-weight: 760;
   line-height: 1;
-  color: #94a3b8;
+  color: rgba(100, 116, 139, 0.62);
   transition:
     border-color 140ms ease,
     background-color 140ms ease,
@@ -786,23 +786,22 @@
 }
 
 .hostly-sala-editor-stepper__segment.is-pending .hostly-sala-editor-stepper__marker {
-  border-color: rgba(148, 163, 184, 0.28);
-  background: #f1f5f9;
-  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(248, 250, 252, 0.58);
+  color: rgba(148, 163, 184, 0.48);
 }
 
 .hostly-sala-editor-stepper__segment.is-active .hostly-sala-editor-stepper__marker {
-  border-color: var(--hostly-accent);
-  background: white;
+  border-color: color-mix(in srgb, var(--hostly-accent) 44%, #cbd5e1);
+  background: color-mix(in srgb, var(--hostly-accent-soft) 52%, white);
   color: var(--hostly-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hostly-accent-soft) 72%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hostly-accent-soft) 58%, transparent);
 }
 
 .hostly-sala-editor-stepper__segment.is-complete .hostly-sala-editor-stepper__marker {
-  border-color: color-mix(in srgb, var(--hostly-accent) 55%, #94a3b8);
-  background: color-mix(in srgb, var(--hostly-accent) 12%, white);
-  color: color-mix(in srgb, var(--hostly-accent) 82%, #64748b);
-  font-size: 11px;
+  border-color: rgba(148, 163, 184, 0.26);
+  background: rgba(248, 250, 252, 0.82);
+  color: rgba(100, 116, 139, 0.62);
 }
 
 .hostly-sala-editor-stepper__label {
@@ -815,36 +814,28 @@
 
 .hostly-sala-editor-stepper__segment.is-active .hostly-sala-editor-stepper__label {
   color: var(--hostly-accent);
-  font-weight: 820;
+  font-weight: 780;
 }
 
 .hostly-sala-editor-stepper__segment.is-complete .hostly-sala-editor-stepper__label {
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .hostly-sala-editor-stepper__rail {
-  height: 2px;
+  height: 1px;
   min-width: 12px;
   flex: 1;
-  margin-top: 11px;
+  margin-top: 9px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.14);
 }
 
 .hostly-sala-editor-stepper__segment.is-complete .hostly-sala-editor-stepper__rail {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--hostly-accent) 45%, #94a3b8),
-    rgba(148, 163, 184, 0.18)
-  );
+  background: rgba(148, 163, 184, 0.14);
 }
 
 .hostly-sala-editor-stepper__segment.is-active .hostly-sala-editor-stepper__rail {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--hostly-accent) 38%, #94a3b8),
-    rgba(148, 163, 184, 0.14)
-  );
+  background: color-mix(in srgb, var(--hostly-accent) 18%, rgba(148, 163, 184, 0.14));
 }
 
 /* Toolbox — left panel */
@@ -2645,19 +2636,19 @@
 }
 
 .hostly-sala-editor-stepper__marker {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   border-width: 1px;
-  font-size: 8px;
-  font-weight: 850;
+  font-size: 10px;
+  font-weight: 740;
 }
 
 .hostly-sala-editor-stepper__segment.is-active .hostly-sala-editor-stepper__marker {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hostly-accent-soft) 80%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--hostly-accent-soft) 72%, transparent);
 }
 
 .hostly-sala-editor-stepper__segment.is-complete .hostly-sala-editor-stepper__marker {
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .hostly-sala-editor-stepper__label {
@@ -2679,7 +2670,7 @@
 
 .hostly-sala-editor-stepper__segment.is-complete .hostly-sala-editor-stepper__rail,
 .hostly-sala-editor-stepper__segment.is-active .hostly-sala-editor-stepper__rail {
-  background: color-mix(in srgb, var(--hostly-accent) 22%, rgba(148, 163, 184, 0.16));
+  background: rgba(148, 163, 184, 0.16);
 }
 
 .hostly-sala-editor-canvas-frame--blueprint {

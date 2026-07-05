@@ -15,12 +15,12 @@ export type SalaEditorPhaseNavProps = {
 
 const PHASE_INDEX: Record<SalaEditorPhase, string> = {
   espacios: "•",
-  base: "①",
-  zonas: "②",
-  terreno: "③",
-  estructura: "④",
-  operacion: "⑤",
-  paisajismo: "⑥",
+  base: "•",
+  zonas: "•",
+  terreno: "•",
+  estructura: "•",
+  operacion: "•",
+  paisajismo: "•",
 };
 
 export function SalaEditorPhaseNav({
@@ -33,7 +33,7 @@ export function SalaEditorPhaseNav({
   const activeIndex = SALA_EDITOR_VISIBLE_PHASE_ORDER.indexOf(visiblePhase);
 
   return (
-    <nav className="hostly-sala-editor-stepper" aria-label="Pasos para preparar tu restaurante">
+    <nav className="hostly-sala-editor-stepper" aria-label="Áreas para preparar tu restaurante">
       <ol className="hostly-sala-editor-stepper__track">
         {SALA_EDITOR_VISIBLE_PHASE_ORDER.map((item, index) => {
           const isActive = item === visiblePhase;
@@ -56,13 +56,13 @@ export function SalaEditorPhaseNav({
               <button
                 type="button"
                 disabled={isDisabled}
-                aria-current={isActive ? "step" : undefined}
+                aria-current={isActive ? "page" : undefined}
                 title={SALA_EDITOR_PHASE_DESCRIPTIONS[item]}
                 onClick={() => onPhaseChange(item)}
                 className="hostly-sala-editor-stepper__node"
               >
                 <span className="hostly-sala-editor-stepper__marker" aria-hidden>
-                  {isComplete ? "✓" : PHASE_INDEX[item]}
+                  {PHASE_INDEX[item]}
                 </span>
                 <span className="hostly-sala-editor-stepper__label">
                   {SALA_EDITOR_PHASE_LABELS[item]}
