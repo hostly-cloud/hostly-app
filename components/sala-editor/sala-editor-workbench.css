@@ -2038,10 +2038,10 @@
   justify-content: center;
   gap: 3px;
   padding: 4px;
-  --op-table-top: #fff4df;
-  --op-table-side: #d5ad73;
-  --op-table-edge: #8a6235;
-  --op-table-ink: #172033;
+  --op-table-top: #fff7e7;
+  --op-table-side: #d7ad70;
+  --op-table-edge: #7a542b;
+  --op-table-ink: #101827;
 }
 
 .hostly-sala-op-visual__glyph {
@@ -2068,19 +2068,24 @@
   position: relative;
   z-index: 1;
   display: inline-flex;
-  max-width: 82%;
+  min-width: 0;
+  max-width: 88%;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   color: var(--op-table-ink);
-  font-size: clamp(18px, 2.15rem, 30px);
-  font-weight: 950;
-  letter-spacing: -0.055em;
-  line-height: 0.92;
+  font-size: clamp(20px, 2.35rem, 34px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 980;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  padding: 0 3px;
+  text-align: center;
   text-overflow: ellipsis;
   text-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.72),
-    0 0 1px rgba(255, 255, 255, 0.7);
+    0 1px 0 rgba(255, 255, 255, 0.88),
+    0 0 1px rgba(255, 255, 255, 0.82),
+    0 1px 2px rgba(15, 23, 42, 0.16);
   white-space: nowrap;
 }
 
@@ -2117,7 +2122,7 @@
 
 /* TABLE — variantes visuales sobre tipo operativo TABLE */
 .hostly-sala-op-visual[data-type="TABLE"] {
-  gap: 4px;
+  gap: 3px;
   padding: 5px;
 }
 
@@ -2127,22 +2132,29 @@
   justify-content: center;
   overflow: hidden;
   background:
+    radial-gradient(
+      ellipse at 50% 45%,
+      rgba(255, 255, 255, 0.42) 0%,
+      rgba(255, 255, 255, 0.16) 38%,
+      transparent 72%
+    ),
     linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.54) 0%,
-      transparent 28%
+      rgba(255, 255, 255, 0.62) 0%,
+      transparent 30%
     ),
     linear-gradient(
       160deg,
       var(--op-table-top) 0%,
-      #efd1a2 62%,
+      #edcc9a 62%,
       var(--op-table-side) 100%
     );
   box-shadow:
-    0 7px 14px rgba(15, 23, 42, 0.16),
-    0 1px 2px rgba(15, 23, 42, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.64),
-    inset 0 -3px 5px rgba(122, 83, 42, 0.16);
+    0 8px 16px rgba(15, 23, 42, 0.18),
+    0 1px 2px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -3px 5px rgba(122, 83, 42, 0.18);
 }
 
 .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph,
@@ -2152,7 +2164,7 @@
   max-width: 104px;
   max-height: 58px;
   border-radius: 11px;
-  border: 2px solid color-mix(in srgb, var(--op-table-edge) 82%, var(--op-accent, #315f7d));
+  border: 2px solid color-mix(in srgb, var(--op-table-edge) 88%, var(--op-accent, #315f7d));
 }
 
 .hostly-sala-op-visual[data-type="TABLE"][data-visual-variant="round"] .hostly-sala-op-visual__glyph {
@@ -2161,10 +2173,10 @@
   max-width: 80px;
   max-height: 80px;
   border-radius: 999px;
-  border: 2px solid color-mix(in srgb, var(--op-table-edge) 82%, var(--op-accent, #315f7d));
+  border: 2px solid color-mix(in srgb, var(--op-table-edge) 88%, var(--op-accent, #315f7d));
   background:
-    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.56), transparent 34%),
-    radial-gradient(circle at 50% 52%, var(--op-table-top), #e7c38d 68%, var(--op-table-side));
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.62), transparent 34%),
+    radial-gradient(circle at 50% 52%, var(--op-table-top), #e8c48d 68%, var(--op-table-side));
 }
 
 .hostly-sala-op-visual[data-type="TABLE"][data-visual-variant="square"] .hostly-sala-op-visual__glyph {
@@ -2173,36 +2185,38 @@
   max-width: 72px;
   max-height: 72px;
   border-radius: 12px;
-  border: 2px solid color-mix(in srgb, var(--op-table-edge) 82%, var(--op-accent, #315f7d));
+  border: 2px solid color-mix(in srgb, var(--op-table-edge) 88%, var(--op-accent, #315f7d));
 }
 
 .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__name {
-  max-width: 92%;
-  color: rgba(30, 41, 59, 0.68);
+  max-width: 88%;
+  color: rgba(30, 41, 59, 0.58);
   font-size: 8px;
-  font-weight: 780;
-  letter-spacing: 0.015em;
+  font-weight: 720;
+  letter-spacing: 0.02em;
   line-height: 1;
   text-transform: uppercase;
 }
 
 .hostly-sala-canvas-object.is-selected .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph {
-  border-color: color-mix(in srgb, var(--hostly-accent, #315f7d) 62%, var(--op-table-edge));
+  border-color: color-mix(in srgb, var(--hostly-accent, #315f7d) 68%, var(--op-table-edge));
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--hostly-accent, #315f7d) 13%, transparent),
-    0 8px 16px rgba(15, 23, 42, 0.17),
+    0 0 0 2px rgba(255, 255, 255, 0.78),
+    0 0 0 5px color-mix(in srgb, var(--hostly-accent, #315f7d) 15%, transparent),
+    0 9px 18px rgba(15, 23, 42, 0.18),
     0 1px 2px rgba(15, 23, 42, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.66),
-    inset 0 -3px 5px rgba(122, 83, 42, 0.16);
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -3px 5px rgba(122, 83, 42, 0.18);
 }
 
 .hostly-sala-canvas-object.is-dragging .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph,
 .hostly-sala-canvas-object.is-resizing .hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph {
   box-shadow:
-    0 10px 18px rgba(15, 23, 42, 0.2),
-    0 1px 2px rgba(15, 23, 42, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.66),
-    inset 0 -3px 5px rgba(122, 83, 42, 0.16);
+    0 10px 20px rgba(15, 23, 42, 0.22),
+    0 1px 2px rgba(15, 23, 42, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -3px 5px rgba(122, 83, 42, 0.18);
 }
 
 /* BARS — mostradores operativos permanentes */
@@ -4602,10 +4616,18 @@
   position: absolute;
   inset: 0;
   z-index: 6;
+  pointer-events: none;
 }
 
 .hostly-sala-operational-layer.is-readonly {
   pointer-events: none;
+}
+
+.hostly-sala-operational-layer:not(.is-readonly) .hostly-sala-canvas-object,
+.hostly-sala-operational-layer:not(.is-readonly) .hostly-sala-canvas-object__body,
+.hostly-sala-operational-layer:not(.is-readonly) .hostly-sala-canvas-object__handle,
+.hostly-sala-operational-layer:not(.is-readonly) .hostly-sala-canvas-object__rotate-handle {
+  pointer-events: auto;
 }
 
 /* ─── Editor V2 · Unified Selection System ─── */
