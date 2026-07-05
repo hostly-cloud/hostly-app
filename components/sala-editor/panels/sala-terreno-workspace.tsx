@@ -306,6 +306,7 @@ function SalaTerrenoCanvasContent({
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const surfaceRef = useRef<HTMLDivElement>(null);
   const creationPointerIdRef = useRef<number | null>(null);
+  const draftRef = useRef<SurfaceCreationDraft | null>(null);
   const [draft, setDraft] = useState<SurfaceCreationDraft | null>(null);
   const [moveSession, setMoveSession] = useState<SurfaceMoveSession | null>(null);
   const [resizeSession, setResizeSession] =
@@ -373,7 +374,7 @@ function SalaTerrenoCanvasContent({
     (event: PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
       if (event.target !== event.currentTarget) return;
-      if (draft || moveSession || resizeSession) return;
+      if (draftRef.current || draft || moveSession || resizeSession) return;
       onSurfaceObjectClearSelection?.();
       if (!activeSurfaceMaterial) return;
       const point = resolveLogicalPoint(event.clientX, event.clientY);
@@ -381,12 +382,14 @@ function SalaTerrenoCanvasContent({
 
       event.currentTarget.setPointerCapture(event.pointerId);
       creationPointerIdRef.current = event.pointerId;
-      setDraft({
+      const nextDraft = {
         material: activeSurfaceMaterial,
         origin: point,
         current: point,
         rect: createSurfaceRectFromPoints(point, point),
-      });
+      };
+      draftRef.current = nextDraft;
+      setDraft(nextDraft);
     },
     [
       activeSurfaceMaterial,
@@ -398,21 +401,29 @@ function SalaTerrenoCanvasContent({
     ],
   );
 
+  useEffect(() => {
+    const current = draftRef.current;
+    if (!current || current.material === activeSurfaceMaterial) return;
+    creationPointerIdRef.current = null;
+    draftRef.current = null;
+    setDraft(null);
+  }, [activeSurfaceMaterial]);
+
   const handlePointerMove = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       if (creationPointerIdRef.current !== event.pointerId) return;
       const point = resolveLogicalPoint(event.clientX, event.clientY);
       if (!point) return;
 
-      setDraft((current) =>
-        current
-          ? {
-              ...current,
-              current: point,
-              rect: createSurfaceRectFromPoints(current.origin, point),
-            }
-          : null,
-      );
+      const current = draftRef.current;
+      if (!current) return;
+      const nextDraft = {
+        ...current,
+        current: point,
+        rect: createSurfaceRectFromPoints(current.origin, point),
+      };
+      draftRef.current = nextDraft;
+      setDraft(nextDraft);
     },
     [resolveLogicalPoint],
   );
@@ -477,6 +488,7 @@ function SalaTerrenoCanvasContent({
         if (event.button !== 0) return;
         event.stopPropagation();
         creationPointerIdRef.current = null;
+        draftRef.current = null;
         setDraft(null);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
@@ -550,6 +562,7 @@ function SalaTerrenoCanvasContent({
         if (event.button !== 0) return;
         event.stopPropagation();
         creationPointerIdRef.current = null;
+        draftRef.current = null;
         setDraft(null);
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
@@ -636,22 +649,22 @@ function SalaTerrenoCanvasContent({
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
       creationPointerIdRef.current = null;
+      const currentDraft = draftRef.current;
+      draftRef.current = null;
+      setDraft(null);
 
-      setDraft((current) => {
-        if (create && current && isSurfaceRectUsable(current.rect)) {
-          onSurfaceObjectCreate?.({
-            espacioId,
-            material: current.material,
-            x: current.rect.x,
-            y: current.rect.y,
-            width: current.rect.width,
-            height: current.rect.height,
-            visible: true,
-            locked: false,
-          });
-        }
-        return null;
-      });
+      if (create && currentDraft && isSurfaceRectUsable(currentDraft.rect)) {
+        onSurfaceObjectCreate?.({
+          espacioId,
+          material: currentDraft.material,
+          x: currentDraft.rect.x,
+          y: currentDraft.rect.y,
+          width: currentDraft.rect.width,
+          height: currentDraft.rect.height,
+          visible: true,
+          locked: false,
+        });
+      }
     },
     [espacioId, onSurfaceObjectCreate],
   );
@@ -662,6 +675,7 @@ function SalaTerrenoCanvasContent({
       if (draft) {
         event.preventDefault();
         creationPointerIdRef.current = null;
+        draftRef.current = null;
         setDraft(null);
         return;
       }
