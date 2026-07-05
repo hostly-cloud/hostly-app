@@ -73,7 +73,7 @@ export function SalaEditorShell({
         </div>
         <div className="hostly-sala-editor-workbench__toolbar-meta">
           <span className="hostly-sala-editor-workbench__count">
-            {espaciosCount} mapa{espaciosCount === 1 ? "" : "s"}
+            {espaciosCount} espacio{espaciosCount === 1 ? "" : "s"}
           </span>
           {legacyEditorHref ? (
             <Link href={legacyEditorHref} className="hostly-sala-editor-workbench__legacy-link">

@@ -18,7 +18,7 @@ export function SalaEstructuraPhasePanel({
       <p className="text-sm text-slate-600">
         {espacioName
           ? `Dentro de «${espacioName}» podrás colocar paredes, cristales, puertas y barras.`
-          : "Selecciona un mapa para añadir estructura."}
+          : "Selecciona un espacio para añadir elementos fijos."}
       </p>
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {SALA_STRUCTURAL_CATALOG.map((item) => (

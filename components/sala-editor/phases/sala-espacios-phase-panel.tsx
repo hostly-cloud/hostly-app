@@ -24,13 +24,13 @@ export function SalaEspaciosPhasePanel({
   return (
     <div className="flex min-h-[240px] flex-col gap-3">
       <p className="text-sm text-slate-600">
-        Crea y ordena los mapas del restaurante. Todavía no se dibuja geometría;
+        Crea y ordena los espacios del restaurante. Todavía no se dibuja geometría;
         solo nombre, color, visibilidad y orden.
       </p>
 
       {sorted.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
-          <p className="text-sm font-bold text-slate-700">Sin mapas todavía</p>
+          <p className="text-sm font-bold text-slate-700">Sin espacios todavía</p>
           <p className="mt-1 text-xs text-slate-500">
             Ejemplos sugeridos: Sala principal, Terraza, Barra, VIP…
           </p>

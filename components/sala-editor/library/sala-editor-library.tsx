@@ -51,7 +51,7 @@ export function SalaEditorLibrary({
   return (
     <div className="hostly-sala-library">
       <div className="hostly-sala-library__head">
-        <p className="hostly-sala-library__title">Biblioteca</p>
+        <p className="hostly-sala-library__title">Elementos</p>
         <label className="hostly-sala-library__search">
           <span className="hostly-sala-library__search-icon" aria-hidden>
             🔍
@@ -60,9 +60,9 @@ export function SalaEditorLibrary({
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Buscar herramientas…"
+            placeholder="Buscar elementos…"
             className="hostly-sala-library__search-input"
-            aria-label="Buscar herramientas en la biblioteca"
+            aria-label="Buscar elementos"
             autoComplete="off"
             spellCheck={false}
           />
@@ -76,7 +76,7 @@ export function SalaEditorLibrary({
               🔍
             </span>
             <p className="hostly-sala-library__empty-title">
-              No hay herramientas que coincidan
+              No hay elementos que coincidan
             </p>
           </div>
         ) : (

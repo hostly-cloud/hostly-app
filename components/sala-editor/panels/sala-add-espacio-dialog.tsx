@@ -79,12 +79,12 @@ export function SalaAddEspacioDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Añadir mapa"
+        aria-label="Añadir espacio"
         className="w-full max-w-md rounded-2xl border border-slate-200/90 bg-white p-5 shadow-[0_24px_64px_rgba(15,23,42,0.18)]"
       >
-        <h3 className="text-lg font-extrabold text-slate-900">Añadir mapa</h3>
+        <h3 className="text-lg font-extrabold text-slate-900">Añadir espacio</h3>
         <p className="mt-1 text-sm text-slate-500">
-          Define el mapa antes de construir paredes o mesas.
+          Crea una sala, terraza o zona antes de colocar paredes y mesas.
         </p>
 
         <div className="mt-5 space-y-4">
@@ -96,7 +96,7 @@ export function SalaAddEspacioDialog({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ej. Restaurante"
+              placeholder="Ej. Sala principal"
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-[color-mix(in_srgb,var(--hostly-accent)_35%,#cbd5e1)] focus:ring-2 focus:ring-[var(--hostly-accent-soft)]"
             />
           </label>

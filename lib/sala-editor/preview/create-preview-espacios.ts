@@ -42,7 +42,7 @@ export function createLocalEspacio(input: CreateLocalEspacioInput): SalaEspacio 
   return {
     id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     restaurantId: rid,
-    name: name || "Nuevo mapa",
+    name: name || "Nuevo espacio",
     tipo: input.tipo,
     color: input.color,
     sortOrder: input.sortOrder,

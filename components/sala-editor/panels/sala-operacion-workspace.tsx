@@ -160,7 +160,7 @@ export function SalaOperacionWorkspace({
       floorBackground={floorEntry.background}
       stageRef={surfaceRef}
       stageRole="application"
-      stageAriaLabel="Lienzo de elementos operativos"
+      stageAriaLabel="Plano de mesas y servicio"
       stageStyle={{
         cursor: toolHint.cursor,
       }}

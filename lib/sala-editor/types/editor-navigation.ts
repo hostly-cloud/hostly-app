@@ -35,28 +35,28 @@ export const SALA_EDITOR_VISIBLE_PHASE_ORDER: readonly SalaEditorPhase[] = [
   "zonas",
   "terreno",
   "estructura",
-  "paisajismo",
   "operacion",
+  "paisajismo",
 ] as const;
 
 export const SALA_EDITOR_PHASE_LABELS: Record<SalaEditorPhase, string> = {
-  espacios: "Mapas",
-  base: "Base",
-  zonas: "Zonas",
-  terreno: "Terreno",
-  estructura: "Estructura",
-  paisajismo: "Paisajismo",
-  operacion: "Operación",
+  espacios: "Espacios",
+  base: "Mi restaurante",
+  zonas: "Espacios",
+  terreno: "Suelo",
+  estructura: "Elementos fijos",
+  paisajismo: "Ambiente",
+  operacion: "Mesas y servicio",
 };
 
 export const SALA_EDITOR_PHASE_DESCRIPTIONS: Record<SalaEditorPhase, string> = {
-  espacios: "Define los mapas operativos del restaurante.",
-  base: "Define dimensiones, escala, cuadrícula y fondo neutro.",
-  zonas: "Agrupa áreas funcionales del restaurante.",
-  terreno: "Construye superficies y materiales dentro del mapa.",
-  estructura: "Paredes, barras, puertas y elementos fijos.",
-  paisajismo: "Jardineras, árboles y elementos naturales del espacio.",
-  operacion: "Mesas, asientos y superficies de servicio.",
+  espacios: "Organiza las salas, terrazas y zonas de tu restaurante.",
+  base: "Ajusta el tamaño y el suelo de este espacio.",
+  zonas: "Marca áreas reconocibles como sala, terraza, jardín o VIP.",
+  terreno: "Dibuja suelos y materiales del espacio.",
+  estructura: "Coloca paredes, puertas, cristales y separadores.",
+  paisajismo: "Añade elementos que ayuden a reconocer el ambiente.",
+  operacion: "Coloca mesas, barras y puntos de apoyo del servicio.",
 };
 
 export function createDefaultSalaEditorNavigation(): SalaEditorNavigation {

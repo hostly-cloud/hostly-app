@@ -828,12 +828,11 @@ export function SalaTerrenoWorkspace({
               Surface Objects
             </span>
             <h2 className="hostly-sala-terreno-placeholder__title">
-              Selecciona un material para comenzar a construir el terreno.
+              Selecciona un material para dibujar el suelo.
             </h2>
             <p className="hostly-sala-terreno-placeholder__text">
-              La biblioteca de Terreno ya separa materiales como madera, piedra,
-              césped, arena, agua y tarima. En esta fase no se dibujan muros ni
-              se colocan mesas.
+              Elige madera, piedra, césped, arena, agua o tarima. Aquí preparas
+              el suelo; las paredes y mesas van después.
             </p>
           </div>
         </div>

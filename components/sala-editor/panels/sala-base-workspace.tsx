@@ -47,7 +47,7 @@ export function SalaBaseWorkspace({
       hint={
         <div className="hostly-sala-espacio-frame__hero hostly-sala-base-workspace__hero">
           <p className="hostly-sala-espacio-frame__hero-title">
-            Vista previa del mapa
+            Vista previa del espacio
           </p>
           <p className="hostly-sala-espacio-frame__hero-hint">
             {formatDimension(base.dimensions.width)} ×{" "}

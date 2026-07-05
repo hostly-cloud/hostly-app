@@ -1040,7 +1040,7 @@ export function SalaEditorWorkspace({
       const kind = selectedStructuralElement.kind;
       return {
         kind: "structural",
-        label: kind in labels ? labels[kind as keyof typeof labels] : "Estructura",
+        label: kind in labels ? labels[kind as keyof typeof labels] : "Elemento fijo",
         icon: kind in icons ? icons[kind as keyof typeof icons] : "▣",
         onDelete: () => removeStructuralElement(selectedStructuralElement.id),
       };
@@ -1068,7 +1068,7 @@ export function SalaEditorWorkspace({
       const item = getLandscapeToolboxItem(selectedLandscapeElement.kind);
       return {
         kind: "landscape",
-        label: item?.label ?? "Paisajismo",
+        label: item?.label ?? "Ambiente",
         icon: item?.icon ?? "♧",
         onDelete: () => removeLandscapeElement(selectedLandscapeElement.id),
       };

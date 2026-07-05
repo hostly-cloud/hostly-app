@@ -14,7 +14,7 @@ export function SalaBaseSidebar({ espacio, onUpdateBase }: SalaBaseSidebarProps)
     return (
       <div className="hostly-sala-editor-toolbox hostly-sala-base-config hostly-sala-base-config--empty">
         <p className="hostly-sala-base-config__empty">
-          Selecciona un mapa para preparar su base.
+          Selecciona un espacio para prepararlo.
         </p>
       </div>
     );

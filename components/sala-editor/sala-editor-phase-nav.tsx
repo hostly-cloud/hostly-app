@@ -19,8 +19,8 @@ const PHASE_INDEX: Record<SalaEditorPhase, string> = {
   zonas: "②",
   terreno: "③",
   estructura: "④",
-  paisajismo: "⑤",
-  operacion: "⑥",
+  operacion: "⑤",
+  paisajismo: "⑥",
 };
 
 export function SalaEditorPhaseNav({
@@ -33,7 +33,7 @@ export function SalaEditorPhaseNav({
   const activeIndex = SALA_EDITOR_VISIBLE_PHASE_ORDER.indexOf(visiblePhase);
 
   return (
-    <nav className="hostly-sala-editor-stepper" aria-label="Fases del editor de sala">
+    <nav className="hostly-sala-editor-stepper" aria-label="Pasos para preparar tu restaurante">
       <ol className="hostly-sala-editor-stepper__track">
         {SALA_EDITOR_VISIBLE_PHASE_ORDER.map((item, index) => {
           const isActive = item === visiblePhase;

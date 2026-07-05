@@ -275,8 +275,8 @@ export function SalaEditorWorkspaceCanvas({
   if (!espacio) {
     return (
       <SalaEditorEmptyState
-        title="Selecciona un mapa en el panel izquierdo."
-        hint="Necesitas un mapa activo para preparar base, terreno, estructura u operación."
+        title="Selecciona un espacio en el panel izquierdo."
+        hint="Elige una sala, terraza o zona para preparar tu restaurante."
         glyph="▢"
       />
     );
@@ -482,8 +482,8 @@ export function SalaEditorWorkspaceCanvas({
   if (phase === "estructura") {
     return (
       <SalaEditorEmptyState
-        title="Elige una herramienta del panel izquierdo."
-        hint="Pared, cristal, puerta u otra estructura."
+        title="Elige qué elemento fijo quieres colocar."
+        hint="Pared, cristal, puerta o separador."
         glyph="⎔"
       />
     );
@@ -560,8 +560,8 @@ export function SalaEditorWorkspaceCanvas({
   if (phase === "operacion") {
     return (
       <SalaEditorEmptyState
-        title="Elige un elemento operativo."
-        hint="Mesa, sofá u otro tipo del panel izquierdo."
+        title="Elige qué quieres colocar para el servicio."
+        hint="Mesa, barra, recepción o punto de apoyo."
         glyph="◎"
       />
     );
@@ -570,7 +570,7 @@ export function SalaEditorWorkspaceCanvas({
   return (
     <SalaEditorEmptyState
       title={espacio.name}
-      hint="Mapa seleccionado."
+      hint="Espacio seleccionado."
       glyph="◫"
     />
   );

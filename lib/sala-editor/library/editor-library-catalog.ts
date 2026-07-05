@@ -178,7 +178,7 @@ const TERRENO_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
 const ZONAS_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   {
     id: "zone-catalog",
-    label: "ZoneCatalog",
+    label: "Zonas del local",
     icon: "◫",
     items: ZONE_CATALOG.map((zone) => ({
       id: `zone-${zone.type}`,
@@ -192,7 +192,7 @@ const ZONAS_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
 const PAISAJISMO_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   {
     id: "paisajismo",
-    label: "Paisajismo",
+    label: "Ambiente",
     icon: "🌿",
     items: [
       ...LANDSCAPE_TOOLBOX_ITEMS.map((item) => ({
@@ -307,7 +307,7 @@ const OPERACION_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
   },
   {
     id: "servicio",
-    label: "Service Areas",
+    label: "Puntos de servicio",
     icon: "🛎",
     items: [
       {
@@ -349,34 +349,6 @@ const OPERACION_LIBRARY_CATEGORIES: readonly SalaEditorLibraryCategory[] = [
         status: "upcoming",
       },
     ],
-  },
-  {
-    id: "exterior",
-    label: "Exterior",
-    icon: "☀",
-    upcoming: true,
-    items: [],
-  },
-  {
-    id: "beach-club",
-    label: "Beach Club",
-    icon: "🏖",
-    upcoming: true,
-    items: [],
-  },
-  {
-    id: "decoracion",
-    label: "Decoración",
-    icon: "✨",
-    upcoming: true,
-    items: [],
-  },
-  {
-    id: "personalizados",
-    label: "Personalizados",
-    icon: "⚙",
-    upcoming: true,
-    items: [],
   },
 ] as const;
 

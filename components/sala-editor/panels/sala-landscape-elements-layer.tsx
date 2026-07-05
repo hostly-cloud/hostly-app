@@ -541,7 +541,7 @@ export function SalaLandscapeElementsLayer({
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                aria-label={getLandscapeToolboxItem(element.kind)?.label ?? "Paisajismo"}
+                aria-label={getLandscapeToolboxItem(element.kind)?.label ?? "Ambiente"}
                 tabIndex={readOnly ? -1 : 0}
                 {...handlers}
               />

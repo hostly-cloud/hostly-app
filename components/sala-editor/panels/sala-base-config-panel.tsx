@@ -79,7 +79,7 @@ export function SalaBaseConfigPanel({
   return (
     <div className="hostly-sala-base-config">
       <div className="hostly-sala-base-config__head">
-        <p className="hostly-sala-base-config__title">Preparar mapa</p>
+        <p className="hostly-sala-base-config__title">Preparar espacio</p>
         <span
           className={[
             "hostly-sala-base-config__status",
@@ -95,7 +95,7 @@ export function SalaBaseConfigPanel({
       <section className="hostly-sala-base-config__section">
         <h3 className="hostly-sala-base-config__section-title">Dimensiones</h3>
         <p className="hostly-sala-base-config__section-hint">
-          Tamaño aproximado del mapa en {base.unit}.
+          Tamaño aproximado del espacio en {base.unit}.
         </p>
         <div className="hostly-sala-base-config__dimension-row">
           <label className="hostly-sala-base-config__field">
@@ -176,7 +176,7 @@ export function SalaBaseConfigPanel({
       <section className="hostly-sala-base-config__section">
         <h3 className="hostly-sala-base-config__section-title">Suelo</h3>
         <p className="hostly-sala-base-config__section-hint">
-          Apariencia visual del plano. No afecta a la operación.
+          Apariencia visual del suelo. No afecta al servicio.
         </p>
         <div className="hostly-sala-base-config__floor-grid">
           {BASE_FLOOR_CATALOG.map((entry) => {

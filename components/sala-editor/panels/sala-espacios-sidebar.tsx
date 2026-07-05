@@ -37,7 +37,7 @@ export function SalaEspaciosSidebar({
   if (isSwitcher) {
     return (
       <div className="hostly-sala-editor-space-switcher">
-        <p className="hostly-sala-editor-space-switcher__label">Mapa activo</p>
+        <p className="hostly-sala-editor-space-switcher__label">Espacio activo</p>
         <ul className="hostly-sala-editor-space-switcher__list">
           {sorted.map((espacio) => {
             const selected = espacio.id === selectedEspacioId;
@@ -76,7 +76,7 @@ export function SalaEspaciosSidebar({
           onClick={onRequestAddEspacio}
         >
           <span aria-hidden>+</span>
-          Nuevo mapa
+          Nuevo espacio
         </button>
       </div>
     );
@@ -88,7 +88,7 @@ export function SalaEspaciosSidebar({
         type="button"
         onClick={onRequestAddEspacio}
         className="hostly-sala-editor-toolbox__add hostly-sala-editor-toolbox__add--icon"
-        title="Añadir mapa"
+        title="Añadir espacio"
       >
         <span aria-hidden>+</span>
       </button>
