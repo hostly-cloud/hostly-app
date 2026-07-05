@@ -18,7 +18,7 @@ export function SalaEspacioWorkspaceHero({
         <div className="hostly-sala-espacio-frame__hero">
           <p className="hostly-sala-espacio-frame__hero-title">Tu espacio está listo</p>
           <p className="hostly-sala-espacio-frame__hero-hint">
-            Añade elementos fijos o pasa a mesas y servicio
+            Puedes trabajar en elementos fijos, mesas, servicio o ambiente
           </p>
         </div>
       }

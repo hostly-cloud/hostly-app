@@ -31,8 +31,8 @@ export function SalaEspaciosEmptyState({
           <span className="hostly-sala-editor-empty__glyph" aria-hidden>
             ◫
           </span>
-          <p className="hostly-sala-editor-empty__title">Crea tu primer espacio</p>
-          <p className="hostly-sala-editor-empty__hint">Empieza por tu sala, terraza o zona principal.</p>
+          <p className="hostly-sala-editor-empty__title">Crea un espacio de tu restaurante</p>
+          <p className="hostly-sala-editor-empty__hint">Sala, terraza, reservado o la zona que quieras preparar ahora.</p>
           <button
             type="button"
             onClick={onCreateEspacio}

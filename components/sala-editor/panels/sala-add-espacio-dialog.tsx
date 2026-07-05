@@ -84,7 +84,7 @@ export function SalaAddEspacioDialog({
       >
         <h3 className="text-lg font-extrabold text-slate-900">Añadir espacio</h3>
         <p className="mt-1 text-sm text-slate-500">
-          Crea una sala, terraza o zona antes de colocar paredes y mesas.
+          Crea una sala, terraza o zona para ubicar paredes, mesas y servicio con claridad.
         </p>
 
         <div className="mt-5 space-y-4">

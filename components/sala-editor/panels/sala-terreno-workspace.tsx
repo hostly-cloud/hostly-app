@@ -828,11 +828,11 @@ export function SalaTerrenoWorkspace({
               Surface Objects
             </span>
             <h2 className="hostly-sala-terreno-placeholder__title">
-              Selecciona un material para dibujar el suelo.
+              Elige el suelo que necesita este espacio.
             </h2>
             <p className="hostly-sala-terreno-placeholder__text">
-              Elige madera, piedra, césped, arena, agua o tarima. Aquí preparas
-              el suelo; las paredes y mesas van después.
+              Madera, piedra, césped, arena, agua o tarima ayudan a reconocer
+              sala, terraza o exterior sin cambiar el servicio.
             </p>
           </div>
         </div>
