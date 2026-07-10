@@ -553,6 +553,32 @@ export function fitBoundsToViewport(
   return { zoom: z, pan };
 }
 
+function getPlanSizeBounds(
+  planSize?: FloorPlanCanvasSize | null,
+): PlanContentBounds | null {
+  if (
+    !planSize ||
+    typeof planSize.width !== "number" ||
+    typeof planSize.height !== "number" ||
+    !Number.isFinite(planSize.width) ||
+    !Number.isFinite(planSize.height) ||
+    planSize.width <= 0 ||
+    planSize.height <= 0
+  ) {
+    return null;
+  }
+  return {
+    minX: 0,
+    minY: 0,
+    maxX: planSize.width,
+    maxY: planSize.height,
+    width: planSize.width,
+    height: planSize.height,
+    centerX: planSize.width / 2,
+    centerY: planSize.height / 2,
+  };
+}
+
 function editorChromeForPlanType(
   planType: PlanElementType,
   tableShape: Table["tableShape"],
@@ -723,6 +749,152 @@ export function getPlanElementBaseVisualStyle(
   };
 }
 
+function readPlanElementRotation(element: Table): number | null {
+  const direct = (element as { rotation?: unknown }).rotation;
+  if (typeof direct === "number" && Number.isFinite(direct)) return direct;
+  const metadata = (element as { metadata?: unknown }).metadata;
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+    const raw = (metadata as { rotation?: unknown }).rotation;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  }
+  return null;
+}
+
+type ReadonlyDecorativeRenderBranch =
+  | "readonly-wall"
+  | "readonly-bar"
+  | "readonly-column"
+  | "readonly-pool"
+  | "readonly-door"
+  | "readonly-planter";
+
+function readonlyDecorativeRenderBranch(
+  element: Table,
+): ReadonlyDecorativeRenderBranch | null {
+  if (element.type === "wall") return "readonly-wall";
+  if (element.type === "bar") return "readonly-bar";
+  if (element.type === "column") return "readonly-column";
+  if (element.type === "pool") return "readonly-pool";
+  if (element.type === "door") return "readonly-door";
+  if (element.type === "planter") return "readonly-planter";
+  return null;
+}
+
+function readonlyDecorativeElementStyle(
+  element: Table,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): CSSProperties {
+  const rotation = readPlanElementRotation(element);
+  const baseVisual = getPlanElementBaseVisualStyle(element, "premium");
+  const branch = readonlyDecorativeRenderBranch(element);
+  const zIndex =
+    branch === "readonly-wall"
+      ? 3
+      : branch === "readonly-pool" || branch === "readonly-planter"
+        ? 5
+        : branch === "readonly-bar" || branch === "readonly-door"
+          ? 8
+          : 7;
+  return {
+    position: "absolute",
+    left: x,
+    top: y,
+    width,
+    height,
+    boxSizing: "border-box",
+    pointerEvents: "none",
+    userSelect: "none",
+    overflow: "hidden",
+    zIndex,
+    ...baseVisual,
+    ...(branch === "readonly-pool"
+      ? {
+          borderRadius: Math.min(24, Math.max(10, height / 2)),
+          border: "1px solid rgba(56, 189, 248, 0.5)",
+          background: [
+            "repeating-linear-gradient(105deg, transparent 0, transparent 13px, rgba(255,255,255,0.12) 13px, rgba(255,255,255,0.12) 14px)",
+            "radial-gradient(ellipse 95% 70% at 50% 12%, rgba(224, 242, 254, 0.44) 0%, transparent 62%)",
+            "linear-gradient(172deg, rgba(56, 189, 248, 0.62) 0%, rgba(14, 116, 144, 0.66) 46%, rgba(8, 47, 73, 0.72) 100%)",
+          ].join(", "),
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -10px 18px rgba(8, 47, 73, 0.16), 0 6px 16px rgba(8, 60, 90, 0.2)",
+        }
+      : {}),
+    ...(branch === "readonly-bar"
+      ? {
+          borderRadius: Math.min(18, Math.max(8, height / 3)),
+          border: "1px solid rgba(120, 75, 42, 0.62)",
+          background: [
+            "linear-gradient(180deg, rgba(255, 244, 219, 0.24) 0%, transparent 24%)",
+            "repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 2px, transparent 2px, transparent 18px)",
+            "linear-gradient(180deg, rgba(111, 72, 42, 0.98) 0%, rgba(74, 48, 31, 0.99) 52%, rgba(47, 32, 24, 1) 100%)",
+          ].join(", "),
+          boxShadow:
+            "inset 0 3px 0 rgba(251, 226, 184, 0.38), inset 0 -9px 16px rgba(24, 16, 10, 0.34), 0 8px 18px rgba(44, 30, 18, 0.22)",
+        }
+      : {}),
+    ...(branch === "readonly-planter"
+      ? {
+          borderRadius: Math.min(20, Math.max(9, height / 2)),
+          border: "1px solid rgba(45, 110, 72, 0.62)",
+          background: [
+            "radial-gradient(circle at 12% 34%, rgba(134, 239, 172, 0.96) 0 5px, transparent 6px)",
+            "radial-gradient(circle at 28% 24%, rgba(74, 222, 128, 0.92) 0 6px, transparent 7px)",
+            "radial-gradient(circle at 46% 36%, rgba(22, 163, 74, 0.94) 0 7px, transparent 8px)",
+            "radial-gradient(circle at 65% 25%, rgba(132, 204, 22, 0.9) 0 6px, transparent 7px)",
+            "radial-gradient(circle at 82% 36%, rgba(34, 197, 94, 0.92) 0 5px, transparent 6px)",
+            "linear-gradient(180deg, rgba(31, 125, 75, 0.96) 0%, rgba(20, 83, 45, 0.96) 52%, rgba(121, 85, 55, 0.96) 53%, rgba(77, 52, 37, 0.98) 100%)",
+          ].join(", "),
+          boxShadow:
+            "inset 0 2px 0 rgba(220, 252, 231, 0.28), inset 0 -7px 11px rgba(48, 31, 19, 0.24), 0 5px 13px rgba(20, 83, 45, 0.2)",
+        }
+      : {}),
+    ...(branch === "readonly-wall"
+      ? {
+          borderRadius: 3,
+          border: "1px solid rgba(15, 23, 42, 0.74)",
+          background:
+            "linear-gradient(180deg, rgba(51, 55, 50, 0.98) 0%, rgba(20, 23, 24, 1) 100%)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.08), 0 3px 8px rgba(2, 6, 23, 0.18)",
+        }
+      : {}),
+    transform:
+      rotation != null && rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+    transformOrigin: "center center",
+  };
+}
+
+function renderReadonlyDecorativeElement(
+  element: Table,
+  elementId: string,
+  mapLayoutX: number,
+  mapLayoutY: number,
+  mapTileWidth: number,
+  mapTileHeight: number,
+): React.ReactNode {
+  const branch = readonlyDecorativeRenderBranch(element);
+  if (!branch) return null;
+  return (
+    <div
+      key={elementId}
+      aria-hidden
+      data-hostly-readonly-decorative-id={elementId}
+      data-hostly-readonly-decorative-type={element.type}
+      style={readonlyDecorativeElementStyle(
+        element,
+        mapLayoutX,
+        mapLayoutY,
+        mapTileWidth,
+        mapTileHeight,
+      )}
+    />
+  );
+}
+
 export function EditableFloorMap({
   elements,
   editable,
@@ -785,6 +957,9 @@ export function EditableFloorMap({
   const spaceHeldRef = useRef(false);
   const panRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
+  const lastElementRenderDiagnosticSignatureRef = useRef<string | null>(null);
+  const lastViewportFitDiagnosticSignatureRef = useRef<string | null>(null);
+  const lastPlanterRectDiagnosticSignatureRef = useRef<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [spacePressed, setSpacePressed] = useState(false);
@@ -792,6 +967,154 @@ export function EditableFloorMap({
   const [dragGroupSnapshot, setDragGroupSnapshot] = useState<
     Record<string, { x: number; y: number }> | null
   >(null);
+
+  useEffect(() => {
+    if (editable) return;
+    const decorativeElements = elements.filter((element) =>
+      isDecorativePlanElementType(element.type),
+    );
+    const rows = decorativeElements.slice(0, 32).map((element) => {
+      const { w, h } = elementSize(element);
+      const renderBranch = readonlyDecorativeRenderBranch(element);
+      const style = readonlyDecorativeElementStyle(
+        element,
+        element.x ?? 0,
+        element.y ?? 0,
+        w,
+        h,
+      );
+      return {
+        id: element.id,
+        type: element.type,
+        renderBranch,
+        computedWidth: w,
+        computedHeight: h,
+        rotation: readPlanElementRotation(element),
+        background: style.background ?? null,
+        border: style.border ?? null,
+        borderRadius: style.borderRadius ?? null,
+        opacity: style.opacity ?? null,
+        boxShadow: style.boxShadow ?? null,
+        zIndex: style.zIndex ?? null,
+        overflow: style.overflow ?? null,
+      };
+    });
+    const signature = JSON.stringify({
+      rows,
+    });
+    if (lastElementRenderDiagnosticSignatureRef.current === signature) return;
+    lastElementRenderDiagnosticSignatureRef.current = signature;
+    console.info("[TPV][MapDiag] decorative visual renderer", {
+      editable,
+      editorPlanSurface,
+      source: "EditableFloorMap",
+      elements: rows,
+    });
+  }, [editable, editorPlanSurface, elements]);
+
+  useLayoutEffect(() => {
+    if (editable) return;
+    const root = floorRef.current;
+    if (!root) return;
+    const planterElements = elements.filter((element) => element.type === "planter");
+    if (planterElements.length === 0) return;
+
+    const viewportRect = root.getBoundingClientRect();
+    const planterNodes = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        '[data-hostly-readonly-decorative-type="planter"]',
+      ),
+    );
+    const planterById = new Map(
+      planterElements.map((element) => [String(element.id).trim(), element]),
+    );
+    const rows = planterNodes.map((node) => {
+      const id = node.dataset.hostlyReadonlyDecorativeId ?? "";
+      const element = planterById.get(id);
+      const { w, h } = element ? elementSize(element) : { w: 0, h: 0 };
+      const rect = node.getBoundingClientRect();
+      const outsideLeft = rect.right < viewportRect.left;
+      const outsideRight = rect.left > viewportRect.right;
+      const outsideTop = rect.bottom < viewportRect.top;
+      const outsideBottom = rect.top > viewportRect.bottom;
+      const partiallyClipped =
+        rect.left < viewportRect.left ||
+        rect.right > viewportRect.right ||
+        rect.top < viewportRect.top ||
+        rect.bottom > viewportRect.bottom;
+      return {
+        id,
+        type: "planter" as const,
+        mapX: element?.x ?? null,
+        mapY: element?.y ?? null,
+        mapWidth: w,
+        mapHeight: h,
+        scale: zoom,
+        translate: pan,
+        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+        expectedScreenRect: element
+          ? {
+              left: viewportRect.left + pan.x + (element.x ?? 0) * zoom,
+              top: viewportRect.top + pan.y + (element.y ?? 0) * zoom,
+              width: w * zoom,
+              height: h * zoom,
+            }
+          : null,
+        domRect: {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        },
+        viewportRect: {
+          left: viewportRect.left,
+          top: viewportRect.top,
+          right: viewportRect.right,
+          bottom: viewportRect.bottom,
+          width: viewportRect.width,
+          height: viewportRect.height,
+        },
+        visibleInViewport:
+          !outsideLeft && !outsideRight && !outsideTop && !outsideBottom,
+        clipping: {
+          outsideLeft,
+          outsideRight,
+          outsideTop,
+          outsideBottom,
+          partiallyClipped,
+        },
+      };
+    });
+    const missingDomNodes = planterElements
+      .filter(
+        (element) =>
+          !planterNodes.some(
+            (node) =>
+              node.dataset.hostlyReadonlyDecorativeId === String(element.id).trim(),
+          ),
+      )
+      .map((element) => ({
+        id: element.id,
+        type: element.type,
+        reason: "missingDomNode",
+      }));
+    const payload = {
+      source: "EditableFloorMap",
+      scale: zoom,
+      translate: pan,
+      transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+      planterCount: planterElements.length,
+      domPlanterCount: planterNodes.length,
+      rows,
+      missingDomNodes,
+    };
+    const signature = JSON.stringify(payload);
+    if (lastPlanterRectDiagnosticSignatureRef.current === signature) return;
+    lastPlanterRectDiagnosticSignatureRef.current = signature;
+    console.info("[TPV][MapDiag] planter viewport rects", payload);
+  }, [editable, elements, pan, zoom]);
 
   useEffect(() => {
     if (!placementRequest || !editable || editingZones || !onCreate) return;
@@ -899,51 +1222,92 @@ export function EditableFloorMap({
     const vw = root.clientWidth;
     const vh = root.clientHeight;
     if (vw < 32 || vh < 32) return;
-    const bounds = getPlanContentBounds(
-      mapFitElementsRef.current,
-      mapFitZonesRef.current,
-      viewportFitMode === "plan" ? planSize : null,
-    );
-    let { zoom: z } = fitBoundsToViewport(bounds, vw, vh, {
-      paddingPx: fitPaddingPx,
-      maxZoom: Math.max(ZOOM_MAX, fitZoomMax),
-      fitZoomMax,
-      align: viewportFitAlign,
-    });
-    // `mapLayoutEmphasis` solo ajusta el zoom (lienzo "denso" del editor en modo
-    // plan); el pan se calcula UNA sola vez con el zoom final para evitar dobles
-    // cálculos y que `viewportFitOffsetX/Y` sea predecible.
-    if (mapLayoutEmphasis && viewportFitMode !== "content") {
-      const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
-      z = clamp(z * 1.085, 0.06, cap);
+    const planBounds = getPlanSizeBounds(planSize);
+    const usePlanFit = viewportFitMode === "plan" && planBounds != null;
+    const bounds = usePlanFit
+      ? planBounds
+      : getPlanContentBounds(mapFitElementsRef.current, mapFitZonesRef.current, null);
+    let z: number;
+    let p: { x: number; y: number };
+    if (usePlanFit) {
+      const availableWidth = Math.max(32, vw - fitPaddingPx);
+      const availableHeight = Math.max(32, vh - fitPaddingPx);
+      const rawScale = Math.min(
+        availableWidth / bounds.width,
+        availableHeight / bounds.height,
+      );
+      z = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 0.06;
+      const renderedWidthForPlan = bounds.width * z;
+      const renderedHeightForPlan = bounds.height * z;
+      p = {
+        x: (vw - renderedWidthForPlan) / 2,
+        y: (vh - renderedHeightForPlan) / 2,
+      };
+    } else {
+      ({ zoom: z, pan: p } = fitBoundsToViewport(bounds, vw, vh, {
+        paddingPx: fitPaddingPx,
+        maxZoom: Math.max(ZOOM_MAX, fitZoomMax),
+        fitZoomMax,
+        align: viewportFitAlign,
+      }));
+      if (mapLayoutEmphasis) {
+        const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
+        z = clamp(z * 1.085, 0.06, cap);
+      }
+      if (
+        viewportFitZoomMultiplier !== 1 &&
+        Number.isFinite(viewportFitZoomMultiplier) &&
+        viewportFitZoomMultiplier > 0
+      ) {
+        const zoomCeil = Math.max(ZOOM_MAX, fitZoomMax);
+        z = clamp(z * viewportFitZoomMultiplier, 0.06, zoomCeil);
+      }
+      const inset = fitPaddingPx / 2;
+      p =
+        viewportFitAlign === "start"
+          ? {
+              x: inset - bounds.minX * z,
+              y: inset - bounds.minY * z,
+            }
+          : {
+              x: vw / 2 - bounds.centerX * z,
+              y: vh / 2 - bounds.centerY * z,
+            };
     }
-    // Multiplicador visual de zoom (solo UX, p. ej. TPV operativo). No altera el
-    // pan: la fórmula de pan ya consume el zoom final, así el contenido crece
-    // manteniendo el mismo centrado.
-    if (
-      viewportFitZoomMultiplier !== 1 &&
-      Number.isFinite(viewportFitZoomMultiplier) &&
-      viewportFitZoomMultiplier > 0
-    ) {
-      const zoomCeil = Math.max(ZOOM_MAX, fitZoomMax);
-      z = clamp(z * viewportFitZoomMultiplier, 0.06, zoomCeil);
-    }
-    const inset = fitPaddingPx / 2;
-    let p =
-      viewportFitAlign === "start"
-        ? {
-            x: inset - bounds.minX * z,
-            y: inset - bounds.minY * z,
-          }
-        : {
-            x: vw / 2 - bounds.centerX * z,
-            y: vh / 2 - bounds.centerY * z,
-          };
     if (viewportFitOffsetX !== 0 || viewportFitOffsetY !== 0) {
       p = { x: p.x + viewportFitOffsetX, y: p.y + viewportFitOffsetY };
     }
     setZoom(z);
     setPan(p);
+    const renderedWidth = bounds.width * z;
+    const renderedHeight = bounds.height * z;
+    const planTransformDiagnostic = {
+      planWidth: usePlanFit ? bounds.width : null,
+      planHeight: usePlanFit ? bounds.height : null,
+      viewportWidth: vw,
+      viewportHeight: vh,
+      padding: fitPaddingPx,
+      scale: z,
+      translateX: p.x,
+      translateY: p.y,
+      renderedWidth,
+      renderedHeight,
+      aspectRatioPreserved:
+        bounds.width > 0 &&
+        bounds.height > 0 &&
+        Math.abs(renderedWidth / renderedHeight - bounds.width / bounds.height) <
+          0.0001,
+    };
+    const planTransformSignature = JSON.stringify(planTransformDiagnostic);
+    if (
+      lastViewportFitDiagnosticSignatureRef.current !== planTransformSignature
+    ) {
+      lastViewportFitDiagnosticSignatureRef.current = planTransformSignature;
+      console.info(
+        "[TPV][MapDiag] plan-to-viewport transform",
+        planTransformDiagnostic,
+      );
+    }
   }, [
     editorPlanSurface,
     fitPaddingPx,
@@ -1774,7 +2138,10 @@ export function EditableFloorMap({
       : null;
 
   if (!editable) {
-    if (!renderElement) return null;
+    const hasReadonlyDecorativeElements = elements.some(
+      (element) => readonlyDecorativeRenderBranch(element) != null,
+    );
+    if (!renderElement && !hasReadonlyDecorativeElements) return null;
     return (
       <div
         ref={setFloorRef}
@@ -1861,6 +2228,18 @@ export function EditableFloorMap({
             const { w, h } = elementSize(element);
             const mapLayoutX = element.x ?? 0;
             const mapLayoutY = element.y ?? 0;
+            const readonlyDecorative = renderReadonlyDecorativeElement(
+              element,
+              elementId,
+              mapLayoutX,
+              mapLayoutY,
+              w,
+              h,
+            );
+            if (readonlyDecorative) {
+              return <Fragment key={element.id}>{readonlyDecorative}</Fragment>;
+            }
+            if (!renderElement) return null;
             return (
               <Fragment key={element.id}>
                 {renderElement({

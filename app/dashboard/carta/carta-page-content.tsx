@@ -450,6 +450,78 @@ function displayRestaurantUserName(row: RestaurantUserRow): string {
   return em || "—";
 }
 
+function countByStringKey<T>(
+  list: T[],
+  readKey: (item: T) => string | null | undefined,
+): Record<string, number> {
+  return list.reduce<Record<string, number>>((acc, item) => {
+    const key = readKey(item)?.trim() || "(sin valor)";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function isEditorV2PublishedTable(table: Table): boolean {
+  const id = String(table.id ?? "").trim();
+  return (
+    table.source === "editor-v2" ||
+    typeof table.editorV2ElementId === "string" ||
+    id.startsWith("v2-map-")
+  );
+}
+
+function summarizeTpvMapTables(list: Table[]) {
+  const active = list.filter((table) => table.isActive !== false);
+  const inactive = list.length - active.length;
+  const decorative = active.filter((table) => isDecorativePlanElementType(table.type));
+  const operational = active.filter((table) => !isDecorativePlanElementType(table.type));
+  const editorV2 = active.filter(isEditorV2PublishedTable);
+  const legacyLikely = active.filter((table) => !isEditorV2PublishedTable(table));
+  return {
+    total: list.length,
+    active: active.length,
+    inactive,
+    operational: operational.length,
+    decorative: decorative.length,
+    editorV2: editorV2.length,
+    legacyLikely: legacyLikely.length,
+    byType: countByStringKey(active, (table) => table.type),
+    byFloorPlanId: countByStringKey(active, (table) => table.floorPlanId),
+    editorV2Sample: editorV2.slice(0, 12).map((table) => ({
+      id: table.id,
+      name: table.name,
+      type: table.type,
+      floorPlanId: table.floorPlanId ?? null,
+      source: table.source ?? null,
+      editorV2ElementId: table.editorV2ElementId ?? null,
+    })),
+    legacyLikelySample: legacyLikely.slice(0, 12).map((table) => ({
+      id: table.id,
+      name: table.name,
+      type: table.type,
+      floorPlanId: table.floorPlanId ?? null,
+      source: table.source ?? null,
+    })),
+  };
+}
+
+function summarizeTpvMapZones(list: Zone[]) {
+  return {
+    total: list.length,
+    byFloorPlanId: countByStringKey(list, (zone) => zone.floorPlanId),
+    sample: list.slice(0, 12).map((zone) => ({
+      id: zone.id,
+      name: zone.name,
+      floorPlanId: zone.floorPlanId ?? null,
+      hasGeometry:
+        typeof zone.x === "number" &&
+        typeof zone.y === "number" &&
+        typeof zone.width === "number" &&
+        typeof zone.height === "number",
+    })),
+  };
+}
+
 /** Errores de red / backend / modo offline del cliente Firestore (listener TPV). */
 function isFirestoreTpvConnectivityFailure(err: unknown): boolean {
   if (err instanceof FirebaseError) {
@@ -1866,6 +1938,9 @@ export function CartaPageContent({
   const firstPendingRef = useRef<HTMLLIElement | null>(null);
   const lastSortedRef = useRef<string[]>([]);
   const lastResultRef = useRef<Table[]>([]);
+  const lastTpvMapDiagRenderSignatureRef = useRef<string | null>(null);
+  const lastTpvDecorativeRenderAuditSignatureRef = useRef<string | null>(null);
+  const tpvRenderElementDecorativeAuditSeenRef = useRef<Set<string>>(new Set());
   const tableFlipPositionsRef = useRef<Record<string, DOMRect>>({});
   const tableFlipElementsRef = useRef<Record<string, HTMLDivElement | null>>(
     {},
@@ -4224,6 +4299,11 @@ export function CartaPageContent({
     const unsub = listenTablesByRestaurantId(
       rid,
       (list) => {
+        console.info("[TPV][MapDiag] listenTables snapshot", {
+          restaurantId: rid,
+          uid: user.uid,
+          ...summarizeTpvMapTables(list),
+        });
         setTablesList(list);
       },
       (err) => {
@@ -4249,6 +4329,11 @@ export function CartaPageContent({
     const unsub = listenZonesByRestaurantId(
       rid,
       (list) => {
+        console.info("[TPV][MapDiag] listenZones snapshot", {
+          restaurantId: rid,
+          uid: user.uid,
+          ...summarizeTpvMapZones(list),
+        });
         setZonesList(list);
       },
       (err) => {
@@ -4270,6 +4355,24 @@ export function CartaPageContent({
     const unsub = listenFloorPlansByRestaurantId(
       rid,
       (plans) => {
+        console.info("[TPV][MapDiag] listenFloorPlans snapshot", {
+          restaurantId: rid,
+          uid: user.uid,
+          total: plans.length,
+          active: plans.filter((plan) => plan.active !== false).length,
+          visibleInTpv: plans.filter(
+            (plan) => plan.active !== false && plan.showInTpv !== false,
+          ).length,
+          plans: plans.map((plan) => ({
+            id: plan.id,
+            name: plan.name,
+            active: plan.active !== false,
+            showInTpv: plan.showInTpv !== false,
+            isDefault: plan.isDefault === true,
+            width: plan.width ?? null,
+            height: plan.height ?? null,
+          })),
+        });
         setFloorPlans(plans);
         setSelectedTpvFloorPlanId((current) => {
           const op = plans.filter(
@@ -6428,8 +6531,16 @@ export function CartaPageContent({
       (element) => element.isActive !== false,
     );
     if (!selectedTpvFloorPlanId) return activeElements;
+    const visibleOperationalFloorPlans = floorPlans.filter(
+      (plan) => plan.active !== false && plan.showInTpv !== false,
+    );
+    const hasMultipleOperationalFloorPlans = visibleOperationalFloorPlans.length > 1;
     return activeElements.filter((element) =>
-      entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
+      hasMultipleOperationalFloorPlans &&
+      !isDecorativePlanElementType(element.type) &&
+      !element.floorPlanId?.trim()
+        ? false
+        : entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
     );
   }, [tablesList, selectedTpvFloorPlanId, floorPlans]);
 
@@ -7114,20 +7225,101 @@ export function CartaPageContent({
     );
   }, [planElementsForTpvMap]);
 
-  const mapElementsForTpvRender = useMemo(() => {
+  const decorativeRenderedForTpvMap = useMemo(() => {
     const tableIds = new Set(
       mapTablesForChipFilter.map((table) => String(table.id ?? "").trim()),
     );
-    const decorative = decorativePlanElementsForTpv.filter(
+    return decorativePlanElementsForTpv.filter(
       (element) => !tableIds.has(String(element.id ?? "").trim()),
     );
-    return [...decorative, ...mapTablesForChipFilter];
   }, [decorativePlanElementsForTpv, mapTablesForChipFilter]);
 
+  const mapElementsForTpvRender = useMemo(() => {
+    return [...decorativeRenderedForTpvMap, ...mapTablesForChipFilter];
+  }, [decorativeRenderedForTpvMap, mapTablesForChipFilter]);
+
+  useEffect(() => {
+    const renderedIds = new Set(
+      decorativeRenderedForTpvMap.map((element) => String(element.id ?? "").trim()),
+    );
+    const discardedDecoratives = decorativePlanElementsForTpv
+      .filter((element) => !renderedIds.has(String(element.id ?? "").trim()))
+      .map((element) => ({
+        id: element.id,
+        type: element.type,
+        reason: "filtered" as const,
+      }));
+    const discardedTypes = discardedDecoratives.reduce<Record<string, number>>(
+      (acc, element) => {
+        acc[element.type] = (acc[element.type] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
+    const discardedByReason = discardedDecoratives.reduce<Record<string, number>>(
+      (acc, element) => {
+        acc[element.reason] = (acc[element.reason] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
+    const payload = {
+      source: "TPV renderElement input",
+      selectedFloorPlanId: selectedTpvFloorPlanId,
+      selectedFloorPlanName: selectedTpvFloorPlan?.name ?? null,
+      receivedTypes: countByStringKey(
+        decorativePlanElementsForTpv,
+        (element) => element.type,
+      ),
+      renderedTypes: countByStringKey(
+        decorativeRenderedForTpvMap,
+        (element) => element.type,
+      ),
+      discardedTypes,
+      discardedByReason,
+      discardedDecoratives,
+      receivedDecoratives: decorativePlanElementsForTpv.slice(0, 32).map((element) => ({
+        id: element.id,
+        type: element.type,
+        floorPlanId: element.floorPlanId ?? null,
+      })),
+      renderedDecoratives: decorativeRenderedForTpvMap.slice(0, 32).map((element) => ({
+        id: element.id,
+        type: element.type,
+        floorPlanId: element.floorPlanId ?? null,
+      })),
+    };
+    const signature = JSON.stringify(payload);
+    if (lastTpvDecorativeRenderAuditSignatureRef.current === signature) return;
+    lastTpvDecorativeRenderAuditSignatureRef.current = signature;
+    console.info("[TPV][MapDiag] decorative render audit", payload);
+  }, [
+    decorativePlanElementsForTpv,
+    decorativeRenderedForTpvMap,
+    selectedTpvFloorPlan?.name,
+    selectedTpvFloorPlanId,
+  ]);
+
+  const mapViewportFitSourceForTpv = useMemo<{
+    source: "tables" | "decoratives" | "empty";
+    elements: Table[];
+  }>(() => {
+    const tableFitElements =
+      mapTablesForChipFilter.length > 0 ? mapTablesForChipFilter : tablesVisibleOnMap;
+    if (tableFitElements.length > 0) {
+      return { source: "tables", elements: tableFitElements };
+    }
+    if (decorativeRenderedForTpvMap.length > 0) {
+      return { source: "decoratives", elements: decorativeRenderedForTpvMap };
+    }
+    return { source: "empty", elements: [] };
+  }, [decorativeRenderedForTpvMap, mapTablesForChipFilter, tablesVisibleOnMap]);
+
   const mapViewportFitElementsForTpv = useMemo(() => {
-    if (mapTablesForChipFilter.length > 0) return mapTablesForChipFilter;
-    return tablesVisibleOnMap;
-  }, [mapTablesForChipFilter, tablesVisibleOnMap]);
+    return mapViewportFitSourceForTpv.elements;
+  }, [mapViewportFitSourceForTpv]);
+
+  const viewportFitSourceForTpv = mapViewportFitSourceForTpv.source;
 
   const tpvOperationalMapElementsForRender = useMemo(() => {
     if (!embeddedInOperacion) return mapElementsForTpvRender;
@@ -7203,6 +7395,230 @@ export function CartaPageContent({
     tpvOperationalMapElementsForRender,
     planElementsForTpvMap,
     zonesForOperationalMapRender,
+  ]);
+
+  useEffect(() => {
+    const activeElements = tablesList.filter((element) => element.isActive !== false);
+    const visibleOperationalFloorPlans = floorPlans.filter(
+      (plan) => plan.active !== false && plan.showInTpv !== false,
+    );
+    const legacyUnscopedActiveElements = activeElements.filter(
+      (element) =>
+        !isDecorativePlanElementType(element.type) && !element.floorPlanId?.trim(),
+    );
+    const legacyUnscopedBlockedByMultiPlan =
+      selectedTpvFloorPlanId != null && visibleOperationalFloorPlans.length > 1
+        ? legacyUnscopedActiveElements
+        : [];
+    const outsideSelectedFloorPlan =
+      selectedTpvFloorPlanId == null
+        ? []
+        : activeElements.filter(
+            (element) =>
+              !entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
+          );
+    const tableIdsForChipFilter = new Set(
+      mapTablesForChipFilter.map((table) => String(table.id ?? "").trim()),
+    );
+    const decorativeSuppressedByDuplicateId = decorativePlanElementsForTpv.filter((element) =>
+      tableIdsForChipFilter.has(String(element.id ?? "").trim()),
+    );
+    const decorativeRendered = decorativeRenderedForTpvMap;
+    const viewportFitElementSamples = tpvOperationalViewportFitElements
+      .slice(0, 16)
+      .map((element) => ({
+        id: element.id,
+        type: element.type,
+        x: element.x,
+        y: element.y,
+        width: element.width ?? null,
+        height: element.height ?? null,
+      }));
+    const renderableElementsCount = tpvOperationalMapElementsForRender.length;
+    const renderGuardSource =
+      renderableElementsCount === 0 ? "empty" : "renderable-elements";
+    const renderDiagnosticSignature = JSON.stringify({
+      restaurantId,
+      uid: user?.uid ?? null,
+      embeddedInOperacion,
+      selectedTpvFloorPlanId,
+      visibleOperationalFloorPlanIds: visibleOperationalFloorPlans.map((plan) => plan.id),
+      tableIds: tablesList.map((table) => [
+        table.id,
+        table.type,
+        table.isActive !== false,
+        table.floorPlanId ?? "",
+        table.source ?? "",
+        table.editorV2ElementId ?? "",
+      ]),
+      zoneIds: zonesList.map((zone) => [
+        zone.id,
+        zone.floorPlanId ?? "",
+        zone.x ?? "",
+        zone.y ?? "",
+        zone.width ?? "",
+        zone.height ?? "",
+      ]),
+      selectedCounts: {
+        planElementsForTpvMap: planElementsForTpvMap.length,
+        tablesForTpvMap: tablesForTpvMap.length,
+        tablesVisibleOnMap: tablesVisibleOnMap.length,
+        tablesFilteredByWaiter: tablesFilteredByWaiter.length,
+        tablesVisibleForMapFilter: tablesVisibleForMapFilter.length,
+        mapTablesOrderedByVisualPriority: mapTablesOrderedByVisualPriority.length,
+        mapTablesForChipFilter: mapTablesForChipFilter.length,
+        decorativePlanElementsForTpv: decorativePlanElementsForTpv.length,
+        zonesForTpvMap: zonesForTpvMap.length,
+        zonesForOperationalMapRender: zonesForOperationalMapRender.length,
+        tpvOperationalMapElementsForRender: tpvOperationalMapElementsForRender.length,
+        tpvOperationalViewportFitElements: tpvOperationalViewportFitElements.length,
+      },
+      viewportFitSource: viewportFitSourceForTpv,
+      viewportFitElements: viewportFitElementSamples,
+      renderGuardSource,
+      renderableElementsCount,
+      operationalTablesCount: tablesVisibleOnMap.length,
+      decorativesCount: decorativeRendered.length,
+      filters: {
+        waiterFilter,
+        myTablesMapScope,
+      },
+    });
+    if (lastTpvMapDiagRenderSignatureRef.current === renderDiagnosticSignature) {
+      return;
+    }
+    lastTpvMapDiagRenderSignatureRef.current = renderDiagnosticSignature;
+
+    console.info("[TPV][MapDiag] render pipeline", {
+      restaurantId,
+      uid: user?.uid ?? null,
+      embeddedInOperacion,
+      selectedFloorPlanId: selectedTpvFloorPlanId,
+      selectedFloorPlan: selectedTpvFloorPlan
+        ? {
+            id: selectedTpvFloorPlan.id,
+            name: selectedTpvFloorPlan.name,
+            active: selectedTpvFloorPlan.active !== false,
+            showInTpv: selectedTpvFloorPlan.showInTpv !== false,
+            width: selectedTpvFloorPlan.width ?? null,
+            height: selectedTpvFloorPlan.height ?? null,
+          }
+        : null,
+      floorPlans: {
+        total: floorPlans.length,
+        active: floorPlans.filter((plan) => plan.active !== false).length,
+        visibleInTpv: visibleOperationalFloorPlans.length,
+      },
+      inputTables: summarizeTpvMapTables(tablesList),
+      inputZones: summarizeTpvMapZones(zonesList),
+      counts: {
+        activeElements: activeElements.length,
+        planElementsForSelectedFloorPlan: planElementsForTpvMap.length,
+        tablesAfterDecorativeFilter: tablesForTpvMap.length,
+        tablesVisibleOnMap: tablesVisibleOnMap.length,
+        tablesAfterWaiterFilter: tablesFilteredByWaiter.length,
+        tablesAfterScopeFilter: tablesVisibleForMapFilter.length,
+        mapTablesAfterPriority: mapTablesOrderedByVisualPriority.length,
+        mapTablesAfterChipFilter: mapTablesForChipFilter.length,
+        decorativeInSelectedFloorPlan: decorativePlanElementsForTpv.length,
+        decorativeRendered: decorativeRendered.length,
+        zonesForSelectedFloorPlan: zonesForTpvMap.length,
+        zonesRendered: zonesForOperationalMapRender.length,
+        finalElementsRendered: tpvOperationalMapElementsForRender.length,
+        viewportFitSource: viewportFitSourceForTpv,
+        viewportFitElements: tpvOperationalViewportFitElements.length,
+        renderGuardSource,
+        renderableElementsCount,
+        operationalTablesCount: tablesVisibleOnMap.length,
+        decorativesCount: decorativeRendered.length,
+      },
+      discarded: {
+        inactiveTables: tablesList.length - activeElements.length,
+        outsideSelectedFloorPlan: outsideSelectedFloorPlan.length,
+        legacyUnscopedBlockedByMultiPlan: legacyUnscopedBlockedByMultiPlan.length,
+        decorativeExcludedFromTableLayer: decorativePlanElementsForTpv.length,
+        decorativeSuppressedByDuplicateId: decorativeSuppressedByDuplicateId.length,
+        zoneFilteredOutByFloorPlan: zonesList.length - zonesForTpvMap.length,
+        zonesHiddenBecauseEmbeddedOperation: embeddedInOperacion ? zonesForTpvMap.length : 0,
+        waiterFilter:
+          embeddedInOperacion || waiterFilter === "all"
+            ? 0
+            : tablesVisibleOnMap.length - tablesFilteredByWaiter.length,
+        operatorScopeFilter:
+          embeddedInOperacion && myTablesMapScope === "mine"
+            ? tablesFilteredByWaiter.length - tablesVisibleForMapFilter.length
+            : 0,
+        chipFilter:
+          mapTablesOrderedByVisualPriority.length - mapTablesForChipFilter.length,
+      },
+      samples: {
+        outsideSelectedFloorPlan: outsideSelectedFloorPlan.slice(0, 12).map((element) => ({
+          id: element.id,
+          name: element.name,
+          type: element.type,
+          floorPlanId: element.floorPlanId ?? null,
+          source: element.source ?? null,
+          editorV2ElementId: element.editorV2ElementId ?? null,
+        })),
+        legacyUnscopedBlockedByMultiPlan: legacyUnscopedBlockedByMultiPlan
+          .slice(0, 12)
+          .map((element) => ({
+            id: element.id,
+            name: element.name,
+            type: element.type,
+            floorPlanId: element.floorPlanId ?? null,
+            source: element.source ?? null,
+            editorV2ElementId: element.editorV2ElementId ?? null,
+          })),
+        decorativeRendered: decorativeRendered.slice(0, 12).map((element) => ({
+          id: element.id,
+          name: element.name,
+          type: element.type,
+          floorPlanId: element.floorPlanId ?? null,
+          source: element.source ?? null,
+          editorV2ElementId: element.editorV2ElementId ?? null,
+        })),
+        finalElementsRendered: tpvOperationalMapElementsForRender.slice(0, 16).map((element) => ({
+          id: element.id,
+          name: element.name,
+          type: element.type,
+          floorPlanId: element.floorPlanId ?? null,
+          source: element.source ?? null,
+          editorV2ElementId: element.editorV2ElementId ?? null,
+          x: element.x,
+          y: element.y,
+          width: element.width ?? null,
+          height: element.height ?? null,
+        })),
+        viewportFitElements: viewportFitElementSamples,
+      },
+    });
+  }, [
+    decorativePlanElementsForTpv,
+    decorativeRenderedForTpvMap,
+    embeddedInOperacion,
+    floorPlans,
+    mapTablesForChipFilter,
+    mapTablesOrderedByVisualPriority,
+    myTablesMapScope,
+    operationalFloorPlansForTpv.length,
+    planElementsForTpvMap,
+    restaurantId,
+    selectedTpvFloorPlan,
+    selectedTpvFloorPlanId,
+    tablesFilteredByWaiter,
+    tablesForTpvMap,
+    tablesList,
+    tablesVisibleForMapFilter,
+    tablesVisibleOnMap,
+    tpvOperationalMapElementsForRender,
+    tpvOperationalViewportFitElements,
+    user?.uid,
+    viewportFitSourceForTpv,
+    waiterFilter,
+    zonesForOperationalMapRender,
+    zonesForTpvMap,
+    zonesList,
   ]);
 
   const formatMapOccupiedDuration = useCallback(
@@ -15297,7 +15713,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                       cartaHeaderMobile && !embeddedInOperacion ? "420px" : 0,
                   }}
                 >
-                {tablesVisibleOnMap.length === 0 ? (
+                {tpvOperationalMapElementsForRender.length === 0 ? (
                   <p
                     style={{
                       color: "#64748b",
@@ -15308,7 +15724,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   >
                     {t("cartaTpv.mapEmpty")}
                   </p>
-                ) : mapTablesOrderedByVisualPriority.length === 0 ? (
+                ) : tablesVisibleOnMap.length > 0 &&
+                  mapTablesOrderedByVisualPriority.length === 0 ? (
                   <p
                     style={{
                       color: "#64748b",
@@ -15319,7 +15736,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   >
                     No hay mesas para este filtro de camarero.
                   </p>
-                ) : mapTablesForChipFilter.length === 0 ? (
+                ) : tablesVisibleOnMap.length > 0 &&
+                  mapTablesForChipFilter.length === 0 ? (
                   <p
                     style={{
                       color: "#64748b",
@@ -15351,7 +15769,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     viewportFitPaddingPx={
                       embeddedInOperacion
                         ? TPV_OPERATIONAL_FIT_PADDING_PX
-                        : 16
+                        : 8
                     }
                     viewportFitAlign="center"
                     viewportFitOffsetX={
@@ -15365,7 +15783,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         ? TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER
                         : 1
                     }
-                    viewportFitMode="content"
+                    viewportFitMode="plan"
                     viewportFitElements={tpvOperationalViewportFitElements}
                     viewportFitZones={[]}
                     viewportFitZoomMax={
@@ -15382,6 +15800,43 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     renderElement={(ctx) => {
                       const tableId = ctx.elementId;
                       if (isDecorativePlanElementType(ctx.element.type)) {
+                        const decorativeAuditKey = [
+                          selectedTpvFloorPlanId ?? "(sin floorPlanId)",
+                          ctx.element.id,
+                          ctx.element.type,
+                          ctx.mapLayoutX,
+                          ctx.mapLayoutY,
+                          ctx.mapTileWidth,
+                          ctx.mapTileHeight,
+                        ].join("|");
+                        if (
+                          !tpvRenderElementDecorativeAuditSeenRef.current.has(
+                            decorativeAuditKey,
+                          )
+                        ) {
+                          tpvRenderElementDecorativeAuditSeenRef.current.add(
+                            decorativeAuditKey,
+                          );
+                          console.info("[TPV][MapDiag] decorative render audit", {
+                            source: "TPV renderElement callback",
+                            selectedFloorPlanId: selectedTpvFloorPlanId,
+                            selectedFloorPlanName: selectedTpvFloorPlan?.name ?? null,
+                            receivedTypes: { [ctx.element.type]: 1 },
+                            renderedTypes: { [ctx.element.type]: 1 },
+                            discardedTypes: {},
+                            discardedByReason: {},
+                            discardedDecoratives: [],
+                            element: {
+                              id: ctx.element.id,
+                              type: ctx.element.type,
+                              floorPlanId: ctx.element.floorPlanId ?? null,
+                              x: ctx.mapLayoutX,
+                              y: ctx.mapLayoutY,
+                              width: ctx.mapTileWidth,
+                              height: ctx.mapTileHeight,
+                            },
+                          });
+                        }
                         return (
                           <div
                             aria-hidden
