@@ -11,7 +11,7 @@ import {
   writeBatch,
   type DocumentData,
 } from "firebase/firestore";
-import { db, firebaseEnvDebug, isFirebaseConfigured } from "@/lib/firebase/client";
+import { auth, db, firebaseEnvDebug, isFirebaseConfigured } from "@/lib/firebase/client";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import {
   getOperationalInstanceCanvasSize,
@@ -103,6 +103,16 @@ export type SalaEditorV2PublicationDecorativeAuditItem = {
     | "protected_operational_type";
 };
 
+export type SalaEditorV2LegacyTableDeactivationSkipReason =
+  | "invalid_restaurant"
+  | "already_inactive"
+  | "not_table"
+  | "expected_by_v2"
+  | "published_by_editor_v2"
+  | "outside_published_scope"
+  | "unsafe_status"
+  | "operational_signal";
+
 export type SalaEditorV2PublicationResult = {
   floorPlansUpdated: number;
   tablesUpdated: number;
@@ -110,6 +120,10 @@ export type SalaEditorV2PublicationResult = {
   decorativeTablesUpdated: number;
   decorativeLegacyFound: number;
   decorativeLegacyDeactivated: number;
+  legacyTablesAudited: number;
+  legacyTablesExpected: number;
+  legacyTablesDeactivated: number;
+  legacyTablesSkippedByReason: Partial<Record<SalaEditorV2LegacyTableDeactivationSkipReason, number>>;
   skippedTables: SalaEditorV2PublicationSkippedItem[];
   skippedZones: SalaEditorV2PublicationSkippedZone[];
   skippedDecorativeTables: SalaEditorV2PublicationSkippedDecorative[];
@@ -124,7 +138,145 @@ type PublicationWrite = {
   ref: ReturnType<typeof doc>;
   data: DocumentData;
   mode: "update" | "setMerge";
+  diagnosticLabel?: string;
+  existingRestaurantId?: string | null;
 };
+
+type PublicationWriteDiagnostic = {
+  label: string;
+  operation: "batch.set" | "batch.update" | "setDoc" | "updateDoc";
+  mode: PublicationWrite["mode"];
+  documentPath: string;
+  collectionPath: string;
+  documentId: string;
+  topLevelCollection: string;
+  restaurantId: string;
+  uid: string | null;
+  payloadRestaurantId: string | null;
+  existingRestaurantId: string | null;
+  payloadRestaurantMatchesExpected: boolean | null;
+  existingRestaurantMatchesExpected: boolean | null;
+  publisherPathExpected: boolean;
+  payload: Record<string, unknown>;
+};
+
+export type SalaEditorV2LastFirestoreOperation = {
+  operation: string;
+  documentPath: string | null;
+  collectionName: string | null;
+  restaurantId: string | null;
+  uid: string | null;
+  payloadRestaurantId: string | null;
+  existingRestaurantId: string | null;
+  payloadKeys: string[];
+  writes?: Array<{
+    operation: string;
+    documentPath: string;
+    collectionName: string;
+    payloadRestaurantId: string | null;
+    existingRestaurantId: string | null;
+    payloadKeys: string[];
+  }>;
+};
+
+let lastSalaEditorV2FirestoreOperation: SalaEditorV2LastFirestoreOperation | null = null;
+
+export type SalaEditorPublisherLastFirestoreOperation = {
+  operation: string;
+  documentPath: string | null;
+  collectionName: string | null;
+  restaurantId: string | null;
+  uid: string | null;
+  payloadRestaurantId: string | null;
+  existingRestaurantId: string | null;
+  payloadKeys: string[];
+};
+
+const PUBLISHER_FIRESTORE_COLLECTIONS = new Set(["floorPlans", "tables", "zones"]);
+const SAFE_WRITE_PAYLOAD_KEYS = [
+  "id",
+  "restaurantId",
+  "floorPlanId",
+  "type",
+  "status",
+  "isActive",
+  "tableShape",
+  "seats",
+  "x",
+  "y",
+  "width",
+  "height",
+  "source",
+  "editorV2ElementId",
+  "editorV2ElementType",
+  "locked",
+] as const;
+
+let lastFirestoreOperation: SalaEditorPublisherLastFirestoreOperation | null = null;
+
+export function getLastSalaEditorV2PublisherFirestoreOperation():
+  | SalaEditorPublisherLastFirestoreOperation
+  | null {
+  return lastFirestoreOperation;
+}
+
+function rememberLastFirestoreOperation(
+  operation: SalaEditorPublisherLastFirestoreOperation,
+): void {
+  lastFirestoreOperation = operation;
+  lastSalaEditorV2FirestoreOperation = {
+    operation: operation.operation,
+    documentPath: operation.documentPath,
+    collectionName: operation.collectionName,
+    restaurantId: operation.restaurantId,
+    uid: operation.uid,
+    payloadRestaurantId: operation.payloadRestaurantId,
+    existingRestaurantId: operation.existingRestaurantId,
+    payloadKeys: operation.payloadKeys,
+  };
+}
+
+function payloadKeysFromData(data: DocumentData | null | undefined): string[] {
+  if (!data) return [];
+  return Object.keys(data).sort();
+}
+
+function rememberLastFirestoreReadOperation(params: {
+  operation: string;
+  documentPath: string | null;
+  collectionName: string | null;
+  restaurantId: string;
+}): void {
+  rememberLastFirestoreOperation({
+    operation: params.operation,
+    documentPath: params.documentPath,
+    collectionName: params.collectionName,
+    restaurantId: params.restaurantId,
+    uid: currentPublisherUid(),
+    payloadRestaurantId: null,
+    existingRestaurantId: null,
+    payloadKeys: [],
+  });
+}
+
+function rememberLastFirestoreWriteOperation(params: {
+  row: PublicationWriteDiagnostic;
+  operation?: string;
+}): void {
+  const { row } = params;
+  rememberLastFirestoreOperation({
+    operation: params.operation ?? row.operation,
+    documentPath: row.documentPath,
+    collectionName: row.collectionPath,
+    restaurantId: row.restaurantId,
+    uid: row.uid,
+    payloadRestaurantId: row.payloadRestaurantId,
+    existingRestaurantId: row.existingRestaurantId,
+    payloadKeys: Array.isArray(row.payload.fieldKeys)
+      ? row.payload.fieldKeys.filter((key): key is string => typeof key === "string")
+      : [],
+  });
+}
 
 type DecorativePublicationDraft = {
   id: string;
@@ -154,6 +306,235 @@ function stringOrEmpty(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function currentPublisherUid(): string | null {
+  return auth.currentUser?.uid ?? null;
+}
+
+export function getLastSalaEditorV2FirestoreOperation(): SalaEditorV2LastFirestoreOperation | null {
+  return lastSalaEditorV2FirestoreOperation;
+}
+
+function setLastSalaEditorV2FirestoreOperation(
+  operation: SalaEditorV2LastFirestoreOperation,
+): void {
+  lastSalaEditorV2FirestoreOperation = operation;
+}
+
+function writePayloadKeys(data: DocumentData | null | undefined): string[] {
+  return data ? Object.keys(data).sort() : [];
+}
+
+function rememberDocumentFirestoreOperation(params: {
+  operation: string;
+  ref: ReturnType<typeof doc>;
+  restaurantId: string;
+  data?: DocumentData;
+  existingRestaurantId?: string | null;
+}): void {
+  setLastSalaEditorV2FirestoreOperation({
+    operation: params.operation,
+    documentPath: params.ref.path,
+    collectionName: params.ref.parent.path,
+    restaurantId: params.restaurantId,
+    uid: currentPublisherUid(),
+    payloadRestaurantId: stringOrEmpty(params.data?.restaurantId) || null,
+    existingRestaurantId: params.existingRestaurantId ?? null,
+    payloadKeys: writePayloadKeys(params.data),
+  });
+}
+
+function rememberQueryFirestoreOperation(params: {
+  operation: string;
+  collectionName: string;
+  documentPath: string;
+  restaurantId: string;
+}): void {
+  setLastSalaEditorV2FirestoreOperation({
+    operation: params.operation,
+    documentPath: params.documentPath,
+    collectionName: params.collectionName,
+    restaurantId: params.restaurantId,
+    uid: currentPublisherUid(),
+    payloadRestaurantId: null,
+    existingRestaurantId: null,
+    payloadKeys: [],
+  });
+}
+
+function rememberBatchCommitFirestoreOperation(params: {
+  restaurantId: string;
+  rows: PublicationWriteDiagnostic[];
+}): void {
+  const collectionNames = [...new Set(params.rows.map((row) => row.collectionPath))];
+  setLastSalaEditorV2FirestoreOperation({
+    operation: "batch.commit",
+    documentPath:
+      params.rows.length === 1
+        ? params.rows[0]?.documentPath ?? "batch:0:documents"
+        : `batch:${params.rows.length}:documents`,
+    collectionName:
+      params.rows.length === 1 ? params.rows[0]?.collectionPath ?? "" : collectionNames.join(", "),
+    restaurantId: params.restaurantId,
+    uid: currentPublisherUid(),
+    payloadRestaurantId:
+      params.rows.length === 1 ? params.rows[0]?.payloadRestaurantId ?? null : null,
+    existingRestaurantId:
+      params.rows.length === 1 ? params.rows[0]?.existingRestaurantId ?? null : null,
+    payloadKeys: [...new Set(params.rows.flatMap((row) => Object.keys(row.payload)))].sort(),
+    writes: params.rows.map((row) => ({
+      operation: row.operation,
+      documentPath: row.documentPath,
+      collectionName: row.collectionPath,
+      payloadRestaurantId: row.payloadRestaurantId,
+      existingRestaurantId: row.existingRestaurantId,
+      payloadKeys: Array.isArray(row.payload.fieldKeys)
+        ? (row.payload.fieldKeys as string[])
+        : Object.keys(row.payload).sort(),
+    })),
+  });
+}
+
+function describeFirestoreError(error: unknown): Record<string, unknown> {
+  const candidate = error as { code?: unknown; message?: unknown; name?: unknown };
+  return {
+    code: typeof candidate.code === "string" ? candidate.code : null,
+    name: typeof candidate.name === "string" ? candidate.name : null,
+    message: typeof candidate.message === "string" ? candidate.message : String(error),
+  };
+}
+
+function safeWritePayload(data: DocumentData): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  for (const key of SAFE_WRITE_PAYLOAD_KEYS) {
+    const value = data[key];
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    ) {
+      payload[key] = value;
+    }
+  }
+  payload.fieldKeys = Object.keys(data).sort();
+  payload.hasMetadata = typeof data.metadata === "object" && data.metadata !== null;
+  payload.metadataKeys =
+    typeof data.metadata === "object" && data.metadata !== null && !Array.isArray(data.metadata)
+      ? Object.keys(data.metadata as Record<string, unknown>).sort()
+      : [];
+  payload.hasCreatedAt = data.createdAt !== undefined;
+  payload.hasUpdatedAt = data.updatedAt !== undefined;
+  return payload;
+}
+
+function describePublicationWrite(params: {
+  write: PublicationWrite;
+  restaurantId: string;
+  operation: PublicationWriteDiagnostic["operation"];
+}): PublicationWriteDiagnostic {
+  const { write, restaurantId, operation } = params;
+  const pathSegments = write.ref.path.split("/").filter(Boolean);
+  const collectionPath = pathSegments.slice(0, -1).join("/");
+  const topLevelCollection = pathSegments[0] ?? "";
+  const payloadRestaurantId = stringOrEmpty(write.data.restaurantId) || null;
+  const existingRestaurantId = write.existingRestaurantId ?? null;
+  return {
+    label: write.diagnosticLabel ?? topLevelCollection,
+    operation,
+    mode: write.mode,
+    documentPath: write.ref.path,
+    collectionPath,
+    documentId: write.ref.id,
+    topLevelCollection,
+    restaurantId,
+    uid: currentPublisherUid(),
+    payloadRestaurantId,
+    existingRestaurantId,
+    payloadRestaurantMatchesExpected:
+      payloadRestaurantId === null ? null : payloadRestaurantId === restaurantId,
+    existingRestaurantMatchesExpected:
+      existingRestaurantId === null ? null : existingRestaurantId === restaurantId,
+    publisherPathExpected: PUBLISHER_FIRESTORE_COLLECTIONS.has(topLevelCollection),
+    payload: safeWritePayload(write.data),
+  };
+}
+
+function summarizePublicationWriteForTable(row: PublicationWriteDiagnostic): Record<string, unknown> {
+  return {
+    label: row.label,
+    op: row.operation,
+    path: row.documentPath,
+    restaurantId: row.restaurantId,
+    uid: row.uid,
+    payloadRestaurantId: row.payloadRestaurantId,
+    existingRestaurantId: row.existingRestaurantId,
+    payloadRidOk: row.payloadRestaurantMatchesExpected,
+    existingRidOk: row.existingRestaurantMatchesExpected,
+    expectedPath: row.publisherPathExpected,
+  };
+}
+
+function inferPermissionDiagnostics(row: PublicationWriteDiagnostic): string[] {
+  const diagnostics: string[] = [];
+  if (!row.uid) {
+    diagnostics.push("auth.currentUser.uid ausente: las reglas sameRestaurant() rechazaran la escritura");
+  }
+  if (!row.publisherPathExpected) {
+    diagnostics.push("ruta fuera de las colecciones esperadas por el publisher");
+  }
+  if (row.payloadRestaurantMatchesExpected === false) {
+    diagnostics.push("restaurantId del payload distinto del restaurantId del publisher");
+  }
+  if (row.existingRestaurantMatchesExpected === false) {
+    diagnostics.push("restaurantId existente del documento distinto del restaurantId del publisher");
+  }
+  if (row.mode === "update" && row.existingRestaurantId === null) {
+    diagnostics.push("update sin restaurantId existente conocido: revisar si el documento existe y pertenece al restaurante");
+  }
+  if (diagnostics.length === 0) {
+    diagnostics.push("si Firebase devuelve permission-denied, revisar perfil users/usuarios del uid frente a este restaurantId");
+  }
+  return diagnostics;
+}
+
+function logPermissionDeniedWriteDiagnostics(params: {
+  title: string;
+  error: unknown;
+  rows: PublicationWriteDiagnostic[];
+}): void {
+  const first = params.rows[0] ?? null;
+  const error = describeFirestoreError(params.error);
+  console.error(params.title, {
+    operation: first?.operation ?? "batch.commit",
+    documentPath:
+      params.rows.length === 1
+        ? first?.documentPath ?? null
+        : `batch:${params.rows.length}:documents`,
+    collectionName:
+      params.rows.length === 1
+        ? first?.collectionPath ?? null
+        : [...new Set(params.rows.map((row) => row.collectionPath))].join(", "),
+    restaurantId: first?.restaurantId ?? null,
+    uid: first?.uid ?? currentPublisherUid(),
+    errorCode: typeof error.code === "string" ? error.code : null,
+    errorMessage: typeof error.message === "string" ? error.message : String(params.error),
+    error,
+    failedWrites: params.rows,
+    ruleContext: {
+      rulesFile: "firestore.rules",
+      relevantMatches: ["/tables/{tableId}", "/zones/{zoneId}", "/floorPlans/{floorPlanId}"],
+      updateRequirement:
+        "sameRestaurant(resource.data.restaurantId) && request.resource.data.restaurantId == resource.data.restaurantId",
+      createRequirement: "sameRestaurant(request.resource.data.restaurantId)",
+    },
+    likelyDiagnostics: params.rows.map((row) => ({
+      documentPath: row.documentPath,
+      operation: row.operation,
+      diagnostics: inferPermissionDiagnostics(row),
+    })),
+  });
+}
+
 function positiveFiniteNumber(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     return null;
@@ -178,6 +559,15 @@ function readLegacyZoneId(metadata: Record<string, unknown> | undefined): string
   return stringOrEmpty(metadata?.legacyZoneId);
 }
 
+function isPermissionDeniedError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "permission-denied"
+  );
+}
+
 function readTableShape(metadata: Record<string, unknown>): TableVisualShape | null {
   const shape = metadata.tableShape;
   if (shape === "round" || shape === "square") return shape;
@@ -192,6 +582,10 @@ function stableLegacyZoneIdFromV2Id(zoneId: string): string {
   return stable ? `v2-zone-${stable}` : "";
 }
 
+function isGeneratedV2ZoneId(zoneId: string): boolean {
+  return zoneId.startsWith("v2-zone-");
+}
+
 function stableLegacyDecorativeId(sourceType: string, elementId: string): string {
   const type = sourceType
     .trim()
@@ -202,6 +596,10 @@ function stableLegacyDecorativeId(sourceType: string, elementId: string): string
     .replace(/[^a-zA-Z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return type && stableId ? `v2-map-${type}-${stableId}` : "";
+}
+
+function isGeneratedV2DecorativeId(tableId: string): boolean {
+  return tableId.startsWith("v2-map-");
 }
 
 function finiteNumber(value: unknown): value is number {
@@ -247,6 +645,53 @@ function readPublicationEditorV2ElementId(data: Record<string, unknown>): string
 
 function isProtectedOperationalPlanElementType(type: string): boolean {
   return type === "table" || type === "sunbed" || type === "bed" || type === "custom";
+}
+
+function isLegacyTableStatusSafeToDeactivate(status: unknown): boolean {
+  const value = stringOrEmpty(status).toLowerCase();
+  return value === "" || value === "free";
+}
+
+function hasPositiveCount(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function hasMeaningfulOperationalSignal(value: unknown): boolean {
+  if (value === undefined || value === null || value === false) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  if (typeof value === "number") return Number.isFinite(value) && value > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return Boolean(value);
+}
+
+function hasSensitiveTableOperationSignal(data: Record<string, unknown>): boolean {
+  if (
+    hasMeaningfulOperationalSignal(data.orders) ||
+    hasMeaningfulOperationalSignal(data.orderId) ||
+    hasMeaningfulOperationalSignal(data.activeOrderId) ||
+    hasMeaningfulOperationalSignal(data.payment) ||
+    hasMeaningfulOperationalSignal(data.paymentId) ||
+    hasMeaningfulOperationalSignal(data.reservationId) ||
+    hasMeaningfulOperationalSignal(data.groupId) ||
+    hasMeaningfulOperationalSignal(data.tableGroupId) ||
+    hasPositiveCount(data.dinersCount) ||
+    hasPositiveCount(data.guestCount) ||
+    data.occupied === true
+  ) {
+    return true;
+  }
+
+  return !isLegacyTableStatusSafeToDeactivate(data.status);
+}
+
+function belongsToPublishedLegacyTableScope(
+  data: Record<string, unknown>,
+  safeFloorPlanIds: ReadonlySet<string>,
+): boolean {
+  const floorPlanId = stringOrEmpty(data.floorPlanId);
+  if (!floorPlanId) return true;
+  return safeFloorPlanIds.has(floorPlanId);
 }
 
 function logPublisherTablesFirestoreAudit(params: {
@@ -485,8 +930,37 @@ function chunkDocumentDataWrites(
 
 async function commitUpdateWrites(
   writes: PublicationWrite[],
+  params: { restaurantId: string },
 ): Promise<void> {
-  for (const chunk of chunkDocumentDataWrites(writes)) {
+  const chunks = chunkDocumentDataWrites(writes);
+  if (chunks.length === 0) {
+    console.info("[SalaEditorV2][FirestoreDiag] batch.commit omitido", {
+      operation: "batch.commit",
+      reason: "no-writes",
+      restaurantId: params.restaurantId,
+      uid: currentPublisherUid(),
+    });
+    return;
+  }
+  for (const [chunkIndex, chunk] of chunks.entries()) {
+    const rows = chunk.map((write) =>
+      describePublicationWrite({
+        write,
+        restaurantId: params.restaurantId,
+        operation: write.mode === "setMerge" ? "batch.set" : "batch.update",
+      }),
+    );
+    console.groupCollapsed(
+      `[SalaEditorV2][FirestoreDiag] batch.commit intento ${chunkIndex + 1}/${chunks.length}`,
+    );
+    console.info("[SalaEditorV2][FirestoreDiag] batch.commit resumen", {
+      firebaseProjectId: firebaseEnvDebug.projectId,
+      restaurantId: params.restaurantId,
+      uid: currentPublisherUid(),
+      writeCount: rows.length,
+    });
+    console.table(rows.map(summarizePublicationWriteForTable));
+    console.info("[SalaEditorV2][FirestoreDiag] batch.commit payload seguro", rows);
     const batch = writeBatch(db);
     for (const write of chunk) {
       if (write.mode === "setMerge") {
@@ -495,39 +969,111 @@ async function commitUpdateWrites(
         batch.update(write.ref, write.data);
       }
     }
-    await batch.commit();
+    try {
+      rememberLastFirestoreOperation({
+        operation: "batch.commit",
+        documentPath:
+          rows.length === 1 ? rows[0]?.documentPath ?? null : `batch:${rows.length}:documents`,
+        collectionName:
+          rows.length === 1
+            ? rows[0]?.collectionPath ?? null
+            : [...new Set(rows.map((row) => row.collectionPath))].join(", "),
+        restaurantId: params.restaurantId,
+        uid: currentPublisherUid(),
+        payloadRestaurantId: rows.length === 1 ? rows[0]?.payloadRestaurantId ?? null : null,
+        existingRestaurantId: rows.length === 1 ? rows[0]?.existingRestaurantId ?? null : null,
+        payloadKeys: [
+          ...new Set(
+            rows.flatMap((row) =>
+              Array.isArray(row.payload.fieldKeys)
+                ? row.payload.fieldKeys.filter((key): key is string => typeof key === "string")
+                : [],
+            ),
+          ),
+        ].sort(),
+      });
+      console.info("[SalaEditorV2][FirestoreDiag] batch.commit ejecutando", {
+        operation: "batch.commit",
+        documentPath:
+          rows.length === 1 ? rows[0]?.documentPath ?? null : `batch:${rows.length}:documents`,
+        collectionName:
+          rows.length === 1
+            ? rows[0]?.collectionPath ?? null
+            : [...new Set(rows.map((row) => row.collectionPath))].join(", "),
+        restaurantId: params.restaurantId,
+        uid: currentPublisherUid(),
+        writes: rows.map(summarizePublicationWriteForTable),
+      });
+      await batch.commit();
+      console.info("[SalaEditorV2][FirestoreDiag] batch.commit OK", {
+        writeCount: rows.length,
+      });
+    } catch (error) {
+      logPermissionDeniedWriteDiagnostics({
+        title: "[SalaEditorV2][FirestoreDiag] batch.commit ERROR",
+        error,
+        rows,
+      });
+      throw error;
+    } finally {
+      console.groupEnd();
+    }
   }
 }
 
 async function commitDecorativeWritesWithTrace(
   writes: PublicationWrite[],
+  params: { restaurantId: string },
 ): Promise<void> {
   console.groupCollapsed("[SalaEditorV2] Publisher decorativos: escritura Firestore");
   console.info("[SalaEditorV2] Publisher decorativos que llegan a escritura", {
+    firebaseProjectId: firebaseEnvDebug.projectId,
+    restaurantId: params.restaurantId,
+    uid: currentPublisherUid(),
     count: writes.length,
   });
 
   try {
     for (const write of writes) {
-      const row = {
-        id: write.ref.id,
-        type: stringOrEmpty(write.data.type),
-        floorPlanId: stringOrEmpty(write.data.floorPlanId),
-        documentPath: write.ref.path,
-      };
-      console.info("[SalaEditorV2] Publisher decorativo setDoc intento", row);
+      const row = describePublicationWrite({
+        write,
+        restaurantId: params.restaurantId,
+        operation: write.mode === "setMerge" ? "setDoc" : "updateDoc",
+      });
 
       try {
         if (write.mode === "setMerge") {
+          rememberLastFirestoreWriteOperation({ row });
+          console.info("[SalaEditorV2][FirestoreDiag] setDoc ejecutando", {
+            operation: row.operation,
+            documentPath: row.documentPath,
+            collectionName: row.collectionPath,
+            restaurantId: row.restaurantId,
+            uid: row.uid,
+            payload: row.payload,
+          });
           await setDoc(write.ref, write.data, { merge: true });
         } else {
+          rememberLastFirestoreWriteOperation({ row });
+          console.info("[SalaEditorV2][FirestoreDiag] updateDoc ejecutando", {
+            operation: row.operation,
+            documentPath: row.documentPath,
+            collectionName: row.collectionPath,
+            restaurantId: row.restaurantId,
+            uid: row.uid,
+            payload: row.payload,
+          });
           await updateDoc(write.ref, write.data);
         }
-        console.info("[SalaEditorV2] Publisher decorativo setDoc OK", row);
+        console.info("[SalaEditorV2][FirestoreDiag] decorativo OK", {
+          documentPath: row.documentPath,
+          operation: row.operation,
+        });
       } catch (error) {
-        console.error("[SalaEditorV2] Publisher decorativo setDoc ERROR", {
-          ...row,
+        logPermissionDeniedWriteDiagnostics({
+          title: "[SalaEditorV2][FirestoreDiag] decorativo ERROR",
           error,
+          rows: [row],
         });
         throw error;
       }
@@ -550,6 +1096,10 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       decorativeTablesUpdated: 0,
       decorativeLegacyFound: 0,
       decorativeLegacyDeactivated: 0,
+      legacyTablesAudited: 0,
+      legacyTablesExpected: 0,
+      legacyTablesDeactivated: 0,
+      legacyTablesSkippedByReason: {},
       skippedTables: [],
       skippedZones: [],
       skippedDecorativeTables: [],
@@ -561,6 +1111,25 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
 
   const restaurantId = assertRestaurantId(params.restaurantId);
   const document = params.document;
+  rememberLastFirestoreOperation({
+    operation: "publishSalaEditorV2Phase1ToLegacy",
+    documentPath: null,
+    collectionName: null,
+    restaurantId,
+    uid: currentPublisherUid(),
+    payloadRestaurantId: null,
+    existingRestaurantId: null,
+    payloadKeys: [],
+  });
+  console.info("[SalaEditorV2][FirestoreDiag] publisher TPV alcanzado", {
+    operation: "publishSalaEditorV2Phase1ToLegacy",
+    restaurantId,
+    uid: currentPublisherUid(),
+    documentRestaurantId: document.restaurantId,
+    espacios: document.espacios.length,
+    operationalElementInstances: document.operationalElementInstances.length,
+    zones: document.zones.length,
+  });
   if (document.restaurantId !== restaurantId) {
     throw new Error("sala-editor-publication: document.restaurantId no coincide");
   }
@@ -570,6 +1139,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   const zoneWrites: PublicationWrite[] = [];
   const decorativeWrites: PublicationWrite[] = [];
   const decorativeDeactivateWrites: PublicationWrite[] = [];
+  const legacyTableDeactivateWrites: PublicationWrite[] = [];
   const skippedTables: SalaEditorV2PublicationSkippedItem[] = [];
   const skippedZones: SalaEditorV2PublicationSkippedZone[] = [];
   const skippedDecorativeTables: SalaEditorV2PublicationSkippedDecorative[] = [];
@@ -582,6 +1152,10 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   const safeFloorPlanIdBySpaceId = new Map<string, string>();
   const replaceLegacyVisualMap = params.replaceLegacyVisualMap !== false;
   let decorativeLegacyFound = 0;
+  let legacyTablesAudited = 0;
+  const legacyTablesSkippedByReason: Partial<
+    Record<SalaEditorV2LegacyTableDeactivationSkipReason, number>
+  > = {};
 
   for (const space of document.espacios) {
     const floorPlanId = stringOrEmpty(space.legacyFloorPlanId);
@@ -596,6 +1170,12 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     const space = spaces[0]!;
 
     const ref = doc(db, "floorPlans", floorPlanId);
+    rememberLastFirestoreReadOperation({
+      operation: "getDoc",
+      documentPath: ref.path,
+      collectionName: "floorPlans",
+      restaurantId,
+    });
     const snap = await getDoc(ref);
     if (!snap.exists()) continue;
 
@@ -620,7 +1200,13 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       payload.height = Math.max(1, Math.round(heightUnits * pixelsPerUnit));
     }
 
-    floorPlanWrites.push({ ref, data: payload, mode: "update" });
+    floorPlanWrites.push({
+      ref,
+      data: payload,
+      mode: "update",
+      diagnosticLabel: "floorPlan:update",
+      existingRestaurantId: stringOrEmpty(data.restaurantId) || null,
+    });
   }
 
   const selectedSpaceId = stringOrEmpty(document.navigation.selectedEspacioId);
@@ -637,6 +1223,12 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     return null;
   };
 
+  rememberLastFirestoreReadOperation({
+    operation: "getDocs",
+    documentPath: `tables where restaurantId == ${restaurantId}`,
+    collectionName: "tables",
+    restaurantId,
+  });
   const tablesQuerySnapshot = await getDocs(
     query(collection(db, "tables"), where("restaurantId", "==", restaurantId)),
   );
@@ -703,7 +1295,14 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
 
     if (activeOperationalFloorPlanIds.size === 1) {
       const candidateFloorPlanId = [...activeOperationalFloorPlanIds][0]!;
-      const floorPlanSnap = await getDoc(doc(db, "floorPlans", candidateFloorPlanId));
+      const floorPlanRef = doc(db, "floorPlans", candidateFloorPlanId);
+      rememberLastFirestoreReadOperation({
+        operation: "getDoc",
+        documentPath: floorPlanRef.path,
+        collectionName: "floorPlans",
+        restaurantId,
+      });
+      const floorPlanSnap = await getDoc(floorPlanRef);
       if (floorPlanSnap.exists()) {
         const floorPlanData = floorPlanSnap.data() as Record<string, unknown>;
         if (stringOrEmpty(floorPlanData.restaurantId) === restaurantId) {
@@ -752,6 +1351,90 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     return resolveFallbackSafeFloorPlanId();
   };
 
+  const expectedLegacyTableIds = new Set(
+    document.operationalElementInstances
+      .filter((instance) => instance.elementType === "TABLE")
+      .map((instance) => readLegacyTableId(instance.metadata))
+      .filter((legacyTableId) => legacyTableId !== ""),
+  );
+
+  const skipLegacyTableDeactivation = (
+    reason: SalaEditorV2LegacyTableDeactivationSkipReason,
+  ): void => {
+    legacyTablesSkippedByReason[reason] =
+      (legacyTablesSkippedByReason[reason] ?? 0) + 1;
+  };
+
+  for (const tableDoc of queriedTableDocs) {
+    const data = tableDoc.data;
+    const name = stringOrEmpty(data.name) || tableDoc.id;
+    const type = stringOrEmpty(data.type) || "table";
+    const source = readPublicationSource(data);
+    const editorV2ElementId = readPublicationEditorV2ElementId(data);
+
+    if (stringOrEmpty(data.restaurantId) !== restaurantId) {
+      skipLegacyTableDeactivation("invalid_restaurant");
+      continue;
+    }
+    if (data.isActive === false) {
+      skipLegacyTableDeactivation("already_inactive");
+      continue;
+    }
+    if (type !== "table") {
+      skipLegacyTableDeactivation("not_table");
+      continue;
+    }
+    if (source === "editor-v2" || editorV2ElementId) {
+      skipLegacyTableDeactivation("published_by_editor_v2");
+      continue;
+    }
+
+    legacyTablesAudited += 1;
+
+    if (expectedLegacyTableIds.has(tableDoc.id)) {
+      skipLegacyTableDeactivation("expected_by_v2");
+      continue;
+    }
+    if (!belongsToPublishedLegacyTableScope(data, safeFloorPlanIds)) {
+      skipLegacyTableDeactivation("outside_published_scope");
+      continue;
+    }
+    if (!isLegacyTableStatusSafeToDeactivate(data.status)) {
+      skipLegacyTableDeactivation("unsafe_status");
+      continue;
+    }
+    if (hasSensitiveTableOperationSignal(data)) {
+      skipLegacyTableDeactivation("operational_signal");
+      continue;
+    }
+
+    legacyTableDeactivateWrites.push({
+      ref: doc(db, "tables", tableDoc.id),
+      data: {
+        restaurantId,
+        isActive: false,
+        updatedAt: serverTimestamp(),
+      },
+      mode: "update",
+      diagnosticLabel: "legacyTable:deactivate",
+      existingRestaurantId: stringOrEmpty(data.restaurantId) || null,
+    });
+    console.info("[SalaEditorV2] Publisher mesa legacy no esperada desactivable", {
+      id: tableDoc.id,
+      name,
+      floorPlanId: stringOrEmpty(data.floorPlanId) || null,
+      status: stringOrEmpty(data.status) || null,
+    });
+  }
+
+  console.info("[SalaEditorV2] Publisher legacy tables cleanup resumen", {
+    legacyTablesAudited,
+    legacyTablesExpected: expectedLegacyTableIds.size,
+    legacyTablesDeactivated: legacyTableDeactivateWrites.length,
+    legacyTablesSkippedByReason,
+    safeFloorPlanIds: [...safeFloorPlanIds],
+  });
+
   const seenLegacyZoneIds = new Set<string>();
   for (const zone of document.zones) {
     if (zone.visible === false) {
@@ -783,8 +1466,8 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       continue;
     }
 
-    const legacyZoneId =
-      readLegacyZoneId(zone.metadata) || stableLegacyZoneIdFromV2Id(zone.id);
+    const explicitLegacyZoneId = readLegacyZoneId(zone.metadata);
+    const legacyZoneId = explicitLegacyZoneId || stableLegacyZoneIdFromV2Id(zone.id);
     if (!legacyZoneId) {
       skippedZones.push({ id: zone.id, name: zone.name, reason: "invalid_geometry" });
       continue;
@@ -796,24 +1479,64 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     seenLegacyZoneIds.add(legacyZoneId);
 
     const ref = doc(db, "zones", legacyZoneId);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const existing = snap.data() as Record<string, unknown>;
-      if (stringOrEmpty(existing.restaurantId) !== restaurantId) {
-        skippedZones.push({
-          id: zone.id,
-          name: zone.name,
-          reason: "restaurant_mismatch",
+    let existingZoneRestaurantId: string | null = null;
+    const isNewGeneratedV2Zone = !explicitLegacyZoneId && isGeneratedV2ZoneId(legacyZoneId);
+
+    if (!isNewGeneratedV2Zone) {
+      try {
+        rememberLastFirestoreReadOperation({
+          operation: "getDoc",
+          documentPath: ref.path,
+          collectionName: "zones",
+          restaurantId,
         });
-        continue;
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const existing = snap.data() as Record<string, unknown>;
+          existingZoneRestaurantId = stringOrEmpty(existing.restaurantId) || null;
+          if (existingZoneRestaurantId !== restaurantId) {
+            skippedZones.push({
+              id: zone.id,
+              name: zone.name,
+              reason: "restaurant_mismatch",
+            });
+            continue;
+          }
+        } else if (explicitLegacyZoneId) {
+          skippedZones.push({
+            id: zone.id,
+            name: zone.name,
+            reason: "legacy_zone_not_found",
+          });
+          continue;
+        }
+      } catch (error) {
+        if (!isPermissionDeniedError(error) || explicitLegacyZoneId) {
+          throw error;
+        }
+        console.warn("[SalaEditorV2][FirestoreDiag] zona V2 nueva sin lectura previa", {
+          operation: "zones.getDoc.permissionDeniedSkipped",
+          documentPath: ref.path,
+          collectionName: "zones",
+          restaurantId,
+          uid: currentPublisherUid(),
+          zoneId: zone.id,
+          legacyZoneId,
+          payloadRestaurantId: restaurantId,
+          reason: "generated_v2_zone_will_use_set_merge",
+        });
       }
-    } else if (readLegacyZoneId(zone.metadata)) {
-      skippedZones.push({
-        id: zone.id,
-        name: zone.name,
-        reason: "legacy_zone_not_found",
+    } else {
+      rememberLastFirestoreOperation({
+        operation: "zones.getDoc.skippedForGeneratedV2Zone",
+        documentPath: ref.path,
+        collectionName: "zones",
+        restaurantId,
+        uid: currentPublisherUid(),
+        payloadRestaurantId: restaurantId,
+        existingRestaurantId: null,
+        payloadKeys: [],
       });
-      continue;
     }
 
     const payload: DocumentData = {
@@ -829,12 +1552,19 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     const color = zone.color.trim();
     if (color) payload.color = color;
 
-    zoneWrites.push({ ref, data: payload, mode: "setMerge" });
+    zoneWrites.push({
+      ref,
+      data: payload,
+      mode: "setMerge",
+      diagnosticLabel: "zone:setMerge",
+      existingRestaurantId: existingZoneRestaurantId,
+    });
   }
 
   const currentDecorativeIds = new Set<string>();
   const seenDecorativeIds = new Set<string>();
   const decorativeDrafts = buildDecorativeDrafts(document);
+  const selectedSpace = selectedSpaceId ? spacesById.get(selectedSpaceId) : undefined;
   const decorativeDiscardReasons: Partial<
     Record<SalaEditorV2PublicationSkippedDecorative["reason"], number>
   > = {};
@@ -896,6 +1626,23 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   console.info("[SalaEditorV2] Publisher decorativos generados por adaptador", {
     count: decorativeDrafts.length,
   });
+  console.info("[SalaEditorV2] Publisher audit espacios antes de filtrar decorativos", {
+    selectedSpaceId,
+    selectedSpaceLegacyFloorPlanId: selectedSpace?.legacyFloorPlanId ?? null,
+    safeFloorPlanIds: [...safeFloorPlanIds],
+    safeFloorPlanIdBySpaceId: [...safeFloorPlanIdBySpaceId.entries()],
+  });
+  console.table(
+    [...spacesById.entries()].map(([spaceId, space]) => ({
+      spaceId,
+      name: space.name,
+      legacyFloorPlanId: space.legacyFloorPlanId ?? "",
+      mappedSafeFloorPlanId: safeFloorPlanIdBySpaceId.get(spaceId) ?? "",
+      selected: spaceId === selectedSpaceId,
+      active: space.active,
+      visible: space.visible,
+    })),
+  );
   console.info("[SalaEditorV2] Publisher floorPlan elegido para decorativos", {
     safeFloorPlanIds: [...safeFloorPlanIds],
     safeFloorPlanIdBySpaceId: [...safeFloorPlanIdBySpaceId.entries()],
@@ -971,31 +1718,76 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     seenDecorativeIds.add(draft.id);
 
     const ref = doc(db, "tables", draft.id);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const existing = snap.data() as Record<string, unknown>;
-      if (stringOrEmpty(existing.restaurantId) !== restaurantId) {
-        logDecorativeDiscard(draft, "restaurant_mismatch", {
+    const explicitLegacyTableId = readLegacyTableId(draft.metadata ?? {});
+    const isNewGeneratedV2Decorative =
+      !explicitLegacyTableId && isGeneratedV2DecorativeId(draft.id);
+    let existingDecorativeRestaurantId: string | null = null;
+
+    if (!isNewGeneratedV2Decorative) {
+      try {
+        rememberLastFirestoreReadOperation({
+          operation: "getDoc",
           documentPath: ref.path,
-          existingRestaurantId: stringOrEmpty(existing.restaurantId),
+          collectionName: "tables",
+          restaurantId,
         });
-        skippedDecorativeTables.push({
-          id: draft.sourceId,
-          name: draft.name,
-          reason: "restaurant_mismatch",
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const existing = snap.data() as Record<string, unknown>;
+          existingDecorativeRestaurantId = stringOrEmpty(existing.restaurantId) || null;
+          if (existingDecorativeRestaurantId !== restaurantId) {
+            logDecorativeDiscard(draft, "restaurant_mismatch", {
+              documentPath: ref.path,
+              existingRestaurantId: existingDecorativeRestaurantId,
+            });
+            skippedDecorativeTables.push({
+              id: draft.sourceId,
+              name: draft.name,
+              reason: "restaurant_mismatch",
+            });
+            continue;
+          }
+        } else if (explicitLegacyTableId) {
+          logDecorativeDiscard(draft, "legacy_table_not_found", {
+            documentPath: ref.path,
+          });
+          skippedDecorativeTables.push({
+            id: draft.sourceId,
+            name: draft.name,
+            reason: "legacy_table_not_found",
+          });
+          continue;
+        }
+      } catch (error) {
+        if (
+          !isPermissionDeniedError(error) ||
+          explicitLegacyTableId ||
+          !isGeneratedV2DecorativeId(draft.id)
+        ) {
+          throw error;
+        }
+        console.warn("[SalaEditorV2][FirestoreDiag] decorativo V2 nuevo sin lectura previa", {
+          operation: "tables.getDoc.permissionDeniedSkipped",
+          documentPath: ref.path,
+          collectionName: "tables",
+          restaurantId,
+          uid: currentPublisherUid(),
+          decorativeId: draft.id,
+          payloadRestaurantId: restaurantId,
+          reason: "generated_v2_decorative_will_use_set_merge",
         });
-        continue;
       }
-    } else if (readLegacyTableId(draft.metadata ?? {})) {
-      logDecorativeDiscard(draft, "legacy_table_not_found", {
+    } else {
+      rememberLastFirestoreOperation({
+        operation: "tables.getDoc.skippedForGeneratedV2Decorative",
         documentPath: ref.path,
+        collectionName: "tables",
+        restaurantId,
+        uid: currentPublisherUid(),
+        payloadRestaurantId: restaurantId,
+        existingRestaurantId: null,
+        payloadKeys: [],
       });
-      skippedDecorativeTables.push({
-        id: draft.sourceId,
-        name: draft.name,
-        reason: "legacy_table_not_found",
-      });
-      continue;
     }
 
     decorativeAfterFilters += 1;
@@ -1026,8 +1818,27 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       },
       updatedAt: serverTimestamp(),
     };
-    if (!snap.exists()) payload.createdAt = serverTimestamp();
-    decorativeWrites.push({ ref, data: payload, mode: "setMerge" });
+    if (!isNewGeneratedV2Decorative && existingDecorativeRestaurantId === null) {
+      payload.createdAt = serverTimestamp();
+    }
+    if (isNewGeneratedV2Decorative) {
+      console.info("[SalaEditorV2][FirestoreDiag] tables.setDoc generated V2 decorative", {
+        operation: "tables.setDoc generated V2 decorative",
+        documentPath: ref.path,
+        collectionName: "tables",
+        restaurantId,
+        uid: currentPublisherUid(),
+        payloadRestaurantId: restaurantId,
+        payloadKeys: Object.keys(payload).sort(),
+      });
+    }
+    decorativeWrites.push({
+      ref,
+      data: payload,
+      mode: "setMerge",
+      diagnosticLabel: "decorativeTable:setMerge",
+      existingRestaurantId: existingDecorativeRestaurantId,
+    });
   }
   console.info("[SalaEditorV2] Publisher decorativos despues de filtros", {
     count: decorativeAfterFilters,
@@ -1160,6 +1971,8 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
           updatedAt: serverTimestamp(),
         },
         mode: "update",
+        diagnosticLabel: "decorativeLegacy:deactivate",
+        existingRestaurantId: stringOrEmpty(data.restaurantId) || null,
       });
     }
   }
@@ -1190,6 +2003,12 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     seenLegacyTableIds.add(legacyTableId);
 
     const ref = doc(db, "tables", legacyTableId);
+    rememberLastFirestoreReadOperation({
+      operation: "getDoc",
+      documentPath: ref.path,
+      collectionName: "tables",
+      restaurantId,
+    });
     const snap = await getDoc(ref);
     if (!snap.exists()) {
       skippedTables.push({
@@ -1246,16 +2065,155 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       });
     }
 
-    tableWrites.push({ ref, data: payload, mode: "update" });
+    tableWrites.push({
+      ref,
+      data: payload,
+      mode: "update",
+      diagnosticLabel: "operationalTable:update",
+      existingRestaurantId: stringOrEmpty(existing.restaurantId) || null,
+    });
   }
 
-  await commitDecorativeWritesWithTrace(decorativeWrites);
-  await commitUpdateWrites([
-    ...floorPlanWrites,
-    ...zoneWrites,
-    ...decorativeDeactivateWrites,
-    ...tableWrites,
-  ]);
+  const writeFloorPlanId = (write: PublicationWrite | undefined): string | null => {
+    if (!write) return null;
+    return stringOrEmpty(write.data.floorPlanId) || null;
+  };
+  const uniqueFloorPlanIds = (ids: (string | null)[]): string[] =>
+    [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  const tableWriteById = new Map(tableWrites.map((write) => [write.ref.id, write]));
+  const zoneWriteById = new Map(zoneWrites.map((write) => [write.ref.id, write]));
+  const decorativeWriteById = new Map(
+    decorativeWrites.map((write) => [write.ref.id, write]),
+  );
+
+  const publishSpaceAudit = document.espacios.map((space) => {
+    const tableWritesForSpace = document.operationalElementInstances
+      .filter((instance) => instance.elementType === "TABLE" && instance.spaceId === space.id)
+      .map((instance) => {
+        const legacyTableId = readLegacyTableId(instance.metadata);
+        const write = legacyTableId ? tableWriteById.get(legacyTableId) : undefined;
+        return {
+          id: instance.id,
+          name: instance.name,
+          legacyTableId: legacyTableId || null,
+          written: Boolean(write),
+          floorPlanId: writeFloorPlanId(write),
+        };
+      })
+      .filter((row) => row.written);
+
+    const zoneWritesForSpace = document.zones
+      .filter((zone) => zone.espacioId === space.id)
+      .map((zone) => {
+        const legacyZoneId =
+          readLegacyZoneId(zone.metadata) || stableLegacyZoneIdFromV2Id(zone.id);
+        const write = legacyZoneId ? zoneWriteById.get(legacyZoneId) : undefined;
+        return {
+          id: zone.id,
+          name: zone.name,
+          legacyZoneId: legacyZoneId || null,
+          written: Boolean(write),
+          floorPlanId: writeFloorPlanId(write),
+        };
+      })
+      .filter((row) => row.written);
+
+    const decorativeWritesForSpace = decorativeDrafts
+      .filter((draft) => draft.spaceId === space.id)
+      .map((draft) => {
+        const write = draft.id ? decorativeWriteById.get(draft.id) : undefined;
+        return {
+          id: draft.sourceId,
+          name: draft.name,
+          legacyTableId: draft.id || null,
+          type: draft.legacyType,
+          sourceType: draft.sourceType,
+          written: Boolean(write),
+          floorPlanId: writeFloorPlanId(write),
+        };
+      })
+      .filter((row) => row.written);
+
+    const floorPlanIdsUsed = uniqueFloorPlanIds([
+      ...tableWritesForSpace.map((row) => row.floorPlanId),
+      ...zoneWritesForSpace.map((row) => row.floorPlanId),
+      ...decorativeWritesForSpace.map((row) => row.floorPlanId),
+    ]);
+
+    return {
+      spaceId: space.id,
+      spaceName: space.name,
+      legacyFloorPlanId: stringOrEmpty(space.legacyFloorPlanId) || null,
+      publishedTables: tableWritesForSpace.length,
+      publishedZones: zoneWritesForSpace.length,
+      publishedDecoratives: decorativeWritesForSpace.length,
+      floorPlanIdsUsed,
+      consistentFloorPlanId:
+        floorPlanIdsUsed.length === 1 ? floorPlanIdsUsed[0]! : null,
+      allWritesUseSameFloorPlan: floorPlanIdsUsed.length <= 1,
+      writes: {
+        tables: tableWritesForSpace,
+        zones: zoneWritesForSpace,
+        decoratives: decorativeWritesForSpace,
+      },
+    };
+  });
+
+  console.groupCollapsed("[SalaEditorV2][PublishToTpvFloorPlanAudit]");
+  console.info("Resumen por espacio", {
+    restaurantId,
+    uid: currentPublisherUid(),
+    spaces: publishSpaceAudit.map((space) => ({
+      spaceId: space.spaceId,
+      spaceName: space.spaceName,
+      legacyFloorPlanId: space.legacyFloorPlanId,
+      publishedTables: space.publishedTables,
+      publishedZones: space.publishedZones,
+      publishedDecoratives: space.publishedDecoratives,
+      floorPlanIdsUsed: space.floorPlanIdsUsed,
+      allWritesUseSameFloorPlan: space.allWritesUseSameFloorPlan,
+    })),
+  });
+  console.table(
+    publishSpaceAudit.map((space) => ({
+      spaceId: space.spaceId,
+      spaceName: space.spaceName,
+      legacyFloorPlanId: space.legacyFloorPlanId ?? "",
+      publishedTables: space.publishedTables,
+      publishedZones: space.publishedZones,
+      publishedDecoratives: space.publishedDecoratives,
+      floorPlanIdsUsed: space.floorPlanIdsUsed.join(", "),
+      allWritesUseSameFloorPlan: space.allWritesUseSameFloorPlan,
+    })),
+  );
+  console.info("Detalle de escrituras por espacio", publishSpaceAudit);
+  console.groupEnd();
+
+  console.info("[SalaEditorV2][FirestoreDiag] publisher TPV escrituras preparadas", {
+    operation: "publishSalaEditorV2Phase1ToLegacy.prepareWrites",
+    restaurantId,
+    uid: currentPublisherUid(),
+    counts: {
+      decorativeWrites: decorativeWrites.length,
+      floorPlanWrites: floorPlanWrites.length,
+      zoneWrites: zoneWrites.length,
+      decorativeDeactivateWrites: decorativeDeactivateWrites.length,
+      legacyTableDeactivateWrites: legacyTableDeactivateWrites.length,
+      tableWrites: tableWrites.length,
+    },
+  });
+
+  await commitDecorativeWritesWithTrace(decorativeWrites, { restaurantId });
+  await commitUpdateWrites(
+    [
+      ...floorPlanWrites,
+      ...zoneWrites,
+      ...decorativeDeactivateWrites,
+      ...legacyTableDeactivateWrites,
+      ...tableWrites,
+    ],
+    { restaurantId },
+  );
 
   return {
     floorPlansUpdated: floorPlanWrites.length,
@@ -1264,6 +2222,10 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     decorativeTablesUpdated: decorativeWrites.length,
     decorativeLegacyFound,
     decorativeLegacyDeactivated: decorativeDeactivateWrites.length,
+    legacyTablesAudited,
+    legacyTablesExpected: expectedLegacyTableIds.size,
+    legacyTablesDeactivated: legacyTableDeactivateWrites.length,
+    legacyTablesSkippedByReason,
     skippedTables,
     skippedZones,
     skippedDecorativeTables,
