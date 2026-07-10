@@ -9,7 +9,7 @@ import {
 export const TPV_OPERATIONAL_MAP_VISUAL_SCALE = 1.4;
 
 /** Margen del auto-fit TPV (px totales restados del viewport). */
-export const TPV_OPERATIONAL_FIT_PADDING_PX = 4;
+export const TPV_OPERATIONAL_FIT_PADDING_PX = 2;
 
 /** Tope de zoom del auto-fit TPV (evita techo artificial bajo). */
 export const TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP = 3.4;
