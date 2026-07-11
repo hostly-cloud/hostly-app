@@ -154,8 +154,12 @@ import {
   EditableFloorMap,
   getPlanElementBaseVisualStyle,
 } from "@/components/map/EditableFloorMap";
+import { SalaEditorReadonlyMap } from "@/components/sala-editor/readonly/sala-editor-readonly-map";
 import { PinchZoomMap } from "./_components/pinch-zoom-map";
 import { ElementCard } from "@/components/map/element-map-card";
+import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
+import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
+import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import {
   listenReservationsForDate,
   type Reservation,
@@ -1939,6 +1943,7 @@ export function CartaPageContent({
   const lastSortedRef = useRef<string[]>([]);
   const lastResultRef = useRef<Table[]>([]);
   const lastTpvMapDiagRenderSignatureRef = useRef<string | null>(null);
+  const lastTpvReadonlyMapIntegrationSignatureRef = useRef<string | null>(null);
   const lastTpvDecorativeRenderAuditSignatureRef = useRef<string | null>(null);
   const tpvRenderElementDecorativeAuditSeenRef = useRef<Set<string>>(new Set());
   const tableFlipPositionsRef = useRef<Record<string, DOMRect>>({});
@@ -2280,8 +2285,45 @@ export function CartaPageContent({
   const [tablesList, setTablesList] = useState<Table[]>([]);
   const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
   const [zonesList, setZonesList] = useState<Zone[]>([]);
+  const [salaEditorDraftDocument, setSalaEditorDraftDocument] =
+    useState<SalaEditorDocument | null>(null);
+  const [salaEditorDraftLoadError, setSalaEditorDraftLoadError] =
+    useState<string | null>(null);
   const [selectedTpvFloorPlanId, setSelectedTpvFloorPlanId] =
     useState<string | null>(null);
+
+  useEffect(() => {
+    const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+    if (!authReady || !user?.uid || !rid || !isFirebaseConfigured) {
+      setSalaEditorDraftDocument(null);
+      setSalaEditorDraftLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
+    void loadSalaEditorDraft(rid)
+      .then((draft) => {
+        if (cancelled) return;
+        setSalaEditorDraftDocument(draft?.document ?? null);
+        setSalaEditorDraftLoadError(null);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : String(error ?? "unknown");
+        setSalaEditorDraftDocument(null);
+        setSalaEditorDraftLoadError(message);
+        console.warn("[TPV][MapDiag] readonly map draft load fallback", {
+          restaurantId: rid,
+          error: message,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user?.uid, restaurantId, isFirebaseConfigured]);
+
   const operationalFloorPlansForTpv = useMemo(
     () => floorPlans.filter((p) => p.active !== false && p.showInTpv !== false),
     [floorPlans],
@@ -6551,10 +6593,81 @@ export function CartaPageContent({
     );
   }, [zonesList, selectedTpvFloorPlanId, floorPlans]);
 
-  /** TPV embebido: un plano = un espacio; no capa ni fitting por zonas legacy. */
+  const readonlyMapIntegration = useMemo(() => {
+    const hasV2Draft = salaEditorDraftDocument != null;
+    const normalizedFloorPlanId = String(selectedTpvFloorPlanId ?? "").trim();
+    let reasonForFallback: string | null = null;
+    let matchedSpaceId: string | null = null;
+
+    if (!hasV2Draft) {
+      reasonForFallback = salaEditorDraftLoadError
+        ? "draft-load-error"
+        : "missing-v2-draft";
+    } else if (!normalizedFloorPlanId) {
+      reasonForFallback = "missing-selected-floor-plan";
+    }
+
+    const matchedSpace =
+      hasV2Draft && normalizedFloorPlanId
+        ? salaEditorDraftDocument.espacios.find(
+            (space) =>
+              String(space.legacyFloorPlanId ?? "").trim() === normalizedFloorPlanId,
+          ) ?? null
+        : null;
+
+    if (matchedSpace) {
+      matchedSpaceId = matchedSpace.id;
+    } else if (!reasonForFallback && normalizedFloorPlanId) {
+      reasonForFallback = "missing-linked-v2-space";
+    }
+
+    const contract =
+      salaEditorDraftDocument && matchedSpace
+        ? buildEditorTpvReadonlyVisualContract(
+            salaEditorDraftDocument,
+            matchedSpace.id,
+          )
+        : null;
+
+    if (!contract && matchedSpace && !reasonForFallback) {
+      reasonForFallback = "readonly-contract-unavailable";
+    }
+
+    const visualLayersEnabled = contract
+      ? [
+          contract.surfaces.length > 0 ? "surfaces" : "",
+          contract.zones.length > 0 ? "zones" : "",
+          contract.walls.length > 0 ? "walls" : "",
+          contract.wallAttachments.length > 0 ? "wallAttachments" : "",
+          contract.structuralElements.length > 0 ? "structural" : "",
+          contract.landscapeElements.length > 0 ? "landscape" : "",
+          contract.operationalElementInstances.length > 0
+            ? "operationalInstances"
+            : "",
+        ].filter(Boolean)
+      : [];
+
+    return {
+      hasV2Draft,
+      matchedSpaceId,
+      contract,
+      rendererUsed: contract ? "v2-readonly" : "legacy-fallback",
+      visualLayersEnabled,
+      operationalOverlayEnabled: true,
+      reasonForFallback,
+    } as const;
+  }, [
+    salaEditorDraftDocument,
+    salaEditorDraftLoadError,
+    selectedTpvFloorPlanId,
+  ]);
+
+  const useReadonlyV2Map = readonlyMapIntegration.rendererUsed === "v2-readonly";
+
+  /** TPV: las zonas son capa visual readonly del espacio, no elementos operativos. */
   const zonesForOperationalMapRender = useMemo(
-    () => (embeddedInOperacion ? [] : zonesForTpvMap),
-    [embeddedInOperacion, zonesForTpvMap],
+    () => (useReadonlyV2Map ? [] : zonesForTpvMap),
+    [useReadonlyV2Map, zonesForTpvMap],
   );
 
   const selectedTpvFloorPlan = useMemo(() => {
@@ -7235,8 +7348,9 @@ export function CartaPageContent({
   }, [decorativePlanElementsForTpv, mapTablesForChipFilter]);
 
   const mapElementsForTpvRender = useMemo(() => {
+    if (useReadonlyV2Map) return [...mapTablesForChipFilter];
     return [...decorativeRenderedForTpvMap, ...mapTablesForChipFilter];
-  }, [decorativeRenderedForTpvMap, mapTablesForChipFilter]);
+  }, [decorativeRenderedForTpvMap, mapTablesForChipFilter, useReadonlyV2Map]);
 
   useEffect(() => {
     const renderedIds = new Set(
@@ -7358,6 +7472,8 @@ export function CartaPageContent({
       tpvOperationalMapElementsForRender.length,
       planElementsForTpvMap.length,
       zonesForOperationalMapRender.length,
+      readonlyMapIntegration.rendererUsed,
+      readonlyMapIntegration.matchedSpaceId ?? "",
       tpvOperationalMapElementsForRender
         .map((element) =>
           [
@@ -7394,7 +7510,30 @@ export function CartaPageContent({
     tpvOperationalPlanSizeForRender,
     tpvOperationalMapElementsForRender,
     planElementsForTpvMap,
+    readonlyMapIntegration.matchedSpaceId,
+    readonlyMapIntegration.rendererUsed,
     zonesForOperationalMapRender,
+  ]);
+
+  useEffect(() => {
+    const payload = {
+      selectedFloorPlanId: selectedTpvFloorPlanId,
+      matchedSpaceId: readonlyMapIntegration.matchedSpaceId,
+      hasV2Draft: readonlyMapIntegration.hasV2Draft,
+      rendererUsed: readonlyMapIntegration.rendererUsed,
+      visualLayersEnabled: readonlyMapIntegration.visualLayersEnabled,
+      operationalOverlayEnabled: readonlyMapIntegration.operationalOverlayEnabled,
+      reasonForFallback: readonlyMapIntegration.reasonForFallback,
+      draftLoadError: salaEditorDraftLoadError,
+    };
+    const signature = JSON.stringify(payload);
+    if (lastTpvReadonlyMapIntegrationSignatureRef.current === signature) return;
+    lastTpvReadonlyMapIntegrationSignatureRef.current = signature;
+    console.info("[TPV][MapDiag] readonly map integration", payload);
+  }, [
+    readonlyMapIntegration,
+    salaEditorDraftLoadError,
+    selectedTpvFloorPlanId,
   ]);
 
   useEffect(() => {
@@ -7539,7 +7678,7 @@ export function CartaPageContent({
         decorativeExcludedFromTableLayer: decorativePlanElementsForTpv.length,
         decorativeSuppressedByDuplicateId: decorativeSuppressedByDuplicateId.length,
         zoneFilteredOutByFloorPlan: zonesList.length - zonesForTpvMap.length,
-        zonesHiddenBecauseEmbeddedOperation: embeddedInOperacion ? zonesForTpvMap.length : 0,
+        zonesHiddenBecauseEmbeddedOperation: 0,
         waiterFilter:
           embeddedInOperacion || waiterFilter === "all"
             ? 0
@@ -15713,7 +15852,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                       cartaHeaderMobile && !embeddedInOperacion ? "420px" : 0,
                   }}
                 >
-                {tpvOperationalMapElementsForRender.length === 0 ? (
+                {tpvOperationalMapElementsForRender.length === 0 &&
+                !useReadonlyV2Map ? (
                   <p
                     style={{
                       color: "#64748b",
@@ -15760,7 +15900,6 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     editorPlanSurface
                     editorVisualPreset="premium"
                     mapLayoutEmphasis
-                    hideZoneOverlays
                     floorSurfacePreset={
                       cartaHeaderMobile && embeddedInOperacion
                         ? "stone"
@@ -15797,6 +15936,20 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     planSize={tpvOperationalPlanSizeForRender}
                     elements={tpvOperationalMapElementsForRender}
                     zones={zonesForOperationalMapRender}
+                    readonlyUnderlay={
+                      useReadonlyV2Map && readonlyMapIntegration.contract ? (
+                        <SalaEditorReadonlyMap
+                          contract={readonlyMapIntegration.contract}
+                          mode="logical-underlay"
+                          operationalMode="none"
+                          coordinateScale={
+                            embeddedInOperacion
+                              ? TPV_OPERATIONAL_MAP_VISUAL_SCALE
+                              : 1
+                          }
+                        />
+                      ) : null
+                    }
                     renderElement={(ctx) => {
                       const tableId = ctx.elementId;
                       if (isDecorativePlanElementType(ctx.element.type)) {

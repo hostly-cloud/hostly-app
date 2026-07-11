@@ -1,6 +1,10 @@
 "use client";
 
-import type { CSSProperties, WheelEvent as ReactWheelEvent } from "react";
+import type {
+  CSSProperties,
+  ReactNode,
+  WheelEvent as ReactWheelEvent,
+} from "react";
 import {
   Fragment,
   useCallback,
@@ -209,6 +213,8 @@ export type EditableFloorMapProps = {
   /** Tipo a crear al hacer click en el fondo (modo editor). */
   createType?: PlanElementType | null;
   renderElement?: (ctx: FloorMapRenderContext) => React.ReactNode;
+  /** Capa visual no interactiva renderizada dentro de la misma transformación del mapa. */
+  readonlyUnderlay?: ReactNode;
   /** Solo modo editor: fondo de plano (rejilla) para alinear elementos. */
   editorPlanSurface?: boolean;
   /** Solo visual: material base del suelo del restaurante. No altera coordenadas ni datos. */
@@ -895,6 +901,89 @@ function renderReadonlyDecorativeElement(
   );
 }
 
+function renderReadonlyZoneElement(
+  zone: EditableFloorMapZone,
+  editorVisualPreset: "default" | "premium",
+): React.ReactNode {
+  const hasRect =
+    typeof zone.x === "number" &&
+    typeof zone.y === "number" &&
+    typeof zone.width === "number" &&
+    typeof zone.height === "number" &&
+    Number.isFinite(zone.x) &&
+    Number.isFinite(zone.y) &&
+    Number.isFinite(zone.width) &&
+    Number.isFinite(zone.height);
+  if (!hasRect) return null;
+
+  const inferred =
+    editorVisualPreset === "premium" ? inferSpatialAreaVisual(zone.name) : null;
+  const border = zone.color
+    ? `1px solid ${zone.color}`
+    : inferred
+      ? `1px solid ${inferred.border}`
+      : "1px solid rgba(100, 116, 139, 0.2)";
+  const background = zone.color
+    ? editorVisualPreset === "premium"
+      ? `${zone.color}14`
+      : `${zone.color}10`
+    : inferred
+      ? inferred.fill
+      : "rgba(148, 163, 184, 0.045)";
+
+  return (
+    <div
+      key={zone.id}
+      aria-hidden
+      style={{
+        position: "absolute",
+        left: zone.x,
+        top: zone.y,
+        width: zone.width,
+        height: zone.height,
+        boxSizing: "border-box",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 12,
+        borderRadius: editorVisualPreset === "premium" ? 18 : 14,
+        border,
+        background,
+        opacity: 0.62,
+        zIndex: 1,
+        pointerEvents: "none",
+        userSelect: "none",
+        overflow: "hidden",
+        boxShadow:
+          editorVisualPreset === "premium"
+            ? "inset 0 1px 0 rgba(255,255,255,0.06)"
+            : undefined,
+      }}
+    >
+      <span
+        style={{
+          maxWidth: "100%",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          fontSize: editorVisualPreset === "premium" ? 12 : 11,
+          fontWeight: 650,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color:
+            editorVisualPreset === "premium" && inferred
+              ? inferred.labelTint
+              : "rgba(51, 65, 85, 0.68)",
+          opacity: 0.78,
+          pointerEvents: "none",
+        }}
+      >
+        {zone.name}
+      </span>
+    </div>
+  );
+}
+
 export function EditableFloorMap({
   elements,
   editable,
@@ -908,6 +997,7 @@ export function EditableFloorMap({
   onCreate,
   createType,
   renderElement,
+  readonlyUnderlay,
   editorPlanSurface = false,
   floorSurfacePreset = "ice",
   planSize = null,
@@ -2141,7 +2231,7 @@ export function EditableFloorMap({
     const hasReadonlyDecorativeElements = elements.some(
       (element) => readonlyDecorativeRenderBranch(element) != null,
     );
-    if (!renderElement && !hasReadonlyDecorativeElements) return null;
+    if (!renderElement && !hasReadonlyDecorativeElements && !readonlyUnderlay) return null;
     return (
       <div
         ref={setFloorRef}
@@ -2169,59 +2259,9 @@ export function EditableFloorMap({
           }}
         >
           {logicalFrameStyle ? <div aria-hidden style={logicalFrameStyle} /> : null}
+          {readonlyUnderlay}
           {zones && showZoneLayer
-            ? zones.map((z) => {
-                const hasRect =
-                  typeof z.x === "number" &&
-                  typeof z.y === "number" &&
-                  typeof z.width === "number" &&
-                  typeof z.height === "number" &&
-                  Number.isFinite(z.x) &&
-                  Number.isFinite(z.y) &&
-                  Number.isFinite(z.width) &&
-                  Number.isFinite(z.height);
-                if (!hasRect) return null;
-                const inferred =
-                  editorVisualPreset === "premium"
-                    ? inferSpatialAreaVisual(z.name)
-                    : null;
-                const border = z.color
-                  ? `1px solid ${z.color}`
-                  : inferred
-                    ? `1px solid ${inferred.border}`
-                    : "1px solid rgba(148, 163, 184, 0.18)";
-                const bg = z.color
-                  ? editorVisualPreset === "premium"
-                    ? `${z.color}1C`
-                    : `${z.color}14`
-                  : inferred
-                    ? inferred.fill
-                    : "rgba(148, 163, 184, 0.05)";
-                return (
-                  <div
-                    key={z.id}
-                    aria-hidden
-                    style={{
-                      position: "absolute",
-                      left: z.x,
-                      top: z.y,
-                      width: z.width,
-                      height: z.height,
-                      boxSizing: "border-box",
-                      borderRadius: editorVisualPreset === "premium" ? 18 : 14,
-                      border,
-                      background: bg,
-                      zIndex: 1,
-                      pointerEvents: "none",
-                      userSelect: "none",
-                      boxShadow:
-                        editorVisualPreset === "premium"
-                          ? "inset 0 1px 0 rgba(255,255,255,0.08)"
-                          : undefined,
-                    }}
-                  />
-                );
-              })
+            ? zones.map((zone) => renderReadonlyZoneElement(zone, editorVisualPreset))
             : null}
           {elements.map((element) => {
             const elementId = String(element.id).trim();
@@ -2489,6 +2529,7 @@ export function EditableFloorMap({
         }}
       >
       {logicalFrameStyle ? <div aria-hidden style={logicalFrameStyle} /> : null}
+      {readonlyUnderlay}
       <div
         onPointerDown={handleFloorPointerDown}
         style={{
