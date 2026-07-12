@@ -140,6 +140,11 @@ export type Table = {
   height?: number;
   /** Editor de plano: si true, no mover/redimensionar en UI (opcional en Firestore). */
   locked?: boolean;
+  /** Diagnóstico / puente Editor V2: origen del elemento publicado. */
+  source?: string;
+  editorV2ElementId?: string;
+  editorV2InstanceId?: string;
+  editorV2ElementType?: string;
   /** Si falta en Firestore, se trata como `true` en lectura. */
   isActive?: boolean;
   /** Usuario (`users/{id}`) responsable de la mesa en sala. */
@@ -385,6 +390,23 @@ function mapDocToTable(d: QueryDocumentSnapshot): Table {
       ? assignedOperatorNameRaw.trim()
       : undefined;
   const assignedAt = readTsMs(data, "assignedAt");
+  const source =
+    typeof data.source === "string" && data.source.trim() !== ""
+      ? data.source.trim()
+      : undefined;
+  const editorV2ElementId =
+    typeof data.editorV2ElementId === "string" && data.editorV2ElementId.trim() !== ""
+      ? data.editorV2ElementId.trim()
+      : undefined;
+  const editorV2InstanceId =
+    typeof data.editorV2InstanceId === "string" && data.editorV2InstanceId.trim() !== ""
+      ? data.editorV2InstanceId.trim()
+      : undefined;
+  const editorV2ElementType =
+    typeof data.editorV2ElementType === "string" &&
+    data.editorV2ElementType.trim() !== ""
+      ? data.editorV2ElementType.trim()
+      : undefined;
   return {
     id: idField,
     name,
@@ -413,6 +435,10 @@ function mapDocToTable(d: QueryDocumentSnapshot): Table {
       ? { height: parseFiniteNumber(data.height) }
       : {}),
     ...(typeof data.locked === "boolean" ? { locked: data.locked } : {}),
+    ...(source !== undefined ? { source } : {}),
+    ...(editorV2ElementId !== undefined ? { editorV2ElementId } : {}),
+    ...(editorV2InstanceId !== undefined ? { editorV2InstanceId } : {}),
+    ...(editorV2ElementType !== undefined ? { editorV2ElementType } : {}),
     isActive: parseBool(data.isActive, true),
     createdAt: readTsMs(data, "createdAt"),
     updatedAt: readTsMs(data, "updatedAt"),
