@@ -1047,9 +1047,6 @@ export function EditableFloorMap({
   const spaceHeldRef = useRef(false);
   const panRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
-  const lastElementRenderDiagnosticSignatureRef = useRef<string | null>(null);
-  const lastViewportFitDiagnosticSignatureRef = useRef<string | null>(null);
-  const lastPlanterRectDiagnosticSignatureRef = useRef<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [spacePressed, setSpacePressed] = useState(false);
@@ -1057,154 +1054,6 @@ export function EditableFloorMap({
   const [dragGroupSnapshot, setDragGroupSnapshot] = useState<
     Record<string, { x: number; y: number }> | null
   >(null);
-
-  useEffect(() => {
-    if (editable) return;
-    const decorativeElements = elements.filter((element) =>
-      isDecorativePlanElementType(element.type),
-    );
-    const rows = decorativeElements.slice(0, 32).map((element) => {
-      const { w, h } = elementSize(element);
-      const renderBranch = readonlyDecorativeRenderBranch(element);
-      const style = readonlyDecorativeElementStyle(
-        element,
-        element.x ?? 0,
-        element.y ?? 0,
-        w,
-        h,
-      );
-      return {
-        id: element.id,
-        type: element.type,
-        renderBranch,
-        computedWidth: w,
-        computedHeight: h,
-        rotation: readPlanElementRotation(element),
-        background: style.background ?? null,
-        border: style.border ?? null,
-        borderRadius: style.borderRadius ?? null,
-        opacity: style.opacity ?? null,
-        boxShadow: style.boxShadow ?? null,
-        zIndex: style.zIndex ?? null,
-        overflow: style.overflow ?? null,
-      };
-    });
-    const signature = JSON.stringify({
-      rows,
-    });
-    if (lastElementRenderDiagnosticSignatureRef.current === signature) return;
-    lastElementRenderDiagnosticSignatureRef.current = signature;
-    console.info("[TPV][MapDiag] decorative visual renderer", {
-      editable,
-      editorPlanSurface,
-      source: "EditableFloorMap",
-      elements: rows,
-    });
-  }, [editable, editorPlanSurface, elements]);
-
-  useLayoutEffect(() => {
-    if (editable) return;
-    const root = floorRef.current;
-    if (!root) return;
-    const planterElements = elements.filter((element) => element.type === "planter");
-    if (planterElements.length === 0) return;
-
-    const viewportRect = root.getBoundingClientRect();
-    const planterNodes = Array.from(
-      root.querySelectorAll<HTMLElement>(
-        '[data-hostly-readonly-decorative-type="planter"]',
-      ),
-    );
-    const planterById = new Map(
-      planterElements.map((element) => [String(element.id).trim(), element]),
-    );
-    const rows = planterNodes.map((node) => {
-      const id = node.dataset.hostlyReadonlyDecorativeId ?? "";
-      const element = planterById.get(id);
-      const { w, h } = element ? elementSize(element) : { w: 0, h: 0 };
-      const rect = node.getBoundingClientRect();
-      const outsideLeft = rect.right < viewportRect.left;
-      const outsideRight = rect.left > viewportRect.right;
-      const outsideTop = rect.bottom < viewportRect.top;
-      const outsideBottom = rect.top > viewportRect.bottom;
-      const partiallyClipped =
-        rect.left < viewportRect.left ||
-        rect.right > viewportRect.right ||
-        rect.top < viewportRect.top ||
-        rect.bottom > viewportRect.bottom;
-      return {
-        id,
-        type: "planter" as const,
-        mapX: element?.x ?? null,
-        mapY: element?.y ?? null,
-        mapWidth: w,
-        mapHeight: h,
-        scale: zoom,
-        translate: pan,
-        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-        expectedScreenRect: element
-          ? {
-              left: viewportRect.left + pan.x + (element.x ?? 0) * zoom,
-              top: viewportRect.top + pan.y + (element.y ?? 0) * zoom,
-              width: w * zoom,
-              height: h * zoom,
-            }
-          : null,
-        domRect: {
-          left: rect.left,
-          top: rect.top,
-          right: rect.right,
-          bottom: rect.bottom,
-          width: rect.width,
-          height: rect.height,
-        },
-        viewportRect: {
-          left: viewportRect.left,
-          top: viewportRect.top,
-          right: viewportRect.right,
-          bottom: viewportRect.bottom,
-          width: viewportRect.width,
-          height: viewportRect.height,
-        },
-        visibleInViewport:
-          !outsideLeft && !outsideRight && !outsideTop && !outsideBottom,
-        clipping: {
-          outsideLeft,
-          outsideRight,
-          outsideTop,
-          outsideBottom,
-          partiallyClipped,
-        },
-      };
-    });
-    const missingDomNodes = planterElements
-      .filter(
-        (element) =>
-          !planterNodes.some(
-            (node) =>
-              node.dataset.hostlyReadonlyDecorativeId === String(element.id).trim(),
-          ),
-      )
-      .map((element) => ({
-        id: element.id,
-        type: element.type,
-        reason: "missingDomNode",
-      }));
-    const payload = {
-      source: "EditableFloorMap",
-      scale: zoom,
-      translate: pan,
-      transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-      planterCount: planterElements.length,
-      domPlanterCount: planterNodes.length,
-      rows,
-      missingDomNodes,
-    };
-    const signature = JSON.stringify(payload);
-    if (lastPlanterRectDiagnosticSignatureRef.current === signature) return;
-    lastPlanterRectDiagnosticSignatureRef.current = signature;
-    console.info("[TPV][MapDiag] planter viewport rects", payload);
-  }, [editable, elements, pan, zoom]);
 
   useEffect(() => {
     if (!placementRequest || !editable || editingZones || !onCreate) return;
@@ -1369,35 +1218,6 @@ export function EditableFloorMap({
     }
     setZoom(z);
     setPan(p);
-    const renderedWidth = bounds.width * z;
-    const renderedHeight = bounds.height * z;
-    const planTransformDiagnostic = {
-      planWidth: usePlanFit ? bounds.width : null,
-      planHeight: usePlanFit ? bounds.height : null,
-      viewportWidth: vw,
-      viewportHeight: vh,
-      padding: fitPaddingPx,
-      scale: z,
-      translateX: p.x,
-      translateY: p.y,
-      renderedWidth,
-      renderedHeight,
-      aspectRatioPreserved:
-        bounds.width > 0 &&
-        bounds.height > 0 &&
-        Math.abs(renderedWidth / renderedHeight - bounds.width / bounds.height) <
-          0.0001,
-    };
-    const planTransformSignature = JSON.stringify(planTransformDiagnostic);
-    if (
-      lastViewportFitDiagnosticSignatureRef.current !== planTransformSignature
-    ) {
-      lastViewportFitDiagnosticSignatureRef.current = planTransformSignature;
-      console.info(
-        "[TPV][MapDiag] plan-to-viewport transform",
-        planTransformDiagnostic,
-      );
-    }
   }, [
     editorPlanSurface,
     fitPaddingPx,

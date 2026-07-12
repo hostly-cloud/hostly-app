@@ -1590,7 +1590,3 @@ export const ElementCard = memo(
     return true;
   },
 );
-
-/** @deprecated Usar `ElementCard`. */
-export const TableCard = ElementCard;
-export type TableMapCardProps = ElementMapCardProps;

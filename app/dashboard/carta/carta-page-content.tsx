@@ -453,78 +453,6 @@ function displayRestaurantUserName(row: RestaurantUserRow): string {
   return em || "—";
 }
 
-function countByStringKey<T>(
-  list: T[],
-  readKey: (item: T) => string | null | undefined,
-): Record<string, number> {
-  return list.reduce<Record<string, number>>((acc, item) => {
-    const key = readKey(item)?.trim() || "(sin valor)";
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
-}
-
-function isEditorV2PublishedTable(table: Table): boolean {
-  const id = String(table.id ?? "").trim();
-  return (
-    table.source === "editor-v2" ||
-    typeof table.editorV2ElementId === "string" ||
-    id.startsWith("v2-map-")
-  );
-}
-
-function summarizeTpvMapTables(list: Table[]) {
-  const active = list.filter((table) => table.isActive !== false);
-  const inactive = list.length - active.length;
-  const decorative = active.filter((table) => isDecorativePlanElementType(table.type));
-  const operational = active.filter((table) => !isDecorativePlanElementType(table.type));
-  const editorV2 = active.filter(isEditorV2PublishedTable);
-  const legacyLikely = active.filter((table) => !isEditorV2PublishedTable(table));
-  return {
-    total: list.length,
-    active: active.length,
-    inactive,
-    operational: operational.length,
-    decorative: decorative.length,
-    editorV2: editorV2.length,
-    legacyLikely: legacyLikely.length,
-    byType: countByStringKey(active, (table) => table.type),
-    byFloorPlanId: countByStringKey(active, (table) => table.floorPlanId),
-    editorV2Sample: editorV2.slice(0, 12).map((table) => ({
-      id: table.id,
-      name: table.name,
-      type: table.type,
-      floorPlanId: table.floorPlanId ?? null,
-      source: table.source ?? null,
-      editorV2ElementId: table.editorV2ElementId ?? null,
-    })),
-    legacyLikelySample: legacyLikely.slice(0, 12).map((table) => ({
-      id: table.id,
-      name: table.name,
-      type: table.type,
-      floorPlanId: table.floorPlanId ?? null,
-      source: table.source ?? null,
-    })),
-  };
-}
-
-function summarizeTpvMapZones(list: Zone[]) {
-  return {
-    total: list.length,
-    byFloorPlanId: countByStringKey(list, (zone) => zone.floorPlanId),
-    sample: list.slice(0, 12).map((zone) => ({
-      id: zone.id,
-      name: zone.name,
-      floorPlanId: zone.floorPlanId ?? null,
-      hasGeometry:
-        typeof zone.x === "number" &&
-        typeof zone.y === "number" &&
-        typeof zone.width === "number" &&
-        typeof zone.height === "number",
-    })),
-  };
-}
-
 /** Errores de red / backend / modo offline del cliente Firestore (listener TPV). */
 function isFirestoreTpvConnectivityFailure(err: unknown): boolean {
   if (err instanceof FirebaseError) {
@@ -1941,10 +1869,6 @@ export function CartaPageContent({
   const firstPendingRef = useRef<HTMLLIElement | null>(null);
   const lastSortedRef = useRef<string[]>([]);
   const lastResultRef = useRef<Table[]>([]);
-  const lastTpvMapDiagRenderSignatureRef = useRef<string | null>(null);
-  const lastTpvReadonlyMapIntegrationSignatureRef = useRef<string | null>(null);
-  const lastTpvReadonlyHitboxParitySignatureRef = useRef<string | null>(null);
-  const lastTpvDecorativeRenderAuditSignatureRef = useRef<string | null>(null);
   const tableFlipPositionsRef = useRef<Record<string, DOMRect>>({});
   const tableFlipElementsRef = useRef<Record<string, HTMLDivElement | null>>(
     {},
@@ -2312,7 +2236,7 @@ export function CartaPageContent({
           error instanceof Error ? error.message : String(error ?? "unknown");
         setSalaEditorDraftDocument(null);
         setSalaEditorDraftLoadError(message);
-        console.warn("[TPV][MapDiag] readonly map draft load fallback", {
+        console.warn("[TPV] readonly map draft load fallback", {
           restaurantId: rid,
           error: message,
         });
@@ -4340,11 +4264,6 @@ export function CartaPageContent({
     const unsub = listenTablesByRestaurantId(
       rid,
       (list) => {
-        console.info("[TPV][MapDiag] listenTables snapshot", {
-          restaurantId: rid,
-          uid: user.uid,
-          ...summarizeTpvMapTables(list),
-        });
         setTablesList(list);
       },
       (err) => {
@@ -4370,11 +4289,6 @@ export function CartaPageContent({
     const unsub = listenZonesByRestaurantId(
       rid,
       (list) => {
-        console.info("[TPV][MapDiag] listenZones snapshot", {
-          restaurantId: rid,
-          uid: user.uid,
-          ...summarizeTpvMapZones(list),
-        });
         setZonesList(list);
       },
       (err) => {
@@ -4396,24 +4310,6 @@ export function CartaPageContent({
     const unsub = listenFloorPlansByRestaurantId(
       rid,
       (plans) => {
-        console.info("[TPV][MapDiag] listenFloorPlans snapshot", {
-          restaurantId: rid,
-          uid: user.uid,
-          total: plans.length,
-          active: plans.filter((plan) => plan.active !== false).length,
-          visibleInTpv: plans.filter(
-            (plan) => plan.active !== false && plan.showInTpv !== false,
-          ).length,
-          plans: plans.map((plan) => ({
-            id: plan.id,
-            name: plan.name,
-            active: plan.active !== false,
-            showInTpv: plan.showInTpv !== false,
-            isDefault: plan.isDefault === true,
-            width: plan.width ?? null,
-            height: plan.height ?? null,
-          })),
-        });
         setFloorPlans(plans);
         setSelectedTpvFloorPlanId((current) => {
           const op = plans.filter(
@@ -7393,34 +7289,6 @@ export function CartaPageContent({
     };
   }, [mapTablesForChipFilter, readonlyMapIntegration.contract]);
 
-  useEffect(() => {
-    if (!useReadonlyV2Map) return;
-    const payload = {
-      selectedFloorPlanId: selectedTpvFloorPlanId,
-      selectedFloorPlanName: selectedTpvFloorPlan?.name ?? null,
-      matchedTables: readonlyV2TableHitboxParity.matchedTables,
-      visibleV2WithoutTable:
-        readonlyV2TableHitboxParity.visibleV2WithoutTable.length,
-      tableWithoutV2: readonlyV2TableHitboxParity.tableWithoutV2.length,
-      rotatedMatches: readonlyV2TableHitboxParity.rotatedMatches,
-      fallbackLegacyVisible: readonlyV2TableHitboxParity.fallbackLegacyVisible,
-      samples: {
-        visibleV2WithoutTable:
-          readonlyV2TableHitboxParity.visibleV2WithoutTable.slice(0, 8),
-        tableWithoutV2: readonlyV2TableHitboxParity.tableWithoutV2.slice(0, 8),
-      },
-    };
-    const signature = JSON.stringify(payload);
-    if (lastTpvReadonlyHitboxParitySignatureRef.current === signature) return;
-    lastTpvReadonlyHitboxParitySignatureRef.current = signature;
-    console.info("[TPV][MapDiag] readonly hitbox parity", payload);
-  }, [
-    readonlyV2TableHitboxParity,
-    selectedTpvFloorPlan?.name,
-    selectedTpvFloorPlanId,
-    useReadonlyV2Map,
-  ]);
-
   const decorativePlanElementsForTpv = useMemo(() => {
     return planElementsForTpvMap.filter((element) =>
       isDecorativePlanElementType(element.type),
@@ -7440,68 +7308,6 @@ export function CartaPageContent({
     if (useReadonlyV2Map) return [...mapTablesForChipFilter];
     return [...decorativeRenderedForTpvMap, ...mapTablesForChipFilter];
   }, [decorativeRenderedForTpvMap, mapTablesForChipFilter, useReadonlyV2Map]);
-
-  useEffect(() => {
-    const renderedIds = new Set(
-      decorativeRenderedForTpvMap.map((element) => String(element.id ?? "").trim()),
-    );
-    const discardedDecoratives = decorativePlanElementsForTpv
-      .filter((element) => !renderedIds.has(String(element.id ?? "").trim()))
-      .map((element) => ({
-        id: element.id,
-        type: element.type,
-        reason: "filtered" as const,
-      }));
-    const discardedTypes = discardedDecoratives.reduce<Record<string, number>>(
-      (acc, element) => {
-        acc[element.type] = (acc[element.type] ?? 0) + 1;
-        return acc;
-      },
-      {},
-    );
-    const discardedByReason = discardedDecoratives.reduce<Record<string, number>>(
-      (acc, element) => {
-        acc[element.reason] = (acc[element.reason] ?? 0) + 1;
-        return acc;
-      },
-      {},
-    );
-    const payload = {
-      source: "TPV renderElement input",
-      selectedFloorPlanId: selectedTpvFloorPlanId,
-      selectedFloorPlanName: selectedTpvFloorPlan?.name ?? null,
-      receivedTypes: countByStringKey(
-        decorativePlanElementsForTpv,
-        (element) => element.type,
-      ),
-      renderedTypes: countByStringKey(
-        decorativeRenderedForTpvMap,
-        (element) => element.type,
-      ),
-      discardedTypes,
-      discardedByReason,
-      discardedDecoratives,
-      receivedDecoratives: decorativePlanElementsForTpv.slice(0, 32).map((element) => ({
-        id: element.id,
-        type: element.type,
-        floorPlanId: element.floorPlanId ?? null,
-      })),
-      renderedDecoratives: decorativeRenderedForTpvMap.slice(0, 32).map((element) => ({
-        id: element.id,
-        type: element.type,
-        floorPlanId: element.floorPlanId ?? null,
-      })),
-    };
-    const signature = JSON.stringify(payload);
-    if (lastTpvDecorativeRenderAuditSignatureRef.current === signature) return;
-    lastTpvDecorativeRenderAuditSignatureRef.current = signature;
-    console.info("[TPV][MapDiag] decorative render audit", payload);
-  }, [
-    decorativePlanElementsForTpv,
-    decorativeRenderedForTpvMap,
-    selectedTpvFloorPlan?.name,
-    selectedTpvFloorPlanId,
-  ]);
 
   const mapViewportFitSourceForTpv = useMemo<{
     source: "tables" | "decoratives" | "empty";
@@ -7589,251 +7395,6 @@ export function CartaPageContent({
     readonlyMapIntegration.matchedSpaceId,
     readonlyMapIntegration.rendererUsed,
     zonesForOperationalMapRender,
-  ]);
-
-  useEffect(() => {
-    const payload = {
-      selectedFloorPlanId: selectedTpvFloorPlanId,
-      matchedSpaceId: readonlyMapIntegration.matchedSpaceId,
-      hasV2Draft: readonlyMapIntegration.hasV2Draft,
-      rendererUsed: readonlyMapIntegration.rendererUsed,
-      visualLayersEnabled: readonlyMapIntegration.visualLayersEnabled,
-      operationalOverlayEnabled: readonlyMapIntegration.operationalOverlayEnabled,
-      reasonForFallback: readonlyMapIntegration.reasonForFallback,
-      draftLoadError: salaEditorDraftLoadError,
-    };
-    const signature = JSON.stringify(payload);
-    if (lastTpvReadonlyMapIntegrationSignatureRef.current === signature) return;
-    lastTpvReadonlyMapIntegrationSignatureRef.current = signature;
-    console.info("[TPV][MapDiag] readonly map integration", payload);
-  }, [
-    readonlyMapIntegration,
-    salaEditorDraftLoadError,
-    selectedTpvFloorPlanId,
-  ]);
-
-  useEffect(() => {
-    const activeElements = tablesList.filter((element) => element.isActive !== false);
-    const visibleOperationalFloorPlans = floorPlans.filter(
-      (plan) => plan.active !== false && plan.showInTpv !== false,
-    );
-    const legacyUnscopedActiveElements = activeElements.filter(
-      (element) =>
-        !isDecorativePlanElementType(element.type) && !element.floorPlanId?.trim(),
-    );
-    const legacyUnscopedBlockedByMultiPlan =
-      selectedTpvFloorPlanId != null && visibleOperationalFloorPlans.length > 1
-        ? legacyUnscopedActiveElements
-        : [];
-    const outsideSelectedFloorPlan =
-      selectedTpvFloorPlanId == null
-        ? []
-        : activeElements.filter(
-            (element) =>
-              !entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
-          );
-    const tableIdsForChipFilter = new Set(
-      mapTablesForChipFilter.map((table) => String(table.id ?? "").trim()),
-    );
-    const decorativeSuppressedByDuplicateId = decorativePlanElementsForTpv.filter((element) =>
-      tableIdsForChipFilter.has(String(element.id ?? "").trim()),
-    );
-    const decorativeRendered = decorativeRenderedForTpvMap;
-    const viewportFitElementSamples = tpvOperationalViewportFitElements
-      .slice(0, 16)
-      .map((element) => ({
-        id: element.id,
-        type: element.type,
-        x: element.x,
-        y: element.y,
-        width: element.width ?? null,
-        height: element.height ?? null,
-      }));
-    const renderableElementsCount = tpvOperationalMapElementsForRender.length;
-    const renderGuardSource =
-      renderableElementsCount === 0 ? "empty" : "renderable-elements";
-    const renderDiagnosticSignature = JSON.stringify({
-      restaurantId,
-      uid: user?.uid ?? null,
-      embeddedInOperacion,
-      selectedTpvFloorPlanId,
-      visibleOperationalFloorPlanIds: visibleOperationalFloorPlans.map((plan) => plan.id),
-      tableIds: tablesList.map((table) => [
-        table.id,
-        table.type,
-        table.isActive !== false,
-        table.floorPlanId ?? "",
-        table.source ?? "",
-        table.editorV2ElementId ?? "",
-      ]),
-      zoneIds: zonesList.map((zone) => [
-        zone.id,
-        zone.floorPlanId ?? "",
-        zone.x ?? "",
-        zone.y ?? "",
-        zone.width ?? "",
-        zone.height ?? "",
-      ]),
-      selectedCounts: {
-        planElementsForTpvMap: planElementsForTpvMap.length,
-        tablesForTpvMap: tablesForTpvMap.length,
-        tablesVisibleOnMap: tablesVisibleOnMap.length,
-        tablesFilteredByWaiter: tablesFilteredByWaiter.length,
-        tablesVisibleForMapFilter: tablesVisibleForMapFilter.length,
-        mapTablesOrderedByVisualPriority: mapTablesOrderedByVisualPriority.length,
-        mapTablesForChipFilter: mapTablesForChipFilter.length,
-        decorativePlanElementsForTpv: decorativePlanElementsForTpv.length,
-        zonesForTpvMap: zonesForTpvMap.length,
-        zonesForOperationalMapRender: zonesForOperationalMapRender.length,
-        tpvOperationalMapElementsForRender: tpvOperationalMapElementsForRender.length,
-        tpvOperationalViewportFitElements: tpvOperationalViewportFitElements.length,
-      },
-      viewportFitSource: viewportFitSourceForTpv,
-      viewportFitElements: viewportFitElementSamples,
-      renderGuardSource,
-      renderableElementsCount,
-      operationalTablesCount: tablesVisibleOnMap.length,
-      decorativesCount: decorativeRendered.length,
-      filters: {
-        waiterFilter,
-        myTablesMapScope,
-      },
-    });
-    if (lastTpvMapDiagRenderSignatureRef.current === renderDiagnosticSignature) {
-      return;
-    }
-    lastTpvMapDiagRenderSignatureRef.current = renderDiagnosticSignature;
-
-    console.info("[TPV][MapDiag] render pipeline", {
-      restaurantId,
-      uid: user?.uid ?? null,
-      embeddedInOperacion,
-      selectedFloorPlanId: selectedTpvFloorPlanId,
-      selectedFloorPlan: selectedTpvFloorPlan
-        ? {
-            id: selectedTpvFloorPlan.id,
-            name: selectedTpvFloorPlan.name,
-            active: selectedTpvFloorPlan.active !== false,
-            showInTpv: selectedTpvFloorPlan.showInTpv !== false,
-            width: selectedTpvFloorPlan.width ?? null,
-            height: selectedTpvFloorPlan.height ?? null,
-          }
-        : null,
-      floorPlans: {
-        total: floorPlans.length,
-        active: floorPlans.filter((plan) => plan.active !== false).length,
-        visibleInTpv: visibleOperationalFloorPlans.length,
-      },
-      inputTables: summarizeTpvMapTables(tablesList),
-      inputZones: summarizeTpvMapZones(zonesList),
-      counts: {
-        activeElements: activeElements.length,
-        planElementsForSelectedFloorPlan: planElementsForTpvMap.length,
-        tablesAfterDecorativeFilter: tablesForTpvMap.length,
-        tablesVisibleOnMap: tablesVisibleOnMap.length,
-        tablesAfterWaiterFilter: tablesFilteredByWaiter.length,
-        tablesAfterScopeFilter: tablesVisibleForMapFilter.length,
-        mapTablesAfterPriority: mapTablesOrderedByVisualPriority.length,
-        mapTablesAfterChipFilter: mapTablesForChipFilter.length,
-        decorativeInSelectedFloorPlan: decorativePlanElementsForTpv.length,
-        decorativeRendered: decorativeRendered.length,
-        zonesForSelectedFloorPlan: zonesForTpvMap.length,
-        zonesRendered: zonesForOperationalMapRender.length,
-        finalElementsRendered: tpvOperationalMapElementsForRender.length,
-        viewportFitSource: viewportFitSourceForTpv,
-        viewportFitElements: tpvOperationalViewportFitElements.length,
-        renderGuardSource,
-        renderableElementsCount,
-        operationalTablesCount: tablesVisibleOnMap.length,
-        decorativesCount: decorativeRendered.length,
-      },
-      discarded: {
-        inactiveTables: tablesList.length - activeElements.length,
-        outsideSelectedFloorPlan: outsideSelectedFloorPlan.length,
-        legacyUnscopedBlockedByMultiPlan: legacyUnscopedBlockedByMultiPlan.length,
-        decorativeExcludedFromTableLayer: decorativePlanElementsForTpv.length,
-        decorativeSuppressedByDuplicateId: decorativeSuppressedByDuplicateId.length,
-        zoneFilteredOutByFloorPlan: zonesList.length - zonesForTpvMap.length,
-        zonesHiddenBecauseEmbeddedOperation: 0,
-        waiterFilter:
-          embeddedInOperacion || waiterFilter === "all"
-            ? 0
-            : tablesVisibleOnMap.length - tablesFilteredByWaiter.length,
-        operatorScopeFilter:
-          embeddedInOperacion && myTablesMapScope === "mine"
-            ? tablesFilteredByWaiter.length - tablesVisibleForMapFilter.length
-            : 0,
-        chipFilter:
-          mapTablesOrderedByVisualPriority.length - mapTablesForChipFilter.length,
-      },
-      samples: {
-        outsideSelectedFloorPlan: outsideSelectedFloorPlan.slice(0, 12).map((element) => ({
-          id: element.id,
-          name: element.name,
-          type: element.type,
-          floorPlanId: element.floorPlanId ?? null,
-          source: element.source ?? null,
-          editorV2ElementId: element.editorV2ElementId ?? null,
-        })),
-        legacyUnscopedBlockedByMultiPlan: legacyUnscopedBlockedByMultiPlan
-          .slice(0, 12)
-          .map((element) => ({
-            id: element.id,
-            name: element.name,
-            type: element.type,
-            floorPlanId: element.floorPlanId ?? null,
-            source: element.source ?? null,
-            editorV2ElementId: element.editorV2ElementId ?? null,
-          })),
-        decorativeRendered: decorativeRendered.slice(0, 12).map((element) => ({
-          id: element.id,
-          name: element.name,
-          type: element.type,
-          floorPlanId: element.floorPlanId ?? null,
-          source: element.source ?? null,
-          editorV2ElementId: element.editorV2ElementId ?? null,
-        })),
-        finalElementsRendered: tpvOperationalMapElementsForRender.slice(0, 16).map((element) => ({
-          id: element.id,
-          name: element.name,
-          type: element.type,
-          floorPlanId: element.floorPlanId ?? null,
-          source: element.source ?? null,
-          editorV2ElementId: element.editorV2ElementId ?? null,
-          x: element.x,
-          y: element.y,
-          width: element.width ?? null,
-          height: element.height ?? null,
-        })),
-        viewportFitElements: viewportFitElementSamples,
-      },
-    });
-  }, [
-    decorativePlanElementsForTpv,
-    decorativeRenderedForTpvMap,
-    embeddedInOperacion,
-    floorPlans,
-    mapTablesForChipFilter,
-    mapTablesOrderedByVisualPriority,
-    myTablesMapScope,
-    operationalFloorPlansForTpv.length,
-    planElementsForTpvMap,
-    restaurantId,
-    selectedTpvFloorPlan,
-    selectedTpvFloorPlanId,
-    tablesFilteredByWaiter,
-    tablesForTpvMap,
-    tablesList,
-    tablesVisibleForMapFilter,
-    tablesVisibleOnMap,
-    tpvOperationalMapElementsForRender,
-    tpvOperationalViewportFitElements,
-    user?.uid,
-    viewportFitSourceForTpv,
-    waiterFilter,
-    zonesForOperationalMapRender,
-    zonesForTpvMap,
-    zonesList,
   ]);
 
   const formatMapOccupiedDuration = useCallback(
