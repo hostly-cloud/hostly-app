@@ -304,17 +304,25 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
           const memberIds = ctx.memberIds
             .map((id) => String(id ?? "").trim())
             .filter(Boolean);
+          const remainingTableIds = collectGroupTableIds(next, mainTableId);
+          const remainingSet = new Set(remainingTableIds);
+          const removedTableIds = memberIds.filter(
+            (memberId) => memberId !== mainTableId && !remainingSet.has(memberId),
+          );
           const restore = await restoreMergedOrdersForTableGroup(
             db,
             restaurantIdTrimmed,
             mainTableId,
-            memberIds,
+            removedTableIds,
+            { remainingTableIds },
           );
           if (!restore.restored && restore.unresolvedAssignments.length > 0) {
             setGroupedTables(previous);
             logTableJoinMergeWarn("split:restore-skipped-reverting-local-group", {
               mainTableId,
               memberIds,
+              removedTableIds,
+              remainingTableIds,
               unresolvedAssignments: restore.unresolvedAssignments,
             });
             return;
