@@ -143,6 +143,7 @@ export type SalaEditorWorkspaceCanvasProps = {
   draggingOperationalInstanceId?: string | null;
   resizingOperationalInstanceId?: string | null;
   dropAnimatingOperationalInstanceId?: string | null;
+  linkedTableNamesById?: Record<string, string>;
   operationalSnapGuides?: SnapGuide[];
   isOperationalDragging?: () => boolean;
   isOperationalResizing?: () => boolean;
@@ -240,6 +241,7 @@ export function SalaEditorWorkspaceCanvas({
   draggingOperationalInstanceId = null,
   resizingOperationalInstanceId = null,
   dropAnimatingOperationalInstanceId = null,
+  linkedTableNamesById = {},
   operationalSnapGuides,
   isOperationalDragging,
   isOperationalResizing,
@@ -350,6 +352,7 @@ export function SalaEditorWorkspaceCanvas({
       <SalaOperationalInstancesLayer
         key="operation-layer"
         instances={operationalElementInstances}
+        linkedTableNamesById={linkedTableNamesById}
         readOnly
       />
     ) : null;
@@ -531,6 +534,7 @@ export function SalaEditorWorkspaceCanvas({
         draggingInstanceId={draggingOperationalInstanceId}
         resizingInstanceId={resizingOperationalInstanceId}
         dropAnimatingInstanceId={dropAnimatingOperationalInstanceId}
+        linkedTableNamesById={linkedTableNamesById}
         snapGuides={operationalSnapGuides}
         isDragging={isOperationalDragging ?? (() => false)}
         isResizing={isOperationalResizing ?? (() => false)}

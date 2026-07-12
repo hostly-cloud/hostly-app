@@ -24,6 +24,7 @@ export type SalaOperationalInstanceCanvasObjectProps = {
   isDragging?: boolean;
   isResizing?: boolean;
   isDropAnimating?: boolean;
+  linkedTableLabel?: string | null;
   onBodyPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
@@ -47,6 +48,7 @@ export function SalaOperationalInstanceCanvasObject({
   isDragging = false,
   isResizing = false,
   isDropAnimating = false,
+  linkedTableLabel = null,
   onBodyPointerDown,
   onBodyPointerMove,
   onBodyPointerUp,
@@ -61,6 +63,8 @@ export function SalaOperationalInstanceCanvasObject({
     instance.metadata,
     instance.elementType,
   );
+  const showLinkBadge = instance.elementType === "TABLE";
+  const linked = typeof linkedTableLabel === "string" && linkedTableLabel.trim() !== "";
   const createResizePointerHandlers = (corner: OperationalInstanceResizeCorner) => ({
     onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0) return;
@@ -114,6 +118,16 @@ export function SalaOperationalInstanceCanvasObject({
       }}
     >
       {selected ? <div className="hostly-sala-canvas-object__frame" aria-hidden /> : null}
+      {showLinkBadge ? (
+        <span
+          className={[
+            "hostly-sala-canvas-object__link-badge",
+            linked ? "is-linked" : "is-unlinked",
+          ].join(" ")}
+        >
+          {linked ? `Enlazada con ${linkedTableLabel}` : "No enlazada"}
+        </span>
+      ) : null}
 
       <div
         role="button"

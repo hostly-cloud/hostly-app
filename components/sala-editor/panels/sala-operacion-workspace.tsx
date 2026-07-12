@@ -46,6 +46,7 @@ export type SalaOperacionWorkspaceProps = {
   draggingInstanceId: string | null;
   resizingInstanceId: string | null;
   dropAnimatingInstanceId: string | null;
+  linkedTableNamesById?: Record<string, string>;
   snapGuides?: SnapGuide[];
   isDragging: () => boolean;
   isResizing: () => boolean;
@@ -93,6 +94,7 @@ export type SalaOperationalInstancesLayerProps = {
   draggingInstanceId?: string | null;
   resizingInstanceId?: string | null;
   dropAnimatingInstanceId?: string | null;
+  linkedTableNamesById?: Record<string, string>;
   createMoveHandlers?: (
     instance: OperationalElementInstance,
   ) => OperationalInstanceMoveHandlers;
@@ -117,6 +119,7 @@ export function SalaOperacionWorkspace({
   draggingInstanceId,
   resizingInstanceId,
   dropAnimatingInstanceId,
+  linkedTableNamesById,
   snapGuides,
   isDragging,
   isResizing,
@@ -176,6 +179,7 @@ export function SalaOperacionWorkspace({
         draggingInstanceId={draggingInstanceId}
         resizingInstanceId={resizingInstanceId}
         dropAnimatingInstanceId={dropAnimatingInstanceId}
+        linkedTableNamesById={linkedTableNamesById}
         snapGuides={snapGuides}
         isDragging={isDragging}
         isResizing={isResizing}
@@ -201,6 +205,7 @@ function SalaOperacionCanvasContent({
   draggingInstanceId,
   resizingInstanceId,
   dropAnimatingInstanceId,
+  linkedTableNamesById,
   snapGuides,
   isDragging,
   isResizing,
@@ -311,6 +316,7 @@ function SalaOperacionCanvasContent({
         draggingInstanceId={draggingInstanceId}
         resizingInstanceId={resizingInstanceId}
         dropAnimatingInstanceId={dropAnimatingInstanceId}
+        linkedTableNamesById={linkedTableNamesById}
         createMoveHandlers={createMoveHandlers}
         onResizeStart={onResizeStart}
         onResizeMove={onResizeMove}
@@ -327,6 +333,7 @@ export function SalaOperationalInstancesLayer({
   draggingInstanceId = null,
   resizingInstanceId = null,
   dropAnimatingInstanceId = null,
+  linkedTableNamesById = {},
   createMoveHandlers,
   onResizeStart,
   onResizeMove,
@@ -361,6 +368,10 @@ export function SalaOperationalInstancesLayer({
         const resizing = !readOnly && resizingInstanceId === instance.id;
         const dropAnimating = dropAnimatingInstanceId === instance.id;
         const size = getOperationalInstanceCanvasSize(instance);
+        const linkedTableId =
+          typeof instance.metadata.legacyTableId === "string"
+            ? instance.metadata.legacyTableId.trim()
+            : "";
 
         return (
           <div
@@ -379,6 +390,11 @@ export function SalaOperationalInstancesLayer({
               isDragging={dragging}
               isResizing={resizing}
               isDropAnimating={dropAnimating}
+              linkedTableLabel={
+                linkedTableId
+                  ? linkedTableNamesById[linkedTableId] ?? linkedTableId
+                  : null
+              }
               {...moveHandlers}
               {...resizeHandlers}
             />

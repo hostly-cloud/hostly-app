@@ -16,6 +16,8 @@ import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { OperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { hasSalaEditorInspectorSelection } from "@/components/sala-editor/sala-editor-inspector-visibility";
+import type { FloorPlan } from "@/lib/firestore/floorPlans";
+import type { Table } from "@/lib/firestore/tables";
 
 function InspectorSection({
   title,
@@ -40,6 +42,13 @@ export type SalaEditorInspectorPanelProps = {
   selectedWall?: SalaWallSegment | null;
   activeOperationalCatalogItem?: OperationalElementCatalogItem | null;
   selectedOperationalElementInstance?: OperationalElementInstance | null;
+  legacyTables?: Table[];
+  legacyFloorPlans?: FloorPlan[];
+  linkedLegacyTableIds?: string[];
+  onLinkOperationalElementToLegacyTable?: (
+    instanceId: string,
+    legacyTableId: string | null,
+  ) => void;
   onUpdateEspacio?: (patch: Partial<SalaEspacioDraft>) => void;
 };
 
@@ -50,6 +59,10 @@ export function SalaEditorInspectorPanel(props: SalaEditorInspectorPanelProps) {
     elementCount = 0,
     selectedWall = null,
     selectedOperationalElementInstance = null,
+    legacyTables = [],
+    legacyFloorPlans = [],
+    linkedLegacyTableIds = [],
+    onLinkOperationalElementToLegacyTable,
     onUpdateEspacio,
   } = props;
 
@@ -70,6 +83,15 @@ export function SalaEditorInspectorPanel(props: SalaEditorInspectorPanelProps) {
     return (
       <SalaOperationalElementInstanceInspector
         instance={selectedOperationalElementInstance}
+        legacyTables={legacyTables}
+        legacyFloorPlans={legacyFloorPlans}
+        linkedLegacyTableIds={linkedLegacyTableIds}
+        onLinkLegacyTable={(legacyTableId) =>
+          onLinkOperationalElementToLegacyTable?.(
+            selectedOperationalElementInstance.id,
+            legacyTableId,
+          )
+        }
       />
     );
   }
