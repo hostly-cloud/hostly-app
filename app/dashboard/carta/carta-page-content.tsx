@@ -103,7 +103,9 @@ import { mergeOpenOrdersForTableGroup } from "@/lib/firestore/merge-table-group-
 import {
   logTableJoinMerge,
   TABLE_GROUP_ORDERS_MERGED_EVENT,
+  TABLE_GROUP_ORDERS_SPLIT_EVENT,
   type TableGroupOrdersMergedDetail,
+  type TableGroupOrdersSplitDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
 import {
@@ -606,6 +608,9 @@ type CartOrderLine = {
   inventoryCost?: CartOrderLineInventoryCost;
   /** `orderItems/{id}` creado al enviar comanda; enlace directo para cancelación/KDS. */
   orderItemDocId?: string;
+  /** Procedencia explícita al unir mesas; permite separar sin inferir por nombre/posición. */
+  tableGroupSourceTableId?: string;
+  tableGroupSourceOrderId?: string;
 };
 
 const CARTA_PRESET_EXTRAS: readonly CartOrderLineExtra[] = [];
@@ -1307,6 +1312,12 @@ function orderLinesToFirestoreItems(
       ...(line.orderItemDocId?.trim()
         ? { orderItemDocId: line.orderItemDocId.trim() }
         : {}),
+      ...(line.tableGroupSourceTableId?.trim()
+        ? { tableGroupSourceTableId: line.tableGroupSourceTableId.trim() }
+        : {}),
+      ...(line.tableGroupSourceOrderId?.trim()
+        ? { tableGroupSourceOrderId: line.tableGroupSourceOrderId.trim() }
+        : {}),
     };
   });
 }
@@ -1486,6 +1497,22 @@ function mapFirestoreOrderDocToCartLines(
         typeof orderItemDocIdRaw === "string" && orderItemDocIdRaw.trim()
           ? orderItemDocIdRaw.trim()
           : undefined;
+      const tableGroupSourceTableIdRaw = (it as {
+        tableGroupSourceTableId?: unknown;
+      }).tableGroupSourceTableId;
+      const tableGroupSourceTableId =
+        typeof tableGroupSourceTableIdRaw === "string" &&
+        tableGroupSourceTableIdRaw.trim()
+          ? tableGroupSourceTableIdRaw.trim()
+          : undefined;
+      const tableGroupSourceOrderIdRaw = (it as {
+        tableGroupSourceOrderId?: unknown;
+      }).tableGroupSourceOrderId;
+      const tableGroupSourceOrderId =
+        typeof tableGroupSourceOrderIdRaw === "string" &&
+        tableGroupSourceOrderIdRaw.trim()
+          ? tableGroupSourceOrderIdRaw.trim()
+          : undefined;
       const stationFields = readStationFieldsFromFirestoreRecord(
         it as Record<string, unknown>,
       );
@@ -1557,6 +1584,8 @@ function mapFirestoreOrderDocToCartLines(
         ...(courseStored != null ? { course: courseStored } : {}),
         ...(inventoryCost ? { inventoryCost } : {}),
         ...(orderItemDocId ? { orderItemDocId } : {}),
+        ...(tableGroupSourceTableId ? { tableGroupSourceTableId } : {}),
+        ...(tableGroupSourceOrderId ? { tableGroupSourceOrderId } : {}),
       };
     })
     .filter((row) => row.quantity > 0);
@@ -5119,6 +5148,28 @@ export function CartaPageContent({
     window.addEventListener(TABLE_GROUP_ORDERS_MERGED_EVENT, handler);
     return () => {
       window.removeEventListener(TABLE_GROUP_ORDERS_MERGED_EVENT, handler);
+    };
+  }, [
+    restaurantId,
+    invalidateTableGroupOrderCache,
+    hydrateTableOrderFromFirestore,
+  ]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<TableGroupOrdersSplitDetail>).detail;
+      if (!detail?.mainTableId?.trim()) return;
+      const rid = String(detail.restaurantId ?? "").trim();
+      if (rid && restaurantId?.trim() !== rid) return;
+      const memberIds = detail.memberIds ?? [];
+      invalidateTableGroupOrderCache(memberIds);
+      for (const memberId of memberIds) {
+        void hydrateTableOrderFromFirestore(memberId);
+      }
+    };
+    window.addEventListener(TABLE_GROUP_ORDERS_SPLIT_EVENT, handler);
+    return () => {
+      window.removeEventListener(TABLE_GROUP_ORDERS_SPLIT_EVENT, handler);
     };
   }, [
     restaurantId,

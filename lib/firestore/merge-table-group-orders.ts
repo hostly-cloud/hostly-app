@@ -51,6 +51,20 @@ function normalizeMergedFirestoreItems(
   });
 }
 
+function withTableGroupLineOrigin(
+  item: Record<string, unknown>,
+  sourceTableId: string,
+  sourceOrderId: string,
+): Record<string, unknown> {
+  const tid = sourceTableId.trim();
+  const oid = sourceOrderId.trim();
+  return {
+    ...item,
+    ...(tid ? { tableGroupSourceTableId: tid } : {}),
+    ...(oid ? { tableGroupSourceOrderId: oid } : {}),
+  };
+}
+
 function isPaymentRequestedAtSet(raw: unknown): boolean {
   if (raw == null) return false;
   if (typeof raw === "number" && Number.isFinite(raw)) return true;
@@ -254,10 +268,16 @@ export async function mergeOpenOrdersForTableGroup(
     }
   }
 
-  const destItems = asFirestoreRawItems(destData.items);
-  const flatSource = sources.flatMap((s) =>
-    asFirestoreRawItems((s.data() as { items?: unknown }).items),
+  const destItems = asFirestoreRawItems(destData.items).map((item) =>
+    withTableGroupLineOrigin(item, destTableId || mainId, destDoc.id),
   );
+  const flatSource = sources.flatMap((s) => {
+    const sourceData = s.data() as { items?: unknown; tableId?: unknown };
+    const sourceTableId = String(sourceData.tableId ?? "").trim();
+    return asFirestoreRawItems(sourceData.items).map((item) =>
+      withTableGroupLineOrigin(item, sourceTableId, s.id),
+    );
+  });
   const mergedItems = normalizeMergedFirestoreItems([...destItems, ...flatSource]);
   const mergedTotal = computeBillableTotalFromOrderDocLike({
     items: mergedItems,
@@ -310,10 +330,19 @@ export async function mergeOpenOrdersForTableGroup(
       updatedAt: serverTimestamp(),
     });
     for (const s of sources) {
+      const sourceData = s.data() as {
+        status?: unknown;
+        paymentRequestedAt?: unknown;
+      };
+      const originalStatus = String(sourceData.status ?? "").trim();
       batch.update(s.ref, {
         status: "merged",
         mergedIntoOrderId: destDoc.id,
         mergedIntoTableId: mainId,
+        ...(originalStatus ? { tableGroupMergeOriginalStatus: originalStatus } : {}),
+        ...(isPaymentRequestedAtSet(sourceData.paymentRequestedAt)
+          ? { tableGroupMergeOriginalPaymentRequestedAt: sourceData.paymentRequestedAt }
+          : {}),
         paymentRequestedAt: null,
         updatedAt: serverTimestamp(),
       });
