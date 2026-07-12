@@ -123,6 +123,28 @@ const MAP_JOIN_ARM_MS = 420;
 const MAP_JOIN_ARM_CANCEL_PX_SQ = 14 * 14;
 const MAP_JOIN_DRAG_START_PX_SQ = 8 * 8;
 
+function resolveJoinDragPreviewScale(
+  element: HTMLElement | null,
+  width: number,
+  height: number,
+  rotation: number,
+): number {
+  if (!element || width <= 0 || height <= 0) return 1;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return 1;
+
+  const radians = (Math.abs(rotation) % 180) * (Math.PI / 180);
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  const rotatedWidth = width * cos + height * sin;
+  const rotatedHeight = width * sin + height * cos;
+  const scaleX = rotatedWidth > 0 ? rect.width / rotatedWidth : 1;
+  const scaleY = rotatedHeight > 0 ? rect.height / rotatedHeight : 1;
+  const scale = (scaleX + scaleY) / 2;
+
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
 const RESERVAS_LIVE_SKINS: Record<
   "booked" | "seated" | "completed" | "no_show",
   { background: string; color: string; border: string }
@@ -302,6 +324,7 @@ export const ElementCard = memo(
     const [joinDragPreviewPos, setJoinDragPreviewPos] = useState<{
       x: number;
       y: number;
+      scale: number;
     } | null>(null);
     const [groupMenuOpen, setGroupMenuOpen] = useState(false);
     const [groupMenuPos, setGroupMenuPos] = useState<{
@@ -568,13 +591,25 @@ export const ElementCard = memo(
           ),
         );
 
-        setJoinDragPreviewPos({ x: e.clientX, y: e.clientY });
+        setJoinDragPreviewPos({
+          x: e.clientX,
+          y: e.clientY,
+          scale: resolveJoinDragPreviewScale(
+            tileElRef.current,
+            mapTileWidth,
+            mapTileHeight,
+            mapRotation,
+          ),
+        });
       },
       [
         clearJoinArmTimer,
         draggedJoinClusterMain,
         emitJoinAborted,
+        mapRotation,
         mapJoinDragEnabled,
+        mapTileHeight,
+        mapTileWidth,
         onMapTableJoinDrop,
         tableId,
       ],
@@ -1118,29 +1153,80 @@ export const ElementCard = memo(
                 position: "fixed",
                 left: joinDragPreviewPos.x,
                 top: joinDragPreviewPos.y,
-                transform: "translate(-50%, -50%) scale(1.06)",
+                transform: [
+                  "translate(-50%, -50%)",
+                  normalizedMapRotation !== 0
+                    ? `rotate(${normalizedMapRotation}deg)`
+                    : null,
+                  `scale(${joinDragPreviewPos.scale})`,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
+                transformOrigin: "center center",
                 width: mapTileWidth,
                 height: mapTileHeight,
                 boxSizing: "border-box",
                 borderRadius: tileBorderRadius,
-                background: skin.background,
-                border: "1px solid rgba(51, 65, 85, 0.32)",
+                background: effectiveSkin.background,
+                color: effectiveSkin.color,
+                border: reservasLiveSkin
+                  ? reservasLiveSkin.border
+                  : baseSurface === "hostly-map-table--free"
+                    ? "1px solid rgba(47, 93, 60, 0.22)"
+                    : baseSurface === "hostly-map-table--occupied"
+                      ? "1px solid rgba(45, 82, 97, 0.24)"
+                      : tileBorder,
                 opacity: 0.92,
                 pointerEvents: "none",
                 zIndex: 10100,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: 6,
+                padding: "8px",
                 boxShadow:
-                  "0 0 0 1px rgba(15, 23, 42, 0.1), 0 10px 24px rgba(15, 23, 42, 0.1), var(--hostly-shadow-float)",
+                  "0 0 0 1px rgba(15, 23, 42, 0.1), 0 8px 20px rgba(15, 23, 42, 0.1)",
                 transition: animationsOff
                   ? undefined
                   : "transform 90ms ease, opacity 90ms ease, box-shadow 120ms ease",
               }}
             >
+              {planType === "table" && showVisualChairs ? (
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 0,
+                    borderRadius: tileBorderRadius,
+                    overflow: "hidden",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {visualChairLayouts.map((layout, chairIdx) => (
+                    <span
+                      key={chairIdx}
+                      style={{
+                        position: "absolute",
+                        left: layout.left,
+                        top: layout.top,
+                        width: layout.width,
+                        height: layout.height,
+                        boxSizing: "border-box",
+                        borderRadius: 999,
+                        background: MAP_TABLE_CHAIR_FILL,
+                        border: MAP_TABLE_CHAIR_BORDER,
+                        boxShadow: MAP_TABLE_CHAIR_SHADOW,
+                        transform: `rotate(${layout.rotation}deg)`,
+                        transformOrigin: "center center",
+                        pointerEvents: "none",
+                      }}
+                    />
+                  ))}
+                </span>
+              ) : null}
               {groupCorner ? (
                 <span
+                  className="hostly-map-table-group-badge"
                   style={{
                     position: "absolute",
                     top: 5,
@@ -1152,8 +1238,9 @@ export const ElementCard = memo(
                     letterSpacing: "0.02em",
                     lineHeight: 1.15,
                     color: "#ffffff",
-                    background: "rgba(31, 41, 51, 0.88)",
+                    background: "rgba(31, 41, 51, 0.84)",
                     pointerEvents: "none",
+                    zIndex: 2,
                     boxShadow:
                       "0 1px 3px rgba(48, 39, 28, 0.18), 0 1px 1px rgba(0, 0, 0, 0.05)",
                   }}
@@ -1161,18 +1248,117 @@ export const ElementCard = memo(
                   {groupCorner}
                 </span>
               ) : null}
+              {showReserveCornerPill ? (
+                <span
+                  className="hostly-map-table-reserve-corner"
+                  style={{
+                    position: "absolute",
+                    top: 5,
+                    right: 5,
+                    padding: "3px 8px",
+                    borderRadius: 9999,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "0.02em",
+                    lineHeight: 1.15,
+                    color: "#4c3b5f",
+                    background: "rgba(247, 241, 255, 0.98)",
+                    border: "1px solid rgba(111, 78, 139, 0.2)",
+                    pointerEvents: "none",
+                    zIndex: 3,
+                    maxWidth: "calc(100% - 28px)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    boxShadow: "var(--hostly-shadow-card)",
+                  }}
+                >
+                  {reserveCornerLabel}
+                </span>
+              ) : null}
+              {alertDot ? (
+                <span
+                  className={`hostly-map-table-alert-dot hostly-map-table-alert-dot--${alertDot}`}
+                  style={{
+                    position: "absolute",
+                    top: showReserveCornerPill ? 21 : 5,
+                    right: 5,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 9999,
+                    background: ALERT_DOT_COLORS[alertDot],
+                    boxShadow:
+                      alertDot === "critical"
+                        ? "0 0 0 2px rgba(255,255,255,0.96), 0 1px 4px rgba(185, 76, 70, 0.28)"
+                        : "0 0 0 2px rgba(255,255,255,0.96), 0 1px 4px rgba(184, 121, 34, 0.24)",
+                    zIndex: 5,
+                    pointerEvents: "none",
+                  }}
+                />
+              ) : null}
               <div
                 style={{
-                  color: "#1f2933",
-                  fontSize: "clamp(19px, 4.75vw, 28px)",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  letterSpacing: "-0.03em",
-                  userSelect: "none",
                   pointerEvents: "none",
+                  position: "relative",
+                  zIndex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 3,
+                  minWidth: 0,
+                  maxWidth: "100%",
                 }}
               >
-                {tableNumber}
+                <div
+                  className="table-number"
+                  style={{
+                    color: "#17212b",
+                    fontSize: "clamp(22px, 5vw, 31px)",
+                    fontWeight: 820,
+                    lineHeight: 1,
+                    letterSpacing: "-0.03em",
+                    userSelect: "none",
+                  }}
+                >
+                  {tableNumber}
+                </div>
+                <span
+                  className="hostly-map-table-status-label"
+                  style={{
+                    color: "#4f6475",
+                    fontSize: "10.5px",
+                    fontWeight: 720,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.045em",
+                    lineHeight: 1.08,
+                    textAlign: "center",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: "100%",
+                  }}
+                >
+                  {statusLabel}
+                </span>
+                {reservationTimeDisplay ? (
+                  <span
+                    className="hostly-map-table-res-time"
+                    style={{
+                      color: "#5f4e72",
+                      fontSize: "10px",
+                      fontWeight: 760,
+                      lineHeight: 1.1,
+                      textAlign: "center",
+                      maxWidth: "100%",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {reservationTimeDisplay}
+                  </span>
+                ) : null}
               </div>
             </div>,
             document.body,
