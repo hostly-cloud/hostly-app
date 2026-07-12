@@ -31,6 +31,8 @@ export type SalaEditorHistoryActionKind =
   | "landscape.resize"
   | "landscape.delete"
   | "espacio.create"
+  | "espacio.duplicate"
+  | "espacio.reorder"
   | "espacio.update"
   | "history.navigation";
 

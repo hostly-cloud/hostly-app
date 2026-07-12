@@ -13,13 +13,24 @@ import {
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
+import type { DraggableAttributes } from "@dnd-kit/core";
+import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import type { SalaEspacio, SalaEspacioDraft } from "@/lib/sala-editor/types/espacio";
 import { salaEspacioTypeIcon } from "@/lib/sala-editor/catalog/espacio-types";
+
+export type SalaEspacioDragHandleProps = {
+  setActivatorNodeRef: (node: HTMLButtonElement | null) => void;
+  attributes: DraggableAttributes;
+  listeners: SyntheticListenerMap | undefined;
+  disabled?: boolean;
+};
 
 export type SalaEspacioCardProps = {
   espacio: SalaEspacio;
   espacios: SalaEspacio[];
   selected: boolean;
+  dragActive?: boolean;
+  dragHandleProps?: SalaEspacioDragHandleProps;
   elementCount: number;
   onSelect: () => void;
   onUpdateEspacio?: (patch: Partial<SalaEspacioDraft>) => void;
@@ -38,6 +49,8 @@ export function SalaEspacioCard({
   espacio,
   espacios,
   selected,
+  dragActive = false,
+  dragHandleProps,
   elementCount,
   onSelect,
   onUpdateEspacio,
@@ -214,11 +227,25 @@ export function SalaEspacioCard({
         "hostly-sala-editor-space-chip",
         selected ? "is-selected" : "",
         !espacio.active ? "is-inactive" : "",
+        dragActive ? "is-dragging" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       style={{ "--espacio-accent": espacio.color } as CSSProperties}
     >
+      {dragHandleProps ? (
+        <button
+          ref={dragHandleProps.setActivatorNodeRef}
+          type="button"
+          className="hostly-sala-editor-space-chip__drag-handle"
+          aria-label={`Reordenar espacio ${espacio.name}`}
+          disabled={dragHandleProps.disabled}
+          {...dragHandleProps.attributes}
+          {...dragHandleProps.listeners}
+        >
+          <span aria-hidden>⋮⋮</span>
+        </button>
+      ) : null}
       {selected && renaming ? (
         <form
           className="hostly-sala-editor-space-chip__main hostly-sala-editor-space-chip__rename-form"

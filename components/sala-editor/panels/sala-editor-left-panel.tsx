@@ -30,6 +30,8 @@ export type SalaEditorLeftPanelProps = {
   activeSurfaceMaterial?: SurfaceMaterialKind | null;
   onSelectEspacio: (espacioId: string) => void;
   onRequestAddEspacio: () => void;
+  onDuplicateEspacio?: (espacioId: string) => void;
+  onReorderEspacios?: (orderedEspacioIds: string[]) => void;
   onSelectStructuralTool: (kind: SalaStructuralElementKind) => void;
   onSelectZoneType: (type: ZoneType) => void;
   onSelectLandscapeKind: (kind: LandscapeElementKind) => void;
@@ -58,6 +60,8 @@ export function SalaEditorLeftPanel({
   activeSurfaceMaterial = null,
   onSelectEspacio,
   onRequestAddEspacio,
+  onDuplicateEspacio,
+  onReorderEspacios,
   onSelectStructuralTool,
   onSelectZoneType,
   onSelectLandscapeKind,
@@ -82,6 +86,8 @@ export function SalaEditorLeftPanel({
           onSelectEspacio={onSelectEspacio}
           onRequestAddEspacio={onRequestAddEspacio}
           onUpdateEspacio={onUpdateEspacio}
+          onDuplicateEspacio={onDuplicateEspacio}
+          onReorderEspacios={onReorderEspacios}
         />
       ) : null}
       <div className="hostly-sala-editor-left-panel__scroll">
@@ -94,6 +100,8 @@ export function SalaEditorLeftPanel({
             onSelectEspacio={onSelectEspacio}
             onRequestAddEspacio={onRequestAddEspacio}
             onUpdateEspacio={onUpdateEspacio}
+            onDuplicateEspacio={onDuplicateEspacio}
+            onReorderEspacios={onReorderEspacios}
           />
         ) : null}
         {phase === "base" ? (

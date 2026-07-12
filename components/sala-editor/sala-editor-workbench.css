@@ -1718,6 +1718,15 @@
   padding: 0;
 }
 
+.hostly-sala-editor-space-grid__item {
+  min-width: 0;
+  will-change: transform;
+}
+
+.hostly-sala-editor-space-grid__item.is-dragging {
+  z-index: 8;
+}
+
 .hostly-sala-editor-tool-chip {
   display: flex;
   width: 100%;
@@ -2186,12 +2195,62 @@
   align-items: center;
   gap: 0;
   border-radius: 11px;
-  transition: background-color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    box-shadow 160ms ease,
+    opacity 140ms ease,
+    transform 160ms ease;
 }
 
 .hostly-sala-editor-space-chip.is-selected {
   background: white;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+}
+
+.hostly-sala-editor-space-chip.is-dragging {
+  opacity: 0.68;
+  transform: scale(1.015);
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.14),
+    0 0 0 1px color-mix(in srgb, var(--espacio-accent, var(--hostly-accent)) 18%, rgba(148, 163, 184, 0.18));
+}
+
+.hostly-sala-editor-space-chip__drag-handle {
+  display: inline-flex;
+  min-width: 22px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: grab;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  touch-action: none;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.hostly-sala-editor-space-chip__drag-handle:hover,
+.hostly-sala-editor-space-chip__drag-handle:focus-visible {
+  background: color-mix(in srgb, var(--espacio-accent, var(--hostly-accent)) 9%, rgba(148, 163, 184, 0.12));
+  color: color-mix(in srgb, var(--espacio-accent, var(--hostly-accent)) 62%, #64748b);
+  outline: none;
+}
+
+.hostly-sala-editor-space-chip__drag-handle:active {
+  cursor: grabbing;
+  transform: scale(0.96);
+}
+
+.hostly-sala-editor-space-chip__drag-handle:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 .hostly-sala-editor-space-chip__main {
@@ -2306,6 +2365,44 @@
   font-weight: 800;
   color: #94a3b8;
   line-height: 12px;
+}
+
+.hostly-sala-editor-space-drag-overlay {
+  display: inline-flex;
+  min-width: 108px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--espacio-accent, var(--hostly-accent)) 24%, rgba(148, 163, 184, 0.24));
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 16px 34px rgba(15, 23, 42, 0.16),
+    0 4px 12px rgba(15, 23, 42, 0.08);
+  color: var(--hostly-ink-strong);
+  padding: 8px 10px;
+  pointer-events: none;
+  transform: scale(1.035);
+}
+
+.hostly-sala-editor-space-drag-overlay__icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  font-size: 16px;
+}
+
+.hostly-sala-editor-space-drag-overlay__name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hostly-sala-editor-space-chip__menu-trigger {

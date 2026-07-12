@@ -1284,6 +1284,45 @@ export function useSalaEditorDocument({
     }
   }, [historyApi]);
 
+  const reorderEspacios = useCallback((orderedEspacioIds: string[]) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      const orderById = new Map(
+        orderedEspacioIds.map((espacioId, index) => [espacioId, (index + 1) * 10]),
+      );
+      if (orderById.size === 0) return prev;
+
+      let changed = false;
+      const espacios = prev.espacios.map((espacio) => {
+        const nextSortOrder = orderById.get(espacio.id);
+        if (nextSortOrder == null || nextSortOrder === espacio.sortOrder) {
+          return espacio;
+        }
+        changed = true;
+        return {
+          ...espacio,
+          sortOrder: nextSortOrder,
+          updatedAt: Date.now(),
+        };
+      });
+
+      if (!changed) return prev;
+      previousDocument = prev;
+      nextDocument = {
+        ...prev,
+        espacios,
+        updatedAt: Date.now(),
+      };
+      return nextDocument;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("espacio.reorder", previousDocument, nextDocument);
+    }
+  }, [historyApi]);
+
   const updateEspacio = useCallback(
     (espacioId: string, patch: Partial<SalaEspacioDraft>) => {
       setDocument((prev) => {
@@ -1405,6 +1444,7 @@ export function useSalaEditorDocument({
     addEspacio,
     addEspacioAndSelect,
     duplicateEspacio,
+    reorderEspacios,
     updateEspacio,
     updateEspacioBase,
     addWall,
