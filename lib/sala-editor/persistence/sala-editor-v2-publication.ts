@@ -28,9 +28,20 @@ export type SalaEditorV2PublicationSkippedItem = {
   name: string;
   reason:
     | "missing_legacy_table_id"
+    | "unsafe_floor_plan"
+    | "invalid_name"
+    | "duplicate_table_number"
     | "duplicate_legacy_table_id"
     | "legacy_table_not_found"
     | "restaurant_mismatch";
+};
+
+export type SalaEditorV2PublishedOperationalTableLink = {
+  instanceId: string;
+  legacyTableIdBefore: string | null;
+  legacyTableIdAfter: string;
+  floorPlanId: string;
+  action: "create" | "reuse";
 };
 
 export type SalaEditorV2PublicationFloorPlanWarning = {
@@ -130,6 +141,7 @@ export type SalaEditorV2PublicationResult = {
   skippedLegacyDecorativeTables: SalaEditorV2PublicationSkippedLegacyDecorative[];
   decorativeAudit: SalaEditorV2PublicationDecorativeAuditItem[];
   unsafeFloorPlanTables: SalaEditorV2PublicationFloorPlanWarning[];
+  newOperationalTableLinks: SalaEditorV2PublishedOperationalTableLink[];
 };
 
 const FIRESTORE_BATCH_LIMIT = 450;
@@ -208,6 +220,7 @@ const SAFE_WRITE_PAYLOAD_KEYS = [
   "height",
   "source",
   "editorV2ElementId",
+  "editorV2InstanceId",
   "editorV2ElementType",
   "locked",
 ] as const;
@@ -600,6 +613,27 @@ function stableLegacyDecorativeId(sourceType: string, elementId: string): string
 
 function isGeneratedV2DecorativeId(tableId: string): boolean {
   return tableId.startsWith("v2-map-");
+}
+
+function stableLegacyOperationalTableIdFromV2Instance(instanceId: string): string {
+  const stable = instanceId
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return stable ? `v2-table-${stable}` : "";
+}
+
+function isGeneratedV2OperationalTableId(tableId: string): boolean {
+  return tableId.startsWith("v2-table-");
+}
+
+function normalizeOperationalTableIdentityKey(name: string): string {
+  const normalized = name
+    .trim()
+    .toLocaleLowerCase("es")
+    .replace(/\s+/g, " ");
+  const numeric = /^mesa\s+(\d+)$/.exec(normalized)?.[1] ?? /^#?(\d+)$/.exec(normalized)?.[1];
+  return numeric ? `mesa:${numeric}` : `name:${normalized}`;
 }
 
 function finiteNumber(value: unknown): value is number {
@@ -1106,6 +1140,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       skippedLegacyDecorativeTables: [],
       decorativeAudit: [],
       unsafeFloorPlanTables: [],
+      newOperationalTableLinks: [],
     };
   }
 
@@ -1146,6 +1181,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   const skippedLegacyDecorativeTables: SalaEditorV2PublicationSkippedLegacyDecorative[] = [];
   const decorativeAudit: SalaEditorV2PublicationDecorativeAuditItem[] = [];
   const unsafeFloorPlanTables: SalaEditorV2PublicationFloorPlanWarning[] = [];
+  const newOperationalTableLinks: SalaEditorV2PublishedOperationalTableLink[] = [];
   const spacesById = new Map(document.espacios.map((space) => [space.id, space]));
   const safeFloorPlanIds = new Set<string>();
   const spacesByLegacyFloorPlanId = new Map<string, typeof document.espacios>();
@@ -1978,20 +2014,193 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   }
 
   const seenLegacyTableIds = new Set<string>();
+  const newOperationalTablePublishLogs: Array<{
+    spaceId: string | null;
+    floorPlanId: string | null;
+    instanceId: string;
+    tableNumber: string | null;
+    generatedDocumentId: string | null;
+    action: "create" | "reuse" | "conflict" | "skip";
+    legacyTableIdBefore: string | null;
+    legacyTableIdAfter: string | null;
+    reason?: string;
+  }> = [];
+
   for (const instance of document.operationalElementInstances) {
     if (instance.elementType !== "TABLE") {
       continue;
     }
 
-    const legacyTableId = readLegacyTableId(instance.metadata);
+    let legacyTableId = readLegacyTableId(instance.metadata);
+    const linkedSpace = spacesById.get(instance.spaceId);
+    const resolvedFloorPlanId = linkedSpace
+      ? resolveSafeFloorPlanIdForSpace(linkedSpace.id)
+      : readLegacyFloorPlanId(instance.metadata);
+    const tableName = instance.name.trim();
+
     if (!legacyTableId) {
-      skippedTables.push({
-        id: instance.id,
-        name: instance.name,
-        reason: "missing_legacy_table_id",
+      const generatedTableId = stableLegacyOperationalTableIdFromV2Instance(instance.id);
+      const logBase = {
+        spaceId: linkedSpace?.id ?? null,
+        floorPlanId: resolvedFloorPlanId ?? null,
+        instanceId: instance.id,
+        tableNumber: tableName || null,
+        generatedDocumentId: generatedTableId || null,
+        legacyTableIdBefore: null,
+      };
+
+      if (!tableName) {
+        skippedTables.push({
+          id: instance.id,
+          name: instance.name,
+          reason: "invalid_name",
+        });
+        newOperationalTablePublishLogs.push({
+          ...logBase,
+          action: "skip",
+          legacyTableIdAfter: null,
+          reason: "invalid_name",
+        });
+        continue;
+      }
+
+      if (!generatedTableId) {
+        skippedTables.push({
+          id: instance.id,
+          name: instance.name,
+          reason: "missing_legacy_table_id",
+        });
+        newOperationalTablePublishLogs.push({
+          ...logBase,
+          action: "skip",
+          legacyTableIdAfter: null,
+          reason: "invalid_generated_id",
+        });
+        continue;
+      }
+
+      if (!resolvedFloorPlanId || !safeFloorPlanIds.has(resolvedFloorPlanId)) {
+        skippedTables.push({
+          id: instance.id,
+          name: instance.name,
+          reason: "unsafe_floor_plan",
+        });
+        if (resolvedFloorPlanId) {
+          unsafeFloorPlanTables.push({
+            id: instance.id,
+            name: instance.name,
+            legacyTableId: generatedTableId,
+            floorPlanId: resolvedFloorPlanId,
+          });
+        }
+        newOperationalTablePublishLogs.push({
+          ...logBase,
+          action: "skip",
+          legacyTableIdAfter: null,
+          reason: "unsafe_floor_plan",
+        });
+        continue;
+      }
+
+      const generatedIdExisting = queriedTableDocs.find(
+        (tableDoc) => tableDoc.id === generatedTableId,
+      );
+      const isSameEditorV2Instance = (data: Record<string, unknown>) =>
+        stringOrEmpty(data.source) === "editor-v2" &&
+        (stringOrEmpty(data.editorV2ElementId) === instance.id ||
+          stringOrEmpty(data.editorV2InstanceId) === instance.id ||
+          stringOrEmpty((data.metadata as Record<string, unknown> | undefined)?.editorV2InstanceId) ===
+            instance.id);
+
+      if (generatedIdExisting && !isSameEditorV2Instance(generatedIdExisting.data)) {
+        skippedTables.push({
+          id: instance.id,
+          name: instance.name,
+          reason: "duplicate_legacy_table_id",
+        });
+        newOperationalTablePublishLogs.push({
+          ...logBase,
+          action: "conflict",
+          legacyTableIdAfter: null,
+          reason: `generated_id_collision:${generatedTableId}`,
+        });
+        continue;
+      }
+
+      const sameInstanceExisting = queriedTableDocs.find((tableDoc) => {
+        const data = tableDoc.data;
+        return isSameEditorV2Instance(data);
       });
-      continue;
+      if (sameInstanceExisting) {
+        if (stringOrEmpty(sameInstanceExisting.data.restaurantId) !== restaurantId) {
+          skippedTables.push({
+            id: instance.id,
+            name: instance.name,
+            reason: "restaurant_mismatch",
+          });
+          newOperationalTablePublishLogs.push({
+            ...logBase,
+            action: "skip",
+            legacyTableIdAfter: null,
+            reason: "restaurant_mismatch",
+          });
+          continue;
+        }
+        legacyTableId = sameInstanceExisting.id;
+        newOperationalTableLinks.push({
+          instanceId: instance.id,
+          legacyTableIdBefore: null,
+          legacyTableIdAfter: legacyTableId,
+          floorPlanId: resolvedFloorPlanId,
+          action: "reuse",
+        });
+        newOperationalTablePublishLogs.push({
+          ...logBase,
+          generatedDocumentId: legacyTableId,
+          action: "reuse",
+          legacyTableIdAfter: legacyTableId,
+        });
+      } else {
+        const identityKey = normalizeOperationalTableIdentityKey(tableName);
+        const conflictingTable = queriedTableDocs.find((tableDoc) => {
+          const data = tableDoc.data;
+          if (stringOrEmpty(data.restaurantId) !== restaurantId) return false;
+          if (data.isActive === false) return false;
+          if ((stringOrEmpty(data.type) || "table") !== "table") return false;
+          if (stringOrEmpty(data.floorPlanId) !== resolvedFloorPlanId) return false;
+          return normalizeOperationalTableIdentityKey(stringOrEmpty(data.name)) === identityKey;
+        });
+        if (conflictingTable) {
+          skippedTables.push({
+            id: instance.id,
+            name: instance.name,
+            reason: "duplicate_table_number",
+          });
+          newOperationalTablePublishLogs.push({
+            ...logBase,
+            action: "conflict",
+            legacyTableIdAfter: null,
+            reason: `same_floor_plan_table:${conflictingTable.id}`,
+          });
+          continue;
+        }
+
+        legacyTableId = generatedTableId;
+        newOperationalTableLinks.push({
+          instanceId: instance.id,
+          legacyTableIdBefore: null,
+          legacyTableIdAfter: legacyTableId,
+          floorPlanId: resolvedFloorPlanId,
+          action: "create",
+        });
+        newOperationalTablePublishLogs.push({
+          ...logBase,
+          action: "create",
+          legacyTableIdAfter: legacyTableId,
+        });
+      }
     }
+
     if (seenLegacyTableIds.has(legacyTableId)) {
       skippedTables.push({
         id: instance.id,
@@ -2003,30 +2212,38 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     seenLegacyTableIds.add(legacyTableId);
 
     const ref = doc(db, "tables", legacyTableId);
-    rememberLastFirestoreReadOperation({
-      operation: "getDoc",
-      documentPath: ref.path,
-      collectionName: "tables",
-      restaurantId,
-    });
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      skippedTables.push({
-        id: instance.id,
-        name: instance.name,
-        reason: "legacy_table_not_found",
+    const isGeneratedNewOperationalTable =
+      isGeneratedV2OperationalTableId(legacyTableId) &&
+      newOperationalTableLinks.some(
+        (link) => link.instanceId === instance.id && link.legacyTableIdAfter === legacyTableId,
+      );
+    let existing: Record<string, unknown> | null = null;
+    if (!isGeneratedNewOperationalTable) {
+      rememberLastFirestoreReadOperation({
+        operation: "getDoc",
+        documentPath: ref.path,
+        collectionName: "tables",
+        restaurantId,
       });
-      continue;
-    }
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        skippedTables.push({
+          id: instance.id,
+          name: instance.name,
+          reason: "legacy_table_not_found",
+        });
+        continue;
+      }
 
-    const existing = snap.data() as Record<string, unknown>;
-    if (stringOrEmpty(existing.restaurantId) !== restaurantId) {
-      skippedTables.push({
-        id: instance.id,
-        name: instance.name,
-        reason: "restaurant_mismatch",
-      });
-      continue;
+      existing = snap.data() as Record<string, unknown>;
+      if (stringOrEmpty(existing.restaurantId) !== restaurantId) {
+        skippedTables.push({
+          id: instance.id,
+          name: instance.name,
+          reason: "restaurant_mismatch",
+        });
+        continue;
+      }
     }
 
     const size = getOperationalInstanceCanvasSize(instance);
@@ -2050,10 +2267,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     const tableShape = readTableShape(instance.metadata);
     if (tableShape) payload.tableShape = tableShape;
 
-    const linkedSpace = spacesById.get(instance.spaceId);
-    const floorPlanId = linkedSpace
-      ? resolveSafeFloorPlanIdForSpace(linkedSpace.id)
-      : readLegacyFloorPlanId(instance.metadata);
+    const floorPlanId = resolvedFloorPlanId;
     if (floorPlanId && safeFloorPlanIds.has(floorPlanId)) {
       payload.floorPlanId = floorPlanId;
     } else if (floorPlanId) {
@@ -2065,13 +2279,39 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       });
     }
 
+    if (isGeneratedNewOperationalTable) {
+      payload.id = legacyTableId;
+      payload.type = "table";
+      payload.status = TABLE_MAP_STATUS_FREE;
+      payload.isActive = true;
+      payload.source = "editor-v2";
+      payload.editorV2ElementId = instance.id;
+      payload.editorV2InstanceId = instance.id;
+      payload.editorV2ElementType = "operational:TABLE";
+      payload.metadata = {
+        legacyTableId,
+        source: "editor-v2",
+        editorV2ElementId: instance.id,
+        editorV2InstanceId: instance.id,
+        editorV2ElementType: "operational:TABLE",
+      };
+      if (!payload.tableShape) payload.tableShape = "square";
+      if (!payload.seats) payload.seats = Math.max(1, Math.round(instance.capacity || 1));
+    }
+
     tableWrites.push({
       ref,
       data: payload,
-      mode: "update",
+      mode: isGeneratedNewOperationalTable ? "setMerge" : "update",
       diagnosticLabel: "operationalTable:update",
-      existingRestaurantId: stringOrEmpty(existing.restaurantId) || null,
+      existingRestaurantId: existing ? stringOrEmpty(existing.restaurantId) || null : null,
     });
+  }
+
+  if (newOperationalTablePublishLogs.length > 0) {
+    console.groupCollapsed("[SalaEditorV2][NewOperationalTablePublish]");
+    console.table(newOperationalTablePublishLogs);
+    console.groupEnd();
   }
 
   const writeFloorPlanId = (write: PublicationWrite | undefined): string | null => {
@@ -2085,12 +2325,17 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   const decorativeWriteById = new Map(
     decorativeWrites.map((write) => [write.ref.id, write]),
   );
+  const newOperationalTableLinkByInstanceId = new Map(
+    newOperationalTableLinks.map((link) => [link.instanceId, link]),
+  );
 
   const publishSpaceAudit = document.espacios.map((space) => {
     const tableWritesForSpace = document.operationalElementInstances
       .filter((instance) => instance.elementType === "TABLE" && instance.spaceId === space.id)
       .map((instance) => {
-        const legacyTableId = readLegacyTableId(instance.metadata);
+        const newLink = newOperationalTableLinkByInstanceId.get(instance.id);
+        const legacyTableId =
+          readLegacyTableId(instance.metadata) || newLink?.legacyTableIdAfter || "";
         const write = legacyTableId ? tableWriteById.get(legacyTableId) : undefined;
         return {
           id: instance.id,
@@ -2232,5 +2477,6 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     skippedLegacyDecorativeTables,
     decorativeAudit,
     unsafeFloorPlanTables,
+    newOperationalTableLinks,
   };
 }
