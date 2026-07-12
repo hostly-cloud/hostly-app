@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import type { HostlyCapability } from "@/lib/auth/hostly-capabilities";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
+import { HostlyBrandMark } from "@/components/brand/hostly-brand";
 import { HostlyKpiCard, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import { DEFAULT_RESTAURANT_NAME } from "@/lib/firestore/user-restaurant-profile";
 import { getRestaurantById } from "@/lib/firestore/restaurants";
@@ -674,11 +674,10 @@ export default function DashboardPage() {
         <div className="hostly-dashboard-command-center">
           <header className="hostly-dashboard-command-header">
             <div className="hostly-dashboard-command-brand">
-              <HostlyBrandLockup
-                className="hostly-dashboard-brand-lockup"
+              <HostlyBrandMark
+                className="hostly-dashboard-brand-mark"
                 size={34}
                 tone="app"
-                wordmarkClassName="hostly-dashboard-brand-lockup__wordmark"
               />
               <div className="min-w-0">
                 <p className="hostly-dashboard-command-eyebrow">{homeTitleText}</p>

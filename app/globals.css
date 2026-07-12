@@ -2968,26 +2968,8 @@ body {
   gap: var(--hostly-op-gap-md);
 }
 
-.hostly-dashboard-brand-lockup {
+.hostly-dashboard-brand-mark {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--hostly-navy-deep);
-}
-
-.hostly-dashboard-brand-lockup__wordmark {
-  display: none;
-  font-size: 15px;
-  font-weight: 850;
-  letter-spacing: -0.04em;
-  color: var(--hostly-ink-strong);
-}
-
-@media (min-width: 768px) {
-  .hostly-dashboard-brand-lockup__wordmark {
-    display: inline-flex;
-  }
 }
 
 .hostly-dashboard-command-eyebrow {
@@ -6686,19 +6668,8 @@ body {
 }
 
 .hostly-config-hub__brand {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 7px;
+  flex: 0 0 auto;
   margin-bottom: 1px;
-  color: var(--hostly-navy-deep);
-}
-
-.hostly-config-hub__brand-wordmark {
-  font-size: 13px;
-  font-weight: 850;
-  letter-spacing: -0.04em;
-  color: var(--hostly-ink-strong);
 }
 
 .hostly-config-hub__eyebrow {

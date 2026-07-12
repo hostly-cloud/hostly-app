@@ -28,11 +28,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/branding/favicon.ico", sizes: "32x32" },
-      { url: "/branding/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/branding/symbol.svg", type: "image/svg+xml" },
+      { url: "/brand/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/brand/hostly-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/brand/hostly-icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/branding/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     title: "Hostly",
@@ -71,8 +71,8 @@ export default function RootLayout({
     >
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
-        <link rel="icon" href="/branding/favicon.ico" sizes="32x32" />
-        <link rel="apple-touch-icon" href="/branding/apple-touch-icon.png" />
+        <link rel="icon" href="/brand/favicon-32.png" type="image/png" sizes="32x32" />
+        <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" sizes="180x180" />
         <meta name="theme-color" content="#0B1220" />
       </head>
       <body className="min-h-full flex flex-col">

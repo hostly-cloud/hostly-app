@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { authErrorMessage, login, logout, register } from "@/lib/auth/auth";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { useAuth } from "@/components/auth/auth-context";
-import { HostlyBrandMark } from "@/components/brand/hostly-brand";
+import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
 
 const DEFAULT_NEXT = "/dashboard";
 
@@ -368,17 +368,7 @@ function LoginPageContent() {
         >
           <header className="hostly-mobile-header" style={{ paddingLeft: 0, paddingRight: 0, textAlign: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-              <HostlyBrandMark size={48} tone="premium" />
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  letterSpacing: "0.2em",
-                  color: "var(--hostly-navy-deep)",
-                }}
-              >
-                HOSTLY
-              </span>
+              <HostlyBrandLockup size={54} tone="app" />
             </div>
             <h1 className="hostly-mobile-title" style={{ textAlign: "center", marginTop: 16 }}>
               Sesión activa
@@ -472,18 +462,7 @@ function LoginPageContent() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <HostlyBrandMark size={58} tone="premium" />
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 800,
-                letterSpacing: "0.22em",
-                color: "var(--hostly-navy-deep)",
-                lineHeight: 1.2,
-              }}
-            >
-              HOSTLY
-            </div>
+            <HostlyBrandLockup size={60} tone="app" />
             <p
               style={{
                 margin: 0,

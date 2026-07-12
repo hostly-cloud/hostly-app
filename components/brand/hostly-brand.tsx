@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 
 export type HostlyBrandMarkTone = "app" | "premium" | "mono";
+export const HOSTLY_LOGO_SRC = "/brand/hostly-logo.png";
+export const HOSTLY_MARK_SRC = "/brand/hostly-mark.png";
 
 type HostlyBrandMarkProps = {
   size?: number;
@@ -11,67 +13,31 @@ type HostlyBrandMarkProps = {
 
 type HostlyBrandLockupProps = HostlyBrandMarkProps & {
   showWordmark?: boolean;
+  /** Compatibilidad con consumidores antiguos; el asset oficial ya incluye wordmark. */
   wordmarkClassName?: string;
 };
 
 export function HostlyBrandMark({
   size = 40,
-  tone = "app",
   className,
   style,
 }: HostlyBrandMarkProps) {
-  const gradientId = `hostly-brand-${tone}`;
-  const isMono = tone === "mono";
-  const start = tone === "premium" ? "#55A8D5" : "#3D8AB8";
-  const end = "#0F2744";
-
   return (
-    <svg
+    <img
+      src={HOSTLY_MARK_SRC}
+      alt="Hostly"
       width={size}
       height={size}
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
       className={className}
-      style={style}
-    >
-      <rect
-        x="2"
-        y="2"
-        width="60"
-        height="60"
-        rx="17"
-        fill={isMono ? "currentColor" : `url(#${gradientId})`}
-      />
-      <path
-        d="M18.5 18.5h8v20h20v-20h8v26.5c0 5.8-4.7 10.5-10.5 10.5h-5.5v-9h-12v9h-8V18.5Z"
-        fill={isMono ? "var(--hostly-surface-card-solid, #fff)" : "#fff"}
-      />
-      <path
-        d="M26.5 47h12"
-        stroke={isMono ? "var(--hostly-surface-card-solid, #fff)" : "#DDF3FF"}
-        strokeWidth="5.5"
-        strokeLinecap="round"
-        opacity="0.72"
-      />
-      {!isMono ? (
-        <defs>
-          <linearGradient id={gradientId} x1="10" y1="7" x2="57" y2="60" gradientUnits="userSpaceOnUse">
-            <stop stopColor={start} />
-            <stop offset="1" stopColor={end} />
-          </linearGradient>
-        </defs>
-      ) : null}
-    </svg>
-  );
-}
-
-export function HostlyWordmark({ className, style }: { className?: string; style?: CSSProperties }) {
-  return (
-    <span className={className} style={style}>
-      Hostly
-    </span>
+      style={{
+        display: "block",
+        width: size,
+        height: size,
+        flexShrink: 0,
+        objectFit: "contain",
+        ...style,
+      }}
+    />
   );
 }
 
@@ -81,12 +47,30 @@ export function HostlyBrandLockup({
   className,
   style,
   showWordmark = true,
-  wordmarkClassName,
 }: HostlyBrandLockupProps) {
+  if (!showWordmark) {
+    return <HostlyBrandMark size={size} tone={tone} className={className} style={style} />;
+  }
+
+  const width = Math.round(size * 4.25);
+
   return (
-    <span className={className} style={style}>
-      <HostlyBrandMark size={size} tone={tone} />
-      {showWordmark ? <HostlyWordmark className={wordmarkClassName} /> : null}
-    </span>
+    <img
+      src={HOSTLY_LOGO_SRC}
+      alt="Hostly"
+      width={width}
+      height={size}
+      className={className}
+      style={{
+        display: "block",
+        width,
+        height: size,
+        maxWidth: "100%",
+        flexShrink: 0,
+        objectFit: "contain",
+        objectPosition: "center",
+        ...style,
+      }}
+    />
   );
 }

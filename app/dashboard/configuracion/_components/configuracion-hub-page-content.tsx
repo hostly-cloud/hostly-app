@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
+import { HostlyBrandMark } from "@/components/brand/hostly-brand";
 
 type HubCard = {
   id: string;
@@ -139,11 +139,10 @@ export function ConfiguracionHubPageContent() {
     >
       <div className="hostly-config-hub">
         <header className="hostly-config-hub__header">
-          <HostlyBrandLockup
+          <HostlyBrandMark
             className="hostly-config-hub__brand"
             size={28}
             tone="app"
-            wordmarkClassName="hostly-config-hub__brand-wordmark"
           />
           <p className="hostly-config-hub__eyebrow">Centro de preparación</p>
           <h1 className="hostly-config-hub__title">Configuración</h1>

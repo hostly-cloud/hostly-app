@@ -9,19 +9,16 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     icons: [
       {
-        src: "/branding/icon-192.png",
+        src: "/brand/hostly-icon-192.png",
         sizes: "192x192",
         type: "image/png",
+        purpose: "any",
       },
       {
-        src: "/branding/icon-512.png",
+        src: "/brand/hostly-icon-512.png",
         sizes: "512x512",
         type: "image/png",
-      },
-      {
-        src: "/branding/symbol.svg",
-        sizes: "any",
-        type: "image/svg+xml",
+        purpose: "any",
       },
     ],
     theme_color: "#0B1220",
