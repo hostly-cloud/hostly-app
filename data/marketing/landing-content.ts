@@ -5,13 +5,13 @@ import {
   CalendarDays,
   ChefHat,
   ClipboardList,
+  CreditCard,
   Layers,
-  MessageSquareWarning,
   Package,
   Receipt,
-  Sparkles,
+  ShieldCheck,
+  Store,
   Timer,
-  TrendingDown,
   Users,
   UtensilsCrossed,
   Wallet,
@@ -23,23 +23,11 @@ export type MarketingNavItem = {
   href: string;
 };
 
-export type MarketingFeatureCard = {
+export type MarketingCard = {
   icon: LucideIcon;
   title: string;
   description: string;
-  detail: string;
-};
-
-export type MarketingProblem = {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-};
-
-export type MarketingBenefit = {
-  icon: LucideIcon;
-  title: string;
-  description: string;
+  detail?: string;
 };
 
 export type MarketingTestimonial = {
@@ -49,6 +37,12 @@ export type MarketingTestimonial = {
   venue: string;
 };
 
+export type MarketingFlowStep = {
+  step: string;
+  title: string;
+  description: string;
+};
+
 export type MarketingAiFeature = {
   icon: LucideIcon;
   title: string;
@@ -56,24 +50,55 @@ export type MarketingAiFeature = {
   badge?: string;
 };
 
+export const demoMailHref = "mailto:hola@hostlyapp.app?subject=Solicitar%20demo%20Hostly";
+
 export const marketingNav: MarketingNavItem[] = [
   { label: "Producto", href: "#producto" },
-  { label: "Solución", href: "#solucion" },
-  { label: "Visión IA", href: "#ia" },
-  { label: "Beneficios", href: "#beneficios" },
+  { label: "Flujo", href: "#flujo" },
+  { label: "IA", href: "#ia" },
+  { label: "Negocios", href: "#negocios" },
 ];
 
 export const marketingHero = {
-  eyebrow: "Plataforma operativa para hostelería",
-  headline: "Controla tu restaurante desde un único sistema visual.",
+  eyebrow: "TPV SaaS para hostelería real",
+  headline: "Opera sala, cocina y caja con menos fricción.",
   subcopy:
-    "TPV, carta, mesas y operación conectados para que sala, barra y cocina trabajen con el mismo contexto.",
-  primaryCta: { label: "Empezar con Hostly", href: "/login" },
+    "Hostly conecta TPV táctil, mesas, comandas, carta, reservas y pagos para que tu equipo trabaje rápido durante el servicio.",
+  primaryCta: { label: "Solicitar demo", href: demoMailHref },
   secondaryCta: { label: "Ver producto", href: "#producto" },
-  trustLine: "Diseñado para restaurantes, terrazas, beach clubs, hoteles y negocios con varios espacios.",
+  trustLine:
+    "Diseñado para restaurantes, bares, terrazas, beach clubs y negocios con servicio en mesa.",
+  proofPoints: ["TPV táctil", "Sala + cocina/barra", "Carta, reservas y pagos"],
 };
 
-export const marketingProblems: MarketingProblem[] = [
+export const marketingKeyBenefits: MarketingCard[] = [
+  {
+    icon: Wallet,
+    title: "Cobra más rápido",
+    description:
+      "Flujos táctiles para vender, revisar la cuenta y cerrar mesa sin pasos innecesarios.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Reduce errores",
+    description:
+      "Sala, cocina y barra trabajan con la misma información de cada comanda.",
+  },
+  {
+    icon: Users,
+    title: "Forma al equipo antes",
+    description:
+      "Pantallas claras para que nuevos empleados aprendan el servicio sin manuales eternos.",
+  },
+  {
+    icon: Layers,
+    title: "Controla la operación",
+    description:
+      "Mesas, carta, reservas y cobros conectados en una misma plataforma.",
+  },
+];
+
+export const marketingProblems: MarketingCard[] = [
   {
     icon: Layers,
     title: "Operación fragmentada",
@@ -85,12 +110,12 @@ export const marketingProblems: MarketingProblem[] = [
     description: "Terraza, salón, barra y reservas no siempre reflejan lo que ocurre en servicio.",
   },
   {
-    icon: TrendingDown,
+    icon: BarChart3,
     title: "Carta desconectada",
     description: "Productos, precios, categorías y cocina cambian sin una base común.",
   },
   {
-    icon: MessageSquareWarning,
+    icon: Timer,
     title: "Demasiados clics",
     description: "Cada paso extra entre pedido, cocina y cobro ralentiza la operación.",
   },
@@ -101,144 +126,188 @@ export const marketingProblems: MarketingProblem[] = [
   },
 ];
 
-export const marketingSolutionIntro = {
-  eyebrow: "Sistema visual conectado",
-  title: "TPV, carta, mesas y operación trabajando juntos.",
+export const marketingProductIntro = {
+  eyebrow: "Producto",
+  title: "Todo lo que ocurre durante el servicio, en una sola operación.",
   description:
-    "Hostly centraliza la operativa diaria en una plataforma SaaS diseñada para hostelería real: menos clics, más contexto y control desde la sala hasta la gestión.",
+    "Hostly empieza por el núcleo diario del restaurante: vender, enviar comandas, mover mesas, coordinar cocina y cobrar con confianza.",
 };
 
-export const marketingFeatures: MarketingFeatureCard[] = [
+export const marketingProductModules: MarketingCard[] = [
   {
     icon: Receipt,
-    title: "TPV táctil",
-    description: "Venta, cobros, descuentos y mesas en un flujo rápido para horas punta.",
-    detail: "Caja y sala",
+    title: "TPV rápido",
+    description:
+      "Añade productos, modifica cantidades, aplica descuentos y cobra desde una interfaz pensada para horas punta.",
+    detail: "Venta táctil",
+  },
+  {
+    icon: Layers,
+    title: "Mesas y plano",
+    description:
+      "Visualiza salón, terraza, barra o beach club con estados claros y acceso rápido a cada cuenta.",
+    detail: "Sala visual",
+  },
+  {
+    icon: ChefHat,
+    title: "Cocina y barra / KDS",
+    description:
+      "Comandas ordenadas por estación, tiempos visibles y menos confusión entre sala, cocina y barra.",
+    detail: "Pase coordinado",
   },
   {
     icon: UtensilsCrossed,
     title: "Carta y productos",
-    description: "Platos, bebidas, categorías, precios y configuración comercial desde una base común.",
+    description:
+      "Gestiona platos, bebidas, categorías, precios y disponibilidad desde una base común.",
     detail: "Carta conectada",
   },
   {
-    icon: Layers,
-    title: "Mapas visuales",
-    description: "Salón, terraza, barra o beach club representados de forma clara para operar mejor.",
-    detail: "Vista de sala",
+    icon: CalendarDays,
+    title: "Reservas",
+    description:
+      "Organiza próximas reservas y relaciónalas con la capacidad real de sala.",
+    detail: "Capacidad real",
   },
   {
-    icon: Users,
-    title: "Operación por mesas",
-    description: "Mesas, comandas, estados y equipo conectados con el mismo contexto operativo.",
-    detail: "Servicio conectado",
-  },
-  {
-    icon: ClipboardList,
-    title: "Editor de espacios en evolución",
-    description: "Hostly avanza hacia un editor visual por capas para terreno, estructura y operación.",
-    detail: "Producto en desarrollo",
-  },
-  {
-    icon: ChefHat,
-    title: "Cocina y barra",
-    description: "Comandas claras, estados visibles y pase coordinado entre equipos.",
-    detail: "Menos errores",
-  },
-  {
-    icon: Package,
-    title: "Inventario y compras",
-    description: "Stock, proveedores y consumo alineados con lo que se vende en el restaurante.",
-    detail: "Control de costes",
-  },
-  {
-    icon: Sparkles,
-    title: "IA en evolución",
-    description: "Hostly está preparado para incorporar asistencia inteligente donde aporte valor real.",
-    detail: "Visión producto",
+    icon: CreditCard,
+    title: "Pagos",
+    description:
+      "Cobra por mesa, revisa importes y mantiene el cierre conectado con la operación diaria.",
+    detail: "Caja clara",
   },
 ];
 
-export const marketingAi = {
-  eyebrow: "Visión con IA",
-  title: "Preparado para una operación más inteligente.",
+export const marketingFlow = {
+  eyebrow: "Flujo operativo",
+  title: "Del pedido al cobro sin perder contexto.",
   description:
-    "La IA en Hostly se plantea como una capa práctica sobre datos reales del restaurante: primero ayuda donde reduce carga manual, después crecerá hacia flujos más asistidos.",
+    "Hostly está pensado para que cada paso del servicio tenga continuidad: la mesa, la comanda, cocina, barra y caja leen la misma operación.",
+  steps: [
+    {
+      step: "01",
+      title: "Toma el pedido",
+      description: "El camarero abre la mesa, añade productos y ve la cuenta sin cambiar de herramienta.",
+    },
+    {
+      step: "02",
+      title: "Envía a cocina y barra",
+      description: "Cada línea llega a su estación con estado, tiempo y prioridad visibles.",
+    },
+    {
+      step: "03",
+      title: "Sigue la sala",
+      description: "Mesas, reservas y estados ayudan al equipo a entender qué necesita atención.",
+    },
+    {
+      step: "04",
+      title: "Cobra y cierra",
+      description: "La cuenta se revisa, se cobra y queda conectada al cierre operativo del día.",
+    },
+  ] satisfies MarketingFlowStep[],
+};
+
+export const marketingAi = {
+  eyebrow: "IA prudente",
+  title: "IA útil, sin prometer magia.",
+  description:
+    "Hostly incorpora IA donde reduce trabajo real: importar una carta desde una foto, ordenar productos y ayudar a revisar información antes de publicarla. Las automatizaciones avanzadas llegarán solo cuando aporten control, no ruido.",
   features: [
     {
       icon: UtensilsCrossed,
       title: "Importar carta por foto",
-      description: "Convierte cartas existentes en una base de productos más fácil de revisar y ordenar.",
+      description:
+        "Convierte una carta existente en productos revisables antes de publicarlos.",
       badge: "Disponible en carta",
     },
     {
+      icon: ClipboardList,
+      title: "Revisión antes de publicar",
+      description:
+        "La IA ayuda a ordenar datos, pero el restaurante mantiene el control final.",
+      badge: "Control humano",
+    },
+    {
       icon: BrainCircuit,
-      title: "Análisis inteligente",
-      description: "Lecturas y recomendaciones sobre ventas, márgenes y operación diaria.",
+      title: "Asistencia operativa",
+      description:
+        "Lecturas y sugerencias futuras sobre ventas, márgenes y trabajo diario.",
       badge: "En evolución",
     },
     {
       icon: Package,
-      title: "Stock inteligente",
-      description: "Sugerencias futuras basadas en carta, consumo y necesidades del negocio.",
-      badge: "Visión producto",
-    },
-    {
-      icon: Zap,
-      title: "Automatizaciones",
-      description: "Alertas y flujos operativos más asistidos, sin perder control humano.",
-      badge: "Próximamente",
-    },
-    {
-      icon: Timer,
-      title: "Voz y comandas",
-      description: "Captura natural de pedidos y asistencia en servicio de sala.",
+      title: "Inventario inteligente",
+      description:
+        "Camino natural hacia compras, stock y consumo conectados con la carta.",
       badge: "Roadmap",
     },
   ] satisfies MarketingAiFeature[],
 };
 
-export const marketingProductShowcase = {
-  eyebrow: "Producto visual",
-  title: "TPV, carta y sala dentro de la misma operación.",
+export const marketingBusinessTypes = {
+  eyebrow: "Tipos de negocio",
+  title: "Para negocios donde el servicio no se queda quieto.",
   description:
-    "Hostly está diseñado para trabajar en desktop, tablet y móvil con una experiencia clara, rápida y pensada para servicio real.",
-  desktopTabs: ["Operación", "TPV", "Cocina", "Mapa visual"],
-  mobileTabs: ["Camarero", "Comandas", "Mesas", "Métricas"],
+    "Hostly encaja especialmente bien cuando hay mesas, barra, terraza, equipos moviéndose y decisiones rápidas durante el servicio.",
+  items: [
+    {
+      icon: UtensilsCrossed,
+      title: "Restaurantes con sala",
+      description: "Servicio por mesas, comandas y cobros coordinados.",
+    },
+    {
+      icon: Store,
+      title: "Bares y cafeterías",
+      description: "Venta rápida, barra y tickets claros.",
+    },
+    {
+      icon: Layers,
+      title: "Terrazas y beach clubs",
+      description: "Espacios visuales, zonas y equipos en movimiento.",
+    },
+    {
+      icon: Users,
+      title: "Pequeños grupos",
+      description: "Operación consistente sin convertir Hostly en un ERP pesado.",
+    },
+  ] satisfies MarketingCard[],
 };
 
-export const marketingBenefits: MarketingBenefit[] = [
-  {
-    icon: Zap,
-    title: "Menos clics",
-    description: "Flujos más directos entre pedido, cocina, mesa y cobro.",
-  },
-  {
-    icon: Wallet,
-    title: "Más control",
-    description: "Información operativa y económica reunida en un solo sistema.",
-  },
-  {
-    icon: Users,
-    title: "Equipo coordinado",
-    description: "Sala, barra y cocina trabajan con una lectura compartida del servicio.",
-  },
-  {
-    icon: BarChart3,
-    title: "Decisiones con datos",
-    description: "Ventas, productos y rendimiento visibles para mejorar la gestión diaria.",
-  },
-  {
-    icon: Layers,
-    title: "Multi-espacio",
-    description: "Pensado para negocios con salón, terraza, barra, hotel o beach club.",
-  },
-  {
-    icon: ChefHat,
-    title: "Menos fricción",
-    description: "Menos saltos entre herramientas y menos pérdida de contexto.",
-  },
-];
+export const marketingDifferentiators = {
+  eyebrow: "Diferenciadores",
+  title: "Profesional por dentro. Fácil de usar en pleno servicio.",
+  description:
+    "Hostly no intenta impresionar con complejidad: busca que el restaurante gane claridad, velocidad y control desde el primer uso.",
+  items: [
+    {
+      icon: Timer,
+      title: "Hecho para servicio real.",
+      description: "La interfaz prioriza acciones frecuentes, lectura rápida y decisiones bajo presión.",
+    },
+    {
+      icon: Layers,
+      title: "Visual sin ser complejo.",
+      description: "Plano, mesas y estados ayudan a entender la sala sin convertirla en una herramienta pesada.",
+    },
+    {
+      icon: Zap,
+      title: "Rápido para el equipo, útil para gerencia.",
+      description: "El camarero trabaja rápido y el encargado conserva contexto para controlar la operación.",
+    },
+    {
+      icon: BarChart3,
+      title: "Preparado para crecer.",
+      description: "La base permite avanzar hacia inventario, compras e inteligencia operativa sin perder simplicidad.",
+    },
+  ] satisfies MarketingCard[],
+};
+
+export const marketingProductShowcase = {
+  eyebrow: "Mockups de producto",
+  title: "Una experiencia pensada para tablet, móvil y escritorio.",
+  description:
+    "La web pública debe enseñar producto: TPV táctil, plano de mesas, comandas y KDS trabajando como una misma operación.",
+};
 
 export const marketingTestimonials: MarketingTestimonial[] = [
   {
@@ -265,25 +334,24 @@ export const marketingTestimonials: MarketingTestimonial[] = [
 ];
 
 export const marketingFinalCta = {
-  title: "Empieza a centralizar tu operación.",
+  title: "Empieza con un TPV que tu equipo entiende.",
   description:
-    "Configura tu restaurante, invita a tu equipo y conecta TPV, carta, mesas y operación en una plataforma preparada para crecer.",
-  primaryCta: { label: "Empezar con Hostly", href: "/login" },
-  secondaryCta: { label: "Hablar con ventas", href: "mailto:hola@hostlyapp.app" },
+    "Monta tu restaurante, organiza mesas, conecta carta y empieza a operar con más claridad desde el primer servicio.",
+  primaryCta: { label: "Solicitar demo", href: demoMailHref },
+  secondaryCta: { label: "Escribir a hola@hostlyapp.app", href: "mailto:hola@hostlyapp.app" },
 };
 
 export const marketingFooter = {
   product: [
-    { label: "TPV", href: "#solucion" },
-    { label: "Carta y productos", href: "#solucion" },
-    { label: "Mapas visuales", href: "#producto" },
-    { label: "Operación por mesas", href: "#solucion" },
-    { label: "Cocina / KDS", href: "#solucion" },
-    { label: "Visión IA", href: "#ia" },
+    { label: "TPV táctil", href: "#producto" },
+    { label: "Mesas y plano", href: "#producto" },
+    { label: "Cocina / KDS", href: "#producto" },
+    { label: "Carta y productos", href: "#producto" },
+    { label: "IA prudente", href: "#ia" },
   ],
   company: [
-    { label: "Sobre Hostly", href: "#beneficios" },
-    { label: "Clientes", href: "#testimonios" },
+    { label: "Flujo operativo", href: "#flujo" },
+    { label: "Tipos de negocio", href: "#negocios" },
     { label: "Contacto", href: "mailto:hola@hostlyapp.app" },
   ],
   legal: [
@@ -292,5 +360,5 @@ export const marketingFooter = {
     { label: "Cookies", href: "#" },
   ],
   contactEmail: "hola@hostlyapp.app",
-  copyright: "© Hostly. Plataforma SaaS visual para hostelería.",
+  copyright: "© Hostly. TPV SaaS para hostelería real.",
 };

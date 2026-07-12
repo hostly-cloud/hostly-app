@@ -5,14 +5,11 @@ import { MarketingButton, MarketingContainer } from "@/components/marketing/ui/m
 
 export function HeroSection() {
   return (
-    <section className="marketing-section relative overflow-hidden pt-10 md:pt-14">
-      <div className="marketing-gradient-spot left-[-10%] top-[-10%] h-72 w-72 bg-[color:var(--hostly-ice-200)]" />
-      <div className="marketing-gradient-spot right-[-5%] top-[20%] h-64 w-64 bg-[color:var(--hostly-accent-soft)]" />
-
+    <section className="marketing-section marketing-hero relative overflow-hidden pt-10 md:pt-14">
       <MarketingContainer className="relative">
         <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
           <div className="max-w-2xl">
-            <div className="marketing-rise inline-flex items-center gap-2 rounded-full border border-[color:var(--hostly-table-divider-soft)] bg-white/80 px-3 py-1.5">
+            <div className="marketing-rise inline-flex items-center gap-2 rounded-full border border-[color:var(--hostly-table-divider-soft)] bg-white px-3 py-1.5 shadow-[var(--hostly-shadow-hairline)]">
               <span className="size-1.5 rounded-full bg-[color:var(--hostly-accent)]" />
               <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--hostly-accent)]">
                 {marketingHero.eyebrow}
@@ -35,7 +32,18 @@ export function HeroSection() {
               </MarketingButton>
             </div>
 
-            <p className="mt-6 text-[12px] font-medium text-[color:var(--hostly-ink-faint)]">{marketingHero.trustLine}</p>
+            <div className="marketing-rise marketing-rise-delay-3 mt-7 flex flex-wrap gap-2">
+              {marketingHero.proofPoints.map((point) => (
+                <span
+                  key={point}
+                  className="rounded-full border border-[color:var(--hostly-table-divider-soft)] bg-white px-3 py-1.5 text-[12px] font-semibold text-[color:var(--hostly-ink-muted)]"
+                >
+                  {point}
+                </span>
+              ))}
+            </div>
+
+            <p className="mt-5 text-[12px] font-medium text-[color:var(--hostly-ink-faint)]">{marketingHero.trustLine}</p>
           </div>
 
           <HeroProductMockup />

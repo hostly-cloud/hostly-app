@@ -16,7 +16,7 @@ export function TestimonialsSection() {
         <div className="mt-12 grid gap-4 lg:grid-cols-3">
           {marketingTestimonials.map((item) => (
             <figure key={item.name} className="marketing-card flex h-full flex-col p-6">
-              <blockquote className="text-[15px] leading-[1.7] tracking-[-0.01em] text-[color:var(--hostly-ink-strong)]">
+              <blockquote className="text-[15px] leading-[1.7] tracking-normal text-[color:var(--hostly-ink-strong)]">
                 “{item.quote}”
               </blockquote>
               <figcaption className="mt-6 border-t border-[color:var(--hostly-table-divider-soft)] pt-4">

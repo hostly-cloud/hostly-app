@@ -2,17 +2,24 @@ import type { Metadata } from "next";
 import "@/components/marketing/marketing.css";
 
 export const metadata: Metadata = {
-  title: "Hostly — Plataforma SaaS visual para hostelería",
+  metadataBase: new URL("https://hostlyapp.app"),
+  title: "Hostly — TPV SaaS para hostelería real",
   description:
-    "Controla TPV, carta, mesas y operación desde un único sistema visual diseñado para restaurantes, terrazas, hoteles y negocios con varios espacios.",
+    "Hostly conecta TPV táctil, mesas, comandas, carta, reservas y pagos para que restaurantes, bares y terrazas trabajen más rápido durante el servicio.",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
-    title: "Hostly — Plataforma SaaS visual para hostelería",
+    title: "Hostly — TPV SaaS para hostelería real",
     description:
-      "TPV, carta, mesas y operación conectados en una sola plataforma visual para hostelería.",
+      "Opera sala, cocina y caja con menos fricción: TPV táctil, mesas, comandas, carta, reservas y pagos en una sola plataforma.",
+    url: "https://hostlyapp.app",
+    siteName: "Hostly",
     type: "website",
+    locale: "es_ES",
     images: [
       {
-        url: "/branding/og-image.png",
+        url: "/branding/og-image.svg",
         width: 1200,
         height: 630,
         alt: "Hostly",
@@ -21,10 +28,10 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Hostly — Plataforma SaaS visual para hostelería",
+    title: "Hostly — TPV SaaS para hostelería real",
     description:
-      "TPV, carta, mesas y operación conectados en una sola plataforma visual para hostelería.",
-    images: ["/branding/og-image.png"],
+      "TPV táctil, mesas, comandas, carta, reservas y pagos para hostelería real.",
+    images: ["/branding/og-image.svg"],
   },
 };
 

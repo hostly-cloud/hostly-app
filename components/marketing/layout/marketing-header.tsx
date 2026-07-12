@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
-import { marketingNav } from "@/data/marketing/landing-content";
+import { marketingHero, marketingNav } from "@/data/marketing/landing-content";
 import { MarketingButton } from "@/components/marketing/ui/marketing-primitives";
 import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
 
@@ -39,7 +39,6 @@ export function MarketingHeader() {
             size={32}
             tone="app"
             className="inline-flex items-center gap-2.5"
-            wordmarkClassName="text-[15px] font-semibold tracking-[-0.03em] text-[color:var(--hostly-ink-strong)]"
           />
         </Link>
 
@@ -59,8 +58,8 @@ export function MarketingHeader() {
           <MarketingButton href="/login" variant="ghost" className="min-h-[40px] px-4 py-2">
             Iniciar sesión
           </MarketingButton>
-          <MarketingButton href="/login" variant="primary" className="min-h-[40px] px-4 py-2">
-            Empezar
+          <MarketingButton href={marketingHero.primaryCta.href} variant="primary" className="min-h-[40px] px-4 py-2">
+            {marketingHero.primaryCta.label}
           </MarketingButton>
         </div>
 
@@ -91,8 +90,8 @@ export function MarketingHeader() {
               <MarketingButton href="/login" variant="secondary" className="w-full">
                 Iniciar sesión
               </MarketingButton>
-              <MarketingButton href="/login" variant="primary" className="w-full">
-                Empezar
+              <MarketingButton href={marketingHero.primaryCta.href} variant="primary" className="w-full">
+                {marketingHero.primaryCta.label}
               </MarketingButton>
             </div>
           </div>

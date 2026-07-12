@@ -29,7 +29,7 @@ export function MarketingButton({
   ...rest
 }: MarketingButtonProps) {
   const classes = [
-    "inline-flex items-center justify-center gap-2 rounded-[14px] px-5 py-3 text-sm font-semibold tracking-[-0.01em] transition-colors duration-200 min-h-[46px]",
+    "inline-flex items-center justify-center gap-2 rounded-[14px] px-5 py-3 text-sm font-semibold tracking-normal transition-colors duration-200 min-h-[46px]",
     variantClasses[variant],
     className,
   ].join(" ");

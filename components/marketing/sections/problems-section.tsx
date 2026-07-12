@@ -19,7 +19,7 @@ export function ProblemsSection() {
                 <div className="inline-flex size-10 items-center justify-center rounded-xl bg-[color:var(--hostly-ice-50)] text-[color:var(--hostly-accent)]">
                   <Icon className="size-[18px]" strokeWidth={1.75} />
                 </div>
-                <h3 className="mt-4 text-[15px] font-semibold tracking-[-0.02em]">{problem.title}</h3>
+                <h3 className="mt-4 text-[15px] font-semibold tracking-normal">{problem.title}</h3>
                 <p className="mt-2 text-[13px] leading-relaxed text-[color:var(--hostly-ink-muted)]">{problem.description}</p>
               </article>
             );

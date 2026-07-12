@@ -4,12 +4,11 @@ import { MarketingButton, MarketingContainer } from "@/components/marketing/ui/m
 
 export function FinalCtaSection() {
   return (
-    <section className="marketing-section pb-24 pt-8">
+    <section id="demo" className="marketing-section scroll-mt-24 pb-24 pt-8">
       <MarketingContainer>
         <div className="relative overflow-hidden rounded-[24px] border border-[color:var(--hostly-table-divider-soft)] bg-[color:var(--hostly-navy-deep)] px-6 py-12 text-white md:px-10 md:py-14">
-          <div className="marketing-gradient-spot right-[-10%] top-[-20%] h-56 w-56 bg-[color:var(--hostly-ice-400)] opacity-30" />
           <div className="relative max-w-2xl">
-            <h2 className="text-balance text-[clamp(1.75rem,4vw,2.75rem)] font-semibold leading-[1.08] tracking-[-0.03em]">
+            <h2 className="text-balance text-[2rem] font-semibold leading-[1.08] tracking-normal md:text-[2.5rem]">
               {marketingFinalCta.title}
             </h2>
             <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/78">{marketingFinalCta.description}</p>

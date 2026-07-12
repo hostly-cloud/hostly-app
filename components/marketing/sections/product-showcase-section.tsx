@@ -4,7 +4,7 @@ import { MarketingContainer, SectionHeading } from "@/components/marketing/ui/ma
 
 export function ProductShowcaseSection() {
   return (
-    <section id="producto" className="marketing-section scroll-mt-24 marketing-grid-bg">
+    <section id="mockups" className="marketing-section scroll-mt-24 marketing-grid-bg">
       <MarketingContainer>
         <SectionHeading
           eyebrow={marketingProductShowcase.eyebrow}

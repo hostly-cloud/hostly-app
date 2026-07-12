@@ -35,10 +35,9 @@ export function MarketingFooter() {
               size={32}
               tone="app"
               className="inline-flex items-center gap-2.5"
-              wordmarkClassName="text-[15px] font-semibold tracking-[-0.03em]"
             />
             <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-[color:var(--hostly-ink-muted)]">
-              Plataforma SaaS visual para restaurantes que quieren conectar TPV, carta, mesas y operación diaria.
+              TPV SaaS para restaurantes, bares y negocios de hostelería que quieren operar sala, cocina y caja con más claridad.
             </p>
             <a
               href={`mailto:${marketingFooter.contactEmail}`}
