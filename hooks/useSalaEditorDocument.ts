@@ -67,6 +67,8 @@ import {
   navigateSalaEditorPhase,
   selectSalaEspacioInNavigation,
 } from "@/lib/sala-editor/navigation/editor-phase-routing";
+import { duplicateSalaEditorSpace } from "@/lib/sala-editor/spaces/duplicate-sala-editor-space";
+import { cloneMetadataWithoutOperationalRuntimeLinks } from "@/lib/sala-editor/metadata/operational-runtime-metadata";
 import type { SalaEditorHistoryApi } from "@/hooks/useSalaEditorHistory";
 
 export type UseSalaEditorDocumentOptions = {
@@ -796,7 +798,7 @@ export function useSalaEditorDocument({
         capacity: source.capacity,
         visible: source.visible,
         enabled: source.enabled,
-        metadata: { ...source.metadata },
+        metadata: cloneMetadataWithoutOperationalRuntimeLinks(source.metadata),
         state: source.state,
       });
 
@@ -1256,6 +1258,32 @@ export function useSalaEditorDocument({
     }
   }, [historyApi]);
 
+  const duplicateEspacio = useCallback((espacioId: string) => {
+    let previousDocument: SalaEditorDocument | null = null;
+    let nextDocument: SalaEditorDocument | null = null;
+
+    setDocument((prev) => {
+      previousDocument = prev;
+      nextDocument = duplicateSalaEditorSpace(prev, espacioId);
+      return nextDocument ?? prev;
+    });
+
+    if (previousDocument && nextDocument) {
+      historyApi?.recordCommit("espacio.duplicate", previousDocument, nextDocument);
+      setActiveTool(null);
+      setActiveOperationalElement(null);
+      setActiveSurfaceMaterial(null);
+      setActiveZoneType(null);
+      setActiveLandscapeKind(null);
+      setSelectedSurfaceObjectId(null);
+      setSelectedZoneId(null);
+      setSelectedLandscapeElementId(null);
+      setSelectedStructuralElementId(null);
+      setSelectedOperationalElementInstanceId(null);
+      setSelectedWallAttachmentId(null);
+    }
+  }, [historyApi]);
+
   const updateEspacio = useCallback(
     (espacioId: string, patch: Partial<SalaEspacioDraft>) => {
       setDocument((prev) => {
@@ -1376,6 +1404,7 @@ export function useSalaEditorDocument({
     replaceEspacios,
     addEspacio,
     addEspacioAndSelect,
+    duplicateEspacio,
     updateEspacio,
     updateEspacioBase,
     addWall,
