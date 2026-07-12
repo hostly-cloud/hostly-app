@@ -63,17 +63,6 @@ export function SalaEditorShell({
   contextActionTarget = null,
 }: SalaEditorShellProps) {
   const handlePublishClick = () => {
-    console.info("[SalaEditorV2][FirestoreDiag] Publicar en TPV click recibido", {
-      operation: "publishToTpv.click",
-      disabled: publishToTpvDisabled,
-      pending: publishToTpvPending,
-      hasHandler: typeof onPublishToTpv === "function",
-    });
-    console.info("[SalaEditorV2] Publicar en TPV click recibido", {
-      disabled: publishToTpvDisabled,
-      pending: publishToTpvPending,
-      hasHandler: typeof onPublishToTpv === "function",
-    });
     onPublishToTpv?.();
   };
 
