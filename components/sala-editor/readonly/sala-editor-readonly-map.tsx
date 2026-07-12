@@ -15,9 +15,13 @@ import { SalaWallCanvas } from "@/components/sala-editor/panels/sala-wall-canvas
 import { SalaStructureObjectsLayer } from "@/components/sala-editor/panels/sala-structure-objects-layer";
 import { SalaLandscapeElementsLayer } from "@/components/sala-editor/panels/sala-landscape-elements-layer";
 import { SalaOperationalInstancesLayer } from "@/components/sala-editor/panels/sala-operacion-workspace";
+import {
+  SalaEditorReadonlyOperationalLayer,
+  type SalaEditorReadonlyTpvOperationalState,
+} from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
 import "@/components/sala-editor/sala-editor-workbench.css";
 
-export type SalaEditorReadonlyOperationalMode = "all" | "non-table" | "none";
+export type SalaEditorReadonlyOperationalMode = "all" | "non-table" | "none" | "tpv";
 export type SalaEditorReadonlyMapMode = "standalone" | "logical-underlay";
 
 export type SalaEditorReadonlyMapProps = {
@@ -27,6 +31,9 @@ export type SalaEditorReadonlyMapProps = {
   operationalMode?: SalaEditorReadonlyOperationalMode;
   mode?: SalaEditorReadonlyMapMode;
   coordinateScale?: number;
+  operationalStateByInstanceId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
+  operationalStateByLegacyTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
+  operationalVisibleInstanceIds?: readonly string[];
 };
 
 function resolveReadonlyFloorKind(kind: string): BaseFloorCatalogKind {
@@ -49,6 +56,9 @@ export function SalaEditorReadonlyMap({
   operationalMode = "all",
   mode = "standalone",
   coordinateScale = 1,
+  operationalStateByInstanceId,
+  operationalStateByLegacyTableId,
+  operationalVisibleInstanceIds,
 }: SalaEditorReadonlyMapProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const base = normalizeSalaEspacioBase(contract.space.base);
@@ -59,13 +69,24 @@ export function SalaEditorReadonlyMap({
   const logicalHeight =
     base.dimensions.height * base.scale.pixelsPerUnit * safeCoordinateScale;
   const operationalInstances =
-    operationalMode === "none"
+    operationalMode === "none" || operationalMode === "tpv"
       ? []
       : operationalMode === "non-table"
         ? contract.operationalElementInstances.filter(
             (instance) => instance.elementType !== "TABLE",
           )
         : contract.operationalElementInstances;
+  const visibleInstanceIdSet =
+    operationalVisibleInstanceIds != null
+      ? new Set(operationalVisibleInstanceIds.map((id) => String(id).trim()).filter(Boolean))
+      : null;
+  const tpvOperationalInstances =
+    visibleInstanceIdSet == null
+      ? contract.operationalElementInstances
+      : contract.operationalElementInstances.filter(
+          (instance) =>
+            instance.elementType !== "TABLE" || visibleInstanceIdSet.has(instance.id),
+        );
 
   const layers = (
     <>
@@ -108,6 +129,13 @@ export function SalaEditorReadonlyMap({
       ) : null}
       {operationalInstances.length > 0 ? (
         <SalaOperationalInstancesLayer instances={operationalInstances} readOnly />
+      ) : null}
+      {operationalMode === "tpv" && tpvOperationalInstances.length > 0 ? (
+        <SalaEditorReadonlyOperationalLayer
+          instances={tpvOperationalInstances}
+          stateByInstanceId={operationalStateByInstanceId}
+          stateByLegacyTableId={operationalStateByLegacyTableId}
+        />
       ) : null}
     </>
   );

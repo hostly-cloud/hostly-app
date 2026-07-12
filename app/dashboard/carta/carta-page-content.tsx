@@ -160,6 +160,8 @@ import { ElementCard } from "@/components/map/element-map-card";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
 import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
+import type { SalaEditorReadonlyTpvOperationalState } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
+import { getOperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import {
   listenReservationsForDate,
   type Reservation,
@@ -1944,8 +1946,8 @@ export function CartaPageContent({
   const lastResultRef = useRef<Table[]>([]);
   const lastTpvMapDiagRenderSignatureRef = useRef<string | null>(null);
   const lastTpvReadonlyMapIntegrationSignatureRef = useRef<string | null>(null);
+  const lastTpvReadonlyHitboxParitySignatureRef = useRef<string | null>(null);
   const lastTpvDecorativeRenderAuditSignatureRef = useRef<string | null>(null);
-  const tpvRenderElementDecorativeAuditSeenRef = useRef<Set<string>>(new Set());
   const tableFlipPositionsRef = useRef<Record<string, DOMRect>>({});
   const tableFlipElementsRef = useRef<Record<string, HTMLDivElement | null>>(
     {},
@@ -7332,6 +7334,96 @@ export function CartaPageContent({
     reservationPressureByTableId,
   ]);
 
+  const readonlyV2TableHitboxParity = useMemo(() => {
+    const contract = readonlyMapIntegration.contract;
+    const visibleTableIds = new Set(
+      mapTablesForChipFilter.map((table) => String(table.id ?? "").trim()).filter(Boolean),
+    );
+    const instanceByLegacyTableId = new Map<
+      string,
+      NonNullable<typeof contract>["operationalElementInstances"][number]
+    >();
+    const visibleV2WithoutTable: Array<{
+      instanceId: string;
+      name: string;
+      legacyTableId: string | null;
+      reason: "missing-legacy-table-id" | "table-not-renderable";
+    }> = [];
+
+    for (const instance of contract?.operationalElementInstances ?? []) {
+      if (instance.elementType !== "TABLE") continue;
+      const legacyTableId =
+        typeof instance.metadata.legacyTableId === "string"
+          ? instance.metadata.legacyTableId.trim()
+          : "";
+      if (legacyTableId && visibleTableIds.has(legacyTableId)) {
+        instanceByLegacyTableId.set(legacyTableId, instance);
+        continue;
+      }
+      visibleV2WithoutTable.push({
+        instanceId: instance.id,
+        name: instance.name,
+        legacyTableId: legacyTableId || null,
+        reason: legacyTableId ? "table-not-renderable" : "missing-legacy-table-id",
+      });
+    }
+
+    const tableWithoutV2 = mapTablesForChipFilter
+      .map((table) => ({
+        tableId: String(table.id ?? "").trim(),
+        name: String(table.name ?? "").trim(),
+      }))
+      .filter((table) => table.tableId && !instanceByLegacyTableId.has(table.tableId));
+
+    const matchedInstanceIds = [...instanceByLegacyTableId.values()].map(
+      (instance) => instance.id,
+    );
+    const rotatedMatches = [...instanceByLegacyTableId.values()].filter(
+      (instance) =>
+        typeof instance.rotation === "number" &&
+        Number.isFinite(instance.rotation) &&
+        Math.abs(instance.rotation) > 0.001,
+    ).length;
+
+    return {
+      instanceByLegacyTableId,
+      matchedInstanceIds,
+      matchedTables: instanceByLegacyTableId.size,
+      visibleV2WithoutTable,
+      tableWithoutV2,
+      rotatedMatches,
+      fallbackLegacyVisible: tableWithoutV2.length,
+    };
+  }, [mapTablesForChipFilter, readonlyMapIntegration.contract]);
+
+  useEffect(() => {
+    if (!useReadonlyV2Map) return;
+    const payload = {
+      selectedFloorPlanId: selectedTpvFloorPlanId,
+      selectedFloorPlanName: selectedTpvFloorPlan?.name ?? null,
+      matchedTables: readonlyV2TableHitboxParity.matchedTables,
+      visibleV2WithoutTable:
+        readonlyV2TableHitboxParity.visibleV2WithoutTable.length,
+      tableWithoutV2: readonlyV2TableHitboxParity.tableWithoutV2.length,
+      rotatedMatches: readonlyV2TableHitboxParity.rotatedMatches,
+      fallbackLegacyVisible: readonlyV2TableHitboxParity.fallbackLegacyVisible,
+      samples: {
+        visibleV2WithoutTable:
+          readonlyV2TableHitboxParity.visibleV2WithoutTable.slice(0, 8),
+        tableWithoutV2: readonlyV2TableHitboxParity.tableWithoutV2.slice(0, 8),
+      },
+    };
+    const signature = JSON.stringify(payload);
+    if (lastTpvReadonlyHitboxParitySignatureRef.current === signature) return;
+    lastTpvReadonlyHitboxParitySignatureRef.current = signature;
+    console.info("[TPV][MapDiag] readonly hitbox parity", payload);
+  }, [
+    readonlyV2TableHitboxParity,
+    selectedTpvFloorPlan?.name,
+    selectedTpvFloorPlanId,
+    useReadonlyV2Map,
+  ]);
+
   const decorativePlanElementsForTpv = useMemo(() => {
     return planElementsForTpvMap.filter((element) =>
       isDecorativePlanElementType(element.type),
@@ -7791,6 +7883,75 @@ export function CartaPageContent({
     },
     [firestoreOccupancyStartMsByTable, now],
   );
+
+  const readonlyV2OperationalStateByLegacyTableId = useMemo(() => {
+    if (!useReadonlyV2Map) return {};
+    const stateByTableId: Record<string, SalaEditorReadonlyTpvOperationalState> = {};
+    for (const table of mapTablesForChipFilter) {
+      const tableId = String(table.id ?? "").trim();
+      if (!tableId) continue;
+      const group = resolveJoinedTableGroupMapState(
+        tableId,
+        groupedTablesMapHandlers,
+        firestoreOccupiedTableIds,
+        ordersByTable,
+      );
+      const serviceTableId = group.serviceTableId;
+      const busy = group.busy;
+      const activeLineCount = countActiveComandaLines(
+        ordersByTable[serviceTableId] ?? [],
+      );
+      const occupancyStartMs = firestoreOccupancyStartMsByTable[serviceTableId];
+      const minutesOccupied =
+        occupancyStartMs != null
+          ? Math.max(0, (now - occupancyStartMs) / 60000)
+          : 0;
+      const priorityLevel = computeMapVisualPriorityLevel(
+        orderOpenedAtByTable[serviceTableId],
+        now,
+        orderTotalsByTable[serviceTableId],
+      );
+      const reservationPressure = reservationPressureByTableId[tableId] ?? null;
+      const selected =
+        selectedTableId === tableId ||
+        groupedTablesMapHandlers?.resolveMainTableId?.(tableId) === selectedTableId;
+
+      let state: SalaEditorReadonlyTpvOperationalState = "libre";
+      if (selected) {
+        state = "seleccionada";
+      } else if (busy && occupancyStartMs != null && minutesOccupied >= 45 && activeLineCount >= 8) {
+        state = "critica";
+      } else if (reservationPressure?.type === "late") {
+        state = "retrasada";
+      } else if (
+        priorityLevel >= 1 ||
+        salaReadyToCloseTableIds.has(serviceTableId) ||
+        reservationPressure?.type === "upcoming"
+      ) {
+        state = "atencion";
+      } else if (busy) {
+        state = "ocupada";
+      } else if (reservedByTableId[tableId]) {
+        state = "reservada";
+      }
+      stateByTableId[tableId] = state;
+    }
+    return stateByTableId;
+  }, [
+    firestoreOccupancyStartMsByTable,
+    firestoreOccupiedTableIds,
+    groupedTablesMapHandlers,
+    mapTablesForChipFilter,
+    now,
+    orderOpenedAtByTable,
+    orderTotalsByTable,
+    ordersByTable,
+    reservationPressureByTableId,
+    reservedByTableId,
+    salaReadyToCloseTableIds,
+    selectedTableId,
+    useReadonlyV2Map,
+  ]);
 
   const handleOpenTableOrder = useCallback(
     (tableId: string, options?: { entry?: "tpv" | "summary" }) => {
@@ -15941,7 +16102,13 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         <SalaEditorReadonlyMap
                           contract={readonlyMapIntegration.contract}
                           mode="logical-underlay"
-                          operationalMode="none"
+                          operationalMode="tpv"
+                          operationalStateByLegacyTableId={
+                            readonlyV2OperationalStateByLegacyTableId
+                          }
+                          operationalVisibleInstanceIds={
+                            readonlyV2TableHitboxParity.matchedInstanceIds
+                          }
                           coordinateScale={
                             embeddedInOperacion
                               ? TPV_OPERATIONAL_MAP_VISUAL_SCALE
@@ -15953,43 +16120,6 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     renderElement={(ctx) => {
                       const tableId = ctx.elementId;
                       if (isDecorativePlanElementType(ctx.element.type)) {
-                        const decorativeAuditKey = [
-                          selectedTpvFloorPlanId ?? "(sin floorPlanId)",
-                          ctx.element.id,
-                          ctx.element.type,
-                          ctx.mapLayoutX,
-                          ctx.mapLayoutY,
-                          ctx.mapTileWidth,
-                          ctx.mapTileHeight,
-                        ].join("|");
-                        if (
-                          !tpvRenderElementDecorativeAuditSeenRef.current.has(
-                            decorativeAuditKey,
-                          )
-                        ) {
-                          tpvRenderElementDecorativeAuditSeenRef.current.add(
-                            decorativeAuditKey,
-                          );
-                          console.info("[TPV][MapDiag] decorative render audit", {
-                            source: "TPV renderElement callback",
-                            selectedFloorPlanId: selectedTpvFloorPlanId,
-                            selectedFloorPlanName: selectedTpvFloorPlan?.name ?? null,
-                            receivedTypes: { [ctx.element.type]: 1 },
-                            renderedTypes: { [ctx.element.type]: 1 },
-                            discardedTypes: {},
-                            discardedByReason: {},
-                            discardedDecoratives: [],
-                            element: {
-                              id: ctx.element.id,
-                              type: ctx.element.type,
-                              floorPlanId: ctx.element.floorPlanId ?? null,
-                              x: ctx.mapLayoutX,
-                              y: ctx.mapLayoutY,
-                              width: ctx.mapTileWidth,
-                              height: ctx.mapTileHeight,
-                            },
-                          });
-                        }
                         return (
                           <div
                             aria-hidden
@@ -16011,10 +16141,44 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         return null;
                       }
                       const stableTable = tablesById[tableId] ?? ctx.element;
-                      const mapLayoutX = ctx.mapLayoutX;
-                      const mapLayoutY = ctx.mapLayoutY;
-                      const mapTileWidth = ctx.mapTileWidth;
-                      const mapTileHeight = ctx.mapTileHeight;
+                      const readonlyV2MatchedInstance = useReadonlyV2Map
+                        ? readonlyV2TableHitboxParity.instanceByLegacyTableId.get(tableId) ??
+                          null
+                        : null;
+                      const readonlyV2CoordinateScale = embeddedInOperacion
+                        ? TPV_OPERATIONAL_MAP_VISUAL_SCALE
+                        : 1;
+                      const readonlyV2Size = readonlyV2MatchedInstance
+                        ? getOperationalInstanceCanvasSize(readonlyV2MatchedInstance)
+                        : null;
+                      const readonlyV2MapTileWidth =
+                        readonlyV2Size != null
+                          ? readonlyV2Size.width * readonlyV2CoordinateScale
+                          : ctx.mapTileWidth;
+                      const readonlyV2MapTileHeight =
+                        readonlyV2Size != null
+                          ? readonlyV2Size.height * readonlyV2CoordinateScale
+                          : ctx.mapTileHeight;
+                      const mapLayoutX =
+                        readonlyV2MatchedInstance && readonlyV2Size
+                          ? readonlyV2MatchedInstance.position.x *
+                              readonlyV2CoordinateScale -
+                            readonlyV2MapTileWidth / 2
+                          : ctx.mapLayoutX;
+                      const mapLayoutY =
+                        readonlyV2MatchedInstance && readonlyV2Size
+                          ? readonlyV2MatchedInstance.position.y *
+                              readonlyV2CoordinateScale -
+                            readonlyV2MapTileHeight / 2
+                          : ctx.mapLayoutY;
+                      const mapTileWidth = readonlyV2MapTileWidth;
+                      const mapTileHeight = readonlyV2MapTileHeight;
+                      const readonlyV2InteractionOnly =
+                        useReadonlyV2Map && readonlyV2MatchedInstance != null;
+                      const readonlyV2HitboxRotation =
+                        readonlyV2MatchedInstance != null
+                          ? readonlyV2MatchedInstance.rotation
+                          : 0;
                       const priorityTable =
                         mapTablesForChipFilter.find(
                           (t) => String(t.id).trim() === tableId,
@@ -16091,7 +16255,17 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         null;
 
                       return (
-                        <ElementCard
+                        <div
+                          key={stableTable.id}
+                          data-hostly-tpv-legacy-table-overlay={
+                            readonlyV2InteractionOnly
+                              ? "interaction-only"
+                              : useReadonlyV2Map
+                                ? "legacy-fallback-visible"
+                                : undefined
+                          }
+                        >
+                          <ElementCard
                           key={stableTable.id}
                           table={stableTable}
                           tableId={tableId}
@@ -16116,6 +16290,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           mapLayoutY={mapLayoutY}
                           mapTileWidth={mapTileWidth}
                           mapTileHeight={mapTileHeight}
+                          mapRotation={readonlyV2HitboxRotation}
+                          interactionOnly={readonlyV2InteractionOnly}
                           tableShape={
                             stableTable.tableShape === "round"
                               ? "round"
@@ -16201,6 +16377,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               : undefined
                           }
                         />
+                        </div>
                       );
                     }}
                   />

@@ -57,6 +57,8 @@ export type ElementMapCardProps = {
   mapLayoutY: number;
   mapTileWidth: number;
   mapTileHeight: number;
+  mapRotation?: number;
+  interactionOnly?: boolean;
   tableShape: "square" | "round";
   seats: number;
   tableMapStatus: TableMapStatus;
@@ -248,6 +250,8 @@ export const ElementCard = memo(
     mapLayoutY,
     mapTileWidth,
     mapTileHeight,
+    mapRotation = 0,
+    interactionOnly = false,
     tableShape,
     seats: _seats,
     tableMapStatus: _tableMapStatus,
@@ -930,6 +934,15 @@ export const ElementCard = memo(
       }
     }
 
+    const normalizedMapRotation =
+      Number.isFinite(mapRotation) && Math.abs(mapRotation) > 0.001
+        ? mapRotation
+        : 0;
+    const tileTransform =
+      normalizedMapRotation !== 0
+        ? [transform, `rotate(${normalizedMapRotation}deg)`].filter(Boolean).join(" ")
+        : transform;
+
     const isGroupedPrimaryTile = Boolean(groupCorner);
 
     if (isGroupedPrimaryTile && !isMapGroupedSelectionElevated) {
@@ -1180,6 +1193,7 @@ export const ElementCard = memo(
         data-hostly-map-join={
           mapJoinDragEnabled && onMapTableJoinDrop ? "1" : undefined
         }
+        data-hostly-map-interaction-only={interactionOnly ? "1" : undefined}
         className={`hostly-map-table ${baseSurface}`}
         aria-label={ariaLabel}
         onKeyDown={(e) => {
@@ -1223,7 +1237,8 @@ export const ElementCard = memo(
             (joinDropHighlight && mapJoinDragEnabled ? 6 : 0) +
             (isJoinGestureActive && mapJoinDragEnabled ? 40 : 0) +
             (isJoinArmReady && mapJoinDragEnabled ? 8 : 0),
-          transform,
+          transform: tileTransform || undefined,
+          transformOrigin: "center center",
           transition,
           borderRadius: tileBorderRadius,
           background: effectiveSkin.background,
@@ -1247,7 +1262,9 @@ export const ElementCard = memo(
               ? "none"
               : undefined,
           opacity:
-            isJoinGestureActive && mapJoinDragEnabled
+            interactionOnly
+              ? 0
+              : isJoinGestureActive && mapJoinDragEnabled
               ? 0.56
               : isJoinArmReady && mapJoinDragEnabled
                 ? 0.88
