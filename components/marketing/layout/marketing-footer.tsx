@@ -29,7 +29,7 @@ export function MarketingFooter() {
   return (
     <footer className="border-t border-[color:var(--hostly-table-divider-soft)] bg-white">
       <div className="marketing-container py-14">
-        <div className="grid gap-10 md:grid-cols-[1.2fr_repeat(3,minmax(0,1fr))]">
+        <div className="grid gap-10 md:grid-cols-[1.2fr_repeat(2,minmax(0,1fr))]">
           <div>
             <HostlyBrandLockup
               size={32}
@@ -48,7 +48,6 @@ export function MarketingFooter() {
           </div>
           <FooterColumn title="Producto" links={marketingFooter.product} />
           <FooterColumn title="Empresa" links={marketingFooter.company} />
-          <FooterColumn title="Legal" links={marketingFooter.legal} />
         </div>
         <div className="mt-12 border-t border-[color:var(--hostly-table-divider-soft)] pt-6 text-[12px] text-[color:var(--hostly-ink-faint)]">
           {marketingFooter.copyright}

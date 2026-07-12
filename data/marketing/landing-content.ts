@@ -30,13 +30,6 @@ export type MarketingCard = {
   detail?: string;
 };
 
-export type MarketingTestimonial = {
-  quote: string;
-  name: string;
-  role: string;
-  venue: string;
-};
-
 export type MarketingFlowStep = {
   step: string;
   title: string;
@@ -95,34 +88,6 @@ export const marketingKeyBenefits: MarketingCard[] = [
     title: "Controla la operación",
     description:
       "Mesas, carta, reservas y cobros conectados en una misma plataforma.",
-  },
-];
-
-export const marketingProblems: MarketingCard[] = [
-  {
-    icon: Layers,
-    title: "Operación fragmentada",
-    description: "TPV, carta, mesas y comunicación viven en sitios distintos.",
-  },
-  {
-    icon: ChefHat,
-    title: "Sala difícil de leer",
-    description: "Terraza, salón, barra y reservas no siempre reflejan lo que ocurre en servicio.",
-  },
-  {
-    icon: BarChart3,
-    title: "Carta desconectada",
-    description: "Productos, precios, categorías y cocina cambian sin una base común.",
-  },
-  {
-    icon: Timer,
-    title: "Demasiados clics",
-    description: "Cada paso extra entre pedido, cocina y cobro ralentiza la operación.",
-  },
-  {
-    icon: CalendarDays,
-    title: "Varios espacios, poco control",
-    description: "Restaurantes con salas, terrazas o eventos necesitan una visión más visual.",
   },
 ];
 
@@ -309,30 +274,6 @@ export const marketingProductShowcase = {
     "La web pública debe enseñar producto: TPV táctil, plano de mesas, comandas y KDS trabajando como una misma operación.",
 };
 
-export const marketingTestimonials: MarketingTestimonial[] = [
-  {
-    quote:
-      "Necesito que el equipo vea la mesa, la comanda y el cobro sin cambiar de herramienta.",
-    name: "Restaurante con sala y terraza",
-    role: "Servicio por mesas",
-    venue: "Operación diaria",
-  },
-  {
-    quote:
-      "La carta cambia cada semana y debe seguir conectada con TPV, cocina y productos.",
-    name: "Gastrobar independiente",
-    role: "Carta y productos",
-    venue: "Configuración comercial",
-  },
-  {
-    quote:
-      "Tenemos comedor, barra, terraza y eventos. El mapa visual tiene que adaptarse a cada espacio.",
-    name: "Hotel o beach club",
-    role: "Multi-espacio",
-    venue: "Visión Hostly",
-  },
-];
-
 export const marketingFinalCta = {
   title: "Empieza con un TPV que tu equipo entiende.",
   description:
@@ -353,11 +294,6 @@ export const marketingFooter = {
     { label: "Flujo operativo", href: "#flujo" },
     { label: "Tipos de negocio", href: "#negocios" },
     { label: "Contacto", href: "mailto:hola@hostlyapp.app" },
-  ],
-  legal: [
-    { label: "Privacidad", href: "#" },
-    { label: "Términos", href: "#" },
-    { label: "Cookies", href: "#" },
   ],
   contactEmail: "hola@hostlyapp.app",
   copyright: "© Hostly. TPV SaaS para hostelería real.",
