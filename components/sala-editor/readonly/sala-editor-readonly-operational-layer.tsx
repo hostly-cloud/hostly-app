@@ -22,6 +22,7 @@ export type SalaEditorReadonlyOperationalLayerProps = {
   instances: OperationalElementInstance[];
   stateByInstanceId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
   stateByLegacyTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
+  selectedLegacyTableIds?: readonly string[];
 };
 
 function readLegacyTableId(instance: OperationalElementInstance): string {
@@ -45,11 +46,6 @@ function stateChrome(
   state: SalaEditorReadonlyTpvOperationalState | null,
 ): Pick<CSSProperties, "boxShadow" | "filter"> {
   switch (state) {
-    case "seleccionada":
-      return {
-        boxShadow:
-          "0 0 0 3px rgba(14, 165, 233, 0.22), 0 0 0 1px rgba(14, 165, 233, 0.62)",
-      };
     case "critica":
       return {
         boxShadow:
@@ -76,12 +72,13 @@ function stateChrome(
           "0 0 0 2px rgba(81, 66, 95, 0.13), 0 0 0 1px rgba(81, 66, 95, 0.38)",
       };
     case "libre":
+    case "seleccionada":
     case null:
       return {};
   }
 }
 
-function stateDotColor(state: SalaEditorReadonlyTpvOperationalState | null): string | null {
+function stateAccentColor(state: SalaEditorReadonlyTpvOperationalState | null): string | null {
   switch (state) {
     case "seleccionada":
       return "#0ea5e9";
@@ -96,18 +93,38 @@ function stateDotColor(state: SalaEditorReadonlyTpvOperationalState | null): str
     case "reservada":
       return "#51425f";
     case "libre":
+      return "#264f34";
     case null:
       return null;
   }
+}
+
+function stateDotColor(state: SalaEditorReadonlyTpvOperationalState | null): string | null {
+  if (!state || state === "libre") return null;
+  return stateAccentColor(state);
+}
+
+function selectedChrome(selected: boolean): Pick<CSSProperties, "boxShadow"> {
+  if (!selected) return {};
+  return {
+    boxShadow:
+      "0 0 0 3px rgba(14, 165, 233, 0.22), 0 0 0 1px rgba(14, 165, 233, 0.62)",
+  };
 }
 
 export function SalaEditorReadonlyOperationalLayer({
   instances,
   stateByInstanceId,
   stateByLegacyTableId,
+  selectedLegacyTableIds,
 }: SalaEditorReadonlyOperationalLayerProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
+  const selectedLegacyTableIdSet = new Set(
+    (selectedLegacyTableIds ?? [])
+      .map((id) => String(id ?? "").trim())
+      .filter(Boolean),
+  );
 
   return (
     <div className="hostly-sala-operational-layer is-readonly" aria-hidden>
@@ -127,6 +144,10 @@ export function SalaEditorReadonlyOperationalLayer({
           stateByInstanceId,
           stateByLegacyTableId,
         );
+        const legacyTableId = readLegacyTableId(instance);
+        const isSelected =
+          legacyTableId !== "" && selectedLegacyTableIdSet.has(legacyTableId);
+        const accentColor = stateAccentColor(state);
         const dotColor = stateDotColor(state);
 
         return (
@@ -141,7 +162,7 @@ export function SalaEditorReadonlyOperationalLayer({
             <div
               className={[
                 "hostly-sala-canvas-object",
-                state === "seleccionada" ? "is-selected" : "",
+                isSelected || state === "seleccionada" ? "is-selected" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -154,6 +175,7 @@ export function SalaEditorReadonlyOperationalLayer({
                 zIndex: instance.elementType === "TABLE" ? 24 : 18,
                 pointerEvents: "none",
                 ...stateChrome(state),
+                ...selectedChrome(isSelected || state === "seleccionada"),
               }}
             >
               <div
@@ -166,7 +188,7 @@ export function SalaEditorReadonlyOperationalLayer({
                 <SalaOperationalElementVisual
                   elementType={instance.elementType}
                   label={instance.name}
-                  color={instanceCatalog?.color ?? "#315f7d"}
+                  color={accentColor ?? instanceCatalog?.color ?? "#315f7d"}
                   visualVariant={visualVariant}
                 />
               </div>

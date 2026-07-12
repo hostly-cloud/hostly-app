@@ -512,6 +512,29 @@ function mapAlertDotFromTileInputs(
   return null;
 }
 
+function resolveTpvReadonlyOperationalState(params: {
+  busy: boolean;
+  reserved: boolean;
+  isCriticalTable: boolean;
+  priorityLevel: number;
+  readyToClose: boolean;
+  reservationPressure: { type: "upcoming" | "late"; time?: string } | null | undefined;
+}): SalaEditorReadonlyTpvOperationalState {
+  if (params.isCriticalTable || params.priorityLevel >= 3) return "critica";
+  if (params.reservationPressure?.type === "late") return "retrasada";
+  if (
+    params.priorityLevel === 1 ||
+    params.priorityLevel === 2 ||
+    params.readyToClose ||
+    params.reservationPressure?.type === "upcoming"
+  ) {
+    return "atencion";
+  }
+  if (params.busy) return "ocupada";
+  if (params.reserved) return "reservada";
+  return "libre";
+}
+
 function formatOrderOpenDurationLabel(totalMinutes: number): string {
   const m = Math.max(0, Math.floor(totalMinutes));
   if (m < 60) return `${m}m`;
@@ -7508,28 +7531,18 @@ export function CartaPageContent({
         orderTotalsByTable[serviceTableId],
       );
       const reservationPressure = reservationPressureByTableId[tableId] ?? null;
-      const selected =
-        selectedTableId === tableId ||
-        groupedTablesMapHandlers?.resolveMainTableId?.(tableId) === selectedTableId;
-
-      let state: SalaEditorReadonlyTpvOperationalState = "libre";
-      if (selected) {
-        state = "seleccionada";
-      } else if (busy && occupancyStartMs != null && minutesOccupied >= 45 && activeLineCount >= 8) {
-        state = "critica";
-      } else if (reservationPressure?.type === "late") {
-        state = "retrasada";
-      } else if (
-        priorityLevel >= 1 ||
-        salaReadyToCloseTableIds.has(serviceTableId) ||
-        reservationPressure?.type === "upcoming"
-      ) {
-        state = "atencion";
-      } else if (busy) {
-        state = "ocupada";
-      } else if (reservedByTableId[tableId]) {
-        state = "reservada";
-      }
+      const state = resolveTpvReadonlyOperationalState({
+        busy,
+        reserved: Boolean(reservedByTableId[tableId]),
+        isCriticalTable:
+          busy &&
+          occupancyStartMs != null &&
+          minutesOccupied >= 45 &&
+          activeLineCount >= 8,
+        priorityLevel,
+        readyToClose: salaReadyToCloseTableIds.has(serviceTableId),
+        reservationPressure,
+      });
       stateByTableId[tableId] = state;
     }
     return stateByTableId;
@@ -7545,6 +7558,25 @@ export function CartaPageContent({
     reservationPressureByTableId,
     reservedByTableId,
     salaReadyToCloseTableIds,
+    selectedTableId,
+    useReadonlyV2Map,
+  ]);
+
+  const readonlyV2SelectedLegacyTableIds = useMemo(() => {
+    if (!useReadonlyV2Map || !selectedTableId) return [];
+    return mapTablesForChipFilter
+      .map((table) => String(table.id ?? "").trim())
+      .filter((tableId) => {
+        if (!tableId) return false;
+        return (
+          selectedTableId === tableId ||
+          groupedTablesMapHandlers?.resolveMainTableId?.(tableId) ===
+            selectedTableId
+        );
+      });
+  }, [
+    groupedTablesMapHandlers,
+    mapTablesForChipFilter,
     selectedTableId,
     useReadonlyV2Map,
   ]);
@@ -15701,6 +15733,9 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           operationalMode="tpv"
                           operationalStateByLegacyTableId={
                             readonlyV2OperationalStateByLegacyTableId
+                          }
+                          operationalSelectedLegacyTableIds={
+                            readonlyV2SelectedLegacyTableIds
                           }
                           operationalVisibleInstanceIds={
                             readonlyV2TableHitboxParity.matchedInstanceIds

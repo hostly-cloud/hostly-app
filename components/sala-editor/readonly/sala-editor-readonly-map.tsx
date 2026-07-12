@@ -33,6 +33,7 @@ export type SalaEditorReadonlyMapProps = {
   coordinateScale?: number;
   operationalStateByInstanceId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
   operationalStateByLegacyTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
+  operationalSelectedLegacyTableIds?: readonly string[];
   operationalVisibleInstanceIds?: readonly string[];
 };
 
@@ -58,6 +59,7 @@ export function SalaEditorReadonlyMap({
   coordinateScale = 1,
   operationalStateByInstanceId,
   operationalStateByLegacyTableId,
+  operationalSelectedLegacyTableIds,
   operationalVisibleInstanceIds,
 }: SalaEditorReadonlyMapProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -135,6 +137,7 @@ export function SalaEditorReadonlyMap({
           instances={tpvOperationalInstances}
           stateByInstanceId={operationalStateByInstanceId}
           stateByLegacyTableId={operationalStateByLegacyTableId}
+          selectedLegacyTableIds={operationalSelectedLegacyTableIds}
         />
       ) : null}
     </>
