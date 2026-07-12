@@ -13,6 +13,7 @@ export type SalaEspaciosSidebarProps = {
   onSelectEspacio: (espacioId: string) => void;
   onRequestAddEspacio: () => void;
   onUpdateEspacio?: (espacioId: string, patch: Partial<SalaEspacioDraft>) => void;
+  onDuplicateEspacio?: (espacioId: string) => void;
   /** primary = fase Espacios · switcher = selector compacto en Estructura/Operación */
   mode?: "primary" | "switcher";
 };
@@ -24,6 +25,7 @@ export function SalaEspaciosSidebar({
   onSelectEspacio,
   onRequestAddEspacio,
   onUpdateEspacio,
+  onDuplicateEspacio,
   mode = "primary",
 }: SalaEspaciosSidebarProps) {
   const sorted = sortSalaEspacios(espacios);
@@ -98,12 +100,18 @@ export function SalaEspaciosSidebar({
           <li key={espacio.id}>
             <SalaEspacioCard
               espacio={espacio}
+              espacios={espacios}
               selected={espacio.id === selectedEspacioId}
               elementCount={elementCountByEspacioId[espacio.id] ?? 0}
               onSelect={() => onSelectEspacio(espacio.id)}
               onUpdateEspacio={
                 onUpdateEspacio
                   ? (patch) => onUpdateEspacio(espacio.id, patch)
+                  : undefined
+              }
+              onDuplicateEspacio={
+                onDuplicateEspacio && espacio.id === selectedEspacioId
+                  ? () => onDuplicateEspacio(espacio.id)
                   : undefined
               }
             />
