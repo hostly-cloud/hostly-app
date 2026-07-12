@@ -138,15 +138,12 @@ import {
 } from "@/lib/firestore/floorPlans";
 import {
   filterTpvOperationalViewportFitElements,
-  scaleTpvOperationalMapElements,
-  scaleTpvOperationalPlanSize,
   TPV_OPERATIONAL_FIT_OFFSET_X,
   TPV_OPERATIONAL_FIT_OFFSET_Y,
   TPV_OPERATIONAL_FIT_PADDING_PX,
   TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP,
   TPV_OPERATIONAL_FIT_ZOOM_MAX_MOBILE,
   TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER,
-  TPV_OPERATIONAL_MAP_VISUAL_SCALE,
 } from "@/lib/map/tpv-operational-map-visual";
 import { listenZonesByRestaurantId, type Zone } from "@/lib/firestore/zones";
 import { getUsersByRestaurant } from "@/lib/firestore/users";
@@ -161,7 +158,7 @@ import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document
 import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
 import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import type { SalaEditorReadonlyTpvOperationalState } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
-import { getOperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
 import {
   listenReservationsForDate,
   type Reservation,
@@ -7528,29 +7525,17 @@ export function CartaPageContent({
   const viewportFitSourceForTpv = mapViewportFitSourceForTpv.source;
 
   const tpvOperationalMapElementsForRender = useMemo(() => {
-    if (!embeddedInOperacion) return mapElementsForTpvRender;
-    return scaleTpvOperationalMapElements(
-      mapElementsForTpvRender,
-      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
-    );
-  }, [embeddedInOperacion, mapElementsForTpvRender]);
+    return mapElementsForTpvRender;
+  }, [mapElementsForTpvRender]);
 
   const tpvOperationalPlanSizeForRender = useMemo(() => {
-    if (!embeddedInOperacion) return selectedTpvFloorPlanSize;
-    return scaleTpvOperationalPlanSize(
-      selectedTpvFloorPlanSize,
-      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
-    );
-  }, [embeddedInOperacion, selectedTpvFloorPlanSize]);
+    return selectedTpvFloorPlanSize;
+  }, [selectedTpvFloorPlanSize]);
 
   const tpvOperationalViewportFitElements = useMemo(() => {
     if (!embeddedInOperacion) return mapViewportFitElementsForTpv;
-    const fitSource = filterTpvOperationalViewportFitElements(
+    return filterTpvOperationalViewportFitElements(
       mapViewportFitElementsForTpv,
-    );
-    return scaleTpvOperationalMapElements(
-      fitSource,
-      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
     );
   }, [embeddedInOperacion, mapViewportFitElementsForTpv]);
 
@@ -7558,7 +7543,6 @@ export function CartaPageContent({
     const planKey = selectedTpvFloorPlanId ?? "legacy";
     return [
       planKey,
-      embeddedInOperacion ? TPV_OPERATIONAL_MAP_VISUAL_SCALE : 1,
       tpvOperationalPlanSizeForRender.width,
       tpvOperationalPlanSizeForRender.height,
       tpvOperationalMapElementsForRender.length,
@@ -16109,11 +16093,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           operationalVisibleInstanceIds={
                             readonlyV2TableHitboxParity.matchedInstanceIds
                           }
-                          coordinateScale={
-                            embeddedInOperacion
-                              ? TPV_OPERATIONAL_MAP_VISUAL_SCALE
-                              : 1
-                          }
+                          coordinateScale={1}
                         />
                       ) : null
                     }
@@ -16145,40 +16125,17 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         ? readonlyV2TableHitboxParity.instanceByLegacyTableId.get(tableId) ??
                           null
                         : null;
-                      const readonlyV2CoordinateScale = embeddedInOperacion
-                        ? TPV_OPERATIONAL_MAP_VISUAL_SCALE
-                        : 1;
-                      const readonlyV2Size = readonlyV2MatchedInstance
-                        ? getOperationalInstanceCanvasSize(readonlyV2MatchedInstance)
+                      const readonlyV2Geometry = readonlyV2MatchedInstance
+                        ? projectOperationalElement(readonlyV2MatchedInstance)
                         : null;
-                      const readonlyV2MapTileWidth =
-                        readonlyV2Size != null
-                          ? readonlyV2Size.width * readonlyV2CoordinateScale
-                          : ctx.mapTileWidth;
-                      const readonlyV2MapTileHeight =
-                        readonlyV2Size != null
-                          ? readonlyV2Size.height * readonlyV2CoordinateScale
-                          : ctx.mapTileHeight;
-                      const mapLayoutX =
-                        readonlyV2MatchedInstance && readonlyV2Size
-                          ? readonlyV2MatchedInstance.position.x *
-                              readonlyV2CoordinateScale -
-                            readonlyV2MapTileWidth / 2
-                          : ctx.mapLayoutX;
-                      const mapLayoutY =
-                        readonlyV2MatchedInstance && readonlyV2Size
-                          ? readonlyV2MatchedInstance.position.y *
-                              readonlyV2CoordinateScale -
-                            readonlyV2MapTileHeight / 2
-                          : ctx.mapLayoutY;
-                      const mapTileWidth = readonlyV2MapTileWidth;
-                      const mapTileHeight = readonlyV2MapTileHeight;
+                      const mapLayoutX = readonlyV2Geometry?.x ?? ctx.mapLayoutX;
+                      const mapLayoutY = readonlyV2Geometry?.y ?? ctx.mapLayoutY;
+                      const mapTileWidth = readonlyV2Geometry?.width ?? ctx.mapTileWidth;
+                      const mapTileHeight = readonlyV2Geometry?.height ?? ctx.mapTileHeight;
                       const readonlyV2InteractionOnly =
                         useReadonlyV2Map && readonlyV2MatchedInstance != null;
                       const readonlyV2HitboxRotation =
-                        readonlyV2MatchedInstance != null
-                          ? readonlyV2MatchedInstance.rotation
-                          : 0;
+                        readonlyV2Geometry?.rotation ?? 0;
                       const priorityTable =
                         mapTablesForChipFilter.find(
                           (t) => String(t.id).trim() === tableId,

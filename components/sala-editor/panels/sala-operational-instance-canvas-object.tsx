@@ -3,9 +3,9 @@
 import type { PointerEvent } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type {
-  OperationalInstanceCanvasSize,
   OperationalInstanceResizeCorner,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import type { V2ProjectedGeometry } from "@/lib/sala-editor/geometry/v2-geometry-projection";
 import { resolveOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
 
@@ -19,7 +19,7 @@ const RESIZE_CORNERS: readonly OperationalInstanceResizeCorner[] = [
 export type SalaOperationalInstanceCanvasObjectProps = {
   instance: OperationalElementInstance;
   catalogColor?: string;
-  size: OperationalInstanceCanvasSize;
+  geometry: V2ProjectedGeometry;
   selected: boolean;
   isDragging?: boolean;
   isResizing?: boolean;
@@ -43,7 +43,7 @@ export type SalaOperationalInstanceCanvasObjectProps = {
 export function SalaOperationalInstanceCanvasObject({
   instance,
   catalogColor = "#315f7d",
-  size,
+  geometry,
   selected,
   isDragging = false,
   isResizing = false,
@@ -109,11 +109,16 @@ export function SalaOperationalInstanceCanvasObject({
         .filter(Boolean)
         .join(" ")}
       style={{
-        width: size.width,
-        height: size.height,
-        transform: isDragging
-          ? "translate(-50%, -50%) scale(1.02)"
-          : "translate(-50%, -50%)",
+        width: geometry.width,
+        height: geometry.height,
+        transform:
+          [
+            geometry.rotation !== 0 ? `rotate(${geometry.rotation}deg)` : "",
+            isDragging ? "scale(1.02)" : "",
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined,
+        transformOrigin: "center center",
         zIndex: isDragging || isResizing ? 40 : selected ? 20 : 1,
       }}
     >

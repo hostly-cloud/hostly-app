@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import { getOperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
 import { resolveOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
@@ -113,8 +114,10 @@ export function SalaEditorReadonlyOperationalLayer({
       {instances.map((instance) => {
         const instanceCatalog = getOperationalElementCatalogItem(instance.elementType);
         const size = getOperationalInstanceCanvasSize(instance);
-        const displayWidth = size.width * coordinateScale;
-        const displayHeight = size.height * coordinateScale;
+        const geometry = projectOperationalElement(instance, {
+          coordinateScale,
+          size,
+        });
         const visualVariant = resolveOperationalVisualVariant(
           instance.metadata,
           instance.elementType,
@@ -131,8 +134,8 @@ export function SalaEditorReadonlyOperationalLayer({
             key={instance.id}
             className="absolute"
             style={{
-              left: instance.position.x * coordinateScale,
-              top: instance.position.y * coordinateScale,
+              left: geometry.x,
+              top: geometry.y,
             }}
           >
             <div
@@ -144,9 +147,10 @@ export function SalaEditorReadonlyOperationalLayer({
                 .join(" ")}
               data-hostly-tpv-operational-state={state ?? undefined}
               style={{
-                width: displayWidth,
-                height: displayHeight,
-                transform: `translate(-50%, -50%) rotate(${instance.rotation}deg)`,
+                width: geometry.width,
+                height: geometry.height,
+                transform: geometry.rotation !== 0 ? `rotate(${geometry.rotation}deg)` : undefined,
+                transformOrigin: "center center",
                 zIndex: instance.elementType === "TABLE" ? 24 : 18,
                 pointerEvents: "none",
                 ...stateChrome(state),
