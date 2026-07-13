@@ -311,7 +311,7 @@ type SecondaryModule = {
 };
 
 const MANAGEMENT_MODULES: SecondaryModule[] = [
-  { path: "/dashboard/productos", label: "Productos", Icon: IconBox },
+  { path: "/dashboard/configuracion/carta/productos", label: "Productos", Icon: IconBox },
   { path: "/dashboard/configuracion", label: "Configuración", Icon: IconSettings },
   { path: "/dashboard/analisis", label: "Análisis", Icon: IconChart },
 ];
@@ -345,7 +345,7 @@ function isSecondaryModuleVisible(
       return can("tpv.sell") || can("kds.manage");
     case "/dashboard/configuracion":
     case "/dashboard/configuracion/carta/escandallos":
-    case "/dashboard/productos":
+    case "/dashboard/configuracion/carta/productos":
     case "/dashboard/configuracion/carta/categorias":
     case "/dashboard/configuracion/carta/importacion":
       return can("settings.manage");
