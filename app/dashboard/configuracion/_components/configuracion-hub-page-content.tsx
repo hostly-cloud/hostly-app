@@ -9,7 +9,7 @@ type HubCard = {
   id: string;
   title: string;
   description: string;
-  href: string;
+  href?: string;
   status: string;
   statusTone: "ok" | "warn" | "neutral";
   visual: string;
@@ -39,7 +39,7 @@ const HUB_CARDS: HubCard[] = [
     id: "operation",
     title: "Mi operación",
     description: "Estaciones, zonas, mesas y flujo de servicio.",
-    href: "/dashboard/configuracion/estaciones",
+    href: "/dashboard/configuracion/operacion",
     status: "4 estaciones",
     statusTone: "neutral",
     visual: "operation",
@@ -79,9 +79,8 @@ const HUB_CARDS: HubCard[] = [
     id: "cashier",
     title: "Mi caja",
     description: "IVA, tickets, métodos de pago y cierre de caja.",
-    href: "/dashboard/configuracion/empresa",
-    status: "IVA configurado",
-    statusTone: "ok",
+    status: "Próximamente",
+    statusTone: "neutral",
     visual: "cashier",
     icon: <IconCashier />,
   },
@@ -99,7 +98,7 @@ const HUB_CARDS: HubCard[] = [
     id: "ai",
     title: "IA",
     description: "Importación inteligente y asistentes de carta.",
-    href: "/dashboard/configuracion/carta/import-workspace",
+    href: "/dashboard/configuracion/carta/importacion",
     status: "Disponible",
     statusTone: "neutral",
     visual: "ai",
@@ -119,9 +118,8 @@ const HUB_CARDS: HubCard[] = [
     id: "account",
     title: "Cuenta",
     description: "Plan Hostly, facturación y preferencias de cuenta.",
-    href: "/dashboard/configuracion/empresa",
-    status: "Plan activo",
-    statusTone: "ok",
+    status: "Próximamente",
+    statusTone: "neutral",
     visual: "account",
     icon: <IconAccount />,
   },
@@ -189,13 +187,9 @@ export function ConfiguracionHubPageContent() {
             Dominios
           </h2>
           <div className="hostly-config-hub__grid">
-            {HUB_CARDS.map((card) => (
-              <Link
-                key={card.id}
-                href={card.href}
-                className="hostly-config-hub-card"
-                data-visual={card.visual}
-              >
+            {HUB_CARDS.map((card) => {
+              const content = (
+                <>
                 <span className="hostly-config-hub-card__icon">{card.icon}</span>
                 <span className="hostly-config-hub-card__body">
                   <span className="hostly-config-hub-card__title">{card.title}</span>
@@ -206,8 +200,33 @@ export function ConfiguracionHubPageContent() {
                 >
                   {card.status}
                 </span>
-              </Link>
-            ))}
+                </>
+              );
+              return card.href ? (
+                <Link
+                  key={card.id}
+                  href={card.href}
+                  className="hostly-config-hub-card"
+                  data-visual={card.visual}
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div
+                  key={card.id}
+                  className="hostly-config-hub-card"
+                  data-visual={card.visual}
+                  aria-disabled="true"
+                  style={{
+                    cursor: "default",
+                    opacity: 0.68,
+                    pointerEvents: "none",
+                  }}
+                >
+                  {content}
+                </div>
+              );
+            })}
           </div>
         </section>
       </div>
