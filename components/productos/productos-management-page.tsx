@@ -5004,6 +5004,20 @@ export default function ProductosManagementPage({
               </div>
               ) : null}
               </div>
+              <CatalogMigrationPreviewPanel
+                restaurantId={operationalRestaurantId}
+                catalogSource={operationalCatalog.source}
+                iceVisual={iceVisual}
+              />
+              <LegacyPlatosArchivePanel
+                restaurantId={operationalRestaurantId}
+                catalogSource={operationalCatalog.source}
+                iceVisual={iceVisual}
+                onArchived={() => {
+                  setNotice("Copia local archivada");
+                  window.setTimeout(() => setNotice(null), 3200);
+                }}
+              />
               </div>
               ) : null}
               <div
