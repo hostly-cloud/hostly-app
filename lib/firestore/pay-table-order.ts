@@ -1,22 +1,12 @@
-import {
-  collection,
-  getDocs,
-  query,
-  serverTimestamp,
-  where,
-  type Firestore,
-} from "firebase/firestore";
-import { DbgWriteBatch } from "@/lib/firestore/instrumentedWrites";
-import { isOrderStatusActiveForTableOccupancy } from "@/lib/firestore/order-table-occupancy";
+import type { Firestore } from "firebase/firestore";
+import { finalizeTableAfterPaymentViaApi } from "@/lib/firestore/tpv-mutations-via-api";
 
 /**
- * Marca como pagadas todas las órdenes activas de una mesa (mismo `restaurantId` y `tableId`).
- * Solo actualiza documentos que siguen activos para ocupación de mesa.
+ * Finaliza la mesa tras cobro autoritativo (sin marcar orders como paid sin payment).
  */
 export async function handlePayTableOrder(
   tableId: string,
   {
-    db,
     restaurantId,
   }: {
     db: Firestore;
@@ -26,31 +16,13 @@ export async function handlePayTableOrder(
   const tid = String(tableId).trim();
   if (!tid || !restaurantId) return { updatedCount: 0 };
 
-  const q = query(
-    collection(db, "orders"),
-    where("restaurantId", "==", restaurantId),
-    where("tableId", "==", tid),
-  );
-  const snap = await getDocs(q);
-  const batch = new DbgWriteBatch(db, {
-    label: "handlePayTableOrder:batch",
-    collection: "orders",
-    restaurantId,
+  const result = await finalizeTableAfterPaymentViaApi({
     tableId: tid,
+    idempotencyKey: `finalize-table:${restaurantId}:${tid}`,
   });
-  let n = 0;
-  for (const d of snap.docs) {
-    const data = d.data() as { restaurantId?: string; status?: string };
-    if (data.restaurantId !== restaurantId) continue;
-    if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
-    batch.update(d.ref, {
-      status: "paid",
-      paidAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      paymentRequestedAt: null,
-    });
-    n++;
+  if (!result.ok) {
+    if (result.error === "TABLE_HAS_UNPAID_ORDERS") return { updatedCount: 0 };
+    throw new Error(result.error);
   }
-  if (n > 0) await batch.commit();
-  return { updatedCount: n };
+  return { updatedCount: 1 };
 }

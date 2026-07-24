@@ -35,6 +35,7 @@ import {
   buildModifierInventoryConsumption,
 } from "@/lib/modifiers/modifier-inventory-consumption";
 import { buildRecipeInventoryConsumption } from "@/lib/recipes/product-recipe-helpers";
+import { buildModifierSaleV2MovementId } from "@/lib/inventory/modifier-sale-movement-identity";
 import {
   areInventoryUnitsCompatible,
   convertInventoryQuantity,
@@ -562,9 +563,23 @@ export async function createStockReversalMovementsForModifierConsumption(
   const saleProductId = String(params.line.product.id ?? "").trim();
   const saleProductName =
     String(params.line.product.nombre ?? "").trim() || "Producto";
+  const occurrenceCounter = new Map<string, number>();
 
   for (const consumption of consumptions) {
-    const originalMovementId = buildModifierConsumptionMovementId(
+    const occurrenceKey = `${consumption.groupId}::${consumption.optionId}::${consumption.inventoryProductId}`;
+    const selectionOccurrence = occurrenceCounter.get(occurrenceKey) ?? 0;
+    occurrenceCounter.set(occurrenceKey, selectionOccurrence + 1);
+
+    const v2MovementId = buildModifierSaleV2MovementId({
+      restaurantId: rid,
+      orderId,
+      sentSegmentLineId: params.line.id,
+      modifierGroupId: consumption.groupId,
+      modifierOptionId: consumption.optionId,
+      inventoryProductId: consumption.inventoryProductId,
+      selectionOccurrence,
+    });
+    const legacyMovementId = buildModifierConsumptionMovementId(
       orderId,
       params.line.id,
       consumption.inventoryProductId,
@@ -578,15 +593,17 @@ export async function createStockReversalMovementsForModifierConsumption(
     );
     result.movementIds.push(reversalMovementId);
 
-    const originalRef = stockMovementDocRef(rid, originalMovementId);
-    const reversalRef = stockMovementDocRef(rid, reversalMovementId);
-    const quantityDelta = consumption.inventoryQuantity * lineQty;
-
+    let originalMovementId = v2MovementId;
     try {
-      const [originalSnap, existingReversalSnap] = await Promise.all([
-        getDoc(originalRef),
-        getDoc(reversalRef),
-      ]);
+      let originalRef = stockMovementDocRef(rid, originalMovementId);
+      let originalSnap = await getDoc(originalRef);
+      if (!originalSnap.exists()) {
+        originalMovementId = legacyMovementId;
+        originalRef = stockMovementDocRef(rid, originalMovementId);
+        originalSnap = await getDoc(originalRef);
+      }
+      const reversalRef = stockMovementDocRef(rid, reversalMovementId);
+      const existingReversalSnap = await getDoc(reversalRef);
 
       if (existingReversalSnap.exists()) {
         result.skipped += 1;
@@ -609,6 +626,8 @@ export async function createStockReversalMovementsForModifierConsumption(
         );
         continue;
       }
+
+      const quantityDelta = consumption.inventoryQuantity * lineQty;
 
       await setDoc(reversalRef, {
         restaurantId: rid,
@@ -1002,7 +1021,7 @@ export async function createStockReversalMovementsForRecipeConsumption(
 
 /**
  * Ledger append-only por consumo de modificadores al enviar comanda.
- * El stock actual se actualiza vía `applyCreatedStockMovements` (fase posterior al create).
+ * @deprecated Consumo inicial server-side (6C2). No usar desde cliente.
  */
 export async function createStockMovementsForModifierConsumption(
   params: CreateStockMovementsForModifierConsumptionParams,

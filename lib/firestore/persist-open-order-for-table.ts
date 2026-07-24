@@ -1,16 +1,5 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  serverTimestamp,
-  type Firestore,
-} from "firebase/firestore";
-import {
-  computeBillableTotalFromPersistItems,
-  mergeOrderItemsForPersist,
-} from "@/lib/firestore/merge-order-items-for-persist";
-import { tableOperatorAssignmentCreateFields } from "@/lib/firestore/table-operator-assignment";
-import { dbgAddDoc, dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
+import type { Firestore } from "firebase/firestore";
+import { syncOrderItemsViaApi } from "@/lib/firestore/sync-order-items-via-api";
 import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignment";
 
 export type PersistOpenOrderForTableParams = {
@@ -31,78 +20,34 @@ export type PersistOpenOrderForTableParams = {
 
 /**
  * Crea o actualiza `orders/{id}` para borrador / comanda activa en mesa.
+ * Las líneas embebidas `items[]` se escriben vía API server-side (Admin SDK).
  * No modifica `orderItems` (eso sigue en `sendLinesToComanda`).
  */
 export async function persistOpenOrderForTable(
-  db: Firestore,
+  _db: Firestore,
   params: PersistOpenOrderForTableParams,
 ): Promise<string> {
   const {
-    restaurantId,
     tableId,
     tableLabel,
     items,
-    total,
     existingOrderId,
     operatorAssignment,
   } = params;
-  const safeTotal = Number.isFinite(total) ? total : 0;
   const tid = tableId.trim();
-  const rid = restaurantId.trim();
 
-  if (existingOrderId?.trim()) {
-    const id = existingOrderId.trim();
-    let mergedItems = items;
-    let mergedTotal = safeTotal;
+  const result = await syncOrderItemsViaApi({
+    operation: existingOrderId?.trim() ? "persist_items" : "create_open",
+    orderId: existingOrderId,
+    tableId: tid,
+    tableLabel,
+    items,
+    operatorAssignment,
+  });
 
-    try {
-      const snap = await getDoc(doc(db, "orders", id));
-      if (snap.exists()) {
-        const serverItems = (snap.data() as { items?: unknown }).items;
-        mergedItems = mergeOrderItemsForPersist(serverItems, items);
-        mergedTotal = computeBillableTotalFromPersistItems(mergedItems);
-      }
-    } catch (mergeReadErr) {
-      console.warn(
-        "[persistOpenOrderForTable] no se pudo leer order para merge; se usa payload local.",
-        mergeReadErr,
-      );
-    }
-
-    await dbgUpdateDoc(
-      doc(db, "orders", id),
-      {
-        items: mergedItems,
-        total: mergedTotal,
-        updatedAt: serverTimestamp(),
-      },
-      {
-        label: "persistOpenOrderForTable:update",
-        collection: "orders",
-        restaurantId: rid,
-        tableId: tid,
-        orderId: id,
-      },
-    );
-    return id;
+  if (!result.ok) {
+    throw new Error(result.error);
   }
 
-  const createPayload = {
-    restaurantId: rid,
-    tableId: tid,
-    table: tableLabel,
-    status: "open",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    items,
-    total: safeTotal,
-    ...tableOperatorAssignmentCreateFields(operatorAssignment),
-  };
-  const ref = await dbgAddDoc(collection(db, "orders"), createPayload, {
-    label: "persistOpenOrderForTable:create",
-    collection: "orders",
-    restaurantId: rid,
-    tableId: tid,
-  });
-  return ref.id;
+  return result.orderId;
 }

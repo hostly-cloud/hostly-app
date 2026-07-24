@@ -3,6 +3,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   query,
   where,
@@ -10,11 +11,12 @@ import {
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase/client";
 import {
-  dbgAddDoc,
-  dbgRunTransaction,
-  dbgTransactionUpdate,
-  DbgWriteBatch,
-} from "@/lib/firestore/instrumentedWrites";
+  closeOrderViaApi,
+  createOpenOrderViaApi,
+  reopenOrderViaApi,
+  upsertSaleLinesViaApi,
+} from "@/lib/firestore/tpv-mutations-via-api";
+import { firestoreItemsToSaleLineIntents } from "@/lib/firestore/firestore-items-to-sale-intent";
 import { updateMesa } from "@/lib/firestore/mesas";
 import type { CatalogProduct, ComandaItem, PastOrder } from "@/types/comanda";
 import type { Mesa } from "@/types/mesa";
@@ -22,7 +24,6 @@ import type { OrderSource, OrderStatus } from "@/types/order";
 import type { ComandaOrderStatus, OrderMetaDoc } from "@/utils/comanda";
 import {
   addProductToComanda,
-  buildOrderItemsForKitchen,
   calculateItemsCount,
   calculateOrderTotal,
   formatOrderDate,
@@ -48,6 +49,19 @@ const ORDER_STATUS_CLOSED: OrderStatus = "closed";
 
 const OPEN_ORDER_STATUSES = [ORDER_STATUS_OPEN, ORDER_STATUS_SENT] as const;
 const CLOSED_ORDER_STATUS = ORDER_STATUS_CLOSED;
+
+function comandaItemsToApiLines(items: ComandaItem[]): Record<string, unknown>[] {
+  return items.map((item) => ({
+    id: item.id,
+    productId: item.id,
+    name: item.name,
+    qty: item.qty,
+    quantity: item.qty,
+    price: item.price,
+    total: item.price * item.qty,
+    status: "pending",
+  }));
+}
 
 export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => {
   const [loading, setLoading] = useState(true);
@@ -273,82 +287,44 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     setIsSaving(true);
 
     try {
-      const total = orderTotal;
+      const apiItems = comandaItemsToApiLines(items);
+      const now = Date.now();
 
       if (currentOrderId) {
-        const now = Date.now();
+        const snap = await getDoc(doc(db, "orders", currentOrderId));
+        const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
+        const remoteUpdatedAt =
+          typeof data?.updatedAt === "number" ? data.updatedAt : null;
 
-        await dbgRunTransaction(
-          db,
-          async (transaction) => {
-          const ref = doc(db, "orders", currentOrderId);
-          const snap = await transaction.get(ref);
+        assertNoOrderConflict(remoteUpdatedAt);
 
-          const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
+        const result = await upsertSaleLinesViaApi({
+          orderId: currentOrderId,
+          lines: firestoreItemsToSaleLineIntents(apiItems),
+          expectedUpdatedAtMs: remoteUpdatedAt ?? undefined,
+        });
 
-          const remoteUpdatedAt =
-            typeof data?.updatedAt === "number" ? data.updatedAt : null;
-
-          assertNoOrderConflict(remoteUpdatedAt);
-
-          dbgTransactionUpdate(
-            transaction,
-            ref,
-            {
-              items,
-              total,
-              updatedAt: now,
-              ...getOrderAuditFields(),
-            },
-            {
-              label: "useMesaComanda:handleSaveOrder:txUpdate",
-              collection: "orders",
-              restaurantId,
-              tableId: mesaId,
-              orderId: currentOrderId,
-            },
-          );
-        },
-          {
-            label: "useMesaComanda:handleSaveOrder:transaction",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-            orderId: currentOrderId,
-          },
-        );
+        if (!result.ok) {
+          if (result.error === "VERSION_CONFLICT") {
+            throw new Error(ORDER_CONFLICT_ERROR);
+          }
+          throw new Error(result.error);
+        }
 
         setCurrentOrderUpdatedAt(now);
         setOrderStatus(ORDER_STATUS_OPEN);
       } else {
-        const now = Date.now();
-
-        const docRef = await dbgAddDoc(
-          collection(db, "orders"),
-          {
-          restaurantId: restaurantId ?? null,
-          mesaId,
+        const result = await createOpenOrderViaApi({
           tableId: mesaId,
-          mesaName: mesa?.name ?? null,
-          mesaZone: mesa?.zone ?? null,
-          zoneName: mesa?.zone ?? null,
-          items,
-          total,
-          status: ORDER_STATUS_OPEN,
-          source: orderSource,
-          createdAt: now,
-          updatedAt: now,
-          ...getOrderAuditFields(),
-        },
-          {
-            label: "useMesaComanda:handleSaveOrder:addDoc",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-          },
-        );
+          tableLabel: mesa?.name ?? mesaId,
+          lines: firestoreItemsToSaleLineIntents(apiItems),
+        });
 
-        setCurrentOrderId(docRef.id);
+        if (!result.ok) {
+          throw new Error(result.error);
+        }
+
+        setCurrentOrderId(result.orderId);
         setOrderStatus(ORDER_STATUS_OPEN);
         setCurrentOrderUpdatedAt(now);
       }
@@ -382,51 +358,16 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     setIsClosing(true);
 
     try {
-      const now = Date.now();
-
-      await dbgRunTransaction(
-        db,
-        async (transaction) => {
-        const ref = doc(db, "orders", orderId);
-        const snap = await transaction.get(ref);
-
-        const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
-
-        const remoteUpdatedAt =
-          typeof data?.updatedAt === "number" ? data.updatedAt : null;
-
-        assertNoOrderConflict(remoteUpdatedAt);
-
-        dbgTransactionUpdate(
-          transaction,
-          ref,
-          {
-            status: ORDER_STATUS_CLOSED,
-            closedAt: now,
-            updatedAt: now,
-            ...getOrderAuditFields(),
-          },
-          {
-            label: "useMesaComanda:handleCloseOrder:txUpdate",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-            orderId,
-          },
-        );
-      },
-        {
-          label: "useMesaComanda:handleCloseOrder",
-          collection: "orders",
-          restaurantId,
-          tableId: mesaId,
-          orderId,
-        },
-      );
-
-      await updateMesa(mesaId, {
-        status: "free",
+      const closeResult = await closeOrderViaApi({
+        orderId,
+        expectedUpdatedAtMs: currentOrderUpdatedAt ?? undefined,
       });
+      if (!closeResult.ok) {
+        if (closeResult.error === "VERSION_CONFLICT") {
+          throw new Error(ORDER_CONFLICT_ERROR);
+        }
+        throw new Error(closeResult.error);
+      }
 
       setCurrentOrderId(null);
       setItems([]);
@@ -455,72 +396,20 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     setIsSending(true);
 
     try {
-      const now = Date.now();
-
-      await dbgRunTransaction(
-        db,
-        async (transaction) => {
-        const ref = doc(db, "orders", orderId);
-        const snap = await transaction.get(ref);
-
-        const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
-
-        const remoteUpdatedAt =
-          typeof data?.updatedAt === "number" ? data.updatedAt : null;
-
-        assertNoOrderConflict(remoteUpdatedAt);
-
-        dbgTransactionUpdate(
-          transaction,
-          ref,
-          {
-            status: ORDER_STATUS_SENT,
-            sentAt: now,
-            updatedAt: now,
-            ...getOrderAuditFields(),
-          },
-          {
-            label: "useMesaComanda:handleSendToKitchen:txUpdate",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-            orderId,
-          },
-        );
-      },
-        {
-          label: "useMesaComanda:handleSendToKitchen",
-          collection: "orders",
-          restaurantId,
-          tableId: mesaId,
-          orderId,
-        },
-      );
-
-      const kitchenItems = buildOrderItemsForKitchen({
-        items,
+      const upsertResult = await upsertSaleLinesViaApi({
         orderId,
-        restaurantId: restaurantId ?? null,
-        mesaId,
-        tableId: mesaId,
+        lines: firestoreItemsToSaleLineIntents(comandaItemsToApiLines(items)),
+        markSent: true,
+        expectedUpdatedAtMs: currentOrderUpdatedAt ?? undefined,
       });
+      if (!upsertResult.ok) {
+        if (upsertResult.error === "VERSION_CONFLICT") {
+          throw new Error(ORDER_CONFLICT_ERROR);
+        }
+        throw new Error(upsertResult.error);
+      }
 
-      const batch = new DbgWriteBatch(db, {
-        label: "useMesaComanda:handleSendToKitchen:orderItemsBatch",
-        collection: "orderItems",
-        restaurantId,
-        tableId: mesaId,
-        orderId,
-      });
-
-      kitchenItems.forEach((item) => {
-        const ref = doc(db, "orderItems", item.id);
-        batch.set(ref, item);
-      });
-
-      await batch.commit();
-
-      setCurrentOrderUpdatedAt(now);
+      setCurrentOrderUpdatedAt(Date.now());
       setOrderStatus(ORDER_STATUS_SENT);
     } catch (err) {
       if (err instanceof Error && err.message === ORDER_CONFLICT_ERROR) {
@@ -545,49 +434,18 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     setIsReopening(true);
 
     try {
-      const now = Date.now();
+      const reopenResult = await reopenOrderViaApi({
+        orderId,
+        expectedUpdatedAtMs: currentOrderUpdatedAt ?? undefined,
+      });
+      if (!reopenResult.ok) {
+        if (reopenResult.error === "VERSION_CONFLICT") {
+          throw new Error(ORDER_CONFLICT_ERROR);
+        }
+        throw new Error(reopenResult.error);
+      }
 
-      await dbgRunTransaction(
-        db,
-        async (transaction) => {
-        const ref = doc(db, "orders", orderId);
-        const snap = await transaction.get(ref);
-
-        const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
-
-        const remoteUpdatedAt =
-          typeof data?.updatedAt === "number" ? data.updatedAt : null;
-
-        assertNoOrderConflict(remoteUpdatedAt);
-
-        dbgTransactionUpdate(
-          transaction,
-          ref,
-          {
-            status: ORDER_STATUS_OPEN,
-            reopenedAt: now,
-            updatedAt: now,
-            ...getOrderAuditFields(),
-          },
-          {
-            label: "useMesaComanda:handleReopenOrder:txUpdate",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-            orderId,
-          },
-        );
-      },
-        {
-          label: "useMesaComanda:handleReopenOrder",
-          collection: "orders",
-          restaurantId,
-          tableId: mesaId,
-          orderId,
-        },
-      );
-
-      setCurrentOrderUpdatedAt(now);
+      setCurrentOrderUpdatedAt(Date.now());
       setOrderStatus(ORDER_STATUS_OPEN);
     } catch (err) {
       if (err instanceof Error && err.message === ORDER_CONFLICT_ERROR) {
