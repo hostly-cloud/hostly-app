@@ -16,7 +16,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
 import ServiceMetricsBar from "@/components/kds/service-metrics-bar";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
-import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
+import { transitionLineStatusViaApi } from "@/lib/firestore/tpv-mutations-via-api";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 import {
   getHomogeneousPassChunkTypeLabel,
@@ -681,26 +681,18 @@ export default function SalaView() {
     if (busyItemIds[key]) return;
     setBusyItemIds((prev) => ({ ...prev, [key]: true }));
     const now = Date.now();
-    const nextItems = order.items.map((it) =>
-      it.id === itemId && isPreparedStatus(it.status)
-        ? { ...it, status: "served", servedAt: now }
-        : it,
-    );
+    const item = order.items.find((it) => it.id === itemId);
+    const expectedStatus = item?.status ?? "prepared";
     try {
-      await dbgUpdateDoc(
-        doc(db, "orders", orderId),
-        {
-        items: nextItems,
-        updatedAt: serverTimestamp(),
-      },
-        {
-          label: "sala-view:handleMarkServed",
-          collection: "orders",
-          restaurantId,
-          orderId,
-          tableId: order.tableId ?? null,
-        },
-      );
+      const result = await transitionLineStatusViaApi({
+        orderId,
+        lineId: itemId,
+        expectedStatus: String(expectedStatus),
+        nextStatus: "served",
+      });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
     } catch (e) {
       console.error("SalaView.handleMarkServed", e);
       logFirestorePermissionError(

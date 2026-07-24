@@ -18,7 +18,11 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
-import { getUsersByRestaurant } from "@/lib/firestore/users";
+import {
+  getUsersByRestaurant,
+  RestaurantRosterError,
+  type RestaurantRosterErrorKind,
+} from "@/lib/firestore/users";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 
 export type OperationWaiterFilter = "all" | "me" | string;
@@ -29,6 +33,12 @@ export type OperationWaiter = {
   id: string;
   name: string;
 };
+
+export type OperationRosterLoadStatus =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "error";
 
 export type OperationZone = {
   id: string;
@@ -51,6 +61,9 @@ type Ctx = {
   zoneFilter: OperationZoneFilter;
   setZoneFilter: (f: OperationZoneFilter) => void;
   waiters: OperationWaiter[];
+  waitersLoadStatus: OperationRosterLoadStatus;
+  waitersErrorKind: RestaurantRosterErrorKind | null;
+  retryWaiters: () => void;
   zones: OperationZone[];
   tableWaiterById: Record<string, string>;
   tableZoneById: Record<string, TableZoneInfo>;
@@ -64,6 +77,9 @@ const defaultCtx: Ctx = {
   zoneFilter: "all",
   setZoneFilter: () => {},
   waiters: [],
+  waitersLoadStatus: "idle",
+  waitersErrorKind: null,
+  retryWaiters: () => {},
   zones: [],
   tableWaiterById: {},
   tableZoneById: {},
@@ -94,6 +110,11 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
     useState<OperationWaiterFilter>("all");
   const [zoneFilter, setZoneFilter] = useState<OperationZoneFilter>("all");
   const [waiters, setWaiters] = useState<OperationWaiter[]>([]);
+  const [waitersLoadStatus, setWaitersLoadStatus] =
+    useState<OperationRosterLoadStatus>("idle");
+  const [waitersErrorKind, setWaitersErrorKind] =
+    useState<RestaurantRosterErrorKind | null>(null);
+  const [waitersReloadToken, setWaitersReloadToken] = useState(0);
   const [tableWaiterById, setTableWaiterById] = useState<
     Record<string, string>
   >({});
@@ -112,8 +133,13 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready || !isFirebaseConfigured || !restaurantId) {
       setWaiters([]);
+      setWaitersLoadStatus("idle");
+      setWaitersErrorKind(null);
       return;
     }
+    setWaiters([]);
+    setWaitersLoadStatus("loading");
+    setWaitersErrorKind(null);
     let cancelled = false;
     void (async () => {
       try {
@@ -127,15 +153,27 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
           .filter((u) => u.id);
         mapped.sort((a, b) => a.name.localeCompare(b.name, "es"));
         setWaiters(mapped);
+        setWaitersLoadStatus("ready");
       } catch (error) {
         console.error(error);
-        if (!cancelled) setWaiters([]);
+        if (!cancelled) {
+          setWaitersLoadStatus("error");
+          setWaitersErrorKind(
+            error instanceof RestaurantRosterError
+              ? error.kind
+              : "network",
+          );
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [ready, restaurantId]);
+  }, [ready, restaurantId, waitersReloadToken]);
+
+  const retryWaiters = useCallback(() => {
+    setWaitersReloadToken((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     if (!ready || !isFirebaseConfigured || !restaurantId) {
@@ -242,6 +280,9 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
       zoneFilter,
       setZoneFilter,
       waiters,
+      waitersLoadStatus,
+      waitersErrorKind,
+      retryWaiters,
       zones,
       tableWaiterById,
       tableZoneById,
@@ -252,6 +293,9 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
       waiterFilter,
       zoneFilter,
       waiters,
+      waitersLoadStatus,
+      waitersErrorKind,
+      retryWaiters,
       zones,
       tableWaiterById,
       tableZoneById,

@@ -7,6 +7,8 @@ export default function OperationFilterBar() {
     waiterFilter,
     setWaiterFilter,
     waiters,
+    waitersLoadStatus,
+    retryWaiters,
     currentUserId,
     zoneFilter,
     setZoneFilter,
@@ -59,6 +61,21 @@ export default function OperationFilterBar() {
           ) : null}
         </select>
       </label>
+      {waitersLoadStatus === "error" ? (
+        <div
+          className="hostly-carta-config-alert hostly-carta-config-alert--error flex w-full items-center justify-between gap-2"
+          role="alert"
+        >
+          <span>No se pudo cargar el equipo</span>
+          <button
+            type="button"
+            className="hostly-button-secondary hostly-button-compact"
+            onClick={retryWaiters}
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
