@@ -5,6 +5,9 @@ import { useI18n } from "@/components/i18n-provider";
 
 export default function InviteLandingClient({ token }: { token: string }) {
   const { t } = useI18n();
+  const loginHref = token
+    ? `/login?inviteToken=${encodeURIComponent(token)}`
+    : "/login";
 
   return (
     <main className="mx-auto flex min-h-[70vh] max-w-lg flex-col justify-center px-5 py-10">
@@ -22,10 +25,10 @@ export default function InviteLandingClient({ token }: { token: string }) {
           </p>
         ) : null}
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/login" className="hostly-button-primary px-4 py-2 text-sm font-semibold">
+          <Link href={loginHref} className="hostly-button-primary px-4 py-2 text-sm font-semibold">
             {t("invites.landingLoginCta")}
           </Link>
-          <Link href="/register" className="hostly-button-secondary px-4 py-2 text-sm font-semibold">
+          <Link href={loginHref} className="hostly-button-secondary px-4 py-2 text-sm font-semibold">
             {t("invites.landingRegisterCta")}
           </Link>
         </div>

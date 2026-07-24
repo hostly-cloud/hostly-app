@@ -79,8 +79,6 @@ function parseUsuarioRow(row: unknown): UsuarioLocal | null {
   if (!nombre || !email) return null;
 
   const inviteStatus = parseInviteStatus(r.inviteStatus);
-  const inviteUrl = typeof r.inviteUrl === "string" && r.inviteUrl.trim() ? r.inviteUrl.trim() : undefined;
-  const inviteError = typeof r.inviteError === "string" && r.inviteError.trim() ? r.inviteError.trim() : undefined;
   const inviteId = typeof r.inviteId === "string" && r.inviteId.trim() ? r.inviteId.trim() : undefined;
 
   return {
@@ -91,10 +89,31 @@ function parseUsuarioRow(row: unknown): UsuarioLocal | null {
     activo,
     modulos,
     ...(inviteStatus ? { inviteStatus } : {}),
-    ...(inviteUrl ? { inviteUrl } : {}),
-    ...(inviteError ? { inviteError } : {}),
     ...(inviteId ? { inviteId } : {}),
   };
+}
+
+export function sanitizeUsuarioForPersistence(
+  user: UsuarioLocal,
+): UsuarioLocal {
+  const {
+    inviteUrl: _inviteUrl,
+    inviteError: _inviteError,
+    ...persistent
+  } = user;
+  void _inviteUrl;
+  void _inviteError;
+  return persistent;
+}
+
+export function parseUsuariosStoragePayload(raw: unknown): UsuarioLocal[] {
+  if (!Array.isArray(raw)) return [];
+  const users: UsuarioLocal[] = [];
+  for (const row of raw) {
+    const user = parseUsuarioRow(row);
+    if (user) users.push(user);
+  }
+  return users;
 }
 
 export function defaultModulosForRol(rol: UsuarioRol): UsuarioModulos {
@@ -118,21 +137,8 @@ export function loadUsuarios(): UsuarioLocal[] {
       return [];
     }
 
-    const out: UsuarioLocal[] = [];
-    let hadDemo = false;
-    for (const row of parsed) {
-      if (row && typeof row === "object") {
-        const id = (row as Record<string, unknown>).id;
-        if (typeof id === "string" && isDemoUsuarioId(id)) {
-          hadDemo = true;
-          continue;
-        }
-      }
-      const user = parseUsuarioRow(row);
-      if (user) out.push(user);
-    }
-
-    if (hadDemo || out.length !== parsed.length) {
+    const out = parseUsuariosStoragePayload(parsed);
+    if (JSON.stringify(parsed) !== JSON.stringify(out)) {
       saveUsuarios(out);
     }
 
@@ -145,7 +151,10 @@ export function loadUsuarios(): UsuarioLocal[] {
 export function saveUsuarios(items: UsuarioLocal[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(USUARIOS_LOCAL_STORAGE_KEY, JSON.stringify(items));
+    localStorage.setItem(
+      USUARIOS_LOCAL_STORAGE_KEY,
+      JSON.stringify(items.map(sanitizeUsuarioForPersistence)),
+    );
   } catch {
     // noop
   }

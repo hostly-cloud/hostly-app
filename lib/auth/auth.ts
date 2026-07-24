@@ -1,22 +1,16 @@
 import { FirebaseError } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
-  deleteUser,
   onAuthStateChanged,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
   type User,
 } from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
 import {
-  collection,
-  doc,
-  getDoc,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
-import { auth, db } from "@/lib/firebase/client";
-import { applyPendingInviteForUser } from "@/lib/auth/invite-resolution";
-import { getPendingInviteByEmail } from "@/lib/firestore/restaurant-invites";
+  applyPendingInviteForUser,
+} from "@/lib/auth/invite-resolution";
 
 export function authErrorMessage(e: unknown): string {
   if (e instanceof FirebaseError) return e.message;
@@ -32,19 +26,22 @@ export function authErrorMessage(e: unknown): string {
   return "Auth error";
 }
 
-export async function login(email: string, password: string): Promise<User> {
+export async function login(
+  email: string,
+  password: string,
+  inviteToken?: string,
+): Promise<User> {
   console.log("[AUTH] login start", email.trim());
   try {
     const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
     console.log("[AUTH] login success", cred.user.uid);
-    try {
-      await applyPendingInviteForUser(cred.user);
-    } catch (inviteErr) {
-      console.error(
-        "[INVITE] apply pending failed (sesión válida)",
-        authErrorMessage(inviteErr),
-        inviteErr,
-      );
+    if (inviteToken?.trim() && cred.user.emailVerified) {
+      try {
+        await applyPendingInviteForUser(cred.user, inviteToken);
+      } catch (inviteErr) {
+        await signOut(auth);
+        throw inviteErr;
+      }
     }
     return cred.user;
   } catch (e) {
@@ -56,97 +53,40 @@ export async function login(email: string, password: string): Promise<User> {
 export async function register(
   email: string,
   password: string,
-  restaurantName?: string,
+  inviteToken?: string,
 ): Promise<User> {
   const trimmed = email.trim();
+  if (!inviteToken?.trim()) {
+    throw new Error(
+      "CONTROLLED_ACCESS_INVITE_REQUIRED: Hostly requiere una invitación durante el piloto.",
+    );
+  }
   console.log("[AUTH] register start", trimmed);
-  let createdUser: User | undefined;
   try {
     const cred = await createUserWithEmailAndPassword(auth, trimmed, password);
-    createdUser = cred.user;
-    const user = createdUser;
+    const user = cred.user;
     console.log("[AUTH] register auth user created", user.uid);
-    await user.getIdToken(true);
-    const pendingInvite = await getPendingInviteByEmail(trimmed);
-    console.log(
-      "[AUTH] register invite checked",
-      pendingInvite ? pendingInvite.id : "none",
-    );
-    if (pendingInvite) {
-      const profile = {
-        uid: user.uid,
-        email: user.email ?? trimmed,
-        restaurantId: pendingInvite.restaurantId,
-        restaurantName: pendingInvite.restaurantName,
-        role: pendingInvite.role,
-      };
-      const batch = writeBatch(db);
-      batch.set(doc(db, "users", user.uid), profile, { merge: true });
-      batch.set(doc(db, "usuarios", user.uid), profile, { merge: true });
-      batch.update(doc(db, "restaurant_invites", pendingInvite.id), {
-        status: "accepted",
-        acceptedAt: serverTimestamp(),
-        acceptedByUid: user.uid,
-      });
-      await batch.commit();
-      console.log("[AUTH] register joined restaurant via invite", user.uid);
-      return user;
-    }
-    const userRef = doc(db, "users", user.uid);
-    const existingUser = await getDoc(userRef);
-    if (existingUser.exists()) {
-      const prev = existingUser.data() as Record<string, unknown>;
-      const existingRid =
-        typeof prev.restaurantId === "string" ? prev.restaurantId.trim() : "";
-      if (existingRid) {
-        console.log(
-          "[AUTH] register user doc already linked to restaurant, skip",
-          user.uid,
-        );
-        return user;
-      }
-    }
-
-    const restaurantNameFinal = restaurantName?.trim() || "Mi restaurante";
-    const restaurantRef = doc(collection(db, "restaurants"));
-    const profile = {
-      email: user.email ?? trimmed,
-      restaurantId: restaurantRef.id,
-      restaurantName: restaurantNameFinal,
-      role: "owner" as const,
-    };
-    const batch = writeBatch(db);
-    batch.set(restaurantRef, {
-      name: restaurantNameFinal,
-      createdAt: Date.now(),
-    });
-    batch.set(userRef, profile);
-    batch.set(doc(db, "usuarios", user.uid), profile);
-    await batch.commit();
-    console.log("[AUTH] register profile + restaurant committed", user.uid);
+    await sendEmailVerification(user);
     return user;
   } catch (e) {
     const msg = authErrorMessage(e);
     console.error("[REGISTER ERROR]", msg, e);
-    if (createdUser) {
-      try {
-        await deleteUser(createdUser);
-        console.log("[AUTH] register rolled back auth user after profile failure");
-      } catch (delErr) {
-        const delMsg = authErrorMessage(delErr);
-        console.error("[REGISTER ERROR] no se pudo eliminar cuenta huérfana:", delMsg, delErr);
-        throw new Error(
-          `No se pudo guardar el restaurante y falló la reversión de la cuenta. ${msg} (reversión: ${delMsg})`,
-        );
-      }
-      throw new Error(`No se pudo completar el registro: ${msg}`);
-    }
     throw e;
   }
 }
 
 export async function logout(): Promise<void> {
   await signOut(auth);
+}
+
+export async function resendEmailVerification(user: User): Promise<void> {
+  await sendEmailVerification(user);
+}
+
+export async function refreshEmailVerification(user: User): Promise<User> {
+  await user.reload();
+  await user.getIdToken(true);
+  return auth.currentUser ?? user;
 }
 
 export function getCurrentUser(): User | null {

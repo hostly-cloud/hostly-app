@@ -1064,11 +1064,12 @@ Rutas: `/dashboard/operacion/cocina` · `barra` · `cocteleria`
 
 | Cuenta | `users/{uid}.role` sugerido | Rol normalizado |
 |--------|----------------------------|-----------------|
-| A — Owner | `owner` (o sin campo `role`) | owner |
-| B — Manager legacy | `staff` | manager |
+| A — Owner | `owner` | owner |
+| B — Staff histórico | `staff` | waiter |
 | C — Waiter | `waiter` | waiter |
 | D — Kitchen | `kitchen` | kitchen |
 | E — Viewer | `viewer` | viewer |
+| F — Manager | `manager` | manager |
 
 Mismo `restaurantId` en todas las cuentas. Cerrar sesión / login entre casos o usar navegadores distintos.
 
@@ -1089,25 +1090,25 @@ Marcar: `[ ]` pendiente · `[x]` OK · `[!]` fallo.
 
 ---
 
-### 15.2 Manager/staff — inventario, compras, facturas y unir mesas
+### 15.2 Staff histórico — mínimo privilegio operativo
 
 | | |
 |--|--|
-| **Escenario** | Encargado legacy (`staff` → manager) |
-| **Pasos** | 1. Login cuenta B (`staff`)<br>2. Repetir §15.1 pasos 2–3 (inventario, compras, factura)<br>3. TPV operación → unir mesa ocupada + libre (§8.1)<br>4. Separar join (§8.2) |
-| **Resultado esperado** | Mismo acceso operacional que manager; join persiste en `config/tableGroups` |
-| **Errores típicos** | `staff` no normalizado a manager (rules antiguas); join bloqueado por UI sin capability |
+| **Escenario** | Perfil histórico `staff` interpretado como `waiter` |
+| **Pasos** | 1. Login cuenta B (`staff`)<br>2. Abrir TPV, vender y cobrar<br>3. Intentar inventario, compras, factura, devolución y unir mesas |
+| **Resultado esperado** | TPV básico disponible; acciones gerenciales ausentes o `permission-denied` |
+| **Errores típicos** | `staff` todavía normalizado a manager; rules antiguas sin desplegar |
 
 - [ ] OK
 
 ---
 
-### 15.3 Manager/staff — NO config sensible
+### 15.3 Manager explícito — NO config sensible
 
 | | |
 |--|--|
 | **Escenario** | Encargado sin `settings.manage` |
-| **Pasos** | 1. Login cuenta B<br>2. Dashboard → tile **Configuración** ausente o acceso restringido<br>3. URL directa `/dashboard/configuracion`<br>4. Intentar activar layout distinto en impresoras/planos (si UI accesible) |
+| **Pasos** | 1. Login cuenta F (`manager`)<br>2. Dashboard → tile **Configuración** ausente o acceso restringido<br>3. URL directa `/dashboard/configuracion`<br>4. Intentar activar layout distinto en impresoras/planos (si UI accesible) |
 | **Resultado esperado** | UI: mensaje *No tienes permiso* o shell restringido; write Firestore a `config/floorPlanLayouts` o `config/printers` → **`permission-denied`** si se fuerza desde consola |
 | **Errores típicos** | Manager aún ve config por bug UI; rules permiten write (no desplegadas) |
 
@@ -1122,7 +1123,7 @@ Marcar: `[ ]` pendiente · `[x]` OK · `[!]` fallo.
 | **Escenario** | Camarero sin permisos back-office |
 | **Pasos** | 1. Login cuenta C (`waiter`)<br>2. Inventario → **Guardar cambios** disabled o error al guardar<br>3. Compras inteligentes → botones crear/convertir disabled<br>4. Facturas → **Registrar factura** disabled<br>5. (Opcional) Consola Firestore / SDK: intentar create en `purchaseOrders` → deny |
 | **Resultado esperado** | UI bloqueada; consola `permission-denied` en writes protegidos |
-| **Errores típicos** | Waiter con `staff` en perfil (se comporta como manager); rules sin deploy |
+| **Errores típicos** | `staff` todavía se comporta como manager; rules sin deploy |
 
 - [ ] OK
 
@@ -1245,14 +1246,14 @@ Marcar: `[ ]` pendiente · `[x]` OK · `[!]` fallo.
 
 ---
 
-### 15.14 Fase 5C — Manager/staff cobra OK
+### 15.14 Fase 5C — Staff histórico cobra como waiter
 
 | | |
 |--|--|
-| **Escenario** | Legacy staff = manager en rules |
+| **Escenario** | Legacy staff = waiter en rules |
 | **Pasos** | 1. Login cuenta B (`staff`)<br>2. Repetir cobro total TPV (§15.13)<br>3. Verificar payment en Firestore |
-| **Resultado esperado** | `canChargeTpv()` OK para manager; cobro sin regresión |
-| **Errores típicos** | Perfil `staff` no normalizado; UI bloquea pero rules deberían permitir |
+| **Resultado esperado** | `canChargeTpv()` OK para waiter; cobro sin regresión |
+| **Errores típicos** | Perfil `staff` denegado por error; UI bloquea aunque rules permiten cobro |
 
 - [ ] OK
 
@@ -1265,7 +1266,7 @@ Marcar: `[ ]` pendiente · `[x]` OK · `[!]` fallo.
 | **Escenario** | Camarero con capability cobro |
 | **Pasos** | 1. Login cuenta C (`waiter`)<br>2. TPV → cobrar mesa (botón habilitado en UI)<br>3. Confirmar pago<br>4. Firestore: `payments` create OK |
 | **Resultado esperado** | UI + rules alineados; waiter puede crear payment |
-| **Errores típicos** | Perfil aún `staff`; botón disabled en UI pero test rules con SDK directo |
+| **Errores típicos** | Botón disabled en UI aunque la capability `tpv.charge` está presente |
 
 - [ ] OK
 
@@ -1367,7 +1368,7 @@ Marcar: `[ ]` pendiente · `[x]` OK · `[!]` fallo.
 | | |
 |--|--|
 | **Escenario** | Encargado con `tpv.refund` |
-| **Pasos** | 1. Login cuenta B (`staff` / manager)<br>2. TPV → mesa con cobro parcial `split_by_items` pagado<br>3. **Anular** pago parcial (`handleCancelPartialPayment`)<br>4. Firestore: `payments/{id}` → `status: cancelled`<br>5. Consola sin `permission-denied` |
+| **Pasos** | 1. Login cuenta F (`manager`)<br>2. TPV → mesa con cobro parcial `split_by_items` pagado<br>3. **Anular** pago parcial (`handleCancelPartialPayment`)<br>4. Firestore: `payments/{id}` → `status: cancelled`<br>5. Consola sin `permission-denied` |
 | **Resultado esperado** | Update payment OK; `canRefundTpv()` satisfecho |
 | **Errores típicos** | Rules 5D no desplegadas; UI oculta acción pero rules deberían permitir manager |
 
@@ -1382,7 +1383,7 @@ Marcar: `[ ]` pendiente · `[x]` OK · `[!]` fallo.
 | **Escenario** | Camarero sin `tpv.refund` |
 | **Pasos** | 1. Login cuenta C (`waiter`)<br>2. UI: acción anular pago parcial disabled o ausente<br>3. (Opcional) SDK/consola: **update** `payments/{id}` con diff `status: cancelled` → **`permission-denied`** |
 | **Resultado esperado** | Backend bloquea refund; cobro create (5C) sigue OK para waiter |
-| **Errores típicos** | Waiter con perfil `staff`; rules 5D sin deploy |
+| **Errores típicos** | `staff` todavía obtiene `tpv.refund`; rules 5D sin deploy |
 
 - [ ] OK
 

@@ -1,4 +1,6 @@
 import { FieldValue, type Firestore, Timestamp } from "firebase-admin/firestore";
+import { isOwnerOrAdminRole } from "@/lib/server/auth/profile-role";
+import { normalizeAuthorizationRole } from "@/lib/auth/profile-authorization-policy";
 import { buildStaffInviteUrl } from "@/lib/staff-invites/build-invite-url";
 import {
   mapOnboardingRoleToStaffInviteRole,
@@ -49,25 +51,11 @@ async function resolveRestaurantName(
   return "Mi restaurante";
 }
 
-async function findPendingInviteForRestaurantEmail(
-  db: Firestore,
-  restaurantId: string,
-  email: string,
-) {
-  const snap = await db
-    .collection(COLLECTION)
-    .where("restaurantId", "==", restaurantId)
-    .where("email", "==", email)
-    .where("status", "==", "pending")
-    .limit(1)
-    .get();
-  return snap.docs[0] ?? null;
-}
-
 export type CreateStaffInviteParams = CreateStaffInviteInput & {
   db: Firestore;
   restaurantId: string;
   createdByUid: string;
+  createdByRole: string;
   sendEmail?: boolean;
 };
 
@@ -81,14 +69,45 @@ export async function createStaffInvite(
   if (!params.createdByUid.trim()) {
     throw new CreateStaffInviteError("MISSING_CREATOR", "Usuario autenticado requerido", 401);
   }
+  if (!isOwnerOrAdminRole(params.createdByRole)) {
+    throw new CreateStaffInviteError(
+      "INVITE_CREATOR_FORBIDDEN",
+      "Solo owner o admin puede crear invitaciones",
+      403,
+    );
+  }
 
   const email = normalizeStaffInviteEmail(params.email);
   if (!isValidStaffInviteEmail(email)) {
     throw new CreateStaffInviteError("INVALID_EMAIL", "Email inválido", 400);
   }
 
+  if (String(params.role).trim().toLowerCase() === "owner") {
+    throw new CreateStaffInviteError(
+      "INVITE_OWNER_FORBIDDEN",
+      "El aprovisionamiento de owners está deshabilitado durante el piloto",
+      403,
+    );
+  }
   const staffRole = normalizeStaffInviteInputRole(params.role);
+  if (!staffRole) {
+    throw new CreateStaffInviteError(
+      "INVITE_ROLE_INVALID",
+      "La invitación contiene un rol no permitido",
+      400,
+    );
+  }
   const inviteRole = mapOnboardingRoleToStaffInviteRole(staffRole);
+  if (
+    inviteRole === "admin" &&
+    normalizeAuthorizationRole(params.createdByRole) !== "owner"
+  ) {
+    throw new CreateStaffInviteError(
+      "INVITE_ROLE_ASSIGNMENT_FORBIDDEN",
+      "Solo un owner puede invitar a otro admin",
+      403,
+    );
+  }
   const displayName = params.displayName?.trim() || undefined;
   const restaurantName = await resolveRestaurantName(
     params.db,
@@ -102,45 +121,73 @@ export async function createStaffInvite(
   const inviteUrl = buildStaffInviteUrl(token);
   const now = FieldValue.serverTimestamp();
 
-  const existing = await findPendingInviteForRestaurantEmail(params.db, restaurantId, email);
-  let inviteId: string;
-  let reused = false;
-
-  if (existing) {
-    inviteId = existing.id;
-    reused = true;
-    await existing.ref.update({
-      restaurantName,
-      displayName: displayName ?? null,
-      role: inviteRole,
-      staffRole,
-      tokenHash,
-      inviteUrl,
-      updatedAt: now,
-      expiresAt,
-      createdByUid: params.createdByUid,
-      invitedBy: params.createdByUid,
-    });
-  } else {
-    const ref = params.db.collection(COLLECTION).doc();
-    inviteId = ref.id;
-    await ref.set({
-      restaurantId,
-      restaurantName,
-      email,
-      displayName: displayName ?? null,
-      role: inviteRole,
-      staffRole,
-      status: "pending",
-      tokenHash,
-      inviteUrl,
-      createdByUid: params.createdByUid,
-      invitedBy: params.createdByUid,
-      createdAt: now,
-      updatedAt: now,
-      expiresAt,
-    });
-  }
+  const stableInviteId = `invite-${hashInviteToken(
+    `${restaurantId}\u0000${email}`,
+  ).slice(0, 40)}`;
+  const stableInviteRef = params.db
+    .collection(COLLECTION)
+    .doc(stableInviteId);
+  const pendingQuery = params.db
+    .collection(COLLECTION)
+    .where("restaurantId", "==", restaurantId)
+    .where("email", "==", email)
+    .where("status", "==", "pending")
+    .limit(2);
+  const { inviteId, reused } = await params.db.runTransaction(
+    async (transaction) => {
+      const [pendingSnapshot, stableSnapshot] = await Promise.all([
+        transaction.get(pendingQuery),
+        transaction.get(stableInviteRef),
+      ]);
+      if (pendingSnapshot.size > 1) {
+        throw new CreateStaffInviteError(
+          "INVITE_STATE_AMBIGUOUS",
+          "Existe más de una invitación pendiente para este email",
+          409,
+        );
+      }
+      if (!pendingSnapshot.empty || stableSnapshot.data()?.status === "pending") {
+        throw new CreateStaffInviteError(
+          "INVITE_ALREADY_PENDING",
+          "Ya existe una invitación pendiente para este email",
+          409,
+        );
+      }
+      const targetRef = stableInviteRef;
+      const invitePayload = {
+        restaurantId,
+        email,
+        status: "pending",
+        createdAt: now,
+        restaurantName,
+        displayName: displayName ?? null,
+        role: inviteRole,
+        staffRole,
+        tokenHash,
+        updatedAt: now,
+        expiresAt,
+        createdByUid: params.createdByUid,
+        invitedBy: params.createdByUid,
+      };
+      if (stableSnapshot.exists) {
+        transaction.set(
+          targetRef,
+          {
+            ...invitePayload,
+            acceptedAt: FieldValue.delete(),
+            acceptedByUid: FieldValue.delete(),
+            cancelledAt: FieldValue.delete(),
+            cancelledByUid: FieldValue.delete(),
+            inviteUrl: FieldValue.delete(),
+          },
+          { merge: true },
+        );
+      } else {
+        transaction.set(targetRef, invitePayload);
+      }
+      return { inviteId: targetRef.id, reused: stableSnapshot.exists };
+    },
+  );
 
   const result: CreateStaffInviteResult = {
     inviteId,

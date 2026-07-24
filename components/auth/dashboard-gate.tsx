@@ -4,12 +4,13 @@ import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { useAuth } from "@/components/auth/auth-context";
+import { logout } from "@/lib/auth/auth";
 
 export function DashboardGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname() ?? "/dashboard";
   const searchParams = useSearchParams();
-  const { user, ready } = useAuth();
+  const { user, ready, profileReady, profileAccessIssue } = useAuth();
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
@@ -39,6 +40,41 @@ export function DashboardGate({ children }: { children: ReactNode }) {
       <div className="hostly-session-state">
         <div className="hostly-session-state__panel" role="status">
           Redirigiendo a login…
+        </div>
+      </div>
+    );
+  }
+
+  if (!profileReady) {
+    return (
+      <div className="hostly-session-state">
+        <div className="hostly-session-state__panel" role="status">
+          Validando acceso…
+        </div>
+      </div>
+    );
+  }
+
+  if (profileAccessIssue) {
+    const disabled = profileAccessIssue === "PROFILE_DISABLED";
+    return (
+      <div className="hostly-session-state">
+        <div className="hostly-session-state__panel" role="alert">
+          <p className="m-0 font-semibold">
+            {disabled ? "Acceso deshabilitado" : "Perfil pendiente de revisión"}
+          </p>
+          <p className="mb-0 mt-2 text-sm">
+            {disabled
+              ? "Tu cuenta está desactivada. Contacta con un administrador de Hostly."
+              : "No se puede autorizar el restaurante hasta revisar la coherencia del perfil."}
+          </p>
+          <button
+            type="button"
+            className="hostly-button-secondary mt-4"
+            onClick={() => void logout()}
+          >
+            Cerrar sesión
+          </button>
         </div>
       </div>
     );
