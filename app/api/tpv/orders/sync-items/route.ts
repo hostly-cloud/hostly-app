@@ -11,4 +11,3 @@ export async function POST() {
     { status: 410 },
   );
 }
-
