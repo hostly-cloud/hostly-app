@@ -552,15 +552,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ORDERS — create/update general sin capability gate (Fase 5C/5D).
-    // Protegido: orderItems cancel (canCancelTpvLine). Pendiente: orders.items[] (sin cancelledLineIds).
-    // isCancellingOrderItemsArray() wired; inactivo hasta schema cancelledLineIds (no bloquea KDS hoy).
+    // ORDERS — server-write-only (Admin SDK); lectura multi-tenant en cliente.
     match /orders/{orderId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
-      allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId
-        && (!isCancellingOrderItemsArray() || canCancelTpvLine());
+      allow create: if false;
+      allow update: if false;
       allow delete: if false;
     }
 
