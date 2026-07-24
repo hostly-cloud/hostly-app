@@ -9,8 +9,10 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
   type Ref,
+  type RefObject,
 } from "react";
 import type { TranslateFn } from "@/lib/i18n";
 import type { PlatoCarta } from "@/lib/platos-local";
@@ -162,6 +164,68 @@ function handleTabNavigation(
   return true;
 }
 
+function focusAndSelectInput(input: HTMLInputElement | null) {
+  if (!input) return;
+  input.focus({ preventScroll: true });
+  input.select();
+}
+
+function inlinePriceDraftMatchesStored(draft: string, storedPrice: number): boolean {
+  const trimmed = draft.trim();
+  if (trimmed === "") return false;
+  if (trimmed === String(storedPrice)) return true;
+  const parsed = Number(trimmed.replace(",", "."));
+  return Number.isFinite(parsed) && parsed === storedPrice;
+}
+
+function handleInlineDisplayActivateKeyDown(
+  e: KeyboardEvent,
+  startEdit: () => void,
+  cellKey: ProductInlineCellKey,
+  ctx: ProductosTableInlineEditContextValue | null,
+) {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    startEdit();
+    return;
+  }
+  handleTabNavigation(e, cellKey, ctx);
+}
+
+function useInlineDisplayEditActivation(args: {
+  disabled?: boolean;
+  saving: boolean;
+  editing: boolean;
+  inputRef: RefObject<HTMLInputElement | null>;
+  prepare: () => void;
+  setEditing: (value: boolean) => void;
+}) {
+  const openingRef = useRef(false);
+
+  useEffect(() => {
+    if (!args.editing) return;
+    focusAndSelectInput(args.inputRef.current);
+    openingRef.current = false;
+  }, [args.editing, args.inputRef]);
+
+  const startEdit = useCallback(() => {
+    if (args.disabled || args.saving || args.editing || openingRef.current) return;
+    openingRef.current = true;
+    args.prepare();
+    args.setEditing(true);
+  }, [args.disabled, args.editing, args.prepare, args.saving, args.setEditing]);
+
+  const handleDisplayClick = useCallback(
+    (event: MouseEvent) => {
+      if (event.detail > 1) return;
+      startEdit();
+    },
+    [startEdit],
+  );
+
+  return { startEdit, handleDisplayClick };
+}
+
 export function ProductosInlineEditableName({
   p,
   disabled,
@@ -217,13 +281,21 @@ export function ProductosInlineEditableName({
     triggerSaved();
   }, [cancel, draft, onError, onSave, p.nombre, saving, triggerSaved]);
 
-  const startEdit = useCallback(() => {
-    if (disabled || saving) return;
+  const prepareEdit = useCallback(() => {
     setDraft(p.nombre);
     setLocalError(null);
-    setEditing(true);
-    window.requestAnimationFrame(() => inputRef.current?.select());
-  }, [disabled, p.nombre, saving]);
+  }, [p.nombre]);
+
+  const { startEdit, handleDisplayClick } = useInlineDisplayEditActivation({
+    disabled,
+    saving,
+    editing,
+    inputRef,
+    prepare: prepareEdit,
+    setEditing,
+  });
+
+  const editNameLabel = `Editar nombre, ${p.nombre}`;
 
   if (editing) {
     return (
@@ -234,7 +306,7 @@ export function ProductosInlineEditableName({
           value={draft}
           disabled={saving}
           autoComplete="off"
-          aria-label={title ?? p.nombre}
+          aria-label={editNameLabel}
           onChange={(e) => {
             setDraft(e.target.value);
             setLocalError(null);
@@ -284,21 +356,18 @@ export function ProductosInlineEditableName({
       className={[
         "hostly-productos-inline-cell__display",
         "hostly-productos-inline-cell__display--name",
+        "hostly-productos-inline-cell__display--editable",
         className,
         saved ? "is-saved" : "",
         disabled ? "is-disabled" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      title={title ?? `${p.nombre} — doble clic para editar`}
-      onDoubleClick={startEdit}
+      title={title ?? `${p.nombre} — clic para editar`}
+      aria-label={editNameLabel}
+      onClick={handleDisplayClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          startEdit();
-          return;
-        }
-        handleTabNavigation(e, cellKey, ctx);
+        handleInlineDisplayActivateKeyDown(e, startEdit, cellKey, ctx);
       }}
     >
       {p.nombre}
@@ -344,6 +413,10 @@ export function ProductosInlineEditablePrice({
 
   const commit = useCallback(async () => {
     if (saving) return;
+    if (inlinePriceDraftMatchesStored(draft, p.precioVenta)) {
+      cancel();
+      return;
+    }
     setSaving(true);
     setLocalError(null);
     const result = await onSave(draft);
@@ -355,15 +428,23 @@ export function ProductosInlineEditablePrice({
     }
     setEditing(false);
     triggerSaved();
-  }, [draft, onError, onSave, saving, triggerSaved]);
+  }, [cancel, draft, onError, onSave, p.precioVenta, saving, triggerSaved]);
 
-  const startEdit = useCallback(() => {
-    if (disabled || saving) return;
+  const prepareEdit = useCallback(() => {
     setDraft(editSeed);
     setLocalError(null);
-    setEditing(true);
-    window.requestAnimationFrame(() => inputRef.current?.select());
-  }, [disabled, editSeed, saving]);
+  }, [editSeed]);
+
+  const { startEdit, handleDisplayClick } = useInlineDisplayEditActivation({
+    disabled,
+    saving,
+    editing,
+    inputRef,
+    prepare: prepareEdit,
+    setEditing,
+  });
+
+  const editPriceLabel = `Editar precio de ${p.nombre}, ${displayValue}`;
 
   if (editing) {
     return (
@@ -377,7 +458,7 @@ export function ProductosInlineEditablePrice({
           className="hostly-productos-inline-cell__input hostly-productos-inline-cell__input--price tabular-nums"
           value={draft}
           disabled={saving}
-          aria-label={`Precio de ${p.nombre}`}
+          aria-label={editPriceLabel}
           onChange={(e) => {
             setDraft(e.target.value);
             setLocalError(null);
@@ -427,21 +508,18 @@ export function ProductosInlineEditablePrice({
       className={[
         "hostly-productos-inline-cell__display",
         "hostly-productos-inline-cell__display--price",
+        "hostly-productos-inline-cell__display--editable",
         "hostly-data-table-price",
         saved ? "is-saved" : "",
         disabled ? "is-disabled" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      title={`${displayValue} — doble clic para editar`}
-      onDoubleClick={startEdit}
+      title={`${displayValue} — clic para editar`}
+      aria-label={editPriceLabel}
+      onClick={handleDisplayClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          startEdit();
-          return;
-        }
-        handleTabNavigation(e, cellKey, ctx);
+        handleInlineDisplayActivateKeyDown(e, startEdit, cellKey, ctx);
       }}
     >
       {displayValue}

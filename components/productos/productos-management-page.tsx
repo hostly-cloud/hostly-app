@@ -53,6 +53,7 @@ import {
 } from "@/lib/carta/product-category-family-resolver";
 import {
   defaultOperationStationSelectForTipoVenta,
+  parseProductPrecio,
 } from "@/lib/productos/product-central-draft";
 import { resolveCategorySelectionInheritance } from "@/lib/productos/product-category-inheritance";
 import {
@@ -1352,6 +1353,497 @@ function ProductRowActions({
   );
 }
 
+type AdvancedFormPendingImageSnapshot = {
+  name: string;
+  size: number;
+  lastModified: number;
+};
+
+type AdvancedFormImagePersistableSnapshot = {
+  mode: "central" | "legacy";
+  legacyFotoUrl: string;
+  existingImagePath: string;
+  removeImage: boolean;
+  pendingFile: AdvancedFormPendingImageSnapshot | null;
+};
+
+type AdvancedFormRecipeRowPersistableSnapshot = {
+  productId: string;
+  quantity: string;
+  unit: string;
+};
+
+type AdvancedProductFormBaselineSnapshot = {
+  nombre: string;
+  precio: string;
+  tipoVenta: TipoProductoVenta;
+  categoriaCartaId: string | null;
+  productFamilyId: string;
+  operationStationSelect: string;
+  draftCourse: string;
+  productCompositionType: ProductCompositionType;
+  activo: boolean;
+  modifierGroupIds: readonly string[];
+  descripcion: string;
+  image: AdvancedFormImagePersistableSnapshot;
+  recipeEnabled: boolean;
+  recipeRows: readonly AdvancedFormRecipeRowPersistableSnapshot[];
+};
+
+type AdvancedFormSnapshotCompareContext = {
+  modifierGroups: readonly ModifierGroupDocument[];
+  skipsMenuCourse: boolean;
+};
+
+type AdvancedProductFormPersistableSnapshot = {
+  nombre: string;
+  precio: string;
+  tipoVenta: TipoProductoVenta;
+  categoriaCartaId: string | null;
+  productFamilyId: string;
+  operationStationSelect: string;
+  course: string;
+  productCompositionType: ProductCompositionType;
+  activo: boolean;
+  modifierGroupIds: readonly string[];
+  descripcion: string;
+  image: AdvancedFormImagePersistableSnapshot;
+  recipeEnabled: boolean;
+  recipeRows: readonly AdvancedFormRecipeRowPersistableSnapshot[];
+};
+
+type AdvancedFormSnapshotBuildInput = {
+  isCentralCatalog: boolean;
+  draftNombre: string;
+  draftPrecio: string;
+  draftTipo: TipoProductoVenta;
+  draftCategoriaCartaId: string | null;
+  draftProductFamilyId: string;
+  draftOperationStationSelect: string;
+  draftCourse: string;
+  draftProductCompositionType: ProductCompositionType;
+  draftActivo: boolean;
+  draftModifierGroupIds: readonly string[];
+  draftDesc: string;
+  draftFoto: string;
+  draftExistingImagePath: string | undefined;
+  draftRemoveImage: boolean;
+  draftPendingImageFile: File | null;
+  draftRecipeEnabled: boolean;
+  draftRecipeRows: readonly RecipeIngredientDraftRow[];
+  skipsMenuCourse: boolean;
+  modifierGroups: readonly ModifierGroupDocument[];
+};
+
+function normalizeAdvancedFormPrecioSnapshot(value: string): string {
+  const parsed = parseProductPrecio(value);
+  return parsed == null ? value.trim() : String(parsed);
+}
+
+function normalizeAdvancedFormRecipeQuantityComparable(value: string): string {
+  const trimmed = value.trim().replace(",", ".");
+  if (!trimmed) return "";
+  const parsed = Number(trimmed);
+  if (Number.isFinite(parsed) && parsed > 0) return String(parsed);
+  return value.trim();
+}
+
+function mapAdvancedFormRecipeRowsBaseline(
+  rows: readonly RecipeIngredientDraftRow[],
+): AdvancedFormRecipeRowPersistableSnapshot[] {
+  return rows
+    .filter((row) => row.productId.trim().length > 0)
+    .map((row) => ({
+      productId: row.productId.trim(),
+      quantity: row.quantity.trim(),
+      unit: row.unit,
+    }));
+}
+
+function normalizeAdvancedFormCourseComparable(
+  rawCourse: string,
+  skipsMenuCourse: boolean,
+): string {
+  return skipsMenuCourse ? "" : rawCourse.trim();
+}
+
+function normalizeAdvancedFormModifierGroupIdsComparable(
+  rawIds: readonly string[],
+  modifierGroups: readonly ModifierGroupDocument[],
+): string[] {
+  return sanitizeModifierGroupIdsForSave(rawIds, modifierGroups).slice().sort();
+}
+
+function buildAdvancedFormImagePersistableSnapshot(
+  input: Pick<
+    AdvancedFormSnapshotBuildInput,
+    "isCentralCatalog" | "draftFoto" | "draftExistingImagePath" | "draftRemoveImage" | "draftPendingImageFile"
+  >,
+): AdvancedFormImagePersistableSnapshot {
+  if (input.isCentralCatalog) {
+    return {
+      mode: "central",
+      legacyFotoUrl: "",
+      existingImagePath: input.draftExistingImagePath?.trim() ?? "",
+      removeImage: input.draftRemoveImage,
+      pendingFile: input.draftPendingImageFile
+        ? {
+            name: input.draftPendingImageFile.name,
+            size: input.draftPendingImageFile.size,
+            lastModified: input.draftPendingImageFile.lastModified,
+          }
+        : null,
+    };
+  }
+  return {
+    mode: "legacy",
+    legacyFotoUrl: input.draftFoto.trim(),
+    existingImagePath: "",
+    removeImage: false,
+    pendingFile: null,
+  };
+}
+
+function captureAdvancedFormBaselineSnapshot(
+  input: AdvancedFormSnapshotBuildInput,
+): AdvancedProductFormBaselineSnapshot {
+  return {
+    nombre: input.draftNombre.trim(),
+    precio: input.draftPrecio.trim(),
+    tipoVenta: input.draftTipo,
+    categoriaCartaId: input.draftCategoriaCartaId,
+    productFamilyId: input.draftProductFamilyId.trim(),
+    operationStationSelect: input.draftOperationStationSelect.trim(),
+    draftCourse: input.draftCourse.trim(),
+    productCompositionType: normalizeProductCompositionType(
+      input.draftProductCompositionType,
+    ),
+    activo: input.draftActivo,
+    modifierGroupIds: [...input.draftModifierGroupIds],
+    descripcion: input.draftDesc.trim(),
+    image: buildAdvancedFormImagePersistableSnapshot(input),
+    recipeEnabled: input.draftRecipeEnabled,
+    recipeRows: mapAdvancedFormRecipeRowsBaseline(input.draftRecipeRows),
+  };
+}
+
+function buildAdvancedFormComparableSnapshot(
+  source: AdvancedProductFormBaselineSnapshot,
+  context: AdvancedFormSnapshotCompareContext,
+): AdvancedProductFormPersistableSnapshot {
+  return {
+    nombre: source.nombre,
+    precio: normalizeAdvancedFormPrecioSnapshot(source.precio),
+    tipoVenta: source.tipoVenta,
+    categoriaCartaId: source.categoriaCartaId,
+    productFamilyId: source.productFamilyId,
+    operationStationSelect: source.operationStationSelect,
+    course: normalizeAdvancedFormCourseComparable(
+      source.draftCourse,
+      context.skipsMenuCourse,
+    ),
+    productCompositionType: source.productCompositionType,
+    activo: source.activo,
+    modifierGroupIds: normalizeAdvancedFormModifierGroupIdsComparable(
+      source.modifierGroupIds,
+      context.modifierGroups,
+    ),
+    descripcion: source.descripcion,
+    image: source.image,
+    recipeEnabled: source.recipeEnabled,
+    recipeRows: source.recipeRows.map((row) => ({
+      productId: row.productId,
+      quantity: normalizeAdvancedFormRecipeQuantityComparable(row.quantity),
+      unit: row.unit,
+    })),
+  };
+}
+
+function buildAdvancedFormComparableSnapshotFromInput(
+  input: AdvancedFormSnapshotBuildInput,
+  context: AdvancedFormSnapshotCompareContext,
+): AdvancedProductFormPersistableSnapshot {
+  return buildAdvancedFormComparableSnapshot(
+    captureAdvancedFormBaselineSnapshot(input),
+    context,
+  );
+}
+
+function areAdvancedFormPendingImagesEqual(
+  left: AdvancedFormPendingImageSnapshot | null,
+  right: AdvancedFormPendingImageSnapshot | null,
+): boolean {
+  if (left == null || right == null) return left === right;
+  return (
+    left.name === right.name &&
+    left.size === right.size &&
+    left.lastModified === right.lastModified
+  );
+}
+
+function areAdvancedFormImagesEqual(
+  left: AdvancedFormImagePersistableSnapshot,
+  right: AdvancedFormImagePersistableSnapshot,
+): boolean {
+  return (
+    left.mode === right.mode &&
+    left.legacyFotoUrl === right.legacyFotoUrl &&
+    left.existingImagePath === right.existingImagePath &&
+    left.removeImage === right.removeImage &&
+    areAdvancedFormPendingImagesEqual(left.pendingFile, right.pendingFile)
+  );
+}
+
+function areAdvancedFormRecipeRowsEqual(
+  left: readonly AdvancedFormRecipeRowPersistableSnapshot[],
+  right: readonly AdvancedFormRecipeRowPersistableSnapshot[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every(
+    (row, index) =>
+      row.productId === right[index]?.productId &&
+      row.quantity === right[index]?.quantity &&
+      row.unit === right[index]?.unit,
+  );
+}
+
+function areAdvancedProductFormPersistableSnapshotsEqual(
+  left: AdvancedProductFormPersistableSnapshot,
+  right: AdvancedProductFormPersistableSnapshot,
+): boolean {
+  if (left.modifierGroupIds.length !== right.modifierGroupIds.length) return false;
+  return (
+    left.nombre === right.nombre &&
+    left.precio === right.precio &&
+    left.tipoVenta === right.tipoVenta &&
+    left.categoriaCartaId === right.categoriaCartaId &&
+    left.productFamilyId === right.productFamilyId &&
+    left.operationStationSelect === right.operationStationSelect &&
+    left.course === right.course &&
+    left.productCompositionType === right.productCompositionType &&
+    left.activo === right.activo &&
+    left.descripcion === right.descripcion &&
+    left.recipeEnabled === right.recipeEnabled &&
+    left.modifierGroupIds.every((id, index) => id === right.modifierGroupIds[index]) &&
+    areAdvancedFormImagesEqual(left.image, right.image) &&
+    areAdvancedFormRecipeRowsEqual(left.recipeRows, right.recipeRows)
+  );
+}
+
+function isVisibleFocusDestination(element: HTMLElement): boolean {
+  if (!element.isConnected) return false;
+  if (element.hasAttribute("hidden")) return false;
+  for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    if (ancestor.hasAttribute("hidden")) return false;
+    if (ancestor.getAttribute("aria-hidden") === "true") return false;
+  }
+  if (element.getClientRects().length === 0) return false;
+  const style = window.getComputedStyle(element);
+  if (style.visibility === "hidden" || style.display === "none") return false;
+  return true;
+}
+
+function isFocusableFocusDestination(element: HTMLElement): boolean {
+  if (element.matches(":disabled") || element.getAttribute("aria-disabled") === "true") {
+    return false;
+  }
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLSelectElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLButtonElement
+  ) {
+    if (element.disabled) return false;
+  }
+  if (
+    element.tabIndex < 0 &&
+    !element.matches("input, select, textarea, button, a[href], summary")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isValidFocusDestination(element: HTMLElement): boolean {
+  return isVisibleFocusDestination(element) && isFocusableFocusDestination(element);
+}
+
+function tryFocusElement(target: HTMLElement): boolean {
+  if (!isValidFocusDestination(target)) return false;
+  target.focus({ preventScroll: true });
+  return document.activeElement === target;
+}
+
+function isAdvancedFormDrawerFocusTarget(
+  element: HTMLElement,
+  drawerRoot: HTMLElement,
+): boolean {
+  if (!drawerRoot.contains(element)) return false;
+  return isValidFocusDestination(element);
+}
+
+function captureAdvancedFormDrawerFocusTarget(
+  drawerRoot: HTMLElement | null,
+): HTMLElement | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !drawerRoot) return null;
+  if (!isAdvancedFormDrawerFocusTarget(active, drawerRoot)) return null;
+  return active;
+}
+
+function isAddCategoryOpenerFocusTarget(element: HTMLElement): boolean {
+  return isValidFocusDestination(element);
+}
+
+type AdvancedFormDrawerFocusRestoreFallback = "saved" | "active-tab" | "drawer-container";
+
+function restoreAdvancedFormDrawerFocus(
+  savedTarget: HTMLElement | null,
+  drawerRoot: HTMLElement | null,
+): AdvancedFormDrawerFocusRestoreFallback {
+  if (
+    savedTarget &&
+    drawerRoot &&
+    isAdvancedFormDrawerFocusTarget(savedTarget, drawerRoot) &&
+    tryFocusElement(savedTarget)
+  ) {
+    return "saved";
+  }
+
+  const activeTabButton = drawerRoot?.querySelector(
+    '.hostly-product-form-drawer-tabs__tab[aria-selected="true"]',
+  );
+  if (
+    activeTabButton instanceof HTMLElement &&
+    drawerRoot &&
+    isAdvancedFormDrawerFocusTarget(activeTabButton, drawerRoot) &&
+    tryFocusElement(activeTabButton)
+  ) {
+    return "active-tab";
+  }
+
+  if (drawerRoot && isVisibleFocusDestination(drawerRoot)) {
+    drawerRoot.focus({ preventScroll: true });
+    if (document.activeElement === drawerRoot) {
+      return "drawer-container";
+    }
+  }
+
+  return "drawer-container";
+}
+
+function ProductAdvancedFormDiscardConfirm({
+  open,
+  saving,
+  onKeepEditing,
+  onDiscard,
+}: {
+  open: boolean;
+  saving: boolean;
+  onKeepEditing: () => void;
+  onDiscard: () => void;
+}) {
+  const keepEditingRef = useRef<HTMLButtonElement | null>(null);
+  const discardRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    keepEditingRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onKeepEditing();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const keepEditing = keepEditingRef.current;
+      const discard = discardRef.current;
+      if (!keepEditing || !discard) return;
+
+      const focusables = [keepEditing, discard];
+      const active = document.activeElement;
+      const currentIndex = focusables.indexOf(active as HTMLButtonElement);
+
+      if (currentIndex === -1) {
+        event.preventDefault();
+        keepEditing.focus();
+        return;
+      }
+
+      event.preventDefault();
+      const nextIndex = event.shiftKey
+        ? currentIndex === 0
+          ? focusables.length - 1
+          : currentIndex - 1
+        : currentIndex === focusables.length - 1
+          ? 0
+          : currentIndex + 1;
+      focusables[nextIndex]?.focus();
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [open, onKeepEditing]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="hostly-productos-bulk-course-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onKeepEditing();
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="hostly-product-form-discard-title"
+        aria-describedby="hostly-product-form-discard-message"
+        className="hostly-productos-bulk-course-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <h2
+          id="hostly-product-form-discard-title"
+          className="hostly-productos-bulk-course-modal__title"
+        >
+          ¿Descartar cambios?
+        </h2>
+        <p
+          id="hostly-product-form-discard-message"
+          className="hostly-productos-bulk-course-modal__hint"
+        >
+          Perderás los cambios que todavía no has guardado.
+        </p>
+        <div className="hostly-productos-bulk-course-modal__actions">
+          <button
+            ref={keepEditingRef}
+            type="button"
+            className="hostly-button-secondary hostly-button-compact"
+            disabled={saving}
+            onClick={onKeepEditing}
+          >
+            Seguir editando
+          </button>
+          <button
+            ref={discardRef}
+            type="button"
+            className="hostly-button-danger hostly-button-compact"
+            disabled={saving}
+            onClick={onDiscard}
+          >
+            Descartar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export type ProductosManagementPageProps = {
   /** Dentro del layout Config (franja superior); el shell usa altura flexible en lugar de 100dvh. */
   lockViewportFillParent?: boolean;
@@ -1524,6 +2016,12 @@ export default function ProductosManagementPage({
     toggleSelectAllDisplayed: toggleSelectAllDisplayedBase,
   } = useProductosSelection();
   const nombreInputRef = useRef<HTMLInputElement | null>(null);
+  const advancedFormDrawerRef = useRef<HTMLElement | null>(null);
+  const advancedFormDiscardFocusRestoreRef = useRef<HTMLElement | null>(null);
+  const advancedFormDiscardFocusPendingRef = useRef(false);
+  const addCategoryOpenerRef = useRef<HTMLElement | null>(null);
+  const addCategoryFocusRestorePendingRef = useRef(false);
+  const addCategoryRestoreViaDrawerFallbackRef = useRef(false);
   /** Oculta al instante productos borrados hasta que el snapshot central confirme el delete. */
   const pendingRemovedProductIdsRef = useRef<Set<string>>(new Set());
   const configListFilterInitRef = useRef(false);
@@ -1534,6 +2032,33 @@ export default function ProductosManagementPage({
   const draftRecipeRowsRef = useRef(draftRecipeRows);
   draftRecipeEnabledRef.current = draftRecipeEnabled;
   draftRecipeRowsRef.current = draftRecipeRows;
+  const [formSessionToken, setFormSessionToken] = useState(0);
+  const formSessionTokenRef = useRef(0);
+  const [discardFormConfirmOpen, setDiscardFormConfirmOpen] = useState(false);
+  const advancedFormBaselineRef = useRef<AdvancedProductFormBaselineSnapshot | null>(null);
+  const pendingAdvancedFormBaselineSessionRef = useRef<number | null>(null);
+  const advancedFormSnapshotBuildInputRef = useRef<AdvancedFormSnapshotBuildInput>({
+    isCentralCatalog: false,
+    draftNombre: "",
+    draftPrecio: "",
+    draftTipo: "plato",
+    draftCategoriaCartaId: null,
+    draftProductFamilyId: CATEGORY_PRODUCT_FAMILY_NONE,
+    draftOperationStationSelect: "default-kitchen",
+    draftCourse: "",
+    draftProductCompositionType: DEFAULT_PRODUCT_COMPOSITION_TYPE,
+    draftActivo: true,
+    draftModifierGroupIds: [],
+    draftDesc: "",
+    draftFoto: "",
+    draftExistingImagePath: undefined,
+    draftRemoveImage: false,
+    draftPendingImageFile: null,
+    draftRecipeEnabled: false,
+    draftRecipeRows: [],
+    skipsMenuCourse: false,
+    modifierGroups: [],
+  });
   const [escandalloModalOpen, setEscandalloModalOpen] = useState(false);
   const [commercialInfoModalOpen, setCommercialInfoModalOpen] = useState(false);
   const [inventoryLookup, setInventoryLookup] = useState<InventoryProductLookup[]>([]);
@@ -2026,6 +2551,43 @@ export default function ProductosManagementPage({
     if (categoryTab === "__all__" || categoryTab === "__uncat__") return "";
     return tabOptions.find((tab) => tab.id === categoryTab)?.label ?? "";
   }, [categoryTab, tabOptions]);
+
+  const showCategoryReorderControl =
+    configCartaProductosChrome && isCentralCatalog && !isLegacyReadOnly;
+
+  const reorderCategoryFullCount = useMemo(() => {
+    if (categoryTab === "__all__" || categoryTab === "__uncat__") return 0;
+    const cat = cartaCategorias.find((c) => c.id === categoryTab);
+    return items.filter((p) => {
+      if (p.categoriaCartaId === categoryTab) return true;
+      if (cat && !p.categoriaCartaId) {
+        const a = normCatKey(p.categoria ?? "");
+        const b = normCatKey(cat.name);
+        return a === b && a !== "";
+      }
+      return false;
+    }).length;
+  }, [items, categoryTab, cartaCategorias]);
+
+  const categoryReorderControl = useMemo(() => {
+    if (categoryTab === "__all__" || categoryTab === "__uncat__") {
+      const hint = t("productos.orderModeSelectCategoryHint");
+      return { enabled: false, label: hint, title: hint, ariaLabel: hint };
+    }
+    if (reorderCategoryFullCount < 2) {
+      const hint = t("productos.orderModeMinProductsHint");
+      return { enabled: false, label: hint, title: hint, ariaLabel: hint };
+    }
+    const label = t("productos.orderModeCategoryCta");
+    return {
+      enabled: true,
+      label,
+      title: label,
+      ariaLabel: t("productos.orderModeCategoryCtaAria", {
+        category: activeReorderCategoryLabel,
+      }),
+    };
+  }, [categoryTab, reorderCategoryFullCount, t, activeReorderCategoryLabel]);
 
   const exitReorderMode = useCallback(() => {
     setReorderMode(false);
@@ -2592,6 +3154,29 @@ export default function ProductosManagementPage({
     [draftTipo, draftOperationStationSelect, operationStations],
   );
 
+  advancedFormSnapshotBuildInputRef.current = {
+    isCentralCatalog,
+    draftNombre,
+    draftPrecio,
+    draftTipo,
+    draftCategoriaCartaId,
+    draftProductFamilyId,
+    draftOperationStationSelect,
+    draftCourse,
+    draftProductCompositionType,
+    draftActivo,
+    draftModifierGroupIds,
+    draftDesc,
+    draftFoto,
+    draftExistingImagePath,
+    draftRemoveImage,
+    draftPendingImageFile,
+    draftRecipeEnabled,
+    draftRecipeRows,
+    skipsMenuCourse: draftSkipsMenuCourse,
+    modifierGroups,
+  };
+
   useEffect(() => {
     if (!formOpen || !draftSkipsMenuCourse) return;
     setDraftCourse("");
@@ -2870,15 +3455,116 @@ export default function ProductosManagementPage({
     }
   }, []);
 
+  const beginAdvancedFormSession = useCallback(() => {
+    const nextToken = formSessionTokenRef.current + 1;
+    formSessionTokenRef.current = nextToken;
+    pendingAdvancedFormBaselineSessionRef.current = nextToken;
+    setFormSessionToken(nextToken);
+  }, []);
+
   const closeForm = useCallback(() => {
     resetDraftImageState();
     setEscandalloModalOpen(false);
     setCommercialInfoModalOpen(false);
+    setDiscardFormConfirmOpen(false);
     setEditFocus(null);
     setFormOpen(false);
     setEditingId(null);
     setFormError(null);
+    advancedFormBaselineRef.current = null;
+    pendingAdvancedFormBaselineSessionRef.current = null;
   }, [resetDraftImageState]);
+
+  const hasAdvancedFormUnsavedChanges = useCallback(() => {
+    if (!advancedFormBaselineRef.current) return false;
+    const input = advancedFormSnapshotBuildInputRef.current;
+    const compareContext: AdvancedFormSnapshotCompareContext = {
+      modifierGroups: input.modifierGroups,
+      skipsMenuCourse: input.skipsMenuCourse,
+    };
+    const current = buildAdvancedFormComparableSnapshotFromInput(input, compareContext);
+    const baseline = buildAdvancedFormComparableSnapshot(
+      advancedFormBaselineRef.current,
+      compareContext,
+    );
+    return !areAdvancedProductFormPersistableSnapshotsEqual(current, baseline);
+  }, []);
+
+  const dismissDiscardFormConfirm = useCallback(() => {
+    setDiscardFormConfirmOpen(false);
+    advancedFormDiscardFocusPendingRef.current = true;
+  }, []);
+
+  const confirmDiscardForm = useCallback(() => {
+    setDiscardFormConfirmOpen(false);
+    closeForm();
+  }, [closeForm]);
+
+  const requestCloseForm = useCallback(() => {
+    if (drawerSyncing || discardFormConfirmOpen) return;
+    if (hasAdvancedFormUnsavedChanges()) {
+      advancedFormDiscardFocusRestoreRef.current = captureAdvancedFormDrawerFocusTarget(
+        advancedFormDrawerRef.current,
+      );
+      setDiscardFormConfirmOpen(true);
+      return;
+    }
+    closeForm();
+  }, [closeForm, discardFormConfirmOpen, drawerSyncing, hasAdvancedFormUnsavedChanges]);
+
+  const captureAddCategoryOpenerFocus = useCallback(() => {
+    const active = document.activeElement;
+    addCategoryOpenerRef.current = active instanceof HTMLElement ? active : null;
+  }, []);
+
+  const closeAddCategoryDialog = useCallback(() => {
+    setAddCategoryOpen(false);
+    addCategoryFocusRestorePendingRef.current = true;
+  }, []);
+
+  const openAddCategoryDialog = useCallback(
+    (prepare: () => void, options?: { restoreViaDrawerFallback?: boolean }) => {
+      captureAddCategoryOpenerFocus();
+      addCategoryRestoreViaDrawerFallbackRef.current =
+        options?.restoreViaDrawerFallback === true;
+      prepare();
+      setAddCategoryOpen(true);
+    },
+    [captureAddCategoryOpenerFocus],
+  );
+
+  useLayoutEffect(() => {
+    if (discardFormConfirmOpen || !advancedFormDiscardFocusPendingRef.current) return;
+    advancedFormDiscardFocusPendingRef.current = false;
+    restoreAdvancedFormDrawerFocus(
+      advancedFormDiscardFocusRestoreRef.current,
+      advancedFormDrawerRef.current,
+    );
+    advancedFormDiscardFocusRestoreRef.current = null;
+  }, [discardFormConfirmOpen]);
+
+  useLayoutEffect(() => {
+    if (addCategoryOpen || !addCategoryFocusRestorePendingRef.current) return;
+    addCategoryFocusRestorePendingRef.current = false;
+    const opener = addCategoryOpenerRef.current;
+    const useDrawerFallback = addCategoryRestoreViaDrawerFallbackRef.current;
+    addCategoryRestoreViaDrawerFallbackRef.current = false;
+    if (opener && isAddCategoryOpenerFocusTarget(opener) && tryFocusElement(opener)) {
+      return;
+    }
+    if (useDrawerFallback) {
+      restoreAdvancedFormDrawerFocus(null, advancedFormDrawerRef.current);
+    }
+  }, [addCategoryOpen]);
+
+  useLayoutEffect(() => {
+    if (!formOpen || pendingAdvancedFormBaselineSessionRef.current == null) return;
+    if (pendingAdvancedFormBaselineSessionRef.current !== formSessionTokenRef.current) return;
+    advancedFormBaselineRef.current = captureAdvancedFormBaselineSnapshot(
+      advancedFormSnapshotBuildInputRef.current,
+    );
+    pendingAdvancedFormBaselineSessionRef.current = null;
+  }, [formOpen, formSessionToken]);
 
   const closeQuickCreate = useCallback(() => {
     setQuickCreateOpen(false);
@@ -2909,9 +3595,10 @@ export default function ProductosManagementPage({
       setEditFocus(null);
       setDraftFamilyOverrideOpen(false);
       quickCreate.resetDraft();
+      beginAdvancedFormSession();
       setFormOpen(true);
     },
-    [quickCreate, resetDraftImageState],
+    [beginAdvancedFormSession, quickCreate, resetDraftImageState],
   );
 
   const handleDraftImageFileChange = useCallback(async (file: File | null) => {
@@ -2947,12 +3634,31 @@ export default function ProductosManagementPage({
   }, []);
 
   useEffect(() => {
+    if (!addCategoryOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeAddCategoryDialog();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [addCategoryOpen, closeAddCategoryDialog]);
+
+  useEffect(() => {
     if (!formOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        closeForm();
+      if (e.key !== "Escape") return;
+      if (
+        commercialInfoModalOpen ||
+        escandalloModalOpen ||
+        addCategoryOpen ||
+        discardFormConfirmOpen
+      ) {
+        return;
       }
+      e.preventDefault();
+      requestCloseForm();
     };
     window.addEventListener("keydown", onKey);
     const focusTimer = window.setTimeout(() => {
@@ -2964,7 +3670,15 @@ export default function ProductosManagementPage({
       window.removeEventListener("keydown", onKey);
       window.clearTimeout(focusTimer);
     };
-  }, [formOpen, closeForm, editFocus]);
+  }, [
+    formOpen,
+    requestCloseForm,
+    editFocus,
+    commercialInfoModalOpen,
+    escandalloModalOpen,
+    addCategoryOpen,
+    discardFormConfirmOpen,
+  ]);
 
   useEffect(() => {
     if (!formOpen || editFocus !== "routing") return;
@@ -3076,6 +3790,7 @@ export default function ProductosManagementPage({
       return;
     }
     resetNewProductDraftState();
+    beginAdvancedFormSession();
     setFormOpen(true);
   }
 
@@ -3154,6 +3869,7 @@ export default function ProductosManagementPage({
       centralDocForModifiers?.modifierGroupIds ?? p.modifierGroupIds ?? [],
     );
     setFormError(null);
+    beginAdvancedFormSession();
     setFormOpen(true);
   }
 
@@ -3983,6 +4699,22 @@ export default function ProductosManagementPage({
     });
   }
 
+  function renderCategoryReorderControl(): ReactNode {
+    if (!showCategoryReorderControl) return null;
+    return (
+      <button
+        type="button"
+        className="hostly-productos-carta-action hostly-productos-carta-action--secondary hostly-productos-carta-action--compact hostly-productos-carta-action--ops"
+        disabled={!categoryReorderControl.enabled}
+        title={categoryReorderControl.title}
+        aria-label={categoryReorderControl.ariaLabel}
+        onClick={categoryReorderControl.enabled ? toggleReorderMode : undefined}
+      >
+        {categoryReorderControl.label}
+      </button>
+    );
+  }
+
   function renderConfigCartaHeaderActions(): ReactNode {
     return (
       <div className="hostly-productos-carta-header-inline-actions">
@@ -4094,16 +4826,17 @@ export default function ProductosManagementPage({
           }}
           onOpenAdvancedConfig={openAdvancedCreateFromQuickDraft}
           onOpenAddCategory={() => {
-            setAddCatType(
-              defaultCartaCategoriaTipoForTipoProducto(quickCreate.inheritedDraft.tipoVenta),
-            );
-            const menuFamId = quickCreate.inheritedDraft.cartaMenuFamiliaId;
-            setAddCatCartaFamiliaId(
-              menuFamId && menuFamId !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED
-                ? menuFamId
-                : undefined,
-            );
-            setAddCategoryOpen(true);
+            openAddCategoryDialog(() => {
+              setAddCatType(
+                defaultCartaCategoriaTipoForTipoProducto(quickCreate.inheritedDraft.tipoVenta),
+              );
+              const menuFamId = quickCreate.inheritedDraft.cartaMenuFamiliaId;
+              setAddCatCartaFamiliaId(
+                menuFamId && menuFamId !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED
+                  ? menuFamId
+                  : undefined,
+              );
+            });
           }}
         />
       ) : null}
@@ -4114,10 +4847,15 @@ export default function ProductosManagementPage({
           aria-modal="true"
           aria-label={editingId ? t("carta.editProduct") : t("carta.newProduct")}
           onMouseDown={(e) => {
-            if (e.currentTarget === e.target) closeForm();
+            if (e.currentTarget === e.target) requestCloseForm();
           }}
         >
-          <aside className="hostly-product-form-drawer hostly-product-form-drawer--v3" onMouseDown={(e) => e.stopPropagation()}>
+          <aside
+            ref={advancedFormDrawerRef}
+            tabIndex={-1}
+            className="hostly-product-form-drawer hostly-product-form-drawer--v3"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <div className="hostly-product-form-drawer__header">
               <div className="hostly-product-form-drawer__header-text">
                 <h2 className="hostly-product-form-drawer__title">
@@ -4127,7 +4865,7 @@ export default function ProductosManagementPage({
                   {editingId ? t("carta.productFormEditHint") : t("carta.productFormNewHint")}
                 </p>
               </div>
-              <ConfigBtnSecondary type="button" onClick={closeForm}>
+              <ConfigBtnSecondary type="button" onClick={requestCloseForm}>
                 {t("common.cancel")}
               </ConfigBtnSecondary>
             </div>
@@ -4206,14 +4944,20 @@ export default function ProductosManagementPage({
                           onSelectId={applyCategorySelection}
                           hintClassName="hostly-carta-config-form-hint hostly-product-form-drawer-primary__hint"
                           onOpenAddCategory={() => {
-                            setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
-                            const fid =
-                              draftSelectedCategory?.cartaFamiliaId?.trim() ||
-                              draftCartaMenuFamiliaId;
-                            setAddCatCartaFamiliaId(
-                              fid && fid !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED ? fid : undefined,
+                            openAddCategoryDialog(
+                              () => {
+                                setAddCatType(defaultCartaCategoriaTipoForTipoProducto(draftTipo));
+                                const fid =
+                                  draftSelectedCategory?.cartaFamiliaId?.trim() ||
+                                  draftCartaMenuFamiliaId;
+                                setAddCatCartaFamiliaId(
+                                  fid && fid !== CARTA_MENU_FAMILIA_FILTER_UNASSIGNED
+                                    ? fid
+                                    : undefined,
+                                );
+                              },
+                              { restoreViaDrawerFallback: true },
                             );
-                            setAddCategoryOpen(true);
                           }}
                         />
                       </div>
@@ -4599,12 +5343,21 @@ export default function ProductosManagementPage({
               >
                 {drawerSyncing ? t("common.preparing") : t("common.save")}
               </ConfigBtnPrimary>
-              <ConfigBtnSecondary type="button" onClick={closeForm}>
+              <ConfigBtnSecondary type="button" onClick={requestCloseForm}>
                 {t("common.cancel")}
               </ConfigBtnSecondary>
             </div>
           </aside>
         </div>
+      ) : null}
+
+      {formOpen ? (
+        <ProductAdvancedFormDiscardConfirm
+          open={discardFormConfirmOpen}
+          saving={drawerSyncing}
+          onKeepEditing={dismissDiscardFormConfirm}
+          onDiscard={confirmDiscardForm}
+        />
       ) : null}
 
       {formOpen ? (
@@ -4661,7 +5414,7 @@ export default function ProductosManagementPage({
           aria-modal="true"
           aria-label={t("cartaCategories.quickAddTitle")}
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setAddCategoryOpen(false);
+            if (e.target === e.currentTarget) closeAddCategoryDialog();
           }}
         >
           <ConfigCard className="hostly-carta-config-drawer">
@@ -4695,7 +5448,7 @@ export default function ProductosManagementPage({
               <ConfigBtnPrimary type="button" disabled={addCatSaving} onClick={() => void saveQuickCategory()}>
                 {t("common.save")}
               </ConfigBtnPrimary>
-              <ConfigBtnSecondary type="button" onClick={() => setAddCategoryOpen(false)}>
+              <ConfigBtnSecondary type="button" onClick={closeAddCategoryDialog}>
                 {t("common.cancel")}
               </ConfigBtnSecondary>
             </div>
@@ -4920,6 +5673,7 @@ export default function ProductosManagementPage({
                 {renderConfigCartaStatusFilterSelect()}
               </div>
               </div>
+              <div className="hostly-productos-v3__command-bar-filters">
               <div
                   className="hostly-productos-carta-category-rail hostly-productos-carta-category-rail--protagonist hostly-productos-carta-category-rail--premium hostly-productos-v3__category-rail"
                   aria-label={t("cartaCategories.title")}
@@ -4943,6 +5697,8 @@ export default function ProductosManagementPage({
                       );
                     })}
                 </div>
+                {renderCategoryReorderControl()}
+              </div>
               </div>
               {configCartaAdvancedOpen ? (
               <div
@@ -4970,16 +5726,6 @@ export default function ProductosManagementPage({
               Importar IA
               </button>
               </nav>
-              {canUseProductReorder ? (
-                <button
-                  type="button"
-                  className="hostly-productos-carta-action hostly-productos-carta-action--secondary hostly-productos-carta-action--compact hostly-productos-carta-action--ops hostly-productos-v3__advanced-order"
-                  aria-label={t("productos.orderModeCtaAria", { category: activeReorderCategoryLabel })}
-                  onClick={toggleReorderMode}
-                >
-                  {t("productos.orderModeCta")}
-                </button>
-              ) : null}
               {renderCatalogFoodDrinkSegment(true)}
               </div>
               <div className="hostly-productos-v3__advanced-controls-row">
