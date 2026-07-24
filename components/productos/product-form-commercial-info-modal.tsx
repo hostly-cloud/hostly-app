@@ -5,6 +5,7 @@ import {
   ConfigBtnPrimary,
   ConfigBtnSecondary,
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
+import { PRODUCT_IMAGE_ACCEPT } from "@/lib/firebase/product-image-contract";
 
 const DESCRIPTION_PREVIEW_MAX = 140;
 
@@ -191,7 +192,7 @@ export function ProductFormCommercialInfoModal({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={PRODUCT_IMAGE_ACCEPT}
                   className="hostly-product-commercial-modal__file-input"
                   disabled={disabled}
                   onChange={(e) => {

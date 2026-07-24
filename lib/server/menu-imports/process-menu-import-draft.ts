@@ -1,7 +1,10 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import type { MenuImportDraftDocument } from "@/lib/firestore/menu-import-drafts";
-import { truncateRawTextForStorage } from "./download-storage-file";
+import {
+  assertMenuImportStoragePathForDraft,
+  truncateRawTextForStorage,
+} from "./download-storage-file";
 import { enrichMenuItemsWithAI } from "./enrich-menu-items-with-ai";
 import { extractMenuText } from "./extract-menu-text";
 import {
@@ -98,6 +101,20 @@ export async function processMenuImportDraft(params: {
   if (draft.restaurantId !== restaurantId.trim()) {
     throw new ProcessMenuImportDraftError("TENANT_MISMATCH", "Borrador fuera del tenant", 403);
   }
+  if (draft.storagePath?.trim()) {
+    try {
+      assertMenuImportStoragePathForDraft(draft.storagePath, {
+        restaurantId,
+        draftId,
+      });
+    } catch {
+      throw new ProcessMenuImportDraftError(
+        "STORAGE_PATH_SCOPE_MISMATCH",
+        "El archivo no pertenece a este borrador",
+        403,
+      );
+    }
+  }
 
   if (draft.status === "ready" || draft.status === "published") {
     trace.step("already_processed", {
@@ -164,6 +181,8 @@ export async function processMenuImportDraft(params: {
 
     currentStep = "ocr_raw";
     const extracted = await extractMenuText({
+      restaurantId,
+      draftId,
       sourceType: draft.sourceType,
       menuType: draft.menuType,
       storagePath: draft.storagePath,
@@ -193,6 +212,8 @@ export async function processMenuImportDraft(params: {
     }
 
     const aiImportV2Shadow = await runAiImportV2Shadow({
+      restaurantId,
+      draftId,
       rawText: extracted.rawText,
       parserItems: parsed.items,
       menuType: draft.menuType,
@@ -336,6 +357,7 @@ export async function processMenuImportDraft(params: {
     const operationalWarnings = await buildMenuImportOperationalWarningsForDraft({
       db,
       restaurantId,
+      draftId,
       sourceType: draft.sourceType,
       storagePath: draft.storagePath,
       ocrMethod: extracted.inputMetadata?.ocrMethod,

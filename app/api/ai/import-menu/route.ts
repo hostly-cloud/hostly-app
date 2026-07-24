@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { inferTipoVentaFromCartaText, parseTipoVentaLoose, type TipoProductoVenta } from "@/lib/platos-local";
-import { MIN_PDF_TEXT_CHARS } from "@/lib/server/menu-imports/menu-import-limits";
+import {
+  MAX_MENU_IMPORT_OCR_BYTES,
+  MIN_PDF_TEXT_CHARS,
+} from "@/lib/server/menu-imports/menu-import-limits";
 import {
   filterItemsByOcrSource,
   isProductNameSupportedByOcr,
-  logOcrValidationDiagnostics,
   MIN_OCR_SOURCE_TEXT_LENGTH,
 } from "@/lib/server/menu-imports/validate-items-against-ocr";
 import { extractPdfEmbeddedText, ocrImageBuffer, ocrPdfBuffer } from "@/lib/server/menu-imports/vision-ocr";
+import {
+  isAuthErrorResponse,
+  requireAuthenticatedRestaurant,
+  type AuthenticatedRestaurantDependencies,
+  type AuthenticatedRestaurantContext,
+} from "@/lib/server/auth/require-authenticated-restaurant";
+import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 
 type MenuDetectedItem = {
   nombre: string;
@@ -21,8 +30,51 @@ type MenuDetectedItem = {
   sourceLine?: string;
 };
 
+type AiImportTrace = Pick<
+  AuthenticatedRestaurantContext,
+  "uid" | "restaurantId"
+>;
+
+type MenuProcessingResult = {
+  items: MenuDetectedItem[];
+  ocrTextLength: number;
+};
+
+export type ImportMenuRouteDependencies = AuthenticatedRestaurantDependencies & {
+  processFile?: (input: {
+    buffer: Buffer;
+    contentType: string;
+    trace: AiImportTrace;
+  }) => Promise<MenuProcessingResult>;
+};
+
 const NO_PRODUCTS_MESSAGE =
   "No hemos podido detectar productos claros en esta carta. Sube una imagen más nítida o crea productos manualmente.";
+function logImportEvent(
+  event: string,
+  trace: AiImportTrace,
+  details?: Record<string, string | number | boolean>,
+) {
+  console.info("[ai/import-menu]", {
+    event,
+    uid: trace.uid,
+    restaurantId: trace.restaurantId,
+    ...details,
+  });
+}
+
+function classifyProcessingError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "OPENAI_API_KEY_MISSING") return "OPENAI_API_KEY_MISSING";
+  if (/^OPENAI_\d{3}$/.test(message)) return message;
+  if (
+    message === "OPENAI_RESPONSE_INVALID" ||
+    message === "OPENAI_CONTENT_MISSING"
+  ) {
+    return message;
+  }
+  return "AI_IMPORT_FAILED";
+}
 
 function jsonError(status: number, error: string, details?: string) {
   return NextResponse.json({ ok: false, error, details: details ?? null }, { status });
@@ -37,6 +89,35 @@ function jsonNoProducts(ocrTextLength: number, details?: string) {
     ocrTextLength,
     details: details ?? NO_PRODUCTS_MESSAGE,
   });
+}
+
+function fileSignatureMatches(buffer: Buffer, contentType: string): boolean {
+  if (contentType === "image/jpeg") {
+    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (contentType === "image/png") {
+    return (
+      buffer.length >= 8 &&
+      buffer.subarray(0, 8).equals(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      )
+    );
+  }
+  if (contentType === "image/gif") {
+    const signature = buffer.subarray(0, 6).toString("ascii");
+    return signature === "GIF87a" || signature === "GIF89a";
+  }
+  if (contentType === "image/webp") {
+    return (
+      buffer.length >= 12 &&
+      buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    );
+  }
+  if (contentType === "application/pdf") {
+    return buffer.length >= 5 && buffer.subarray(0, 5).toString("ascii") === "%PDF-";
+  }
+  return false;
 }
 
 function extractJsonObject(text: string): unknown | null {
@@ -126,7 +207,11 @@ async function extractOcrTextFromBuffer(buffer: Buffer, type: string): Promise<s
   return ocrImageBuffer(buffer);
 }
 
-async function callOpenAiVisionExtract(args: { dataUrl: string; ocrReference: string }): Promise<MenuDetectedItem[]> {
+async function callOpenAiVisionExtract(args: {
+  dataUrl: string;
+  ocrReference: string;
+  trace: AiImportTrace;
+}): Promise<MenuDetectedItem[]> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY_MISSING");
@@ -197,7 +282,7 @@ async function callOpenAiVisionExtract(args: { dataUrl: string; ocrReference: st
 
   const text = await res.text();
   if (!res.ok) {
-    console.error("[ai/import-menu] openai error", res.status, text);
+    logImportEvent("openai_failed", args.trace, { status: res.status });
     throw new Error(`OPENAI_${res.status}`);
   }
 
@@ -205,13 +290,13 @@ async function callOpenAiVisionExtract(args: { dataUrl: string; ocrReference: st
   try {
     parsed = JSON.parse(text);
   } catch {
-    console.error("[ai/import-menu] openai non-json response", text.slice(0, 4000));
+    logImportEvent("openai_invalid_json", args.trace);
     throw new Error("OPENAI_RESPONSE_INVALID");
   }
 
   const content = (parsed as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
-    console.error("[ai/import-menu] missing content", (parsed as { choices?: unknown[] })?.choices?.[0]);
+    logImportEvent("openai_missing_content", args.trace);
     throw new Error("OPENAI_CONTENT_MISSING");
   }
 
@@ -221,7 +306,7 @@ async function callOpenAiVisionExtract(args: { dataUrl: string; ocrReference: st
   } | null;
   const itemsRaw = obj?.items;
   if (!Array.isArray(itemsRaw)) {
-    console.error("[ai/import-menu] invalid items", content.slice(0, 2000));
+    logImportEvent("openai_invalid_items", args.trace);
     return [];
   }
 
@@ -233,84 +318,130 @@ async function callOpenAiVisionExtract(args: { dataUrl: string; ocrReference: st
   return applyOcrFidelityFlags(out, args.ocrReference);
 }
 
-export async function POST(req: Request) {
+async function processMenuFile(input: {
+  buffer: Buffer;
+  contentType: string;
+  trace: AiImportTrace;
+}): Promise<MenuProcessingResult> {
+  const { buffer, contentType, trace } = input;
+  let ocrText = "";
+  try {
+    ocrText = await extractOcrTextFromBuffer(buffer, contentType);
+  } catch {
+    logImportEvent("ocr_failed", trace);
+    return { items: [], ocrTextLength: 0 };
+  }
+
+  const ocrTextLength = ocrText.trim().length;
+  if (ocrTextLength < MIN_OCR_SOURCE_TEXT_LENGTH) {
+    logImportEvent("ocr_insufficient", trace, { ocrTextLength });
+    return { items: [], ocrTextLength };
+  }
+
+  const dataUrl = `data:${contentType};base64,${buffer.toString("base64")}`;
+  const aiItems = await callOpenAiVisionExtract({
+    dataUrl,
+    ocrReference: ocrText,
+    trace,
+  });
+  const wrapped = aiItems.map((item) => ({ name: item.nombre, item }));
+  const validation = filterItemsByOcrSource(wrapped, ocrText);
+  const accepted = validation.accepted.map((row) => row.item);
+  logImportEvent("validation_completed", trace, {
+    ocrTextLength: validation.ocrTextLength,
+    aiReturnedCount: aiItems.length,
+    acceptedCount: accepted.length,
+    rejectedCount: validation.rejected.length,
+  });
+  return { items: accepted, ocrTextLength };
+}
+
+export async function handleImportMenuRequest(
+  req: Request,
+  dependencies?: ImportMenuRouteDependencies,
+) {
+  const authContext = await requireAuthenticatedRestaurant(req, dependencies);
+  if (isAuthErrorResponse(authContext)) {
+    if (authContext.status === 409) {
+      return jsonError(403, "PROFILE_AUTHORIZATION_FAILED");
+    }
+    return authContext;
+  }
+  if (!serverRoleHasCapability(authContext.role, "settings.manage")) {
+    return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
+  }
+
+  const trace: AiImportTrace = {
+    uid: authContext.uid,
+    restaurantId: authContext.restaurantId,
+  };
+  const startedAt = Date.now();
   try {
     const form = await req.formData().catch(() => null);
     if (!form) return jsonError(400, "INVALID_MULTIPART");
-
     const file = form.get("file");
     if (!(file instanceof File)) return jsonError(400, "MISSING_FILE");
 
-    const type = file.type || "";
+    const contentType = file.type || "";
     const allowed =
-      type === "image/jpeg" ||
-      type === "image/png" ||
-      type === "image/webp" ||
-      type === "image/gif" ||
-      type === "application/pdf";
-    if (!allowed) return jsonError(415, "UNSUPPORTED_TYPE", `type=${type || "unknown"}`);
-
-    const maxBytes = 15 * 1024 * 1024;
-    if (file.size > maxBytes) return jsonError(413, "FILE_TOO_LARGE", `max=${maxBytes}`);
-
-    const buf = Buffer.from(await file.arrayBuffer());
-    let ocrText = "";
-    try {
-      ocrText = await extractOcrTextFromBuffer(buf, type);
-    } catch (ocrErr) {
-      const message = ocrErr instanceof Error ? ocrErr.message : String(ocrErr);
-      console.error("[ai/import-menu] ocr failed", message);
-      return jsonNoProducts(0, NO_PRODUCTS_MESSAGE);
+      contentType === "image/jpeg" ||
+      contentType === "image/png" ||
+      contentType === "image/webp" ||
+      contentType === "image/gif" ||
+      contentType === "application/pdf";
+    if (!allowed) return jsonError(415, "UNSUPPORTED_TYPE");
+    if (file.size <= 0) return jsonError(400, "EMPTY_FILE");
+    if (file.size > MAX_MENU_IMPORT_OCR_BYTES) {
+      return jsonError(413, "FILE_TOO_LARGE");
     }
 
-    const ocrTextLength = ocrText.trim().length;
-    if (ocrTextLength < MIN_OCR_SOURCE_TEXT_LENGTH) {
-      logOcrValidationDiagnostics(
-        {
-          ocrTextLength,
-          aiReturnedCount: 0,
-          acceptedCount: 0,
-          rejectedCount: 0,
-          acceptedNames: [],
-          rejectedNames: [],
-        },
-        "ocr-insufficient",
-      );
-      return jsonNoProducts(ocrTextLength, NO_PRODUCTS_MESSAGE);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    if (!fileSignatureMatches(buffer, contentType)) {
+      return jsonError(415, "FILE_SIGNATURE_MISMATCH");
     }
 
-    const base64 = buf.toString("base64");
-    const dataUrl = `data:${type || "application/octet-stream"};base64,${base64}`;
-
-    const aiItems = await callOpenAiVisionExtract({ dataUrl, ocrReference: ocrText });
-
-    const wrapped = aiItems.map((item) => ({ name: item.nombre, item }));
-    const validation = filterItemsByOcrSource(wrapped, ocrText);
-    const accepted = validation.accepted.map((row) => row.item);
-
-    logOcrValidationDiagnostics(
-      {
-        ocrTextLength: validation.ocrTextLength,
-        aiReturnedCount: aiItems.length,
-        acceptedCount: accepted.length,
-        rejectedCount: validation.rejected.length,
-        acceptedNames: accepted.map((i) => i.nombre),
-        rejectedNames: validation.rejected.map((i) => i.name),
-      },
-      "post-filter",
-    );
-
-    if (accepted.length === 0) {
-      return jsonNoProducts(ocrTextLength, NO_PRODUCTS_MESSAGE);
+    logImportEvent("processing_started", trace, {
+      contentType,
+      size: file.size,
+    });
+    const result = await (dependencies?.processFile ?? processMenuFile)({
+      buffer,
+      contentType,
+      trace,
+    });
+    if (result.items.length === 0) {
+      logImportEvent("processing_completed", trace, {
+        code: "NO_PRODUCTS_DETECTED",
+        durationMs: Date.now() - startedAt,
+        itemCount: 0,
+        ocrTextLength: result.ocrTextLength,
+      });
+      return jsonNoProducts(result.ocrTextLength, NO_PRODUCTS_MESSAGE);
     }
-
-    return NextResponse.json({ ok: true, items: accepted, ocrTextLength });
+    logImportEvent("processing_completed", trace, {
+      code: "OK",
+      durationMs: Date.now() - startedAt,
+      itemCount: result.items.length,
+      ocrTextLength: result.ocrTextLength,
+    });
+    return NextResponse.json({
+      ok: true,
+      items: result.items,
+      ocrTextLength: result.ocrTextLength,
+    });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[api/ai/import-menu] error", { message, stack: err instanceof Error ? err.stack : undefined });
-    if (message === "OPENAI_API_KEY_MISSING") {
-      return jsonError(500, "AI_KEY_MISSING", "Falta configurar la API key de IA (OPENAI_API_KEY).");
+    const code = classifyProcessingError(err);
+    logImportEvent("processing_failed", trace, {
+      code,
+      durationMs: Date.now() - startedAt,
+    });
+    if (code === "OPENAI_API_KEY_MISSING") {
+      return jsonError(503, "AI_UNAVAILABLE");
     }
-    return jsonError(500, "AI_IMPORT_FAILED", message);
+    return jsonError(500, "AI_IMPORT_FAILED");
   }
+}
+
+export async function POST(req: Request) {
+  return handleImportMenuRequest(req);
 }

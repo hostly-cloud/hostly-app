@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, type ReactNode } from "react";
+import { PRODUCT_IMAGE_ACCEPT } from "@/lib/firebase/product-image-contract";
 
 const inputStyle: CSSProperties = {
   display: "block",
@@ -96,7 +97,7 @@ export function ProductForm({
         Imagen (opcional)
         <input
           type="file"
-          accept="image/*"
+          accept={PRODUCT_IMAGE_ACCEPT}
           disabled={fieldsDisabled}
           onChange={(e) => {
             const selected = e.target.files?.[0] ?? null;

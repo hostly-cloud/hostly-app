@@ -44,6 +44,8 @@ async function main() {
 
   const d = doc.data();
   const extracted = await extractMenuText({
+    restaurantId: doc.ref.parent.parent?.id ?? "",
+    draftId: doc.id,
     sourceType: d.sourceType,
     menuType: d.menuType,
     storagePath: d.storagePath,

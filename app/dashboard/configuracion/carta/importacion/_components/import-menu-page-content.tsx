@@ -38,6 +38,7 @@ import {
   logClientPublishPreview,
 } from "@/lib/carta/publish-flow-client-diagnostics";
 import { requestMenuImportProcess } from "@/lib/carta/request-menu-import-process";
+import { requestMenuImportReviewUpdate } from "@/lib/carta/request-menu-import-review-update";
 import {
   flattenSectionsToItems,
   menuImportDocToUiDraft,
@@ -1416,7 +1417,10 @@ export function ImportMenuPageContent() {
       setSaving(true);
       setSaveError(null);
       try {
-        await updateMenuImportDraft(scope.restaurantId, nextDraft.id, savePayload);
+        await requestMenuImportReviewUpdate(
+          nextDraft.id,
+          savePayload.items,
+        );
         return true;
       } catch (e) {
         logMenuImportDraftSaveError({

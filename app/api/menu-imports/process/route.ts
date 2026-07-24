@@ -2,22 +2,30 @@ import { NextResponse } from "next/server";
 import {
   isAuthErrorResponse,
   requireAuthenticatedRestaurant,
+  type AuthenticatedRestaurantDependencies,
 } from "@/lib/server/auth/require-authenticated-restaurant";
-import {
-  ProcessMenuImportDraftError,
-  processMenuImportDraft,
-} from "@/lib/server/menu-imports/process-menu-import-draft";
+import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import { isMenuImportDebugReportEnabled } from "@/lib/carta/menu-import-debug-report-types";
 
 function jsonError(status: number, error: string, details?: string) {
   return NextResponse.json({ ok: false, error, details: details ?? null }, { status });
 }
 
-export async function POST(req: Request) {
+export type ProcessRouteDependencies = AuthenticatedRestaurantDependencies & {
+  processDraft?: typeof import("@/lib/server/menu-imports/process-menu-import-draft")["processMenuImportDraft"];
+};
+
+export async function handleProcessMenuImportRequest(
+  req: Request,
+  dependencies?: ProcessRouteDependencies,
+) {
   try {
-    const authCtx = await requireAuthenticatedRestaurant(req);
+    const authCtx = await requireAuthenticatedRestaurant(req, dependencies);
     if (isAuthErrorResponse(authCtx)) {
       return authCtx;
+    }
+    if (!serverRoleHasCapability(authCtx.role, "settings.manage")) {
+      return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
     }
 
     const body = (await req.json().catch(() => null)) as { draftId?: string } | null;
@@ -30,7 +38,12 @@ export async function POST(req: Request) {
       return jsonError(400, "MISSING_DRAFT_ID", "Envía { draftId }");
     }
 
-    const result = await processMenuImportDraft({
+    const processDraft =
+      dependencies?.processDraft ??
+      (
+        await import("@/lib/server/menu-imports/process-menu-import-draft")
+      ).processMenuImportDraft;
+    const result = await processDraft({
       db: authCtx.db,
       restaurantId: authCtx.restaurantId,
       draftId,
@@ -51,11 +64,23 @@ export async function POST(req: Request) {
         : {}),
     });
   } catch (e) {
-    if (e instanceof ProcessMenuImportDraftError) {
-      return jsonError(e.httpStatus, e.code, e.message);
+    if (
+      e &&
+      typeof e === "object" &&
+      "name" in e &&
+      e.name === "ProcessMenuImportDraftError" &&
+      "httpStatus" in e &&
+      typeof e.httpStatus === "number" &&
+      "code" in e &&
+      typeof e.code === "string"
+    ) {
+      return jsonError(e.httpStatus, e.code);
     }
-    const message = e instanceof Error ? e.message : "PROCESS_FAILED";
-    console.error("[api/menu-imports/process]", message, e);
-    return jsonError(500, "PROCESS_FAILED", message);
+    console.error("[api/menu-imports/process]", { code: "PROCESS_FAILED" });
+    return jsonError(500, "PROCESS_FAILED");
   }
+}
+
+export async function POST(req: Request) {
+  return handleProcessMenuImportRequest(req);
 }

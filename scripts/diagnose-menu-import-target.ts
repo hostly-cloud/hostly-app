@@ -124,6 +124,8 @@ async function main() {
 
   try {
     const extracted = await extractMenuText({
+      restaurantId: pick.restaurantId,
+      draftId: pick.draftId,
       sourceType: draft.sourceType,
       menuType: draft.menuType,
       storagePath: draft.storagePath,

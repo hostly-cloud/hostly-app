@@ -7,6 +7,11 @@ export type DownloadedStorageFile = {
   size: number;
 };
 
+export type MenuImportStorageScope = {
+  restaurantId: string;
+  draftId: string;
+};
+
 function inferContentType(path: string, metadataType?: string): string {
   if (metadataType?.trim()) return metadataType.trim().toLowerCase();
   const lower = path.toLowerCase();
@@ -20,8 +25,16 @@ function inferContentType(path: string, metadataType?: string): string {
 }
 
 function assertSafeStoragePath(storagePath: string): string {
-  const path = storagePath.trim();
-  if (!path || path.includes("..") || path.startsWith("/") || path.includes("\\")) {
+  if (storagePath !== storagePath.trim()) {
+    throw new Error("Ruta Storage no canónica");
+  }
+  const path = storagePath;
+  if (
+    !path ||
+    path.startsWith("/") ||
+    path.includes("\\") ||
+    /[%?#\u0000-\u001f\u007f]/.test(path)
+  ) {
     throw new Error("Ruta Storage inválida");
   }
   if (!path.startsWith("restaurants/") || !path.includes("/menu-imports/")) {
@@ -30,8 +43,49 @@ function assertSafeStoragePath(storagePath: string): string {
   return path;
 }
 
-export async function downloadMenuImportStorageFile(storagePath: string): Promise<DownloadedStorageFile> {
-  const safePath = assertSafeStoragePath(storagePath);
+export function assertMenuImportStoragePathForDraft(
+  storagePath: string,
+  scope: MenuImportStorageScope,
+): string {
+  const path = assertSafeStoragePath(storagePath);
+  if (
+    scope.restaurantId !== scope.restaurantId.trim() ||
+    scope.draftId !== scope.draftId.trim()
+  ) {
+    throw new Error("Scope Storage de importación inválido");
+  }
+  const restaurantId = scope.restaurantId;
+  const draftId = scope.draftId;
+  if (
+    !restaurantId ||
+    !draftId ||
+    /[\\/%?#\u0000-\u001f\u007f]/.test(restaurantId) ||
+    /[\\/%?#\u0000-\u001f\u007f]/.test(draftId)
+  ) {
+    throw new Error("Scope Storage de importación inválido");
+  }
+  const segments = path.split("/");
+  const fileName = segments[4] ?? "";
+  if (
+    segments.length !== 5 ||
+    segments[0] !== "restaurants" ||
+    segments[1] !== restaurantId ||
+    segments[2] !== "menu-imports" ||
+    segments[3] !== draftId ||
+    !/^[A-Za-z0-9._-]{1,120}$/.test(fileName) ||
+    fileName === "." ||
+    fileName.includes("..")
+  ) {
+    throw new Error("Ruta Storage fuera del tenant o borrador");
+  }
+  return path;
+}
+
+export async function downloadMenuImportStorageFile(
+  storagePath: string,
+  scope: MenuImportStorageScope,
+): Promise<DownloadedStorageFile> {
+  const safePath = assertMenuImportStoragePathForDraft(storagePath, scope);
   const bucket = getHostlyStorageBucket();
   if (!bucket) {
     throw new Error("Storage Admin no configurado en servidor");

@@ -1,8 +1,12 @@
 import { FirebaseError } from "firebase/app";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, storage } from "@/lib/firebase/client";
+import {
+  MAX_PRODUCT_IMAGE_BYTES,
+  validateProductImageCandidate,
+} from "@/lib/firebase/product-image-contract";
 
-export const MAX_PRODUCT_IMAGE_BYTES = 3 * 1024 * 1024;
+export { MAX_PRODUCT_IMAGE_BYTES } from "@/lib/firebase/product-image-contract";
 const UPLOAD_TIMEOUT_MS = 120_000;
 
 function storageErr(phase: string, e: unknown): Error {
@@ -48,16 +52,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  */
 export async function createStableImageFile(selected: File): Promise<File> {
   console.log("[MOBILE IMAGE] file selected", selected.name, selected.type, selected.size);
-  const byType = selected.type.startsWith("image/");
-  const byName = /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i.test(selected.name);
-  if (!byType && !byName) {
-    throw new Error(
-      "El archivo debe ser una imagen (tipo MIME vacío o no reconocido: usa PNG/JPEG/WebP o revisa el archivo)",
-    );
-  }
-  if (selected.size > MAX_PRODUCT_IMAGE_BYTES) {
-    throw new Error("La imagen supera 3 MB");
-  }
+  validateProductImageCandidate(selected);
   let buffer: ArrayBuffer;
   try {
     buffer = await selected.arrayBuffer();
@@ -77,16 +72,7 @@ export async function createStableImageFile(selected: File): Promise<File> {
 
 export function validateProductImageFile(file: File): void {
   console.log("[IMAGE] validate start", file.name, file.type, file.size);
-  const byType = file.type.startsWith("image/");
-  const byName = /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i.test(file.name);
-  if (!byType && !byName) {
-    throw new Error(
-      "El archivo debe ser una imagen (tipo MIME vacío o no reconocido: usa PNG/JPEG/WebP o revisa el archivo)",
-    );
-  }
-  if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
-    throw new Error("La imagen supera 3 MB");
-  }
+  validateProductImageCandidate(file);
   console.log("[IMAGE] validate ok", file.name, file.type, file.size);
 }
 

@@ -3,16 +3,18 @@ import type { CartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import {
   isAuthErrorResponse,
   requireAuthenticatedRestaurant,
+  type AuthenticatedRestaurantDependencies,
 } from "@/lib/server/auth/require-authenticated-restaurant";
-import {
-  CreateMenuImportCategoriesError,
-  createMenuImportCategories,
-  type CreateMenuImportCategoryInput,
-} from "@/lib/server/menu-imports/create-menu-import-categories";
+import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
+import type { CreateMenuImportCategoryInput } from "@/lib/server/menu-imports/create-menu-import-categories";
 
 function jsonError(status: number, error: string, details?: string) {
   return NextResponse.json({ ok: false, error, details: details ?? null }, { status });
 }
+
+export type CreateCategoriesRouteDependencies = AuthenticatedRestaurantDependencies & {
+  createCategories?: typeof import("@/lib/server/menu-imports/create-menu-import-categories")["createMenuImportCategories"];
+};
 
 function readCategoryInput(raw: unknown): CreateMenuImportCategoryInput | null {
   if (!raw || typeof raw !== "object") return null;
@@ -36,11 +38,17 @@ function readCategoryInput(raw: unknown): CreateMenuImportCategoryInput | null {
   return { name, suggestedType, suggestedStation };
 }
 
-export async function POST(req: Request) {
+export async function handleCreateMenuImportCategoriesRequest(
+  req: Request,
+  dependencies?: CreateCategoriesRouteDependencies,
+) {
   try {
-    const authCtx = await requireAuthenticatedRestaurant(req);
+    const authCtx = await requireAuthenticatedRestaurant(req, dependencies);
     if (isAuthErrorResponse(authCtx)) {
       return authCtx;
+    }
+    if (!serverRoleHasCapability(authCtx.role, "settings.manage")) {
+      return jsonError(403, "SETTINGS_MANAGE_REQUIRED");
     }
 
     const body = (await req.json().catch(() => null)) as {
@@ -66,7 +74,12 @@ export async function POST(req: Request) {
       return jsonError(400, "MISSING_CATEGORIES", "Ninguna categoría válida en la solicitud");
     }
 
-    const result = await createMenuImportCategories({
+    const createCategories =
+      dependencies?.createCategories ??
+      (
+        await import("@/lib/server/menu-imports/create-menu-import-categories")
+      ).createMenuImportCategories;
+    const result = await createCategories({
       db: authCtx.db,
       restaurantId: authCtx.restaurantId,
       draftId,
@@ -76,11 +89,25 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, result });
   } catch (e) {
-    if (e instanceof CreateMenuImportCategoriesError) {
-      return jsonError(e.httpStatus, e.code, e.message);
+    if (
+      e &&
+      typeof e === "object" &&
+      "name" in e &&
+      e.name === "CreateMenuImportCategoriesError" &&
+      "httpStatus" in e &&
+      typeof e.httpStatus === "number" &&
+      "code" in e &&
+      typeof e.code === "string"
+    ) {
+      return jsonError(e.httpStatus, e.code);
     }
-    const message = e instanceof Error ? e.message : "CREATE_CATEGORIES_FAILED";
-    console.error("[api/menu-imports/create-categories]", message, e);
-    return jsonError(500, "CREATE_CATEGORIES_FAILED", message);
+    console.error("[api/menu-imports/create-categories]", {
+      code: "CREATE_CATEGORIES_FAILED",
+    });
+    return jsonError(500, "CREATE_CATEGORIES_FAILED");
   }
+}
+
+export async function POST(req: Request) {
+  return handleCreateMenuImportCategoriesRequest(req);
 }

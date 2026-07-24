@@ -16,7 +16,6 @@ import {
 } from "firebase/firestore";
 import {
   logMenuImportDraftSaveError,
-  summarizeMenuImportDraftSavePayload,
 } from "@/lib/carta/menu-import-draft-save-diagnostics";
 import { sanitizeMenuImportDraftUpdatePatch } from "@/lib/carta/sanitize-menu-import-draft-payload";
 import { auth, db } from "@/lib/firebase/client";
@@ -88,14 +87,6 @@ export type UpdateMenuImportDraftInput = Partial<
     | "sourceUrl"
     | "storagePath"
     | "originalFileName"
-    | "menuType"
-    | "status"
-    | "sections"
-    | "items"
-    | "rawText"
-    | "parserWarnings"
-    | "aiWarnings"
-    | "errorMessage"
   >
 > & {
   updatedBy: string;
@@ -416,8 +407,7 @@ export async function createMenuImportDraft(
     createdBy: uid,
     updatedBy: uid,
     ...(input.sourceUrl?.trim() ? { sourceUrl: input.sourceUrl.trim() } : {}),
-    ...(input.originalFileName?.trim() ? { originalFileName: input.originalFileName.trim() } : {}),
-    ...(input.storagePath?.trim() ? { storagePath: input.storagePath.trim() } : {}),
+    // El path y el nombre se asignan juntos, una sola vez, después del upload.
   };
 
   try {
@@ -458,14 +448,6 @@ export async function updateMenuImportDraft(
     if (input.sourceUrl !== undefined) patch.sourceUrl = input.sourceUrl;
     if (input.storagePath !== undefined) patch.storagePath = input.storagePath;
     if (input.originalFileName !== undefined) patch.originalFileName = input.originalFileName;
-    if (input.menuType !== undefined) patch.menuType = input.menuType;
-    if (input.status !== undefined) patch.status = input.status;
-    if (input.sections !== undefined) patch.sections = input.sections;
-    if (input.items !== undefined) patch.items = input.items;
-    if (input.rawText !== undefined) patch.rawText = input.rawText;
-    if (input.parserWarnings !== undefined) patch.parserWarnings = input.parserWarnings;
-    if (input.aiWarnings !== undefined) patch.aiWarnings = input.aiWarnings;
-    if (input.errorMessage !== undefined) patch.errorMessage = input.errorMessage;
 
     const ref = draftDocRef(rid, did);
     const existing = await getDoc(ref);
@@ -489,11 +471,6 @@ export async function updateMenuImportDraft(
       userId: uid || input.updatedBy,
       payload: {
         patchKeys: Object.keys(patch),
-        ...summarizeMenuImportDraftSavePayload({
-          sections: patch.sections,
-          items: patch.items,
-          updatedBy: uid || input.updatedBy,
-        }),
         patch,
       },
     });
