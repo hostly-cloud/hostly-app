@@ -1,10 +1,35 @@
 import { NextResponse } from "next/server";
 import type { Firestore } from "firebase-admin/firestore";
 import { getHostlyAuth, getHostlyFirestore } from "@/lib/firebase/admin";
+import {
+  AuthorizedProfileError,
+  readAuthorizedProfile,
+} from "@/lib/server/auth/authorized-profile";
+import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 
 export type AuthenticatedRestaurantContext = {
   uid: string;
+  email: string;
+  emailVerified: boolean;
   restaurantId: string;
+  role: string;
+  canManageUsers: boolean;
+  db: Firestore;
+};
+
+export type AuthTokenVerifier = {
+  verifyIdToken(
+    token: string,
+    checkRevoked?: boolean,
+  ): Promise<{
+    uid: string;
+    email?: string;
+    email_verified?: boolean;
+  }>;
+};
+
+export type AuthenticatedRestaurantDependencies = {
+  auth: AuthTokenVerifier;
   db: Firestore;
 };
 
@@ -13,19 +38,6 @@ function parseBearerToken(req: Request): string | null {
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   return token || null;
-}
-
-async function readRestaurantIdFromUserProfile(db: Firestore, uid: string): Promise<string | null> {
-  for (const collectionName of ["users", "usuarios"] as const) {
-    const snap = await db.collection(collectionName).doc(uid).get();
-    if (!snap.exists) continue;
-    const data = snap.data() as Record<string, unknown> | undefined;
-    const rid = data?.restaurantId;
-    if (typeof rid === "string" && rid.trim() !== "") {
-      return rid.trim();
-    }
-  }
-  return null;
 }
 
 export function isAuthErrorResponse(value: unknown): value is NextResponse {
@@ -38,6 +50,7 @@ export function isAuthErrorResponse(value: unknown): value is NextResponse {
  */
 export async function requireAuthenticatedRestaurant(
   req: Request,
+  dependencies?: AuthenticatedRestaurantDependencies,
 ): Promise<AuthenticatedRestaurantContext | NextResponse> {
   const token = parseBearerToken(req);
   if (!token) {
@@ -47,8 +60,8 @@ export async function requireAuthenticatedRestaurant(
     );
   }
 
-  const authAdmin = getHostlyAuth();
-  const db = getHostlyFirestore();
+  const authAdmin = dependencies?.auth ?? getHostlyAuth();
+  const db = dependencies?.db ?? getHostlyFirestore();
   if (!authAdmin || !db) {
     return NextResponse.json(
       { ok: false, error: "ADMIN_NOT_CONFIGURED", details: "Firebase Admin no disponible en servidor" },
@@ -56,10 +69,9 @@ export async function requireAuthenticatedRestaurant(
     );
   }
 
-  let uid: string;
+  let decoded: Awaited<ReturnType<AuthTokenVerifier["verifyIdToken"]>>;
   try {
-    const decoded = await authAdmin.verifyIdToken(token);
-    uid = decoded.uid;
+    decoded = await authAdmin.verifyIdToken(token, true);
   } catch {
     return NextResponse.json(
       { ok: false, error: "UNAUTHORIZED", details: "Token inválido o expirado" },
@@ -67,13 +79,35 @@ export async function requireAuthenticatedRestaurant(
     );
   }
 
-  const restaurantId = await readRestaurantIdFromUserProfile(db, uid);
-  if (!restaurantId) {
+  const uid = decoded.uid?.trim();
+  const email = decoded.email?.trim().toLowerCase() ?? "";
+  if (!uid || !email) {
     return NextResponse.json(
-      { ok: false, error: "NO_RESTAURANT", details: "El usuario no tiene restaurante asignado" },
+      { ok: false, error: "AUTH_EMAIL_REQUIRED", details: "El token no contiene email" },
       { status: 403 },
     );
   }
 
-  return { uid, restaurantId, db };
+  let profile;
+  try {
+    profile = await readAuthorizedProfile(db, uid, email);
+  } catch (error) {
+    if (error instanceof AuthorizedProfileError) {
+      return NextResponse.json(
+        { ok: false, error: error.code, details: "El perfil requiere revisión administrativa" },
+        { status: error.httpStatus },
+      );
+    }
+    throw error;
+  }
+
+  return {
+    uid,
+    email,
+    emailVerified: decoded.email_verified === true,
+    restaurantId: profile.restaurantId,
+    role: profile.rawRole,
+    canManageUsers: serverRoleHasCapability(profile.rawRole, "users.manage"),
+    db,
+  };
 }

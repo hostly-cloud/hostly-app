@@ -1,0 +1,37 @@
+import { NextResponse } from "next/server";
+import {
+  isAuthErrorResponse,
+  requireAuthenticatedRestaurant,
+} from "@/lib/server/auth/require-authenticated-restaurant";
+import { handlePatchOrderMetadata } from "@/lib/server/tpv/handle-tpv-order-lifecycle";
+import {
+  isTpvMutationError,
+  tpvMutationJsonError,
+  tpvMutationJsonOk,
+} from "@/lib/server/tpv/tpv-mutation-response";
+
+export async function POST(req: Request) {
+  const authCtx = await requireAuthenticatedRestaurant(req);
+  if (isAuthErrorResponse(authCtx)) return authCtx;
+
+  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+  const orderId = typeof body?.orderId === "string" ? body.orderId.trim() : "";
+  if (!orderId) return NextResponse.json({ ok: false, error: "ORDER_ID_REQUIRED" }, { status: 400 });
+
+  const result = await handlePatchOrderMetadata(authCtx, {
+    orderId,
+    note: typeof body?.note === "string" ? body.note : undefined,
+    paymentRequestedAt:
+      body?.paymentRequestedAt === null
+        ? null
+        : typeof body?.paymentRequestedAt === "number"
+          ? body.paymentRequestedAt
+          : undefined,
+    idempotencyKey:
+      typeof body?.idempotencyKey === "string" ? body.idempotencyKey.trim() : undefined,
+    expectedUpdatedAtMs:
+      typeof body?.expectedUpdatedAtMs === "number" ? Math.floor(body.expectedUpdatedAtMs) : undefined,
+  });
+  if (isTpvMutationError(result)) return tpvMutationJsonError(result);
+  return tpvMutationJsonOk(result);
+}
