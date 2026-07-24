@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ModulePageShell from "@/components/module-page-shell";
 import { useI18n } from "@/components/i18n-provider";
+import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
 import { fetchCartaCategorias } from "@/lib/carta-categorias/api-client";
 import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
 import type { CartaCategoria } from "@/lib/carta-categorias/types";
@@ -135,8 +136,8 @@ export default function CartaModificadoresMvpPage() {
     setApiError(null);
     try {
       const [famRes, grpRes] = await Promise.all([
-        fetch(`/api/modifiers/families?restauranteId=${encodeURIComponent(restauranteId)}`),
-        fetch(`/api/modifiers/groups?restauranteId=${encodeURIComponent(restauranteId)}`),
+        authenticatedApiFetch(`/api/modifiers/families?restauranteId=${encodeURIComponent(restauranteId)}`),
+        authenticatedApiFetch(`/api/modifiers/groups?restauranteId=${encodeURIComponent(restauranteId)}`),
       ]);
       const famJson = (await famRes.json()) as any;
       const grpJson = (await grpRes.json()) as any;
@@ -351,7 +352,7 @@ export default function CartaModificadoresMvpPage() {
     setLoading(true);
     setApiError(null);
     try {
-      const res = await fetch("/api/modifiers/families", {
+      const res = await authenticatedApiFetch("/api/modifiers/families", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ restauranteId, nombre, activo: true, modifiersEnabledByDefault: true, defaultModifierGroupIds: [] }),
@@ -377,7 +378,7 @@ export default function CartaModificadoresMvpPage() {
     setLoading(true);
     setApiError(null);
     try {
-      const res = await fetch("/api/modifiers/groups", {
+      const res = await authenticatedApiFetch("/api/modifiers/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -409,7 +410,7 @@ export default function CartaModificadoresMvpPage() {
     setLoading(true);
     setApiError(null);
     try {
-      const res = await fetch("/api/modifiers/options", {
+      const res = await authenticatedApiFetch("/api/modifiers/options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -441,7 +442,7 @@ export default function CartaModificadoresMvpPage() {
       setLoading(true);
       setApiError(null);
       try {
-        const res = await fetch("/api/modifiers/families", {
+        const res = await authenticatedApiFetch("/api/modifiers/families", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -470,7 +471,7 @@ export default function CartaModificadoresMvpPage() {
       setLoading(true);
       setApiError(null);
       try {
-        const res = await fetch("/api/modifiers/families", {
+        const res = await authenticatedApiFetch("/api/modifiers/families", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -499,7 +500,7 @@ export default function CartaModificadoresMvpPage() {
       setLoading(true);
       setApiError(null);
       try {
-        const res = await fetch(`/api/modifiers/families?restauranteId=${encodeURIComponent(restauranteId)}&id=${encodeURIComponent(familyId)}`, { method: "DELETE" });
+        const res = await authenticatedApiFetch(`/api/modifiers/families?restauranteId=${encodeURIComponent(restauranteId)}&id=${encodeURIComponent(familyId)}`, { method: "DELETE" });
         const json = (await res.json()) as any;
         if (!res.ok) throw new Error(json?.error ?? "DELETE_FAMILY_FAILED");
         await fetchAll();
@@ -519,7 +520,7 @@ export default function CartaModificadoresMvpPage() {
       try {
         const selectionType = patch.selectionType ?? group.selectionType ?? "single";
         const obligatorio = patch.obligatorio ?? group.obligatorio ?? false;
-        const res = await fetch("/api/modifiers/groups", {
+        const res = await authenticatedApiFetch("/api/modifiers/groups", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -549,7 +550,7 @@ export default function CartaModificadoresMvpPage() {
       setLoading(true);
       setApiError(null);
       try {
-        const res = await fetch(`/api/modifiers/groups?restauranteId=${encodeURIComponent(restauranteId)}&id=${encodeURIComponent(groupId)}`, { method: "DELETE" });
+        const res = await authenticatedApiFetch(`/api/modifiers/groups?restauranteId=${encodeURIComponent(restauranteId)}&id=${encodeURIComponent(groupId)}`, { method: "DELETE" });
         const json = (await res.json()) as any;
         if (!res.ok) throw new Error(json?.error ?? "DELETE_GROUP_FAILED");
         await fetchAll();
@@ -567,7 +568,7 @@ export default function CartaModificadoresMvpPage() {
       setLoading(true);
       setApiError(null);
       try {
-        const res = await fetch("/api/modifiers/options", {
+        const res = await authenticatedApiFetch("/api/modifiers/options", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -597,7 +598,7 @@ export default function CartaModificadoresMvpPage() {
       setLoading(true);
       setApiError(null);
       try {
-        const res = await fetch(`/api/modifiers/options?restauranteId=${encodeURIComponent(restauranteId)}&groupId=${encodeURIComponent(groupId)}&id=${encodeURIComponent(optionId)}`, { method: "DELETE" });
+        const res = await authenticatedApiFetch(`/api/modifiers/options?restauranteId=${encodeURIComponent(restauranteId)}&groupId=${encodeURIComponent(groupId)}&id=${encodeURIComponent(optionId)}`, { method: "DELETE" });
         const json = (await res.json()) as any;
         if (!res.ok) throw new Error(json?.error ?? "DELETE_OPTION_FAILED");
         await fetchAll();

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getHostlyFirestore } from "@/lib/firebase/admin";
-import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
+import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-restaurant";
+import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
 type FamilyDoc = {
   restauranteId: string;
@@ -32,24 +32,13 @@ function safeErrMessage(err: unknown): string {
 
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
-    if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
-    try {
-      assertServerRestauranteAllowed(restauranteId);
-    } catch (e) {
-      console.error("[api/modifiers/families][GET] RESTAURANTE_NOT_ALLOWED", { restauranteId, message: safeErrMessage(e) });
-      return serverError("RESTAURANTE_NOT_ALLOWED", `restauranteId=${restauranteId}`, 403);
-    }
-
-    const db = getHostlyFirestore();
-    if (!db) {
-      return serverError(
-        "FIRESTORE_NOT_CONFIGURED",
-        "Missing Firebase Admin credentials or projectId. Set FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY or GOOGLE_APPLICATION_CREDENTIALS (+ project_id).",
-        501,
-      );
-    }
+    const authContext = await requireLegacyRestaurantApi(
+      req,
+      "settings.manage",
+    );
+    if (isAuthErrorResponse(authContext)) return authContext;
+    const restauranteId = authContext.restaurantId;
+    const db = authContext.db;
 
     const snap = await db.collection("restaurantes").doc(restauranteId).collection("familiasProducto").get();
     const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as FamilyDoc) }));
@@ -65,36 +54,27 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const authContext = await requireLegacyRestaurantApi(
+      req,
+      "settings.manage",
+    );
+    if (isAuthErrorResponse(authContext)) return authContext;
+
     const body = (await req.json().catch(() => null)) as
       | (Partial<FamilyDoc> & { restauranteId?: string; id?: string; nombre?: string; activo?: boolean })
       | null;
     if (!body) return badRequest("INVALID_JSON");
-    const restauranteId = (body.restauranteId ?? "").trim();
-    if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
+    const restauranteId = authContext.restaurantId;
     console.info("[api/modifiers/families][POST] body", {
       restauranteId,
       nombre: typeof body.nombre === "string" ? body.nombre : null,
       id: typeof body.id === "string" ? body.id : null,
       activo: body.activo,
     });
-    try {
-      assertServerRestauranteAllowed(restauranteId);
-    } catch (e) {
-      console.error("[api/modifiers/families][POST] RESTAURANTE_NOT_ALLOWED", { restauranteId, message: safeErrMessage(e) });
-      return serverError("RESTAURANTE_NOT_ALLOWED", `restauranteId=${restauranteId}`, 403);
-    }
-
     const nombre = (body.nombre ?? "").trim();
     if (!nombre) return badRequest("MISSING_NOMBRE");
 
-    const db = getHostlyFirestore();
-    if (!db) {
-      return serverError(
-        "FIRESTORE_NOT_CONFIGURED",
-        "Missing Firebase Admin credentials or projectId. Set FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY or GOOGLE_APPLICATION_CREDENTIALS (+ project_id).",
-        501,
-      );
-    }
+    const db = authContext.db;
 
     const col = db.collection("restaurantes").doc(restauranteId).collection("familiasProducto");
     console.info("[api/modifiers/families][POST] path", `restaurantes/${restauranteId}/familiasProducto`);
@@ -134,26 +114,17 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const url = new URL(req.url);
-    const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
-    const id = (url.searchParams.get("id") ?? "").trim();
-    if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
-    if (!id) return badRequest("MISSING_ID");
-    try {
-      assertServerRestauranteAllowed(restauranteId);
-    } catch (e) {
-      console.error("[api/modifiers/families][DELETE] RESTAURANTE_NOT_ALLOWED", { restauranteId, message: safeErrMessage(e) });
-      return serverError("RESTAURANTE_NOT_ALLOWED", `restauranteId=${restauranteId}`, 403);
-    }
+    const authContext = await requireLegacyRestaurantApi(
+      req,
+      "settings.manage",
+    );
+    if (isAuthErrorResponse(authContext)) return authContext;
 
-    const db = getHostlyFirestore();
-    if (!db) {
-      return serverError(
-        "FIRESTORE_NOT_CONFIGURED",
-        "Missing Firebase Admin credentials or projectId. Set FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY or GOOGLE_APPLICATION_CREDENTIALS (+ project_id).",
-        501,
-      );
-    }
+    const url = new URL(req.url);
+    const restauranteId = authContext.restaurantId;
+    const id = (url.searchParams.get("id") ?? "").trim();
+    if (!id) return badRequest("MISSING_ID");
+    const db = authContext.db;
 
     await db.collection("restaurantes").doc(restauranteId).collection("familiasProducto").doc(id).delete();
     return NextResponse.json({ ok: true });

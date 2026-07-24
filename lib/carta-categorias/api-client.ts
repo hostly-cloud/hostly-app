@@ -1,5 +1,6 @@
 "use client";
 
+import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import {
   normalizeCategoryOperationalBehavior,
@@ -118,7 +119,7 @@ function trimRestauranteId(restauranteId: string): string {
 export async function fetchCartaFamilias(restauranteId: string): Promise<CartaFamilia[]> {
   const rid = trimRestauranteId(restauranteId);
   if (!rid) return [];
-  const res = await fetch(`/api/carta-familias?restauranteId=${encodeURIComponent(rid)}`);
+  const res = await authenticatedApiFetch(`/api/carta-familias?restauranteId=${encodeURIComponent(rid)}`);
   const data = await parseJson<{ ok?: boolean; items?: CartaFamilia[]; error?: string }>(res);
   if (res.status === 501 || data?.error === "FIRESTORE_NOT_CONFIGURED") {
     return loadCartaFamiliasLocal(rid);
@@ -134,7 +135,7 @@ export async function createCartaFamiliaApi(
   input: CartaFamiliaWriteInput,
 ): Promise<{ ok: true; item: CartaFamilia } | { ok: false; error: string }> {
   const operativa = normalizeCartaFamiliaOperativa(input);
-  const res = await fetch("/api/carta-familias", {
+  const res = await authenticatedApiFetch("/api/carta-familias", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -190,7 +191,7 @@ export async function patchCartaFamiliaApi(
   id: string,
   patch: Partial<CartaFamiliaWriteInput>,
 ): Promise<{ ok: true; item: CartaFamilia } | { ok: false; error: string }> {
-  const res = await fetch(`/api/carta-familias/${encodeURIComponent(id)}`, {
+  const res = await authenticatedApiFetch(`/api/carta-familias/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ restauranteId, patch }),
@@ -233,7 +234,7 @@ export async function deleteCartaFamiliaApi(
   restauranteId: string,
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const res = await fetch(
+  const res = await authenticatedApiFetch(
     `/api/carta-familias/${encodeURIComponent(id)}?restauranteId=${encodeURIComponent(restauranteId)}`,
     { method: "DELETE" },
   );
@@ -265,7 +266,7 @@ export async function reorderCartaFamiliasApi(
   restauranteId: string,
   orderedIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const res = await fetch("/api/carta-familias/reorder", {
+  const res = await authenticatedApiFetch("/api/carta-familias/reorder", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ restauranteId, orderedIds }),
@@ -304,7 +305,7 @@ async function parseJson<T>(res: Response): Promise<T | null> {
 export async function fetchCartaCategorias(restauranteId: string): Promise<CartaCategoria[]> {
   const rid = trimRestauranteId(restauranteId);
   if (!rid) return [];
-  const res = await fetch(`/api/carta-categorias?restauranteId=${encodeURIComponent(rid)}`);
+  const res = await authenticatedApiFetch(`/api/carta-categorias?restauranteId=${encodeURIComponent(rid)}`);
   const data = await parseJson<{ ok?: boolean; items?: CartaCategoria[]; error?: string }>(res);
   if (res.status === 501 || data?.error === "FIRESTORE_NOT_CONFIGURED") {
     return loadCartaCategoriasLocal(rid);
@@ -338,7 +339,7 @@ export async function createCartaCategoriaApi(
   const categoryOperationalBehavior = normalizeCategoryOperationalBehavior(
     input.categoryOperationalBehavior,
   );
-  const res = await fetch("/api/carta-categorias", {
+  const res = await authenticatedApiFetch("/api/carta-categorias", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -413,7 +414,7 @@ export async function patchCartaCategoriaApi(
     isActive: boolean;
   }>,
 ): Promise<{ ok: true; item: CartaCategoria } | { ok: false; error: string }> {
-  const res = await fetch(`/api/carta-categorias/${encodeURIComponent(id)}`, {
+  const res = await authenticatedApiFetch(`/api/carta-categorias/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ restauranteId, patch }),
@@ -488,7 +489,7 @@ export async function deleteCartaCategoriaApi(
   restauranteId: string,
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const res = await fetch(
+  const res = await authenticatedApiFetch(
     `/api/carta-categorias/${encodeURIComponent(id)}?restauranteId=${encodeURIComponent(restauranteId)}`,
     { method: "DELETE" },
   );
@@ -513,7 +514,7 @@ export async function reorderCartaCategoriasApi(
   restauranteId: string,
   orderedIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const res = await fetch("/api/carta-categorias/reorder", {
+  const res = await authenticatedApiFetch("/api/carta-categorias/reorder", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ restauranteId, orderedIds }),

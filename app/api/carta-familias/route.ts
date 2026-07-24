@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getHostlyFirestore } from "@/lib/firebase/admin";
 import {
   applyCartaFamiliaProductionStationPatchToUpdate,
   cartaFamiliaFromFirestoreDoc,
@@ -8,8 +7,9 @@ import {
   normalizeCartaFamiliaOperativa,
 } from "@/lib/carta-categorias/familia-operational-config";
 import type { ProductionStationType } from "@/lib/produccion/production-station-types";
-import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
 import type { CartaFamilia } from "@/lib/carta-categorias/types";
+import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-restaurant";
+import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
@@ -35,13 +35,11 @@ type FirestoreFamDoc = {
 };
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
-  assertServerRestauranteAllowed(restauranteId);
+  const authContext = await requireLegacyRestaurantApi(req, "tpv.sell");
+  if (isAuthErrorResponse(authContext)) return authContext;
 
-  const db = getHostlyFirestore();
-  if (!db) return NextResponse.json({ ok: false, error: "FIRESTORE_NOT_CONFIGURED" }, { status: 501 });
+  const restauranteId = authContext.restaurantId;
+  const db = authContext.db;
 
   const snap = await db
     .collection("restaurantes")
@@ -57,16 +55,19 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const authContext = await requireLegacyRestaurantApi(
+    req,
+    "settings.manage",
+  );
+  if (isAuthErrorResponse(authContext)) return authContext;
+
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return badRequest("INVALID_JSON");
-  const restauranteId = (typeof body.restauranteId === "string" ? body.restauranteId : "").trim();
+  const restauranteId = authContext.restaurantId;
   const name = (typeof body.name === "string" ? body.name : "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
   if (!name) return badRequest("MISSING_NAME");
-  assertServerRestauranteAllowed(restauranteId);
 
-  const db = getHostlyFirestore();
-  if (!db) return NextResponse.json({ ok: false, error: "FIRESTORE_NOT_CONFIGURED" }, { status: 501 });
+  const db = authContext.db;
 
   const coll = db.collection("restaurantes").doc(restauranteId).collection("cartaFamilias");
   let sortOrder =

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getHostlyFirestore } from "@/lib/firebase/admin";
-import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
+import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-restaurant";
+import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
 type OptionDoc = {
   restauranteId: string;
@@ -18,20 +18,23 @@ function badRequest(message: string, status = 400) {
 }
 
 export async function POST(req: Request) {
+  const authContext = await requireLegacyRestaurantApi(
+    req,
+    "settings.manage",
+  );
+  if (isAuthErrorResponse(authContext)) return authContext;
+
   const body = (await req.json().catch(() => null)) as
     | (Partial<OptionDoc> & { restauranteId?: string; id?: string; groupId?: string; nombre?: string })
     | null;
   if (!body) return badRequest("INVALID_JSON");
-  const restauranteId = (body.restauranteId ?? "").trim();
+  const restauranteId = authContext.restaurantId;
   const groupId = (body.groupId ?? "").trim();
   const nombre = (body.nombre ?? "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
   if (!groupId) return badRequest("MISSING_GROUP_ID");
   if (!nombre) return badRequest("MISSING_NOMBRE");
-  assertServerRestauranteAllowed(restauranteId);
 
-  const db = getHostlyFirestore();
-  if (!db) return badRequest("FIRESTORE_NOT_CONFIGURED", 501);
+  const db = authContext.db;
 
   const now = new Date().toISOString();
   const groupRef = db.collection("restaurantes").doc(restauranteId).collection("gruposModificadores").doc(groupId);
@@ -60,17 +63,20 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const authContext = await requireLegacyRestaurantApi(
+    req,
+    "settings.manage",
+  );
+  if (isAuthErrorResponse(authContext)) return authContext;
+
   const url = new URL(req.url);
-  const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
+  const restauranteId = authContext.restaurantId;
   const groupId = (url.searchParams.get("groupId") ?? "").trim();
   const id = (url.searchParams.get("id") ?? "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
   if (!groupId) return badRequest("MISSING_GROUP_ID");
   if (!id) return badRequest("MISSING_ID");
-  assertServerRestauranteAllowed(restauranteId);
 
-  const db = getHostlyFirestore();
-  if (!db) return badRequest("FIRESTORE_NOT_CONFIGURED", 501);
+  const db = authContext.db;
 
   await db
     .collection("restaurantes")
