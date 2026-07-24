@@ -1,14 +1,12 @@
 import {
   collection,
-  deleteField,
   getDocs,
   query,
-  serverTimestamp,
   where,
   type Firestore,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
-import { DbgWriteBatch } from "@/lib/firestore/instrumentedWrites";
+import { splitTableGroupOrdersViaApi } from "@/lib/firestore/tpv-mutations-via-api";
 import { computeBillableTotalFromOrderDocLike } from "@/lib/firestore/order-table-occupancy";
 import { fetchActiveOrdersForTable } from "@/lib/firestore/open-orders-same-table";
 
@@ -251,11 +249,12 @@ export async function restoreMergedOrdersForTableGroup(
   removedTableIds: string[],
   options: {
     remainingTableIds?: readonly string[];
+    newMainTableId?: string;
   } = {},
 ): Promise<SplitTableGroupOrdersResult> {
   const rid = restaurantId.trim();
   const primaryId = primaryTableId.trim();
-  const removed = uniqueTrimmed(removedTableIds).filter((id) => id !== primaryId);
+  const removed = uniqueTrimmed(removedTableIds);
   const remaining = uniqueTrimmed(options.remainingTableIds ?? [primaryId]);
   const members = uniqueTrimmed([primaryId, ...remaining, ...removed]);
   const groupId = primaryId;
@@ -547,39 +546,26 @@ export async function restoreMergedOrdersForTableGroup(
       0,
     );
 
-  const batch = new DbgWriteBatch(db, {
-    label: "restoreMergedOrdersForTableGroup",
-    collection: "orders",
-    restaurantId: rid,
-    tableId: primaryId,
-    orderId: primaryOrder.id,
+  const apiResult = await splitTableGroupOrdersViaApi({
+    mainTableId: primaryId,
+    removedTableIds: removed,
+    remainingTableIds: remaining,
+    newMainTableId: options.newMainTableId,
+    idempotencyKey: `split-group:${rid}:${primaryId}:${removed.join(",")}`,
   });
-
-  batch.update(primaryOrder.ref, {
-    items: remainingPrimaryItems,
-    total: totalFromItems(remainingPrimaryItems),
-    updatedAt: serverTimestamp(),
-  });
+  if (!apiResult.ok) {
+    addUnresolved(baseResult, {
+      orderId: primaryOrder.id,
+      tableId: primaryId,
+      reason: apiResult.error,
+    });
+    logTableGroupSplit(baseResult);
+    return baseResult;
+  }
 
   for (const source of sourceOrders) {
-    const sourceData = source.data() as Record<string, unknown>;
-    const sourceTableId = String(sourceData.tableId ?? "").trim();
+    const sourceTableId = String(source.data().tableId ?? "").trim();
     const restoredItems = restoredItemsBySourceOrder.get(source.id) ?? [];
-    const originalPaymentRequestedAt =
-      sourceData.tableGroupMergeOriginalPaymentRequestedAt;
-    batch.update(source.ref, {
-      status: resolveRestoredStatus(sourceData),
-      items: restoredItems,
-      total: totalFromItems(restoredItems),
-      mergedIntoOrderId: deleteField(),
-      mergedIntoTableId: deleteField(),
-      tableGroupMergeOriginalStatus: deleteField(),
-      tableGroupMergeOriginalPaymentRequestedAt: deleteField(),
-      paymentRequestedAt: hasStoredOriginalPaymentRequest(sourceData)
-        ? originalPaymentRequestedAt
-        : null,
-      updatedAt: serverTimestamp(),
-    });
     baseResult.restoredAssignments.push({
       orderId: source.id,
       tableId: sourceTableId,
@@ -589,12 +575,10 @@ export async function restoreMergedOrdersForTableGroup(
     baseResult.movedItemCount += restoredItems.length;
   }
 
-  await batch.commit();
-
-  baseResult.restored = true;
+  baseResult.restored = apiResult.restored;
   baseResult.totalsBefore = totalsBefore;
   baseResult.totalsAfter = totalsAfter;
-  baseResult.result = remaining.length > 1 ? "partial-split" : "full-split";
+  baseResult.result = apiResult.result;
   logTableGroupSplit(baseResult);
   return baseResult;
 }
