@@ -4225,6 +4225,81 @@ describe("Rules: lecturas administrativas y mutaciones TPV", () => {
     );
   });
 
+  test("orderItems hardening: deniega deleteDoc a cliente Web válido", async () => {
+    const orderItemId = "order-item-delete-denied";
+    const fixtureRef = adminDb.collection("orderItems").doc(orderItemId);
+
+    // Admin SDK se usa únicamente para preparar y verificar el fixture.
+    await fixtureRef.set({
+      restaurantId: RESTAURANT_A,
+      orderId: "order-delete-denied",
+      status: "sent",
+      quantity: 1,
+    });
+    assert.equal((await fixtureRef.get()).exists, true);
+
+    await assertFails(
+      deleteDoc(doc(rulesDb(WAITER_A), "orderItems", orderItemId)),
+    );
+    assert.equal((await fixtureRef.get()).exists, true);
+  });
+
+  test("orderItems hardening: permite lectura Web del mismo tenant", async () => {
+    const orderItemId = "order-item-same-tenant-read";
+    const fixtureRef = adminDb.collection("orderItems").doc(orderItemId);
+
+    // Admin SDK se usa únicamente para preparar y verificar el fixture.
+    await fixtureRef.set({
+      restaurantId: RESTAURANT_A,
+      orderId: "order-same-tenant-read",
+      status: "sent",
+      quantity: 1,
+    });
+    assert.equal((await fixtureRef.get()).exists, true);
+
+    const snapshot = await assertSucceeds(
+      getDoc(doc(rulesDb(WAITER_A), "orderItems", orderItemId)),
+    );
+    assert.equal(snapshot.exists(), true);
+    assert.equal(snapshot.data()?.restaurantId, RESTAURANT_A);
+  });
+
+  test("orderItems hardening: deniega lectura Web cross-tenant", async () => {
+    const orderItemId = "order-item-cross-tenant-read";
+    const fixtureRef = adminDb.collection("orderItems").doc(orderItemId);
+
+    // Admin SDK se usa únicamente para preparar y verificar el fixture.
+    await fixtureRef.set({
+      restaurantId: RESTAURANT_A,
+      orderId: "order-cross-tenant-read",
+      status: "sent",
+      quantity: 1,
+    });
+    assert.equal((await fixtureRef.get()).exists, true);
+
+    await assertFails(
+      getDoc(doc(rulesDb(OWNER_B), "orderItems", orderItemId)),
+    );
+  });
+
+  test("orderItems hardening: deniega lectura Web a perfil disabled", async () => {
+    const orderItemId = "order-item-disabled-read";
+    const fixtureRef = adminDb.collection("orderItems").doc(orderItemId);
+
+    // Admin SDK se usa únicamente para preparar y verificar el fixture.
+    await fixtureRef.set({
+      restaurantId: RESTAURANT_A,
+      orderId: "order-disabled-read",
+      status: "sent",
+      quantity: 1,
+    });
+    assert.equal((await fixtureRef.get()).exists, true);
+
+    await assertFails(
+      getDoc(doc(rulesDb(DISABLED_A), "orderItems", orderItemId)),
+    );
+  });
+
   test("orders, orderItems y payments bloquean bypass TPV y privilegios preinyectados", async () => {
     await seedProfilePair(
       "kitchen-a",
