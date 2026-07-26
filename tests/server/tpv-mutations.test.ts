@@ -93,6 +93,97 @@ describe("firestoreItemsToSaleLineIntents", () => {
   });
 });
 
+function collectUndefinedPaths(value: unknown, prefix = ""): string[] {
+  if (value === undefined) return prefix ? [prefix] : ["<root>"];
+  if (value == null || typeof value !== "object") return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) =>
+      collectUndefinedPaths(item, prefix ? `${prefix}[${index}]` : `[${index}]`),
+    );
+  }
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, nested]) =>
+    collectUndefinedPaths(nested, prefix ? `${prefix}.${key}` : key),
+  );
+}
+
+describe("buildAuthoritativeSaleLine Firestore serialization", () => {
+  test("simple product without modifiers omits modifierTotal and has no undefined values", () => {
+    const line = buildAuthoritativeSaleLine({
+      intent: { lineId: "line-simple", productId: "prod-1", quantity: 1 },
+      product: baseProduct(),
+      modifiers: [],
+      defaultStatus: "sent",
+    });
+
+    assert.equal(typeof line.id, "string");
+    assert.equal(line.productId, "prod-1");
+    assert.equal(Object.hasOwn(line, "modifierTotal"), false);
+    assert.deepEqual(collectUndefinedPaths(line), []);
+  });
+
+  test("product with modifiers keeps modifierTotal without undefined values", () => {
+    const line = buildAuthoritativeSaleLine({
+      intent: { lineId: "line-mod", productId: "prod-1", quantity: 1 },
+      product: baseProduct(),
+      modifiers: [
+        {
+          groupId: "mixer",
+          groupName: "Mixer",
+          optionId: "cola",
+          optionName: "Cola",
+          priceDelta: 1.5,
+        },
+      ],
+      defaultStatus: "sent",
+    });
+
+    assert.equal(Object.hasOwn(line, "modifierTotal"), true);
+    assert.equal(line.modifierTotal, 1.5);
+    assert.deepEqual(collectUndefinedPaths(line), []);
+  });
+
+  test("absent optional metadata is omitted instead of serialized as undefined", () => {
+    const line = buildAuthoritativeSaleLine({
+      intent: { lineId: "line-meta-absent", productId: "prod-1", quantity: 1 },
+      product: baseProduct(),
+      modifiers: [],
+      defaultStatus: "sent",
+    });
+
+    assert.equal(Object.hasOwn(line, "categoryName"), false);
+    assert.equal(Object.hasOwn(line, "categoria"), false);
+    assert.equal(Object.hasOwn(line, "stationId"), false);
+    assert.equal(Object.hasOwn(line, "stationName"), false);
+    assert.equal(Object.hasOwn(line, "operationStationId"), false);
+    assert.equal(Object.hasOwn(line, "operationStationName"), false);
+    assert.equal(Object.hasOwn(line, "course"), false);
+    assert.deepEqual(collectUndefinedPaths(line), []);
+  });
+
+  test("present optional metadata is preserved without undefined values", () => {
+    const line = buildAuthoritativeSaleLine({
+      intent: { lineId: "line-meta-present", productId: "prod-1", quantity: 1 },
+      product: baseProduct({
+        categoryName: "Entrantes",
+        operationStationId: "station-cocina",
+        operationStationName: "Cocina",
+        course: 0,
+      }),
+      modifiers: [],
+      defaultStatus: "sent",
+    });
+
+    assert.equal(line.categoryName, "Entrantes");
+    assert.equal(line.categoria, "Entrantes");
+    assert.equal(line.stationId, "station-cocina");
+    assert.equal(line.operationStationId, "station-cocina");
+    assert.equal(line.stationName, "Cocina");
+    assert.equal(line.operationStationName, "Cocina");
+    assert.equal(line.course, 0);
+    assert.deepEqual(collectUndefinedPaths(line), []);
+  });
+});
+
 describe("authoritative totals", () => {
   test("computeAuthoritativeOrderTotal skips cancelled lines", () => {
     const total = computeAuthoritativeOrderTotal([

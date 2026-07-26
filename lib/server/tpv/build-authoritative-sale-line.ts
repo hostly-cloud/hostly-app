@@ -40,6 +40,25 @@ export function buildAuthoritativeSaleLine(
         ? params.defaultStatus
         : preservedStatus;
 
+  const categoryName =
+    typeof product.categoryName === "string" && product.categoryName.trim() !== ""
+      ? product.categoryName.trim()
+      : undefined;
+  const operationStationId =
+    typeof product.operationStationId === "string" &&
+    product.operationStationId.trim() !== ""
+      ? product.operationStationId.trim()
+      : undefined;
+  const operationStationName =
+    typeof product.operationStationName === "string" &&
+    product.operationStationName.trim() !== ""
+      ? product.operationStationName.trim()
+      : undefined;
+  const course =
+    typeof product.course === "number" && Number.isFinite(product.course)
+      ? product.course
+      : undefined;
+
   const line: Record<string, unknown> = {
     id: intent.lineId,
     productId: product.id,
@@ -50,16 +69,17 @@ export function buildAuthoritativeSaleLine(
     status,
     price: basePrice,
     precio: basePrice,
-    modifierTotal: modifiers.length > 0 ? modifierTotal : undefined,
+    ...(modifiers.length > 0 ? { modifierTotal } : {}),
     total: lineTotal,
     displayName,
-    categoryName: product.categoryName ?? undefined,
-    categoria: product.categoryName ?? undefined,
-    stationId: product.operationStationId ?? undefined,
-    stationName: product.operationStationName ?? undefined,
-    operationStationId: product.operationStationId ?? undefined,
-    operationStationName: product.operationStationName ?? undefined,
-    course: product.course ?? undefined,
+    ...(categoryName !== undefined ? { categoryName, categoria: categoryName } : {}),
+    ...(operationStationId !== undefined
+      ? { stationId: operationStationId, operationStationId }
+      : {}),
+    ...(operationStationName !== undefined
+      ? { stationName: operationStationName, operationStationName }
+      : {}),
+    ...(course !== undefined ? { course } : {}),
   };
 
   if (modifiers.length > 0) {
