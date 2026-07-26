@@ -176,6 +176,7 @@ import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document
 import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
 import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import type { SalaEditorReadonlyTpvOperationalState } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
+import { resolveTableOperationalVisualState } from "@/lib/map/table-operational-state";
 import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
 import {
   listenReservationsForDate,
@@ -525,29 +526,6 @@ function mapAlertDotFromTileInputs(
     return "attention";
   }
   return null;
-}
-
-function resolveTpvReadonlyOperationalState(params: {
-  busy: boolean;
-  reserved: boolean;
-  isCriticalTable: boolean;
-  priorityLevel: number;
-  readyToClose: boolean;
-  reservationPressure: { type: "upcoming" | "late"; time?: string } | null | undefined;
-}): SalaEditorReadonlyTpvOperationalState {
-  if (params.isCriticalTable || params.priorityLevel >= 3) return "critica";
-  if (params.reservationPressure?.type === "late") return "retrasada";
-  if (
-    params.priorityLevel === 1 ||
-    params.priorityLevel === 2 ||
-    params.readyToClose ||
-    params.reservationPressure?.type === "upcoming"
-  ) {
-    return "atencion";
-  }
-  if (params.busy) return "ocupada";
-  if (params.reserved) return "reservada";
-  return "libre";
 }
 
 function formatOrderOpenDurationLabel(totalMinutes: number): string {
@@ -7369,7 +7347,7 @@ export function CartaPageContent({
         orderTotalsByTable[serviceTableId],
       );
       const reservationPressure = reservationPressureByTableId[tableId] ?? null;
-      const state = resolveTpvReadonlyOperationalState({
+      const state = resolveTableOperationalVisualState({
         busy,
         reserved: Boolean(reservedByTableId[tableId]),
         isCriticalTable:
