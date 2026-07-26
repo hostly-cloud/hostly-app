@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import { getOperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
@@ -8,6 +7,7 @@ import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometr
 import { resolveOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
+import { tableOperationalAccentColor } from "@/lib/map/table-operational-visual-tokens";
 
 export type SalaEditorReadonlyTpvOperationalState =
   | "libre"
@@ -40,76 +40,6 @@ function resolveReadonlyOperationalState(
   const legacyTableId = readLegacyTableId(instance);
   if (!legacyTableId) return null;
   return stateByLegacyTableId?.[legacyTableId] ?? null;
-}
-
-function stateChrome(
-  state: SalaEditorReadonlyTpvOperationalState | null,
-): Pick<CSSProperties, "boxShadow" | "filter"> {
-  switch (state) {
-    case "critica":
-      return {
-        boxShadow:
-          "0 0 0 3px rgba(185, 76, 70, 0.22), 0 0 0 1px rgba(185, 76, 70, 0.68)",
-      };
-    case "retrasada":
-      return {
-        boxShadow:
-          "0 0 0 3px rgba(217, 119, 6, 0.2), 0 0 0 1px rgba(217, 119, 6, 0.58)",
-      };
-    case "atencion":
-      return {
-        boxShadow:
-          "0 0 0 3px rgba(184, 121, 34, 0.16), 0 0 0 1px rgba(184, 121, 34, 0.5)",
-      };
-    case "ocupada":
-      return {
-        boxShadow:
-          "0 0 0 2px rgba(37, 73, 90, 0.14), 0 0 0 1px rgba(37, 73, 90, 0.42)",
-      };
-    case "reservada":
-      return {
-        boxShadow:
-          "0 0 0 2px rgba(81, 66, 95, 0.13), 0 0 0 1px rgba(81, 66, 95, 0.38)",
-      };
-    case "libre":
-    case "seleccionada":
-    case null:
-      return {};
-  }
-}
-
-function stateAccentColor(state: SalaEditorReadonlyTpvOperationalState | null): string | null {
-  switch (state) {
-    case "seleccionada":
-      return "#0ea5e9";
-    case "critica":
-      return "#b94c46";
-    case "retrasada":
-      return "#d97706";
-    case "atencion":
-      return "#b87922";
-    case "ocupada":
-      return "#25495a";
-    case "reservada":
-      return "#51425f";
-    case "libre":
-      return "#264f34";
-    case null:
-      return null;
-  }
-}
-
-function stateDotColor(state: SalaEditorReadonlyTpvOperationalState | null): string | null {
-  if (!state || state === "libre") return null;
-  return stateAccentColor(state);
-}
-
-function selectedChrome(selected: boolean): Pick<CSSProperties, "boxShadow"> {
-  if (!selected) return {};
-  return {
-    boxShadow:
-      "0 0 0 3px rgba(14, 165, 233, 0.22), 0 0 0 1px rgba(14, 165, 233, 0.62)",
-  };
 }
 
 export function SalaEditorReadonlyOperationalLayer({
@@ -147,8 +77,7 @@ export function SalaEditorReadonlyOperationalLayer({
         const legacyTableId = readLegacyTableId(instance);
         const isSelected =
           legacyTableId !== "" && selectedLegacyTableIdSet.has(legacyTableId);
-        const accentColor = stateAccentColor(state);
-        const dotColor = stateDotColor(state);
+        const accentColor = tableOperationalAccentColor(state);
 
         return (
           <div
@@ -174,8 +103,6 @@ export function SalaEditorReadonlyOperationalLayer({
                 transformOrigin: "center center",
                 zIndex: instance.elementType === "TABLE" ? 24 : 18,
                 pointerEvents: "none",
-                ...stateChrome(state),
-                ...selectedChrome(isSelected || state === "seleccionada"),
               }}
             >
               <div
@@ -192,22 +119,6 @@ export function SalaEditorReadonlyOperationalLayer({
                   visualVariant={visualVariant}
                 />
               </div>
-              {dotColor ? (
-                <span
-                  aria-hidden
-                  style={{
-                    position: "absolute",
-                    right: -3,
-                    top: -3,
-                    width: 9,
-                    height: 9,
-                    borderRadius: 999,
-                    background: dotColor,
-                    border: "1px solid rgba(255,255,255,0.92)",
-                    boxShadow: "0 1px 3px rgba(15, 23, 42, 0.18)",
-                  }}
-                />
-              ) : null}
             </div>
           </div>
         );

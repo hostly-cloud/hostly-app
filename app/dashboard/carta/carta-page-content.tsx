@@ -176,7 +176,14 @@ import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document
 import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
 import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import type { SalaEditorReadonlyTpvOperationalState } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
-import { resolveTableOperationalVisualState } from "@/lib/map/table-operational-state";
+import {
+  buildTableOperationalVisualInput,
+  computeMapVisualPriorityLevel,
+} from "@/lib/map/build-table-operational-visual-input";
+import {
+  resolveTableOperationalVisualState,
+  type TableOperationalVisualState,
+} from "@/lib/map/table-operational-state";
 import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
 import {
   listenReservationsForDate,
@@ -489,42 +496,11 @@ function isFirestoreTpvConnectivityFailure(err: unknown): boolean {
   );
 }
 
-/** Prioridad visual en mapa (0–3); solo render, no Firestore. */
-function computeMapVisualPriorityLevel(
-  openedAtMs: number | undefined,
-  mapNow: number,
-  orderTotal: number | undefined,
-): number {
-  const minutes =
-    openedAtMs != null && Number.isFinite(openedAtMs)
-      ? Math.max(0, Math.floor((mapNow - openedAtMs) / 60000))
-      : 0;
-  const total =
-    typeof orderTotal === "number" && Number.isFinite(orderTotal)
-      ? orderTotal
-      : 0;
-  if (minutes >= 60) return 3;
-  if (minutes >= 30) return 2;
-  if (total > 50) return 1;
-  return 0;
-}
-
-/** Misma regla que `resolveAlertDot` en `components/map/element-map-card.tsx`. */
-function mapAlertDotFromTileInputs(
-  isCriticalTable: boolean,
-  priorityLevel: number,
-  readyToClose: boolean,
-  reservationPressure: { type: "upcoming" | "late"; time?: string } | null | undefined,
+function mapAlertDotFromOperationalState(
+  state: TableOperationalVisualState,
 ): "critical" | "attention" | null {
-  if (isCriticalTable || priorityLevel >= 3) return "critical";
-  if (
-    priorityLevel === 1 ||
-    priorityLevel === 2 ||
-    readyToClose ||
-    reservationPressure?.type === "late"
-  ) {
-    return "attention";
-  }
+  if (state === "critica") return "critical";
+  if (state === "atencion" || state === "retrasada") return "attention";
   return null;
 }
 
@@ -7050,20 +7026,8 @@ export function CartaPageContent({
         ordersByTable,
       );
       const serviceTableId = group.serviceTableId;
-      const activeLineCount = countActiveComandaLines(
-        ordersByTable[serviceTableId] ?? [],
-      );
+      const tableLines = ordersByTable[serviceTableId] ?? [];
       const busy = mapOccupied;
-      const occupancyStartMs = firestoreOccupancyStartMsByTable[serviceTableId];
-      const minutesOccupied =
-        occupancyStartMs != null
-          ? Math.max(0, (now - occupancyStartMs) / 60000)
-          : 0;
-      const isCriticalTable =
-        busy &&
-        occupancyStartMs != null &&
-        minutesOccupied >= 45 &&
-        activeLineCount >= 8;
       const openedAtMsRaw = orderOpenedAtByTable[serviceTableId];
       const openedAtMs =
         typeof openedAtMsRaw === "number" && Number.isFinite(openedAtMsRaw)
@@ -7072,26 +7036,29 @@ export function CartaPageContent({
       const ot = orderTotalsByTable[serviceTableId];
       const orderTotal =
         typeof ot === "number" && Number.isFinite(ot) ? ot : undefined;
-      const priorityLevel = computeMapVisualPriorityLevel(
-        openedAtMs,
-        now,
-        orderTotal,
-      );
       const readyToClose = group.memberIds.some((memberId) =>
         salaReadyToCloseTableIds.has(memberId),
       );
       const rp = reservationPressureByTableId[tableId];
+      const operationalState = resolveTableOperationalVisualState(
+        buildTableOperationalVisualInput({
+          busy,
+          reserved: Boolean(reservedByTableId[tableId]),
+          lines: tableLines,
+          occupancyStartMs: firestoreOccupancyStartMsByTable[serviceTableId],
+          orderOpenedAtMs: openedAtMs,
+          orderTotal,
+          mapNow: now,
+          readyToClose,
+          reservationPressure: rp ?? null,
+        }),
+      );
 
       if (activeMapFilter === "delayed") {
-        return rp?.type === "late";
+        return operationalState === "retrasada";
       }
 
-      const dot = mapAlertDotFromTileInputs(
-        isCriticalTable,
-        priorityLevel,
-        readyToClose,
-        rp ?? null,
-      );
+      const dot = mapAlertDotFromOperationalState(operationalState);
 
       if (activeMapFilter === "critical") {
         return dot === "critical";
@@ -7333,32 +7300,31 @@ export function CartaPageContent({
       );
       const serviceTableId = group.serviceTableId;
       const busy = group.busy;
-      const activeLineCount = countActiveComandaLines(
-        ordersByTable[serviceTableId] ?? [],
-      );
-      const occupancyStartMs = firestoreOccupancyStartMsByTable[serviceTableId];
-      const minutesOccupied =
-        occupancyStartMs != null
-          ? Math.max(0, (now - occupancyStartMs) / 60000)
-          : 0;
-      const priorityLevel = computeMapVisualPriorityLevel(
-        orderOpenedAtByTable[serviceTableId],
-        now,
-        orderTotalsByTable[serviceTableId],
-      );
+      const tableLines = ordersByTable[serviceTableId] ?? [];
+      const openedAtMsRaw = orderOpenedAtByTable[serviceTableId];
+      const openedAtMs =
+        typeof openedAtMsRaw === "number" && Number.isFinite(openedAtMsRaw)
+          ? openedAtMsRaw
+          : undefined;
+      const orderTotalRaw = orderTotalsByTable[serviceTableId];
+      const orderTotal =
+        typeof orderTotalRaw === "number" && Number.isFinite(orderTotalRaw)
+          ? orderTotalRaw
+          : undefined;
       const reservationPressure = reservationPressureByTableId[tableId] ?? null;
-      const state = resolveTableOperationalVisualState({
-        busy,
-        reserved: Boolean(reservedByTableId[tableId]),
-        isCriticalTable:
-          busy &&
-          occupancyStartMs != null &&
-          minutesOccupied >= 45 &&
-          activeLineCount >= 8,
-        priorityLevel,
-        readyToClose: salaReadyToCloseTableIds.has(serviceTableId),
-        reservationPressure,
-      });
+      const state = resolveTableOperationalVisualState(
+        buildTableOperationalVisualInput({
+          busy,
+          reserved: Boolean(reservedByTableId[tableId]),
+          lines: tableLines,
+          occupancyStartMs: firestoreOccupancyStartMsByTable[serviceTableId],
+          orderOpenedAtMs: openedAtMs,
+          orderTotal,
+          mapNow: now,
+          readyToClose: salaReadyToCloseTableIds.has(serviceTableId),
+          reservationPressure,
+        }),
+      );
       stateByTableId[tableId] = state;
     }
     return stateByTableId;
@@ -15460,9 +15426,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         busy && firestoreOccupiedTableIds.has(serviceTableId)
                           ? formatMapOccupiedDuration(serviceTableId)
                           : null;
-                      const activeLineCount = countActiveComandaLines(
-                        ordersByTable[serviceTableId] ?? [],
-                      );
+                      const tableLines = ordersByTable[serviceTableId] ?? [];
+                      const activeLineCount = countActiveComandaLines(tableLines);
                       const showProductCount = busy && activeLineCount > 0;
                       const badgeTier =
                         activeLineCount >= 8
@@ -15470,36 +15435,36 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           : activeLineCount >= 4
                             ? "medium"
                             : "low";
-                      const occupancyStartMs =
-                        firestoreOccupancyStartMsByTable[serviceTableId];
-                      const minutesOccupied =
-                        occupancyStartMs != null
-                          ? Math.max(0, (now - occupancyStartMs) / 60000)
-                          : 0;
-                      const isCriticalTable =
-                        busy &&
-                        occupancyStartMs != null &&
-                        minutesOccupied >= 45 &&
-                        activeLineCount >= 8;
-                      const ariaTileBusy = busy
-                        ? cartaHeaderMobile
-                          ? `${String(stableTable.name ?? "").trim()}, ${t("cartaTpv.mapOcupada")}`
-                          : `${String(stableTable.name ?? "").trim()}${durationLabel ? `, ${durationLabel}` : ""}${showProductCount ? ` (${activeLineCount})` : ""}, ${t("cartaTpv.mapOcupada")}`
-                        : "";
-
-                      const total = orderTotalsByTable[serviceTableId];
                       const openedAt = orderOpenedAtByTable[serviceTableId];
                       const openedAtMs =
                         typeof openedAt === "number" && Number.isFinite(openedAt)
                           ? openedAt
                           : undefined;
-                      const priorityLevel = computeMapVisualPriorityLevel(
-                        openedAtMs,
-                        now,
+                      const total = orderTotalsByTable[serviceTableId];
+                      const orderTotal =
                         typeof total === "number" && Number.isFinite(total)
                           ? total
-                          : undefined,
-                      );
+                          : undefined;
+                      const mapOperationalInput = buildTableOperationalVisualInput({
+                        busy,
+                        reserved: Boolean(reservedByTableId[tableId]),
+                        lines: tableLines,
+                        occupancyStartMs:
+                          firestoreOccupancyStartMsByTable[serviceTableId],
+                        orderOpenedAtMs: openedAtMs,
+                        orderTotal,
+                        mapNow: now,
+                        readyToClose: salaReadyToCloseTableIds.has(serviceTableId),
+                        reservationPressure:
+                          reservationPressureByTableId[tableId] ?? null,
+                      });
+                      const isCriticalTable = mapOperationalInput.isCriticalTable;
+                      const priorityLevel = mapOperationalInput.priorityLevel;
+                      const ariaTileBusy = busy
+                        ? cartaHeaderMobile
+                          ? `${String(stableTable.name ?? "").trim()}, ${t("cartaTpv.mapOcupada")}`
+                          : `${String(stableTable.name ?? "").trim()}${durationLabel ? `, ${durationLabel}` : ""}${showProductCount ? ` (${activeLineCount})` : ""}, ${t("cartaTpv.mapOcupada")}`
+                        : "";
                       const lastActivityAt = lastActivityAtByTable[serviceTableId];
                       const inactiveMinutes =
                         isBusy &&
