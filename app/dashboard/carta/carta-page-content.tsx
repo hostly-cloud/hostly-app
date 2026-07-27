@@ -194,6 +194,7 @@ import {
   type KdsDestination,
 } from "@/lib/kds/kds-destination";
 import {
+  formatEnviarComandaActionLabel,
   isPendingMarchPostresLine,
   isPendingMarchPrimeroLine,
   isPendingMarchSegundosLine,
@@ -805,24 +806,27 @@ function comandaLineRowBg(
     return opts.hover ? "rgba(241, 245, 249, 0.95)" : "rgba(241, 245, 249, 0.75)";
   }
   if (status !== "pending" && !opts.selected) {
-    return opts.hover ? "rgba(241, 245, 249, 0.95)" : "rgba(241, 245, 249, 0.75)";
+    return opts.hover ? "rgba(248, 250, 252, 0.98)" : "rgba(248, 250, 252, 0.92)";
   }
   if (opts.selected) {
-    if (status === "pending") return "rgba(71, 85, 105, 0.20)";
-    if (status === "sent") return "rgba(59, 130, 246, 0.22)";
+    if (status === "pending") return "rgba(245, 158, 11, 0.22)";
+    if (status === "sent") return "rgba(148, 163, 184, 0.22)";
     if (status === "prepared") return "rgba(249, 115, 22, 0.22)";
     return "rgba(34, 197, 94, 0.20)";
   }
-  if (opts.hover) return "rgba(15, 23, 42, 0.07)";
-  if (status === "pending") return "rgba(71, 85, 105, 0.11)";
-  if (status === "sent") return "rgba(59, 130, 246, 0.14)";
+  if (opts.hover) {
+    if (status === "pending") return "rgba(245, 158, 11, 0.16)";
+    return "rgba(15, 23, 42, 0.05)";
+  }
+  if (status === "pending") return "rgba(245, 158, 11, 0.10)";
+  if (status === "sent") return "rgba(248, 250, 252, 0.92)";
   if (status === "prepared") return "rgba(249, 115, 22, 0.14)";
   return "rgba(34, 197, 94, 0.11)";
 }
 
 function comandaLineStatusOutline(status: OrderLineStatus): string {
-  if (status === "pending") return "2px solid rgba(71, 85, 105, 0.55)";
-  if (status === "sent") return "2px solid rgba(37, 99, 235, 0.5)";
+  if (status === "pending") return "2px solid rgba(217, 119, 6, 0.55)";
+  if (status === "sent") return "2px solid rgba(148, 163, 184, 0.45)";
   if (status === "prepared") return "2px solid rgba(234, 88, 12, 0.55)";
   if (status === "cancelled") return "2px solid rgba(148, 163, 184, 0.55)";
   return "2px solid rgba(22, 163, 74, 0.5)";
@@ -844,16 +848,16 @@ function comandaLineRowBgHeldForMarch(opts: { hover: boolean }): string {
 function comandaStatusBadgeStyle(status: OrderLineStatus): CSSProperties {
   if (status === "pending") {
     return {
-      background: "rgba(71, 85, 105, 0.16)",
-      color: "#334155",
-      border: "1px solid rgba(71, 85, 105, 0.28)",
+      background: "rgba(245, 158, 11, 0.22)",
+      color: "#92400e",
+      border: "1px solid rgba(217, 119, 6, 0.42)",
     };
   }
   if (status === "sent") {
     return {
-      background: "rgba(59, 130, 246, 0.28)",
-      color: "#1e40af",
-      border: "1px solid rgba(37, 99, 235, 0.55)",
+      background: "rgba(148, 163, 184, 0.18)",
+      color: "#475569",
+      border: "1px solid rgba(148, 163, 184, 0.38)",
     };
   }
   if (status === "prepared") {
@@ -8814,14 +8818,25 @@ export function CartaPageContent({
       .filter((g) => g.items.length > 0);
   }, [cocinaItems]);
 
-  const hasPendingItems = useMemo(
-    () => order.some((l) => l.status === "pending"),
-    [order],
+  const comandaReleasableLines = useMemo(
+    () => selectLinesToReleaseOnComanda(visibleOrderLines),
+    [visibleOrderLines],
   );
 
-  const hasPendingComandaRelease = useMemo(
-    () => selectLinesToReleaseOnComanda(visibleOrderLines).length > 0,
-    [visibleOrderLines],
+  const hasPendingComandaRelease = comandaReleasableLines.length > 0;
+
+  const enviarComandaActionLabel = useMemo(
+    () =>
+      formatEnviarComandaActionLabel({
+        isSending: isComandaSending,
+        sentFlash: comandaSentFlash,
+        releasableLineCount: comandaReleasableLines.length,
+      }),
+    [
+      comandaReleasableLines.length,
+      comandaSentFlash,
+      isComandaSending,
+    ],
   );
 
   const tpvRushMode = useMemo(
@@ -9391,13 +9406,16 @@ export function CartaPageContent({
                   }
                   style={{
                     flexShrink: 0,
-                    fontSize: 8,
-                    fontWeight: 800,
+                    fontSize: item.status === "pending" || heldForMarch ? 10 : 8,
+                    fontWeight: 860,
                     letterSpacing: "0.04em",
                     textTransform: "uppercase",
-                    padding: "1px 5px",
+                    padding:
+                      item.status === "pending" || heldForMarch
+                        ? "2px 7px"
+                        : "1px 5px",
                     borderRadius: 999,
-                    lineHeight: 1.1,
+                    lineHeight: 1.15,
                     ...(heldForMarch
                       ? comandaHeldForMarchBadgeStyle()
                       : comandaStatusBadgeStyle(item.status)),
@@ -12797,8 +12815,9 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 .carta-comanda-line.is-pending {
   position: relative;
   padding-left: 12px !important;
-  background: rgba(15, 23, 42, 0.04) !important;
-  border: 1px solid rgba(15, 23, 42, 0.11) !important;
+  background: color-mix(in srgb, var(--hostly-warning-soft) 88%, #fff7ed) !important;
+  border: 1px solid rgba(217, 119, 6, 0.28) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 .carta-comanda-line.is-pending::before {
@@ -12809,10 +12828,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   transform: translateY(-50%);
   width: 3px;
   height: calc(100% - 6px);
-  max-height: 24px;
+  max-height: 28px;
   border-radius: 2px;
-  background: rgba(30, 41, 59, 0.72);
+  background: #d97706;
   pointer-events: none;
+}
+
+.carta-comanda-line.is-pending .carta-comanda-name-primary {
+  color: #1f2933;
+  font-weight: 820;
 }
 
 .carta-comanda-line.is-held-for-march {
@@ -13820,13 +13844,19 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   z-index: 2;
 }
 
-.carta-comanda-button:hover:not(:disabled) {
-  background: #f1f5f9 !important;
-  border-color: rgba(56, 189, 248, 0.35) !important;
-}
-
 .carta-comanda-button {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   touch-action: manipulation;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
@@ -13836,8 +13866,32 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
     opacity 120ms ease !important;
 }
 
+.carta-comanda-button:hover:not(:disabled):not(.is-pending-action) {
+  background: #f1f5f9 !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+.carta-comanda-button.is-pending-action {
+  color: #78350f !important;
+  border-color: rgba(217, 119, 6, 0.55) !important;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%) !important;
+  box-shadow:
+    0 0 0 2px rgba(245, 158, 11, 0.18),
+    0 6px 16px rgba(180, 83, 9, 0.22) !important;
+}
+
+.carta-comanda-button.is-pending-action:hover:not(:disabled) {
+  filter: brightness(1.03);
+  border-color: rgba(180, 83, 9, 0.55) !important;
+}
+
 .carta-comanda-button:active:not(:disabled) {
   transform: scale(0.985);
+}
+
+.carta-comanda-button.is-sending {
+  opacity: 0.72 !important;
+  cursor: wait !important;
 }
 
 .carta-comanda-button.is-success {
@@ -13849,13 +13903,24 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
     0 5px 14px rgba(16, 185, 129, 0.14) !important;
 }
 
-.carta-comanda-button:disabled {
+.carta-comanda-button:disabled:not(.is-success):not(.is-sending) {
   opacity: 0.45 !important;
   cursor: not-allowed !important;
   background: #e5e7eb !important;
   color: #6b7280 !important;
   box-shadow: none !important;
   filter: none !important;
+}
+
+.carta-comanda-button.is-sending:disabled {
+  opacity: 0.72 !important;
+  cursor: wait !important;
+  color: #78350f !important;
+  border-color: rgba(217, 119, 6, 0.45) !important;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%) !important;
+  box-shadow:
+    0 0 0 2px rgba(245, 158, 11, 0.12),
+    0 4px 12px rgba(180, 83, 9, 0.16) !important;
 }
 
 .carta-comanda-button.is-success:disabled {
@@ -16038,55 +16103,29 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
               >
                 <button
                   type="button"
-                  className={`carta-comanda-button${
-                    isComandaSending
-                      ? " opacity-60 cursor-not-allowed"
-                      : ""
-                  }${comandaSentFlash ? " is-success" : ""}`}
+                  className={[
+                    "carta-comanda-button",
+                    hasPendingComandaRelease && !comandaSentFlash
+                      ? "is-pending-action"
+                      : "",
+                    isComandaSending ? "is-sending" : "",
+                    comandaSentFlash ? "is-success" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   onClick={() => {
-                    if (!hasPendingItems) return;
+                    if (!hasPendingComandaRelease || isComandaSending) return;
                     void handleComandaAndExit();
                   }}
                   disabled={
                     isComandaSending ||
                     order.length === 0 ||
                     !selectedTableId ||
-                    !hasPendingItems
+                    !hasPendingComandaRelease
                   }
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    fontWeight: 700,
-                    fontSize: 15,
-                    cursor:
-                      isComandaSending ||
-                      order.length === 0 ||
-                      !selectedTableId ||
-                      !hasPendingItems
-                        ? "not-allowed"
-                        : "pointer",
-                    borderRadius: 14,
-                    border: "1px solid rgba(203, 213, 225, 0.9)",
-                    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-                    color: "#111827",
-                    minHeight: 44,
-                    opacity:
-                      isComandaSending
-                        ? 0.6
-                        : order.length === 0 ||
-                            !selectedTableId ||
-                            !hasPendingItems
-                          ? 0.5
-                          : 1,
-                    filter: comandaSentFlash ? "brightness(1.03)" : "none",
-                    transition:
-                      "filter 120ms ease, opacity 120ms ease, background-color 120ms ease",
-                    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.05)",
-                  }}
+                  aria-busy={isComandaSending || undefined}
                 >
-                  {comandaSentFlash
-                    ? "Comanda enviada"
-                    : `Enviar comanda${linesPending.length > 0 ? ` · ${linesPending.length}` : ""}`}
+                  {enviarComandaActionLabel}
                 </button>
                 <div
                   className="carta-tpv-dock-pre-ticket-wrap"

@@ -260,3 +260,20 @@ export function isTpvComandaLineHeldForMarch(
   const course = resolveEffectiveComandaLineCourse(line) ?? 1;
   return course >= 2 && course <= 4;
 }
+
+/**
+ * Etiqueta del CTA «Enviar comanda».
+ * `releasableLineCount` debe ser el tamaño de `selectLinesToReleaseOnComanda`
+ * (líneas que se liberan realmente, no unidades ni todos los pending retenidos).
+ */
+export function formatEnviarComandaActionLabel(params: {
+  isSending: boolean;
+  sentFlash: boolean;
+  releasableLineCount: number;
+}): string {
+  if (params.sentFlash) return "Comanda enviada";
+  if (params.isSending) return "Enviando…";
+  const n = Math.max(0, Math.floor(params.releasableLineCount));
+  if (n > 0) return `Enviar comanda · ${n}`;
+  return "Enviar comanda";
+}
