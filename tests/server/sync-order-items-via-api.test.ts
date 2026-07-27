@@ -205,3 +205,147 @@ describe("syncOrderItemsViaApi inventoryWarnings contract (6C2.3-CLIENT-WRAPPER)
     assert.equal("inventoryWarnings" in adapterError, false);
   });
 });
+
+describe("syncOrderItemsViaApi draft persist filters non-pending", () => {
+  before(async () => {
+    const mod = await import("@/lib/firestore/sync-order-items-via-api");
+    syncOrderItemsViaApi = mod.syncOrderItemsViaApi;
+  });
+
+  test("persist_items solo envía líneas pending al upsert", async () => {
+    let receivedLineIds: string[] = [];
+    const result = await syncOrderItemsViaApi(
+      {
+        operation: "persist_items",
+        orderId: "order-mixed",
+        items: [
+          { id: "sent-1", productId: "p1", quantity: 1, status: "sent" },
+          { id: "pend-1", productId: "p2", quantity: 2, status: "pending" },
+          { id: "canc-1", productId: "p3", quantity: 1, status: "cancelled" },
+        ],
+      },
+      {
+        upsertSaleLinesViaApi: async (params) => {
+          receivedLineIds = params.lines.map((l) => l.lineId);
+          assert.equal(params.markSent === true, false);
+          return {
+            ok: true,
+            orderId: "order-mixed",
+            total: 20,
+            inventoryWarnings: [],
+          };
+        },
+      },
+    );
+    assertSuccessResult(result);
+    assert.deepEqual(receivedLineIds, ["pend-1"]);
+  });
+
+  test("persist_items solo enviadas es no-op sin llamar upsert", async () => {
+    let upsertCalls = 0;
+    const result = await syncOrderItemsViaApi(
+      {
+        operation: "persist_items",
+        orderId: "order-sent-only",
+        items: [
+          { id: "sent-1", productId: "p1", quantity: 1, status: "sent" },
+          { id: "sent-2", productId: "p2", quantity: 1, status: "prepared" },
+        ],
+      },
+      {
+        upsertSaleLinesViaApi: async () => {
+          upsertCalls += 1;
+          return {
+            ok: true,
+            orderId: "order-sent-only",
+            total: 0,
+            inventoryWarnings: [],
+          };
+        },
+      },
+    );
+    assertSuccessResult(result);
+    assert.equal(upsertCalls, 0);
+    assert.equal(result.orderId, "order-sent-only");
+    assert.deepEqual(result.inventoryWarnings, []);
+  });
+
+  test("send_items no filtra por status (caller pasa solo liberables)", async () => {
+    let receivedLineIds: string[] = [];
+    const result = await syncOrderItemsViaApi(
+      {
+        operation: "send_items",
+        orderId: "order-send",
+        items: [
+          { id: "rel-1", productId: "p1", quantity: 1, status: "sent" },
+          { id: "rel-2", productId: "p2", quantity: 2, status: "pending" },
+        ],
+      },
+      {
+        upsertSaleLinesViaApi: async (params) => {
+          receivedLineIds = params.lines.map((l) => l.lineId);
+          assert.equal(params.markSent, true);
+          return {
+            ok: true,
+            orderId: "order-send",
+            total: 12,
+            inventoryWarnings: [],
+          };
+        },
+      },
+    );
+    assertSuccessResult(result);
+    assert.deepEqual(receivedLineIds, ["rel-1", "rel-2"]);
+  });
+
+  test("create_open draft filtra no-pending; create_open markSent no filtra", async () => {
+    let draftIds: string[] = [];
+    await syncOrderItemsViaApi(
+      {
+        operation: "create_open",
+        tableId: "mesa-1",
+        items: [
+          { id: "s1", productId: "p1", quantity: 1, status: "sent" },
+          { id: "n1", productId: "p2", quantity: 1, status: "pending" },
+        ],
+      },
+      {
+        createOpenOrderViaApi: async (params) => {
+          draftIds = params.lines.map((l) => l.lineId);
+          return {
+            ok: true,
+            orderId: "o-draft",
+            total: 5,
+            inventoryWarnings: [],
+          };
+        },
+      },
+    );
+    assert.deepEqual(draftIds, ["n1"]);
+
+    let sendIds: string[] = [];
+    await syncOrderItemsViaApi(
+      {
+        operation: "create_open",
+        tableId: "mesa-1",
+        markSent: true,
+        items: [
+          { id: "rel-1", productId: "p1", quantity: 1, status: "sent" },
+        ],
+      },
+      {
+        createOpenOrderViaApi: async (params) => {
+          sendIds = params.lines.map((l) => l.lineId);
+          assert.equal(params.markSent, true);
+          return {
+            ok: true,
+            orderId: "o-send",
+            total: 5,
+            inventoryWarnings: [],
+          };
+        },
+      },
+    );
+    assert.deepEqual(sendIds, ["rel-1"]);
+  });
+});

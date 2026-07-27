@@ -1,4 +1,5 @@
 import { firestoreItemsToSaleLineIntents } from "@/lib/firestore/firestore-items-to-sale-intent";
+import { selectDraftPersistableFirestoreItems } from "@/lib/firestore/merge-order-items-for-persist";
 import {
   cancelLinesViaApi,
   createOpenOrderViaApi,
@@ -47,12 +48,16 @@ export async function syncOrderItemsViaApi(
   const createOpen = deps.createOpenOrderViaApi ?? createOpenOrderViaApi;
   const upsertSaleLines = deps.upsertSaleLinesViaApi ?? upsertSaleLinesViaApi;
   const cancelLines = deps.cancelLinesViaApi ?? cancelLinesViaApi;
-  const lines = firestoreItemsToSaleLineIntents(params.items);
 
   if (params.operation === "create_open") {
     if (!params.tableId?.trim()) {
       return { ok: false, error: "TABLE_ID_REQUIRED" };
     }
+    const markSent = params.markSent === true;
+    const itemsForCreate = markSent
+      ? params.items
+      : selectDraftPersistableFirestoreItems(params.items);
+    const lines = firestoreItemsToSaleLineIntents(itemsForCreate);
     const result = await createOpen({
       tableId: params.tableId,
       tableLabel: params.tableLabel,
@@ -82,10 +87,26 @@ export async function syncOrderItemsViaApi(
       : { ok: false, error: result.error, details: result.details };
   }
 
+  const markSent =
+    params.operation === "send_items" || params.markSent === true;
+  const itemsForUpsert = markSent
+    ? params.items
+    : selectDraftPersistableFirestoreItems(params.items);
+
+  if (!markSent && itemsForUpsert.length === 0) {
+    return {
+      ok: true,
+      orderId,
+      total: 0,
+      inventoryWarnings: [],
+    };
+  }
+
+  const lines = firestoreItemsToSaleLineIntents(itemsForUpsert);
   const result = await upsertSaleLines({
     orderId,
     lines,
-    markSent: params.operation === "send_items" || params.markSent === true,
+    markSent,
   });
   return result.ok
     ? result

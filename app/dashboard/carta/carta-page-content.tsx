@@ -8097,7 +8097,9 @@ export function CartaPageContent({
 
         updateCurrentTableOrder(() => nextOrder);
 
-        const items = serializeOrderLinesToFirestoreItems(nextOrder) as Record<
+        // Solo las líneas liberables: incluir enviadas previas provoca
+        // LINE_STATE_CONFLICT en mergeUpsertedLines y bloquea el lote.
+        const items = serializeOrderLinesToFirestoreItems(linesToSend) as Record<
           string,
           unknown
         >[];

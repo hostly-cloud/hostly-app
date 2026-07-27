@@ -718,7 +718,14 @@ export async function handleUpsertSaleLines(
     if (msg === "VERSION_CONFLICT") return { status: 409, error: "VERSION_CONFLICT" };
     if (msg === "DUPLICATE_LINE_ID") return { status: 400, error: msg };
     if (msg.startsWith("LINE_STATE_CONFLICT:")) {
-      return { status: 409, error: "LINE_STATE_CONFLICT", details: msg.slice(20) };
+      const conflictLineId = msg.slice("LINE_STATE_CONFLICT:".length).trim();
+      return {
+        status: 409,
+        error: "LINE_STATE_CONFLICT",
+        details: conflictLineId
+          ? `${conflictLineId}|reason=non_pending_upsert`
+          : "reason=non_pending_upsert",
+      };
     }
     if (msg === "STOCK_MOVEMENT_ID_CONFLICT") return { status: 409, error: "STOCK_MOVEMENT_ID_CONFLICT" };
     throw e;
