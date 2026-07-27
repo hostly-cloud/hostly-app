@@ -14,6 +14,8 @@ export const SALA_EDITOR_MAPS_COLLECTION = "salaEditorMaps" as const;
 export const SALA_EDITOR_DRAFT_DOC_ID = "draft" as const;
 export const SALA_EDITOR_PUBLISHED_DOC_ID = "published" as const;
 
+const SALA_EDITOR_DEV_DIAGNOSTICS = process.env.NODE_ENV !== "production";
+
 export type SalaEditorMapState =
   | typeof SALA_EDITOR_DRAFT_DOC_ID
   | typeof SALA_EDITOR_PUBLISHED_DOC_ID;
@@ -228,41 +230,49 @@ export async function saveSalaEditorDraft(
   };
 
   const ref = draftDocRef(rid);
-  const logContext = draftWriteLogContext({
-    operation: "setDoc",
-    ref,
-    restaurantId: rid,
-    document,
-    updatedBy,
-  });
+  const logContext = SALA_EDITOR_DEV_DIAGNOSTICS
+    ? draftWriteLogContext({
+        operation: "setDoc",
+        ref,
+        restaurantId: rid,
+        document,
+        updatedBy,
+      })
+    : null;
 
-  console.info("[SalaEditorV2][FirestoreDiag] setDoc ejecutando", logContext);
+  if (logContext) {
+    console.info("[SalaEditorV2][FirestoreDiag] setDoc ejecutando", logContext);
+  }
   try {
     await setDoc(
       ref,
       removeUndefinedFields(payload) as DocumentData,
       { merge: false },
     );
-    console.info("[SalaEditorV2][FirestoreDiag] setDoc OK", {
-      operation: logContext.operation,
-      documentPath: logContext.documentPath,
-      collectionName: logContext.collectionName,
-      restaurantId: logContext.restaurantId,
-      uid: logContext.uid,
-    });
+    if (logContext) {
+      console.info("[SalaEditorV2][FirestoreDiag] setDoc OK", {
+        operation: logContext.operation,
+        documentPath: logContext.documentPath,
+        collectionName: logContext.collectionName,
+        restaurantId: logContext.restaurantId,
+        uid: logContext.uid,
+      });
+    }
   } catch (error) {
-    const details = firestoreErrorDetails(error);
-    console.error("[SalaEditorV2][FirestoreDiag] setDoc ERROR", {
-      operation: logContext.operation,
-      documentPath: logContext.documentPath,
-      collectionName: logContext.collectionName,
-      restaurantId: logContext.restaurantId,
-      uid: logContext.uid,
-      errorCode: details.code,
-      errorMessage: details.message,
-      error,
-      ruleContext: logContext.ruleContext,
-    });
+    if (logContext) {
+      const details = firestoreErrorDetails(error);
+      console.error("[SalaEditorV2][FirestoreDiag] setDoc ERROR", {
+        operation: logContext.operation,
+        documentPath: logContext.documentPath,
+        collectionName: logContext.collectionName,
+        restaurantId: logContext.restaurantId,
+        uid: logContext.uid,
+        errorCode: details.code,
+        errorMessage: details.message,
+        error,
+        ruleContext: logContext.ruleContext,
+      });
+    }
     throw error;
   }
 }

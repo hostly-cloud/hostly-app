@@ -145,6 +145,7 @@ export type SalaEditorV2PublicationResult = {
 };
 
 const FIRESTORE_BATCH_LIMIT = 450;
+const SALA_EDITOR_DEV_DIAGNOSTICS = process.env.NODE_ENV !== "production";
 
 type PublicationWrite = {
   ref: ReturnType<typeof doc>;
@@ -515,6 +516,7 @@ function logPermissionDeniedWriteDiagnostics(params: {
   error: unknown;
   rows: PublicationWriteDiagnostic[];
 }): void {
+  if (!SALA_EDITOR_DEV_DIAGNOSTICS) return;
   const first = params.rows[0] ?? null;
   const error = describeFirestoreError(params.error);
   console.error(params.title, {
@@ -732,6 +734,7 @@ function logPublisherTablesFirestoreAudit(params: {
   restaurantId: string;
   docs: Array<{ id: string; data: Record<string, unknown> }>;
 }): void {
+  if (!SALA_EDITOR_DEV_DIAGNOSTICS) return;
   console.groupCollapsed("[SalaEditorV2] Firestore audit Publisher tables");
   console.info("[SalaEditorV2] Firestore audit Publisher tables resumen", {
     firebaseProjectId: firebaseEnvDebug.projectId,
@@ -968,12 +971,14 @@ async function commitUpdateWrites(
 ): Promise<void> {
   const chunks = chunkDocumentDataWrites(writes);
   if (chunks.length === 0) {
-    console.info("[SalaEditorV2][FirestoreDiag] batch.commit omitido", {
-      operation: "batch.commit",
-      reason: "no-writes",
-      restaurantId: params.restaurantId,
-      uid: currentPublisherUid(),
-    });
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.info("[SalaEditorV2][FirestoreDiag] batch.commit omitido", {
+        operation: "batch.commit",
+        reason: "no-writes",
+        restaurantId: params.restaurantId,
+        uid: currentPublisherUid(),
+      });
+    }
     return;
   }
   for (const [chunkIndex, chunk] of chunks.entries()) {
@@ -984,17 +989,19 @@ async function commitUpdateWrites(
         operation: write.mode === "setMerge" ? "batch.set" : "batch.update",
       }),
     );
-    console.groupCollapsed(
-      `[SalaEditorV2][FirestoreDiag] batch.commit intento ${chunkIndex + 1}/${chunks.length}`,
-    );
-    console.info("[SalaEditorV2][FirestoreDiag] batch.commit resumen", {
-      firebaseProjectId: firebaseEnvDebug.projectId,
-      restaurantId: params.restaurantId,
-      uid: currentPublisherUid(),
-      writeCount: rows.length,
-    });
-    console.table(rows.map(summarizePublicationWriteForTable));
-    console.info("[SalaEditorV2][FirestoreDiag] batch.commit payload seguro", rows);
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.groupCollapsed(
+        `[SalaEditorV2][FirestoreDiag] batch.commit intento ${chunkIndex + 1}/${chunks.length}`,
+      );
+      console.info("[SalaEditorV2][FirestoreDiag] batch.commit resumen", {
+        firebaseProjectId: firebaseEnvDebug.projectId,
+        restaurantId: params.restaurantId,
+        uid: currentPublisherUid(),
+        writeCount: rows.length,
+      });
+      console.table(rows.map(summarizePublicationWriteForTable));
+      console.info("[SalaEditorV2][FirestoreDiag] batch.commit payload seguro", rows);
+    }
     const batch = writeBatch(db);
     for (const write of chunk) {
       if (write.mode === "setMerge") {
@@ -1026,22 +1033,26 @@ async function commitUpdateWrites(
           ),
         ].sort(),
       });
-      console.info("[SalaEditorV2][FirestoreDiag] batch.commit ejecutando", {
-        operation: "batch.commit",
-        documentPath:
-          rows.length === 1 ? rows[0]?.documentPath ?? null : `batch:${rows.length}:documents`,
-        collectionName:
-          rows.length === 1
-            ? rows[0]?.collectionPath ?? null
-            : [...new Set(rows.map((row) => row.collectionPath))].join(", "),
-        restaurantId: params.restaurantId,
-        uid: currentPublisherUid(),
-        writes: rows.map(summarizePublicationWriteForTable),
-      });
+      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        console.info("[SalaEditorV2][FirestoreDiag] batch.commit ejecutando", {
+          operation: "batch.commit",
+          documentPath:
+            rows.length === 1 ? rows[0]?.documentPath ?? null : `batch:${rows.length}:documents`,
+          collectionName:
+            rows.length === 1
+              ? rows[0]?.collectionPath ?? null
+              : [...new Set(rows.map((row) => row.collectionPath))].join(", "),
+          restaurantId: params.restaurantId,
+          uid: currentPublisherUid(),
+          writes: rows.map(summarizePublicationWriteForTable),
+        });
+      }
       await batch.commit();
-      console.info("[SalaEditorV2][FirestoreDiag] batch.commit OK", {
-        writeCount: rows.length,
-      });
+      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        console.info("[SalaEditorV2][FirestoreDiag] batch.commit OK", {
+          writeCount: rows.length,
+        });
+      }
     } catch (error) {
       logPermissionDeniedWriteDiagnostics({
         title: "[SalaEditorV2][FirestoreDiag] batch.commit ERROR",
@@ -1050,7 +1061,9 @@ async function commitUpdateWrites(
       });
       throw error;
     } finally {
-      console.groupEnd();
+      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        console.groupEnd();
+      }
     }
   }
 }
@@ -1059,13 +1072,15 @@ async function commitDecorativeWritesWithTrace(
   writes: PublicationWrite[],
   params: { restaurantId: string },
 ): Promise<void> {
-  console.groupCollapsed("[SalaEditorV2] Publisher decorativos: escritura Firestore");
-  console.info("[SalaEditorV2] Publisher decorativos que llegan a escritura", {
-    firebaseProjectId: firebaseEnvDebug.projectId,
-    restaurantId: params.restaurantId,
-    uid: currentPublisherUid(),
-    count: writes.length,
-  });
+  if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+    console.groupCollapsed("[SalaEditorV2] Publisher decorativos: escritura Firestore");
+    console.info("[SalaEditorV2] Publisher decorativos que llegan a escritura", {
+      firebaseProjectId: firebaseEnvDebug.projectId,
+      restaurantId: params.restaurantId,
+      uid: currentPublisherUid(),
+      count: writes.length,
+    });
+  }
 
   try {
     for (const write of writes) {
@@ -1078,31 +1093,37 @@ async function commitDecorativeWritesWithTrace(
       try {
         if (write.mode === "setMerge") {
           rememberLastFirestoreWriteOperation({ row });
-          console.info("[SalaEditorV2][FirestoreDiag] setDoc ejecutando", {
-            operation: row.operation,
-            documentPath: row.documentPath,
-            collectionName: row.collectionPath,
-            restaurantId: row.restaurantId,
-            uid: row.uid,
-            payload: row.payload,
-          });
+          if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+            console.info("[SalaEditorV2][FirestoreDiag] setDoc ejecutando", {
+              operation: row.operation,
+              documentPath: row.documentPath,
+              collectionName: row.collectionPath,
+              restaurantId: row.restaurantId,
+              uid: row.uid,
+              payload: row.payload,
+            });
+          }
           await setDoc(write.ref, write.data, { merge: true });
         } else {
           rememberLastFirestoreWriteOperation({ row });
-          console.info("[SalaEditorV2][FirestoreDiag] updateDoc ejecutando", {
-            operation: row.operation,
-            documentPath: row.documentPath,
-            collectionName: row.collectionPath,
-            restaurantId: row.restaurantId,
-            uid: row.uid,
-            payload: row.payload,
-          });
+          if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+            console.info("[SalaEditorV2][FirestoreDiag] updateDoc ejecutando", {
+              operation: row.operation,
+              documentPath: row.documentPath,
+              collectionName: row.collectionPath,
+              restaurantId: row.restaurantId,
+              uid: row.uid,
+              payload: row.payload,
+            });
+          }
           await updateDoc(write.ref, write.data);
         }
-        console.info("[SalaEditorV2][FirestoreDiag] decorativo OK", {
-          documentPath: row.documentPath,
-          operation: row.operation,
-        });
+        if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+          console.info("[SalaEditorV2][FirestoreDiag] decorativo OK", {
+            documentPath: row.documentPath,
+            operation: row.operation,
+          });
+        }
       } catch (error) {
         logPermissionDeniedWriteDiagnostics({
           title: "[SalaEditorV2][FirestoreDiag] decorativo ERROR",
@@ -1113,7 +1134,9 @@ async function commitDecorativeWritesWithTrace(
       }
     }
   } finally {
-    console.groupEnd();
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.groupEnd();
+    }
   }
 }
 
@@ -1156,15 +1179,17 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     existingRestaurantId: null,
     payloadKeys: [],
   });
-  console.info("[SalaEditorV2][FirestoreDiag] publisher TPV alcanzado", {
-    operation: "publishSalaEditorV2Phase1ToLegacy",
-    restaurantId,
-    uid: currentPublisherUid(),
-    documentRestaurantId: document.restaurantId,
-    espacios: document.espacios.length,
-    operationalElementInstances: document.operationalElementInstances.length,
-    zones: document.zones.length,
-  });
+  if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+    console.info("[SalaEditorV2][FirestoreDiag] publisher TPV alcanzado", {
+      operation: "publishSalaEditorV2Phase1ToLegacy",
+      restaurantId,
+      uid: currentPublisherUid(),
+      documentRestaurantId: document.restaurantId,
+      espacios: document.espacios.length,
+      operationalElementInstances: document.operationalElementInstances.length,
+      zones: document.zones.length,
+    });
+  }
   if (document.restaurantId !== restaurantId) {
     throw new Error("sala-editor-publication: document.restaurantId no coincide");
   }
@@ -1303,15 +1328,19 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       }
     }
     selectedSafeFloorPlanId = selectedSafeFloorPlanId ?? inferredSafeFloorPlanIdFromLinkedTables;
-    console.info("[SalaEditorV2] Publisher floorPlan inferido desde mesas enlazadas", {
-      floorPlanId: inferredSafeFloorPlanIdFromLinkedTables,
-      linkedTables: floorPlanIdsByLinkedLegacyTable.size,
-    });
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.info("[SalaEditorV2] Publisher floorPlan inferido desde mesas enlazadas", {
+        floorPlanId: inferredSafeFloorPlanIdFromLinkedTables,
+        linkedTables: floorPlanIdsByLinkedLegacyTable.size,
+      });
+    }
   } else if (linkedFloorPlanIds.size > 1) {
-    console.warn("[SalaEditorV2] Publisher no infiere floorPlan: mesas enlazadas en varios planos", {
-      floorPlanIds: [...linkedFloorPlanIds],
-      linkedTables: floorPlanIdsByLinkedLegacyTable.size,
-    });
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.warn("[SalaEditorV2] Publisher no infiere floorPlan: mesas enlazadas en varios planos", {
+        floorPlanIds: [...linkedFloorPlanIds],
+        linkedTables: floorPlanIdsByLinkedLegacyTable.size,
+      });
+    }
   }
 
   let finalDecorativeFallbackFloorPlanId: string | null = inferredSafeFloorPlanIdFromLinkedTables;
@@ -1350,16 +1379,20 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
             safeFloorPlanIdBySpaceId.set(document.espacios[0]!.id, candidateFloorPlanId);
           }
           selectedSafeFloorPlanId = selectedSafeFloorPlanId ?? candidateFloorPlanId;
-          console.info("[SalaEditorV2] Publisher floorPlan inferido desde mesas activas", {
-            floorPlanId: candidateFloorPlanId,
-            activeOperationalTables: activeOperationalTablesWithFloorPlan,
-          });
+          if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+            console.info("[SalaEditorV2] Publisher floorPlan inferido desde mesas activas", {
+              floorPlanId: candidateFloorPlanId,
+              activeOperationalTables: activeOperationalTablesWithFloorPlan,
+            });
+          }
         }
       }
     } else if (activeOperationalFloorPlanIds.size > 1) {
-      console.warn("[SalaEditorV2] Publisher no infiere floorPlan decorativo: varios planos activos", {
-        floorPlanIds: [...activeOperationalFloorPlanIds],
-      });
+      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        console.warn("[SalaEditorV2] Publisher no infiere floorPlan decorativo: varios planos activos", {
+          floorPlanIds: [...activeOperationalFloorPlanIds],
+        });
+      }
     }
   }
 
@@ -1455,21 +1488,25 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       diagnosticLabel: "legacyTable:deactivate",
       existingRestaurantId: stringOrEmpty(data.restaurantId) || null,
     });
-    console.info("[SalaEditorV2] Publisher mesa legacy no esperada desactivable", {
-      id: tableDoc.id,
-      name,
-      floorPlanId: stringOrEmpty(data.floorPlanId) || null,
-      status: stringOrEmpty(data.status) || null,
-    });
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.info("[SalaEditorV2] Publisher mesa legacy no esperada desactivable", {
+        id: tableDoc.id,
+        name,
+        floorPlanId: stringOrEmpty(data.floorPlanId) || null,
+        status: stringOrEmpty(data.status) || null,
+      });
+    }
   }
 
-  console.info("[SalaEditorV2] Publisher legacy tables cleanup resumen", {
-    legacyTablesAudited,
-    legacyTablesExpected: expectedLegacyTableIds.size,
-    legacyTablesDeactivated: legacyTableDeactivateWrites.length,
-    legacyTablesSkippedByReason,
-    safeFloorPlanIds: [...safeFloorPlanIds],
-  });
+  if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+    console.info("[SalaEditorV2] Publisher legacy tables cleanup resumen", {
+      legacyTablesAudited,
+      legacyTablesExpected: expectedLegacyTableIds.size,
+      legacyTablesDeactivated: legacyTableDeactivateWrites.length,
+      legacyTablesSkippedByReason,
+      safeFloorPlanIds: [...safeFloorPlanIds],
+    });
+  }
 
   const seenLegacyZoneIds = new Set<string>();
   for (const zone of document.zones) {
@@ -1550,17 +1587,19 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
         if (!isPermissionDeniedError(error) || explicitLegacyZoneId) {
           throw error;
         }
-        console.warn("[SalaEditorV2][FirestoreDiag] zona V2 nueva sin lectura previa", {
-          operation: "zones.getDoc.permissionDeniedSkipped",
-          documentPath: ref.path,
-          collectionName: "zones",
-          restaurantId,
-          uid: currentPublisherUid(),
-          zoneId: zone.id,
-          legacyZoneId,
-          payloadRestaurantId: restaurantId,
-          reason: "generated_v2_zone_will_use_set_merge",
-        });
+        if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+          console.warn("[SalaEditorV2][FirestoreDiag] zona V2 nueva sin lectura previa", {
+            operation: "zones.getDoc.permissionDeniedSkipped",
+            documentPath: ref.path,
+            collectionName: "zones",
+            restaurantId,
+            uid: currentPublisherUid(),
+            zoneId: zone.id,
+            legacyZoneId,
+            payloadRestaurantId: restaurantId,
+            reason: "generated_v2_zone_will_use_set_merge",
+          });
+        }
       }
     } else {
       rememberLastFirestoreOperation({
@@ -1620,7 +1659,8 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     const validGeometry = hasValidGeometry(draft);
 
     decorativeDiscardReasons[reason] = (decorativeDiscardReasons[reason] ?? 0) + 1;
-    console.warn("[SalaEditorV2] Publisher decorativo descartado", {
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.warn("[SalaEditorV2] Publisher decorativo descartado", {
       reason,
       id: draft.id || draft.sourceId,
       sourceId: draft.sourceId,
@@ -1656,37 +1696,41 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       },
       ...details,
     });
+    }
   };
 
-  console.groupCollapsed("[SalaEditorV2] Publisher decorativos: filtros");
-  console.info("[SalaEditorV2] Publisher decorativos generados por adaptador", {
-    count: decorativeDrafts.length,
-  });
-  console.info("[SalaEditorV2] Publisher audit espacios antes de filtrar decorativos", {
-    selectedSpaceId,
-    selectedSpaceLegacyFloorPlanId: selectedSpace?.legacyFloorPlanId ?? null,
-    safeFloorPlanIds: [...safeFloorPlanIds],
-    safeFloorPlanIdBySpaceId: [...safeFloorPlanIdBySpaceId.entries()],
-  });
-  console.table(
-    [...spacesById.entries()].map(([spaceId, space]) => ({
-      spaceId,
-      name: space.name,
-      legacyFloorPlanId: space.legacyFloorPlanId ?? "",
-      mappedSafeFloorPlanId: safeFloorPlanIdBySpaceId.get(spaceId) ?? "",
-      selected: spaceId === selectedSpaceId,
-      active: space.active,
-      visible: space.visible,
-    })),
-  );
-  console.info("[SalaEditorV2] Publisher floorPlan elegido para decorativos", {
-    safeFloorPlanIds: [...safeFloorPlanIds],
-    safeFloorPlanIdBySpaceId: [...safeFloorPlanIdBySpaceId.entries()],
-    selectedSafeFloorPlanId,
-    inferredSafeFloorPlanIdFromLinkedTables,
-    fallbackSafeFloorPlanId: resolveFallbackSafeFloorPlanId(),
-    chosenDecorativeFloorPlanId: resolveFallbackSafeFloorPlanId(),
-  });
+  if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+    console.groupCollapsed("[SalaEditorV2] Publisher decorativos: filtros");
+    console.info("[SalaEditorV2] Publisher decorativos generados por adaptador", {
+      count: decorativeDrafts.length,
+    });
+    console.info("[SalaEditorV2] Publisher audit espacios antes de filtrar decorativos", {
+      selectedSpaceId,
+      selectedSpaceLegacyFloorPlanId: selectedSpace?.legacyFloorPlanId ?? null,
+      safeFloorPlanIds: [...safeFloorPlanIds],
+      safeFloorPlanIdBySpaceId: [...safeFloorPlanIdBySpaceId.entries()],
+    });
+    console.table(
+      [...spacesById.entries()].map(([spaceId, space]) => ({
+        spaceId,
+        name: space.name,
+        legacyFloorPlanId: space.legacyFloorPlanId ?? "",
+        mappedSafeFloorPlanId: safeFloorPlanIdBySpaceId.get(spaceId) ?? "",
+        selected: spaceId === selectedSpaceId,
+        active: space.active,
+        visible: space.visible,
+      })),
+    );
+    console.info("[SalaEditorV2] Publisher floorPlan elegido para decorativos", {
+      safeFloorPlanIds: [...safeFloorPlanIds],
+      safeFloorPlanIdBySpaceId: [...safeFloorPlanIdBySpaceId.entries()],
+      selectedSafeFloorPlanId,
+      inferredSafeFloorPlanIdFromLinkedTables,
+      fallbackSafeFloorPlanId: resolveFallbackSafeFloorPlanId(),
+      chosenDecorativeFloorPlanId: resolveFallbackSafeFloorPlanId(),
+    });
+    console.groupEnd();
+  }
 
   for (const draft of decorativeDrafts) {
     if (draft.visible === false) {
@@ -1802,16 +1846,18 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
         ) {
           throw error;
         }
-        console.warn("[SalaEditorV2][FirestoreDiag] decorativo V2 nuevo sin lectura previa", {
-          operation: "tables.getDoc.permissionDeniedSkipped",
-          documentPath: ref.path,
-          collectionName: "tables",
-          restaurantId,
-          uid: currentPublisherUid(),
-          decorativeId: draft.id,
-          payloadRestaurantId: restaurantId,
-          reason: "generated_v2_decorative_will_use_set_merge",
-        });
+        if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+          console.warn("[SalaEditorV2][FirestoreDiag] decorativo V2 nuevo sin lectura previa", {
+            operation: "tables.getDoc.permissionDeniedSkipped",
+            documentPath: ref.path,
+            collectionName: "tables",
+            restaurantId,
+            uid: currentPublisherUid(),
+            decorativeId: draft.id,
+            payloadRestaurantId: restaurantId,
+            reason: "generated_v2_decorative_will_use_set_merge",
+          });
+        }
       }
     } else {
       rememberLastFirestoreOperation({
@@ -1857,7 +1903,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     if (!isNewGeneratedV2Decorative && existingDecorativeRestaurantId === null) {
       payload.createdAt = serverTimestamp();
     }
-    if (isNewGeneratedV2Decorative) {
+    if (isNewGeneratedV2Decorative && SALA_EDITOR_DEV_DIAGNOSTICS) {
       console.info("[SalaEditorV2][FirestoreDiag] tables.setDoc generated V2 decorative", {
         operation: "tables.setDoc generated V2 decorative",
         documentPath: ref.path,
@@ -1876,17 +1922,18 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       existingRestaurantId: existingDecorativeRestaurantId,
     });
   }
-  console.info("[SalaEditorV2] Publisher decorativos despues de filtros", {
-    count: decorativeAfterFilters,
-  });
-  console.info("[SalaEditorV2] Publisher decorativos que llegan al bucle de escritura", {
-    count: decorativeWrites.length,
-  });
-  console.info("[SalaEditorV2] Publisher decorativos descartados por motivo", {
-    count: decorativeDrafts.length - decorativeAfterFilters,
-    reasons: decorativeDiscardReasons,
-  });
-  console.groupEnd();
+  if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+    console.info("[SalaEditorV2] Publisher decorativos despues de filtros", {
+      count: decorativeAfterFilters,
+    });
+    console.info("[SalaEditorV2] Publisher decorativos que llegan al bucle de escritura", {
+      count: decorativeWrites.length,
+    });
+    console.info("[SalaEditorV2] Publisher decorativos descartados por motivo", {
+      count: decorativeDrafts.length - decorativeAfterFilters,
+      reasons: decorativeDiscardReasons,
+    });
+  }
 
   if (replaceLegacyVisualMap) {
     for (const tableDoc of queriedTableDocs) {
@@ -2308,145 +2355,147 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     });
   }
 
-  if (newOperationalTablePublishLogs.length > 0) {
-    console.groupCollapsed("[SalaEditorV2][NewOperationalTablePublish]");
-    console.table(newOperationalTablePublishLogs);
-    console.groupEnd();
-  }
+  if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+    if (newOperationalTablePublishLogs.length > 0) {
+      console.groupCollapsed("[SalaEditorV2][NewOperationalTablePublish]");
+      console.table(newOperationalTablePublishLogs);
+      console.groupEnd();
+    }
 
-  const writeFloorPlanId = (write: PublicationWrite | undefined): string | null => {
-    if (!write) return null;
-    return stringOrEmpty(write.data.floorPlanId) || null;
-  };
-  const uniqueFloorPlanIds = (ids: (string | null)[]): string[] =>
-    [...new Set(ids.filter((id): id is string => Boolean(id)))];
-  const tableWriteById = new Map(tableWrites.map((write) => [write.ref.id, write]));
-  const zoneWriteById = new Map(zoneWrites.map((write) => [write.ref.id, write]));
-  const decorativeWriteById = new Map(
-    decorativeWrites.map((write) => [write.ref.id, write]),
-  );
-  const newOperationalTableLinkByInstanceId = new Map(
-    newOperationalTableLinks.map((link) => [link.instanceId, link]),
-  );
-
-  const publishSpaceAudit = document.espacios.map((space) => {
-    const tableWritesForSpace = document.operationalElementInstances
-      .filter((instance) => instance.elementType === "TABLE" && instance.spaceId === space.id)
-      .map((instance) => {
-        const newLink = newOperationalTableLinkByInstanceId.get(instance.id);
-        const legacyTableId =
-          readLegacyTableId(instance.metadata) || newLink?.legacyTableIdAfter || "";
-        const write = legacyTableId ? tableWriteById.get(legacyTableId) : undefined;
-        return {
-          id: instance.id,
-          name: instance.name,
-          legacyTableId: legacyTableId || null,
-          written: Boolean(write),
-          floorPlanId: writeFloorPlanId(write),
-        };
-      })
-      .filter((row) => row.written);
-
-    const zoneWritesForSpace = document.zones
-      .filter((zone) => zone.espacioId === space.id)
-      .map((zone) => {
-        const legacyZoneId =
-          readLegacyZoneId(zone.metadata) || stableLegacyZoneIdFromV2Id(zone.id);
-        const write = legacyZoneId ? zoneWriteById.get(legacyZoneId) : undefined;
-        return {
-          id: zone.id,
-          name: zone.name,
-          legacyZoneId: legacyZoneId || null,
-          written: Boolean(write),
-          floorPlanId: writeFloorPlanId(write),
-        };
-      })
-      .filter((row) => row.written);
-
-    const decorativeWritesForSpace = decorativeDrafts
-      .filter((draft) => draft.spaceId === space.id)
-      .map((draft) => {
-        const write = draft.id ? decorativeWriteById.get(draft.id) : undefined;
-        return {
-          id: draft.sourceId,
-          name: draft.name,
-          legacyTableId: draft.id || null,
-          type: draft.legacyType,
-          sourceType: draft.sourceType,
-          written: Boolean(write),
-          floorPlanId: writeFloorPlanId(write),
-        };
-      })
-      .filter((row) => row.written);
-
-    const floorPlanIdsUsed = uniqueFloorPlanIds([
-      ...tableWritesForSpace.map((row) => row.floorPlanId),
-      ...zoneWritesForSpace.map((row) => row.floorPlanId),
-      ...decorativeWritesForSpace.map((row) => row.floorPlanId),
-    ]);
-
-    return {
-      spaceId: space.id,
-      spaceName: space.name,
-      legacyFloorPlanId: stringOrEmpty(space.legacyFloorPlanId) || null,
-      publishedTables: tableWritesForSpace.length,
-      publishedZones: zoneWritesForSpace.length,
-      publishedDecoratives: decorativeWritesForSpace.length,
-      floorPlanIdsUsed,
-      consistentFloorPlanId:
-        floorPlanIdsUsed.length === 1 ? floorPlanIdsUsed[0]! : null,
-      allWritesUseSameFloorPlan: floorPlanIdsUsed.length <= 1,
-      writes: {
-        tables: tableWritesForSpace,
-        zones: zoneWritesForSpace,
-        decoratives: decorativeWritesForSpace,
-      },
+    const writeFloorPlanId = (write: PublicationWrite | undefined): string | null => {
+      if (!write) return null;
+      return stringOrEmpty(write.data.floorPlanId) || null;
     };
-  });
+    const uniqueFloorPlanIds = (ids: (string | null)[]): string[] =>
+      [...new Set(ids.filter((id): id is string => Boolean(id)))];
+    const tableWriteById = new Map(tableWrites.map((write) => [write.ref.id, write]));
+    const zoneWriteById = new Map(zoneWrites.map((write) => [write.ref.id, write]));
+    const decorativeWriteById = new Map(
+      decorativeWrites.map((write) => [write.ref.id, write]),
+    );
+    const newOperationalTableLinkByInstanceId = new Map(
+      newOperationalTableLinks.map((link) => [link.instanceId, link]),
+    );
 
-  console.groupCollapsed("[SalaEditorV2][PublishToTpvFloorPlanAudit]");
-  console.info("Resumen por espacio", {
-    restaurantId,
-    uid: currentPublisherUid(),
-    spaces: publishSpaceAudit.map((space) => ({
-      spaceId: space.spaceId,
-      spaceName: space.spaceName,
-      legacyFloorPlanId: space.legacyFloorPlanId,
-      publishedTables: space.publishedTables,
-      publishedZones: space.publishedZones,
-      publishedDecoratives: space.publishedDecoratives,
-      floorPlanIdsUsed: space.floorPlanIdsUsed,
-      allWritesUseSameFloorPlan: space.allWritesUseSameFloorPlan,
-    })),
-  });
-  console.table(
-    publishSpaceAudit.map((space) => ({
-      spaceId: space.spaceId,
-      spaceName: space.spaceName,
-      legacyFloorPlanId: space.legacyFloorPlanId ?? "",
-      publishedTables: space.publishedTables,
-      publishedZones: space.publishedZones,
-      publishedDecoratives: space.publishedDecoratives,
-      floorPlanIdsUsed: space.floorPlanIdsUsed.join(", "),
-      allWritesUseSameFloorPlan: space.allWritesUseSameFloorPlan,
-    })),
-  );
-  console.info("Detalle de escrituras por espacio", publishSpaceAudit);
-  console.groupEnd();
+    const publishSpaceAudit = document.espacios.map((space) => {
+      const tableWritesForSpace = document.operationalElementInstances
+        .filter((instance) => instance.elementType === "TABLE" && instance.spaceId === space.id)
+        .map((instance) => {
+          const newLink = newOperationalTableLinkByInstanceId.get(instance.id);
+          const legacyTableId =
+            readLegacyTableId(instance.metadata) || newLink?.legacyTableIdAfter || "";
+          const write = legacyTableId ? tableWriteById.get(legacyTableId) : undefined;
+          return {
+            id: instance.id,
+            name: instance.name,
+            legacyTableId: legacyTableId || null,
+            written: Boolean(write),
+            floorPlanId: writeFloorPlanId(write),
+          };
+        })
+        .filter((row) => row.written);
 
-  console.info("[SalaEditorV2][FirestoreDiag] publisher TPV escrituras preparadas", {
-    operation: "publishSalaEditorV2Phase1ToLegacy.prepareWrites",
-    restaurantId,
-    uid: currentPublisherUid(),
-    counts: {
-      decorativeWrites: decorativeWrites.length,
-      floorPlanWrites: floorPlanWrites.length,
-      zoneWrites: zoneWrites.length,
-      decorativeDeactivateWrites: decorativeDeactivateWrites.length,
-      legacyTableDeactivateWrites: legacyTableDeactivateWrites.length,
-      tableWrites: tableWrites.length,
-    },
-  });
+      const zoneWritesForSpace = document.zones
+        .filter((zone) => zone.espacioId === space.id)
+        .map((zone) => {
+          const legacyZoneId =
+            readLegacyZoneId(zone.metadata) || stableLegacyZoneIdFromV2Id(zone.id);
+          const write = legacyZoneId ? zoneWriteById.get(legacyZoneId) : undefined;
+          return {
+            id: zone.id,
+            name: zone.name,
+            legacyZoneId: legacyZoneId || null,
+            written: Boolean(write),
+            floorPlanId: writeFloorPlanId(write),
+          };
+        })
+        .filter((row) => row.written);
+
+      const decorativeWritesForSpace = decorativeDrafts
+        .filter((draft) => draft.spaceId === space.id)
+        .map((draft) => {
+          const write = draft.id ? decorativeWriteById.get(draft.id) : undefined;
+          return {
+            id: draft.sourceId,
+            name: draft.name,
+            legacyTableId: draft.id || null,
+            type: draft.legacyType,
+            sourceType: draft.sourceType,
+            written: Boolean(write),
+            floorPlanId: writeFloorPlanId(write),
+          };
+        })
+        .filter((row) => row.written);
+
+      const floorPlanIdsUsed = uniqueFloorPlanIds([
+        ...tableWritesForSpace.map((row) => row.floorPlanId),
+        ...zoneWritesForSpace.map((row) => row.floorPlanId),
+        ...decorativeWritesForSpace.map((row) => row.floorPlanId),
+      ]);
+
+      return {
+        spaceId: space.id,
+        spaceName: space.name,
+        legacyFloorPlanId: stringOrEmpty(space.legacyFloorPlanId) || null,
+        publishedTables: tableWritesForSpace.length,
+        publishedZones: zoneWritesForSpace.length,
+        publishedDecoratives: decorativeWritesForSpace.length,
+        floorPlanIdsUsed,
+        consistentFloorPlanId:
+          floorPlanIdsUsed.length === 1 ? floorPlanIdsUsed[0]! : null,
+        allWritesUseSameFloorPlan: floorPlanIdsUsed.length <= 1,
+        writes: {
+          tables: tableWritesForSpace,
+          zones: zoneWritesForSpace,
+          decoratives: decorativeWritesForSpace,
+        },
+      };
+    });
+
+    console.groupCollapsed("[SalaEditorV2][PublishToTpvFloorPlanAudit]");
+    console.info("Resumen por espacio", {
+      restaurantId,
+      uid: currentPublisherUid(),
+      spaces: publishSpaceAudit.map((space) => ({
+        spaceId: space.spaceId,
+        spaceName: space.spaceName,
+        legacyFloorPlanId: space.legacyFloorPlanId,
+        publishedTables: space.publishedTables,
+        publishedZones: space.publishedZones,
+        publishedDecoratives: space.publishedDecoratives,
+        floorPlanIdsUsed: space.floorPlanIdsUsed,
+        allWritesUseSameFloorPlan: space.allWritesUseSameFloorPlan,
+      })),
+    });
+    console.table(
+      publishSpaceAudit.map((space) => ({
+        spaceId: space.spaceId,
+        spaceName: space.spaceName,
+        legacyFloorPlanId: space.legacyFloorPlanId ?? "",
+        publishedTables: space.publishedTables,
+        publishedZones: space.publishedZones,
+        publishedDecoratives: space.publishedDecoratives,
+        floorPlanIdsUsed: space.floorPlanIdsUsed.join(", "),
+        allWritesUseSameFloorPlan: space.allWritesUseSameFloorPlan,
+      })),
+    );
+    console.info("Detalle de escrituras por espacio", publishSpaceAudit);
+    console.groupEnd();
+
+    console.info("[SalaEditorV2][FirestoreDiag] publisher TPV escrituras preparadas", {
+      operation: "publishSalaEditorV2Phase1ToLegacy.prepareWrites",
+      restaurantId,
+      uid: currentPublisherUid(),
+      counts: {
+        decorativeWrites: decorativeWrites.length,
+        floorPlanWrites: floorPlanWrites.length,
+        zoneWrites: zoneWrites.length,
+        decorativeDeactivateWrites: decorativeDeactivateWrites.length,
+        legacyTableDeactivateWrites: legacyTableDeactivateWrites.length,
+        tableWrites: tableWrites.length,
+      },
+    });
+  }
 
   await commitDecorativeWritesWithTrace(decorativeWrites, { restaurantId });
   await commitUpdateWrites(

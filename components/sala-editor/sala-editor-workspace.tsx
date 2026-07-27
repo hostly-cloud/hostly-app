@@ -82,6 +82,7 @@ export type SalaEditorWorkspaceProps = {
 };
 
 const EMPTY_SMART_SNAP_GUIDES: SnapGuide[] = [];
+const SALA_EDITOR_DEV_DIAGNOSTICS = process.env.NODE_ENV !== "production";
 
 function formatSalaEditorPublicationSummary(
   result: SalaEditorV2PublicationResult,
@@ -192,7 +193,7 @@ function formatSalaEditorPublicationSummary(
 }
 
 function logSalaEditorPublicationDebug(result: SalaEditorV2PublicationResult): void {
-  if (result.decorativeAudit.length === 0) return;
+  if (!SALA_EDITOR_DEV_DIAGNOSTICS || result.decorativeAudit.length === 0) return;
   console.groupCollapsed("[SalaEditorV2] Auditoria publicacion TPV decorativos");
   console.table(
     result.decorativeAudit.map((item) => ({
@@ -433,6 +434,7 @@ function traceReplaceDocumentBefore(params: {
 }
 
 function traceBeforePublisherSpaces(document: SalaEditorDocument): void {
+  if (!SALA_EDITOR_DEV_DIAGNOSTICS) return;
   const selectedSpaceId = document.navigation.selectedEspacioId;
   const selectedSpace =
     document.espacios.find((space) => space.id === selectedSpaceId) ?? null;
@@ -695,6 +697,7 @@ function logSalaEditorLegacyFloorPlanRepair(
 }
 
 function logSalaEditorDocumentPublicationDebug(document: SalaEditorDocument): void {
+  if (!SALA_EDITOR_DEV_DIAGNOSTICS) return;
   const collections: Array<{ name: string; items: readonly unknown[] }> = [
     { name: "espacios", items: document.espacios },
     { name: "operationalElements", items: document.operationalElements },
@@ -1886,38 +1889,46 @@ export function SalaEditorWorkspace({
   const handlePublishToTpv = useCallback(() => {
     const rid = restaurantId.trim();
     const initialSnapshot = documentSnapshotRef.current;
-    console.info("[SalaEditorV2][FirestoreDiag] Publicar en TPV handler alcanzado", {
-      operation: "publishToTpv.handler",
-      restaurantId: rid,
-      uid: currentUserId,
-      draftReady,
-      hasDocumentSnapshot: initialSnapshot != null,
-      publishToTpvPending,
-    });
-    console.info("[SalaEditorV2] Publicar en TPV handler iniciado", {
-      restaurantId: rid,
-      draftReady,
-      hasDocumentSnapshot: initialSnapshot != null,
-      publishToTpvPending,
-      espacios: initialSnapshot?.espacios.length ?? 0,
-      mesas: initialSnapshot?.operationalElementInstances.length ?? 0,
-      zonas: initialSnapshot?.zones.length ?? 0,
-    });
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.info("[SalaEditorV2][FirestoreDiag] Publicar en TPV handler alcanzado", {
+        operation: "publishToTpv.handler",
+        restaurantId: rid,
+        uid: currentUserId,
+        draftReady,
+        hasDocumentSnapshot: initialSnapshot != null,
+        publishToTpvPending,
+      });
+      console.info("[SalaEditorV2] Publicar en TPV handler iniciado", {
+        restaurantId: rid,
+        draftReady,
+        hasDocumentSnapshot: initialSnapshot != null,
+        publishToTpvPending,
+        espacios: initialSnapshot?.espacios.length ?? 0,
+        mesas: initialSnapshot?.operationalElementInstances.length ?? 0,
+        zonas: initialSnapshot?.zones.length ?? 0,
+      });
+    }
 
     if (publishToTpvPending) {
-      console.info("[SalaEditorV2] Publicacion cancelada: ya hay una publicacion en curso");
+      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        console.info("[SalaEditorV2] Publicacion cancelada: ya hay una publicacion en curso");
+      }
       setPublishToTpvStatus("Ya hay una publicacion en curso.");
       return;
     }
 
     if (!rid) {
-      console.warn("[SalaEditorV2] Publicacion cancelada: restaurantId vacio");
+      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        console.warn("[SalaEditorV2] Publicacion cancelada: restaurantId vacio");
+      }
       setPublishToTpvStatus("No se pudo publicar: restaurante no disponible.");
       return;
     }
 
     if (!initialSnapshot) {
-      console.warn("[SalaEditorV2] Publicacion cancelada: documento no disponible");
+      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        console.warn("[SalaEditorV2] Publicacion cancelada: documento no disponible");
+      }
       setPublishToTpvStatus("No se pudo publicar: mapa no cargado.");
       return;
     }
@@ -1928,27 +1939,31 @@ export function SalaEditorWorkspace({
     logSalaEditorDocumentPublicationDebug(snapshot);
     setPublishToTpvPending(true);
     setPublishToTpvStatus("Publicando mapa operativo...");
-    console.info("[SalaEditorV2] Llamando publisher TPV", {
-      restaurantId: rid,
-      documentRestaurantId: snapshot.restaurantId,
-      draftReady,
-    });
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.info("[SalaEditorV2] Llamando publisher TPV", {
+        restaurantId: rid,
+        documentRestaurantId: snapshot.restaurantId,
+        draftReady,
+      });
+    }
 
     void publishSalaEditorV2Phase1ToLegacy({
       restaurantId: rid,
       document: snapshot,
     })
       .then(async (result) => {
-        console.info("[SalaEditorV2] Publisher TPV completado", {
-          floorPlansUpdated: result.floorPlansUpdated,
-          tablesUpdated: result.tablesUpdated,
-          zonesUpdated: result.zonesUpdated,
-          decorativeTablesUpdated: result.decorativeTablesUpdated,
-          decorativeLegacyFound: result.decorativeLegacyFound,
-          decorativeLegacyDeactivated: result.decorativeLegacyDeactivated,
-          decorativeAuditItems: result.decorativeAudit.length,
-          newOperationalTableLinks: result.newOperationalTableLinks.length,
-        });
+        if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+          console.info("[SalaEditorV2] Publisher TPV completado", {
+            floorPlansUpdated: result.floorPlansUpdated,
+            tablesUpdated: result.tablesUpdated,
+            zonesUpdated: result.zonesUpdated,
+            decorativeTablesUpdated: result.decorativeTablesUpdated,
+            decorativeLegacyFound: result.decorativeLegacyFound,
+            decorativeLegacyDeactivated: result.decorativeLegacyDeactivated,
+            decorativeAuditItems: result.decorativeAudit.length,
+            newOperationalTableLinks: result.newOperationalTableLinks.length,
+          });
+        }
         if (result.newOperationalTableLinks.length > 0) {
           const linksByInstanceId = new Map(
             result.newOperationalTableLinks.map((link) => [link.instanceId, link]),
@@ -1988,40 +2003,44 @@ export function SalaEditorWorkspace({
               });
               lastDraftSignatureRef.current = signature;
             }
-            console.info("[SalaEditorV2][NewOperationalTablePublish] Draft links persisted", {
-              linkedCount,
-              links: result.newOperationalTableLinks.map((link) => ({
-                instanceId: link.instanceId,
-                legacyTableIdBefore: link.legacyTableIdBefore,
-                legacyTableIdAfter: link.legacyTableIdAfter,
-                floorPlanId: link.floorPlanId,
-                action: link.action,
-              })),
-            });
+            if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+              console.info("[SalaEditorV2][NewOperationalTablePublish] Draft links persisted", {
+                linkedCount,
+                links: result.newOperationalTableLinks.map((link) => ({
+                  instanceId: link.instanceId,
+                  legacyTableIdBefore: link.legacyTableIdBefore,
+                  legacyTableIdAfter: link.legacyTableIdAfter,
+                  floorPlanId: link.floorPlanId,
+                  action: link.action,
+                })),
+              });
+            }
           }
         }
         logSalaEditorPublicationDebug(result);
         setPublishToTpvStatus(formatSalaEditorPublicationSummary(result));
       })
       .catch((error) => {
-        console.error("[SalaEditorV2] No se pudo publicar hacia TPV", error);
-        const firestoreError = error as {
-          code?: unknown;
-          message?: unknown;
-          name?: unknown;
-        };
-        console.error("[SalaEditorV2][FirestoreDiag] publishToTpv.finalCatch", {
-          operation: "publishToTpv.finalCatch",
-          restaurantId: rid,
-          uid: currentUserId,
-          errorName: typeof firestoreError.name === "string" ? firestoreError.name : null,
-          errorCode: typeof firestoreError.code === "string" ? firestoreError.code : null,
-          errorMessage:
-            typeof firestoreError.message === "string"
-              ? firestoreError.message
-              : String(error),
-          lastFirestoreOperation: getLastSalaEditorV2PublisherFirestoreOperation(),
-        });
+        if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+          console.error("[SalaEditorV2] No se pudo publicar hacia TPV", error);
+          const firestoreError = error as {
+            code?: unknown;
+            message?: unknown;
+            name?: unknown;
+          };
+          console.error("[SalaEditorV2][FirestoreDiag] publishToTpv.finalCatch", {
+            operation: "publishToTpv.finalCatch",
+            restaurantId: rid,
+            uid: currentUserId,
+            errorName: typeof firestoreError.name === "string" ? firestoreError.name : null,
+            errorCode: typeof firestoreError.code === "string" ? firestoreError.code : null,
+            errorMessage:
+              typeof firestoreError.message === "string"
+                ? firestoreError.message
+                : String(error),
+            lastFirestoreOperation: getLastSalaEditorV2PublisherFirestoreOperation(),
+          });
+        }
         const message =
           error instanceof Error && error.message.trim()
             ? error.message.trim()
@@ -2029,7 +2048,9 @@ export function SalaEditorWorkspace({
         setPublishToTpvStatus(`No se pudo publicar: ${message}`);
       })
       .finally(() => {
-        console.info("[SalaEditorV2] Flujo publicar en TPV finalizado");
+        if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+          console.info("[SalaEditorV2] Flujo publicar en TPV finalizado");
+        }
         setPublishToTpvPending(false);
       });
   }, [
