@@ -1,6 +1,6 @@
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
-import type { AuthenticatedRestaurantContext } from "@/lib/server/auth/require-authenticated-restaurant";
+import type { AuthorizedTpvRestaurantContext } from "@/lib/server/tpv/require-authorized-tpv-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
   assertProductSellable,
@@ -133,7 +133,7 @@ function transitionLineQuantityResultFromIdempotencyHit(
 }
 
 export function requireTpvCapability(
-  ctx: AuthenticatedRestaurantContext,
+  ctx: AuthorizedTpvRestaurantContext,
   capability: "tpv.sell" | "tpv.cancel_line" | "kds.manage",
 ): TpvMutationError | null {
   if (!serverRoleHasCapability(ctx.role, capability)) {
@@ -150,7 +150,7 @@ export function requireTpvCapability(
 
 async function applyModifierStockForItemTransition(
   tx: Transaction,
-  ctx: AuthenticatedRestaurantContext,
+  ctx: AuthorizedTpvRestaurantContext,
   orderId: string,
   beforeItems: readonly Record<string, unknown>[],
   afterItems: readonly Record<string, unknown>[],
@@ -289,7 +289,7 @@ function buildTableOperatorAssignmentAdminFields(
 }
 
 export async function handleCreateOpenOrder(
-  ctx: AuthenticatedRestaurantContext,
+  ctx: AuthorizedTpvRestaurantContext,
   intent: CreateOpenOrderIntent,
 ): Promise<CreateOpenOrderResult | TpvMutationError> {
   const capErr = requireTpvCapability(ctx, "tpv.sell");
@@ -427,7 +427,7 @@ export async function handleCreateOpenOrder(
 }
 
 export async function handleUpsertSaleLines(
-  ctx: AuthenticatedRestaurantContext,
+  ctx: AuthorizedTpvRestaurantContext,
   intent: UpsertSaleLinesIntent,
 ): Promise<UpsertSaleLinesResult | TpvMutationError> {
   const capErr = requireTpvCapability(ctx, "tpv.sell");
@@ -595,7 +595,7 @@ export async function handleUpsertSaleLines(
 }
 
 export async function handleCancelLines(
-  ctx: AuthenticatedRestaurantContext,
+  ctx: AuthorizedTpvRestaurantContext,
   intent: CancelLinesIntent,
 ): Promise<{ orderId: string; total: number; cancelledLineIds: string[] } | TpvMutationError> {
   const capErr = requireTpvCapability(ctx, "tpv.cancel_line");
@@ -683,7 +683,7 @@ export async function handleCancelLines(
 }
 
 export async function handleTransitionLineStatus(
-  ctx: AuthenticatedRestaurantContext,
+  ctx: AuthorizedTpvRestaurantContext,
   intent: TransitionLineStatusIntent,
 ): Promise<TransitionLineStatusResult | TpvMutationError> {
   const capErr = requireTpvCapability(ctx, "kds.manage");
@@ -818,7 +818,7 @@ export async function handleTransitionLineStatus(
 }
 
 export async function handleTransitionLineQuantity(
-  ctx: AuthenticatedRestaurantContext,
+  ctx: AuthorizedTpvRestaurantContext,
   intent: TransitionLineQuantityIntent,
 ): Promise<TransitionLineQuantityResult | TpvMutationError> {
   const capErr = requireTpvCapability(ctx, "kds.manage");

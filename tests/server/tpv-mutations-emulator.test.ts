@@ -7,7 +7,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import type { AuthenticatedRestaurantContext } from "@/lib/server/auth/require-authenticated-restaurant";
+import type { AuthorizedTpvRestaurantContext } from "@/lib/server/tpv/require-authorized-tpv-restaurant";
 import { handleCancelLines, handleCreateOpenOrder, handleTransitionLineQuantity, handleTransitionLineStatus, handleUpsertSaleLines } from "@/lib/server/tpv/handle-tpv-order-mutations";
 import { stablePayloadHash, canonicalSerialize, readInventoryWarningsFromIdempotencyResult } from "@/lib/server/tpv/tpv-idempotency";
 import { isAllowedKdsLineStatusTransition } from "@/lib/server/tpv/line-status-transitions";
@@ -21,7 +21,7 @@ let testEnv: RulesTestEnvironment;
 let adminApp: App;
 let adminDb: AdminFirestore;
 
-function authCtx(role = "manager"): AuthenticatedRestaurantContext {
+function authCtx(role = "manager"): AuthorizedTpvRestaurantContext {
   return {
     uid: MANAGER_UID,
     email: "manager@example.test",
