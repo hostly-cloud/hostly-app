@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:tpv-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-mutations \"tsx --test tests/server/tpv-mutations-emulator.test.ts\"",
-    "test:tpv-unit": "tsx --test tests/server/tpv-mutations.test.ts tests/server/tpv-mutations-via-api.test.ts tests/server/sync-order-items-via-api.test.ts tests/server/tpv-auth-isolation.test.ts",
+    "test:tpv-unit": "tsx --test tests/server/tpv-mutations.test.ts tests/server/tpv-mutations-via-api.test.ts tests/server/sync-order-items-via-api.test.ts tests/server/tpv-auth-isolation.test.ts tests/server/tpv-undefined-payload.test.ts",
     "eval:menu-import": "tsx scripts/eval-menu-import-corpus.ts",
     "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check"
   },

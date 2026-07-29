@@ -134,7 +134,6 @@ describe("tpv mutations emulator", () => {
     });
     adminApp = initializeApp({ projectId: "demo-hostly-tpv-mutations" }, "tpv-mutations-admin");
     adminDb = getAdminFirestore(adminApp);
-    adminDb.settings({ ignoreUndefinedProperties: true });
   });
 
   after(async () => {

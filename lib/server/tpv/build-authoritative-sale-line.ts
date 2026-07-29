@@ -50,17 +50,53 @@ export function buildAuthoritativeSaleLine(
     status,
     price: basePrice,
     precio: basePrice,
-    modifierTotal: modifiers.length > 0 ? modifierTotal : undefined,
     total: lineTotal,
     displayName,
-    categoryName: product.categoryName ?? undefined,
-    categoria: product.categoryName ?? undefined,
-    stationId: product.operationStationId ?? undefined,
-    stationName: product.operationStationName ?? undefined,
-    operationStationId: product.operationStationId ?? undefined,
-    operationStationName: product.operationStationName ?? undefined,
-    course: product.course ?? undefined,
   };
+
+  if (modifiers.length > 0) {
+    line.modifierTotal = modifierTotal;
+  }
+
+  const categoryId =
+    typeof product.categoryId === "string" && product.categoryId.trim() !== ""
+      ? product.categoryId.trim()
+      : null;
+  if (categoryId) {
+    line.categoryId = categoryId;
+  }
+
+  const categoryName =
+    typeof product.categoryName === "string" && product.categoryName.trim() !== ""
+      ? product.categoryName.trim()
+      : null;
+  if (categoryName) {
+    line.categoryName = categoryName;
+    line.categoria = categoryName;
+  }
+
+  const operationStationId =
+    typeof product.operationStationId === "string" && product.operationStationId.trim() !== ""
+      ? product.operationStationId.trim()
+      : null;
+  if (operationStationId) {
+    line.stationId = operationStationId;
+    line.operationStationId = operationStationId;
+  }
+
+  const operationStationName =
+    typeof product.operationStationName === "string" &&
+    product.operationStationName.trim() !== ""
+      ? product.operationStationName.trim()
+      : null;
+  if (operationStationName) {
+    line.stationName = operationStationName;
+    line.operationStationName = operationStationName;
+  }
+
+  if (product.course != null && Number.isFinite(Number(product.course))) {
+    line.course = product.course;
+  }
 
   if (modifiers.length > 0) {
     line.selectedModifiers = modifiers.map((m) => ({
