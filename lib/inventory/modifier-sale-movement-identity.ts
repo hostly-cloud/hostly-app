@@ -1,4 +1,10 @@
 import { createHash } from "crypto";
+import {
+  convertInventoryQuantity,
+  roundInventoryQuantity,
+} from "@/lib/inventory/unit-conversions";
+
+export const STOCK_MOVEMENT_ID_CONFLICT = "STOCK_MOVEMENT_ID_CONFLICT";
 
 function canonicalSerialize(value: unknown): string {
   if (value === undefined) return '{"$hostly":"undefined"}';
@@ -85,9 +91,12 @@ export function readStoredModifierSaleMovementFingerprint(
   const quantityDelta = data.quantityDelta;
   if (
     typeof sentQuantity !== "number" ||
+    !Number.isFinite(sentQuantity) ||
     typeof inventoryQuantityPerUnit !== "number" ||
+    !Number.isFinite(inventoryQuantityPerUnit) ||
     typeof inventoryUnit !== "string" ||
-    typeof quantityDelta !== "number"
+    typeof quantityDelta !== "number" ||
+    !Number.isFinite(quantityDelta)
   ) {
     return null;
   }
@@ -97,4 +106,163 @@ export function readStoredModifierSaleMovementFingerprint(
     inventoryUnit,
     quantityDelta,
   });
+}
+
+function readStrictFiniteNumber(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return value;
+}
+
+function readStrictTrimmedString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function rejectExistingModifierSaleMovement(): never {
+  throw new Error(STOCK_MOVEMENT_ID_CONFLICT);
+}
+
+export type ValidateExistingModifierSaleMovementParams = {
+  movementId: string;
+  existing: Record<string, unknown>;
+  expectedFingerprint: string;
+  restaurantId: string;
+  orderId: string;
+  sentSegmentLineId: string;
+  inventoryProductId: string;
+  modifierGroupId: string;
+  modifierOptionId: string;
+  selectionOccurrence: number;
+  sentQuantity: number;
+  inventoryQuantityPerUnit: number;
+  inventoryUnit: string;
+  quantityDelta: number;
+  productCurrentStock: number;
+  productUnit: string;
+};
+
+/**
+ * Acepta un movimiento existente como idempotencia legítima solo si coincide con
+ * el planificado y demuestra que el stock del producto ya refleja su aplicación.
+ */
+export function assertExistingModifierSaleMovementIsValidForIdempotentSkip(
+  params: ValidateExistingModifierSaleMovementParams,
+): void {
+  const { existing, movementId, expectedFingerprint } = params;
+  const expectedFp = expectedFingerprint.trim();
+
+  const movementFingerprint = readStrictTrimmedString(existing.movementFingerprint);
+  if (!movementFingerprint || movementFingerprint !== expectedFp) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const derivedFingerprint = readStoredModifierSaleMovementFingerprint(existing);
+  if (!derivedFingerprint || derivedFingerprint !== expectedFp) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  if (existing.type !== "modifier_sale" || existing.source !== "modifier_sale") {
+    rejectExistingModifierSaleMovement();
+  }
+
+  if (existing.applied !== true) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const restaurantId = readStrictTrimmedString(existing.restaurantId);
+  if (!restaurantId || restaurantId !== params.restaurantId.trim()) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const orderId = readStrictTrimmedString(existing.orderId);
+  if (!orderId || orderId !== params.orderId.trim()) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const productId = readStrictTrimmedString(existing.productId);
+  if (!productId || productId !== params.inventoryProductId.trim()) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const expectedLineId = params.sentSegmentLineId.trim();
+  const lineId = readStrictTrimmedString(existing.lineId);
+  if (!lineId || lineId !== expectedLineId) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const sentSegmentLineId = readStrictTrimmedString(existing.sentSegmentLineId);
+  if (!sentSegmentLineId || sentSegmentLineId !== expectedLineId) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const modifierGroupId = readStrictTrimmedString(existing.modifierGroupId);
+  if (!modifierGroupId || modifierGroupId !== params.modifierGroupId.trim()) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const modifierOptionId = readStrictTrimmedString(existing.modifierOptionId);
+  if (!modifierOptionId || modifierOptionId !== params.modifierOptionId.trim()) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const selectionOccurrence = readStrictFiniteNumber(existing.selectionOccurrence);
+  if (selectionOccurrence == null || selectionOccurrence !== params.selectionOccurrence) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const idempotencyKey = readStrictTrimmedString(existing.idempotencyKey);
+  if (!idempotencyKey || idempotencyKey !== movementId.trim()) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const sentQuantity = readStrictFiniteNumber(existing.sentQuantity);
+  if (sentQuantity == null || sentQuantity !== params.sentQuantity) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const inventoryQuantityPerUnit = readStrictFiniteNumber(existing.inventoryQuantityPerUnit);
+  if (
+    inventoryQuantityPerUnit == null ||
+    inventoryQuantityPerUnit !== params.inventoryQuantityPerUnit
+  ) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const quantityDelta = readStrictFiniteNumber(existing.quantityDelta);
+  if (quantityDelta == null || quantityDelta !== params.quantityDelta) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const unit = readStrictTrimmedString(existing.unit);
+  if (!unit || unit !== params.inventoryUnit.trim()) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const stockBefore = readStrictFiniteNumber(existing.stockBefore);
+  const stockAfter = readStrictFiniteNumber(existing.stockAfter);
+  if (stockBefore == null || stockAfter == null) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const convertedPerUnit = convertInventoryQuantity({
+    quantity: -params.inventoryQuantityPerUnit,
+    fromUnit: params.inventoryUnit,
+    toUnit: params.productUnit,
+  });
+  if (convertedPerUnit == null || !Number.isFinite(convertedPerUnit)) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  const expectedConvertedDelta = roundInventoryQuantity(
+    convertedPerUnit * params.sentQuantity,
+  );
+  const expectedStockAfter = roundInventoryQuantity(stockBefore + expectedConvertedDelta);
+  if (stockAfter !== expectedStockAfter) {
+    rejectExistingModifierSaleMovement();
+  }
+
+  if (params.productCurrentStock !== stockAfter) {
+    rejectExistingModifierSaleMovement();
+  }
 }

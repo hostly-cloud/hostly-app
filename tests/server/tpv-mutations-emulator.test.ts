@@ -737,6 +737,134 @@ describe("tpv mutations emulator", () => {
     assert.equal(currentStock, 7);
   });
 
+  test("6C3. preseed mínimo de stockMovement aborta transition-line-status con 409", async () => {
+    const invProductId = "inv-preseed-6c3";
+    const groupId = "grp-preseed-6c3";
+    const optionId = "opt-preseed-cola";
+    const tableId = "mesa-preseed-6c3";
+    const lineId = "line-preseed-6c3";
+    const productId = "prod-preseed-6c3";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa preseed",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Cola inventario preseed",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer preseed",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Cola inventario preseed",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(productId)
+      .set({
+        name: "Ballantines preseed",
+        price: 12,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId,
+          productId,
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: false,
+      idempotencyKey: "create-pending-preseed-6c3",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const { buildModifierSaleV2MovementId } = await import(
+      "@/lib/inventory/modifier-sale-movement-identity"
+    );
+    const movementId = buildModifierSaleV2MovementId({
+      restaurantId: RESTAURANT_A,
+      orderId: created.orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(movementId)
+      .set({ restaurantId: RESTAURANT_A });
+
+    const result = await handleTransitionLineStatus(authCtx("kitchen"), {
+      orderId: created.orderId,
+      lineId,
+      expectedStatus: "pending",
+      nextStatus: "sent",
+      idempotencyKey: "status-preseed-6c3",
+    });
+    assert.equal("error" in result, true);
+    if (!("error" in result)) return;
+    assert.equal(result.status, 409);
+    assert.equal(result.error, "STOCK_MOVEMENT_ID_CONFLICT");
+
+    const orderSnap = await adminDb.collection("orders").doc(created.orderId).get();
+    const line = (orderSnap.data()?.items as Array<Record<string, unknown>> | undefined)?.[0];
+    assert.equal(line?.status, "pending");
+
+    const invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    const currentStock = (invSnap.data()?.inventory as Record<string, unknown> | undefined)
+      ?.currentStock;
+    assert.equal(currentStock, 10);
+
+    assert.equal(await countStockMovementsForOrder(created.orderId), 0);
+    const movementSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(movementId)
+      .get();
+    assert.equal(movementSnap.exists, true);
+    assert.deepEqual(movementSnap.data(), { restaurantId: RESTAURANT_A });
+  });
+
   test("6C2.2-21. currentStock inválido envía order, warning, sin modifier_sale ni cambio de stock", async () => {
     const invProductId = "inv-bad-stock-6c22";
     const groupId = "grp-bad-stock-6c22";

@@ -20,8 +20,10 @@ import {
 } from "@/lib/server/tpv/plan-initial-modifier-stock-consumption";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import {
+  assertExistingModifierSaleMovementIsValidForIdempotentSkip,
   buildModifierSaleMovementFingerprint,
   buildModifierSaleV2MovementId,
+  STOCK_MOVEMENT_ID_CONFLICT,
 } from "@/lib/inventory/modifier-sale-movement-identity";
 import {
   isAllowedKdsLineStatusTransition,
@@ -1895,6 +1897,457 @@ describe("modifier inventory product validation (6C2.2)", () => {
     for (const movement of mock.movementWrites.values()) {
       assert.notEqual(movement.unit, "ud");
     }
+  });
+});
+
+const EXISTING_MOVEMENT_RESTAURANT = "rest-existing-movement";
+const EXISTING_ORDER_ID = "order-existing-1";
+const EXISTING_LINE_ID = "line-existing-1";
+const EXISTING_GROUP_ID = "grp-existing-1";
+const EXISTING_OPTION_ID = "opt-existing-1";
+const EXISTING_INV_PRODUCT_ID = "inv-existing-1";
+const EXISTING_SALE_PRODUCT_ID = "sale-existing-1";
+
+function existingMovementIdentity() {
+  return {
+    restaurantId: EXISTING_MOVEMENT_RESTAURANT,
+    orderId: EXISTING_ORDER_ID,
+    sentSegmentLineId: EXISTING_LINE_ID,
+    modifierGroupId: EXISTING_GROUP_ID,
+    modifierOptionId: EXISTING_OPTION_ID,
+    inventoryProductId: EXISTING_INV_PRODUCT_ID,
+    selectionOccurrence: 0,
+  };
+}
+
+function existingMovementFingerprint(sentQuantity = 1) {
+  const inventoryQuantityPerUnit = 1;
+  const inventoryUnit = "unit";
+  const quantityDelta = -inventoryQuantityPerUnit * sentQuantity;
+  return buildModifierSaleMovementFingerprint({
+    sentQuantity,
+    inventoryQuantityPerUnit,
+    inventoryUnit,
+    quantityDelta,
+  });
+}
+
+function existingMovementId(sentQuantity = 1) {
+  return buildModifierSaleV2MovementId(existingMovementIdentity());
+}
+
+function buildValidExistingServerMovement(
+  stockBefore: number,
+  stockAfter: number,
+  overrides: Record<string, unknown> = {},
+) {
+  const sentQuantity = 1;
+  const inventoryQuantityPerUnit = 1;
+  const inventoryUnit = "unit";
+  const quantityDelta = -1;
+  const movementId = existingMovementId();
+  return {
+    restaurantId: EXISTING_MOVEMENT_RESTAURANT,
+    productId: EXISTING_INV_PRODUCT_ID,
+    productName: EXISTING_INV_PRODUCT_ID,
+    source: "modifier_sale",
+    type: "modifier_sale",
+    orderId: EXISTING_ORDER_ID,
+    lineId: EXISTING_LINE_ID,
+    sentSegmentLineId: EXISTING_LINE_ID,
+    saleProductId: EXISTING_SALE_PRODUCT_ID,
+    saleProductName: "Sale",
+    modifierGroupId: EXISTING_GROUP_ID,
+    modifierOptionId: EXISTING_OPTION_ID,
+    modifierOptionName: EXISTING_OPTION_ID,
+    quantityDelta,
+    unit: inventoryUnit,
+    idempotencyKey: movementId,
+    applied: true,
+    appliedAt: 1,
+    movementFingerprint: existingMovementFingerprint(sentQuantity),
+    sentQuantity,
+    inventoryQuantityPerUnit,
+    selectionOccurrence: 0,
+    stockBefore,
+    stockAfter,
+    ...overrides,
+  };
+}
+
+function createExistingMovementApplyFixture(
+  existingMovements: Record<string, Record<string, unknown>> | undefined,
+  productCurrentStock = 10,
+) {
+  const mock = createStockApplyMock({
+    products: {
+      [EXISTING_INV_PRODUCT_ID]: {
+        restaurantId: EXISTING_MOVEMENT_RESTAURANT,
+        active: true,
+        inventory: { enabled: true, unit: "unit", currentStock: productCurrentStock },
+      },
+    },
+    existingMovements,
+  });
+  const beforeItems = [{ id: EXISTING_LINE_ID, status: "pending", quantity: 1 }];
+  const afterItems = [
+    sentLineWithInventoryModifier({
+      lineId: EXISTING_LINE_ID,
+      productId: EXISTING_SALE_PRODUCT_ID,
+      groupId: EXISTING_GROUP_ID,
+      optionId: EXISTING_OPTION_ID,
+      inventoryProductId: EXISTING_INV_PRODUCT_ID,
+    }),
+  ];
+  return { ...mock, beforeItems, afterItems };
+}
+
+async function applyExistingMovementScenario(
+  existingMovements: Record<string, Record<string, unknown>> | undefined,
+  productCurrentStock = 10,
+) {
+  const fixture = createExistingMovementApplyFixture(existingMovements, productCurrentStock);
+  return {
+    fixture,
+    plan: await applyInitialModifierStockConsumptionInTransaction({
+      tx: fixture.tx,
+      db: fixture.db,
+      restaurantId: EXISTING_MOVEMENT_RESTAURANT,
+      orderId: EXISTING_ORDER_ID,
+      actorUid: "uid-server",
+      beforeItems: fixture.beforeItems,
+      afterItems: fixture.afterItems,
+      nowMs: 1_700_000_000_000,
+    }),
+  };
+}
+
+describe("existing modifier_sale movement idempotency validation (6C3)", () => {
+  test("1. first legitimate consumption creates movement and decrements stock once", async () => {
+    const { fixture, plan } = await applyExistingMovementScenario(undefined, 10);
+    assert.equal(fixture.movementWrites.size, 1);
+    assert.equal(fixture.productUpdates.size, 1);
+    assert.equal(plan.movementIds.length, 1);
+    const movement = [...fixture.movementWrites.values()][0];
+    assert.equal(movement?.stockBefore, 10);
+    assert.equal(movement?.stockAfter, 9);
+    const productUpdate = fixture.productUpdates.get(EXISTING_INV_PRODUCT_ID);
+    assert.equal(
+      (productUpdate?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      9,
+    );
+  });
+
+  test("2. legitimate retry accepts existing server movement without second decrement", async () => {
+    const movementId = existingMovementId();
+    const existing = buildValidExistingServerMovement(10, 9);
+    const { fixture, plan } = await applyExistingMovementScenario(
+      { [movementId]: existing },
+      9,
+    );
+    assert.equal(fixture.movementWrites.size, 0);
+    assert.equal(fixture.productUpdates.size, 0);
+    assert.deepEqual(plan.movementIds, [movementId]);
+  });
+
+  test("3. two distinct modifiers produce distinct movement ids and both decrement", async () => {
+    const invA = "inv-existing-a";
+    const invB = "inv-existing-b";
+    const mock = createStockApplyMock({
+      products: {
+        [invA]: {
+          active: true,
+          inventory: { enabled: true, unit: "unit", currentStock: 10 },
+        },
+        [invB]: {
+          active: true,
+          inventory: { enabled: true, unit: "unit", currentStock: 20 },
+        },
+      },
+    });
+    const afterItems = [
+      {
+        id: EXISTING_LINE_ID,
+        status: "sent",
+        quantity: 1,
+        productId: EXISTING_SALE_PRODUCT_ID,
+        selectedModifiers: [
+          {
+            groupId: "grp-a",
+            optionId: "opt-a",
+            inventoryProductId: invA,
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+          {
+            groupId: "grp-b",
+            optionId: "opt-b",
+            inventoryProductId: invB,
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      },
+    ];
+    const plan = await applyInitialModifierStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: EXISTING_MOVEMENT_RESTAURANT,
+      orderId: EXISTING_ORDER_ID,
+      actorUid: "uid-server",
+      beforeItems: [{ id: EXISTING_LINE_ID, status: "pending", quantity: 1 }],
+      afterItems,
+      nowMs: 1_700_000_000_000,
+    });
+    assert.equal(mock.movementWrites.size, 2);
+    assert.equal(mock.productUpdates.size, 2);
+    assert.equal(plan.movementIds.length, 2);
+    assert.notEqual(plan.movementIds[0], plan.movementIds[1]);
+  });
+
+  test("4. repeated modifier selection uses distinct selectionOccurrence movement ids", async () => {
+    const mock = createStockApplyMock({
+      products: {
+        [EXISTING_INV_PRODUCT_ID]: {
+          active: true,
+          inventory: { enabled: true, unit: "unit", currentStock: 10 },
+        },
+      },
+    });
+    const afterItems = [
+      {
+        id: EXISTING_LINE_ID,
+        status: "sent",
+        quantity: 1,
+        productId: EXISTING_SALE_PRODUCT_ID,
+        selectedModifiers: [
+          {
+            groupId: EXISTING_GROUP_ID,
+            optionId: EXISTING_OPTION_ID,
+            inventoryProductId: EXISTING_INV_PRODUCT_ID,
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+          {
+            groupId: EXISTING_GROUP_ID,
+            optionId: EXISTING_OPTION_ID,
+            inventoryProductId: EXISTING_INV_PRODUCT_ID,
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      },
+    ];
+    const plan = await applyInitialModifierStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: EXISTING_MOVEMENT_RESTAURANT,
+      orderId: EXISTING_ORDER_ID,
+      actorUid: "uid-server",
+      beforeItems: [{ id: EXISTING_LINE_ID, status: "pending", quantity: 1 }],
+      afterItems,
+      nowMs: 1_700_000_000_000,
+    });
+    assert.equal(mock.movementWrites.size, 2);
+    assert.equal(plan.movementIds.length, 2);
+    assert.notEqual(plan.movementIds[0], plan.movementIds[1]);
+  });
+
+  test("5. conflict aborts apply and leaves writes untouched", async () => {
+    const movementId = existingMovementId();
+    await assert.rejects(
+      () =>
+        applyExistingMovementScenario(
+          { [movementId]: { restaurantId: EXISTING_MOVEMENT_RESTAURANT } },
+          10,
+        ),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("6. rejects minimal preseed document", async () => {
+    const movementId = existingMovementId();
+    await assert.rejects(
+      () =>
+        applyExistingMovementScenario(
+          { [movementId]: { restaurantId: EXISTING_MOVEMENT_RESTAURANT } },
+          10,
+        ),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("7. rejects missing fingerprint", async () => {
+    const movementId = existingMovementId();
+    const doc = { ...buildValidExistingServerMovement(10, 9) } as Record<string, unknown>;
+    delete doc.movementFingerprint;
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("8. rejects different fingerprint", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 9, {
+      movementFingerprint: existingMovementFingerprint(99),
+      sentQuantity: 99,
+      quantityDelta: -99,
+    });
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("9. rejects correct fingerprint without full schema", async () => {
+    const movementId = existingMovementId();
+    await assert.rejects(
+      () =>
+        applyExistingMovementScenario(
+          {
+            [movementId]: {
+              restaurantId: EXISTING_MOVEMENT_RESTAURANT,
+              movementFingerprint: existingMovementFingerprint(),
+            },
+          },
+          10,
+        ),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("10. rejects wrong restaurantId", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 9, { restaurantId: "other-rest" });
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("11. rejects wrong inventory productId", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 9, { productId: "other-inv" });
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("12. rejects wrong orderId", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 9, { orderId: "other-order" });
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("13. rejects wrong lineId", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 9, {
+      lineId: "other-line",
+      sentSegmentLineId: "other-line",
+    });
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("14. rejects wrong quantityDelta", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 9, { quantityDelta: -2 });
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("15. rejects missing stockBefore/stockAfter", async () => {
+    const movementId = existingMovementId();
+    const doc = { ...buildValidExistingServerMovement(10, 9) } as Record<string, unknown>;
+    delete doc.stockBefore;
+    delete doc.stockAfter;
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("16. rejects non-numeric stockBefore", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 9, { stockBefore: "10" });
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 9),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("17. rejects incoherent stockBefore/stockAfter math", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 8);
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 8),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("18. rejects valid movement when product stock does not match stockAfter", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, 9);
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 10),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("19. rejects NaN stockAfter", async () => {
+    const movementId = existingMovementId();
+    const doc = buildValidExistingServerMovement(10, Number.NaN);
+    await assert.rejects(
+      () => applyExistingMovementScenario({ [movementId]: doc }, 10),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("20. direct helper accepts a fully valid existing movement", () => {
+    assert.doesNotThrow(() =>
+      assertExistingModifierSaleMovementIsValidForIdempotentSkip({
+        movementId: existingMovementId(),
+        existing: buildValidExistingServerMovement(10, 9),
+        expectedFingerprint: existingMovementFingerprint(),
+        restaurantId: EXISTING_MOVEMENT_RESTAURANT,
+        orderId: EXISTING_ORDER_ID,
+        sentSegmentLineId: EXISTING_LINE_ID,
+        inventoryProductId: EXISTING_INV_PRODUCT_ID,
+        modifierGroupId: EXISTING_GROUP_ID,
+        modifierOptionId: EXISTING_OPTION_ID,
+        selectionOccurrence: 0,
+        sentQuantity: 1,
+        inventoryQuantityPerUnit: 1,
+        inventoryUnit: "unit",
+        quantityDelta: -1,
+        productCurrentStock: 9,
+        productUnit: "unit",
+      }),
+    );
   });
 });
 

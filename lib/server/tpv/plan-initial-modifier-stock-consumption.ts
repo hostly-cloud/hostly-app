@@ -1,9 +1,10 @@
 import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from "firebase-admin/firestore";
 import { normalizeProductionLineStatus } from "@/lib/firestore/merge-order-items-for-persist";
 import {
+  assertExistingModifierSaleMovementIsValidForIdempotentSkip,
   buildModifierSaleMovementFingerprint,
   buildModifierSaleV2MovementId,
-  readStoredModifierSaleMovementFingerprint,
+  STOCK_MOVEMENT_ID_CONFLICT,
 } from "@/lib/inventory/modifier-sale-movement-identity";
 import type {
   ModifierSaleStockMovementDocument,
@@ -460,12 +461,31 @@ export async function applyInitialModifierStockConsumptionInTransaction(params: 
   for (const row of pending.sort((a, b) => a.movementId.localeCompare(b.movementId))) {
     const existingSnap = movementSnapById.get(row.movementId);
     if (existingSnap?.exists) {
-      const storedFingerprint = readStoredModifierSaleMovementFingerprint(
-        existingSnap.data() as Record<string, unknown>,
-      );
-      if (storedFingerprint && storedFingerprint !== row.fingerprint) {
-        throw new Error("STOCK_MOVEMENT_ID_CONFLICT");
+      const existingData = existingSnap.data() as Record<string, unknown>;
+      const productData = productDataById.get(row.inventoryProductId);
+      const productUnit = readCanonicalProductInventoryUnit(productData);
+      const productStock = readValidInventoryCurrentStock(productData);
+      if (!productData || !productUnit || productStock == null) {
+        throw new Error(STOCK_MOVEMENT_ID_CONFLICT);
       }
+      assertExistingModifierSaleMovementIsValidForIdempotentSkip({
+        movementId: row.movementId,
+        existing: existingData,
+        expectedFingerprint: row.fingerprint,
+        restaurantId: params.restaurantId,
+        orderId: params.orderId,
+        sentSegmentLineId: String(row.payload.sentSegmentLineId ?? row.payload.lineId),
+        inventoryProductId: row.inventoryProductId,
+        modifierGroupId: row.payload.modifierGroupId,
+        modifierOptionId: row.payload.modifierOptionId,
+        selectionOccurrence: row.payload.selectionOccurrence ?? 0,
+        sentQuantity: row.payload.sentQuantity ?? 0,
+        inventoryQuantityPerUnit: row.payload.inventoryQuantityPerUnit ?? 0,
+        inventoryUnit: String(row.payload.unit),
+        quantityDelta: row.payload.quantityDelta,
+        productCurrentStock: productStock,
+        productUnit,
+      });
       movementIds.push(row.movementId);
       continue;
     }
