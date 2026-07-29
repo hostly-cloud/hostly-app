@@ -56,6 +56,7 @@ import {
   applyInitialModifierStockConsumptionInTransaction,
   type ModifierStockConsumptionPlan,
 } from "@/lib/server/tpv/plan-initial-modifier-stock-consumption";
+import { applyModifierStockReversalInTransaction, isModifierReversalBlockedError } from "@/lib/server/tpv/plan-modifier-stock-reversal";
 import type { ModifierStockConsumptionWarning } from "@/lib/inventory/stock-movement-types";
 
 export type TpvMutationError = { status: number; error: string; details?: string };
@@ -768,6 +769,7 @@ export async function handleCancelLines(
       if (verErr) throw new Error(verErr.error);
 
       const existingItems = existingItemsArray(orderData.items);
+      const beforeItems = existingItems.map((row) => ({ ...row }));
       const byId = indexItemsByLineId(existingItems);
       cancelledLineIds = [];
 
@@ -804,6 +806,20 @@ export async function handleCancelLines(
       const plan = planOrderProjectionWrites(ctx.db, meta, merged, loaded, nowMs);
       total = computeAuthoritativeOrderTotal(plan.itemsWithDocIds);
 
+      await applyModifierStockReversalInTransaction({
+        tx,
+        db: ctx.db,
+        restaurantId: ctx.restaurantId,
+        orderId,
+        actorUid: ctx.uid,
+        beforeItems,
+        afterItems: plan.itemsWithDocIds,
+        nowMs,
+        operationKind: "cancel_lines",
+        externalOperationIdempotencyKey: intent.idempotencyKey?.trim(),
+        lineIds: uniqueIds,
+      });
+
       tx.update(orderRef, {
         items: plan.itemsWithDocIds,
         total,
@@ -817,6 +833,12 @@ export async function handleCancelLines(
     if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
     if (msg === "TENANT_MISMATCH") return { status: 403, error: "TENANT_MISMATCH" };
     if (msg === "VERSION_CONFLICT") return { status: 409, error: "VERSION_CONFLICT" };
+    if (msg === "STOCK_MOVEMENT_ID_CONFLICT") {
+      return { status: 409, error: "STOCK_MOVEMENT_ID_CONFLICT" };
+    }
+    if (isModifierReversalBlockedError(msg)) {
+      return { status: 409, error: msg };
+    }
     if (msg.startsWith("LINE_NOT_FOUND:")) return { status: 400, error: "LINE_NOT_FOUND", details: msg.split(":")[1] };
     if (msg.startsWith("LINE_NOT_CANCELABLE:")) {
       return { status: 400, error: "LINE_NOT_CANCELABLE", details: msg.split(":")[1] };

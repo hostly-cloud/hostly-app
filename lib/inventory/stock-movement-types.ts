@@ -88,6 +88,16 @@ export type ModifierSaleReversalStockMovementDocument = StockMovementApplyFields
   reversalOfMovementId: string;
   createdAt: number;
   createdBy?: string;
+  sentSegmentLineId?: string;
+  selectionOccurrence?: number;
+  /** Aggregated reversal schema version (3 = per-operation). */
+  movementSchemaVersion?: number;
+  /** Stable idempotency key for the logical mutation (API key or derived). */
+  operationIdempotencyKey?: string;
+  movementFingerprint?: string;
+  inventoryQuantityPerUnit?: number;
+  /** Sale units reversed by this aggregated operation document. */
+  reversedSaleUnits?: number;
 };
 
 export type CreateModifierStockMovementsResult = {

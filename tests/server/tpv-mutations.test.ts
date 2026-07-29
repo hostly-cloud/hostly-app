@@ -18,10 +18,21 @@ import {
   deriveNewlySentUnits,
   validateModifierInventoryProduct,
 } from "@/lib/server/tpv/plan-initial-modifier-stock-consumption";
+import {
+  applyModifierStockReversalInTransaction,
+  buildModifierReversalBlockedErrorCode,
+  buildModifierReversalOperationIdempotencyKey,
+  deriveUnitsToReverse,
+  remainingConsumedUnitsAfter,
+} from "@/lib/server/tpv/plan-modifier-stock-reversal";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import {
+  buildModifierSaleAggregatedReversalFingerprint,
+  buildModifierSaleAggregatedReversalV3MovementId,
   buildModifierSaleMovementFingerprint,
   buildModifierSaleV2MovementId,
+  MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR,
+  MODIFIER_SALE_REVERSAL_SCHEMA_V3,
 } from "@/lib/inventory/modifier-sale-movement-identity";
 import {
   isAllowedKdsLineStatusTransition,
@@ -1638,6 +1649,105 @@ function sentLineWithInventoryModifier(params: {
   };
 }
 
+function buildValidModifierSaleV2LedgerDocument(params: {
+  restaurantId: string;
+  orderId: string;
+  lineId: string;
+  groupId: string;
+  optionId: string;
+  invProductId: string;
+  selectionOccurrence?: number;
+  sentQuantity: number;
+  inventoryQuantityPerUnit?: number;
+  inventoryUnit?: string;
+  productName?: string;
+}): { movementId: string; data: Record<string, unknown> } {
+  const selectionOccurrence = params.selectionOccurrence ?? 0;
+  const inventoryQuantityPerUnit = params.inventoryQuantityPerUnit ?? 1;
+  const inventoryUnit = params.inventoryUnit ?? "unit";
+  const sentQuantity = params.sentQuantity;
+  const quantityDelta = -sentQuantity * inventoryQuantityPerUnit;
+  const movementId = buildModifierSaleV2MovementId({
+    restaurantId: params.restaurantId,
+    orderId: params.orderId,
+    sentSegmentLineId: params.lineId,
+    modifierGroupId: params.groupId,
+    modifierOptionId: params.optionId,
+    inventoryProductId: params.invProductId,
+    selectionOccurrence,
+  });
+  const movementFingerprint = buildModifierSaleMovementFingerprint({
+    sentQuantity,
+    inventoryQuantityPerUnit,
+    inventoryUnit,
+    quantityDelta,
+  });
+  return {
+    movementId,
+    data: {
+      restaurantId: params.restaurantId,
+      orderId: params.orderId,
+      lineId: params.lineId,
+      sentSegmentLineId: params.lineId,
+      type: "modifier_sale",
+      source: "modifier_sale",
+      applied: true,
+      sentQuantity,
+      inventoryQuantityPerUnit,
+      unit: inventoryUnit,
+      quantityDelta,
+      productId: params.invProductId,
+      modifierGroupId: params.groupId,
+      modifierOptionId: params.optionId,
+      selectionOccurrence,
+      productName: params.productName ?? "Inv",
+      idempotencyKey: movementId,
+      movementFingerprint,
+    },
+  };
+}
+
+function saleMovementFixture(params: {
+  restaurantId: string;
+  orderId: string;
+  lineId: string;
+  groupId: string;
+  optionId: string;
+  invProductId: string;
+  selectionOccurrence?: number;
+  sentQuantity: number;
+  inventoryQuantityPerUnit?: number;
+  inventoryUnit?: string;
+}): Record<string, unknown> {
+  return buildValidModifierSaleV2LedgerDocument(params).data;
+}
+
+type StockApplyMockStats = {
+  txGets: number;
+  queryGets: number;
+  queryDocsRead: number;
+  originalSaleQueries: number;
+  originalSaleDocsRead: number;
+  reversalQueries: number;
+  reversalDocsRead: number;
+  directDocGets: number;
+  getAllCalls: number;
+  getAllRefCount: number;
+  movementWrites: number;
+};
+
+function classifyQueryStats(filters: Array<{ field: string; op: string; value: unknown }>): {
+  isLineScopedOriginalLookupQuery: boolean;
+  isReversalQuery: boolean;
+} {
+  const byField = new Map(filters.map((filter) => [filter.field, filter.value]));
+  const isLineScopedOriginalLookupQuery =
+    byField.has("orderId") && byField.has("lineId") && !byField.has("type");
+  const isReversalQuery =
+    byField.get("type") === "modifier_sale_reversal" && byField.has("reversalOfMovementId");
+  return { isLineScopedOriginalLookupQuery, isReversalQuery };
+}
+
 function createStockApplyMock(params: {
   products: Record<string, Record<string, unknown>>;
   existingMovements?: Record<string, Record<string, unknown>>;
@@ -1645,6 +1755,41 @@ function createStockApplyMock(params: {
   const movementWrites = new Map<string, Record<string, unknown>>();
   const productUpdates = new Map<string, Record<string, unknown>>();
   const refKinds = new Map<string, "movement" | "product">();
+  const stats: StockApplyMockStats = {
+    txGets: 0,
+    queryGets: 0,
+    queryDocsRead: 0,
+    originalSaleQueries: 0,
+    originalSaleDocsRead: 0,
+    reversalQueries: 0,
+    reversalDocsRead: 0,
+    directDocGets: 0,
+    getAllCalls: 0,
+    getAllRefCount: 0,
+    movementWrites: 0,
+  };
+
+  type WhereFilter = { field: string; op: string; value: unknown };
+
+  function allMovements(): Record<string, Record<string, unknown>> {
+    return {
+      ...(params.existingMovements ?? {}),
+      ...Object.fromEntries(movementWrites),
+    };
+  }
+
+  function buildWhereChain(initial: WhereFilter) {
+    const filters: WhereFilter[] = [initial];
+    const chain = {
+      _isQuery: true as const,
+      filters,
+      where(field: string, op: string, value: unknown) {
+        filters.push({ field, op, value });
+        return chain;
+      },
+    };
+    return chain;
+  }
 
   const db = {
     collection() {
@@ -1657,6 +1802,9 @@ function createStockApplyMock(params: {
                   refKinds.set(id, sub === "stockMovements" ? "movement" : "product");
                   return { id };
                 },
+                where(field: string, op: string, value: unknown) {
+                  return buildWhereChain({ field, op, value });
+                },
               };
             },
           };
@@ -1666,11 +1814,52 @@ function createStockApplyMock(params: {
   } as unknown as Firestore;
 
   const tx = {
+    async get(refOrQuery: { id?: string; _isQuery?: true; filters?: WhereFilter[] }) {
+      stats.txGets += 1;
+      if (refOrQuery._isQuery && refOrQuery.filters) {
+        stats.queryGets += 1;
+        const movements = allMovements();
+        const matching = Object.entries(movements).filter(([, data]) =>
+          refOrQuery.filters!.every((filter) => {
+            if (filter.op === "==") return data[filter.field] === filter.value;
+            return false;
+          }),
+        );
+        stats.queryDocsRead += matching.length;
+        const queryKind = classifyQueryStats(refOrQuery.filters);
+        if (queryKind.isLineScopedOriginalLookupQuery) {
+          stats.originalSaleQueries += 1;
+          stats.originalSaleDocsRead += matching.length;
+        }
+        if (queryKind.isReversalQuery) {
+          stats.reversalQueries += 1;
+          stats.reversalDocsRead += matching.length;
+        }
+        return {
+          docs: matching.map(([id, data]) => ({
+            id,
+            exists: true,
+            data: () => data,
+          })),
+        };
+      }
+      stats.directDocGets += 1;
+      const ref = refOrQuery as { id: string };
+      const kind = refKinds.get(ref.id);
+      if (kind === "movement") {
+        const data = allMovements()[ref.id];
+        return { exists: Boolean(data), data: () => data, id: ref.id };
+      }
+      const data = params.products[ref.id];
+      return { exists: Boolean(data), data: () => data, id: ref.id };
+    },
     async getAll(...refs: Array<{ id: string }>) {
+      stats.getAllCalls += 1;
+      stats.getAllRefCount += refs.length;
       return refs.map((ref) => {
         const kind = refKinds.get(ref.id);
         if (kind === "movement") {
-          const data = params.existingMovements?.[ref.id];
+          const data = allMovements()[ref.id];
           return { exists: Boolean(data), data: () => data, id: ref.id };
         }
         const data = params.products[ref.id];
@@ -1679,13 +1868,14 @@ function createStockApplyMock(params: {
     },
     set(ref: { id: string }, data: Record<string, unknown>) {
       movementWrites.set(ref.id, data);
+      stats.movementWrites = movementWrites.size;
     },
     update(ref: { id: string }, data: Record<string, unknown>) {
       productUpdates.set(ref.id, data);
     },
   } as unknown as Transaction;
 
-  return { db, tx, movementWrites, productUpdates };
+  return { db, tx, movementWrites, productUpdates, stats };
 }
 
 describe("modifier inventory product validation (6C2.2)", () => {
@@ -2084,5 +2274,4080 @@ describe("resolveCategoryForProduct client inheritance", () => {
       categoria: "Refrescos",
     } as Product;
     assert.equal(resolveCategoryForProduct(product, categories), null);
+  });
+});
+
+describe("modifier stock reversal derivation", () => {
+  test("cancel sent line requests full before quantity", () => {
+    assert.equal(
+      deriveUnitsToReverse(
+        { id: "l1", status: "sent", quantity: 3 },
+        { id: "l1", status: "cancelled", quantity: 0 },
+      ),
+      3,
+    );
+  });
+
+  test("reduce sent 3 → 2 requests one unit", () => {
+    assert.equal(
+      deriveUnitsToReverse(
+        { id: "l1", status: "sent", quantity: 3 },
+        { id: "l1", status: "sent", quantity: 2 },
+      ),
+      1,
+    );
+  });
+
+  test("pending and already cancelled request zero", () => {
+    assert.equal(
+      deriveUnitsToReverse(
+        { id: "l1", status: "pending", quantity: 2 },
+        undefined,
+      ),
+      0,
+    );
+    assert.equal(
+      deriveUnitsToReverse(
+        { id: "l1", status: "cancelled", quantity: 0 },
+        { id: "l1", status: "cancelled", quantity: 0 },
+      ),
+      0,
+    );
+  });
+
+  test("remainingConsumedUnitsAfter treats cancelled as zero", () => {
+    assert.equal(remainingConsumedUnitsAfter({ status: "cancelled", quantity: 5 }), 0);
+    assert.equal(remainingConsumedUnitsAfter({ status: "preparing", quantity: 2 }), 2);
+  });
+
+  test("reversal v3 id differs by operation key and is tenant-scoped", () => {
+    const base = {
+      restaurantId: TPV_TEST_RESTAURANT,
+      orderId: "order-1",
+      sentSegmentLineId: "line-1",
+      reversalOfMovementId: "modifier_sale_v2_abc123",
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    };
+    const op1 = buildModifierSaleAggregatedReversalV3MovementId({
+      ...base,
+      operationIdempotencyKey: "op-1",
+    });
+    const op2 = buildModifierSaleAggregatedReversalV3MovementId({
+      ...base,
+      operationIdempotencyKey: "op-2",
+    });
+    const otherTenant = buildModifierSaleAggregatedReversalV3MovementId({
+      ...base,
+      restaurantId: "other-tenant",
+      operationIdempotencyKey: "op-1",
+    });
+    assert.notEqual(op1, op2);
+    assert.notEqual(op1, otherTenant);
+    assert.match(op1, /^modifier_sale_reversal_v3_/);
+  });
+});
+
+describe("modifier stock reversal apply (mock txn)", () => {
+  test("cancel restores stock once; retry writes nothing extra", async () => {
+    const restaurantId = "rest-rev-1";
+    const orderId = "order-rev-1";
+    const lineId = "line-rev-1";
+    const invProductId = "inv-rev-1";
+    const groupId = "grp-rev-1";
+    const optionId = "opt-rev-1";
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 2,
+    });
+    const afterLine = { ...beforeLine, status: "cancelled", quantity: 0, qty: 0 };
+
+    const first = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 8, unit: "unit" }),
+      },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 2,
+        }),
+      },
+    });
+
+    const plan1 = await applyModifierStockReversalInTransaction({
+      tx: first.tx,
+      db: first.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1_700_000_000_000,
+      lineIds: [lineId],
+    });
+    assert.equal(plan1.unitsReversed, 2);
+    assert.equal(first.movementWrites.size, 1);
+    const aggregated = [...first.movementWrites.values()][0];
+    assert.equal(aggregated?.reversedSaleUnits, 2);
+    assert.equal(aggregated?.movementSchemaVersion, MODIFIER_SALE_REVERSAL_SCHEMA_V3);
+    assert.equal(
+      (first.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      10,
+    );
+
+    const second = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 10, unit: "unit" }),
+      },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 2,
+        }),
+        ...Object.fromEntries(first.movementWrites),
+      },
+    });
+    const plan2 = await applyModifierStockReversalInTransaction({
+      tx: second.tx,
+      db: second.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [afterLine],
+      afterItems: [afterLine],
+      nowMs: 1_700_000_000_001,
+      lineIds: [lineId],
+    });
+    assert.equal(plan2.unitsReversed, 0);
+    assert.equal(second.movementWrites.size, 0);
+    assert.equal(second.productUpdates.size, 0);
+  });
+
+  test("partial reduce reverses one unit only", async () => {
+    const restaurantId = "rest-rev-2";
+    const orderId = "order-rev-2";
+    const lineId = "line-rev-2";
+    const invProductId = "inv-rev-2";
+    const groupId = "grp-rev-2";
+    const optionId = "opt-rev-2";
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 3,
+    });
+    const afterLine = { ...beforeLine, quantity: 2, qty: 2 };
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 7, unit: "unit" }),
+      },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 3,
+        }),
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1_700_000_000_000,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal(mock.movementWrites.size, 1);
+    const written = [...mock.movementWrites.values()][0];
+    assert.equal(written?.type, "modifier_sale_reversal");
+    assert.equal(written?.quantityDelta, 1);
+    assert.equal(written?.reversedSaleUnits, 1);
+    assert.equal(written?.movementSchemaVersion, MODIFIER_SALE_REVERSAL_SCHEMA_V3);
+    assert.equal(
+      (mock.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      8,
+    );
+  });
+
+  test("without original v2 consumption does not invent reversal", async () => {
+    const restaurantId = "rest-rev-3";
+    const lineId = "line-rev-3";
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId: "grp",
+      optionId: "opt",
+      inventoryProductId: "inv-missing",
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: {
+        "inv-missing": inventoryProductDoc({ currentStock: 5, unit: "unit" }),
+      },
+      existingMovements: {},
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId: "order-rev-3",
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [{ ...beforeLine, status: "cancelled", quantity: 0 }],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 0);
+    assert.equal(mock.movementWrites.size, 0);
+    assert.equal(mock.productUpdates.size, 0);
+  });
+});
+
+describe("modifier stock reversal selectionOccurrence ledger lookup", () => {
+  const restaurantId = "rest-occ-ledger";
+  const orderId = "order-occ-ledger";
+  const invProductId = "inv-cola-shared";
+  const groupId = "grp-mixer";
+  const optionId = "opt-cola";
+  const saleProductId = "prod-refresco";
+
+  function sharedModifierLine(params: {
+    lineId: string;
+    quantity?: number;
+    status?: string;
+  }) {
+    return sentLineWithInventoryModifier({
+      lineId: params.lineId,
+      productId: saleProductId,
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: params.quantity ?? 1,
+    });
+  }
+
+  function buildSaleMovement(params: {
+    lineId: string;
+    selectionOccurrence: number;
+    sentQuantity?: number;
+  }) {
+    return buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: params.lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: params.selectionOccurrence,
+      sentQuantity: params.sentQuantity ?? 1,
+      productName: "Cola",
+    });
+  }
+
+  test("consumption assigns global selectionOccurrence across lines", async () => {
+    const lineA = "line-occ-a";
+    const lineB = "line-occ-b";
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 20, unit: "unit" }),
+      },
+    });
+    const plan = await applyInitialModifierStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [
+        { id: lineA, status: "pending", quantity: 1 },
+        { id: lineB, status: "pending", quantity: 1 },
+      ],
+      afterItems: [sharedModifierLine({ lineId: lineA }), sharedModifierLine({ lineId: lineB })],
+      nowMs: 1_700_000_000_000,
+    });
+    assert.equal(plan.movementIds.length, 2);
+    const idA = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineA,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const idB = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineB,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 1,
+    });
+    assert.equal(mock.movementWrites.has(idA), true);
+    assert.equal(mock.movementWrites.has(idB), true);
+    assert.notEqual(idA, idB);
+  });
+
+  test("cancel second line only reverses its own global occurrence", async () => {
+    const lineA = "line-cancel-b-a";
+    const lineB = "line-cancel-b-b";
+    const saleA = buildSaleMovement({ lineId: lineA, selectionOccurrence: 0 });
+    const saleB = buildSaleMovement({ lineId: lineB, selectionOccurrence: 1 });
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 18, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+      },
+    });
+    const beforeItems = [
+      sharedModifierLine({ lineId: lineA }),
+      sharedModifierLine({ lineId: lineB }),
+    ];
+    const afterItems = [
+      sharedModifierLine({ lineId: lineA }),
+      { ...sharedModifierLine({ lineId: lineB }), status: "cancelled", quantity: 0, qty: 0 },
+    ];
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems,
+      afterItems,
+      nowMs: 1_700_000_000_100,
+      lineIds: [lineB],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal(mock.movementWrites.size, 1);
+    const reversal = [...mock.movementWrites.values()][0];
+    assert.equal(reversal?.lineId, lineB);
+    assert.equal(reversal?.selectionOccurrence, 1);
+    assert.equal(reversal?.reversalOfMovementId, saleB.movementId);
+    assert.equal(
+      (mock.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      19,
+    );
+  });
+
+  test("cancel first then second fully compensates without double reversal", async () => {
+    const lineA = "line-seq-a";
+    const lineB = "line-seq-b";
+    const saleA = buildSaleMovement({ lineId: lineA, selectionOccurrence: 0 });
+    const saleB = buildSaleMovement({ lineId: lineB, selectionOccurrence: 1 });
+    const first = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 18, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+      },
+    });
+    const beforeBoth = [
+      sharedModifierLine({ lineId: lineA }),
+      sharedModifierLine({ lineId: lineB }),
+    ];
+    const afterCancelA = [
+      { ...sharedModifierLine({ lineId: lineA }), status: "cancelled", quantity: 0, qty: 0 },
+      sharedModifierLine({ lineId: lineB }),
+    ];
+    const planA = await applyModifierStockReversalInTransaction({
+      tx: first.tx,
+      db: first.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: beforeBoth,
+      afterItems: afterCancelA,
+      nowMs: 1_700_000_000_200,
+      lineIds: [lineA],
+    });
+    assert.equal(planA.unitsReversed, 1);
+    assert.equal(
+      (first.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      19,
+    );
+
+    const second = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 19, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+        ...Object.fromEntries(first.movementWrites),
+      },
+    });
+    const afterCancelBoth = [
+      { ...sharedModifierLine({ lineId: lineA }), status: "cancelled", quantity: 0, qty: 0 },
+      { ...sharedModifierLine({ lineId: lineB }), status: "cancelled", quantity: 0, qty: 0 },
+    ];
+    const planB = await applyModifierStockReversalInTransaction({
+      tx: second.tx,
+      db: second.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: afterCancelA,
+      afterItems: afterCancelBoth,
+      nowMs: 1_700_000_000_201,
+      lineIds: [lineB],
+    });
+    assert.equal(planB.unitsReversed, 1);
+    assert.equal(second.movementWrites.size, 1);
+    assert.equal(
+      (second.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      20,
+    );
+  });
+
+  test("cancel in reverse order reaches the same final stock", async () => {
+    const lineA = "line-rev-order-a";
+    const lineB = "line-rev-order-b";
+    const saleA = buildSaleMovement({ lineId: lineA, selectionOccurrence: 0 });
+    const saleB = buildSaleMovement({ lineId: lineB, selectionOccurrence: 1 });
+    const first = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 18, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+      },
+    });
+    const beforeBoth = [
+      sharedModifierLine({ lineId: lineA }),
+      sharedModifierLine({ lineId: lineB }),
+    ];
+    const afterCancelB = [
+      sharedModifierLine({ lineId: lineA }),
+      { ...sharedModifierLine({ lineId: lineB }), status: "cancelled", quantity: 0, qty: 0 },
+    ];
+    await applyModifierStockReversalInTransaction({
+      tx: first.tx,
+      db: first.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: beforeBoth,
+      afterItems: afterCancelB,
+      nowMs: 1_700_000_000_300,
+      lineIds: [lineB],
+    });
+
+    const second = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 19, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+        ...Object.fromEntries(first.movementWrites),
+      },
+    });
+    const afterCancelBoth = [
+      { ...sharedModifierLine({ lineId: lineA }), status: "cancelled", quantity: 0, qty: 0 },
+      { ...sharedModifierLine({ lineId: lineB }), status: "cancelled", quantity: 0, qty: 0 },
+    ];
+    await applyModifierStockReversalInTransaction({
+      tx: second.tx,
+      db: second.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: afterCancelB,
+      afterItems: afterCancelBoth,
+      nowMs: 1_700_000_000_301,
+      lineIds: [lineA],
+    });
+    assert.equal(
+      (second.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      20,
+    );
+  });
+
+  test("three lines with same modifier each reverse only their own movement", async () => {
+    const lineA = "line-three-a";
+    const lineB = "line-three-b";
+    const lineC = "line-three-c";
+    const saleA = buildSaleMovement({ lineId: lineA, selectionOccurrence: 0 });
+    const saleB = buildSaleMovement({ lineId: lineB, selectionOccurrence: 1 });
+    const saleC = buildSaleMovement({ lineId: lineC, selectionOccurrence: 2 });
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 17, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+        [saleC.movementId]: saleC.data,
+      },
+    });
+    const beforeItems = [
+      sharedModifierLine({ lineId: lineA }),
+      sharedModifierLine({ lineId: lineB }),
+      sharedModifierLine({ lineId: lineC }),
+    ];
+    const afterItems = [
+      sharedModifierLine({ lineId: lineA }),
+      sharedModifierLine({ lineId: lineB }),
+      { ...sharedModifierLine({ lineId: lineC }), status: "cancelled", quantity: 0, qty: 0 },
+    ];
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems,
+      afterItems,
+      nowMs: 1_700_000_000_400,
+      lineIds: [lineC],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    const reversal = [...mock.movementWrites.values()][0];
+    assert.equal(reversal?.lineId, lineC);
+    assert.equal(reversal?.selectionOccurrence, 2);
+    assert.equal(reversal?.reversalOfMovementId, saleC.movementId);
+  });
+
+  test("retry of targeted cancel does not duplicate reversal", async () => {
+    const lineA = "line-retry-a";
+    const lineB = "line-retry-b";
+    const saleA = buildSaleMovement({ lineId: lineA, selectionOccurrence: 0 });
+    const saleB = buildSaleMovement({ lineId: lineB, selectionOccurrence: 1 });
+    const first = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 18, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+      },
+    });
+    const beforeBoth = [
+      sharedModifierLine({ lineId: lineA }),
+      sharedModifierLine({ lineId: lineB }),
+    ];
+    const afterCancelB = [
+      sharedModifierLine({ lineId: lineA }),
+      { ...sharedModifierLine({ lineId: lineB }), status: "cancelled", quantity: 0, qty: 0 },
+    ];
+    const plan1 = await applyModifierStockReversalInTransaction({
+      tx: first.tx,
+      db: first.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: beforeBoth,
+      afterItems: afterCancelB,
+      nowMs: 1_700_000_000_500,
+      lineIds: [lineB],
+    });
+    assert.equal(plan1.unitsReversed, 1);
+
+    const second = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 19, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+        ...Object.fromEntries(first.movementWrites),
+      },
+    });
+    const plan2 = await applyModifierStockReversalInTransaction({
+      tx: second.tx,
+      db: second.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: afterCancelB,
+      afterItems: afterCancelB,
+      nowMs: 1_700_000_000_501,
+      lineIds: [lineB],
+    });
+    assert.equal(plan2.unitsReversed, 0);
+    assert.equal(second.movementWrites.size, 0);
+    assert.equal(second.productUpdates.size, 0);
+  });
+
+  test("shuffling unrelated lines does not change target line association", async () => {
+    const lineA = "line-shuffle-a";
+    const lineB = "line-shuffle-b";
+    const lineC = "line-shuffle-c";
+    const saleA = buildSaleMovement({ lineId: lineA, selectionOccurrence: 0 });
+    const saleB = buildSaleMovement({ lineId: lineB, selectionOccurrence: 1 });
+    const saleC = buildSaleMovement({
+      lineId: lineC,
+      selectionOccurrence: 2,
+    });
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 17, unit: "unit" }),
+      },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+        [saleC.movementId]: saleC.data,
+      },
+    });
+    const lineBBefore = sharedModifierLine({ lineId: lineB });
+    const lineBAfter = {
+      ...sharedModifierLine({ lineId: lineB }),
+      status: "cancelled",
+      quantity: 0,
+      qty: 0,
+    };
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [
+        sharedModifierLine({ lineId: lineC }),
+        lineBBefore,
+        sharedModifierLine({ lineId: lineA }),
+      ],
+      afterItems: [sharedModifierLine({ lineId: lineC }), lineBAfter, sharedModifierLine({ lineId: lineA })],
+      nowMs: 1_700_000_000_600,
+      lineIds: [lineB],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    const reversal = [...mock.movementWrites.values()][0];
+    assert.equal(reversal?.lineId, lineB);
+    assert.equal(reversal?.selectionOccurrence, 1);
+    assert.equal(reversal?.reversalOfMovementId, saleB.movementId);
+  });
+});
+
+describe("modifier stock reversal corrupt ledger validation (BLOCK 2)", () => {
+  const restaurantId = "rest-rev-ledger";
+  const orderId = "order-rev-ledger";
+  const lineId = "line-rev-ledger";
+  const invProductId = "inv-rev-ledger";
+  const groupId = "grp-rev-ledger";
+  const optionId = "opt-rev-ledger";
+
+  function buildOriginalSaleMovement(sentQuantity = 1) {
+    return buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId: invProductId,
+      sentQuantity,
+    });
+  }
+
+  function buildValidReversalMovement(originalMovementId: string, reversedSaleUnits = 1) {
+    const beforeRemaining = reversedSaleUnits;
+    const afterRemaining = 0;
+    const operationIdempotencyKey = buildModifierReversalOperationIdempotencyKey({
+      operationKind: "cancel_lines",
+      restaurantId,
+      orderId,
+      lineId,
+      beforeRemaining,
+      afterRemaining,
+    });
+    const inventoryQuantityPerUnit = 1;
+    const inventoryUnit = "unit";
+    const quantityDelta = reversedSaleUnits * inventoryQuantityPerUnit;
+    const fingerprint = buildModifierSaleAggregatedReversalFingerprint({
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+      reversedSaleUnits,
+      inventoryQuantityPerUnit,
+      inventoryUnit,
+      quantityDelta,
+    });
+    const movementId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: originalMovementId,
+      operationIdempotencyKey,
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    return {
+      movementId,
+      data: {
+        restaurantId,
+        orderId,
+        lineId,
+        sentSegmentLineId: lineId,
+        type: "modifier_sale_reversal",
+        source: "modifier_sale_reversal",
+        applied: true,
+        productId: invProductId,
+        modifierGroupId: groupId,
+        modifierOptionId: optionId,
+        reversalOfMovementId: originalMovementId,
+        selectionOccurrence: 0,
+        operationIdempotencyKey,
+        movementSchemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+        quantityDelta,
+        inventoryQuantityPerUnit,
+        unit: inventoryUnit,
+        reversedSaleUnits,
+        idempotencyKey: movementId,
+        movementFingerprint: fingerprint,
+        productName: "Inv",
+      },
+    };
+  }
+
+  async function expectCorruptReversalAborts(
+    label: string,
+    corruptData: Record<string, unknown>,
+    corruptMovementId: string,
+  ) {
+    const sale = buildOriginalSaleMovement();
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const afterLine = { ...beforeLine, status: "cancelled", quantity: 0, qty: 0 };
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 8, unit: "unit" }),
+      },
+      existingMovements: {
+        [sale.movementId]: sale.data,
+        [corruptMovementId]: corruptData,
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [afterLine],
+          nowMs: 1_700_000_000_000,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR, label);
+        return true;
+      },
+    );
+    assert.equal(mock.movementWrites.size, 0, `${label}: no new reversals`);
+    assert.equal(mock.productUpdates.size, 0, `${label}: stock unchanged`);
+    assert.equal(mock.movementWrites.has(corruptMovementId), false, `${label}: corrupt doc not overwritten`);
+  }
+
+  test("1. applied false aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts("applied false", { ...reversal.data, applied: false }, reversal.movementId);
+  });
+
+  test("2. quantityDelta zero aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "quantityDelta zero",
+      { ...reversal.data, quantityDelta: 0 },
+      reversal.movementId,
+    );
+  });
+
+  test("3. incorrect quantityDelta aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "quantityDelta incorrect",
+      { ...reversal.data, quantityDelta: 2 },
+      reversal.movementId,
+    );
+  });
+
+  test("4. incorrect fingerprint aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "fingerprint incorrect",
+      { ...reversal.data, movementFingerprint: "corrupt-fingerprint" },
+      reversal.movementId,
+    );
+  });
+
+  test("5. incorrect reversalOfMovementId aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "reversalOfMovementId incorrect",
+      { ...reversal.data, reversalOfMovementId: "modifier_sale_v2_deadbeef" },
+      reversal.movementId,
+    );
+  });
+
+  test("6. incorrect restaurantId aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "restaurantId incorrect",
+      { ...reversal.data, restaurantId: "other-restaurant" },
+      reversal.movementId,
+    );
+  });
+
+  test("7. incorrect orderId aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "orderId incorrect",
+      { ...reversal.data, orderId: "other-order" },
+      reversal.movementId,
+    );
+  });
+
+  test("8. incorrect lineId aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "lineId incorrect",
+      { ...reversal.data, lineId: "other-line", sentSegmentLineId: "other-line" },
+      reversal.movementId,
+    );
+  });
+
+  test("9. incorrect product aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "product incorrect",
+      { ...reversal.data, productId: "other-product" },
+      reversal.movementId,
+    );
+  });
+
+  test("10. incorrect modifier group aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "modifier group incorrect",
+      { ...reversal.data, modifierGroupId: "other-group" },
+      reversal.movementId,
+    );
+  });
+
+  test("11. incorrect modifier option aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "modifier option incorrect",
+      { ...reversal.data, modifierOptionId: "other-option" },
+      reversal.movementId,
+    );
+  });
+
+  test("12. incorrect selectionOccurrence aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "selectionOccurrence incorrect",
+      { ...reversal.data, selectionOccurrence: 9 },
+      reversal.movementId,
+    );
+  });
+
+  test("13. incorrect reversedSaleUnits aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "reversedSaleUnits incorrect",
+      { ...reversal.data, reversedSaleUnits: 2, quantityDelta: 2 },
+      reversal.movementId,
+    );
+  });
+
+  test("14. incorrect movement type aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "type incorrect",
+      { ...reversal.data, type: "modifier_sale" },
+      reversal.movementId,
+    );
+  });
+
+  test("15. incorrect source aborts with ledger conflict", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    await expectCorruptReversalAborts(
+      "source incorrect",
+      { ...reversal.data, source: "manual_adjustment" },
+      reversal.movementId,
+    );
+  });
+
+  test("16. valid existing reversal is accepted idempotently", async () => {
+    const sale = buildOriginalSaleMovement();
+    const reversal = buildValidReversalMovement(sale.movementId);
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const afterLine = { ...beforeLine, status: "cancelled", quantity: 0, qty: 0 };
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 9, unit: "unit" }),
+      },
+      existingMovements: {
+        [sale.movementId]: sale.data,
+        [reversal.movementId]: reversal.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1_700_000_000_000,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 0);
+    assert.equal(mock.movementWrites.size, 0);
+    assert.equal(mock.productUpdates.size, 0);
+  });
+
+  test("17. missing reversal document is created correctly", async () => {
+    const sale = buildOriginalSaleMovement();
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const afterLine = { ...beforeLine, status: "cancelled", quantity: 0, qty: 0 };
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 8, unit: "unit" }),
+      },
+      existingMovements: {
+        [sale.movementId]: sale.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1_700_000_000_000,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal(mock.movementWrites.size, 1);
+    const written = [...mock.movementWrites.values()][0];
+    assert.equal(written?.applied, true);
+    assert.equal(written?.type, "modifier_sale_reversal");
+    assert.equal(
+      (mock.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      9,
+    );
+  });
+});
+
+describe("modifier stock reversal mandatory atomicity (BLOCK 3)", () => {
+  const restaurantId = "rest-rev-atomic";
+  const orderId = "order-rev-atomic";
+  const lineId = "line-rev-atomic";
+  const invProductId = "inv-rev-atomic";
+  const groupId = "grp-rev-atomic";
+  const optionId = "opt-rev-atomic";
+
+  function buildOriginalSaleMovement() {
+    return buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity: 1,
+    });
+  }
+
+  async function expectMandatoryReversalBlocked(params: {
+    label: string;
+    expectedError: string;
+    products: Record<string, Record<string, unknown>>;
+  }) {
+    const sale = buildOriginalSaleMovement();
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const afterLine = { ...beforeLine, status: "cancelled", quantity: 0, qty: 0 };
+    const mock = createStockApplyMock({
+      products: params.products,
+      existingMovements: {
+        [sale.movementId]: sale.data,
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [afterLine],
+          nowMs: 1_700_000_000_000,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, params.expectedError, params.label);
+        return true;
+      },
+    );
+    assert.equal(mock.movementWrites.size, 0, `${params.label}: no new movements`);
+    assert.equal(mock.productUpdates.size, 0, `${params.label}: stock unchanged`);
+  }
+
+  test("1. deleted product aborts mandatory reversal", async () => {
+    await expectMandatoryReversalBlocked({
+      label: "deleted product",
+      expectedError: buildModifierReversalBlockedErrorCode("PRODUCT_NOT_FOUND"),
+      products: {},
+    });
+  });
+
+  test("2. inactive product aborts mandatory reversal", async () => {
+    await expectMandatoryReversalBlocked({
+      label: "inactive product",
+      expectedError: buildModifierReversalBlockedErrorCode("PRODUCT_INACTIVE"),
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 8, unit: "unit", active: false }),
+      },
+    });
+  });
+
+  test("3. inventory disabled aborts mandatory reversal", async () => {
+    await expectMandatoryReversalBlocked({
+      label: "inventory disabled",
+      expectedError: buildModifierReversalBlockedErrorCode("INVENTORY_DISABLED"),
+      products: {
+        [invProductId]: {
+          active: true,
+          inventory: { enabled: false, unit: "unit", currentStock: 8 },
+        },
+      },
+    });
+  });
+
+  test("4. invalid currentStock aborts mandatory reversal", async () => {
+    await expectMandatoryReversalBlocked({
+      label: "invalid stock",
+      expectedError: buildModifierReversalBlockedErrorCode("INVALID_CURRENT_STOCK"),
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: null, unit: "unit" }),
+      },
+    });
+  });
+
+  test("5. incompatible unit aborts mandatory reversal", async () => {
+    await expectMandatoryReversalBlocked({
+      label: "incompatible unit",
+      expectedError: buildModifierReversalBlockedErrorCode("INCOMPATIBLE_UNIT"),
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 8, unit: "g" }),
+      },
+    });
+  });
+
+  test("6. valid product still reverses successfully", async () => {
+    const sale = buildOriginalSaleMovement();
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 8, unit: "unit" }),
+      },
+      existingMovements: {
+        [sale.movementId]: sale.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [{ ...beforeLine, status: "cancelled", quantity: 0, qty: 0 }],
+      nowMs: 1_700_000_000_000,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal(mock.movementWrites.size, 1);
+  });
+
+  test("7. retry remains idempotent after successful reversal", async () => {
+    const sale = buildOriginalSaleMovement();
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const afterLine = { ...beforeLine, status: "cancelled", quantity: 0, qty: 0 };
+    const first = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 8, unit: "unit" }),
+      },
+      existingMovements: {
+        [sale.movementId]: sale.data,
+      },
+    });
+    await applyModifierStockReversalInTransaction({
+      tx: first.tx,
+      db: first.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1_700_000_000_000,
+      lineIds: [lineId],
+    });
+
+    const second = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 9, unit: "unit" }),
+      },
+      existingMovements: {
+        [sale.movementId]: sale.data,
+        ...Object.fromEntries(first.movementWrites),
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: second.tx,
+      db: second.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [afterLine],
+      afterItems: [afterLine],
+      nowMs: 1_700_000_000_001,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 0);
+    assert.equal(second.movementWrites.size, 0);
+  });
+});
+
+describe("modifier stock reversal aggregated v3 (BLOCK 4)", () => {
+  test("A. cancel qty 100 creates one aggregated reversal document", async () => {
+    const restaurantId = "rest-scale-100";
+    const orderId = "order-scale-100";
+    const lineId = "line-scale-100";
+    const invProductId = "inv-scale-100";
+    const groupId = "grp-scale";
+    const optionId = "opt-scale";
+    const qty = 100;
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: qty,
+    });
+    const afterLine = { ...beforeLine, status: "cancelled", quantity: 0, qty: 0 };
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }),
+      },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: qty,
+        }),
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1_700_000_000_000,
+      operationKind: "cancel_lines",
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, qty);
+    assert.equal(mock.movementWrites.size, 1);
+    const written = [...mock.movementWrites.values()][0];
+    assert.equal(written?.reversedSaleUnits, qty);
+    assert.equal(written?.quantityDelta, qty);
+    assert.equal(written?.movementSchemaVersion, MODIFIER_SALE_REVERSAL_SCHEMA_V3);
+    assert.equal(
+      (mock.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      qty,
+    );
+  });
+
+  test("B. partial reversals 100→80→30→cancel use three aggregated movements", async () => {
+    const restaurantId = "rest-partial-seq";
+    const orderId = "order-partial-seq";
+    const lineId = "line-partial-seq";
+    const invProductId = "inv-partial-seq";
+    const groupId = "grp-partial";
+    const optionId = "opt-partial";
+    const qty = 100;
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const baseLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: qty,
+    });
+
+    const step1Before = { ...baseLine, quantity: 100, qty: 100 };
+    const step1After = { ...baseLine, quantity: 80, qty: 80 };
+    const mock1 = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: qty,
+        }),
+      },
+    });
+    const plan1 = await applyModifierStockReversalInTransaction({
+      tx: mock1.tx,
+      db: mock1.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [step1Before],
+      afterItems: [step1After],
+      nowMs: 1,
+      operationKind: "remove_line_unit",
+      externalOperationIdempotencyKey: "remove-100-to-80",
+      lineIds: [lineId],
+    });
+    assert.equal(plan1.unitsReversed, 20);
+    assert.equal(mock1.movementWrites.size, 1);
+
+    const step2Before = { ...step1After };
+    const step2After = { ...baseLine, quantity: 30, qty: 30 };
+    const mock2 = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 20, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: qty,
+        }),
+        ...Object.fromEntries(mock1.movementWrites),
+      },
+    });
+    const plan2 = await applyModifierStockReversalInTransaction({
+      tx: mock2.tx,
+      db: mock2.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [step2Before],
+      afterItems: [step2After],
+      nowMs: 2,
+      operationKind: "remove_line_unit",
+      externalOperationIdempotencyKey: "remove-80-to-30",
+      lineIds: [lineId],
+    });
+    assert.equal(plan2.unitsReversed, 50);
+    assert.equal(mock2.movementWrites.size, 1);
+
+    const step3Before = { ...step2After };
+    const step3After = { ...baseLine, status: "cancelled", quantity: 0, qty: 0 };
+    const mock3 = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 70, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: qty,
+        }),
+        ...Object.fromEntries(mock1.movementWrites),
+        ...Object.fromEntries(mock2.movementWrites),
+      },
+    });
+    const plan3 = await applyModifierStockReversalInTransaction({
+      tx: mock3.tx,
+      db: mock3.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [step3Before],
+      afterItems: [step3After],
+      nowMs: 3,
+      operationKind: "cancel_lines",
+      externalOperationIdempotencyKey: "cancel-remaining-30",
+      lineIds: [lineId],
+    });
+    assert.equal(plan3.unitsReversed, 30);
+    assert.equal(mock3.movementWrites.size, 1);
+    assert.equal(
+      (mock3.productUpdates.get(invProductId)?.inventory as { currentStock?: number } | undefined)
+        ?.currentStock,
+      100,
+    );
+  });
+
+  test("C. retry with same idempotency key does not duplicate reversal", async () => {
+    const restaurantId = "rest-idem-retry";
+    const orderId = "order-idem-retry";
+    const lineId = "line-idem-retry";
+    const invProductId = "inv-idem-retry";
+    const groupId = "grp-idem";
+    const optionId = "opt-idem";
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 100,
+    });
+    const afterLine = { ...beforeLine, quantity: 80, qty: 80 };
+    const idemKey = "retry-remove-20";
+    const first = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 100,
+        }),
+      },
+    });
+    await applyModifierStockReversalInTransaction({
+      tx: first.tx,
+      db: first.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1,
+      operationKind: "remove_line_unit",
+      externalOperationIdempotencyKey: idemKey,
+      lineIds: [lineId],
+    });
+    const second = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 20, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 100,
+        }),
+        ...Object.fromEntries(first.movementWrites),
+      },
+    });
+    const plan2 = await applyModifierStockReversalInTransaction({
+      tx: second.tx,
+      db: second.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 2,
+      operationKind: "remove_line_unit",
+      externalOperationIdempotencyKey: idemKey,
+      lineIds: [lineId],
+    });
+    assert.equal(plan2.unitsReversed, 0);
+    assert.equal(second.movementWrites.size, 0);
+    assert.equal(second.productUpdates.size, 0);
+  });
+
+  test("D. ledger excess reversal aborts with conflict", async () => {
+    const restaurantId = "rest-ledger-excess";
+    const orderId = "order-ledger-excess";
+    const lineId = "line-ledger-excess";
+    const invProductId = "inv-ledger-excess";
+    const groupId = "grp-excess";
+    const optionId = "opt-excess";
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const priorReversalKey = buildModifierReversalOperationIdempotencyKey({
+      operationKind: "remove_line_unit",
+      restaurantId,
+      orderId,
+      lineId,
+      beforeRemaining: 100,
+      afterRemaining: 50,
+    });
+    const priorReversalId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: originalId,
+      operationIdempotencyKey: priorReversalKey,
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 100,
+    });
+    const afterLine = { ...beforeLine, quantity: 80, qty: 80 };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 10, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 100,
+        }),
+        [priorReversalId]: {
+          restaurantId,
+          orderId,
+          lineId,
+          sentSegmentLineId: lineId,
+          type: "modifier_sale_reversal",
+          source: "modifier_sale_reversal",
+          applied: true,
+          productId: invProductId,
+          modifierGroupId: groupId,
+          modifierOptionId: optionId,
+          reversalOfMovementId: originalId,
+          selectionOccurrence: 0,
+          operationIdempotencyKey: priorReversalKey,
+          movementSchemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+          quantityDelta: 90,
+          inventoryQuantityPerUnit: 1,
+          unit: "unit",
+          reversedSaleUnits: 90,
+          idempotencyKey: priorReversalId,
+          movementFingerprint: buildModifierSaleAggregatedReversalFingerprint({
+            schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+            reversedSaleUnits: 90,
+            inventoryQuantityPerUnit: 1,
+            inventoryUnit: "unit",
+            quantityDelta: 90,
+          }),
+          productName: "Inv",
+        },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [afterLine],
+          nowMs: 1,
+          operationKind: "remove_line_unit",
+          externalOperationIdempotencyKey: "remove-20-more",
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("D. zero balance skips new reversal on already-cancelled line", async () => {
+    const restaurantId = "rest-zero-balance";
+    const orderId = "order-zero-balance";
+    const lineId = "line-zero-balance";
+    const invProductId = "inv-zero-balance";
+    const groupId = "grp-zero";
+    const optionId = "opt-zero";
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const cancelKey = buildModifierReversalOperationIdempotencyKey({
+      operationKind: "cancel_lines",
+      restaurantId,
+      orderId,
+      lineId,
+      beforeRemaining: 1,
+      afterRemaining: 0,
+    });
+    const reversalId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: originalId,
+      operationIdempotencyKey: cancelKey,
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    const cancelledLine = {
+      ...sentLineWithInventoryModifier({
+        lineId,
+        productId: "prod-1",
+        groupId,
+        optionId,
+        inventoryProductId: invProductId,
+        quantity: 0,
+      }),
+      status: "cancelled",
+      qty: 0,
+    };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 1, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 1,
+        }),
+        [reversalId]: {
+          restaurantId,
+          orderId,
+          lineId,
+          sentSegmentLineId: lineId,
+          type: "modifier_sale_reversal",
+          source: "modifier_sale_reversal",
+          applied: true,
+          productId: invProductId,
+          modifierGroupId: groupId,
+          modifierOptionId: optionId,
+          reversalOfMovementId: originalId,
+          selectionOccurrence: 0,
+          operationIdempotencyKey: cancelKey,
+          movementSchemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+          quantityDelta: 1,
+          inventoryQuantityPerUnit: 1,
+          unit: "unit",
+          reversedSaleUnits: 1,
+          idempotencyKey: reversalId,
+          movementFingerprint: buildModifierSaleAggregatedReversalFingerprint({
+            schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+            reversedSaleUnits: 1,
+            inventoryQuantityPerUnit: 1,
+            inventoryUnit: "unit",
+            quantityDelta: 1,
+          }),
+          productName: "Inv",
+        },
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [cancelledLine],
+      afterItems: [cancelledLine],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 0);
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("E. cancel qty 500 stays O(1) writes and reads per modifier slot", async () => {
+    const restaurantId = "rest-scale-500";
+    const orderId = "order-scale-500";
+    const lineId = "line-scale-500";
+    const invProductId = "inv-scale-500";
+    const groupId = "grp-scale-500";
+    const optionId = "opt-scale-500";
+    const qty = 500;
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: qty,
+    });
+    const afterLine = { ...beforeLine, status: "cancelled", quantity: 0, qty: 0 };
+    const mock = createStockApplyMock({
+      products: {
+        [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }),
+      },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: qty,
+        }),
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1,
+      operationKind: "cancel_lines",
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, qty);
+    assert.equal(mock.movementWrites.size, 1);
+    assert.equal([...mock.movementWrites.values()][0]?.reversedSaleUnits, qty);
+  });
+
+  test("F. unapplied v3 reversal in ledger balance query aborts with conflict", async () => {
+    const restaurantId = "rest-unapplied-balance";
+    const orderId = "order-unapplied-balance";
+    const lineId = "line-unapplied-balance";
+    const invProductId = "inv-unapplied-balance";
+    const groupId = "grp-unapplied";
+    const optionId = "opt-unapplied";
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const priorKey = "prior-remove-20";
+    const priorId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: originalId,
+      operationIdempotencyKey: priorKey,
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    const ghostId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: originalId,
+      operationIdempotencyKey: "ghost-unapplied",
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 80,
+    });
+    const afterLine = { ...beforeLine, quantity: 70, qty: 70 };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 20, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 100,
+        }),
+        [priorId]: {
+          restaurantId,
+          orderId,
+          lineId,
+          sentSegmentLineId: lineId,
+          type: "modifier_sale_reversal",
+          source: "modifier_sale_reversal",
+          applied: true,
+          productId: invProductId,
+          modifierGroupId: groupId,
+          modifierOptionId: optionId,
+          reversalOfMovementId: originalId,
+          selectionOccurrence: 0,
+          operationIdempotencyKey: priorKey,
+          movementSchemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+          quantityDelta: 20,
+          inventoryQuantityPerUnit: 1,
+          unit: "unit",
+          reversedSaleUnits: 20,
+          idempotencyKey: priorId,
+          movementFingerprint: buildModifierSaleAggregatedReversalFingerprint({
+            schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+            reversedSaleUnits: 20,
+            inventoryQuantityPerUnit: 1,
+            inventoryUnit: "unit",
+            quantityDelta: 20,
+          }),
+          productName: "Inv",
+        },
+        [ghostId]: {
+          restaurantId,
+          orderId,
+          lineId,
+          sentSegmentLineId: lineId,
+          type: "modifier_sale_reversal",
+          source: "modifier_sale_reversal",
+          applied: false,
+          productId: invProductId,
+          modifierGroupId: groupId,
+          modifierOptionId: optionId,
+          reversalOfMovementId: originalId,
+          selectionOccurrence: 0,
+          operationIdempotencyKey: "ghost-unapplied",
+          movementSchemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+          quantityDelta: 10,
+          inventoryQuantityPerUnit: 1,
+          unit: "unit",
+          reversedSaleUnits: 10,
+          idempotencyKey: ghostId,
+          movementFingerprint: "ghost",
+          productName: "Inv",
+        },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [afterLine],
+          nowMs: 1,
+          operationKind: "remove_line_unit",
+          externalOperationIdempotencyKey: "remove-10-more",
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("G. reusing external idempotency key for different mutation aborts with conflict", async () => {
+    const restaurantId = "rest-idem-collision";
+    const orderId = "order-idem-collision";
+    const lineId = "line-idem-collision";
+    const invProductId = "inv-idem-collision";
+    const groupId = "grp-idem-collision";
+    const optionId = "opt-idem-collision";
+    const sharedKey = "client-reused-key";
+    const originalId = buildModifierSaleV2MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      modifierGroupId: groupId,
+      modifierOptionId: optionId,
+      inventoryProductId: invProductId,
+      selectionOccurrence: 0,
+    });
+    const before100 = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 100,
+    });
+    const after80 = { ...before100, quantity: 80, qty: 80 };
+    const first = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 100,
+        }),
+      },
+    });
+    await applyModifierStockReversalInTransaction({
+      tx: first.tx,
+      db: first.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [before100],
+      afterItems: [after80],
+      nowMs: 1,
+      operationKind: "remove_line_unit",
+      externalOperationIdempotencyKey: sharedKey,
+      lineIds: [lineId],
+    });
+
+    const before80 = { ...after80 };
+    const after30 = { ...before100, quantity: 30, qty: 30 };
+    const second = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 20, unit: "unit" }) },
+      existingMovements: {
+        [originalId]: saleMovementFixture({
+          restaurantId,
+          orderId,
+          lineId,
+          groupId,
+          optionId,
+          invProductId,
+          sentQuantity: 100,
+        }),
+        ...Object.fromEntries(first.movementWrites),
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: second.tx,
+          db: second.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [before80],
+          afterItems: [after30],
+          nowMs: 2,
+          operationKind: "remove_line_unit",
+          externalOperationIdempotencyKey: sharedKey,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+    assert.equal(second.movementWrites.size, 0);
+  });
+});
+
+describe("modifier stock reversal strict ledger integrity (Codex)", () => {
+  const restaurantId = "rest-codex-integrity";
+  const orderId = "order-codex-integrity";
+  const lineId = "line-codex-integrity";
+  const invProductId = "inv-codex-integrity";
+  const groupId = "grp-codex-integrity";
+  const optionId = "opt-codex-integrity";
+
+  function buildOriginal(sentQuantity = 5) {
+    return buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity,
+    });
+  }
+
+  function buildValidPriorReversal(params: {
+    originalMovementId: string;
+    operationIdempotencyKey: string;
+    reversedSaleUnits: number;
+  }) {
+    const inventoryQuantityPerUnit = 1;
+    const inventoryUnit = "unit";
+    const quantityDelta = params.reversedSaleUnits * inventoryQuantityPerUnit;
+    const movementId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: params.originalMovementId,
+      operationIdempotencyKey: params.operationIdempotencyKey,
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    return {
+      movementId,
+      data: {
+        restaurantId,
+        orderId,
+        lineId,
+        sentSegmentLineId: lineId,
+        type: "modifier_sale_reversal",
+        source: "modifier_sale_reversal",
+        applied: true,
+        productId: invProductId,
+        modifierGroupId: groupId,
+        modifierOptionId: optionId,
+        reversalOfMovementId: params.originalMovementId,
+        selectionOccurrence: 0,
+        operationIdempotencyKey: params.operationIdempotencyKey,
+        movementSchemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+        quantityDelta,
+        inventoryQuantityPerUnit,
+        unit: inventoryUnit,
+        reversedSaleUnits: params.reversedSaleUnits,
+        idempotencyKey: movementId,
+        movementFingerprint: buildModifierSaleAggregatedReversalFingerprint({
+          schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+          reversedSaleUnits: params.reversedSaleUnits,
+          inventoryQuantityPerUnit,
+          inventoryUnit,
+          quantityDelta,
+        }),
+        productName: "Inv",
+      },
+    };
+  }
+
+  async function expectLedgerConflict(run: () => Promise<unknown>, label: string) {
+    await assert.rejects(run, (error: unknown) => {
+      assert.equal(error instanceof Error, true, label);
+      assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR, label);
+      return true;
+    });
+  }
+
+  test("B20. retry aborts when current valid op plus other reversal exceeds consumption", async () => {
+    const original = buildOriginal(5);
+    const other = buildValidPriorReversal({
+      originalMovementId: original.movementId,
+      operationIdempotencyKey: "prior-remove-5",
+      reversedSaleUnits: 5,
+    });
+    const current = buildValidPriorReversal({
+      originalMovementId: original.movementId,
+      operationIdempotencyKey: buildModifierReversalOperationIdempotencyKey({
+        operationKind: "remove_line_unit",
+        restaurantId,
+        orderId,
+        lineId,
+        beforeRemaining: 5,
+        afterRemaining: 3,
+      }),
+      reversedSaleUnits: 2,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 5,
+    });
+    const afterLine = { ...beforeLine, quantity: 3, qty: 3 };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [original.movementId]: original.data,
+        [other.movementId]: other.data,
+        [current.movementId]: current.data,
+      },
+    });
+    await expectLedgerConflict(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [afterLine],
+          nowMs: 1,
+          operationKind: "remove_line_unit",
+          lineIds: [lineId],
+        }),
+      "retry global excess",
+    );
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("B22. retry stays idempotent when global ledger balance is correct", async () => {
+    const original = buildOriginal(5);
+    const other = buildValidPriorReversal({
+      originalMovementId: original.movementId,
+      operationIdempotencyKey: "prior-remove-3",
+      reversedSaleUnits: 3,
+    });
+    const current = buildValidPriorReversal({
+      originalMovementId: original.movementId,
+      operationIdempotencyKey: buildModifierReversalOperationIdempotencyKey({
+        operationKind: "remove_line_unit",
+        restaurantId,
+        orderId,
+        lineId,
+        beforeRemaining: 5,
+        afterRemaining: 3,
+      }),
+      reversedSaleUnits: 2,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 5,
+    });
+    const afterLine = { ...beforeLine, quantity: 3, qty: 3 };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 2, unit: "unit" }) },
+      existingMovements: {
+        [original.movementId]: original.data,
+        [other.movementId]: other.data,
+        [current.movementId]: current.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [afterLine],
+      nowMs: 1,
+      operationKind: "remove_line_unit",
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 0);
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("A17. decimal reversedSaleUnits in prior reversal aborts with conflict", async () => {
+    const original = buildOriginal(2);
+    const reversal = buildValidPriorReversal({
+      originalMovementId: original.movementId,
+      operationIdempotencyKey: "decimal-units",
+      reversedSaleUnits: 1,
+    });
+    await expectLedgerConflict(async () => {
+      const mock = createStockApplyMock({
+        products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+        existingMovements: {
+          [original.movementId]: original.data,
+          [reversal.movementId]: { ...reversal.data, reversedSaleUnits: 1.5, quantityDelta: 1.5 },
+        },
+      });
+      await applyModifierStockReversalInTransaction({
+        tx: mock.tx,
+        db: mock.db,
+        restaurantId,
+        orderId,
+        actorUid: "uid-1",
+        beforeItems: [
+          sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 2,
+          }),
+        ],
+        afterItems: [
+          sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+        ],
+        nowMs: 1,
+        lineIds: [lineId],
+      });
+    }, "decimal reversedSaleUnits");
+  });
+
+  test("A18-A19. zero and negative reversedSaleUnits abort with conflict", async () => {
+    for (const [label, reversedSaleUnits, quantityDelta] of [
+      ["zero", 0, 0],
+      ["negative", -1, -1],
+    ] as const) {
+      const original = buildOriginal(2);
+      const reversal = buildValidPriorReversal({
+        originalMovementId: original.movementId,
+        operationIdempotencyKey: `${label}-units`,
+        reversedSaleUnits: 1,
+      });
+      await expectLedgerConflict(async () => {
+        const mock = createStockApplyMock({
+          products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+          existingMovements: {
+            [original.movementId]: original.data,
+            [reversal.movementId]: { ...reversal.data, reversedSaleUnits, quantityDelta },
+          },
+        });
+        await applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [
+            sentLineWithInventoryModifier({
+              lineId,
+              productId: "prod-1",
+              groupId,
+              optionId,
+              inventoryProductId: invProductId,
+              quantity: 2,
+            }),
+          ],
+          afterItems: [
+            sentLineWithInventoryModifier({
+              lineId,
+              productId: "prod-1",
+              groupId,
+              optionId,
+              inventoryProductId: invProductId,
+              quantity: 1,
+            }),
+          ],
+          nowMs: 1,
+          lineIds: [lineId],
+        });
+      }, label);
+    }
+  });
+
+  test("A11. missing operationIdempotencyKey in prior reversal aborts with conflict", async () => {
+    const original = buildOriginal(2);
+    const reversal = buildValidPriorReversal({
+      originalMovementId: original.movementId,
+      operationIdempotencyKey: "missing-op-key",
+      reversedSaleUnits: 1,
+    });
+    const corrupt = { ...reversal.data, operationIdempotencyKey: undefined as unknown as string };
+    delete (corrupt as { operationIdempotencyKey?: string }).operationIdempotencyKey;
+    await expectLedgerConflict(async () => {
+      const mock = createStockApplyMock({
+        products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+        existingMovements: {
+          [original.movementId]: original.data,
+          [reversal.movementId]: corrupt,
+        },
+      });
+      await applyModifierStockReversalInTransaction({
+        tx: mock.tx,
+        db: mock.db,
+        restaurantId,
+        orderId,
+        actorUid: "uid-1",
+        beforeItems: [
+          sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 2,
+          }),
+        ],
+        afterItems: [
+          sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+        ],
+        nowMs: 1,
+        lineIds: [lineId],
+      });
+    }, "missing operationIdempotencyKey");
+  });
+
+  test("A12. non-deterministic reversal document id aborts with conflict", async () => {
+    const original = buildOriginal(2);
+    const reversal = buildValidPriorReversal({
+      originalMovementId: original.movementId,
+      operationIdempotencyKey: "manual-doc",
+      reversedSaleUnits: 1,
+    });
+    const manualId = "modifier_sale_reversal_v3_manual00000000000000000000";
+    await expectLedgerConflict(async () => {
+      const mock = createStockApplyMock({
+        products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+        existingMovements: {
+          [original.movementId]: original.data,
+          [manualId]: { ...reversal.data, idempotencyKey: manualId },
+        },
+      });
+      await applyModifierStockReversalInTransaction({
+        tx: mock.tx,
+        db: mock.db,
+        restaurantId,
+        orderId,
+        actorUid: "uid-1",
+        beforeItems: [
+          sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 2,
+          }),
+        ],
+        afterItems: [
+          sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+        ],
+        nowMs: 1,
+        lineIds: [lineId],
+      });
+    }, "non-deterministic reversal id");
+  });
+
+  test("C24-C25. original source mismatch aborts; wrong type at deterministic id aborts", async () => {
+    const original = buildOriginal(1);
+    await expectLedgerConflict(async () => {
+      const mock = createStockApplyMock({
+        products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+        existingMovements: {
+          [original.movementId]: { ...original.data, source: "manual_adjustment" },
+        },
+      });
+      await applyModifierStockReversalInTransaction({
+        tx: mock.tx,
+        db: mock.db,
+        restaurantId,
+        orderId,
+        actorUid: "uid-1",
+        beforeItems: [
+          sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+        ],
+        afterItems: [
+          {
+            ...sentLineWithInventoryModifier({
+              lineId,
+              productId: "prod-1",
+              groupId,
+              optionId,
+              inventoryProductId: invProductId,
+              quantity: 1,
+            }),
+            status: "cancelled",
+            quantity: 0,
+            qty: 0,
+          },
+        ],
+        nowMs: 1,
+        lineIds: [lineId],
+      });
+    }, "source incorrect");
+
+    const originalTypeMismatch = buildOriginal(1);
+    await expectLedgerConflict(async () => {
+      const mock = createStockApplyMock({
+        products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+        existingMovements: {
+          [originalTypeMismatch.movementId]: {
+            ...originalTypeMismatch.data,
+            type: "manual_adjustment",
+          },
+        },
+      });
+      await applyModifierStockReversalInTransaction({
+        tx: mock.tx,
+        db: mock.db,
+        restaurantId,
+        orderId,
+        actorUid: "uid-1",
+        beforeItems: [
+          sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+        ],
+        afterItems: [
+          {
+            ...sentLineWithInventoryModifier({
+              lineId,
+              productId: "prod-1",
+              groupId,
+              optionId,
+              inventoryProductId: invProductId,
+              quantity: 1,
+            }),
+            status: "cancelled",
+            quantity: 0,
+            qty: 0,
+          },
+        ],
+        nowMs: 1,
+        lineIds: [lineId],
+      });
+    }, "type incorrect at deterministic id");
+  });
+
+  test("C32. corrupt original at deterministic id never treated as absence", async () => {
+    const original = buildOriginal(1);
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [original.movementId]: { ...original.data, applied: false },
+      },
+    });
+    await expectLedgerConflict(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [
+            sentLineWithInventoryModifier({
+              lineId,
+              productId: "prod-1",
+              groupId,
+              optionId,
+              inventoryProductId: invProductId,
+              quantity: 1,
+            }),
+          ],
+          afterItems: [
+            {
+              ...sentLineWithInventoryModifier({
+                lineId,
+                productId: "prod-1",
+                groupId,
+                optionId,
+                inventoryProductId: invProductId,
+                quantity: 1,
+              }),
+              status: "cancelled",
+              quantity: 0,
+              qty: 0,
+            },
+          ],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      "corrupt original not absence",
+    );
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("D33. real absence at expected ids does not invent reversal", async () => {
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [
+        sentLineWithInventoryModifier({
+          lineId,
+          productId: "prod-1",
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          quantity: 1,
+        }),
+      ],
+      afterItems: [
+        {
+          ...sentLineWithInventoryModifier({
+            lineId,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+          status: "cancelled",
+          quantity: 0,
+          qty: 0,
+        },
+      ],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 0);
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("E36/C29. selectionOccurrence incompatible with deterministic original id aborts", async () => {
+    const lineA = `${lineId}-a`;
+    const lineB = `${lineId}-b`;
+    const first = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineA,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const second = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineB,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 1,
+      sentQuantity: 1,
+    });
+    await expectLedgerConflict(async () => {
+      const mock = createStockApplyMock({
+        products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+        existingMovements: {
+          [first.movementId]: first.data,
+          [second.movementId]: { ...second.data, selectionOccurrence: 0 },
+        },
+      });
+      await applyModifierStockReversalInTransaction({
+        tx: mock.tx,
+        db: mock.db,
+        restaurantId,
+        orderId,
+        actorUid: "uid-1",
+        beforeItems: [
+          sentLineWithInventoryModifier({
+            lineId: lineA,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+          sentLineWithInventoryModifier({
+            lineId: lineB,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+        ],
+        afterItems: [
+          {
+            ...sentLineWithInventoryModifier({
+              lineId: lineA,
+              productId: "prod-1",
+              groupId,
+              optionId,
+              inventoryProductId: invProductId,
+              quantity: 1,
+            }),
+            status: "cancelled",
+            quantity: 0,
+            qty: 0,
+          },
+          sentLineWithInventoryModifier({
+            lineId: lineB,
+            productId: "prod-1",
+            groupId,
+            optionId,
+            inventoryProductId: invProductId,
+            quantity: 1,
+          }),
+        ],
+        nowMs: 1,
+        lineIds: [lineA, lineB],
+      });
+    }, "selectionOccurrence incompatible with probe id");
+  });
+});
+
+describe("modifier stock reversal original lookup scalability (BLOCK 1 query)", () => {
+  const restaurantId = "rest-scale-query";
+  const orderId = "order-scale-query";
+  const groupId = "grp-scale-query";
+  const optionId = "opt-scale-query";
+  const invProductId = "inv-scale-query";
+
+  function readTestLineId(line: Record<string, unknown>): string {
+    return typeof line.id === "string" ? line.id.trim() : "";
+  }
+
+  function buildSharedModifierLines(params: {
+    lineCount: number;
+    lineIdPrefix: string;
+    sentQuantity?: number;
+  }) {
+    const sentQuantity = params.sentQuantity ?? 1;
+    const lines: Record<string, unknown>[] = [];
+    const movements: Record<string, Record<string, unknown>> = {};
+    let globalOccurrence = 0;
+    for (let index = 0; index < params.lineCount; index += 1) {
+      const lineId = `${params.lineIdPrefix}-${index}`;
+      lines.push(
+        sentLineWithInventoryModifier({
+          lineId,
+          productId: "prod-1",
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          quantity: sentQuantity,
+        }),
+      );
+      const sale = buildValidModifierSaleV2LedgerDocument({
+        restaurantId,
+        orderId,
+        lineId,
+        groupId,
+        optionId,
+        invProductId,
+        selectionOccurrence: globalOccurrence,
+        sentQuantity,
+      });
+      globalOccurrence += 1;
+      movements[sale.movementId] = sale.data;
+    }
+    return { lines, movements };
+  }
+
+  function cancelledLineFrom(line: Record<string, unknown>) {
+    return { ...line, status: "cancelled", quantity: 0, qty: 0 };
+  }
+
+  test("A1-A4. cancel one of 50 shared-modifier lines uses one bounded original query", async () => {
+    const { lines, movements } = buildSharedModifierLines({
+      lineCount: 50,
+      lineIdPrefix: "line-scale-50",
+    });
+    const targetLineId = "line-scale-50-24";
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: movements,
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: lines,
+      afterItems: lines.map((line) =>
+        readTestLineId(line) === targetLineId ? cancelledLineFrom(line) : line,
+      ),
+      nowMs: 1,
+      lineIds: [targetLineId],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal(mock.stats.originalSaleQueries, 1);
+    assert.equal(mock.stats.originalSaleDocsRead, 1);
+    assert.ok(mock.stats.getAllRefCount <= 1, "no candidate-id getAll fan-out");
+  });
+
+  test("A1b. valid original in query uses zero fallback direct gets", async () => {
+    const lineId = "line-fallback-zero";
+    const sale = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity: 1,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: { [sale.movementId]: sale.data },
+    });
+    await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(mock.stats.originalSaleQueries, 1);
+  });
+
+  test("A5-A6. cancel all 50 lines scales linearly with one query per line", async () => {
+    const { lines, movements } = buildSharedModifierLines({
+      lineCount: 50,
+      lineIdPrefix: "line-scale-50-all",
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: movements,
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: lines,
+      afterItems: lines.map(cancelledLineFrom),
+      nowMs: 1,
+    });
+    assert.equal(plan.unitsReversed, 50);
+    assert.equal(mock.stats.originalSaleQueries, 50);
+    assert.equal(mock.stats.originalSaleDocsRead, 50);
+    assert.ok(mock.stats.getAllRefCount <= 1, "no candidate-id getAll fan-out");
+  });
+
+  test("A7-A8. 100 lines stay within mock transaction limits without candidate id probes", async () => {
+    const { lines, movements } = buildSharedModifierLines({
+      lineCount: 100,
+      lineIdPrefix: "line-scale-100",
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: movements,
+    });
+    await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: lines,
+      afterItems: lines.map(cancelledLineFrom),
+      nowMs: 1,
+    });
+    assert.equal(mock.stats.originalSaleQueries, 100);
+    assert.equal(mock.stats.originalSaleDocsRead, 100);
+    assert.ok(mock.stats.getAllRefCount <= 1, "no candidate-id getAll fan-out");
+    assert.ok(mock.stats.txGets < 500);
+  });
+
+  test("B9-B10. one line with 10 modifiers uses a single original query", async () => {
+    const lineId = "line-ten-mods";
+    const movements: Record<string, Record<string, unknown>> = {};
+    const selectedModifiers = Array.from({ length: 10 }, (_, index) => ({
+      groupId: `grp-${index}`,
+      optionId: `opt-${index}`,
+      inventoryProductId: `inv-${index}`,
+      inventoryQuantity: 1,
+      inventoryUnit: "unit",
+    }));
+    const beforeLine = {
+      id: lineId,
+      status: "sent",
+      quantity: 1,
+      productId: "prod-1",
+      selectedModifiers,
+    };
+    let globalOccurrence = 0;
+    const products: Record<string, Record<string, unknown>> = {};
+    for (const mod of selectedModifiers) {
+      const sale = buildValidModifierSaleV2LedgerDocument({
+        restaurantId,
+        orderId,
+        lineId,
+        groupId: mod.groupId,
+        optionId: mod.optionId,
+        invProductId: mod.inventoryProductId,
+        selectionOccurrence: globalOccurrence,
+        sentQuantity: 1,
+      });
+      globalOccurrence += 1;
+      movements[sale.movementId] = sale.data;
+      products[mod.inventoryProductId] = inventoryProductDoc({ currentStock: 0, unit: "unit" });
+    }
+    const mock = createStockApplyMock({ products, existingMovements: movements });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 10);
+    assert.equal(mock.stats.originalSaleQueries, 1);
+    assert.equal(mock.stats.originalSaleDocsRead, 10);
+  });
+
+  test("C11-C14. repeated identical modifier occurrences resolve without swapping", async () => {
+    const lineId = "line-repeat-mod";
+    const first = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const second = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 1,
+      sentQuantity: 1,
+    });
+    const beforeLine = {
+      id: lineId,
+      status: "sent",
+      quantity: 1,
+      productId: "prod-1",
+      selectedModifiers: [
+        {
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+        {
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+      ],
+    };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [first.movementId]: first.data,
+        [second.movementId]: second.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 2);
+    const written = [...mock.movementWrites.values()];
+    assert.equal(written.length, 2);
+    const reversedOriginalIds = written.map((row) => row.reversalOfMovementId).sort();
+    assert.deepEqual(reversedOriginalIds, [first.movementId, second.movementId].sort());
+  });
+
+  test("D15-D17. cancel only the second of two lines with same modifier", async () => {
+    const lineA = "line-two-a";
+    const lineB = "line-two-b";
+    const saleA = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineA,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const saleB = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineB,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 1,
+      sentQuantity: 1,
+    });
+    const lineAData = sentLineWithInventoryModifier({
+      lineId: lineA,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const lineBData = sentLineWithInventoryModifier({
+      lineId: lineB,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [lineAData, lineBData],
+      afterItems: [lineAData, cancelledLineFrom(lineBData)],
+      nowMs: 1,
+      lineIds: [lineB],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal([...mock.movementWrites.values()][0]?.reversalOfMovementId, saleB.movementId);
+    assert.equal(mock.stats.originalSaleQueries, 1);
+    assert.equal(mock.stats.originalSaleDocsRead, 1);
+  });
+
+  test("E20. valid original for another modifier slot on same line does not block cancel", async () => {
+    const lineId = "line-other-slot";
+    const modA = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId: "grp-a",
+      optionId: "opt-a",
+      invProductId: "inv-a",
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const modB = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId: "grp-b",
+      optionId: "opt-b",
+      invProductId: "inv-b",
+      selectionOccurrence: 1,
+      sentQuantity: 1,
+    });
+    const beforeLine = {
+      id: lineId,
+      status: "sent",
+      quantity: 1,
+      productId: "prod-1",
+      selectedModifiers: [
+        {
+          groupId: "grp-a",
+          optionId: "opt-a",
+          inventoryProductId: "inv-a",
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+      ],
+    };
+    const mock = createStockApplyMock({
+      products: {
+        "inv-a": inventoryProductDoc({ currentStock: 0, unit: "unit" }),
+        "inv-b": inventoryProductDoc({ currentStock: 0, unit: "unit" }),
+      },
+      existingMovements: {
+        [modA.movementId]: modA.data,
+        [modB.movementId]: modB.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal([...mock.movementWrites.values()][0]?.reversalOfMovementId, modA.movementId);
+  });
+
+  test("E21. corrupt original on queried line aborts with conflict", async () => {
+    const lineId = "line-corrupt-query";
+    const sale = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity: 1,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [sale.movementId]: { ...sale.data, applied: false },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [cancelledLineFrom(beforeLine)],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+  });
+
+  test("E22. duplicate valid originals for same logical slot abort with conflict", async () => {
+    const lineId = "line-dup-slot";
+    const first = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const forgedId = "modifier_sale_v2_dup000000000000000000000000";
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [first.movementId]: first.data,
+        [forgedId]: { ...first.data, idempotencyKey: forgedId },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [cancelledLineFrom(beforeLine)],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+  });
+
+  test("F25-F27. query with no originals keeps legacy no-op contract", async () => {
+    const lineId = "line-no-original";
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 0);
+    assert.equal(mock.stats.originalSaleQueries, 1);
+    assert.equal(mock.stats.originalSaleDocsRead, 0);
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("G32. quantity 500 does not increase original lookup reads", async () => {
+    const lineId = "line-qty-500";
+    const qty = 500;
+    const sale = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity: qty,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: qty,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: { [sale.movementId]: sale.data },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, qty);
+    assert.equal(mock.stats.originalSaleQueries, 1);
+    assert.equal(mock.stats.originalSaleDocsRead, 1);
+  });
+});
+
+describe("modifier stock reversal original lookup direct get fallback (BLOCK 2)", () => {
+  const restaurantId = "rest-block2-fallback";
+  const orderId = "order-block2-fallback";
+  const groupId = "grp-block2-fallback";
+  const optionId = "opt-block2-fallback";
+  const invProductId = "inv-block2-fallback";
+
+  function cancelledLineFrom(line: Record<string, unknown>) {
+    return { ...line, status: "cancelled", quantity: 0, qty: 0 };
+  }
+
+  test("B3. deterministic id with wrong type triggers conflict via direct get", async () => {
+    const lineId = "line-type-corrupt";
+    const sale = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity: 1,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [sale.movementId]: { ...sale.data, type: "manual_adjustment" },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [cancelledLineFrom(beforeLine)],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("B4-B6. wrong source, fingerprint and quantityDelta at deterministic id abort", async () => {
+    const lineId = "line-direct-corrupt-fields";
+    const sale = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity: 1,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+
+    for (const corrupt of [
+      { ...sale.data, source: "manual_adjustment" },
+      { ...sale.data, movementFingerprint: "corrupt-fingerprint" },
+      { ...sale.data, quantityDelta: -999 },
+    ]) {
+      await assert.rejects(
+        async () => {
+          const mock = createStockApplyMock({
+            products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+            existingMovements: { [sale.movementId]: corrupt },
+          });
+          await applyModifierStockReversalInTransaction({
+            tx: mock.tx,
+            db: mock.db,
+            restaurantId,
+            orderId,
+            actorUid: "uid-1",
+            beforeItems: [beforeLine],
+            afterItems: [cancelledLineFrom(beforeLine)],
+            nowMs: 1,
+            lineIds: [lineId],
+          });
+        },
+        (error: unknown) => {
+          assert.equal(error instanceof Error, true);
+          assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+          return true;
+        },
+      );
+    }
+  });
+
+  test("B7. query and direct get for same document do not duplicate candidates", async () => {
+    const lineId = "line-dedupe-query-direct";
+    const sale = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity: 1,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: { [sale.movementId]: sale.data },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal([...mock.movementWrites.values()].length, 1);
+  });
+
+  test("B8. two distinct documents for same slot abort with conflict", async () => {
+    const lineId = "line-two-docs-slot";
+    const valid = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const forgedId = "modifier_sale_v2_forge0000000000000000000000";
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [valid.movementId]: valid.data,
+        [forgedId]: {
+          ...valid.data,
+          idempotencyKey: forgedId,
+          selectionOccurrence: 0,
+        },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [cancelledLineFrom(beforeLine)],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+  });
+
+  test("B9-B11. ten modifiers on one line stay at one query with proportional fallback", async () => {
+    const lineId = "line-ten-fallback";
+    const selectedModifiers = Array.from({ length: 10 }, (_, index) => ({
+      groupId: `grp-${index}`,
+      optionId: `opt-${index}`,
+      inventoryProductId: `inv-${index}`,
+      inventoryQuantity: 1,
+      inventoryUnit: "unit",
+    }));
+    const beforeLine = {
+      id: lineId,
+      status: "sent",
+      quantity: 1,
+      productId: "prod-1",
+      selectedModifiers,
+    };
+    const movements: Record<string, Record<string, unknown>> = {};
+    const products: Record<string, Record<string, unknown>> = {};
+    for (let index = 0; index < selectedModifiers.length; index += 1) {
+      const mod = selectedModifiers[index]!;
+      const sale = buildValidModifierSaleV2LedgerDocument({
+        restaurantId,
+        orderId,
+        lineId,
+        groupId: mod.groupId,
+        optionId: mod.optionId,
+        invProductId: mod.inventoryProductId,
+        selectionOccurrence: 0,
+        sentQuantity: 1,
+      });
+      if (index === 4) {
+        movements[sale.movementId] = { ...sale.data, type: "manual_adjustment" };
+      } else {
+        movements[sale.movementId] = sale.data;
+      }
+      products[mod.inventoryProductId] = inventoryProductDoc({ currentStock: 0, unit: "unit" });
+    }
+    const mock = createStockApplyMock({ products, existingMovements: movements });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [cancelledLineFrom(beforeLine)],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+    assert.equal(mock.stats.originalSaleQueries, 1);
+  });
+
+  test("B12. repeated identical modifier keeps occurrence 0 and 1 without swap", async () => {
+    const lineId = "line-repeat-fallback";
+    const first = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const second = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 1,
+      sentQuantity: 1,
+    });
+    const beforeLine = {
+      id: lineId,
+      status: "sent",
+      quantity: 1,
+      productId: "prod-1",
+      selectedModifiers: [
+        {
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+        {
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+      ],
+    };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [first.movementId]: first.data,
+        [second.movementId]: { ...second.data, type: "manual_adjustment" },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [cancelledLineFrom(beforeLine)],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+  });
+});
+
+describe("modifier stock reversal order immutability audit", () => {
+  const restaurantId = "rest-audit-order";
+  const orderId = "order-audit-order";
+  const groupId = "grp-audit-order";
+  const optionId = "opt-audit-order";
+  const invProductId = "inv-audit-order";
+
+  function cancelledLineFrom(line: Record<string, unknown>) {
+    return { ...line, status: "cancelled", quantity: 0, qty: 0 };
+  }
+
+  test("A1-A5. sequential-send lines with same mod resolve via query by lineId", async () => {
+    const lineA = "line-seq-a";
+    const lineB = "line-seq-b";
+    const saleA = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineA,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const saleB = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineB,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const lineAData = sentLineWithInventoryModifier({
+      lineId: lineA,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const lineBData = sentLineWithInventoryModifier({
+      lineId: lineB,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+      },
+    });
+    const cancelA = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [lineAData, lineBData],
+      afterItems: [cancelledLineFrom(lineAData), lineBData],
+      nowMs: 1,
+      lineIds: [lineA],
+    });
+    assert.equal(cancelA.unitsReversed, 1);
+    assert.equal([...mock.movementWrites.values()][0]?.reversalOfMovementId, saleA.movementId);
+
+    const cancelB = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [cancelledLineFrom(lineAData), lineBData],
+      afterItems: [cancelledLineFrom(lineAData), cancelledLineFrom(lineBData)],
+      nowMs: 2,
+      lineIds: [lineB],
+    });
+    assert.equal(cancelB.unitsReversed, 1);
+    const reversals = [...mock.movementWrites.values()];
+    assert.equal(reversals[1]?.reversalOfMovementId, saleB.movementId);
+  });
+
+  test("B6-B9. reversed beforeItems still resolves via line-scoped query", async () => {
+    const lineA = "line-rev-a";
+    const lineB = "line-rev-b";
+    const saleA = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineA,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const saleB = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineB,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 1,
+      sentQuantity: 1,
+    });
+    const lineAData = sentLineWithInventoryModifier({
+      lineId: lineA,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const lineBData = sentLineWithInventoryModifier({
+      lineId: lineB,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: saleB.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [lineBData, lineAData],
+      afterItems: [cancelledLineFrom(lineBData), lineAData],
+      nowMs: 1,
+      lineIds: [lineB],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal([...mock.movementWrites.values()][0]?.reversalOfMovementId, saleB.movementId);
+  });
+
+  test("C10-C13. two-line same mod with hidden original aborts instead of legacy absence", async () => {
+    const lineA = "line-hide-a";
+    const lineB = "line-hide-b";
+    const saleA = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineA,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const saleB = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId: lineB,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const lineAData = sentLineWithInventoryModifier({
+      lineId: lineA,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const lineBData = sentLineWithInventoryModifier({
+      lineId: lineB,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [saleA.movementId]: saleA.data,
+        [saleB.movementId]: { ...saleB.data, type: "manual_adjustment" },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [lineAData, lineBData],
+          afterItems: [lineAData, cancelledLineFrom(lineBData)],
+          nowMs: 1,
+          lineIds: [lineB],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("E17-E20. repeated modifier order on line matches consumption array order", async () => {
+    const lineId = "line-repeat-order";
+    const first = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const second = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 1,
+      sentQuantity: 1,
+    });
+    const beforeLine = {
+      id: lineId,
+      status: "sent",
+      quantity: 1,
+      productId: "prod-1",
+      selectedModifiers: [
+        {
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+        {
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+      ],
+    };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [first.movementId]: first.data,
+        [second.movementId]: second.data,
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 2);
+    const reversedIds = [...mock.movementWrites.values()]
+      .map((row) => row.reversalOfMovementId)
+      .sort();
+    assert.deepEqual(reversedIds, [first.movementId, second.movementId].sort());
+  });
+
+  test("F21-F24. single-line hidden original still conflicts via line query", async () => {
+    const lineId = "line-single-hide";
+    const sale = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [sale.movementId]: { ...sale.data, type: "manual_adjustment" },
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [cancelledLineFrom(beforeLine)],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
+    assert.equal(mock.stats.originalSaleQueries, 1);
+    assert.equal(mock.stats.directDocGets, 0);
+  });
+});
+
+describe("modifier stock reversal line-scoped lookup (no type filter)", () => {
+  const restaurantId = "rest-line-scope";
+  const orderId = "order-line-scope";
+  const groupId = "grp-line-scope";
+  const optionId = "opt-line-scope";
+  const invProductId = "inv-line-scope";
+
+  function cancelledLineFrom(line: Record<string, unknown>) {
+    return { ...line, status: "cancelled", quantity: 0, qty: 0 };
+  }
+
+  test("C7-C11. original with coexisting reversal and unrelated movement on line", async () => {
+    const lineId = "line-with-reversal";
+    const sale = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      sentQuantity: 1,
+    });
+    const reversalId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId,
+      orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: "other-original-id",
+      operationIdempotencyKey: "prior-reversal-unrelated",
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    const beforeLine = sentLineWithInventoryModifier({
+      lineId,
+      productId: "prod-1",
+      groupId,
+      optionId,
+      inventoryProductId: invProductId,
+      quantity: 1,
+    });
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: {
+        [sale.movementId]: sale.data,
+        [reversalId]: {
+          restaurantId,
+          orderId,
+          lineId,
+          type: "modifier_sale_reversal",
+          source: "modifier_sale_reversal",
+          applied: true,
+          reversalOfMovementId: "other-original-id",
+          selectionOccurrence: 0,
+          reversedSaleUnits: 1,
+        },
+        "manual-line-move": {
+          restaurantId,
+          orderId,
+          lineId,
+          type: "manual_adjustment",
+          source: "manual_adjustment",
+          applied: true,
+          quantityDelta: 1,
+        },
+      },
+    });
+    const plan = await applyModifierStockReversalInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId,
+      orderId,
+      actorUid: "uid-1",
+      beforeItems: [beforeLine],
+      afterItems: [cancelledLineFrom(beforeLine)],
+      nowMs: 1,
+      lineIds: [lineId],
+    });
+    assert.equal(plan.unitsReversed, 1);
+    assert.equal(mock.stats.originalSaleQueries, 1);
+    assert.equal(mock.stats.originalSaleDocsRead, 3);
+    assert.equal(mock.stats.directDocGets, 1);
+  });
+
+  test("E23-E26. partial original evidence for repeated slots aborts", async () => {
+    const lineId = "line-partial-pool";
+    const first = buildValidModifierSaleV2LedgerDocument({
+      restaurantId,
+      orderId,
+      lineId,
+      groupId,
+      optionId,
+      invProductId,
+      selectionOccurrence: 0,
+      sentQuantity: 1,
+    });
+    const beforeLine = {
+      id: lineId,
+      status: "sent",
+      quantity: 1,
+      productId: "prod-1",
+      selectedModifiers: [
+        {
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+        {
+          groupId,
+          optionId,
+          inventoryProductId: invProductId,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+      ],
+    };
+    const mock = createStockApplyMock({
+      products: { [invProductId]: inventoryProductDoc({ currentStock: 0, unit: "unit" }) },
+      existingMovements: { [first.movementId]: first.data },
+    });
+    await assert.rejects(
+      () =>
+        applyModifierStockReversalInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId,
+          orderId,
+          actorUid: "uid-1",
+          beforeItems: [beforeLine],
+          afterItems: [cancelledLineFrom(beforeLine)],
+          nowMs: 1,
+          lineIds: [lineId],
+        }),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message, MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR);
+        return true;
+      },
+    );
   });
 });

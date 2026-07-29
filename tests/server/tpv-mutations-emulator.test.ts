@@ -20,6 +20,12 @@ import { stablePayloadHash, canonicalSerialize, readInventoryWarningsFromIdempot
 import { computeSplitEqualAmount } from "@/lib/server/tpv/split-payment-amounts";
 import { isAllowedKdsLineStatusTransition } from "@/lib/server/tpv/line-status-transitions";
 import { computeOrderEconomics } from "@/lib/server/tpv/compute-order-economics";
+import {
+  buildModifierSaleAggregatedReversalFingerprint,
+  buildModifierSaleAggregatedReversalV3MovementId,
+  MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+} from "@/lib/inventory/modifier-sale-movement-identity";
+import { buildModifierReversalOperationIdempotencyKey } from "@/lib/server/tpv/plan-modifier-stock-reversal";
 import type { Firestore as ClientFirestore } from "firebase/firestore";
 import {
   assignTableOperatorOnFirstOpen,
@@ -911,6 +917,1470 @@ describe("tpv mutations emulator", () => {
     const currentStock = (invSnap.data()?.inventory as Record<string, unknown> | undefined)
       ?.currentStock;
     assert.equal(currentStock, 7);
+  });
+
+  test("6C2R. cancel-lines revierte modifier stock y retry no duplica", async () => {
+    const invProductId = "inv-cola-6c2r-cancel";
+    const groupId = "grp-mixer-6c2r-cancel";
+    const optionId = "opt-cola-6c2r-cancel";
+    const tableId = "mesa-6c2r-cancel";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R cancel",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-cancel")
+      .set({
+        name: "Ballantines",
+        price: 12,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId: "line-6c2r-cancel",
+          productId: "prod-6c2r-cancel",
+          quantity: 2,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-cancel",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: ["line-6c2r-cancel"],
+    });
+    assert.equal("orderId" in cancelled, true);
+
+    const invAfterCancel = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invAfterCancel.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      10,
+    );
+
+    const movementsAfterCancel = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .get();
+    const types = movementsAfterCancel.docs.map((d) => d.data().type).sort();
+    assert.equal(types.filter((t) => t === "modifier_sale").length, 1);
+    const reversalDocs = movementsAfterCancel.docs.filter((d) => d.data().type === "modifier_sale_reversal");
+    assert.equal(reversalDocs.length, 1);
+    assert.equal(reversalDocs[0]?.data().reversedSaleUnits, 2);
+    assert.equal(reversalDocs[0]?.data().movementSchemaVersion, MODIFIER_SALE_REVERSAL_SCHEMA_V3);
+
+    const cancelledAgain = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: ["line-6c2r-cancel"],
+    });
+    assert.equal("orderId" in cancelledAgain, true);
+
+    const movementsAfterRetry = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .get();
+    assert.equal(
+      movementsAfterRetry.docs.filter((d) => d.data().type === "modifier_sale_reversal").length,
+      1,
+    );
+    const invAfterRetry = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invAfterRetry.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      10,
+    );
+  });
+
+  test("6C2R. remove-line-unit parcial + cancel restante revierte sin sobrecompensar", async () => {
+    const invProductId = "inv-cola-6c2r-remove";
+    const groupId = "grp-mixer-6c2r-remove";
+    const optionId = "opt-cola-6c2r-remove";
+    const tableId = "mesa-6c2r-remove";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R remove",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-remove")
+      .set({
+        name: "Ballantines",
+        price: 12,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId: "line-6c2r-remove",
+          productId: "prod-6c2r-remove",
+          quantity: 3,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-remove",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const removed = await handleRemoveLineUnit(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineId: "line-6c2r-remove",
+      idempotencyKey: "remove-6c2r-1",
+    });
+    assert.equal("orderId" in removed, true);
+
+    let invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal((invSnap.data()?.inventory as Record<string, unknown>)?.currentStock, 8);
+
+    const removedAgain = await handleRemoveLineUnit(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineId: "line-6c2r-remove",
+      idempotencyKey: "remove-6c2r-1",
+    });
+    assert.equal("orderId" in removedAgain, true);
+    invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal((invSnap.data()?.inventory as Record<string, unknown>)?.currentStock, 8);
+
+    const removedSecond = await handleRemoveLineUnit(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineId: "line-6c2r-remove",
+      idempotencyKey: "remove-6c2r-2",
+    });
+    assert.equal("orderId" in removedSecond, true);
+    invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal((invSnap.data()?.inventory as Record<string, unknown>)?.currentStock, 9);
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: ["line-6c2r-remove"],
+    });
+    assert.equal("orderId" in cancelled, true);
+    invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal((invSnap.data()?.inventory as Record<string, unknown>)?.currentStock, 10);
+
+    const movements = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .get();
+    const saleQty = movements.docs
+      .filter((d) => d.data().type === "modifier_sale")
+      .reduce((s, d) => s + Number(d.data().quantityDelta || 0), 0);
+    const revQty = movements.docs
+      .filter((d) => d.data().type === "modifier_sale_reversal")
+      .reduce((s, d) => s + Number(d.data().quantityDelta || 0), 0);
+    assert.equal(saleQty, -3);
+    assert.equal(revQty, 3);
+  });
+
+  test("6C2R. dos líneas mismo modificador: cancelar solo la segunda revierte su occurrence global", async () => {
+    const invProductId = "inv-cola-6c2r-dual";
+    const groupId = "grp-mixer-6c2r-dual";
+    const optionId = "opt-cola-6c2r-dual";
+    const tableId = "mesa-6c2r-dual";
+    const lineA = "line-6c2r-dual-a";
+    const lineB = "line-6c2r-dual-b";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R dual",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-dual")
+      .set({
+        name: "Refresco",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId: lineA,
+          productId: "prod-6c2r-dual",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+        {
+          lineId: lineB,
+          productId: "prod-6c2r-dual",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-dual",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const invAfterSend = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invAfterSend.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      8,
+    );
+
+    const salesAfterSend = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale")
+      .get();
+    assert.equal(salesAfterSend.docs.length, 2);
+    const saleByLine = new Map(
+      salesAfterSend.docs.map((doc) => [String(doc.data().lineId ?? doc.data().sentSegmentLineId), doc]),
+    );
+    assert.equal(saleByLine.get(lineA)?.data().selectionOccurrence, 0);
+    assert.equal(saleByLine.get(lineB)?.data().selectionOccurrence, 1);
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [lineB],
+    });
+    assert.equal("orderId" in cancelled, true);
+
+    const invAfterCancelB = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invAfterCancelB.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      9,
+    );
+
+    const reversalsAfterB = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale_reversal")
+      .get();
+    assert.equal(reversalsAfterB.docs.length, 1);
+    assert.equal(reversalsAfterB.docs[0]?.data().lineId, lineB);
+    assert.equal(reversalsAfterB.docs[0]?.data().selectionOccurrence, 1);
+
+    const cancelledA = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [lineA],
+    });
+    assert.equal("orderId" in cancelledA, true);
+
+    const invFinal = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invFinal.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      10,
+    );
+
+    const allMovements = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .get();
+    assert.equal(allMovements.docs.filter((d) => d.data().type === "modifier_sale").length, 2);
+    assert.equal(
+      allMovements.docs.filter((d) => d.data().type === "modifier_sale_reversal").length,
+      2,
+    );
+
+    const cancelledBRetry = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [lineB],
+    });
+    assert.equal("orderId" in cancelledBRetry, true);
+    const movementsAfterRetry = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .get();
+    assert.equal(
+      movementsAfterRetry.docs.filter((d) => d.data().type === "modifier_sale_reversal").length,
+      2,
+    );
+  });
+
+  test("6C2R. documento de reversión corrupto aborta cancel-lines sin tocar orden ni stock", async () => {
+    const invProductId = "inv-cola-6c2r-corrupt";
+    const groupId = "grp-mixer-6c2r-corrupt";
+    const optionId = "opt-cola-6c2r-corrupt";
+    const tableId = "mesa-6c2r-corrupt";
+    const lineId = "line-6c2r-corrupt";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R corrupt",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-corrupt")
+      .set({
+        name: "Refresco",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId,
+          productId: "prod-6c2r-corrupt",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-corrupt",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const saleSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale")
+      .limit(1)
+      .get();
+    assert.equal(saleSnap.docs.length, 1);
+    const saleDoc = saleSnap.docs[0]!;
+    const operationIdempotencyKey = buildModifierReversalOperationIdempotencyKey({
+      operationKind: "cancel_lines",
+      restaurantId: RESTAURANT_A,
+      orderId: created.orderId,
+      lineId,
+      beforeRemaining: 1,
+      afterRemaining: 0,
+    });
+    const corruptReversalId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId: RESTAURANT_A,
+      orderId: created.orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: saleDoc.id,
+      operationIdempotencyKey,
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(corruptReversalId)
+      .set({
+        restaurantId: RESTAURANT_A,
+        orderId: created.orderId,
+        lineId,
+        sentSegmentLineId: lineId,
+        type: "modifier_sale_reversal",
+        source: "modifier_sale_reversal",
+        applied: false,
+        productId: invProductId,
+        modifierGroupId: groupId,
+        modifierOptionId: optionId,
+        reversalOfMovementId: saleDoc.id,
+        selectionOccurrence: 0,
+        operationIdempotencyKey,
+        movementSchemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+        quantityDelta: 0,
+        inventoryQuantityPerUnit: 1,
+        unit: "unit",
+        reversedSaleUnits: 1,
+        idempotencyKey: corruptReversalId,
+        movementFingerprint: "corrupt",
+        productName: "Coca-Cola inventario",
+      });
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [lineId],
+    });
+    assert.equal("error" in cancelled, true);
+    if (!("error" in cancelled)) return;
+    assert.equal(cancelled.status, 409);
+    assert.equal(cancelled.error, "STOCK_MOVEMENT_ID_CONFLICT");
+
+    const orderSnap = await adminDb.collection("orders").doc(created.orderId).get();
+    const line = (orderSnap.data()?.items as Array<Record<string, unknown>> | undefined)?.find(
+      (row) => row.id === lineId,
+    );
+    assert.equal(line?.status, "sent");
+
+    const invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invSnap.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      9,
+    );
+
+    const corruptSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(corruptReversalId)
+      .get();
+    assert.equal(corruptSnap.data()?.applied, false);
+    assert.equal(corruptSnap.data()?.quantityDelta, 0);
+
+    const reversals = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale_reversal")
+      .get();
+    assert.equal(reversals.docs.length, 1);
+    assert.equal(reversals.docs[0]?.id, corruptReversalId);
+  });
+
+  test("6C2R-CODEX-46. movimiento original corrupto en id determinista aborta cancel-lines", async () => {
+    const invProductId = "inv-cola-6c2r-corrupt-original";
+    const groupId = "grp-mixer-6c2r-corrupt-original";
+    const optionId = "opt-cola-6c2r-corrupt-original";
+    const tableId = "mesa-6c2r-corrupt-original";
+    const lineId = "line-6c2r-corrupt-original";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R corrupt original",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-corrupt-original")
+      .set({
+        name: "Refresco",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId,
+          productId: "prod-6c2r-corrupt-original",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-corrupt-original",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const saleSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale")
+      .limit(1)
+      .get();
+    assert.equal(saleSnap.docs.length, 1);
+    const saleDoc = saleSnap.docs[0]!;
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(saleDoc.id)
+      .update({ applied: false, quantityDelta: 0 });
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [lineId],
+    });
+    assert.equal("error" in cancelled, true);
+    if (!("error" in cancelled)) return;
+    assert.equal(cancelled.status, 409);
+    assert.equal(cancelled.error, "STOCK_MOVEMENT_ID_CONFLICT");
+
+    const orderSnap = await adminDb.collection("orders").doc(created.orderId).get();
+    const line = (orderSnap.data()?.items as Array<Record<string, unknown>> | undefined)?.find(
+      (row) => row.id === lineId,
+    );
+    assert.equal(line?.status, "sent");
+  });
+
+  test("6C2R-BLOCK2-48. original con type corrupto en id determinista aborta cancel-lines", async () => {
+    const invProductId = "inv-cola-6c2r-type-corrupt";
+    const groupId = "grp-mixer-6c2r-type-corrupt";
+    const optionId = "opt-cola-6c2r-type-corrupt";
+    const tableId = "mesa-6c2r-type-corrupt";
+    const lineId = "line-6c2r-type-corrupt";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R type corrupt",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-type-corrupt")
+      .set({
+        name: "Refresco",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId,
+          productId: "prod-6c2r-type-corrupt",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-type-corrupt",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const saleSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale")
+      .limit(1)
+      .get();
+    assert.equal(saleSnap.docs.length, 1);
+    const saleDoc = saleSnap.docs[0]!;
+    const corruptPayload = { ...(saleDoc.data() as Record<string, unknown>), type: "manual_adjustment" };
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(saleDoc.id)
+      .set(corruptPayload);
+
+    const stockBefore = (
+      await adminDb
+        .collection("restaurants")
+        .doc(RESTAURANT_A)
+        .collection("products")
+        .doc(invProductId)
+        .get()
+    ).data()?.inventory as { currentStock?: number } | undefined;
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [lineId],
+    });
+    assert.equal("error" in cancelled, true);
+    if (!("error" in cancelled)) return;
+    assert.equal(cancelled.status, 409);
+    assert.equal(cancelled.error, "STOCK_MOVEMENT_ID_CONFLICT");
+
+    const orderSnap = await adminDb.collection("orders").doc(created.orderId).get();
+    const line = (orderSnap.data()?.items as Array<Record<string, unknown>> | undefined)?.find(
+      (row) => row.id === lineId,
+    );
+    assert.equal(line?.status, "sent");
+
+    const stockAfter = (
+      await adminDb
+        .collection("restaurants")
+        .doc(RESTAURANT_A)
+        .collection("products")
+        .doc(invProductId)
+        .get()
+    ).data()?.inventory as { currentStock?: number } | undefined;
+    assert.equal(stockAfter?.currentStock, stockBefore?.currentStock);
+
+    const corruptSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(saleDoc.id)
+      .get();
+    assert.equal(corruptSnap.data()?.type, "manual_adjustment");
+  });
+
+  test("6C2R-CODEX-47. retry con ledger global sobre-revertido aborta", async () => {
+    const invProductId = "inv-cola-6c2r-over-revert";
+    const groupId = "grp-mixer-6c2r-over-revert";
+    const optionId = "opt-cola-6c2r-over-revert";
+    const tableId = "mesa-6c2r-over-revert";
+    const lineId = "line-6c2r-over-revert";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R over revert",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-over-revert")
+      .set({
+        name: "Refresco",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId,
+          productId: "prod-6c2r-over-revert",
+          quantity: 5,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-over-revert",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const removed = await handleRemoveLineUnit(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineId,
+      idempotencyKey: "remove-over-revert-1",
+    });
+    assert.equal("orderId" in removed, true);
+
+    const saleSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale")
+      .limit(1)
+      .get();
+    assert.equal(saleSnap.docs.length, 1);
+    const saleDoc = saleSnap.docs[0]!;
+
+    const ghostKey = "ghost-over-revert-5";
+    const ghostId = buildModifierSaleAggregatedReversalV3MovementId({
+      restaurantId: RESTAURANT_A,
+      orderId: created.orderId,
+      sentSegmentLineId: lineId,
+      reversalOfMovementId: saleDoc.id,
+      operationIdempotencyKey: ghostKey,
+      schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+    });
+    const ghostUnits = 5;
+    const ghostQuantityDelta = ghostUnits;
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(ghostId)
+      .set({
+        restaurantId: RESTAURANT_A,
+        orderId: created.orderId,
+        lineId,
+        sentSegmentLineId: lineId,
+        type: "modifier_sale_reversal",
+        source: "modifier_sale_reversal",
+        applied: true,
+        productId: invProductId,
+        modifierGroupId: groupId,
+        modifierOptionId: optionId,
+        reversalOfMovementId: saleDoc.id,
+        selectionOccurrence: 0,
+        operationIdempotencyKey: ghostKey,
+        movementSchemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+        quantityDelta: ghostQuantityDelta,
+        inventoryQuantityPerUnit: 1,
+        unit: "unit",
+        reversedSaleUnits: ghostUnits,
+        idempotencyKey: ghostId,
+        movementFingerprint: buildModifierSaleAggregatedReversalFingerprint({
+          schemaVersion: MODIFIER_SALE_REVERSAL_SCHEMA_V3,
+          reversedSaleUnits: ghostUnits,
+          inventoryQuantityPerUnit: 1,
+          inventoryUnit: "unit",
+          quantityDelta: ghostQuantityDelta,
+        }),
+        productName: "Coca-Cola inventario",
+      });
+
+    const retried = await handleRemoveLineUnit(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineId,
+      idempotencyKey: "remove-over-revert-2",
+    });
+    assert.equal("error" in retried, true);
+    if (!("error" in retried)) return;
+    assert.equal(retried.status, 409);
+    assert.equal(retried.error, "STOCK_MOVEMENT_ID_CONFLICT");
+  });
+
+  test("6C2R-BLOCK1-33. pedido 20 lineas cancela linea intermedia con movimiento exacto", async () => {
+    const invProductId = "inv-cola-6c2r-scale20";
+    const groupId = "grp-mixer-6c2r-scale20";
+    const optionId = "opt-cola-6c2r-scale20";
+    const tableId = "mesa-6c2r-scale20";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R scale20",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 100 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-scale20")
+      .set({
+        name: "Refresco",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const lineIds = Array.from({ length: 20 }, (_, index) => `line-scale20-${index}`);
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: lineIds.map((lineId) => ({
+        lineId,
+        productId: "prod-6c2r-scale20",
+        quantity: 1,
+        selectedModifiers: [{ groupId, optionId }],
+      })),
+      markSent: true,
+      idempotencyKey: "create-6c2r-scale20",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const targetLineId = lineIds[10]!;
+    const salesBefore = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale")
+      .get();
+    assert.equal(salesBefore.docs.length, 20);
+    const targetSale = salesBefore.docs.find((doc) => doc.data().lineId === targetLineId);
+    assert.ok(targetSale);
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [targetLineId],
+    });
+    assert.equal("orderId" in cancelled, true);
+
+    const reversals = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale_reversal")
+      .get();
+    assert.equal(reversals.docs.length, 1);
+    assert.equal(reversals.docs[0]?.data().reversalOfMovementId, targetSale!.id);
+    assert.equal(reversals.docs[0]?.data().lineId, targetLineId);
+
+    const invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invSnap.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      81,
+    );
+  });
+
+  test("6C2R-BLOCK1-37. dos lineas mismo modificador cancela solo la segunda", async () => {
+    const invProductId = "inv-cola-6c2r-two-lines";
+    const groupId = "grp-mixer-6c2r-two-lines";
+    const optionId = "opt-cola-6c2r-two-lines";
+    const tableId = "mesa-6c2r-two-lines";
+    const lineA = "line-two-lines-a";
+    const lineB = "line-two-lines-b";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R two lines",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 50 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-two-lines")
+      .set({
+        name: "Refresco",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId: lineA,
+          productId: "prod-6c2r-two-lines",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+        {
+          lineId: lineB,
+          productId: "prod-6c2r-two-lines",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-two-lines",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const sales = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale")
+      .get();
+    const saleB = sales.docs.find((doc) => doc.data().lineId === lineB);
+    assert.ok(saleB);
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [lineB],
+    });
+    assert.equal("orderId" in cancelled, true);
+
+    const reversals = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale_reversal")
+      .get();
+    assert.equal(reversals.docs.length, 1);
+    assert.equal(reversals.docs[0]?.data().reversalOfMovementId, saleB!.id);
+    assert.equal(reversals.docs[0]?.data().lineId, lineB);
+  });
+
+  test("6C2R. producto inactivo aborta cancel-lines sin modificar orden ni stock", async () => {
+    const invProductId = "inv-cola-6c2r-inactive";
+    const groupId = "grp-mixer-6c2r-inactive";
+    const optionId = "opt-cola-6c2r-inactive";
+    const tableId = "mesa-6c2r-inactive";
+    const lineId = "line-6c2r-inactive";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R inactive",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-inactive")
+      .set({
+        name: "Refresco",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId,
+          productId: "prod-6c2r-inactive",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-inactive",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set(
+        {
+          name: "Coca-Cola inventario",
+          active: false,
+          inventory: { enabled: true, unit: "ud", currentStock: 9 },
+        },
+        { merge: true },
+      );
+
+    const cancelled = await handleCancelLines(authCtx("waiter"), {
+      orderId: created.orderId,
+      lineIds: [lineId],
+    });
+    assert.equal("error" in cancelled, true);
+    if (!("error" in cancelled)) return;
+    assert.equal(cancelled.status, 409);
+    assert.equal(cancelled.error, "MODIFIER_REVERSAL_PRODUCT_INACTIVE");
+
+    const orderSnap = await adminDb.collection("orders").doc(created.orderId).get();
+    const line = (orderSnap.data()?.items as Array<Record<string, unknown>> | undefined)?.find(
+      (row) => row.id === lineId,
+    );
+    assert.equal(line?.status, "sent");
+
+    const invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invSnap.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      9,
+    );
+
+    const reversals = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "modifier_sale_reversal")
+      .get();
+    assert.equal(reversals.docs.length, 0);
+  });
+
+  test("6C2R. cancel pending rechazado; tenant mismatch no toca stock", async () => {
+    const invProductId = "inv-cola-6c2r-tenant";
+    const groupId = "grp-mixer-6c2r-tenant";
+    const optionId = "opt-cola-6c2r-tenant";
+    const tablePending = "mesa-6c2r-pending";
+    const tableSent = "mesa-6c2r-tenant";
+    await adminDb.collection("tables").doc(tablePending).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R pending",
+    });
+    await adminDb.collection("tables").doc(tableSent).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa 6C2R tenant",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        name: "Coca-Cola inventario",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Cola",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invProductId,
+            inventoryProductName: "Coca-Cola inventario",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc("prod-6c2r-tenant")
+      .set({
+        name: "Ballantines",
+        price: 12,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+      });
+
+    const pending = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId: tablePending,
+      lines: [
+        {
+          lineId: "line-6c2r-pending",
+          productId: "prod-6c2r-tenant",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: false,
+      idempotencyKey: "create-6c2r-pending",
+    });
+    assert.equal("orderId" in pending, true);
+    if (!("orderId" in pending)) return;
+
+    const cancelPending = await handleCancelLines(authCtx("waiter"), {
+      orderId: pending.orderId,
+      lineIds: ["line-6c2r-pending"],
+    });
+    assert.equal("error" in cancelPending, true);
+    if ("error" in cancelPending) {
+      assert.equal(cancelPending.error, "LINE_NOT_CANCELABLE");
+    }
+    const pendingMovements = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", pending.orderId)
+      .get();
+    assert.equal(pendingMovements.size, 0);
+
+    const sent = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId: tableSent,
+      lines: [
+        {
+          lineId: "line-6c2r-tenant-sent",
+          productId: "prod-6c2r-tenant",
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-6c2r-tenant-sent",
+    });
+    assert.equal("orderId" in sent, true);
+    if (!("orderId" in sent)) return;
+
+    const foreignCtx = { ...authCtx("waiter"), restaurantId: RESTAURANT_B };
+    const foreignCancel = await handleCancelLines(foreignCtx, {
+      orderId: sent.orderId,
+      lineIds: ["line-6c2r-tenant-sent"],
+    });
+    assert.equal("error" in foreignCancel, true);
+    if ("error" in foreignCancel) {
+      assert.equal(foreignCancel.error, "TENANT_MISMATCH");
+    }
+
+    const invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal((invSnap.data()?.inventory as Record<string, unknown>)?.currentStock, 9);
   });
 
   test("6C2.2-21. currentStock inválido envía order, warning, sin modifier_sale ni cambio de stock", async () => {

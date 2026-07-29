@@ -7,6 +7,7 @@ import type { TpvMutationError } from "@/lib/server/tpv/handle-tpv-order-mutatio
 import { requireTpvCapability } from "@/lib/server/tpv/handle-tpv-order-mutations";
 import { applyLineCancellation } from "@/lib/server/tpv/line-status-transitions";
 import { assertNoDuplicateLineIds } from "@/lib/server/tpv/line-quantity-split";
+import { applyModifierStockReversalInTransaction, isModifierReversalBlockedError } from "@/lib/server/tpv/plan-modifier-stock-reversal";
 import {
   applyProjectionWritePlan,
   DuplicateOrderItemLineError,
@@ -390,6 +391,7 @@ export async function handleRemoveLineUnit(
       if (verErr) throw new Error(verErr.error);
 
       const items = existingItemsArray(orderData.items);
+      const beforeItems = items.map((row) => ({ ...row }));
       const idx = items.findIndex((row) => String(row.id ?? "").trim() === lineId);
       if (idx < 0) throw new Error("LINE_NOT_FOUND");
 
@@ -430,6 +432,20 @@ export async function handleRemoveLineUnit(
       const plan = planOrderProjectionWrites(ctx.db, meta, merged, loaded, nowMs);
       total = computeAuthoritativeOrderTotal(plan.itemsWithDocIds);
 
+      await applyModifierStockReversalInTransaction({
+        tx,
+        db: ctx.db,
+        restaurantId: ctx.restaurantId,
+        orderId,
+        actorUid: ctx.uid,
+        beforeItems,
+        afterItems: plan.itemsWithDocIds,
+        nowMs,
+        operationKind: "remove_line_unit",
+        externalOperationIdempotencyKey: idemKey,
+        lineIds: [lineId],
+      });
+
       tx.update(orderRef, {
         items: plan.itemsWithDocIds,
         total,
@@ -457,6 +473,12 @@ export async function handleRemoveLineUnit(
       return { orderId: oid!, total: Number(tot) || 0, lineId: lid ?? lineId };
     }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+    if (msg === "STOCK_MOVEMENT_ID_CONFLICT") {
+      return { status: 409, error: "STOCK_MOVEMENT_ID_CONFLICT" };
+    }
+    if (isModifierReversalBlockedError(msg)) {
+      return { status: 409, error: msg };
+    }
     if (msg === "ORDER_NOT_FOUND" || msg === "LINE_NOT_FOUND") {
       return { status: 404, error: msg };
     }
