@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:tpv-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-mutations \"tsx --test tests/server/tpv-mutations-emulator.test.ts\"",
+    "test:tpv-unit": "tsx --test tests/server/tpv-mutations.test.ts tests/server/tpv-mutations-via-api.test.ts tests/server/sync-order-items-via-api.test.ts",
     "eval:menu-import": "tsx scripts/eval-menu-import-corpus.ts",
     "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check"
   },
@@ -26,12 +28,14 @@
     "recharts": "^3.8.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
+    "firebase-tools": "^15.23.0",
     "tailwindcss": "^4",
     "tsx": "^4.20.3",
     "typescript": "^5"
