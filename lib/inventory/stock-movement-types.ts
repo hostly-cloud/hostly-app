@@ -137,6 +137,32 @@ export type RecipeSaleStockMovementDocument = StockMovementApplyFields & {
   idempotencyKey: string;
   createdAt: number;
   createdBy?: string;
+  sentSegmentLineId?: string;
+  ingredientOccurrence?: number;
+  movementFingerprint?: string;
+  sentQuantity?: number;
+  recipeQuantityPerUnit?: number;
+  /** Unidad canónica del producto de inventario al aplicar (destino de conversión). */
+  productInventoryUnit?: string;
+};
+
+export type RecipeStockConsumptionWarningReason =
+  | "PRODUCT_NOT_FOUND"
+  | "PRODUCT_INACTIVE"
+  | "INVENTORY_DISABLED"
+  | "INVALID_CURRENT_STOCK"
+  | "UNKNOWN_PRODUCT_UNIT"
+  | "INCOMPATIBLE_UNIT"
+  | "INVALID_CONSUMPTION_QUANTITY";
+
+export type RecipeStockConsumptionWarning = {
+  inventoryProductId?: string;
+  orderId: string;
+  lineId: string;
+  saleProductId: string;
+  reason: RecipeStockConsumptionWarningReason;
+  requestedQuantity?: number;
+  unit?: string;
 };
 
 export type RecipeSaleReversalStockMovementDocument = StockMovementApplyFields & {

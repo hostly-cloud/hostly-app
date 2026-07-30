@@ -156,6 +156,7 @@ async function applyModifierStockForItemTransition(
   afterItems: readonly Record<string, unknown>[],
   nowMs: number,
 ): Promise<ModifierStockConsumptionPlan> {
+  // Modifier planner also runs recipe consumption with all reads before writes.
   return applyInitialModifierStockConsumptionInTransaction({
     tx,
     db: ctx.db,

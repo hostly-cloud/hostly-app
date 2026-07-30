@@ -18,6 +18,11 @@ import {
   deriveNewlySentUnits,
   validateModifierInventoryProduct,
 } from "@/lib/server/tpv/plan-initial-modifier-stock-consumption";
+import {
+  applyInitialRecipeStockConsumptionInTransaction,
+  buildPendingRecipeWrites,
+  validateRecipeInventoryProduct,
+} from "@/lib/server/tpv/plan-initial-recipe-stock-consumption";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import {
   assertExistingModifierSaleMovementIsValidForIdempotentSkip,
@@ -25,6 +30,12 @@ import {
   buildModifierSaleV2MovementId,
   STOCK_MOVEMENT_ID_CONFLICT,
 } from "@/lib/inventory/modifier-sale-movement-identity";
+import {
+  assertExistingRecipeSaleMovementIsValidForIdempotentSkip,
+  buildRecipeSaleMovementFingerprint,
+  buildRecipeSaleV2MovementId,
+} from "@/lib/inventory/recipe-sale-movement-identity";
+import { convertInventoryQuantity, roundInventoryQuantity } from "@/lib/inventory/unit-conversions";
 import {
   isAllowedKdsLineStatusTransition,
   isAllowedLineStatusTransition,
@@ -2419,5 +2430,995 @@ describe("inventoryWarnings idempotency rehydration (6C2.3)", () => {
     assert.equal(payload.ok, true);
     assert.ok(Array.isArray(payload.inventoryWarnings));
     assert.equal((payload.inventoryWarnings as unknown[]).length, 1);
+  });
+});
+
+const RECIPE_REST = "rest-recipe-3b1a";
+const RECIPE_ORDER = "order-recipe-1";
+const RECIPE_LINE = "line-recipe-1";
+const RECIPE_SALE = "sale-recipe-1";
+const RECIPE_INV_A = "inv-recipe-a";
+const RECIPE_INV_B = "inv-recipe-b";
+
+function recipeSaleProduct(params: {
+  ingredients?: Array<{
+    productId: string;
+    name?: string;
+    quantity: number;
+    unit: string;
+  }>;
+  enabled?: boolean;
+}): Record<string, unknown> {
+  return {
+    restaurantId: RECIPE_REST,
+    name: "Plato receta",
+    active: true,
+    recipe: {
+      enabled: params.enabled !== false,
+      ingredients: params.ingredients ?? [],
+    },
+  };
+}
+
+function recipeInventoryProduct(overrides: {
+  id?: string;
+  currentStock?: unknown;
+  unit?: string;
+  enabled?: boolean;
+  active?: boolean;
+} = {}): Record<string, unknown> {
+  const inventory: Record<string, unknown> = {
+    enabled: overrides.enabled !== false,
+    unit: overrides.unit ?? "unit",
+  };
+  if ("currentStock" in overrides) inventory.currentStock = overrides.currentStock;
+  else inventory.currentStock = 100;
+  return {
+    restaurantId: RECIPE_REST,
+    active: overrides.active !== false,
+    name: overrides.id ?? "ing",
+    inventory,
+  };
+}
+
+function recipeSegmentLine(quantity = 1) {
+  return {
+    id: RECIPE_LINE,
+    status: "sent",
+    quantity,
+    productId: RECIPE_SALE,
+    productName: "Plato receta",
+  };
+}
+
+function recipeIdentity(overrides: Partial<{
+  restaurantId: string;
+  orderId: string;
+  sentSegmentLineId: string;
+  saleProductId: string;
+  inventoryProductId: string;
+  recipeQuantityPerUnit: number;
+  recipeUnit: string;
+  ingredientOccurrence: number;
+}> = {}) {
+  return {
+    restaurantId: RECIPE_REST,
+    orderId: RECIPE_ORDER,
+    sentSegmentLineId: RECIPE_LINE,
+    saleProductId: RECIPE_SALE,
+    inventoryProductId: RECIPE_INV_A,
+    recipeQuantityPerUnit: 1,
+    recipeUnit: "unit",
+    ingredientOccurrence: 0,
+    ...overrides,
+  };
+}
+
+function recipeFingerprint(params: {
+  sentQuantity: number;
+  recipeQuantityPerUnit: number;
+  inventoryUnit?: string;
+  productInventoryUnit?: string;
+}) {
+  const inventoryUnit = params.inventoryUnit ?? "unit";
+  const quantityDelta = roundInventoryQuantity(
+    -(params.recipeQuantityPerUnit * params.sentQuantity),
+  );
+  return buildRecipeSaleMovementFingerprint({
+    sentQuantity: params.sentQuantity,
+    recipeQuantityPerUnit: params.recipeQuantityPerUnit,
+    inventoryUnit,
+    quantityDelta,
+    productInventoryUnit: params.productInventoryUnit ?? inventoryUnit,
+  });
+}
+
+function buildValidRecipeServerMovement(params: {
+  stockBefore: number;
+  stockAfter: number;
+  sentQuantity?: number;
+  recipeQuantityPerUnit?: number;
+  recipeUnit?: string;
+  inventoryProductId?: string;
+  productInventoryUnit?: string;
+  ingredientOccurrence?: number;
+  overrides?: Record<string, unknown>;
+}) {
+  const sentQuantity = params.sentQuantity ?? 1;
+  const recipeQuantityPerUnit = params.recipeQuantityPerUnit ?? 1;
+  const inventoryUnit = params.recipeUnit ?? "unit";
+  const productInventoryUnit = params.productInventoryUnit ?? inventoryUnit;
+  const quantityDelta = roundInventoryQuantity(-(recipeQuantityPerUnit * sentQuantity));
+  const identity = recipeIdentity({
+    inventoryProductId: params.inventoryProductId ?? RECIPE_INV_A,
+    recipeQuantityPerUnit,
+    recipeUnit: inventoryUnit,
+    ingredientOccurrence: params.ingredientOccurrence ?? 0,
+  });
+  const movementId = buildRecipeSaleV2MovementId(identity);
+  return {
+    movementId,
+    doc: {
+      restaurantId: RECIPE_REST,
+      productId: identity.inventoryProductId,
+      productName: identity.inventoryProductId,
+      source: "recipe_sale",
+      type: "recipe_sale",
+      orderId: RECIPE_ORDER,
+      lineId: RECIPE_LINE,
+      sentSegmentLineId: RECIPE_LINE,
+      saleProductId: RECIPE_SALE,
+      saleProductName: "Plato receta",
+      quantityDelta,
+      unit: inventoryUnit,
+      idempotencyKey: movementId,
+      createdAt: 1,
+      createdBy: "uid-server",
+      applied: true,
+      appliedAt: 1,
+      movementFingerprint: recipeFingerprint({
+        sentQuantity,
+        recipeQuantityPerUnit,
+        inventoryUnit,
+        productInventoryUnit,
+      }),
+      sentQuantity,
+      recipeQuantityPerUnit,
+      productInventoryUnit,
+      ingredientOccurrence: identity.ingredientOccurrence,
+      stockBefore: params.stockBefore,
+      stockAfter: params.stockAfter,
+      ...(params.overrides ?? {}),
+    },
+  };
+}
+
+describe("initial recipe stock consumption (3B-1A)", () => {
+  test("1. producto sin receta activa → sin movimientos", async () => {
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({ enabled: false, ingredients: [
+          { productId: RECIPE_INV_A, quantity: 1, unit: "unit" },
+        ] }),
+        [RECIPE_INV_A]: recipeInventoryProduct(),
+      },
+    });
+    const plan = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 1,
+    });
+    assert.equal(plan.movementIds.length, 0);
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("2. receta activa sin ingredientes → sin movimientos", async () => {
+    const mock = createStockApplyMock({
+      products: { [RECIPE_SALE]: recipeSaleProduct({ ingredients: [] }) },
+    });
+    const plan = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 1,
+    });
+    assert.equal(plan.movementIds.length, 0);
+  });
+
+  test("3-6. un ingrediente, quantity>1 y decimales producen stock correcto", async () => {
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 0.5, unit: "unit", name: "Sal" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 10 }),
+      },
+    });
+    const plan = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 3 }],
+      afterItems: [recipeSegmentLine(3)],
+      nowMs: 1,
+    });
+    assert.equal(plan.movementIds.length, 1);
+    const movement = [...mock.movementWrites.values()][0]!;
+    assert.equal(movement.type, "recipe_sale");
+    assert.equal(movement.source, "recipe_sale");
+    assert.equal(movement.applied, true);
+    assert.equal(movement.sentQuantity, 3);
+    assert.equal(movement.recipeQuantityPerUnit, 0.5);
+    assert.equal(movement.quantityDelta, -1.5);
+    assert.equal(movement.stockBefore, 10);
+    assert.equal(movement.stockAfter, 8.5);
+    assert.equal(
+      (mock.productUpdates.get(RECIPE_INV_A)?.inventory as Record<string, unknown>).currentStock,
+      8.5,
+    );
+  });
+
+  test("4. varios ingredientes descuentan ambos", async () => {
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [
+            { productId: RECIPE_INV_A, quantity: 1, unit: "unit" },
+            { productId: RECIPE_INV_B, quantity: 2, unit: "unit" },
+          ],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 20 }),
+        [RECIPE_INV_B]: recipeInventoryProduct({ currentStock: 30 }),
+      },
+    });
+    const plan = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 1,
+    });
+    assert.equal(plan.movementIds.length, 2);
+    assert.equal(mock.productUpdates.size, 2);
+    assert.equal(
+      (mock.productUpdates.get(RECIPE_INV_A)?.inventory as Record<string, unknown>).currentStock,
+      19,
+    );
+    assert.equal(
+      (mock.productUpdates.get(RECIPE_INV_B)?.inventory as Record<string, unknown>).currentStock,
+      28,
+    );
+  });
+
+  test("7-8. unidades iguales y conversión g→kg", async () => {
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 500, unit: "g" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 2, unit: "kg" }),
+      },
+    });
+    await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 1,
+    });
+    const movement = [...mock.movementWrites.values()][0]!;
+    assert.equal(movement.unit, "g");
+    assert.equal(movement.quantityDelta, -500);
+    const converted = convertInventoryQuantity({ quantity: -500, fromUnit: "g", toUnit: "kg" });
+    assert.equal(movement.stockAfter, roundInventoryQuantity(2 + (converted ?? 0)));
+    assert.equal(movement.stockAfter, 1.5);
+  });
+
+  test("9. unidad incompatible → warning, sin write", async () => {
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 1, unit: "unit" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 5, unit: "kg" }),
+      },
+    });
+    const plan = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 1,
+    });
+    assert.equal(mock.movementWrites.size, 0);
+    assert.equal(plan.warnings[0]?.reason, "INCOMPATIBLE_UNIT");
+  });
+
+  test("10. producto inventario ausente → PRODUCT_NOT_FOUND", async () => {
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 1, unit: "unit" }],
+        }),
+      },
+    });
+    const plan = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 1,
+    });
+    assert.equal(plan.warnings[0]?.reason, "PRODUCT_NOT_FOUND");
+    assert.equal(mock.movementWrites.size, 0);
+  });
+
+  test("11. currentStock inválido → INVALID_CURRENT_STOCK", () => {
+    const product = recipeInventoryProduct();
+    delete (product.inventory as Record<string, unknown>).currentStock;
+    const warning = validateRecipeInventoryProduct({
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      lineId: RECIPE_LINE,
+      saleProductId: RECIPE_SALE,
+      inventoryProductId: RECIPE_INV_A,
+      inventoryUnit: "unit",
+      recipeQuantityPerUnit: 1,
+      productData: product,
+    });
+    assert.equal(warning?.reason, "INVALID_CURRENT_STOCK");
+  });
+
+  test("12-16. primer consumo escribe movimiento completo applied=true", async () => {
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 2, unit: "unit" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 10 }),
+      },
+    });
+    await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 42,
+    });
+    const movementId = buildRecipeSaleV2MovementId(
+      recipeIdentity({ recipeQuantityPerUnit: 2, recipeUnit: "unit" }),
+    );
+    const movement = mock.movementWrites.get(movementId)!;
+    assert.ok(movement);
+    assert.equal(movement.idempotencyKey, movementId);
+    assert.equal(movement.productInventoryUnit, "unit");
+    assert.equal(movement.movementFingerprint, recipeFingerprint({
+      sentQuantity: 1,
+      recipeQuantityPerUnit: 2,
+      productInventoryUnit: "unit",
+    }));
+    assert.equal(movement.stockBefore, 10);
+    assert.equal(movement.stockAfter, 8);
+    assert.equal(movement.applied, true);
+    assert.match(movementId, /^recipe_sale_v2_/);
+  });
+
+  test("17-18. ID y fingerprint deterministas", () => {
+    const a = buildRecipeSaleV2MovementId(recipeIdentity());
+    const b = buildRecipeSaleV2MovementId(recipeIdentity());
+    assert.equal(a, b);
+    assert.match(a, /^recipe_sale_v2_[a-f0-9]{32}$/);
+    assert.notEqual(
+      recipeFingerprint({ sentQuantity: 1, recipeQuantityPerUnit: 1 }),
+      recipeFingerprint({ sentQuantity: 2, recipeQuantityPerUnit: 1 }),
+    );
+  });
+
+  test("19-20. retry legítimo sin doble decremento", async () => {
+    const { movementId, doc } = buildValidRecipeServerMovement({
+      stockBefore: 10,
+      stockAfter: 9,
+    });
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 1, unit: "unit" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 9 }),
+      },
+      existingMovements: { [movementId]: doc },
+    });
+    const plan = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 1,
+    });
+    assert.equal(mock.movementWrites.size, 0);
+    assert.equal(mock.productUpdates.size, 0);
+    assert.equal(plan.movementIds.length, 1);
+  });
+
+  test("21-28. preseed/fingerprint/esquema/identidad/cantidad/math/stock divergente → CONFLICT", async () => {
+    const cases: Array<{ name: string; mutate: (doc: Record<string, unknown>) => void; stock?: number }> = [
+      { name: "preseed mínimo", mutate: (d) => {
+        delete d.movementFingerprint;
+        delete d.stockBefore;
+        delete d.stockAfter;
+        d.applied = false;
+      }},
+      { name: "fingerprint ausente", mutate: (d) => { delete d.movementFingerprint; }},
+      { name: "fingerprint incorrecto", mutate: (d) => { d.movementFingerprint = "bad"; }},
+      { name: "esquema incompleto", mutate: (d) => { delete d.sentQuantity; }},
+      { name: "identidad incorrecta", mutate: (d) => { d.orderId = "other"; }},
+      { name: "cantidad incorrecta", mutate: (d) => { d.quantityDelta = -99; }},
+      { name: "stock math incoherente", mutate: (d) => { d.stockAfter = 999; }},
+      { name: "currentStock distinto", mutate: () => {}, stock: 7 },
+    ];
+    for (const c of cases) {
+      const { movementId, doc } = buildValidRecipeServerMovement({
+        stockBefore: 10,
+        stockAfter: 9,
+      });
+      c.mutate(doc);
+      const mock = createStockApplyMock({
+        products: {
+          [RECIPE_SALE]: recipeSaleProduct({
+            ingredients: [{ productId: RECIPE_INV_A, quantity: 1, unit: "unit" }],
+          }),
+          [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: c.stock ?? 9 }),
+        },
+        existingMovements: { [movementId]: doc },
+      });
+      await assert.rejects(
+        () =>
+          applyInitialRecipeStockConsumptionInTransaction({
+            tx: mock.tx,
+            db: mock.db,
+            restaurantId: RECIPE_REST,
+            orderId: RECIPE_ORDER,
+            actorUid: "uid-1",
+            beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+            afterItems: [recipeSegmentLine(1)],
+            nowMs: 1,
+          }),
+        (err: unknown) =>
+          err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+        c.name,
+      );
+      assert.equal(mock.movementWrites.size, 0, c.name);
+      assert.equal(mock.productUpdates.size, 0, c.name);
+    }
+  });
+
+  test("29. filas económicas idénticas usan occurrence; filas distintas no", () => {
+    const identicalA = buildRecipeSaleV2MovementId(
+      recipeIdentity({ recipeQuantityPerUnit: 1, ingredientOccurrence: 0 }),
+    );
+    const identicalB = buildRecipeSaleV2MovementId(
+      recipeIdentity({ recipeQuantityPerUnit: 1, ingredientOccurrence: 1 }),
+    );
+    assert.notEqual(identicalA, identicalB);
+
+    const { pending } = buildPendingRecipeWrites({
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      segments: [{
+        sentSegmentLineId: RECIPE_LINE,
+        newlySentUnits: 1,
+        line: recipeSegmentLine(1),
+      }],
+      saleProductDataById: new Map([
+        [RECIPE_SALE, recipeSaleProduct({
+          ingredients: [
+            { productId: RECIPE_INV_A, quantity: 1, unit: "unit" },
+            { productId: RECIPE_INV_A, quantity: 2, unit: "unit" },
+            { productId: RECIPE_INV_A, quantity: 1, unit: "unit" },
+          ],
+        })],
+      ]),
+      nowMs: 1,
+    });
+    assert.equal(pending.length, 3);
+    const byQty = new Map(
+      pending.map((row) => [
+        `${row.payload.recipeQuantityPerUnit}:${row.payload.ingredientOccurrence}`,
+        row,
+      ]),
+    );
+    assert.equal(byQty.get("1:0")?.payload.ingredientOccurrence, 0);
+    assert.equal(byQty.get("1:1")?.payload.ingredientOccurrence, 1);
+    assert.equal(byQty.get("2:0")?.payload.ingredientOccurrence, 0);
+    assert.notEqual(byQty.get("1:0")?.movementId, byQty.get("2:0")?.movementId);
+    assert.notEqual(byQty.get("1:0")?.movementId, byQty.get("1:1")?.movementId);
+  });
+
+  test("30-31. dos líneas / dos pedidos no colisionan", () => {
+    assert.notEqual(
+      buildRecipeSaleV2MovementId(recipeIdentity({ sentSegmentLineId: "line-a" })),
+      buildRecipeSaleV2MovementId(recipeIdentity({ sentSegmentLineId: "line-b" })),
+    );
+    assert.notEqual(
+      buildRecipeSaleV2MovementId(recipeIdentity({ orderId: "order-a" })),
+      buildRecipeSaleV2MovementId(recipeIdentity({ orderId: "order-b" })),
+    );
+  });
+
+  test("32-33. split de quantity consume solo tramo nuevo; retry no re-consume", async () => {
+    // Modelo real: transition-line-quantity deja remainder pending y avanza un hijo sent.
+    const advancedLineId = `${RECIPE_LINE}-adv-2`;
+    const beforeItems = [
+      {
+        id: RECIPE_LINE,
+        status: "pending",
+        quantity: 3,
+        productId: RECIPE_SALE,
+        productName: "Plato receta",
+      },
+    ];
+    const afterItems = [
+      {
+        id: RECIPE_LINE,
+        status: "pending",
+        quantity: 1,
+        productId: RECIPE_SALE,
+        productName: "Plato receta",
+      },
+      {
+        id: advancedLineId,
+        status: "sent",
+        quantity: 2,
+        productId: RECIPE_SALE,
+        productName: "Plato receta",
+      },
+    ];
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 1, unit: "unit" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 10 }),
+      },
+    });
+    const first = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems,
+      afterItems,
+      nowMs: 1,
+    });
+    assert.equal(first.movementIds.length, 1);
+    const movement = [...mock.movementWrites.values()][0]!;
+    assert.equal(movement.sentSegmentLineId, advancedLineId);
+    assert.equal(movement.sentQuantity, 2);
+    assert.equal(movement.stockBefore, 10);
+    assert.equal(movement.stockAfter, 8);
+
+    const movementId = buildRecipeSaleV2MovementId(
+      recipeIdentity({
+        sentSegmentLineId: advancedLineId,
+        recipeQuantityPerUnit: 1,
+        recipeUnit: "unit",
+      }),
+    );
+    const retryMock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 1, unit: "unit" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 8 }),
+      },
+      existingMovements: {
+        [movementId]: {
+          ...movement,
+          idempotencyKey: movementId,
+          movementFingerprint: recipeFingerprint({
+            sentQuantity: 2,
+            recipeQuantityPerUnit: 1,
+            productInventoryUnit: "unit",
+          }),
+          productInventoryUnit: "unit",
+          stockBefore: 10,
+          stockAfter: 8,
+        },
+      },
+    });
+    const retry = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: retryMock.tx,
+      db: retryMock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems,
+      afterItems,
+      nowMs: 2,
+    });
+    assert.equal(retryMock.movementWrites.size, 0);
+    assert.equal(retryMock.productUpdates.size, 0);
+    assert.equal(retry.movementIds.length, 1);
+  });
+
+  test("34. conflicto aborta todos los writes (assert helper)", () => {
+    assert.throws(
+      () =>
+        assertExistingRecipeSaleMovementIsValidForIdempotentSkip({
+          movementId: "x",
+          existing: { type: "recipe_sale", source: "recipe_sale", applied: true },
+          expectedFingerprint: "fp",
+          restaurantId: RECIPE_REST,
+          orderId: RECIPE_ORDER,
+          sentSegmentLineId: RECIPE_LINE,
+          saleProductId: RECIPE_SALE,
+          inventoryProductId: RECIPE_INV_A,
+          ingredientOccurrence: 0,
+          sentQuantity: 1,
+          recipeQuantityPerUnit: 1,
+          inventoryUnit: "unit",
+          quantityDelta: -1,
+          productCurrentStock: 9,
+          productUnit: "unit",
+        }),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+  });
+
+  test("coexistencia: modifier + recipe misma tx; conflicto recipe no escribe", async () => {
+    const groupId = "grp-coex";
+    const optionId = "opt-coex";
+    const { movementId, doc } = buildValidRecipeServerMovement({
+      stockBefore: 10,
+      stockAfter: 9,
+    });
+    doc.movementFingerprint = "tampered";
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 1, unit: "unit" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 10 }),
+        [RECIPE_INV_B]: recipeInventoryProduct({ currentStock: 50 }),
+      },
+      existingMovements: { [movementId]: doc },
+    });
+    await assert.rejects(
+      () =>
+        applyInitialModifierStockConsumptionInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId: RECIPE_REST,
+          orderId: RECIPE_ORDER,
+          actorUid: "uid-1",
+          beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+          afterItems: [
+            {
+              ...recipeSegmentLine(1),
+              selectedModifiers: [
+                {
+                  groupId,
+                  optionId,
+                  inventoryProductId: RECIPE_INV_B,
+                  inventoryQuantity: 1,
+                  inventoryUnit: "unit",
+                },
+              ],
+            },
+          ],
+          nowMs: 1,
+        }),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+    assert.equal(mock.movementWrites.size, 0);
+    assert.equal(mock.productUpdates.size, 0);
+  });
+
+  test("recipe_sale_v2 no colisiona con modifier_sale_v2 prefix", () => {
+    const recipeId = buildRecipeSaleV2MovementId(recipeIdentity());
+    const modifierId = buildModifierSaleV2MovementId({
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      sentSegmentLineId: RECIPE_LINE,
+      modifierGroupId: "g",
+      modifierOptionId: "o",
+      inventoryProductId: RECIPE_INV_A,
+      selectionOccurrence: 0,
+    });
+    assert.match(recipeId, /^recipe_sale_v2_/);
+    assert.match(modifierId, /^modifier_sale_v2_/);
+    assert.notEqual(recipeId, modifierId);
+  });
+
+  test("3B-1A.1 reorden de filas económicas distintas conserva IDs", () => {
+    const segment = {
+      sentSegmentLineId: RECIPE_LINE,
+      newlySentUnits: 1,
+      line: recipeSegmentLine(1),
+    };
+    const pendingA = buildPendingRecipeWrites({
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      segments: [segment],
+      saleProductDataById: new Map([
+        [RECIPE_SALE, recipeSaleProduct({
+          ingredients: [
+            { productId: RECIPE_INV_A, quantity: 1, unit: "g" },
+            { productId: RECIPE_INV_A, quantity: 2, unit: "g" },
+          ],
+        })],
+      ]),
+      nowMs: 1,
+    }).pending;
+    const pendingB = buildPendingRecipeWrites({
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      segments: [segment],
+      saleProductDataById: new Map([
+        [RECIPE_SALE, recipeSaleProduct({
+          ingredients: [
+            { productId: RECIPE_INV_A, quantity: 2, unit: "g" },
+            { productId: RECIPE_INV_A, quantity: 1, unit: "g" },
+          ],
+        })],
+      ]),
+      nowMs: 1,
+    }).pending;
+
+    const byEconomicKey = (rows: typeof pendingA) => {
+      const map = new Map<string, string>();
+      for (const row of rows) {
+        const key = `${row.payload.recipeQuantityPerUnit}|${row.payload.unit}|${row.payload.ingredientOccurrence}`;
+        map.set(key, row.movementId);
+      }
+      return map;
+    };
+    const mapA = byEconomicKey(pendingA);
+    const mapB = byEconomicKey(pendingB);
+    assert.deepEqual([...mapA.keys()].sort(), [...mapB.keys()].sort());
+    assert.equal(mapA.get("1|g|0"), mapB.get("1|g|0"));
+    assert.equal(mapA.get("2|g|0"), mapB.get("2|g|0"));
+    assert.notEqual(mapA.get("1|g|0"), mapA.get("2|g|0"));
+    assert.equal(
+      pendingA.reduce((sum, row) => sum + Math.abs(row.payload.quantityDelta), 0),
+      pendingB.reduce((sum, row) => sum + Math.abs(row.payload.quantityDelta), 0),
+    );
+  });
+
+  test("3B-1A.1 cambio económico real cambia movementId y fingerprint", () => {
+    const id1 = buildRecipeSaleV2MovementId(
+      recipeIdentity({ recipeQuantityPerUnit: 1, recipeUnit: "g" }),
+    );
+    const id15 = buildRecipeSaleV2MovementId(
+      recipeIdentity({ recipeQuantityPerUnit: 1.5, recipeUnit: "g" }),
+    );
+    assert.notEqual(id1, id15);
+    assert.notEqual(
+      recipeFingerprint({
+        sentQuantity: 1,
+        recipeQuantityPerUnit: 1,
+        inventoryUnit: "g",
+        productInventoryUnit: "g",
+      }),
+      recipeFingerprint({
+        sentQuantity: 1,
+        recipeQuantityPerUnit: 1.5,
+        inventoryUnit: "g",
+        productInventoryUnit: "g",
+      }),
+    );
+  });
+
+  test("3B-1A.1 retry multi-recipe mismo producto acepta stock final 7", async () => {
+    // Encadenar stockBefore/stockAfter en el orden canónico de movementId (igual que el planner).
+    const idQty1 = buildRecipeSaleV2MovementId(
+      recipeIdentity({ recipeQuantityPerUnit: 1, recipeUnit: "unit" }),
+    );
+    const idQty2 = buildRecipeSaleV2MovementId(
+      recipeIdentity({ recipeQuantityPerUnit: 2, recipeUnit: "unit" }),
+    );
+    assert.notEqual(idQty1, idQty2);
+    const orderedIds = [idQty1, idQty2].sort((a, b) => a.localeCompare(b));
+    const deltaById = new Map([
+      [idQty1, -1],
+      [idQty2, -2],
+    ]);
+    let running = 10;
+    const docs: Record<string, Record<string, unknown>> = {};
+    for (const id of orderedIds) {
+      const qty = id === idQty1 ? 1 : 2;
+      const delta = deltaById.get(id)!;
+      const before = running;
+      const after = before + delta;
+      running = after;
+      const built = buildValidRecipeServerMovement({
+        stockBefore: before,
+        stockAfter: after,
+        recipeQuantityPerUnit: qty,
+      });
+      assert.equal(built.movementId, id);
+      docs[id] = built.doc;
+    }
+    assert.equal(running, 7);
+
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [
+            { productId: RECIPE_INV_A, quantity: 1, unit: "unit" },
+            { productId: RECIPE_INV_A, quantity: 2, unit: "unit" },
+          ],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 7 }),
+      },
+      existingMovements: docs,
+    });
+    const plan = await applyInitialRecipeStockConsumptionInTransaction({
+      tx: mock.tx,
+      db: mock.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [recipeSegmentLine(1)],
+      nowMs: 1,
+    });
+    assert.equal(mock.movementWrites.size, 0);
+    assert.equal(mock.productUpdates.size, 0);
+    assert.equal(plan.movementIds.length, 2);
+    assert.ok(plan.movementIds.includes(idQty1));
+    assert.ok(plan.movementIds.includes(idQty2));
+  });
+
+  test("3B-1A.1 retry multi-recipe: preseed del movimiento intermedio aborta", async () => {
+    const mov1 = buildValidRecipeServerMovement({
+      stockBefore: 10,
+      stockAfter: 9,
+      recipeQuantityPerUnit: 1,
+    });
+    const mov2 = buildValidRecipeServerMovement({
+      stockBefore: 9,
+      stockAfter: 7,
+      recipeQuantityPerUnit: 2,
+    });
+    const mock = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [
+            { productId: RECIPE_INV_A, quantity: 1, unit: "unit" },
+            { productId: RECIPE_INV_A, quantity: 2, unit: "unit" },
+          ],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 7 }),
+      },
+      existingMovements: {
+        [mov1.movementId]: { restaurantId: RECIPE_REST, type: "recipe_sale" },
+        [mov2.movementId]: mov2.doc,
+      },
+    });
+    await assert.rejects(
+      () =>
+        applyInitialRecipeStockConsumptionInTransaction({
+          tx: mock.tx,
+          db: mock.db,
+          restaurantId: RECIPE_REST,
+          orderId: RECIPE_ORDER,
+          actorUid: "uid-1",
+          beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+          afterItems: [recipeSegmentLine(1)],
+          nowMs: 1,
+        }),
+      (err: unknown) =>
+        err instanceof Error && err.message === STOCK_MOVEMENT_ID_CONFLICT,
+    );
+    assert.equal(mock.movementWrites.size, 0);
+    assert.equal(mock.productUpdates.size, 0);
+  });
+
+  test("3B-1A.1 modifier + recipe mismo producto se encadenan; retry no re-descuenta", async () => {
+    const groupId = "grp-same-inv";
+    const optionId = "opt-same-inv";
+    const first = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 2, unit: "unit" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 10 }),
+      },
+    });
+    const afterLine = {
+      ...recipeSegmentLine(1),
+      selectedModifiers: [
+        {
+          groupId,
+          optionId,
+          inventoryProductId: RECIPE_INV_A,
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+      ],
+    };
+    const plan = await applyInitialModifierStockConsumptionInTransaction({
+      tx: first.tx,
+      db: first.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [afterLine],
+      nowMs: 1,
+    });
+    assert.equal(plan.movementIds.length, 2);
+    assert.equal(first.movementWrites.size, 2);
+    assert.equal(first.productUpdates.size, 1);
+    assert.equal(
+      (first.productUpdates.get(RECIPE_INV_A)?.inventory as Record<string, unknown>).currentStock,
+      7,
+    );
+
+    const ordered = [...first.movementWrites.entries()].sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    assert.equal(ordered[0]?.[1].stockBefore, 10);
+    assert.equal(ordered[0]?.[1].stockAfter, ordered[1]?.[1].stockBefore);
+    assert.equal(ordered[1]?.[1].stockAfter, 7);
+
+    const retry = createStockApplyMock({
+      products: {
+        [RECIPE_SALE]: recipeSaleProduct({
+          ingredients: [{ productId: RECIPE_INV_A, quantity: 2, unit: "unit" }],
+        }),
+        [RECIPE_INV_A]: recipeInventoryProduct({ currentStock: 7 }),
+      },
+      existingMovements: Object.fromEntries(ordered),
+    });
+    const retryPlan = await applyInitialModifierStockConsumptionInTransaction({
+      tx: retry.tx,
+      db: retry.db,
+      restaurantId: RECIPE_REST,
+      orderId: RECIPE_ORDER,
+      actorUid: "uid-1",
+      beforeItems: [{ id: RECIPE_LINE, status: "pending", quantity: 1 }],
+      afterItems: [afterLine],
+      nowMs: 2,
+    });
+    assert.equal(retry.movementWrites.size, 0);
+    assert.equal(retry.productUpdates.size, 0);
+    assert.equal(retryPlan.movementIds.length, 2);
   });
 });

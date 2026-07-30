@@ -1,11 +1,13 @@
 import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from "firebase-admin/firestore";
-import { normalizeProductionLineStatus } from "@/lib/firestore/merge-order-items-for-persist";
 import {
   assertExistingModifierSaleMovementIsValidForIdempotentSkip,
   buildModifierSaleMovementFingerprint,
   buildModifierSaleV2MovementId,
   STOCK_MOVEMENT_ID_CONFLICT,
 } from "@/lib/inventory/modifier-sale-movement-identity";
+import {
+  assertExistingRecipeSaleMovementIsValidForIdempotentSkip,
+} from "@/lib/inventory/recipe-sale-movement-identity";
 import type {
   ModifierSaleStockMovementDocument,
   ModifierStockConsumptionWarning,
@@ -17,16 +19,27 @@ import {
   roundInventoryQuantity,
 } from "@/lib/inventory/unit-conversions";
 import { isModifierInventoryUnit } from "@/lib/modifiers/modifier-types";
+import {
+  deriveNewlySentSegments,
+  deriveNewlySentUnits,
+  type NewlySentSegment,
+} from "@/lib/server/tpv/newly-sent-segments";
+import {
+  buildPendingRecipeWrites,
+  finalizeRecipeMovementFingerprint,
+  readSaleProductIdFromLine,
+  validateRecipeInventoryProduct,
+  type PendingRecipeMovementWrite,
+} from "@/lib/server/tpv/plan-initial-recipe-stock-consumption";
 
-export type NewlySentSegment = {
-  sentSegmentLineId: string;
-  line: Record<string, unknown>;
-  newlySentUnits: number;
-};
+export type { NewlySentSegment };
+export { deriveNewlySentSegments, deriveNewlySentUnits };
 
 export type ModifierStockConsumptionPlan = {
   warnings: ModifierStockConsumptionWarning[];
   movementIds: string[];
+  /** Stock final escrito en esta tx por producto de inventario (para encadenar recipe). */
+  appliedStockByProductId: Record<string, number>;
 };
 
 type PendingMovementWrite = {
@@ -36,15 +49,6 @@ type PendingMovementWrite = {
   inventoryProductId: string;
   convertedDelta: number;
 };
-
-function readLineId(line: Record<string, unknown>): string {
-  return typeof line.id === "string" ? line.id.trim() : "";
-}
-
-function readLineQuantity(line: Record<string, unknown>): number {
-  const qty = Math.floor(Number(line.quantity ?? line.qty) || 0);
-  return Number.isFinite(qty) && qty > 0 ? qty : 0;
-}
 
 function readFiniteNumber(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
@@ -96,41 +100,6 @@ function assertSameRestaurantDoc(
   const docRid =
     typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
   return !docRid || docRid === restaurantId.trim();
-}
-
-/** Canonical first-send units from orders.items[] snapshots. */
-export function deriveNewlySentUnits(
-  before: Record<string, unknown> | undefined,
-  after: Record<string, unknown>,
-): number {
-  const afterStatus = normalizeProductionLineStatus(after.status);
-  if (afterStatus !== "sent") return 0;
-  const qty = readLineQuantity(after);
-  if (qty <= 0) return 0;
-  if (!before) return qty;
-  const beforeStatus = normalizeProductionLineStatus(before.status);
-  if (beforeStatus === "pending") return qty;
-  return 0;
-}
-
-export function deriveNewlySentSegments(
-  beforeItems: readonly Record<string, unknown>[],
-  afterItems: readonly Record<string, unknown>[],
-): NewlySentSegment[] {
-  const beforeById = new Map<string, Record<string, unknown>>();
-  for (const line of beforeItems) {
-    const id = readLineId(line);
-    if (id) beforeById.set(id, line);
-  }
-  const out: NewlySentSegment[] = [];
-  for (const line of afterItems) {
-    const sentSegmentLineId = readLineId(line);
-    if (!sentSegmentLineId) continue;
-    const newlySentUnits = deriveNewlySentUnits(beforeById.get(sentSegmentLineId), line);
-    if (newlySentUnits <= 0) continue;
-    out.push({ sentSegmentLineId, line, newlySentUnits });
-  }
-  return out;
 }
 
 type SelectedModifierRow = {
@@ -415,7 +384,7 @@ export async function applyInitialModifierStockConsumptionInTransaction(params: 
 }): Promise<ModifierStockConsumptionPlan> {
   const segments = deriveNewlySentSegments(params.beforeItems, params.afterItems);
   if (segments.length === 0) {
-    return { warnings: [], movementIds: [] };
+    return { warnings: [], movementIds: [], appliedStockByProductId: {} };
   }
 
   const { pending, warnings } = buildPendingWrites({
@@ -425,18 +394,57 @@ export async function applyInitialModifierStockConsumptionInTransaction(params: 
     segments,
     nowMs: params.nowMs,
   });
-  if (pending.length === 0) {
-    return { warnings, movementIds: [] };
+
+  // --- All reads first (modifier + recipe) to satisfy Firestore tx ordering ---
+  const saleProductIds = [
+    ...new Set(segments.map((segment) => readSaleProductIdFromLine(segment.line)).filter(Boolean)),
+  ];
+  const saleProductRefs = saleProductIds.map((productId) =>
+    params.db.collection("restaurants").doc(params.restaurantId).collection("products").doc(productId),
+  );
+  const saleProductSnaps =
+    saleProductRefs.length > 0 ? await params.tx.getAll(...saleProductRefs) : [];
+  const saleProductDataById = new Map<string, Record<string, unknown>>();
+  saleProductSnaps.forEach((snap, index) => {
+    if (snap.exists) {
+      saleProductDataById.set(saleProductIds[index]!, snap.data() as Record<string, unknown>);
+    }
+  });
+
+  const { pending: recipePending, warnings: recipeWarnings } = buildPendingRecipeWrites({
+    restaurantId: params.restaurantId,
+    orderId: params.orderId,
+    actorUid: params.actorUid,
+    segments,
+    saleProductDataById,
+    nowMs: params.nowMs,
+  });
+  for (const warning of recipeWarnings) {
+    console.warn("[Hostly Inventory] recipe stock skipped:", warning);
   }
 
-  const movementRefs: DocumentReference[] = pending.map((row) =>
+  if (pending.length === 0 && recipePending.length === 0) {
+    return { warnings, movementIds: [], appliedStockByProductId: {} };
+  }
+
+  const allPendingMovements: Array<
+    | { kind: "modifier"; row: PendingMovementWrite }
+    | { kind: "recipe"; row: PendingRecipeMovementWrite }
+  > = [
+    ...pending.map((row) => ({ kind: "modifier" as const, row })),
+    ...recipePending.map((row) => ({ kind: "recipe" as const, row })),
+  ];
+
+  const movementRefs: DocumentReference[] = allPendingMovements.map((entry) =>
     params.db
       .collection("restaurants")
       .doc(params.restaurantId)
       .collection("stockMovements")
-      .doc(row.movementId),
+      .doc(entry.row.movementId),
   );
-  const uniqueProductIds = [...new Set(pending.map((row) => row.inventoryProductId))];
+  const uniqueProductIds = [
+    ...new Set(allPendingMovements.map((entry) => entry.row.inventoryProductId)),
+  ];
   const productRefs = uniqueProductIds.map((productId) =>
     params.db.collection("restaurants").doc(params.restaurantId).collection("products").doc(productId),
   );
@@ -446,7 +454,7 @@ export async function applyInitialModifierStockConsumptionInTransaction(params: 
 
   const movementSnapById = new Map<string, DocumentSnapshot>();
   movementSnaps.forEach((snap, index) => {
-    movementSnapById.set(pending[index]!.movementId, snap);
+    movementSnapById.set(allPendingMovements[index]!.row.movementId, snap);
   });
   const productDataById = new Map<string, Record<string, unknown>>();
   productSnaps.forEach((snap, index) => {
@@ -455,11 +463,103 @@ export async function applyInitialModifierStockConsumptionInTransaction(params: 
     }
   });
 
-  const validated: PendingMovementWrite[] = [];
+  const validatedModifiers: PendingMovementWrite[] = [];
+  const validatedRecipes: PendingRecipeMovementWrite[] = [];
   const movementIds: string[] = [];
+  const skippedExistingStockAfterByProduct = new Map<string, Array<{ movementId: string; stockAfter: number }>>();
 
-  for (const row of pending.sort((a, b) => a.movementId.localeCompare(b.movementId))) {
-    const existingSnap = movementSnapById.get(row.movementId);
+  const expectStockMatchFor = (inventoryProductId: string) =>
+    allPendingMovements.filter((entry) => entry.row.inventoryProductId === inventoryProductId)
+      .length === 1;
+
+  for (const entry of [...allPendingMovements].sort((a, b) =>
+    a.row.movementId.localeCompare(b.row.movementId),
+  )) {
+    const existingSnap = movementSnapById.get(entry.row.movementId);
+    if (entry.kind === "modifier") {
+      const row = entry.row;
+      if (existingSnap?.exists) {
+        const existingData = existingSnap.data() as Record<string, unknown>;
+        const productData = productDataById.get(row.inventoryProductId);
+        const productUnit = readCanonicalProductInventoryUnit(productData);
+        const productStock = readValidInventoryCurrentStock(productData);
+        if (!productData || !productUnit || productStock == null) {
+          throw new Error(STOCK_MOVEMENT_ID_CONFLICT);
+        }
+        assertExistingModifierSaleMovementIsValidForIdempotentSkip({
+          movementId: row.movementId,
+          existing: existingData,
+          expectedFingerprint: row.fingerprint,
+          restaurantId: params.restaurantId,
+          orderId: params.orderId,
+          sentSegmentLineId: String(row.payload.sentSegmentLineId ?? row.payload.lineId),
+          inventoryProductId: row.inventoryProductId,
+          modifierGroupId: row.payload.modifierGroupId,
+          modifierOptionId: row.payload.modifierOptionId,
+          selectionOccurrence: row.payload.selectionOccurrence ?? 0,
+          sentQuantity: row.payload.sentQuantity ?? 0,
+          inventoryQuantityPerUnit: row.payload.inventoryQuantityPerUnit ?? 0,
+          inventoryUnit: String(row.payload.unit),
+          quantityDelta: row.payload.quantityDelta,
+          productCurrentStock: productStock,
+          productUnit,
+          expectProductStockMatch: expectStockMatchFor(row.inventoryProductId),
+        });
+        const stockAfter = readFiniteNumber(existingData.stockAfter);
+        if (stockAfter != null) {
+          const list = skippedExistingStockAfterByProduct.get(row.inventoryProductId) ?? [];
+          list.push({ movementId: row.movementId, stockAfter });
+          skippedExistingStockAfterByProduct.set(row.inventoryProductId, list);
+        }
+        movementIds.push(row.movementId);
+        continue;
+      }
+
+      const productData = productDataById.get(row.inventoryProductId);
+      const warning = validateModifierInventoryProduct({
+        restaurantId: params.restaurantId,
+        orderId: params.orderId,
+        lineId: row.payload.lineId,
+        groupId: row.payload.modifierGroupId,
+        optionId: row.payload.modifierOptionId,
+        inventoryProductId: row.inventoryProductId,
+        inventoryUnit: String(row.payload.unit),
+        inventoryQuantityPerUnit: row.payload.inventoryQuantityPerUnit ?? 0,
+        productData,
+      });
+      if (warning) {
+        warnings.push(warning);
+        console.warn("[Hostly Inventory] modifier stock skipped:", warning);
+        continue;
+      }
+      const productUnit = readCanonicalProductInventoryUnit(productData);
+      if (!productUnit) continue;
+      const convertedPerUnit = convertInventoryQuantity({
+        quantity: -(row.payload.inventoryQuantityPerUnit ?? 0),
+        fromUnit: row.payload.unit,
+        toUnit: productUnit,
+      });
+      if (convertedPerUnit == null || !Number.isFinite(convertedPerUnit)) {
+        warnings.push({
+          inventoryProductId: row.inventoryProductId,
+          orderId: params.orderId,
+          lineId: row.payload.lineId,
+          groupId: row.payload.modifierGroupId,
+          optionId: row.payload.modifierOptionId,
+          reason: "INCOMPATIBLE_UNIT",
+          requestedQuantity: row.payload.inventoryQuantityPerUnit,
+          unit: String(row.payload.unit),
+        });
+        continue;
+      }
+      row.convertedDelta = roundInventoryQuantity(
+        convertedPerUnit * (row.payload.sentQuantity ?? 0),
+      );
+      validatedModifiers.push(row);
+      continue;
+    }
+
+    const row = entry.row;
     if (existingSnap?.exists) {
       const existingData = existingSnap.data() as Record<string, unknown>;
       const productData = productDataById.get(row.inventoryProductId);
@@ -468,103 +568,156 @@ export async function applyInitialModifierStockConsumptionInTransaction(params: 
       if (!productData || !productUnit || productStock == null) {
         throw new Error(STOCK_MOVEMENT_ID_CONFLICT);
       }
-      assertExistingModifierSaleMovementIsValidForIdempotentSkip({
+      const expectedFingerprint = finalizeRecipeMovementFingerprint(row, productUnit);
+      assertExistingRecipeSaleMovementIsValidForIdempotentSkip({
         movementId: row.movementId,
         existing: existingData,
-        expectedFingerprint: row.fingerprint,
+        expectedFingerprint,
         restaurantId: params.restaurantId,
         orderId: params.orderId,
         sentSegmentLineId: String(row.payload.sentSegmentLineId ?? row.payload.lineId),
+        saleProductId: row.payload.saleProductId,
         inventoryProductId: row.inventoryProductId,
-        modifierGroupId: row.payload.modifierGroupId,
-        modifierOptionId: row.payload.modifierOptionId,
-        selectionOccurrence: row.payload.selectionOccurrence ?? 0,
+        ingredientOccurrence: row.payload.ingredientOccurrence ?? 0,
         sentQuantity: row.payload.sentQuantity ?? 0,
-        inventoryQuantityPerUnit: row.payload.inventoryQuantityPerUnit ?? 0,
+        recipeQuantityPerUnit: row.payload.recipeQuantityPerUnit ?? 0,
         inventoryUnit: String(row.payload.unit),
         quantityDelta: row.payload.quantityDelta,
         productCurrentStock: productStock,
         productUnit,
+        expectProductStockMatch: expectStockMatchFor(row.inventoryProductId),
       });
+      const stockAfter = readFiniteNumber(existingData.stockAfter);
+      if (stockAfter != null) {
+        const list = skippedExistingStockAfterByProduct.get(row.inventoryProductId) ?? [];
+        list.push({ movementId: row.movementId, stockAfter });
+        skippedExistingStockAfterByProduct.set(row.inventoryProductId, list);
+      }
       movementIds.push(row.movementId);
       continue;
     }
 
     const productData = productDataById.get(row.inventoryProductId);
-    const warning = validateModifierInventoryProduct({
+    const warning = validateRecipeInventoryProduct({
       restaurantId: params.restaurantId,
       orderId: params.orderId,
       lineId: row.payload.lineId,
-      groupId: row.payload.modifierGroupId,
-      optionId: row.payload.modifierOptionId,
+      saleProductId: row.payload.saleProductId,
       inventoryProductId: row.inventoryProductId,
       inventoryUnit: String(row.payload.unit),
-      inventoryQuantityPerUnit: row.payload.inventoryQuantityPerUnit ?? 0,
+      recipeQuantityPerUnit: row.payload.recipeQuantityPerUnit ?? 0,
       productData,
     });
     if (warning) {
-      warnings.push(warning);
-      console.warn("[Hostly Inventory] modifier stock skipped:", warning);
+      console.warn("[Hostly Inventory] recipe stock skipped:", warning);
       continue;
     }
-
     const productUnit = readCanonicalProductInventoryUnit(productData);
-    if (!productUnit) {
-      continue;
-    }
+    if (!productUnit) continue;
     const convertedPerUnit = convertInventoryQuantity({
-      quantity: -(row.payload.inventoryQuantityPerUnit ?? 0),
+      quantity: -(row.payload.recipeQuantityPerUnit ?? 0),
       fromUnit: row.payload.unit,
       toUnit: productUnit,
     });
     if (convertedPerUnit == null || !Number.isFinite(convertedPerUnit)) {
-      warnings.push({
+      console.warn("[Hostly Inventory] recipe stock skipped:", {
         inventoryProductId: row.inventoryProductId,
-        orderId: params.orderId,
-        lineId: row.payload.lineId,
-        groupId: row.payload.modifierGroupId,
-        optionId: row.payload.modifierOptionId,
         reason: "INCOMPATIBLE_UNIT",
-        requestedQuantity: row.payload.inventoryQuantityPerUnit,
-        unit: String(row.payload.unit),
       });
       continue;
     }
-    row.convertedDelta = roundInventoryQuantity(convertedPerUnit * (row.payload.sentQuantity ?? 0));
-    validated.push(row);
+    finalizeRecipeMovementFingerprint(row, productUnit);
+    row.convertedDelta = roundInventoryQuantity(
+      convertedPerUnit * (row.payload.sentQuantity ?? 0),
+    );
+    validatedRecipes.push(row);
+  }
+
+  // Retry batch: if several existing movements share a product, currentStock must
+  // match the last movement's stockAfter (by movementId), not an intermediate one.
+  for (const [productId, entries] of skippedExistingStockAfterByProduct.entries()) {
+    const hasNewWrite =
+      validatedModifiers.some((row) => row.inventoryProductId === productId) ||
+      validatedRecipes.some((row) => row.inventoryProductId === productId);
+    if (hasNewWrite) continue;
+    if (entries.length <= 1) continue;
+    const last = [...entries].sort((a, b) => a.movementId.localeCompare(b.movementId)).at(-1);
+    const current = readValidInventoryCurrentStock(productDataById.get(productId));
+    if (!last || current == null || current !== last.stockAfter) {
+      throw new Error(STOCK_MOVEMENT_ID_CONFLICT);
+    }
   }
 
   const runningStock = new Map<string, number>();
-  for (const row of validated) {
-    if (runningStock.has(row.inventoryProductId)) continue;
-    const stock = readValidInventoryCurrentStock(productDataById.get(row.inventoryProductId));
-    if (stock === null) continue;
-    runningStock.set(row.inventoryProductId, stock);
-  }
+  const seedStock = (productId: string) => {
+    if (runningStock.has(productId)) return;
+    const stock = readValidInventoryCurrentStock(productDataById.get(productId));
+    if (stock === null) return;
+    runningStock.set(productId, stock);
+  };
+  for (const row of validatedModifiers) seedStock(row.inventoryProductId);
+  for (const row of validatedRecipes) seedStock(row.inventoryProductId);
 
-  for (const row of validated.sort((a, b) => a.movementId.localeCompare(b.movementId))) {
+  const writeRows: Array<{
+    movementId: string;
+    inventoryProductId: string;
+    convertedDelta: number;
+    apply: (stockBefore: number, stockAfter: number) => void;
+  }> = [
+    ...validatedModifiers.map((row) => ({
+      movementId: row.movementId,
+      inventoryProductId: row.inventoryProductId,
+      convertedDelta: row.convertedDelta,
+      apply: (stockBefore: number, stockAfter: number) => {
+        row.payload.stockBefore = stockBefore;
+        row.payload.stockAfter = stockAfter;
+        row.payload.applied = true;
+        row.payload.appliedAt = params.nowMs;
+        params.tx.set(
+          params.db
+            .collection("restaurants")
+            .doc(params.restaurantId)
+            .collection("stockMovements")
+            .doc(row.movementId),
+          row.payload,
+        );
+      },
+    })),
+    ...validatedRecipes.map((row) => ({
+      movementId: row.movementId,
+      inventoryProductId: row.inventoryProductId,
+      convertedDelta: row.convertedDelta,
+      apply: (stockBefore: number, stockAfter: number) => {
+        row.payload.stockBefore = stockBefore;
+        row.payload.stockAfter = stockAfter;
+        row.payload.applied = true;
+        row.payload.appliedAt = params.nowMs;
+        params.tx.set(
+          params.db
+            .collection("restaurants")
+            .doc(params.restaurantId)
+            .collection("stockMovements")
+            .doc(row.movementId),
+          row.payload,
+        );
+      },
+    })),
+  ];
+
+  for (const row of writeRows.sort((a, b) => a.movementId.localeCompare(b.movementId))) {
     const before = runningStock.get(row.inventoryProductId);
     if (before == null) continue;
     const after = roundInventoryQuantity(before + row.convertedDelta);
-    row.payload.stockBefore = before;
-    row.payload.stockAfter = after;
-    row.payload.applied = true;
-    row.payload.appliedAt = params.nowMs;
+    row.apply(before, after);
     runningStock.set(row.inventoryProductId, after);
     movementIds.push(row.movementId);
-    params.tx.set(
-      params.db
-        .collection("restaurants")
-        .doc(params.restaurantId)
-        .collection("stockMovements")
-        .doc(row.movementId),
-      row.payload,
-    );
   }
 
+  const appliedStockByProductId: Record<string, number> = {};
   for (const [productId, stockAfter] of runningStock.entries()) {
-    const touched = validated.some((row) => row.inventoryProductId === productId);
+    const touched = writeRows.some((row) => row.inventoryProductId === productId);
     if (!touched) continue;
+    appliedStockByProductId[productId] = stockAfter;
     const productData = productDataById.get(productId);
     const existingInv =
       productData?.inventory && typeof productData.inventory === "object"
@@ -582,5 +735,9 @@ export async function applyInitialModifierStockConsumptionInTransaction(params: 
     );
   }
 
-  return { warnings, movementIds: [...new Set(movementIds)] };
+  return {
+    warnings,
+    movementIds: [...new Set(movementIds)],
+    appliedStockByProductId,
+  };
 }

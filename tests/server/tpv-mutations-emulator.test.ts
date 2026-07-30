@@ -12,6 +12,7 @@ import { handleCancelLines, handleCreateOpenOrder, handleTransitionLineQuantity,
 import { stablePayloadHash, canonicalSerialize, readInventoryWarningsFromIdempotencyResult } from "@/lib/server/tpv/tpv-idempotency";
 import { isAllowedKdsLineStatusTransition } from "@/lib/server/tpv/line-status-transitions";
 import { computeOrderEconomics } from "@/lib/server/tpv/compute-order-economics";
+import { buildRecipeSaleV2MovementId } from "@/lib/inventory/recipe-sale-movement-identity";
 
 const RESTAURANT_A = "rest-a-tpv";
 const RESTAURANT_B = "rest-b-tpv-price";
@@ -1757,5 +1758,544 @@ describe("tpv mutations emulator", () => {
     assert.equal(order?.assignedOperatorName, "Operador Create");
     assert.ok(order?.assignedAt != null);
     assert.equal(typeof (order?.assignedAt as { toDate?: () => Date }).toDate, "function");
+  });
+
+  test("3B-1A. create-open sent con receta crea recipe_sale_v2 y decrementa stock", async () => {
+    const tableId = "mesa-recipe-3b1a";
+    const saleProductId = "prod-recipe-3b1a";
+    const invA = "inv-flour-3b1a";
+    const invB = "inv-egg-3b1a";
+    const lineId = "line-recipe-3b1a";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa recipe",
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invA).set({
+      name: "Harina",
+      active: true,
+      inventory: { enabled: true, unit: "unit", currentStock: 20 },
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invB).set({
+      name: "Huevo",
+      active: true,
+      inventory: { enabled: true, unit: "unit", currentStock: 30 },
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(saleProductId).set({
+      name: "Tortilla",
+      price: 8,
+      active: true,
+      visibleOnMenu: true,
+      recipe: {
+        enabled: true,
+        ingredients: [
+          { productId: invA, name: "Harina", quantity: 1, unit: "unit" },
+          { productId: invB, name: "Huevo", quantity: 2, unit: "unit" },
+        ],
+      },
+    });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{ lineId, productId: saleProductId, quantity: 2 }],
+      markSent: true,
+      idempotencyKey: "create-recipe-3b1a",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const orderSnap = await adminDb.collection("orders").doc(created.orderId).get();
+    assert.ok(orderSnap.exists);
+    const items = orderSnap.data()?.items as Array<Record<string, unknown>>;
+    assert.equal(items?.[0]?.status, "sent");
+    assert.equal(items?.[0]?.quantity, 2);
+
+    const movementsSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .get();
+    assert.equal(movementsSnap.size, 2);
+    for (const doc of movementsSnap.docs) {
+      assert.match(doc.id, /^recipe_sale_v2_/);
+      assert.equal(doc.data().type, "recipe_sale");
+      assert.equal(doc.data().source, "recipe_sale");
+      assert.equal(doc.data().applied, true);
+      assert.equal(doc.data().sentQuantity, 2);
+      assert.ok(typeof doc.data().movementFingerprint === "string");
+    }
+
+    const flour = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invA).get()
+    ).data()?.inventory as Record<string, unknown>;
+    const egg = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invB).get()
+    ).data()?.inventory as Record<string, unknown>;
+    assert.equal(flour?.currentStock, 18);
+    assert.equal(egg?.currentStock, 26);
+
+    const retry = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{ lineId, productId: saleProductId, quantity: 2 }],
+      markSent: true,
+      idempotencyKey: "create-recipe-3b1a",
+    });
+    assert.equal("orderId" in retry, true);
+    if (!("orderId" in retry)) return;
+    assert.equal(retry.orderId, created.orderId);
+    assert.equal(await countStockMovementsForOrder(created.orderId), 2);
+    const flourRetry = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invA).get()
+    ).data()?.inventory as Record<string, unknown>;
+    assert.equal(flourRetry?.currentStock, 18);
+  });
+
+  test("3B-1A. preseed mínimo recipe_sale_v2 → 409 y sin avance", async () => {
+    const tableId = "mesa-recipe-preseed";
+    const saleProductId = "prod-recipe-preseed";
+    const invProductId = "inv-recipe-preseed";
+    const lineId = "line-recipe-preseed";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa preseed recipe",
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invProductId).set({
+      name: "Aceite",
+      active: true,
+      inventory: { enabled: true, unit: "unit", currentStock: 10 },
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(saleProductId).set({
+      name: "Ensalada",
+      price: 6,
+      active: true,
+      visibleOnMenu: true,
+      recipe: {
+        enabled: true,
+        ingredients: [{ productId: invProductId, name: "Aceite", quantity: 1, unit: "unit" }],
+      },
+    });
+
+    const pending = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{ lineId, productId: saleProductId, quantity: 1 }],
+      markSent: false,
+      idempotencyKey: "create-pending-recipe-preseed",
+    });
+    assert.equal("orderId" in pending, true);
+    if (!("orderId" in pending)) return;
+
+    const movementId = buildRecipeSaleV2MovementId({
+      restaurantId: RESTAURANT_A,
+      orderId: pending.orderId,
+      sentSegmentLineId: lineId,
+      saleProductId,
+      inventoryProductId: invProductId,
+      recipeQuantityPerUnit: 1,
+      recipeUnit: "unit",
+      ingredientOccurrence: 0,
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(movementId)
+      .set({ restaurantId: RESTAURANT_A, type: "recipe_sale" });
+
+    const result = await handleTransitionLineStatus(authCtx("kitchen"), {
+      orderId: pending.orderId,
+      lineId,
+      expectedStatus: "pending",
+      nextStatus: "sent",
+      idempotencyKey: "status-recipe-preseed",
+    });
+    assert.equal("error" in result, true);
+    if (!("error" in result)) return;
+    assert.equal(result.status, 409);
+    assert.equal(result.error, "STOCK_MOVEMENT_ID_CONFLICT");
+
+    const order = (await adminDb.collection("orders").doc(pending.orderId).get()).data();
+    assert.equal((order?.items as Array<Record<string, unknown>>)?.[0]?.status, "pending");
+    const inv = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invProductId).get()
+    ).data()?.inventory as Record<string, unknown>;
+    assert.equal(inv?.currentStock, 10);
+    // Preseed sin orderId no aparece en la query por orderId; no se crearon movimientos nuevos.
+    assert.equal(await countStockMovementsForOrder(pending.orderId), 0);
+    const movementSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(movementId)
+      .get();
+    assert.equal(movementSnap.exists, true);
+    assert.deepEqual(movementSnap.data(), {
+      restaurantId: RESTAURANT_A,
+      type: "recipe_sale",
+    });
+  });
+
+  test("3B-1A. producto sin receta conserva comportamiento actual (sin recipe_sale)", async () => {
+    await seedBasicTableAndProduct("mesa-no-recipe", "prod-no-recipe");
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId: "mesa-no-recipe",
+      lines: [{ lineId: "line-no-recipe", productId: "prod-no-recipe", quantity: 1 }],
+      markSent: true,
+      idempotencyKey: "create-no-recipe-3b1a",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    assert.equal(await countStockMovementsForOrder(created.orderId), 0);
+  });
+
+  test("3B-1A. coexistencia modifier+recipe en una tx; conflicto recipe hace rollback conjunto", async () => {
+    const tableId = "mesa-coex-3b1a";
+    const saleProductId = "prod-coex-3b1a";
+    const invRecipe = "inv-recipe-coex";
+    const invMod = "inv-mod-coex";
+    const groupId = "grp-coex-3b1a";
+    const optionId = "opt-coex-3b1a";
+    const lineId = "line-coex-3b1a";
+
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa coex",
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invRecipe).set({
+      name: "Base",
+      active: true,
+      inventory: { enabled: true, unit: "unit", currentStock: 10 },
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invMod).set({
+      name: "Cola",
+      active: true,
+      inventory: { enabled: true, unit: "unit", currentStock: 10 },
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("modifierGroups").doc(groupId).set({
+      name: "Mixer",
+      type: "mixer",
+      active: true,
+      options: [
+        {
+          id: optionId,
+          name: "Cola",
+          priceDelta: 0,
+          active: true,
+          inventoryProductId: invMod,
+          inventoryProductName: "Cola",
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+      ],
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(saleProductId).set({
+      name: "Whisky con receta",
+      price: 12,
+      active: true,
+      visibleOnMenu: true,
+      modifierGroupIds: [groupId],
+      recipe: {
+        enabled: true,
+        ingredients: [{ productId: invRecipe, name: "Base", quantity: 1, unit: "unit" }],
+      },
+    });
+
+    const pending = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{
+        lineId,
+        productId: saleProductId,
+        quantity: 1,
+        selectedModifiers: [{ groupId, optionId }],
+      }],
+      markSent: false,
+      idempotencyKey: "create-coex-pending",
+    });
+    assert.equal("orderId" in pending, true);
+    if (!("orderId" in pending)) return;
+
+    // Happy path first: both consume in one transaction.
+    const sent = await handleTransitionLineStatus(authCtx("kitchen"), {
+      orderId: pending.orderId,
+      lineId,
+      expectedStatus: "pending",
+      nextStatus: "sent",
+      idempotencyKey: "status-coex-ok",
+    });
+    assert.equal("orderId" in sent, true);
+    if (!("orderId" in sent)) return;
+
+    const movements = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", pending.orderId)
+      .get();
+    assert.equal(movements.size, 2);
+    const types = movements.docs.map((d) => d.data().type).sort();
+    assert.deepEqual(types, ["modifier_sale", "recipe_sale"]);
+    const recipeStock = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invRecipe).get()
+    ).data()?.inventory as Record<string, unknown>;
+    const modStock = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invMod).get()
+    ).data()?.inventory as Record<string, unknown>;
+    assert.equal(recipeStock?.currentStock, 9);
+    assert.equal(modStock?.currentStock, 9);
+
+    // Conflict path on a second order: preseed recipe ID → full rollback.
+    const tableId2 = "mesa-coex-conflict";
+    const lineId2 = "line-coex-conflict";
+    await adminDb.collection("tables").doc(tableId2).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa coex conflict",
+    });
+    const pending2 = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId: tableId2,
+      lines: [{
+        lineId: lineId2,
+        productId: saleProductId,
+        quantity: 1,
+        selectedModifiers: [{ groupId, optionId }],
+      }],
+      markSent: false,
+      idempotencyKey: "create-coex-conflict-pending",
+    });
+    assert.equal("orderId" in pending2, true);
+    if (!("orderId" in pending2)) return;
+
+    const conflictMovementId = buildRecipeSaleV2MovementId({
+      restaurantId: RESTAURANT_A,
+      orderId: pending2.orderId,
+      sentSegmentLineId: lineId2,
+      saleProductId,
+      inventoryProductId: invRecipe,
+      recipeQuantityPerUnit: 1,
+      recipeUnit: "unit",
+      ingredientOccurrence: 0,
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(conflictMovementId)
+      .set({ restaurantId: RESTAURANT_A, type: "recipe_sale" });
+
+    const stockBeforeConflictRecipe = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invRecipe).get()
+    ).data()?.inventory as Record<string, unknown>;
+    const stockBeforeConflictMod = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invMod).get()
+    ).data()?.inventory as Record<string, unknown>;
+
+    const conflict = await handleTransitionLineStatus(authCtx("kitchen"), {
+      orderId: pending2.orderId,
+      lineId: lineId2,
+      expectedStatus: "pending",
+      nextStatus: "sent",
+      idempotencyKey: "status-coex-conflict",
+    });
+    assert.equal("error" in conflict, true);
+    if (!("error" in conflict)) return;
+    assert.equal(conflict.status, 409);
+    assert.equal(conflict.error, "STOCK_MOVEMENT_ID_CONFLICT");
+
+    const order2 = (await adminDb.collection("orders").doc(pending2.orderId).get()).data();
+    assert.equal((order2?.items as Array<Record<string, unknown>>)?.[0]?.status, "pending");
+    const stockAfterConflictRecipe = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invRecipe).get()
+    ).data()?.inventory as Record<string, unknown>;
+    const stockAfterConflictMod = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invMod).get()
+    ).data()?.inventory as Record<string, unknown>;
+    assert.equal(stockAfterConflictRecipe?.currentStock, stockBeforeConflictRecipe?.currentStock);
+    assert.equal(stockAfterConflictMod?.currentStock, stockBeforeConflictMod?.currentStock);
+    assert.equal(await countStockMovementsForOrder(pending2.orderId), 0);
+    const preseedSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(conflictMovementId)
+      .get();
+    assert.equal(preseedSnap.exists, true);
+  });
+
+  test("3B-1A.1. modifier + recipe mismo inventoryProductId se encadenan; retry y preseed", async () => {
+    const tableId = "mesa-same-inv-3b1a1";
+    const saleProductId = "prod-same-inv-3b1a1";
+    const invShared = "inv-shared-3b1a1";
+    const groupId = "grp-same-inv-3b1a1";
+    const optionId = "opt-same-inv-3b1a1";
+    const lineId = "line-same-inv-3b1a1";
+
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa same inv",
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invShared).set({
+      name: "Ingrediente compartido",
+      active: true,
+      inventory: { enabled: true, unit: "unit", currentStock: 10 },
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("modifierGroups").doc(groupId).set({
+      name: "Mixer shared",
+      type: "mixer",
+      active: true,
+      options: [
+        {
+          id: optionId,
+          name: "Extra",
+          priceDelta: 0,
+          active: true,
+          inventoryProductId: invShared,
+          inventoryProductName: "Ingrediente compartido",
+          inventoryQuantity: 1,
+          inventoryUnit: "unit",
+        },
+      ],
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(saleProductId).set({
+      name: "Plato shared inv",
+      price: 10,
+      active: true,
+      visibleOnMenu: true,
+      modifierGroupIds: [groupId],
+      recipe: {
+        enabled: true,
+        ingredients: [{ productId: invShared, name: "Base", quantity: 2, unit: "unit" }],
+      },
+    });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{
+        lineId,
+        productId: saleProductId,
+        quantity: 1,
+        selectedModifiers: [{ groupId, optionId }],
+      }],
+      markSent: true,
+      idempotencyKey: "create-same-inv-3b1a1",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const movements = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .get();
+    assert.equal(movements.size, 2);
+    const types = movements.docs.map((d) => d.data().type).sort();
+    assert.deepEqual(types, ["modifier_sale", "recipe_sale"]);
+    for (const doc of movements.docs) {
+      assert.equal(doc.data().productId, invShared);
+    }
+    const ordered = movements.docs
+      .map((d) => {
+        const data = d.data() as Record<string, unknown>;
+        return {
+          id: d.id,
+          stockBefore: data.stockBefore as number,
+          stockAfter: data.stockAfter as number,
+        };
+      })
+      .sort((a, b) => a.id.localeCompare(b.id));
+    assert.equal(ordered[0]?.stockBefore, 10);
+    assert.equal(ordered[0]?.stockAfter, ordered[1]?.stockBefore);
+    assert.equal(ordered[1]?.stockAfter, 7);
+
+    const invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invShared)
+      .get();
+    assert.equal(
+      (invSnap.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      7,
+    );
+
+    const retry = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{
+        lineId,
+        productId: saleProductId,
+        quantity: 1,
+        selectedModifiers: [{ groupId, optionId }],
+      }],
+      markSent: true,
+      idempotencyKey: "create-same-inv-3b1a1",
+    });
+    assert.equal("orderId" in retry, true);
+    if (!("orderId" in retry)) return;
+    assert.equal(retry.orderId, created.orderId);
+    assert.equal(await countStockMovementsForOrder(created.orderId), 2);
+    const invRetry = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invShared).get()
+    ).data()?.inventory as Record<string, unknown>;
+    assert.equal(invRetry?.currentStock, 7);
+
+    // Conflicto: segundo pedido pending + preseed recipe del mismo producto compartido.
+    const tableId2 = "mesa-same-inv-conflict";
+    const lineId2 = "line-same-inv-conflict";
+    await adminDb.collection("tables").doc(tableId2).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa same inv conflict",
+    });
+    const pending2 = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId: tableId2,
+      lines: [{
+        lineId: lineId2,
+        productId: saleProductId,
+        quantity: 1,
+        selectedModifiers: [{ groupId, optionId }],
+      }],
+      markSent: false,
+      idempotencyKey: "create-same-inv-conflict-pending",
+    });
+    assert.equal("orderId" in pending2, true);
+    if (!("orderId" in pending2)) return;
+
+    const preseedId = buildRecipeSaleV2MovementId({
+      restaurantId: RESTAURANT_A,
+      orderId: pending2.orderId,
+      sentSegmentLineId: lineId2,
+      saleProductId,
+      inventoryProductId: invShared,
+      recipeQuantityPerUnit: 2,
+      recipeUnit: "unit",
+      ingredientOccurrence: 0,
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(preseedId)
+      .set({ restaurantId: RESTAURANT_A, type: "recipe_sale" });
+
+    const stockBefore = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invShared).get()
+    ).data()?.inventory as Record<string, unknown>;
+
+    const conflict = await handleTransitionLineStatus(authCtx("kitchen"), {
+      orderId: pending2.orderId,
+      lineId: lineId2,
+      expectedStatus: "pending",
+      nextStatus: "sent",
+      idempotencyKey: "status-same-inv-conflict",
+    });
+    assert.equal("error" in conflict, true);
+    if (!("error" in conflict)) return;
+    assert.equal(conflict.status, 409);
+    assert.equal(conflict.error, "STOCK_MOVEMENT_ID_CONFLICT");
+
+    const order2 = (await adminDb.collection("orders").doc(pending2.orderId).get()).data();
+    assert.equal((order2?.items as Array<Record<string, unknown>>)?.[0]?.status, "pending");
+    const stockAfter = (
+      await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(invShared).get()
+    ).data()?.inventory as Record<string, unknown>;
+    assert.equal(stockAfter?.currentStock, stockBefore?.currentStock);
+    assert.equal(await countStockMovementsForOrder(pending2.orderId), 0);
   });
 });

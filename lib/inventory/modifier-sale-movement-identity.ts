@@ -140,6 +140,8 @@ export type ValidateExistingModifierSaleMovementParams = {
   quantityDelta: number;
   productCurrentStock: number;
   productUnit: string;
+  /** Cuando hay varios movimientos del mismo producto en la misma tx, diferir el match de stock. */
+  expectProductStockMatch?: boolean;
 };
 
 /**
@@ -262,7 +264,10 @@ export function assertExistingModifierSaleMovementIsValidForIdempotentSkip(
     rejectExistingModifierSaleMovement();
   }
 
-  if (params.productCurrentStock !== stockAfter) {
+  if (
+    params.expectProductStockMatch !== false &&
+    params.productCurrentStock !== stockAfter
+  ) {
     rejectExistingModifierSaleMovement();
   }
 }
