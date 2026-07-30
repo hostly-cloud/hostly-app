@@ -10,15 +10,19 @@ import {
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase/client";
 import {
-  dbgAddDoc,
   dbgRunTransaction,
   dbgTransactionUpdate,
   DbgWriteBatch,
 } from "@/lib/firestore/instrumentedWrites";
 import { updateMesa } from "@/lib/firestore/mesas";
+import {
+  closeTpvOrderViaApi,
+  createOpenOrderViaApi,
+  reopenTpvOrderViaApi,
+} from "@/lib/firestore/tpv-mutations-via-api";
 import type { CatalogProduct, ComandaItem, PastOrder } from "@/types/comanda";
 import type { Mesa } from "@/types/mesa";
-import type { OrderSource, OrderStatus } from "@/types/order";
+import type { OrderStatus } from "@/types/order";
 import type { ComandaOrderStatus, OrderMetaDoc } from "@/utils/comanda";
 import {
   addProductToComanda,
@@ -39,8 +43,6 @@ import {
 } from "@/utils/comanda";
 
 const ORDER_CONFLICT_ERROR = "ORDER_CONFLICT";
-
-const orderSource: OrderSource = "mesa";
 
 const ORDER_STATUS_OPEN: OrderStatus = "open";
 const ORDER_STATUS_SENT: OrderStatus = "sent";
@@ -322,33 +324,30 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
         setOrderStatus(ORDER_STATUS_OPEN);
       } else {
         const now = Date.now();
-
-        const docRef = await dbgAddDoc(
-          collection(db, "orders"),
-          {
-          restaurantId: restaurantId ?? null,
-          mesaId,
+        const lines = items
+          .filter((item) => item.qty > 0 && item.id.trim())
+          .map((item) => ({
+            lineId: item.id.trim(),
+            productId: item.id.trim(),
+            quantity: Math.floor(item.qty),
+          }));
+        if (lines.length === 0) {
+          window.alert("Añade productos antes de guardar la comanda.");
+          return;
+        }
+        const created = await createOpenOrderViaApi({
           tableId: mesaId,
-          mesaName: mesa?.name ?? null,
-          mesaZone: mesa?.zone ?? null,
-          zoneName: mesa?.zone ?? null,
-          items,
-          total,
-          status: ORDER_STATUS_OPEN,
-          source: orderSource,
-          createdAt: now,
-          updatedAt: now,
-          ...getOrderAuditFields(),
-        },
-          {
-            label: "useMesaComanda:handleSaveOrder:addDoc",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-          },
-        );
+          tableLabel: mesa?.name ?? mesaId,
+          lines,
+          markSent: false,
+        });
+        if (!created.ok) {
+          console.error("Error creating order via API", created.error, created.details);
+          window.alert("No se pudo abrir la comanda. Inténtalo de nuevo.");
+          return;
+        }
 
-        setCurrentOrderId(docRef.id);
+        setCurrentOrderId(created.orderId);
         setOrderStatus(ORDER_STATUS_OPEN);
         setCurrentOrderUpdatedAt(now);
       }
@@ -382,47 +381,12 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     setIsClosing(true);
 
     try {
-      const now = Date.now();
-
-      await dbgRunTransaction(
-        db,
-        async (transaction) => {
-        const ref = doc(db, "orders", orderId);
-        const snap = await transaction.get(ref);
-
-        const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
-
-        const remoteUpdatedAt =
-          typeof data?.updatedAt === "number" ? data.updatedAt : null;
-
-        assertNoOrderConflict(remoteUpdatedAt);
-
-        dbgTransactionUpdate(
-          transaction,
-          ref,
-          {
-            status: ORDER_STATUS_CLOSED,
-            closedAt: now,
-            updatedAt: now,
-            ...getOrderAuditFields(),
-          },
-          {
-            label: "useMesaComanda:handleCloseOrder:txUpdate",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-            orderId,
-          },
-        );
-      },
-        {
-          label: "useMesaComanda:handleCloseOrder",
-          collection: "orders",
-          restaurantId,
-          tableId: mesaId,
-          orderId,
-        },
-      );
+      const closed = await closeTpvOrderViaApi({ orderId });
+      if (!closed.ok) {
+        console.error("Error closing order", closed.error, closed.details);
+        window.alert("No se pudo cerrar la comanda. Inténtalo de nuevo.");
+        return;
+      }
 
       await updateMesa(mesaId, {
         status: "free",
@@ -433,13 +397,6 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
       setOrderStatus(null);
       setCurrentOrderUpdatedAt(null);
     } catch (err) {
-      if (err instanceof Error && err.message === ORDER_CONFLICT_ERROR) {
-        window.alert(
-          "La comanda ha cambiado en otro dispositivo. Revisa antes de cerrar.",
-        );
-        return;
-      }
-
       console.error("Error closing order", err);
     } finally {
       setIsClosing(false);
@@ -546,57 +503,21 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
 
     try {
       const now = Date.now();
-
-      await dbgRunTransaction(
-        db,
-        async (transaction) => {
-        const ref = doc(db, "orders", orderId);
-        const snap = await transaction.get(ref);
-
-        const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
-
-        const remoteUpdatedAt =
-          typeof data?.updatedAt === "number" ? data.updatedAt : null;
-
-        assertNoOrderConflict(remoteUpdatedAt);
-
-        dbgTransactionUpdate(
-          transaction,
-          ref,
-          {
-            status: ORDER_STATUS_OPEN,
-            reopenedAt: now,
-            updatedAt: now,
-            ...getOrderAuditFields(),
-          },
-          {
-            label: "useMesaComanda:handleReopenOrder:txUpdate",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-            orderId,
-          },
-        );
-      },
-        {
-          label: "useMesaComanda:handleReopenOrder",
-          collection: "orders",
-          restaurantId,
-          tableId: mesaId,
-          orderId,
-        },
-      );
+      const result = await reopenTpvOrderViaApi({ orderId });
+      if (!result.ok) {
+        if (result.error === "TABLE_ALREADY_HAS_ACTIVE_ORDER") {
+          window.alert(
+            "La mesa ya tiene otro pedido activo. No se puede reabrir esta comanda.",
+          );
+          return;
+        }
+        console.error("Error reopening order", result.error, result.details);
+        return;
+      }
 
       setCurrentOrderUpdatedAt(now);
       setOrderStatus(ORDER_STATUS_OPEN);
     } catch (err) {
-      if (err instanceof Error && err.message === ORDER_CONFLICT_ERROR) {
-        window.alert(
-          "La comanda ha cambiado en otro dispositivo. Revisa antes de reabrir edición.",
-        );
-        return;
-      }
-
       console.error("Error reopening order", err);
     } finally {
       setIsReopening(false);

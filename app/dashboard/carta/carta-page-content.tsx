@@ -106,6 +106,7 @@ import {
   type TableGroupOrdersMergedDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
+import { firestoreItemsToSaleLineIntents } from "@/lib/firestore/firestore-items-to-sale-intent";
 import {
   cartLinesProductionSnapshotEqual,
   mergeLocalLinesProductionFromServerItems,
@@ -212,12 +213,20 @@ import {
   createPrintJobsForComandaLines,
 } from "@/lib/firestore/print-jobs";
 import {
-  applyCreatedStockMovements,
-  createStockMovementsForModifierConsumption,
-  createStockMovementsForRecipeConsumption,
   createStockReversalMovementsForModifierConsumption,
   createStockReversalMovementsForRecipeConsumption,
 } from "@/lib/firestore/stock-movements";
+import {
+  applyAuthoritativeSnapshotsToLines,
+  parseAuthoritativeLineSnapshots,
+  rollbackReleaseLinesSelective,
+  sendCartaProductionReleaseViaTpvApi,
+} from "@/lib/carta/send-production-release-via-tpv-api";
+import {
+  closeTpvOrderViaApi,
+  createOpenOrderViaApi,
+  resolveActiveOrderForTableViaApi,
+} from "@/lib/firestore/tpv-mutations-via-api";
 import { fetchCartaCategorias, fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
 import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
@@ -603,6 +612,8 @@ type CartOrderLine = {
   inventoryCost?: CartOrderLineInventoryCost;
   /** `orderItems/{id}` creado al enviar comanda; enlace directo para cancelación/KDS. */
   orderItemDocId?: string;
+  /** Última quantity autoritativa conocida en servidor (tras send/rehydrate). */
+  serverQuantity?: number;
 };
 
 const CARTA_PRESET_EXTRAS: readonly CartOrderLineExtra[] = [];
@@ -2951,9 +2962,42 @@ export function CartaPageContent({
         let knownId =
           openDraftOrderIdByTableRef.current[tid]?.trim() || null;
         if (!knownId) {
-          const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
-          if (snapDoc) knownId = snapDoc.id;
+          try {
+            const resolved = await resolveActiveOrderForTableViaApi({ tableId: tid });
+            if (resolved.ok && resolved.orderId) knownId = resolved.orderId;
+          } catch {
+            // Fallback query cliente.
+          }
+          if (!knownId) {
+            const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
+            if (snapDoc) knownId = snapDoc.id;
+          }
         }
+
+        // Alta activa únicamente vía create-open (adquiere tableOrderLocks).
+        if (!knownId) {
+          const intents = firestoreItemsToSaleLineIntents(items);
+          if (intents.length === 0) return;
+          const created = await createOpenOrderViaApi({
+            tableId: tid,
+            tableLabel,
+            lines: intents,
+            markSent: false,
+            operatorAssignment: resolveOperatorAssignmentForNewOrder(
+              tid,
+              tablesList,
+              activeOperator,
+            ),
+          });
+          if (!created.ok) {
+            console.error("[persistOpenOrderDraft] create-open failed", created.error);
+            return;
+          }
+          openDraftOrderIdByTableRef.current[tid] = created.orderId;
+          return;
+        }
+
+        // Sync de borrador sobre pedido existente (no crea).
         const orderId = await persistOpenOrderForTable(db, {
           restaurantId,
           tableId: tid,
@@ -2961,13 +3005,6 @@ export function CartaPageContent({
           items,
           total: Number.isFinite(grandTotal) ? grandTotal : 0,
           existingOrderId: knownId,
-          operatorAssignment: knownId
-            ? null
-            : resolveOperatorAssignmentForNewOrder(
-                tid,
-                tablesList,
-                activeOperator,
-              ),
         });
         openDraftOrderIdByTableRef.current[tid] = orderId;
       } catch (e) {
@@ -3532,27 +3569,15 @@ export function CartaPageContent({
               return;
             }
           }
-          const batch = new DbgWriteBatch(db, {
-            label: "carta:autoCloseEmptyTable",
-            collection: "orders",
-            restaurantId: rid,
-            tableId: tid,
-          });
-          let n = 0;
           for (const d of snap.docs) {
             const data = d.data() as { status?: string; restaurantId?: string };
             if (data.restaurantId !== rid) continue;
             if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
-            batch.update(d.ref, {
-              status: "closed",
-              closedAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              total: 0,
-              paymentRequestedAt: null,
-            });
-            n++;
+            const closed = await closeTpvOrderViaApi({ orderId: d.id });
+            if (!closed.ok) {
+              console.error("[autoCloseEmptyTable] close API failed", closed.error, d.id);
+            }
           }
-          if (n > 0) await batch.commit();
 
           const memberIds = resolveGroupMemberIdsForTable(
             tid,
@@ -5400,11 +5425,53 @@ export function CartaPageContent({
   const handleQuickAdd = handleProductAddRequest;
 
   const handleIncrementLine = (lineId: string) => {
-    updateCurrentTableOrder((prev) =>
-      prev.map((l) =>
-        l.id === lineId ? { ...l, quantity: l.quantity + 1 } : l,
-      ),
-    );
+    updateCurrentTableOrder((prev) => {
+      const idx = prev.findIndex((l) => l.id === lineId);
+      if (idx === -1) return prev;
+      const line = prev[idx]!;
+      // Pending: incrementar in-place.
+      if (line.status === "pending") {
+        return prev.map((l) =>
+          l.id === lineId ? { ...l, quantity: l.quantity + 1 } : l,
+        );
+      }
+      // Ya enviada: no subir quantity de la línea sent (rompería sync).
+      // Crear/fusionar unidad pendiente hermana (mismo producto/mods/pase/nota).
+      const modifierKey = cartLineModifiersMergeKey(line.selectedModifiers);
+      const mergeIdx = prev.findIndex(
+        (l, i) =>
+          i !== idx &&
+          l.status === "pending" &&
+          l.product.id === line.product.id &&
+          (l.course ?? undefined) === (line.course ?? undefined) &&
+          (l.lineNote ?? "") === (line.lineNote ?? "") &&
+          cartLineModifiersMergeKey(l.selectedModifiers) === modifierKey,
+      );
+      if (mergeIdx !== -1) {
+        const next = [...prev];
+        const target = next[mergeIdx]!;
+        next[mergeIdx] = { ...target, quantity: target.quantity + 1 };
+        return next;
+      }
+      const now = Date.now();
+      const pendingSibling: CartOrderLine = {
+        ...line,
+        id: generateOrderLineId(),
+        quantity: 1,
+        status: "pending",
+        sentAt: undefined,
+        preparedAt: undefined,
+        servedAt: undefined,
+        cancelledAt: undefined,
+        cancelledBy: undefined,
+        orderItemDocId: undefined,
+        serverQuantity: undefined,
+        inventoryCost: undefined,
+        addedAt: now,
+        createdAt: now,
+      };
+      return [...prev, pendingSibling];
+    });
   };
 
   const stopHoldAdd = () => {
@@ -6325,21 +6392,11 @@ export function CartaPageContent({
 
   const handleMarkOrderClosed = async () => {
     if (!orderIdFromUrl || !isFirebaseConfigured) return;
-    const ref = doc(db, "orders", orderIdFromUrl);
-    await dbgUpdateDoc(
-      ref,
-      {
-      status: "closed",
-      closedAt: serverTimestamp(),
-    },
-      {
-        label: "carta:handleMarkOrderClosed",
-        collection: "orders",
-        restaurantId,
-        tableId: selectedTableId,
-        orderId: orderIdFromUrl,
-      },
-    );
+    const closed = await closeTpvOrderViaApi({ orderId: orderIdFromUrl });
+    if (!closed.ok) {
+      console.error("[handleMarkOrderClosed] close API failed", closed.error);
+      return;
+    }
     setOrder([]);
   };
 
@@ -7972,17 +8029,24 @@ export function CartaPageContent({
         selectedTableId;
 
       setIsComandaSending(true);
+      const previousByLineId = new Map(
+        linesToSend.map((l) => {
+          const prev = order.find((x) => x.id === l.id) ?? l;
+          return [
+            l.id,
+            {
+              status: prev.status,
+              sentAt: prev.sentAt,
+              inventoryCost: prev.inventoryCost,
+              orderItemDocId: prev.orderItemDocId,
+            },
+          ] as const;
+        }),
+      );
       try {
         const now = Date.now();
         const sendIds = new Set(linesToSend.map((l) => l.id));
-        const inventoryCostByLineId = new Map<string, CartOrderLineInventoryCost>();
-        const orderItemRefByLineId = new Map<
-          string,
-          ReturnType<typeof doc>
-        >();
-        for (const l of linesToSend) {
-          orderItemRefByLineId.set(l.id, doc(collection(db, "orderItems")));
-        }
+        const allPendingBeforeSend = order.filter((l) => l.status === "pending");
 
         const nextOrder = order.map((l) => {
           if (l.status !== "pending" || !sendIds.has(l.id)) return l;
@@ -7998,21 +8062,15 @@ export function CartaPageContent({
                   calculatedAt: now,
                 })
               : undefined;
-          if (inventoryCost) inventoryCostByLineId.set(l.id, inventoryCost);
-          const orderItemRef = orderItemRefByLineId.get(l.id);
           return {
             ...l,
             status: "sent" as const,
             sentAt: l.sentAt ?? now,
             ...(inventoryCost ? { inventoryCost } : {}),
-            ...(orderItemRef ? { orderItemDocId: orderItemRef.id } : {}),
           };
         });
 
         updateCurrentTableOrder(() => nextOrder);
-
-        const items = serializeOrderLinesToFirestoreItems(nextOrder);
-        const grandTotal = sumCartOrderLinesTotal(nextOrder);
 
         const draftOrderId =
           openDraftOrderIdByTableRef.current[selectedTableId]?.trim() || "";
@@ -8025,191 +8083,83 @@ export function CartaPageContent({
                 ? openOrderIdsForTable[0]!
                 : null;
 
-        const persistedOrderRef = existingOrderId
-          ? doc(db, "orders", existingOrderId)
-          : await dbgAddDoc(
-              collection(db, "orders"),
-              {
-              restaurantId,
-              tableId: selectedTableId,
-              table: tableLabel,
-              status: "sent",
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              items,
-              total: Number.isFinite(grandTotal) ? grandTotal : 0,
-            },
-              {
-                label: "carta:sendLinesToComanda:createOrder",
-                collection: "orders",
-                restaurantId,
-                tableId: selectedTableId,
-              },
-            );
-
-        openDraftOrderIdByTableRef.current[selectedTableId] =
-          persistedOrderRef.id;
-
-        if (existingOrderId) {
-          await dbgUpdateDoc(
-            persistedOrderRef,
-            {
-            status: "sent",
-            updatedAt: serverTimestamp(),
-            items,
-            total: Number.isFinite(grandTotal) ? grandTotal : 0,
+        const apiResult = await sendCartaProductionReleaseViaTpvApi(
+          {
+            tableId: selectedTableId,
+            tableLabel,
+            existingOrderId,
+            linesToSend,
+            allPendingBeforeSend,
+            releaseAction: options?.releaseAction ?? "send_to_comanda",
           },
-            {
-              label: "carta:sendLinesToComanda:updateOrder",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: persistedOrderRef.id,
+          {
+            resolveOpenOrderIdForTable: async (tableId) => {
+              if (!restaurantId?.trim()) return null;
+              try {
+                const resolved = await resolveActiveOrderForTableViaApi({ tableId });
+                if (resolved.ok && resolved.orderId) return resolved.orderId;
+              } catch {
+                // Fallback a query cliente si el resolve server falla.
+              }
+              const snap = await fetchOpenOrderForTable(
+                db,
+                restaurantId.trim(),
+                tableId,
+              );
+              return snap?.id ?? null;
             },
+            readOrderLines: async (orderId) => {
+              const snap = await getDoc(doc(db, "orders", orderId));
+              if (!snap.exists()) return null;
+              const data = snap.data() as { items?: unknown };
+              if (!Array.isArray(data.items)) return [];
+              return parseAuthoritativeLineSnapshots(
+                data.items as Record<string, unknown>[],
+              );
+            },
+          },
+        );
+
+        if (!apiResult.ok) {
+          console.error(
+            "[Hostly TPV] envío Carta vía API falló.",
+            apiResult.error,
+            apiResult.details,
+            apiResult.failureClass,
+          );
+          if (apiResult.shouldRollbackOptimistic) {
+            updateCurrentTableOrder((current) =>
+              rollbackReleaseLinesSelective(current, previousByLineId),
+            );
+          }
+          return false;
+        }
+
+        openDraftOrderIdByTableRef.current[selectedTableId] = apiResult.orderId;
+
+        if (apiResult.items.length > 0) {
+          updateCurrentTableOrder((current) =>
+            applyAuthoritativeSnapshotsToLines(
+              current,
+              apiResult.items,
+              normalizeOrderLineStatus,
+            ),
+          );
+        } else {
+          // Sin items: al menos marcar serverQuantity = quantity en líneas enviadas.
+          updateCurrentTableOrder((current) =>
+            current.map((l) =>
+              sendIds.has(l.id) && l.status !== "pending"
+                ? { ...l, serverQuantity: l.quantity }
+                : l,
+            ),
           );
         }
 
-        const batch = new DbgWriteBatch(db, {
-          label: "carta:sendLinesToComanda:orderItemsBatch",
-          collection: "orderItems",
-          restaurantId,
-          tableId: selectedTableId,
-          orderId: persistedOrderRef.id,
-        });
-        linesToSend.forEach((l) => {
-          const shadowCatalog = buildProductResolverParityContextFromProduct(
-            l.product,
-            operationalShadowCatalogSources,
-          );
-          const { stationFields } = resolveOperationalLineFieldsForCartLine(
-            l,
-            shadowCatalog,
-          );
-          const opFields = resolveOperationStationFieldsForCartLine(l);
-          warnDevIfSentLineMissingStation({
-            lineId: l.id,
-            productId: String(l.product.id),
-            productName: String(l.product.nombre ?? ""),
-            fields: stationFields,
-          });
-          const ref = orderItemRefByLineId.get(l.id);
-          if (!ref) return;
-          const lCourse = normalizeComandaCourseForStorage(l.course);
-          const extrasPayload = Array.isArray(l.extras)
-            ? l.extras
-                .filter((ex) => ex && typeof ex.name === "string")
-                .map((ex) => ({
-                  name: String(ex.name).trim(),
-                  price: Number.isFinite(Number(ex.price))
-                    ? Number(ex.price)
-                    : 0,
-                }))
-                .filter((ex) => ex.name !== "")
-            : [];
-          const selectedModifiersPayload = selectedModifiersToFirestorePayload(
-            l.selectedModifiers,
-          );
-          const linePresentation = resolveOrderLineModifierPresentation({
-            baseProductName: String(l.product.nombre ?? ""),
-            displayName: l.displayName,
-            selectedModifiers: l.selectedModifiers,
-            lineNote: l.lineNote,
-          });
-          batch.set(ref, {
-            restaurantId,
-            orderId: persistedOrderRef.id,
-            tableId: selectedTableId,
-            tableName: tableLabel,
-            lineId: l.id,
-            productId: String(l.product.id),
-            name: linePresentation.displayName,
-            quantity: l.quantity,
-            status: "pending",
-            sentAt: now,
-            createdAt: now,
-            updatedAt: now,
-            categoryName: l.product.categoria ?? undefined,
-            ...(lCourse != null ? { course: lCourse } : {}),
-            extras: extrasPayload,
-            ...(selectedModifiersPayload.length > 0
-              ? {
-                  selectedModifiers: selectedModifiersPayload,
-                  modifierTotal: resolveLineModifierTotal(l),
-                  modifiersLabel: linePresentation.modifiersLabel,
-                }
-              : {}),
-            ...(linePresentation.displayName
-              ? { displayName: linePresentation.displayName }
-              : {}),
-            note: linePresentation.note,
-            ...stationFieldsToFirestorePayload(stationFields),
-            ...operationStationFieldsToFirestorePayload(opFields),
-            ...(inventoryCostByLineId.has(l.id)
-              ? {
-                  inventoryCost: inventoryCostSnapshotToFirestore(
-                    inventoryCostByLineId.get(l.id)!,
-                  ),
-                }
-              : {}),
-          });
-        });
-        await batch.commit();
-
-        try {
-          const inventoryRestaurantId = operationalRestaurantId ?? restaurantId;
-          const inventoryResult = await createStockMovementsForModifierConsumption({
-            restaurantId: inventoryRestaurantId,
-            orderId: persistedOrderRef.id,
-            lines: linesToSend,
-            userId: waiterId,
-          });
-          if (inventoryResult.failed > 0) {
-            console.warn(
-              "[Hostly Inventory] algunos movimientos de modificador no se crearon; comanda enviada.",
-              inventoryResult,
-            );
-          }
-          if (inventoryResult.movementIds.length > 0) {
-            const applyResult = await applyCreatedStockMovements({
-              restaurantId: inventoryRestaurantId,
-              movementIds: inventoryResult.movementIds,
-            });
-            if (applyResult.failed > 0) {
-              console.warn(
-                "[Hostly Inventory] algunos movimientos no se aplicaron al stock; comanda enviada.",
-                applyResult,
-              );
-            }
-          }
-
-          const recipeResult = await createStockMovementsForRecipeConsumption({
-            restaurantId: inventoryRestaurantId,
-            orderId: persistedOrderRef.id,
-            lines: linesToSend,
-            userId: waiterId,
-          });
-          if (recipeResult.failed > 0) {
-            console.warn(
-              "[Hostly Inventory] algunos movimientos de escandallo no se crearon; comanda enviada.",
-              recipeResult,
-            );
-          }
-          if (recipeResult.movementIds.length > 0) {
-            const recipeApplyResult = await applyCreatedStockMovements({
-              restaurantId: inventoryRestaurantId,
-              movementIds: recipeResult.movementIds,
-            });
-            if (recipeApplyResult.failed > 0) {
-              console.warn(
-                "[Hostly Inventory] escandallo no aplicado al stock; comanda enviada.",
-                recipeApplyResult,
-              );
-            }
-          }
-        } catch (inventoryErr) {
+        if (apiResult.inventoryWarnings.length > 0) {
           console.warn(
-            "[Hostly Inventory] ledger de inventario no disponible; comanda enviada.",
-            inventoryErr,
+            "[Hostly Inventory] avisos de consumo en envío Carta.",
+            apiResult.inventoryWarnings,
           );
         }
 
@@ -8217,7 +8167,7 @@ export function CartaPageContent({
           const printerConfig = await getPrinterConfig(restaurantId);
           const printResult = await createPrintJobsForComandaLines({
             restaurantId,
-            orderId: persistedOrderRef.id,
+            orderId: apiResult.orderId,
             tableId: selectedTableId,
             tableName: tableLabel,
             lines: linesToSend,
@@ -8249,7 +8199,7 @@ export function CartaPageContent({
           restaurantId,
           type: existingOrderId ? "order_updated" : "order_created",
           entityType: "order",
-          entityId: persistedOrderRef.id,
+          entityId: apiResult.orderId,
           actorUserId: waiterId ?? undefined,
           actorUserName: activityActorName,
           actorRole: activityActorRole,
@@ -8258,7 +8208,7 @@ export function CartaPageContent({
             tableName: tableLabel,
             lineCount: linesToSend.length,
             lineIds: linesToSend.map((line) => line.id),
-            total: Number.isFinite(grandTotal) ? grandTotal : 0,
+            total: Number.isFinite(apiResult.total) ? apiResult.total : 0,
             action: options?.releaseAction ?? "send_to_comanda",
             route: "tpv",
           }),
@@ -8267,6 +8217,9 @@ export function CartaPageContent({
         return true;
       } catch (e) {
         console.error(e);
+        updateCurrentTableOrder((current) =>
+          rollbackReleaseLinesSelective(current, previousByLineId),
+        );
         return false;
       } finally {
         setIsComandaSending(false);
@@ -8282,14 +8235,12 @@ export function CartaPageContent({
       updateCurrentTableOrder,
       orderIdFromUrl,
       openOrderIdsForTable,
-      operationalRestaurantId,
       waiterId,
       inventoryProductsById,
       operationalCatalog.productDocumentsById,
       operationalCatalog.source,
       activityActorName,
       activityActorRole,
-      operationalShadowCatalogSources,
     ],
   );
 

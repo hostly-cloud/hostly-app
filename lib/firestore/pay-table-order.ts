@@ -1,56 +1,41 @@
-import {
-  collection,
-  getDocs,
-  query,
-  serverTimestamp,
-  where,
-  type Firestore,
-} from "firebase/firestore";
-import { DbgWriteBatch } from "@/lib/firestore/instrumentedWrites";
-import { isOrderStatusActiveForTableOccupancy } from "@/lib/firestore/order-table-occupancy";
+import { authenticatedApiFetch } from "@/lib/auth/authenticated-api-fetch";
 
 /**
- * Marca como pagadas todas las órdenes activas de una mesa (mismo `restaurantId` y `tableId`).
- * Solo actualiza documentos que siguen activos para ocupación de mesa.
+ * Pago total de mesa vía API Admin (libera tableOrderLocks atómicamente).
+ * No usar para pagos parciales: el pedido debe permanecer activo y con lock.
  */
 export async function handlePayTableOrder(
   tableId: string,
   {
-    db,
     restaurantId,
   }: {
-    db: Firestore;
+    db?: unknown;
     restaurantId: string;
   },
-): Promise<{ updatedCount: number }> {
+): Promise<{ updatedCount: number; lockReleased?: boolean; paidOrderIds?: string[] }> {
   const tid = String(tableId).trim();
-  if (!tid || !restaurantId) return { updatedCount: 0 };
+  if (!tid || !restaurantId?.trim()) return { updatedCount: 0 };
 
-  const q = query(
-    collection(db, "orders"),
-    where("restaurantId", "==", restaurantId),
-    where("tableId", "==", tid),
-  );
-  const snap = await getDocs(q);
-  const batch = new DbgWriteBatch(db, {
-    label: "handlePayTableOrder:batch",
-    collection: "orders",
-    restaurantId,
-    tableId: tid,
+  const response = await authenticatedApiFetch("/api/tpv/orders/pay-table", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tableId: tid }),
   });
-  let n = 0;
-  for (const d of snap.docs) {
-    const data = d.data() as { restaurantId?: string; status?: string };
-    if (data.restaurantId !== restaurantId) continue;
-    if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
-    batch.update(d.ref, {
-      status: "paid",
-      paidAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      paymentRequestedAt: null,
-    });
-    n++;
+  const payload = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    error?: string;
+    updatedCount?: number;
+    lockReleased?: boolean;
+    paidOrderIds?: string[];
+  } | null;
+
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.error ?? "PAY_TABLE_FAILED");
   }
-  if (n > 0) await batch.commit();
-  return { updatedCount: n };
+
+  return {
+    updatedCount: Number(payload.updatedCount) || 0,
+    lockReleased: payload.lockReleased === true,
+    paidOrderIds: Array.isArray(payload.paidOrderIds) ? payload.paidOrderIds : [],
+  };
 }

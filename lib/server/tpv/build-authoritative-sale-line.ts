@@ -3,6 +3,7 @@ import type { SaleLineIntent } from "@/lib/server/tpv/tpv-mutation-dtos";
 import type { ResolvedSaleModifier } from "@/lib/server/tpv/load-tpv-catalog-admin";
 import { modifierInventoryFieldsToPayload } from "@/lib/modifiers/modifier-inventory-consumption";
 import { normalizeProductionLineStatus } from "@/lib/firestore/merge-order-items-for-persist";
+import { normalizeMenuCourseValue } from "@/lib/carta/menu-course";
 
 export type BuildAuthoritativeSaleLineParams = {
   intent: SaleLineIntent;
@@ -94,8 +95,14 @@ export function buildAuthoritativeSaleLine(
     line.operationStationName = operationStationName;
   }
 
-  if (product.course != null && Number.isFinite(Number(product.course))) {
-    line.course = product.course;
+  // Precedencia course: intent Carta (pase operativo) → catálogo → sin course.
+  // Excepción de autoridad: solo `course` puede venir del cliente; station/precio no.
+  const intentCourse = normalizeMenuCourseValue(intent.course);
+  if (intentCourse != null) {
+    line.course = intentCourse;
+  } else {
+    const catalogCourse = normalizeMenuCourseValue(product.course);
+    if (catalogCourse != null) line.course = catalogCourse;
   }
 
   if (modifiers.length > 0) {

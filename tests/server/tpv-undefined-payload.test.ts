@@ -177,15 +177,16 @@ describe("TPV payloads omit undefined before Firestore (Corrección 2)", () => {
     assertNoUndefinedDeep(line, "sale line with zero modifierTotal");
   });
 
-  test("7. null categoryName on product is omitted, course 0 is preserved", () => {
+  test("7. null categoryName omitted; course 0 (sin pase) no se persiste", () => {
     const line = buildAuthoritativeSaleLine({
       intent: { lineId: "line-1", productId: "prod-1", quantity: 1 },
       product: baseProduct({ categoryName: null, course: 0 }),
       modifiers: [],
     });
     assert.equal("categoryName" in line, false);
-    assert.equal(line.course, 0);
-    assertNoUndefinedDeep(line, "sale line with course zero");
+    // course 0 / sin pase → omitir campo (misma regla que normalizeMenuCourseValue).
+    assert.equal("course" in line, false);
+    assertNoUndefinedDeep(line, "sale line without course when catalog course is 0");
   });
 
   test("8. nested selectedModifiers contain no undefined", () => {

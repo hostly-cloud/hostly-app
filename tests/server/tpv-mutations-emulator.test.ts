@@ -188,9 +188,10 @@ describe("tpv mutations emulator", () => {
   });
 
   test("idempotent create-open returns same order", async () => {
-    await seedBasicTableAndProduct();
+    const tableId = "mesa-idem-create-open";
+    await seedBasicTableAndProduct(tableId, "prod-1");
     const intent = {
-      tableId: "mesa-1",
+      tableId,
       lines: [{ lineId: "line-x", productId: "prod-1", quantity: 1 }],
       idempotencyKey: "idem-create-2",
     };
@@ -2297,5 +2298,36 @@ describe("tpv mutations emulator", () => {
     ).data()?.inventory as Record<string, unknown>;
     assert.equal(stockAfter?.currentStock, stockBefore?.currentStock);
     assert.equal(await countStockMovementsForOrder(pending2.orderId), 0);
+  });
+
+  test("3B-1B.1 create-open con course override persiste pase Carta (no catálogo)", async () => {
+    const tableId = "mesa-course-3b1b1";
+    const saleProductId = "prod-course-3b1b1";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa course",
+    });
+    await adminDb.collection("restaurants").doc(RESTAURANT_A).collection("products").doc(saleProductId).set({
+      name: "Plato pase",
+      price: 12,
+      active: true,
+      visibleOnMenu: true,
+      course: 1,
+    });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{ lineId: "line-course-1", productId: saleProductId, quantity: 1, course: 3 }],
+      markSent: true,
+      idempotencyKey: "create-course-override-3b1b1",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const items = (
+      await adminDb.collection("orders").doc(created.orderId).get()
+    ).data()?.items as Array<Record<string, unknown>>;
+    assert.equal(items?.[0]?.course, 3);
+    assert.equal(items?.[0]?.status, "sent");
   });
 });

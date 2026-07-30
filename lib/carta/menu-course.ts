@@ -24,6 +24,14 @@ export function isMenuCourse(course: number): course is MenuCourse {
   );
 }
 
+/** Normaliza pase 1–4; `<=0` / inválido → undefined (sin pase). */
+export function normalizeMenuCourseValue(raw: unknown): MenuCourse | undefined {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  const u = Math.min(MENU_COURSE_MAX, Math.max(MENU_COURSE_MIN, Math.floor(n)));
+  return isMenuCourse(u) ? u : undefined;
+}
+
 /** Singular label for badges and line chips. */
 export function getMenuCourseLabel(course: number): string {
   switch (course) {

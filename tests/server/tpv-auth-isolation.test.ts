@@ -23,6 +23,11 @@ const TPV_ROUTES = [
   "app/api/tpv/orders/cancel-lines/route.ts",
   "app/api/tpv/orders/transition-line-status/route.ts",
   "app/api/tpv/orders/transition-line-quantity/route.ts",
+  "app/api/tpv/orders/close/route.ts",
+  "app/api/tpv/orders/reopen/route.ts",
+  "app/api/tpv/orders/resolve-active-for-table/route.ts",
+  "app/api/tpv/orders/pay-table/route.ts",
+  "app/api/tpv/orders/merge-table-group/route.ts",
 ] as const;
 
 const LEGACY_API_ROUTES = [
@@ -129,7 +134,7 @@ describe("TPV auth isolation (Corrección 1)", () => {
     assert.match(src, /restaurantId: string;\s+db: Firestore;/);
   });
 
-  test("five TPV routes import strict helper only", () => {
+  test("TPV routes import strict helper only", () => {
     for (const route of TPV_ROUTES) {
       const src = readFileSync(route, "utf8");
       assert.match(src, /requireAuthorizedTpvRestaurant/);

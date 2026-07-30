@@ -1,7 +1,3 @@
-import { dbgAddDoc } from "@/lib/firestore/instrumentedWrites";
-import { collection } from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
-
 /** Cobro / cierre contable en documentos `orders` (además de estados de flujo como `sent`). */
 export type OrderBillStatus = "open" | "paid" | "closed";
 
@@ -31,13 +27,12 @@ export function parseOrderCancelledLineIds(raw: unknown): string[] {
   return out;
 }
 
-export const createOrder = async ({
-  restaurantId,
-  items,
-  total,
-  tableId,
-  tableName,
-}: {
+/**
+ * @deprecated LEGACY — sin callers operativos (3B-2A.1).
+ * No crea pedidos: la ausencia de `status` contaría como activo en occupancy.
+ * Usar `createOpenOrderViaApi` / `handleCreateOpenOrder`.
+ */
+export const createOrder = async (_params: {
   restaurantId: string;
   items: {
     productId: string;
@@ -49,19 +44,8 @@ export const createOrder = async ({
   total: number;
   tableId?: string | null;
   tableName?: string | null;
-}) => {
-  const payload = {
-    restaurantId,
-    items,
-    total,
-    createdAt: Date.now(),
-    tableId: tableId ?? null,
-    tableName: tableName ?? null,
-  };
-  await dbgAddDoc(collection(db, "orders"), payload, {
-    label: "createOrder",
-    collection: "orders",
-    restaurantId,
-    tableId: tableId ?? null,
-  });
+}): Promise<never> => {
+  throw new Error(
+    "CREATE_ORDER_LEGACY_FORBIDDEN: use create-open API for active table orders",
+  );
 };

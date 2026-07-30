@@ -1,5 +1,7 @@
 /** DTOs e intención mínima para mutaciones TPV autoritativas (server-side). */
 
+import { normalizeMenuCourseValue } from "@/lib/carta/menu-course";
+
 export const MAX_SALE_LINES_PER_REQUEST = 200;
 export const MAX_CANCEL_LINE_IDS = 100;
 export const MAX_LINE_NOTE_LENGTH = 500;
@@ -17,6 +19,11 @@ export type SaleLineIntent = {
   quantity: number;
   selectedModifiers?: ModifierSelectionIntent[];
   note?: string;
+  /**
+   * Pase operativo (1–4). Excepción de autoridad: editable en Carta.
+   * Si se omite, el server usa el course del catálogo.
+   */
+  course?: number;
 };
 
 export const SALE_LINE_INTENT_KEYS = [
@@ -25,6 +32,7 @@ export const SALE_LINE_INTENT_KEYS = [
   "quantity",
   "selectedModifiers",
   "note",
+  "course",
 ] as const;
 
 export const MODIFIER_INTENT_KEYS = ["groupId", "optionId"] as const;
@@ -155,7 +163,17 @@ export function parseSaleLineIntent(raw: unknown): SaleLineIntent | { error: str
     typeof raw.note === "string" && raw.note.trim()
       ? raw.note.trim().slice(0, MAX_LINE_NOTE_LENGTH)
       : undefined;
-  return { lineId, productId, quantity, selectedModifiers, note };
+  let course: number | undefined;
+  if (Object.prototype.hasOwnProperty.call(raw, "course")) {
+    // Estricto: solo number entero; rechaza strings numéricos / NaN / fracciones.
+    if (typeof raw.course !== "number" || !Number.isInteger(raw.course)) {
+      return { error: "COURSE_INVALID" };
+    }
+    const normalized = normalizeMenuCourseValue(raw.course);
+    if (normalized === undefined) return { error: "COURSE_INVALID" };
+    course = normalized;
+  }
+  return { lineId, productId, quantity, selectedModifiers, note, course };
 }
 
 export function parseSaleLineIntents(
@@ -481,4 +499,56 @@ export function parseRefundPaymentBody(raw: unknown): RefundPaymentIntent | { er
     paymentId,
     idempotencyKey: parseIdempotencyKey(raw.idempotencyKey),
   };
+}
+
+export type CloseTpvOrderIntent = {
+  orderId: string;
+  idempotencyKey?: string;
+};
+
+export type ReopenTpvOrderIntent = {
+  orderId: string;
+};
+
+export type ResolveActiveOrderForTableIntent = {
+  tableId: string;
+};
+
+const CLOSE_ORDER_KEYS = ["orderId", "idempotencyKey"] as const;
+const REOPEN_ORDER_KEYS = ["orderId"] as const;
+const RESOLVE_ACTIVE_KEYS = ["tableId"] as const;
+
+export function parseCloseTpvOrderBody(raw: unknown): CloseTpvOrderIntent | { error: string } {
+  if (!isRecord(raw)) return { error: "INVALID_JSON" };
+  const err = rejectRestaurantIdInBody(raw);
+  if (err) return { error: err };
+  if (!hasOnlyKeys(raw, CLOSE_ORDER_KEYS)) return { error: "UNKNOWN_KEY" };
+  const orderId = typeof raw.orderId === "string" ? raw.orderId.trim() : "";
+  if (!orderId) return { error: "ORDER_ID_REQUIRED" };
+  return {
+    orderId,
+    idempotencyKey: parseIdempotencyKey(raw.idempotencyKey),
+  };
+}
+
+export function parseReopenTpvOrderBody(raw: unknown): ReopenTpvOrderIntent | { error: string } {
+  if (!isRecord(raw)) return { error: "INVALID_JSON" };
+  const err = rejectRestaurantIdInBody(raw);
+  if (err) return { error: err };
+  if (!hasOnlyKeys(raw, REOPEN_ORDER_KEYS)) return { error: "UNKNOWN_KEY" };
+  const orderId = typeof raw.orderId === "string" ? raw.orderId.trim() : "";
+  if (!orderId) return { error: "ORDER_ID_REQUIRED" };
+  return { orderId };
+}
+
+export function parseResolveActiveOrderForTableBody(
+  raw: unknown,
+): ResolveActiveOrderForTableIntent | { error: string } {
+  if (!isRecord(raw)) return { error: "INVALID_JSON" };
+  const err = rejectRestaurantIdInBody(raw);
+  if (err) return { error: err };
+  if (!hasOnlyKeys(raw, RESOLVE_ACTIVE_KEYS)) return { error: "UNKNOWN_KEY" };
+  const tableId = typeof raw.tableId === "string" ? raw.tableId.trim() : "";
+  if (!tableId) return { error: "TABLE_ID_REQUIRED" };
+  return { tableId };
 }

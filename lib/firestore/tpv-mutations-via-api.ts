@@ -56,7 +56,15 @@ export async function createOpenOrderViaApi(
   },
   options?: { apiFetch?: TpvMutationApiFetch },
 ): Promise<
-  { ok: true; orderId: string; total: number; inventoryWarnings: ModifierStockConsumptionWarning[] } | ApiFail
+  | {
+      ok: true;
+      orderId: string;
+      total: number;
+      inventoryWarnings: ModifierStockConsumptionWarning[];
+      reusedExistingOrder?: boolean;
+      items?: Record<string, unknown>[];
+    }
+  | ApiFail
 > {
   const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
   const response = await apiFetch("/api/tpv/orders/create-open", {
@@ -77,13 +85,90 @@ export async function createOpenOrderViaApi(
         ),
     }),
   });
-  const parsed = await parseApiResponse<{ orderId: string; total: number }>(response);
+  const parsed = await parseApiResponse<{
+    orderId: string;
+    total: number;
+    reusedExistingOrder?: boolean;
+    items?: Record<string, unknown>[];
+  }>(response);
   if (!parsed.ok || !parsed.orderId) return parsed.ok ? { ok: false, error: "MISSING_ORDER_ID" } : parsed;
   return {
     ok: true,
     orderId: parsed.orderId,
     total: Number(parsed.total) || 0,
     inventoryWarnings: readInventoryWarningsFromApiPayload(parsed),
+    reusedExistingOrder: parsed.reusedExistingOrder === true,
+    items: Array.isArray(parsed.items) ? parsed.items : undefined,
+  };
+}
+
+export async function closeTpvOrderViaApi(
+  params: { orderId: string; idempotencyKey?: string },
+  options?: { apiFetch?: TpvMutationApiFetch },
+): Promise<{ ok: true; orderId: string; status: string; lockReleased: boolean } | ApiFail> {
+  const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
+  const response = await apiFetch("/api/tpv/orders/close", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      orderId: params.orderId,
+      idempotencyKey: params.idempotencyKey,
+    }),
+  });
+  const parsed = await parseApiResponse<{
+    orderId: string;
+    status: string;
+    lockReleased?: boolean;
+  }>(response);
+  if (!parsed.ok || !parsed.orderId) return parsed.ok ? { ok: false, error: "MISSING_ORDER_ID" } : parsed;
+  return {
+    ok: true,
+    orderId: parsed.orderId,
+    status: String(parsed.status ?? "closed"),
+    lockReleased: parsed.lockReleased === true,
+  };
+}
+
+export async function reopenTpvOrderViaApi(
+  params: { orderId: string },
+  options?: { apiFetch?: TpvMutationApiFetch },
+): Promise<{ ok: true; orderId: string; status: string; lockAcquired: boolean } | ApiFail> {
+  const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
+  const response = await apiFetch("/api/tpv/orders/reopen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderId: params.orderId }),
+  });
+  const parsed = await parseApiResponse<{
+    orderId: string;
+    status: string;
+    lockAcquired?: boolean;
+  }>(response);
+  if (!parsed.ok || !parsed.orderId) return parsed.ok ? { ok: false, error: "MISSING_ORDER_ID" } : parsed;
+  return {
+    ok: true,
+    orderId: parsed.orderId,
+    status: String(parsed.status ?? "open"),
+    lockAcquired: parsed.lockAcquired === true,
+  };
+}
+
+export async function resolveActiveOrderForTableViaApi(
+  params: { tableId: string },
+  options?: { apiFetch?: TpvMutationApiFetch },
+): Promise<{ ok: true; tableId: string; orderId: string | null } | ApiFail> {
+  const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
+  const response = await apiFetch("/api/tpv/orders/resolve-active-for-table", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tableId: params.tableId }),
+  });
+  const parsed = await parseApiResponse<{ tableId: string; orderId?: string | null }>(response);
+  if (!parsed.ok) return parsed;
+  return {
+    ok: true,
+    tableId: String(parsed.tableId ?? params.tableId),
+    orderId: typeof parsed.orderId === "string" && parsed.orderId.trim() ? parsed.orderId.trim() : null,
   };
 }
 
@@ -97,7 +182,14 @@ export async function upsertSaleLinesViaApi(
   },
   options?: { apiFetch?: TpvMutationApiFetch },
 ): Promise<
-  { ok: true; orderId: string; total: number; inventoryWarnings: ModifierStockConsumptionWarning[] } | ApiFail
+  | {
+      ok: true;
+      orderId: string;
+      total: number;
+      items: Record<string, unknown>[];
+      inventoryWarnings: ModifierStockConsumptionWarning[];
+    }
+  | ApiFail
 > {
   const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
   const response = await apiFetch("/api/tpv/orders/upsert-sale-lines", {
@@ -118,12 +210,17 @@ export async function upsertSaleLinesViaApi(
         ),
     }),
   });
-  const parsed = await parseApiResponse<{ orderId: string; total: number }>(response);
+  const parsed = await parseApiResponse<{
+    orderId: string;
+    total: number;
+    items?: Record<string, unknown>[];
+  }>(response);
   if (!parsed.ok || !parsed.orderId) return parsed.ok ? { ok: false, error: "MISSING_ORDER_ID" } : parsed;
   return {
     ok: true,
     orderId: parsed.orderId,
     total: Number(parsed.total) || 0,
+    items: Array.isArray(parsed.items) ? parsed.items : [],
     inventoryWarnings: readInventoryWarningsFromApiPayload(parsed),
   };
 }

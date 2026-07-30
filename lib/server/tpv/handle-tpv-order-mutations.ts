@@ -55,6 +55,15 @@ import {
   type ModifierStockConsumptionPlan,
 } from "@/lib/server/tpv/plan-initial-modifier-stock-consumption";
 import type { ModifierStockConsumptionWarning } from "@/lib/inventory/stock-movement-types";
+import { isActiveTpvOrderStatus } from "@/lib/server/tpv/is-active-tpv-order-status";
+import {
+  assertTableOrderLockIntegrity,
+  filterActiveOrdersForTable,
+  readTableOrderLockData,
+  releaseTableOrderLockIfOwnerInTransaction,
+  tableOrderLockRef,
+  writeTableOrderLockClaim,
+} from "@/lib/server/tpv/table-order-lock";
 
 export type TpvMutationError = { status: number; error: string; details?: string };
 
@@ -62,6 +71,8 @@ export type CreateOpenOrderResult = {
   orderId: string;
   total: number;
   inventoryWarnings: ModifierStockConsumptionWarning[];
+  reusedExistingOrder?: boolean;
+  items?: Record<string, unknown>[];
 };
 
 export type UpsertSaleLinesResult = {
@@ -91,7 +102,19 @@ function createOpenResultFromIdempotencyHit(hit: Record<string, unknown>): Creat
     orderId: String(hit.orderId),
     total: Number(hit.total) || 0,
     inventoryWarnings: readInventoryWarningsFromIdempotencyResult(hit),
+    reusedExistingOrder: hit.reusedExistingOrder === true,
+    items: Array.isArray(hit.items) ? (hit.items as Record<string, unknown>[]) : undefined,
   };
+}
+
+function isMutationError(value: unknown): value is TpvMutationError {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    "status" in value &&
+    "error" in value &&
+    typeof (value as TpvMutationError).status === "number"
+  );
 }
 
 function upsertSaleLinesResultFromIdempotencyHit(hit: Record<string, unknown>): UpsertSaleLinesResult {
@@ -341,9 +364,10 @@ export async function handleCreateOpenOrder(
   }
 
   const total = computeAuthoritativeOrderTotal(built);
-  const orderRef = ctx.db.collection("orders").doc();
   let inventoryWarnings: ModifierStockConsumptionWarning[] = [];
   let rehydratedResult: CreateOpenOrderResult | null = null;
+  let createdOrderId: string | null = null;
+  let reuseOrderId: string | null = null;
 
   try {
     await ctx.db.runTransaction(async (tx) => {
@@ -364,6 +388,99 @@ export async function handleCreateOpenOrder(
         throw new Error("TABLE_TENANT_MISMATCH");
       }
 
+      const lockRef = tableOrderLockRef(ctx.db, ctx.restaurantId, tableId);
+      const lockSnap = await tx.get(lockRef);
+      const ordersSnap = await tx.get(
+        ctx.db
+          .collection("orders")
+          .where("restaurantId", "==", ctx.restaurantId)
+          .where("tableId", "==", tableId),
+      );
+
+      const activeOrders = filterActiveOrdersForTable(
+        ordersSnap.docs.map((d) => ({
+          id: d.id,
+          data: () => d.data() as Record<string, unknown>,
+        })),
+        ctx.restaurantId,
+        tableId,
+      );
+
+      let resolvedReuseId: string | null = null;
+      let repairLockToFree = false;
+
+      const lock = readTableOrderLockData(lockSnap);
+      if (lock) {
+        const integrity = assertTableOrderLockIntegrity(lock, ctx.restaurantId, tableId);
+        if (integrity) {
+          throw new Error(integrity.code);
+        }
+        const lockedOrderId = lock.orderId?.trim() || "";
+        if (lockedOrderId) {
+          let lockedOrderDoc = ordersSnap.docs.find((d) => d.id === lockedOrderId) ?? null;
+          let lockedData: Record<string, unknown> | null = lockedOrderDoc
+            ? ((lockedOrderDoc.data() as Record<string, unknown>) ?? null)
+            : null;
+          if (!lockedOrderDoc) {
+            const orphanSnap = await tx.get(ctx.db.collection("orders").doc(lockedOrderId));
+            if (orphanSnap.exists) {
+              lockedData = (orphanSnap.data() as Record<string, unknown>) ?? null;
+            }
+          }
+          if (!lockedData) {
+            console.warn("[tableOrderLock] orphan lock; repairing", {
+              restaurantId: ctx.restaurantId,
+              tableId,
+              orderId: lockedOrderId,
+            });
+            repairLockToFree = true;
+          } else {
+            const orderRid = String(lockedData.restaurantId ?? "").trim();
+            const orderTid = String(lockedData.tableId ?? "").trim();
+            if (orderRid !== ctx.restaurantId) {
+              throw new Error("LOCK_ORDER_TENANT_MISMATCH");
+            }
+            if (orderTid !== tableId) {
+              throw new Error("LOCK_ORDER_TABLE_MISMATCH");
+            }
+            if (isActiveTpvOrderStatus(lockedData.status)) {
+              resolvedReuseId = lockedOrderId;
+            } else {
+              console.warn("[tableOrderLock] terminal order in lock; repairing", {
+                restaurantId: ctx.restaurantId,
+                tableId,
+                orderId: lockedOrderId,
+              });
+              repairLockToFree = true;
+            }
+          }
+        }
+      }
+
+      if (!resolvedReuseId) {
+        if (activeOrders.length > 1) {
+          throw new Error("MULTIPLE_ACTIVE_ORDERS_FOR_TABLE");
+        }
+        if (activeOrders.length === 1) {
+          resolvedReuseId = activeOrders[0]!.id;
+        }
+      }
+
+      if (resolvedReuseId) {
+        writeTableOrderLockClaim(tx, lockRef, {
+          restaurantId: ctx.restaurantId,
+          tableId,
+          orderId: resolvedReuseId,
+          create: !lockSnap.exists,
+        });
+        reuseOrderId = resolvedReuseId;
+        return;
+      }
+
+      // repairLockToFree: lock huérfano/terminal — se sobrescribe al reclamar el nuevo order.
+      void repairLockToFree;
+
+      const orderRef = ctx.db.collection("orders").doc();
       const loaded = { byLineId: new Map(), byDocId: new Map(), allRefs: [] };
       const meta = orderProjectionMetaFromOrder(
         orderRef.id,
@@ -371,6 +488,7 @@ export async function handleCreateOpenOrder(
         ctx.restaurantId,
       );
       const plan = planOrderProjectionWrites(ctx.db, meta, built, loaded, nowMs);
+      // Todas las lecturas del planner de stock deben ocurrir antes de cualquier write.
       const inventoryPlan = await applyModifierStockForItemTransition(
         tx,
         ctx,
@@ -393,6 +511,12 @@ export async function handleCreateOpenOrder(
         ...buildTableOperatorAssignmentAdminFields(intent.operatorAssignment ?? null),
       });
       applyProjectionWritePlan(tx, plan);
+      writeTableOrderLockClaim(tx, lockRef, {
+        restaurantId: ctx.restaurantId,
+        tableId,
+        orderId: orderRef.id,
+        create: !lockSnap.exists,
+      });
 
       if (idemKey) {
         writeIdempotencyRecord(
@@ -404,11 +528,13 @@ export async function handleCreateOpenOrder(
             {
               orderId: orderRef.id,
               total,
+              reusedExistingOrder: false,
             },
             inventoryPlan.warnings,
           ),
         );
       }
+      createdOrderId = orderRef.id;
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
@@ -417,13 +543,79 @@ export async function handleCreateOpenOrder(
     if (msg === "TABLE_NOT_FOUND") return { status: 404, error: "TABLE_NOT_FOUND" };
     if (msg === "TABLE_TENANT_MISMATCH") return { status: 403, error: "TABLE_TENANT_MISMATCH" };
     if (msg === "STOCK_MOVEMENT_ID_CONFLICT") return { status: 409, error: "STOCK_MOVEMENT_ID_CONFLICT" };
+    if (msg === "MULTIPLE_ACTIVE_ORDERS_FOR_TABLE") {
+      return { status: 409, error: "MULTIPLE_ACTIVE_ORDERS_FOR_TABLE" };
+    }
+    if (msg === "LOCK_TENANT_MISMATCH" || msg === "LOCK_ORDER_TENANT_MISMATCH") {
+      return { status: 409, error: "LOCK_TENANT_MISMATCH" };
+    }
+    if (msg === "LOCK_TABLE_MISMATCH" || msg === "LOCK_ORDER_TABLE_MISMATCH") {
+      return { status: 409, error: "LOCK_TABLE_MISMATCH" };
+    }
     throw e;
   }
 
+  if (reuseOrderId) {
+    const upsert = await handleUpsertSaleLines(ctx, {
+      orderId: reuseOrderId,
+      lines: intent.lines,
+      markSent: intent.markSent === true,
+      idempotencyKey: idemKey ? `${idemKey}__create_open_reuse_upsert` : undefined,
+    });
+    if (isMutationError(upsert)) return upsert;
+
+    if (idemKey) {
+      try {
+        await ctx.db.runTransaction(async (tx) => {
+          const idemSnap = await tx.get(idemRef(ctx.db, ctx.restaurantId, idemKey));
+          const hit = readIdempotencyHit(idemSnap, "create_open_order", payloadHash);
+          if (hit?.conflict) throw new Error("IDEMPOTENCY_CONFLICT");
+          if (hit?.orderId) {
+            rehydratedResult = createOpenResultFromIdempotencyHit(hit);
+            throw new Error("IDEM_OK");
+          }
+          writeIdempotencyRecord(
+            tx,
+            idemRef(ctx.db, ctx.restaurantId, idemKey),
+            "create_open_order",
+            payloadHash,
+            buildIdempotencyResultWithInventoryWarnings(
+              {
+                orderId: reuseOrderId,
+                total: upsert.total,
+                reusedExistingOrder: true,
+                items: upsert.items,
+              },
+              upsert.inventoryWarnings,
+            ),
+          );
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "IDEM_OK" && rehydratedResult) return rehydratedResult;
+        if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+        throw e;
+      }
+    }
+
+    return {
+      orderId: reuseOrderId,
+      total: upsert.total,
+      inventoryWarnings: sortInventoryWarningsStable(upsert.inventoryWarnings),
+      reusedExistingOrder: true,
+      items: upsert.items,
+    };
+  }
+
+  if (!createdOrderId) {
+    return { status: 500, error: "CREATE_OPEN_NO_ORDER" };
+  }
+
   return {
-    orderId: orderRef.id,
+    orderId: createdOrderId,
     total,
     inventoryWarnings: sortInventoryWarningsStable(inventoryWarnings),
+    reusedExistingOrder: false,
   };
 }
 
@@ -966,4 +1158,242 @@ export async function handleTransitionLineQuantity(
     status: next,
     inventoryWarnings: sortInventoryWarningsStable(inventoryWarnings),
   };
+}
+
+export type CloseTpvOrderResult = {
+  orderId: string;
+  status: "closed";
+  lockReleased: boolean;
+};
+
+export type ReopenTpvOrderResult = {
+  orderId: string;
+  status: "open";
+  lockAcquired: boolean;
+};
+
+export type ResolveActiveOrderForTableResult = {
+  tableId: string;
+  orderId: string | null;
+};
+
+/**
+ * Cierra un pedido y libera el lock de mesa si este order es el propietario.
+ * Atómico: status terminal + release en la misma transacción.
+ */
+export async function handleCloseTpvOrder(
+  ctx: AuthorizedTpvRestaurantContext,
+  intent: { orderId: string; idempotencyKey?: string },
+): Promise<CloseTpvOrderResult | TpvMutationError> {
+  const capErr = requireTpvCapability(ctx, "tpv.sell");
+  if (capErr) return capErr;
+
+  const orderId = intent.orderId.trim();
+  if (!orderId) return { status: 400, error: "ORDER_ID_REQUIRED" };
+
+  const orderRef = ctx.db.collection("orders").doc(orderId);
+  let lockReleased = false;
+
+  try {
+    await ctx.db.runTransaction(async (tx) => {
+      const orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) throw new Error("ORDER_NOT_FOUND");
+      const orderData = orderSnap.data() as Record<string, unknown>;
+      if (String(orderData.restaurantId ?? "").trim() !== ctx.restaurantId) {
+        throw new Error("TENANT_MISMATCH");
+      }
+      const tableId = String(orderData.tableId ?? "").trim();
+      if (!tableId) throw new Error("ORDER_TABLE_ID_REQUIRED");
+
+      const lockRef = tableOrderLockRef(ctx.db, ctx.restaurantId, tableId);
+      const lockSnap = await tx.get(lockRef);
+
+      if (!isActiveTpvOrderStatus(orderData.status)) {
+        const release = releaseTableOrderLockIfOwnerInTransaction(tx, lockRef, lockSnap, {
+          restaurantId: ctx.restaurantId,
+          tableId,
+          orderId,
+        });
+        lockReleased = release.released && release.reason !== "already_free";
+        if (release.reason === "already_free") lockReleased = true;
+        return;
+      }
+
+      tx.update(orderRef, {
+        status: "closed",
+        closedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        paymentRequestedAt: null,
+      });
+      const release = releaseTableOrderLockIfOwnerInTransaction(tx, lockRef, lockSnap, {
+        restaurantId: ctx.restaurantId,
+        tableId,
+        orderId,
+      });
+      lockReleased = release.released;
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
+    if (msg === "TENANT_MISMATCH") return { status: 403, error: "TENANT_MISMATCH" };
+    if (msg === "ORDER_TABLE_ID_REQUIRED") return { status: 400, error: "ORDER_TABLE_ID_REQUIRED" };
+    throw e;
+  }
+
+  return { orderId, status: "closed", lockReleased };
+}
+
+/**
+ * Reabre un pedido terminal y adquiere el lock si la mesa está libre.
+ */
+export async function handleReopenTpvOrder(
+  ctx: AuthorizedTpvRestaurantContext,
+  intent: { orderId: string },
+): Promise<ReopenTpvOrderResult | TpvMutationError> {
+  const capErr = requireTpvCapability(ctx, "tpv.sell");
+  if (capErr) return capErr;
+
+  const orderId = intent.orderId.trim();
+  if (!orderId) return { status: 400, error: "ORDER_ID_REQUIRED" };
+
+  const orderRef = ctx.db.collection("orders").doc(orderId);
+  let lockAcquired = false;
+
+  try {
+    await ctx.db.runTransaction(async (tx) => {
+      const orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) throw new Error("ORDER_NOT_FOUND");
+      const orderData = orderSnap.data() as Record<string, unknown>;
+      if (String(orderData.restaurantId ?? "").trim() !== ctx.restaurantId) {
+        throw new Error("TENANT_MISMATCH");
+      }
+      const tableId = String(orderData.tableId ?? "").trim();
+      if (!tableId) throw new Error("ORDER_TABLE_ID_REQUIRED");
+
+      const lockRef = tableOrderLockRef(ctx.db, ctx.restaurantId, tableId);
+      const lockSnap = await tx.get(lockRef);
+      const lock = readTableOrderLockData(lockSnap);
+      if (lock) {
+        const integrity = assertTableOrderLockIntegrity(lock, ctx.restaurantId, tableId);
+        if (integrity) throw new Error(integrity.code);
+      }
+
+      if (isActiveTpvOrderStatus(orderData.status)) {
+        if (lock?.orderId === orderId) {
+          lockAcquired = true;
+          return;
+        }
+        if (lock?.orderId && lock.orderId !== orderId) {
+          throw new Error("TABLE_ALREADY_HAS_ACTIVE_ORDER");
+        }
+        writeTableOrderLockClaim(tx, lockRef, {
+          restaurantId: ctx.restaurantId,
+          tableId,
+          orderId,
+          create: !lockSnap.exists,
+        });
+        lockAcquired = true;
+        return;
+      }
+
+      const lockedOrderId = lock?.orderId?.trim() || "";
+      if (lockedOrderId && lockedOrderId !== orderId) {
+        const otherSnap = await tx.get(ctx.db.collection("orders").doc(lockedOrderId));
+        if (otherSnap.exists) {
+          const other = otherSnap.data() as Record<string, unknown>;
+          if (
+            String(other.restaurantId ?? "").trim() === ctx.restaurantId &&
+            String(other.tableId ?? "").trim() === tableId &&
+            isActiveTpvOrderStatus(other.status)
+          ) {
+            throw new Error("TABLE_ALREADY_HAS_ACTIVE_ORDER");
+          }
+        }
+      }
+
+      // Lecturas adicionales de legacy activos antes de escribir.
+      const ordersSnap = await tx.get(
+        ctx.db
+          .collection("orders")
+          .where("restaurantId", "==", ctx.restaurantId)
+          .where("tableId", "==", tableId),
+      );
+      const actives = filterActiveOrdersForTable(
+        ordersSnap.docs.map((d) => ({
+          id: d.id,
+          data: () => d.data() as Record<string, unknown>,
+        })),
+        ctx.restaurantId,
+        tableId,
+      ).filter((o) => o.id !== orderId);
+      if (actives.length > 0) {
+        throw new Error("TABLE_ALREADY_HAS_ACTIVE_ORDER");
+      }
+
+      tx.update(orderRef, {
+        status: "open",
+        reopenedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      writeTableOrderLockClaim(tx, lockRef, {
+        restaurantId: ctx.restaurantId,
+        tableId,
+        orderId,
+        create: !lockSnap.exists,
+      });
+      lockAcquired = true;
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
+    if (msg === "TENANT_MISMATCH") return { status: 403, error: "TENANT_MISMATCH" };
+    if (msg === "ORDER_TABLE_ID_REQUIRED") return { status: 400, error: "ORDER_TABLE_ID_REQUIRED" };
+    if (msg === "TABLE_ALREADY_HAS_ACTIVE_ORDER") {
+      return { status: 409, error: "TABLE_ALREADY_HAS_ACTIVE_ORDER" };
+    }
+    if (msg === "LOCK_TENANT_MISMATCH") return { status: 409, error: "LOCK_TENANT_MISMATCH" };
+    if (msg === "LOCK_TABLE_MISMATCH") return { status: 409, error: "LOCK_TABLE_MISMATCH" };
+    throw e;
+  }
+
+  return { orderId, status: "open", lockAcquired };
+}
+
+/** Lectura autorizada del orderId activo vía lock determinista (recuperación tras timeout). */
+export async function handleResolveActiveOrderForTable(
+  ctx: AuthorizedTpvRestaurantContext,
+  intent: { tableId: string },
+): Promise<ResolveActiveOrderForTableResult | TpvMutationError> {
+  const capErr = requireTpvCapability(ctx, "tpv.sell");
+  if (capErr) return capErr;
+
+  const tableId = intent.tableId.trim();
+  if (!tableId) return { status: 400, error: "TABLE_ID_REQUIRED" };
+
+  const lockRef = tableOrderLockRef(ctx.db, ctx.restaurantId, tableId);
+  const lockSnap = await lockRef.get();
+  const lock = readTableOrderLockData(lockSnap);
+  if (!lock || !lock.orderId) {
+    return { tableId, orderId: null };
+  }
+  const integrity = assertTableOrderLockIntegrity(lock, ctx.restaurantId, tableId);
+  if (integrity) {
+    return { status: 409, error: integrity.code };
+  }
+
+  const orderSnap = await ctx.db.collection("orders").doc(lock.orderId).get();
+  if (!orderSnap.exists) {
+    return { tableId, orderId: null };
+  }
+  const orderData = orderSnap.data() as Record<string, unknown>;
+  if (String(orderData.restaurantId ?? "").trim() !== ctx.restaurantId) {
+    return { status: 409, error: "LOCK_ORDER_TENANT_MISMATCH" };
+  }
+  if (String(orderData.tableId ?? "").trim() !== tableId) {
+    return { status: 409, error: "LOCK_ORDER_TABLE_MISMATCH" };
+  }
+  if (!isActiveTpvOrderStatus(orderData.status)) {
+    return { tableId, orderId: null };
+  }
+  return { tableId, orderId: lock.orderId };
 }
