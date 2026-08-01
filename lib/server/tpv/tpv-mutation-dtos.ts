@@ -514,6 +514,21 @@ export type ResolveActiveOrderForTableIntent = {
   tableId: string;
 };
 
+export type PersistDraftItemsIntent = {
+  orderId: string;
+  /** Ítems serializados del borrador local (puede ser `[]`). */
+  items: Record<string, unknown>[];
+  idempotencyKey?: string;
+  expectedUpdatedAtMs?: number;
+};
+
+const PERSIST_DRAFT_KEYS = [
+  "orderId",
+  "items",
+  "idempotencyKey",
+  "expectedUpdatedAtMs",
+] as const;
+
 const CLOSE_ORDER_KEYS = ["orderId", "idempotencyKey"] as const;
 const REOPEN_ORDER_KEYS = ["orderId"] as const;
 const RESOLVE_ACTIVE_KEYS = ["tableId"] as const;
@@ -551,4 +566,36 @@ export function parseResolveActiveOrderForTableBody(
   const tableId = typeof raw.tableId === "string" ? raw.tableId.trim() : "";
   if (!tableId) return { error: "TABLE_ID_REQUIRED" };
   return { tableId };
+}
+
+export function parsePersistDraftItemsBody(
+  raw: unknown,
+): PersistDraftItemsIntent | { error: string } {
+  if (!isRecord(raw)) return { error: "INVALID_JSON" };
+  const err = rejectRestaurantIdInBody(raw);
+  if (err) return { error: err };
+  if (!hasOnlyKeys(raw, PERSIST_DRAFT_KEYS)) return { error: "UNKNOWN_KEY" };
+  const orderId = typeof raw.orderId === "string" ? raw.orderId.trim() : "";
+  if (!orderId) return { error: "ORDER_ID_REQUIRED" };
+  if (!Array.isArray(raw.items)) return { error: "ITEMS_REQUIRED" };
+  if (raw.items.length > MAX_SALE_LINES_PER_REQUEST) {
+    return { error: "TOO_MANY_LINES" };
+  }
+  const items: Record<string, unknown>[] = [];
+  for (const row of raw.items) {
+    if (!isRecord(row)) return { error: "LINE_NOT_OBJECT" };
+    items.push(row);
+  }
+  let expectedUpdatedAtMs: number | undefined;
+  if (Object.prototype.hasOwnProperty.call(raw, "expectedUpdatedAtMs")) {
+    const n = Number(raw.expectedUpdatedAtMs);
+    if (!Number.isFinite(n)) return { error: "EXPECTED_UPDATED_AT_INVALID" };
+    expectedUpdatedAtMs = n;
+  }
+  return {
+    orderId,
+    items,
+    idempotencyKey: parseIdempotencyKey(raw.idempotencyKey),
+    expectedUpdatedAtMs,
+  };
 }

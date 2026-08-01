@@ -6,27 +6,28 @@ import {
   onSnapshot,
   query,
   where,
+  type QueryDocumentSnapshot,
+  type QueryConstraint,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase/client";
-import {
-  dbgRunTransaction,
-  dbgTransactionUpdate,
-  DbgWriteBatch,
-} from "@/lib/firestore/instrumentedWrites";
 import { updateMesa } from "@/lib/firestore/mesas";
+import { readOrderUpdatedAtMs } from "@/lib/firestore/order-table-occupancy";
 import {
   closeTpvOrderViaApi,
   createOpenOrderViaApi,
+  persistDraftItemsViaApi,
   reopenTpvOrderViaApi,
+  upsertSaleLinesViaApi,
 } from "@/lib/firestore/tpv-mutations-via-api";
+import { pickActiveOrderDocForTable } from "@/lib/tpv/pick-active-order-doc-for-table";
+import type { SaleLineIntent } from "@/lib/server/tpv/tpv-mutation-dtos";
 import type { CatalogProduct, ComandaItem, PastOrder } from "@/types/comanda";
 import type { Mesa } from "@/types/mesa";
 import type { OrderStatus } from "@/types/order";
-import type { ComandaOrderStatus, OrderMetaDoc } from "@/utils/comanda";
+import type { ComandaOrderStatus } from "@/utils/comanda";
 import {
   addProductToComanda,
-  buildOrderItemsForKitchen,
   calculateItemsCount,
   calculateOrderTotal,
   formatOrderDate,
@@ -42,6 +43,32 @@ import {
   updateComandaItemQty,
 } from "@/utils/comanda";
 
+function comandaItemsToSaleLineIntents(items: ComandaItem[]): SaleLineIntent[] {
+  return items
+    .filter((item) => item.qty > 0 && item.id.trim())
+    .map((item) => ({
+      lineId: item.id.trim(),
+      productId: item.id.trim(),
+      quantity: Math.floor(item.qty),
+    }));
+}
+
+function comandaItemsToDraftFirestoreItems(
+  items: ComandaItem[],
+): Record<string, unknown>[] {
+  return items
+    .filter((item) => item.qty > 0 && item.id.trim())
+    .map((item) => ({
+      id: item.id.trim(),
+      productId: item.id.trim(),
+      quantity: Math.floor(item.qty),
+      qty: Math.floor(item.qty),
+      status: "pending",
+      name: item.name,
+      productName: item.name,
+    }));
+}
+
 const ORDER_CONFLICT_ERROR = "ORDER_CONFLICT";
 
 const ORDER_STATUS_OPEN: OrderStatus = "open";
@@ -51,7 +78,38 @@ const ORDER_STATUS_CLOSED: OrderStatus = "closed";
 const OPEN_ORDER_STATUSES = [ORDER_STATUS_OPEN, ORDER_STATUS_SENT] as const;
 const CLOSED_ORDER_STATUS = ORDER_STATUS_CLOSED;
 
+/**
+ * El param de ruta puede llamarse mesaId por compatibilidad, pero la identidad
+ * canónica del pedido es tableId (mismo valor).
+ */
+function resolveCanonicalTableId(routeMesaId: string): string {
+  return routeMesaId.trim();
+}
+
+function applyAuthoritativeVersion(updatedAtMs: number | null | undefined): number | null {
+  return typeof updatedAtMs === "number" && Number.isFinite(updatedAtMs)
+    ? updatedAtMs
+    : null;
+}
+
+function buildOrderConstraints(
+  field: "tableId" | "mesaId",
+  tableId: string,
+  restaurantId: string | null | undefined,
+  statusConstraint: QueryConstraint,
+): QueryConstraint[] {
+  const constraints: QueryConstraint[] = [
+    where(field, "==", tableId),
+    statusConstraint,
+  ];
+  const rid = restaurantId?.trim();
+  if (rid) constraints.unshift(where("restaurantId", "==", rid));
+  return constraints;
+}
+
 export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => {
+  const tableId = resolveCanonicalTableId(mesaId);
+
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ComandaItem[]>([]);
   const [mesa, setMesa] = useState<Mesa | null>(null);
@@ -76,32 +134,15 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
   const canCloseOrder = Boolean(currentOrderId) && !isBusy;
   const canReopenOrder = Boolean(currentOrderId) && isSentToKitchen && !isBusy;
 
-  const assertNoOrderConflict = (remoteUpdatedAt: number | null | undefined) => {
-    if (
-      typeof currentOrderUpdatedAt === "number" &&
-      typeof remoteUpdatedAt === "number" &&
-      remoteUpdatedAt !== currentOrderUpdatedAt
-    ) {
-      throw new Error(ORDER_CONFLICT_ERROR);
-    }
-  };
-
-  const getOrderAuditFields = () => {
-    return {
-      updatedBy: restaurantId ?? null,
-      updatedFrom: "mesa-detail",
-    };
-  };
-
   useEffect(() => {
-    if (!mesaId) {
+    if (!tableId) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
 
-    const ref = doc(db, "mesas", mesaId);
+    const ref = doc(db, "mesas", tableId);
 
     const unsubscribe = onSnapshot(
       ref,
@@ -124,7 +165,7 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     );
 
     return () => unsubscribe();
-  }, [mesaId]);
+  }, [tableId]);
 
   useEffect(() => {
     const update = () => {
@@ -138,78 +179,135 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
   }, []);
 
   useEffect(() => {
-    if (!mesaId) return;
+    if (!tableId) return;
 
     setCurrentOrderId(null);
     setItems([]);
     setOrderStatus(null);
     setCurrentOrderUpdatedAt(null);
 
-    const q = query(
+    let primaryDocs: QueryDocumentSnapshot[] = [];
+    let legacyDocs: QueryDocumentSnapshot[] = [];
+
+    const apply = () => {
+      const orderDoc = pickActiveOrderDocForTable(tableId, primaryDocs, legacyDocs);
+      if (!orderDoc) {
+        setCurrentOrderId(null);
+        setItems([]);
+        setOrderStatus(null);
+        setCurrentOrderUpdatedAt(null);
+        return;
+      }
+
+      setCurrentOrderId(orderDoc.id);
+      const data = orderDoc.data();
+      setCurrentOrderUpdatedAt(
+        applyAuthoritativeVersion(readOrderUpdatedAtMs(data.updatedAt)),
+      );
+      setOrderStatus(
+        data.status === ORDER_STATUS_SENT ? ORDER_STATUS_SENT : ORDER_STATUS_OPEN,
+      );
+      setItems(normalizeOpenOrderItems(data));
+    };
+
+    const statusOpen = where("status", "in", OPEN_ORDER_STATUSES);
+    const qPrimary = query(
       collection(db, "orders"),
-      where("mesaId", "==", mesaId),
-      where("status", "in", OPEN_ORDER_STATUSES),
+      ...buildOrderConstraints("tableId", tableId, restaurantId, statusOpen),
+    );
+    const qLegacy = query(
+      collection(db, "orders"),
+      ...buildOrderConstraints("mesaId", tableId, restaurantId, statusOpen),
     );
 
-    const unsubscribe = onSnapshot(
-      q,
+    const unsubPrimary = onSnapshot(
+      qPrimary,
       (snapshot) => {
-        if (snapshot.empty) {
-          setCurrentOrderId(null);
-          setItems([]);
-          setOrderStatus(null);
-          setCurrentOrderUpdatedAt(null);
-          return;
-        }
-
-        const orderDoc = snapshot.docs[0];
-        setCurrentOrderId(orderDoc.id);
-
-        const data = orderDoc.data();
-        setCurrentOrderUpdatedAt(
-          typeof data.updatedAt === "number" ? data.updatedAt : null,
-        );
-        setOrderStatus(
-          data.status === ORDER_STATUS_SENT ? ORDER_STATUS_SENT : ORDER_STATUS_OPEN,
-        );
-        setItems(normalizeOpenOrderItems(data));
+        primaryDocs = snapshot.docs;
+        apply();
       },
       (error) => {
-        console.error("Error listening open order", error);
+        console.error("Error listening open order by tableId", error);
+      },
+    );
+    const unsubLegacy = onSnapshot(
+      qLegacy,
+      (snapshot) => {
+        legacyDocs = snapshot.docs;
+        apply();
+      },
+      (error) => {
+        console.error("Error listening open order legacy mesaId", error);
       },
     );
 
-    return () => unsubscribe();
-  }, [mesaId]);
+    return () => {
+      unsubPrimary();
+      unsubLegacy();
+    };
+  }, [tableId, restaurantId]);
 
   useEffect(() => {
-    if (!mesaId) {
+    if (!tableId) {
       setPastOrders([]);
       return;
     }
 
-    const q = query(
+    let primaryDocs: QueryDocumentSnapshot[] = [];
+    let legacyDocs: QueryDocumentSnapshot[] = [];
+
+    const apply = () => {
+      const byId = new Map<string, QueryDocumentSnapshot>();
+      for (const d of primaryDocs) byId.set(d.id, d);
+      for (const d of legacyDocs) {
+        const data = d.data() as { tableId?: unknown };
+        const docTableId = String(data.tableId ?? "").trim();
+        if (docTableId && docTableId !== tableId) continue;
+        if (!byId.has(d.id)) byId.set(d.id, d);
+      }
+      setPastOrders(
+        [...byId.values()].map((docSnap) =>
+          normalizePastOrder(docSnap.id, docSnap.data()),
+        ),
+      );
+    };
+
+    const statusClosed = where("status", "==", CLOSED_ORDER_STATUS);
+    const qPrimary = query(
       collection(db, "orders"),
-      where("mesaId", "==", mesaId),
-      where("status", "==", CLOSED_ORDER_STATUS),
+      ...buildOrderConstraints("tableId", tableId, restaurantId, statusClosed),
+    );
+    const qLegacy = query(
+      collection(db, "orders"),
+      ...buildOrderConstraints("mesaId", tableId, restaurantId, statusClosed),
     );
 
-    const unsubscribe = onSnapshot(
-      q,
+    const unsubPrimary = onSnapshot(
+      qPrimary,
       (snapshot) => {
-        const data = snapshot.docs.map((docSnap) =>
-          normalizePastOrder(docSnap.id, docSnap.data()),
-        );
-
-        setPastOrders(data);
+        primaryDocs = snapshot.docs;
+        apply();
       },
       (error) => {
-        console.error("Error listening past orders", error);
+        console.error("Error listening past orders by tableId", error);
+      },
+    );
+    const unsubLegacy = onSnapshot(
+      qLegacy,
+      (snapshot) => {
+        legacyDocs = snapshot.docs;
+        apply();
+      },
+      (error) => {
+        console.error("Error listening past orders legacy mesaId", error);
       },
     );
 
-    return () => unsubscribe();
-  }, [mesaId]);
+    return () => {
+      unsubPrimary();
+      unsubLegacy();
+    };
+  }, [tableId, restaurantId]);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -275,69 +373,36 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     setIsSaving(true);
 
     try {
-      const total = orderTotal;
+      const lines = comandaItemsToSaleLineIntents(items);
+      if (lines.length === 0) {
+        window.alert("Añade productos antes de guardar la comanda.");
+        return;
+      }
 
       if (currentOrderId) {
-        const now = Date.now();
-
-        await dbgRunTransaction(
-          db,
-          async (transaction) => {
-          const ref = doc(db, "orders", currentOrderId);
-          const snap = await transaction.get(ref);
-
-          const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
-
-          const remoteUpdatedAt =
-            typeof data?.updatedAt === "number" ? data.updatedAt : null;
-
-          assertNoOrderConflict(remoteUpdatedAt);
-
-          dbgTransactionUpdate(
-            transaction,
-            ref,
-            {
-              items,
-              total,
-              updatedAt: now,
-              ...getOrderAuditFields(),
-            },
-            {
-              label: "useMesaComanda:handleSaveOrder:txUpdate",
-              collection: "orders",
-              restaurantId,
-              tableId: mesaId,
-              orderId: currentOrderId,
-            },
+        const persisted = await persistDraftItemsViaApi({
+          orderId: currentOrderId,
+          items: comandaItemsToDraftFirestoreItems(items),
+          expectedUpdatedAtMs: currentOrderUpdatedAt ?? undefined,
+        });
+        if (!persisted.ok) {
+          if (persisted.error === "VERSION_CONFLICT") {
+            throw new Error(ORDER_CONFLICT_ERROR);
+          }
+          console.error(
+            "Error saving order via API",
+            persisted.error,
+            persisted.details,
           );
-        },
-          {
-            label: "useMesaComanda:handleSaveOrder:transaction",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-            orderId: currentOrderId,
-          },
-        );
-
-        setCurrentOrderUpdatedAt(now);
-        setOrderStatus(ORDER_STATUS_OPEN);
-      } else {
-        const now = Date.now();
-        const lines = items
-          .filter((item) => item.qty > 0 && item.id.trim())
-          .map((item) => ({
-            lineId: item.id.trim(),
-            productId: item.id.trim(),
-            quantity: Math.floor(item.qty),
-          }));
-        if (lines.length === 0) {
-          window.alert("Añade productos antes de guardar la comanda.");
+          window.alert("No se pudo guardar la comanda. Inténtalo de nuevo.");
           return;
         }
+        setCurrentOrderUpdatedAt(applyAuthoritativeVersion(persisted.updatedAtMs));
+        setOrderStatus(ORDER_STATUS_OPEN);
+      } else {
         const created = await createOpenOrderViaApi({
-          tableId: mesaId,
-          tableLabel: mesa?.name ?? mesaId,
+          tableId,
+          tableLabel: mesa?.name ?? tableId,
           lines,
           markSent: false,
         });
@@ -349,10 +414,10 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
 
         setCurrentOrderId(created.orderId);
         setOrderStatus(ORDER_STATUS_OPEN);
-        setCurrentOrderUpdatedAt(now);
+        setCurrentOrderUpdatedAt(applyAuthoritativeVersion(created.updatedAtMs));
       }
 
-      await updateMesa(mesaId, {
+      await updateMesa(tableId, {
         status: "occupied",
       });
     } catch (err) {
@@ -388,7 +453,7 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
         return;
       }
 
-      await updateMesa(mesaId, {
+      await updateMesa(tableId, {
         status: "free",
       });
 
@@ -412,72 +477,28 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     setIsSending(true);
 
     try {
-      const now = Date.now();
+      const lines = comandaItemsToSaleLineIntents(items);
+      if (lines.length === 0) {
+        window.alert("Añade productos antes de enviar a cocina.");
+        return;
+      }
 
-      await dbgRunTransaction(
-        db,
-        async (transaction) => {
-        const ref = doc(db, "orders", orderId);
-        const snap = await transaction.get(ref);
-
-        const data = snap.exists() ? (snap.data() as OrderMetaDoc) : null;
-
-        const remoteUpdatedAt =
-          typeof data?.updatedAt === "number" ? data.updatedAt : null;
-
-        assertNoOrderConflict(remoteUpdatedAt);
-
-        dbgTransactionUpdate(
-          transaction,
-          ref,
-          {
-            status: ORDER_STATUS_SENT,
-            sentAt: now,
-            updatedAt: now,
-            ...getOrderAuditFields(),
-          },
-          {
-            label: "useMesaComanda:handleSendToKitchen:txUpdate",
-            collection: "orders",
-            restaurantId,
-            tableId: mesaId,
-            orderId,
-          },
-        );
-      },
-        {
-          label: "useMesaComanda:handleSendToKitchen",
-          collection: "orders",
-          restaurantId,
-          tableId: mesaId,
-          orderId,
-        },
-      );
-
-      const kitchenItems = buildOrderItemsForKitchen({
-        items,
+      const sent = await upsertSaleLinesViaApi({
         orderId,
-        restaurantId: restaurantId ?? null,
-        mesaId,
-        tableId: mesaId,
+        lines,
+        markSent: true,
+        expectedUpdatedAtMs: currentOrderUpdatedAt ?? undefined,
       });
+      if (!sent.ok) {
+        if (sent.error === "VERSION_CONFLICT") {
+          throw new Error(ORDER_CONFLICT_ERROR);
+        }
+        console.error("Error sending order via API", sent.error, sent.details);
+        window.alert("No se pudo enviar a cocina. Inténtalo de nuevo.");
+        return;
+      }
 
-      const batch = new DbgWriteBatch(db, {
-        label: "useMesaComanda:handleSendToKitchen:orderItemsBatch",
-        collection: "orderItems",
-        restaurantId,
-        tableId: mesaId,
-        orderId,
-      });
-
-      kitchenItems.forEach((item) => {
-        const ref = doc(db, "orderItems", item.id);
-        batch.set(ref, item);
-      });
-
-      await batch.commit();
-
-      setCurrentOrderUpdatedAt(now);
+      setCurrentOrderUpdatedAt(applyAuthoritativeVersion(sent.updatedAtMs));
       setOrderStatus(ORDER_STATUS_SENT);
     } catch (err) {
       if (err instanceof Error && err.message === ORDER_CONFLICT_ERROR) {
@@ -502,7 +523,6 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
     setIsReopening(true);
 
     try {
-      const now = Date.now();
       const result = await reopenTpvOrderViaApi({ orderId });
       if (!result.ok) {
         if (result.error === "TABLE_ALREADY_HAS_ACTIVE_ORDER") {
@@ -515,7 +535,7 @@ export const useMesaComanda = (mesaId: string, restaurantId?: string | null) => 
         return;
       }
 
-      setCurrentOrderUpdatedAt(now);
+      setCurrentOrderUpdatedAt(applyAuthoritativeVersion(result.updatedAtMs));
       setOrderStatus(ORDER_STATUS_OPEN);
     } catch (err) {
       console.error("Error reopening order", err);

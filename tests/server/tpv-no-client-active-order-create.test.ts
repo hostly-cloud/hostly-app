@@ -54,7 +54,10 @@ describe("3B-2A.1 structural: no client active order create", () => {
   test("3. persistOpenOrderForTable forbids create without existingOrderId", () => {
     const src = read("lib/firestore/persist-open-order-for-table.ts");
     assert.match(src, /PERSIST_OPEN_ORDER_CREATE_FORBIDDEN/);
+    assert.match(src, /persistDraftItemsViaApi/);
     assert.doesNotMatch(src, /dbgAddDoc/);
+    assert.doesNotMatch(src, /dbgUpdateDoc/);
+    assert.doesNotMatch(src, /updateDoc\s*\(/);
     assert.doesNotMatch(src, /status:\s*["']open["']/);
   });
 
@@ -79,7 +82,12 @@ describe("3B-2A.1 structural: no client active order create", () => {
     const src = read("hooks/useMesaComanda.ts");
     assert.match(src, /createOpenOrderViaApi/);
     assert.match(src, /closeTpvOrderViaApi/);
+    assert.match(src, /persistDraftItemsViaApi/);
+    assert.match(src, /upsertSaleLinesViaApi/);
     assert.doesNotMatch(src, /dbgAddDoc/);
+    assert.doesNotMatch(src, /dbgRunTransaction/);
+    assert.doesNotMatch(src, /DbgWriteBatch/);
+    assert.doesNotMatch(src, /dbgUpdateDoc/);
   });
 
   test("7. pay-table-order goes through API", () => {

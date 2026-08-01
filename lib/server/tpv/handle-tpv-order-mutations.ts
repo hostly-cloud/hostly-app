@@ -44,12 +44,19 @@ import {
 import type {
   CancelLinesIntent,
   CreateOpenOrderIntent,
+  PersistDraftItemsIntent,
   SaleLineIntent,
   TransitionLineQuantityIntent,
   TransitionLineStatusIntent,
   UpsertSaleLinesIntent,
 } from "@/lib/server/tpv/tpv-mutation-dtos";
-import { normalizeProductionLineStatus } from "@/lib/firestore/merge-order-items-for-persist";
+import {
+  mergeOrderItemsForPersist,
+  normalizeProductionLineStatus,
+  resolvePersistOrderLineId,
+  selectDraftPersistableFirestoreItems,
+} from "@/lib/firestore/merge-order-items-for-persist";
+import { firestoreItemsToSaleLineIntents } from "@/lib/firestore/firestore-items-to-sale-intent";
 import {
   applyInitialModifierStockConsumptionInTransaction,
   type ModifierStockConsumptionPlan,
@@ -73,6 +80,8 @@ export type CreateOpenOrderResult = {
   inventoryWarnings: ModifierStockConsumptionWarning[];
   reusedExistingOrder?: boolean;
   items?: Record<string, unknown>[];
+  /** Versión autoritativa post-mutación (ms). Cliente debe usarla en CAS. */
+  updatedAtMs?: number;
 };
 
 export type UpsertSaleLinesResult = {
@@ -80,6 +89,16 @@ export type UpsertSaleLinesResult = {
   total: number;
   items: Record<string, unknown>[];
   inventoryWarnings: ModifierStockConsumptionWarning[];
+  updatedAtMs?: number;
+};
+
+export type PersistDraftItemsResult = {
+  orderId: string;
+  total: number;
+  items: Record<string, unknown>[];
+  pendingRemoved: number;
+  nonPendingPreserved: number;
+  updatedAtMs?: number;
 };
 
 export type TransitionLineStatusResult = {
@@ -97,6 +116,11 @@ export type TransitionLineQuantityResult = {
   inventoryWarnings: ModifierStockConsumptionWarning[];
 };
 
+function readUpdatedAtMsFromHit(hit: Record<string, unknown>): number | undefined {
+  const raw = hit.updatedAtMs;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+}
+
 function createOpenResultFromIdempotencyHit(hit: Record<string, unknown>): CreateOpenOrderResult {
   return {
     orderId: String(hit.orderId),
@@ -104,7 +128,28 @@ function createOpenResultFromIdempotencyHit(hit: Record<string, unknown>): Creat
     inventoryWarnings: readInventoryWarningsFromIdempotencyResult(hit),
     reusedExistingOrder: hit.reusedExistingOrder === true,
     items: Array.isArray(hit.items) ? (hit.items as Record<string, unknown>[]) : undefined,
+    updatedAtMs: readUpdatedAtMsFromHit(hit),
   };
+}
+
+/** Lee updatedAt real tras commit (serverTimestamp ya materializado). */
+async function loadAuthoritativeUpdatedAtMs(
+  db: Firestore,
+  orderId: string,
+): Promise<number | undefined> {
+  const snap = await db.collection("orders").doc(orderId).get();
+  if (!snap.exists) return undefined;
+  const ms = readOrderUpdatedAtMs(snap.data() as Record<string, unknown>);
+  return ms ?? undefined;
+}
+
+async function withAuthoritativeUpdatedAtMs<T extends { orderId: string; updatedAtMs?: number }>(
+  db: Firestore,
+  result: T,
+): Promise<T> {
+  if (result.updatedAtMs != null) return result;
+  const updatedAtMs = await loadAuthoritativeUpdatedAtMs(db, result.orderId);
+  return updatedAtMs != null ? { ...result, updatedAtMs } : result;
 }
 
 function isMutationError(value: unknown): value is TpvMutationError {
@@ -123,6 +168,7 @@ function upsertSaleLinesResultFromIdempotencyHit(hit: Record<string, unknown>): 
     total: Number(hit.total) || 0,
     items: Array.isArray(hit.items) ? (hit.items as Record<string, unknown>[]) : [],
     inventoryWarnings: readInventoryWarningsFromIdempotencyResult(hit),
+    updatedAtMs: readUpdatedAtMsFromHit(hit),
   };
 }
 
@@ -171,6 +217,7 @@ export function requireTpvCapability(
   return null;
 }
 
+/** Permisos de transition-line-status: served con tpv.sell|kds.manage; resto kds.manage. */
 async function applyModifierStockForItemTransition(
   tx: Transaction,
   ctx: AuthorizedTpvRestaurantContext,
@@ -340,7 +387,10 @@ export async function handleCreateOpenOrder(
     );
     if (hit?.conflict) return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (hit?.orderId) {
-      return createOpenResultFromIdempotencyHit(hit);
+      return withAuthoritativeUpdatedAtMs(
+        ctx.db,
+        createOpenResultFromIdempotencyHit(hit),
+      );
     }
   }
 
@@ -538,7 +588,9 @@ export async function handleCreateOpenOrder(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
-    if (msg === "IDEM_OK" && rehydratedResult) return rehydratedResult;
+    if (msg === "IDEM_OK" && rehydratedResult) {
+      return withAuthoritativeUpdatedAtMs(ctx.db, rehydratedResult);
+    }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (msg === "TABLE_NOT_FOUND") return { status: 404, error: "TABLE_NOT_FOUND" };
     if (msg === "TABLE_TENANT_MISMATCH") return { status: 403, error: "TABLE_TENANT_MISMATCH" };
@@ -592,7 +644,9 @@ export async function handleCreateOpenOrder(
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
-        if (msg === "IDEM_OK" && rehydratedResult) return rehydratedResult;
+        if (msg === "IDEM_OK" && rehydratedResult) {
+          return withAuthoritativeUpdatedAtMs(ctx.db, rehydratedResult);
+        }
         if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
         throw e;
       }
@@ -604,6 +658,9 @@ export async function handleCreateOpenOrder(
       inventoryWarnings: sortInventoryWarningsStable(upsert.inventoryWarnings),
       reusedExistingOrder: true,
       items: upsert.items,
+      updatedAtMs:
+        upsert.updatedAtMs ??
+        (await loadAuthoritativeUpdatedAtMs(ctx.db, reuseOrderId)),
     };
   }
 
@@ -616,6 +673,7 @@ export async function handleCreateOpenOrder(
     total,
     inventoryWarnings: sortInventoryWarningsStable(inventoryWarnings),
     reusedExistingOrder: false,
+    updatedAtMs: await loadAuthoritativeUpdatedAtMs(ctx.db, createdOrderId),
   };
 }
 
@@ -647,7 +705,10 @@ export async function handleUpsertSaleLines(
     );
     if (hit?.conflict) return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (hit?.orderId) {
-      return upsertSaleLinesResultFromIdempotencyHit(hit);
+      return withAuthoritativeUpdatedAtMs(
+        ctx.db,
+        upsertSaleLinesResultFromIdempotencyHit(hit),
+      );
     }
   }
 
@@ -766,7 +827,9 @@ export async function handleUpsertSaleLines(
       return { status: 409, error: e.code, details: e.lineId };
     }
     const msg = e instanceof Error ? e.message : "";
-    if (msg === "IDEM_OK" && rehydratedResult) return rehydratedResult;
+    if (msg === "IDEM_OK" && rehydratedResult) {
+      return withAuthoritativeUpdatedAtMs(ctx.db, rehydratedResult);
+    }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
     if (msg === "TENANT_MISMATCH") return { status: 403, error: "TENANT_MISMATCH" };
@@ -784,6 +847,7 @@ export async function handleUpsertSaleLines(
     total,
     items: resultItems,
     inventoryWarnings: sortInventoryWarningsStable(inventoryWarnings),
+    updatedAtMs: await loadAuthoritativeUpdatedAtMs(ctx.db, orderId),
   };
 }
 
@@ -879,15 +943,15 @@ export async function handleTransitionLineStatus(
   ctx: AuthorizedTpvRestaurantContext,
   intent: TransitionLineStatusIntent,
 ): Promise<TransitionLineStatusResult | TpvMutationError> {
-  const capErr = requireTpvCapability(ctx, "kds.manage");
-  if (capErr) return capErr;
-
   const orderId = intent.orderId.trim();
   const lineId = intent.lineId.trim();
   if (!orderId || !lineId) return { status: 400, error: "ORDER_AND_LINE_REQUIRED" };
 
   const next = normalizeProductionLineStatus(intent.nextStatus);
   if (next === "cancelled") return { status: 400, error: "KDS_CANNOT_CANCEL" };
+
+  const capErr = requireTpvCapability(ctx, "kds.manage");
+  if (capErr) return capErr;
 
   const orderRef = ctx.db.collection("orders").doc(orderId);
   const idemKey = intent.idempotencyKey?.trim();
@@ -933,6 +997,7 @@ export async function handleTransitionLineStatus(
       const orderData = readOrderSnapData(orderSnap);
       if (!orderData) throw new Error("ORDER_NOT_FOUND");
       if (String(orderData.restaurantId ?? "") !== ctx.restaurantId) throw new Error("TENANT_MISMATCH");
+      if (!isActiveTpvOrderStatus(orderData.status)) throw new Error("ORDER_NOT_EDITABLE");
       const verErr = assertExpectedVersion(orderData, intent.expectedUpdatedAtMs);
       if (verErr) throw new Error(verErr.error);
 
@@ -994,6 +1059,7 @@ export async function handleTransitionLineStatus(
     if (msg === "IDEM_OK" && rehydratedResult) return rehydratedResult;
     if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
     if (msg === "LINE_NOT_FOUND") return { status: 404, error: "LINE_NOT_FOUND" };
+    if (msg === "ORDER_NOT_EDITABLE") return { status: 409, error: "ORDER_NOT_EDITABLE" };
     if (msg === "TRANSITION_NOT_ALLOWED") return { status: 400, error: "TRANSITION_NOT_ALLOWED" };
     if (msg.startsWith("STATUS_MISMATCH:")) return { status: 409, error: "STATUS_MISMATCH", details: msg.slice(14) };
     if (msg === "VERSION_CONFLICT") return { status: 409, error: "VERSION_CONFLICT" };
@@ -1070,6 +1136,7 @@ export async function handleTransitionLineQuantity(
       const orderData = readOrderSnapData(orderSnap);
       if (!orderData) throw new Error("ORDER_NOT_FOUND");
       if (String(orderData.restaurantId ?? "") !== ctx.restaurantId) throw new Error("TENANT_MISMATCH");
+      if (!isActiveTpvOrderStatus(orderData.status)) throw new Error("ORDER_NOT_EDITABLE");
       const verErr = assertExpectedVersion(orderData, intent.expectedUpdatedAtMs);
       if (verErr) throw new Error(verErr.error);
 
@@ -1141,6 +1208,7 @@ export async function handleTransitionLineQuantity(
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
     if (msg === "LINE_NOT_FOUND") return { status: 404, error: "LINE_NOT_FOUND" };
+    if (msg === "ORDER_NOT_EDITABLE") return { status: 409, error: "ORDER_NOT_EDITABLE" };
     if (msg === "UNITS_INVALID" || msg === "UNITS_NOT_PARTIAL" || msg === "DUPLICATE_LINE_ID") {
       return { status: 400, error: msg };
     }
@@ -1170,6 +1238,7 @@ export type ReopenTpvOrderResult = {
   orderId: string;
   status: "open";
   lockAcquired: boolean;
+  updatedAtMs?: number;
 };
 
 export type ResolveActiveOrderForTableResult = {
@@ -1356,7 +1425,12 @@ export async function handleReopenTpvOrder(
     throw e;
   }
 
-  return { orderId, status: "open", lockAcquired };
+  return {
+    orderId,
+    status: "open",
+    lockAcquired,
+    updatedAtMs: await loadAuthoritativeUpdatedAtMs(ctx.db, orderId),
+  };
 }
 
 /** Lectura autorizada del orderId activo vía lock determinista (recuperación tras timeout). */
@@ -1396,4 +1470,210 @@ export async function handleResolveActiveOrderForTable(
     return { tableId, orderId: null };
   }
   return { tableId, orderId: lock.orderId };
+}
+
+function assertDraftPersistClientItemShape(
+  item: Record<string, unknown>,
+): { ok: true } | { ok: false; error: string } {
+  const id = resolvePersistOrderLineId(item);
+  if (!id) return { ok: false, error: "LINE_ID_REQUIRED" };
+  const productId =
+    typeof item.productId === "string" ? item.productId.trim() : "";
+  if (!productId) return { ok: false, error: "PRODUCT_ID_REQUIRED" };
+  if (normalizeProductionLineStatus(item.status) !== "pending") {
+    return { ok: false, error: "DRAFT_NON_PENDING_FORBIDDEN" };
+  }
+  const qty = Number(item.quantity ?? item.qty);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    return { ok: false, error: "LINE_QTY_INVALID" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Sync autoritativo del borrador TPV (incluye `items: []`).
+ * Merge server-side: elimina pending omitidas; conserva sent/prepared/served.
+ * Líneas pending se reconstruyen con buildAuthoritativeSaleLine (no confía en precio/routing cliente).
+ */
+export async function handlePersistDraftItems(
+  ctx: AuthorizedTpvRestaurantContext,
+  intent: PersistDraftItemsIntent,
+): Promise<PersistDraftItemsResult | TpvMutationError> {
+  const capErr = requireTpvCapability(ctx, "tpv.sell");
+  if (capErr) return capErr;
+
+  const orderId = intent.orderId.trim();
+  if (!orderId) return { status: 400, error: "ORDER_ID_REQUIRED" };
+
+  const draftOnly = selectDraftPersistableFirestoreItems(intent.items);
+  for (const row of draftOnly) {
+    const shape = assertDraftPersistClientItemShape(row);
+    if (!shape.ok) return { status: 400, error: shape.error };
+  }
+  const draftIntents = firestoreItemsToSaleLineIntents(draftOnly);
+
+  const orderRef = ctx.db.collection("orders").doc(orderId);
+  const idemKey = intent.idempotencyKey?.trim();
+  const payloadHash = stablePayloadHash(
+    buildIdempotencyPayload(ctx.uid, ctx.restaurantId, "persist_draft_items", {
+      orderId,
+      items: draftIntents,
+    }),
+  );
+
+  if (idemKey) {
+    const hit = readIdempotencyHit(
+      await idemRef(ctx.db, ctx.restaurantId, idemKey).get(),
+      "persist_draft_items",
+      payloadHash,
+    );
+    if (hit?.conflict) return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+    if (hit?.orderId) {
+      return {
+        orderId: String(hit.orderId),
+        total: Number(hit.total) || 0,
+        items: Array.isArray(hit.items) ? (hit.items as Record<string, unknown>[]) : [],
+        pendingRemoved: Number(hit.pendingRemoved) || 0,
+        nonPendingPreserved: Number(hit.nonPendingPreserved) || 0,
+      };
+    }
+  }
+
+  const preSnap = await orderRef.get();
+  if (!preSnap.exists) return { status: 404, error: "ORDER_NOT_FOUND" };
+  const preData = preSnap.data() as Record<string, unknown>;
+  if (String(preData.restaurantId ?? "") !== ctx.restaurantId) {
+    return { status: 403, error: "TENANT_MISMATCH" };
+  }
+  if (!isActiveTpvOrderStatus(preData.status)) {
+    return { status: 409, error: "ORDER_NOT_EDITABLE" };
+  }
+
+  const preExistingById = indexItemsByLineId(existingItemsArray(preData.items));
+  let normalizedLocal: Record<string, unknown>[] = [];
+  if (draftIntents.length > 0) {
+    const built = await preloadCatalogForIntents(
+      ctx.db,
+      ctx.restaurantId,
+      draftIntents,
+      preExistingById,
+      "pending",
+    );
+    if (!Array.isArray(built)) return built;
+    normalizedLocal = built;
+  }
+
+  let resultItems: Record<string, unknown>[] = [];
+  let total = 0;
+  let pendingRemoved = 0;
+  let nonPendingPreserved = 0;
+  let rehydrated: PersistDraftItemsResult | null = null;
+
+  try {
+    await ctx.db.runTransaction(async (tx) => {
+      if (idemKey) {
+        const idemSnap = await tx.get(idemRef(ctx.db, ctx.restaurantId, idemKey));
+        const hit = readIdempotencyHit(idemSnap, "persist_draft_items", payloadHash);
+        if (hit?.conflict) throw new Error("IDEMPOTENCY_CONFLICT");
+        if (hit?.orderId) {
+          rehydrated = {
+            orderId: String(hit.orderId),
+            total: Number(hit.total) || 0,
+            items: Array.isArray(hit.items)
+              ? (hit.items as Record<string, unknown>[])
+              : [],
+            pendingRemoved: Number(hit.pendingRemoved) || 0,
+            nonPendingPreserved: Number(hit.nonPendingPreserved) || 0,
+          };
+          throw new Error("IDEM_OK");
+        }
+      }
+
+      const orderSnap = await tx.get(orderRef);
+      const orderData = readOrderSnapData(orderSnap);
+      if (!orderData) throw new Error("ORDER_NOT_FOUND");
+      if (String(orderData.restaurantId ?? "") !== ctx.restaurantId) {
+        throw new Error("TENANT_MISMATCH");
+      }
+      if (!isActiveTpvOrderStatus(orderData.status)) {
+        throw new Error("ORDER_NOT_EDITABLE");
+      }
+      const verErr = assertExpectedVersion(orderData, intent.expectedUpdatedAtMs);
+      if (verErr) throw new Error(verErr.error);
+
+      const txExistingItems = existingItemsArray(orderData.items);
+      const serverPending = txExistingItems.filter(
+        (row) => normalizeProductionLineStatus(row.status) === "pending",
+      ).length;
+      const merged = mergeOrderItemsForPersist(txExistingItems, normalizedLocal);
+      const mergedPending = merged.filter(
+        (row) => normalizeProductionLineStatus(row.status) === "pending",
+      ).length;
+      pendingRemoved = Math.max(0, serverPending - mergedPending);
+      nonPendingPreserved = merged.filter(
+        (row) => normalizeProductionLineStatus(row.status) !== "pending",
+      ).length;
+
+      const dupErr = assertNoDuplicateLineIds(merged);
+      if (dupErr) throw new Error(dupErr);
+
+      const nowMs = Date.now();
+      const orderItemsSnap = await loadOrderItemsForOrderInTransaction(
+        tx,
+        ctx.db,
+        ctx.restaurantId,
+        orderId,
+      );
+      const loaded = indexLoadedOrderItems(orderItemsSnap);
+      const meta = orderProjectionMetaFromOrder(orderId, orderData, ctx.restaurantId);
+      const plan = planOrderProjectionWrites(ctx.db, meta, merged, loaded, nowMs);
+      resultItems = plan.itemsWithDocIds;
+      total = computeAuthoritativeOrderTotal(plan.itemsWithDocIds);
+
+      tx.update(orderRef, {
+        items: plan.itemsWithDocIds,
+        total,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      applyProjectionWritePlan(tx, plan);
+
+      if (idemKey) {
+        writeIdempotencyRecord(
+          tx,
+          idemRef(ctx.db, ctx.restaurantId, idemKey),
+          "persist_draft_items",
+          payloadHash,
+          {
+            orderId,
+            total,
+            items: plan.itemsWithDocIds,
+            pendingRemoved,
+            nonPendingPreserved,
+          },
+        );
+      }
+    });
+  } catch (e) {
+    if (e instanceof DuplicateOrderItemLineError) {
+      return { status: 409, error: e.code, details: e.lineId };
+    }
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "IDEM_OK" && rehydrated) return rehydrated;
+    if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+    if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
+    if (msg === "TENANT_MISMATCH") return { status: 403, error: "TENANT_MISMATCH" };
+    if (msg === "ORDER_NOT_EDITABLE") return { status: 409, error: "ORDER_NOT_EDITABLE" };
+    if (msg === "VERSION_CONFLICT") return { status: 409, error: "VERSION_CONFLICT" };
+    if (msg === "DUPLICATE_LINE_ID") return { status: 400, error: msg };
+    throw e;
+  }
+
+  return {
+    orderId,
+    total,
+    items: resultItems,
+    pendingRemoved,
+    nonPendingPreserved,
+    updatedAtMs: await loadAuthoritativeUpdatedAtMs(ctx.db, orderId),
+  };
 }

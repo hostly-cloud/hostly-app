@@ -20,6 +20,7 @@ process.env.NEXT_PUBLIC_FIREBASE_APP_ID ??= "1:123456789:web:abc";
 const TPV_ROUTES = [
   "app/api/tpv/orders/create-open/route.ts",
   "app/api/tpv/orders/upsert-sale-lines/route.ts",
+  "app/api/tpv/orders/persist-draft/route.ts",
   "app/api/tpv/orders/cancel-lines/route.ts",
   "app/api/tpv/orders/transition-line-status/route.ts",
   "app/api/tpv/orders/transition-line-quantity/route.ts",

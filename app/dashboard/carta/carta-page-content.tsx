@@ -63,6 +63,13 @@ import {
 import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignment";
 import type { ActiveOperatorSession } from "@/lib/tpv/active-operator-session";
 import { clearOperacionTpvUrlParams } from "@/lib/tpv/clear-operacion-tpv-url";
+
+import {
+  shouldFlushDraftBeforeBackToMap,
+  shouldPreserveLocalDraftCacheOnBackToMap,
+} from "@/lib/tpv/back-to-map-pending-draft";
+import { tableEmptySessionWarrantsAutoClose } from "@/lib/tpv/table-empty-session-auto-close";
+
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import {
   buildTpvInventoryProductsById,
@@ -106,6 +113,11 @@ import {
   type TableGroupOrdersMergedDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
+
+import {
+  summarizeTraceLines,
+  traceEmptyDraft,
+} from "@/lib/debug/tpv-empty-draft-trace";
 import { firestoreItemsToSaleLineIntents } from "@/lib/firestore/firestore-items-to-sale-intent";
 import {
   cartLinesProductionSnapshotEqual,
@@ -968,25 +980,6 @@ function countActiveComandaLines(lines: CartOrderLine[]): number {
   return lines.filter(
     (line) => normalizeOrderLineStatus(line.status) !== "cancelled",
   ).length;
-}
-
-/** Mesa sin líneas activas pero con sesión (comanda vacía/cancelada) → cerrar como al cobrar. */
-function tableEmptySessionWarrantsAutoClose(args: {
-  lines: CartOrderLine[];
-  cachedTableLines?: CartOrderLine[];
-  openOrderIds: readonly string[];
-  firestoreOccupied: boolean;
-  draftOrderId: string | null;
-  tableHasOperationalSession: boolean;
-}): boolean {
-  if (countActiveComandaLines(args.lines) > 0) return false;
-  if (countActiveComandaLines(args.cachedTableLines ?? []) > 0) return false;
-  if (args.lines.length > 0) return true;
-  if (args.openOrderIds.length > 0) return true;
-  if (args.draftOrderId) return true;
-  if (args.firestoreOccupied) return true;
-  if (args.tableHasOperationalSession) return true;
-  return false;
 }
 
 function tableDocHasOperationalSession(
@@ -2690,6 +2683,25 @@ export function CartaPageContent({
   const draftPersistChainByTableRef = useRef<Record<string, Promise<void>>>(
     {},
   );
+  /**
+   * Epoch solo para invalidar flushes obsoletos (create-open vs shrink).
+   * No es fuente de autoridad de borrador.
+   */
+  const draftPersistEpochByTableRef = useRef<Record<string, number>>({});
+
+  /**
+   * Origen 2990711: autoridad local = presencia de key en `ordersByTable`
+   * (incluye `[]` tras borrar la última pending). Sin mapa epoch aparte.
+   */
+  const isLocalDraftAuthoritative = (tableId: string): boolean => {
+    const tid = tableId.trim();
+    if (!tid) return false;
+    return Object.prototype.hasOwnProperty.call(
+      ordersByTableRef.current,
+      tid,
+    );
+  };
+
   /** Evita que el listener realtime pise comensales durante persistGuestCount. */
   const guestCountPersistRef = useRef<{
     tableId: string;
@@ -2944,10 +2956,24 @@ export function CartaPageContent({
   }, [comandaLineEditorId]);
 
   const flushPersistDraftOrderForTable = useCallback(
-    async (tableId: string, lines: CartOrderLine[]) => {
+    async (tableId: string, lines: CartOrderLine[], epoch: number) => {
       if (!restaurantId || !isFirebaseConfigured) return;
       const tid = tableId.trim();
       if (!tid) return;
+      const isCurrentEpoch = () =>
+        (draftPersistEpochByTableRef.current[tid] ?? 0) === epoch;
+      if (!isCurrentEpoch()) {
+        traceEmptyDraft("flush.skip.staleEpoch", {
+          tableId: tid,
+          epoch,
+          currentEpoch: draftPersistEpochByTableRef.current[tid] ?? 0,
+          lines: summarizeTraceLines(lines),
+        });
+        return;
+      }
+      let createOpenCalled = false;
+      let persistCalled = false;
+      let deleteCalled = false;
       try {
         const tableLabel =
           tablesList.find((t) => t.id === tid)?.name?.trim() || tid;
@@ -2973,11 +2999,39 @@ export function CartaPageContent({
             if (snapDoc) knownId = snapDoc.id;
           }
         }
+        if (!isCurrentEpoch()) {
+          traceEmptyDraft("flush.skip.staleEpoch.afterResolve", {
+            tableId: tid,
+            epoch,
+            knownId,
+          });
+          return;
+        }
 
         // Alta activa únicamente vía create-open (adquiere tableOrderLocks).
         if (!knownId) {
           const intents = firestoreItemsToSaleLineIntents(items);
-          if (intents.length === 0) return;
+          traceEmptyDraft("flush.noKnownId", {
+            tableId: tid,
+            epoch,
+            intentsLength: intents.length,
+            lines: summarizeTraceLines(lines),
+            createOpenCalled: intents.length > 0,
+            persistCalled: false,
+            deleteCalled: false,
+          });
+          if (intents.length === 0) {
+            // Draft vacío sin pedido activo: nada que crear.
+            return;
+          }
+          if (!isCurrentEpoch()) return;
+          createOpenCalled = true;
+          traceEmptyDraft("createOpen.request", {
+            tableId: tid,
+            epoch,
+            intentsLength: intents.length,
+            lines: summarizeTraceLines(lines),
+          });
           const created = await createOpenOrderViaApi({
             tableId: tid,
             tableLabel,
@@ -2991,13 +3045,70 @@ export function CartaPageContent({
           });
           if (!created.ok) {
             console.error("[persistOpenOrderDraft] create-open failed", created.error);
-            return;
+            traceEmptyDraft("createOpen.error", {
+              tableId: tid,
+              epoch,
+              error: created.error,
+            });
+            traceEmptyDraft("draftApi.error", {
+              tableId: tid,
+              epoch,
+              error: created.error,
+              phase: "create-open",
+            });
+            throw new Error(created.error || "CREATE_OPEN_FAILED");
           }
           openDraftOrderIdByTableRef.current[tid] = created.orderId;
+          traceEmptyDraft("createOpen.success", {
+            tableId: tid,
+            epoch,
+            orderId: created.orderId,
+            stillCurrent: isCurrentEpoch(),
+          });
+          traceEmptyDraft("flush.createOpen.done", {
+            tableId: tid,
+            epoch,
+            orderId: created.orderId,
+            stillCurrent: isCurrentEpoch(),
+          });
+          if (isCurrentEpoch()) {
+            return;
+          }
+          // create-open obsoleto: reconciliar borrador actual (puede ser []) con knownId.
+          const latestLines = ordersByTableRef.current[tid] ?? [];
+          const latestItems = serializeOrderLinesToFirestoreItems(
+            latestLines,
+          ) as Record<string, unknown>[];
+          const latestTotal = latestItems.reduce(
+            (acc, it) => acc + (Number(it.total) || 0),
+            0,
+          );
+          await persistOpenOrderForTable(db, {
+            restaurantId,
+            tableId: tid,
+            tableLabel,
+            items: latestItems,
+            total: Number.isFinite(latestTotal) ? latestTotal : 0,
+            existingOrderId: created.orderId,
+          });
           return;
         }
 
+        if (!isCurrentEpoch()) return;
+
         // Sync de borrador sobre pedido existente (no crea).
+        persistCalled = true;
+        deleteCalled = items.length === 0;
+        traceEmptyDraft("flush.persist", {
+          tableId: tid,
+          epoch,
+          knownId,
+          intentsLength: items.length,
+          createOpenCalled,
+          persistCalled,
+          deleteCalled,
+          lines: summarizeTraceLines(lines),
+        });
         const orderId = await persistOpenOrderForTable(db, {
           restaurantId,
           tableId: tid,
@@ -3006,6 +3117,7 @@ export function CartaPageContent({
           total: Number.isFinite(grandTotal) ? grandTotal : 0,
           existingOrderId: knownId,
         });
+        if (!isCurrentEpoch()) return;
         openDraftOrderIdByTableRef.current[tid] = orderId;
       } catch (e) {
         console.error("[persistOpenOrderDraft]", {
@@ -3013,28 +3125,76 @@ export function CartaPageContent({
           restaurantId,
           error: e,
         });
+        traceEmptyDraft("flush.error", {
+          tableId: tid,
+          epoch,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        // Propagar fallo para que backToMap no navegue con ACK falso.
+        throw e;
       }
     },
-    [restaurantId, isFirebaseConfigured, tablesList, activeOperator],
+    [
+      restaurantId,
+      isFirebaseConfigured,
+      tablesList,
+      activeOperator,
+      serializeOrderLinesToFirestoreItems,
+    ],
+  );
+
+  const cancelDraftPersistDebounceForTable = useCallback((tableId: string) => {
+    const tid = tableId.trim();
+    if (!tid) return;
+    const prevTimer = draftPersistDebounceByTableRef.current[tid];
+    if (prevTimer != null) window.clearTimeout(prevTimer);
+    draftPersistDebounceByTableRef.current[tid] = undefined;
+  }, []);
+
+  const enqueueDraftPersistFlushForTable = useCallback(
+    (tableId: string, lines: CartOrderLine[]) => {
+      const tid = tableId.trim();
+      if (!tid) return;
+      const epoch = (draftPersistEpochByTableRef.current[tid] ?? 0) + 1;
+      draftPersistEpochByTableRef.current[tid] = epoch;
+      const tail =
+        draftPersistChainByTableRef.current[tid] ?? Promise.resolve();
+      draftPersistChainByTableRef.current[tid] = tail
+        .catch(() => undefined)
+        .then(() => flushPersistDraftOrderForTable(tid, lines, epoch));
+    },
+    [flushPersistDraftOrderForTable],
   );
 
   const schedulePersistDraftOrderForTable = useCallback(
     (tableId: string, lines: CartOrderLine[]) => {
       const tid = tableId.trim();
       if (!tid) return;
-      const prevTimer = draftPersistDebounceByTableRef.current[tid];
-      if (prevTimer != null) window.clearTimeout(prevTimer);
+      cancelDraftPersistDebounceForTable(tid);
       draftPersistDebounceByTableRef.current[tid] = window.setTimeout(() => {
         draftPersistDebounceByTableRef.current[tid] = undefined;
-        const tail =
-          draftPersistChainByTableRef.current[tid] ?? Promise.resolve();
-        draftPersistChainByTableRef.current[tid] = tail.then(() =>
-          flushPersistDraftOrderForTable(tid, lines),
-        );
+        enqueueDraftPersistFlushForTable(tid, lines);
       }, 380) as number;
     },
-    [flushPersistDraftOrderForTable],
+    [cancelDraftPersistDebounceForTable, enqueueDraftPersistFlushForTable],
   );
+
+  useEffect(() => {
+    const tid = selectedTableId?.trim() || "";
+    if (!tid) return;
+    return () => {
+      const lines = ordersByTableRef.current[tid] ?? [];
+      const debouncePending =
+        draftPersistDebounceByTableRef.current[tid] != null;
+      if (countActiveComandaLines(lines) <= 0 && !debouncePending) return;
+      traceEmptyDraft("unmount.pendingDraft", {
+        tableId: tid,
+        orderId: openDraftOrderIdByTableRef.current[tid]?.trim() || null,
+        debouncePending,
+        lines: summarizeTraceLines(lines),
+      });
+    };
+  }, [selectedTableId]);
 
   const updateCurrentTableOrder = useCallback(
     (updater: (prev: CartOrderLine[]) => CartOrderLine[]) => {
@@ -3046,10 +3206,18 @@ export function CartaPageContent({
         setOrder((prev) => updater(prev));
         return;
       }
+
+      let nextOrder: CartOrderLine[] = [];
+      let beforeLines: CartOrderLine[] = [];
+      let isShrink = false;
+      let shouldPersist = false;
+
       setOrdersByTable((prev) => {
         const cur = prev[selectedTableId] || [];
-        const nextOrder = updater(cur);
+        beforeLines = cur;
+        nextOrder = updater(cur);
         if (restaurantId && selectedTableId && isFirebaseConfigured) {
+          shouldPersist = true;
           const activeLineCount = (lines: CartOrderLine[]) =>
             lines.filter(
               (l) => normalizeOrderLineStatus(l.status) !== "cancelled",
@@ -3059,19 +3227,50 @@ export function CartaPageContent({
               if (normalizeOrderLineStatus(l.status) === "cancelled") return acc;
               return acc + (Number(l.quantity) || 0);
             }, 0);
-          const isShrink =
+          isShrink =
             activeLineCount(nextOrder) < activeLineCount(cur) ||
             unitCount(nextOrder) < unitCount(cur);
-          if (isShrink) {
-            void flushPersistDraftOrderForTable(selectedTableId, nextOrder);
-          } else {
-            schedulePersistDraftOrderForTable(selectedTableId, nextOrder);
-          }
         }
-        return { ...prev, [selectedTableId]: nextOrder };
+        const nextMap = { ...prev, [selectedTableId]: nextOrder };
+        // Evita que el listener lea un ref stale entre setState y el siguiente render.
+        ordersByTableRef.current = nextMap;
+        return nextMap;
       });
       // Mantener `order` sincronizado para el render actual sin cambiar el resto del archivo.
-      setOrder((prev) => updater(prev));
+      setOrder((prev) => {
+        const next = updater(prev);
+        orderRef.current = next;
+        return next;
+      });
+
+      // Key en ordersByTable (= autoridad 2990711), incluso si nextOrder es [].
+      traceEmptyDraft("updateCurrentTableOrder", {
+        tableId: selectedTableId,
+        before: summarizeTraceLines(beforeLines),
+        after: summarizeTraceLines(nextOrder),
+        isShrink,
+        becameEmpty: nextOrder.length === 0 && beforeLines.length > 0,
+        shouldPersist,
+        localDraftAuthoritative: isLocalDraftAuthoritative(selectedTableId),
+      });
+
+      if (shouldPersist) {
+        if (isShrink) {
+          cancelDraftPersistDebounceForTable(selectedTableId);
+          enqueueDraftPersistFlushForTable(selectedTableId, nextOrder);
+          traceEmptyDraft("persist.enqueue.shrink", {
+            tableId: selectedTableId,
+            lines: summarizeTraceLines(nextOrder),
+            epoch: draftPersistEpochByTableRef.current[selectedTableId] ?? 0,
+          });
+        } else {
+          schedulePersistDraftOrderForTable(selectedTableId, nextOrder);
+          traceEmptyDraft("persist.schedule", {
+            tableId: selectedTableId,
+            lines: summarizeTraceLines(nextOrder),
+          });
+        }
+      }
     },
     [
       orderIdFromUrl,
@@ -3079,7 +3278,8 @@ export function CartaPageContent({
       restaurantId,
       isFirebaseConfigured,
       schedulePersistDraftOrderForTable,
-      flushPersistDraftOrderForTable,
+      cancelDraftPersistDebounceForTable,
+      enqueueDraftPersistFlushForTable,
     ],
   );
 
@@ -3566,6 +3766,10 @@ export function CartaPageContent({
             if (data.restaurantId !== rid) continue;
             if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
             if (orderDocHasActiveLinesForMapOccupancy(data)) {
+              traceEmptyDraft("autoClose.skip.hasActiveLines", {
+                tableId: tid,
+                orderId: d.id,
+              });
               return;
             }
           }
@@ -4796,21 +5000,51 @@ export function CartaPageContent({
             : selectedTableIdRef.current
         )?.trim() ?? null;
 
-        if (orderIdFromUrl) {
-          const localLines = orderRef.current;
-          const nextLines = buildSyncedOrderLinesFromServerDoc(
-            localLines,
+        const serverMappedPreview =
+          mapFirestoreOrderDocToCartLines(
             data,
             rid,
             operationalCatalog.productDocumentsById,
-            { localDraftAuthoritative: true },
-          );
-          setOrder((prev) =>
-            cartLinesProductionSnapshotEqual(prev, nextLines) &&
-            prev.length === nextLines.length
-              ? prev
-              : nextLines,
-          );
+          ) ?? [];
+        const pendingCount = serverMappedPreview.filter(
+          (l) => normalizeOrderLineStatus(l.status) === "pending",
+        ).length;
+        const sentCount = serverMappedPreview.filter((l) => {
+          const s = normalizeOrderLineStatus(l.status);
+          return s !== "pending" && s !== "cancelled";
+        }).length;
+        traceEmptyDraft("onSnapshot", {
+          orderId: activeOrderId,
+          tableId,
+          source: snap.metadata.fromCache ? "cache" : "server",
+          hasPendingWrites: snap.metadata.hasPendingWrites,
+          received: summarizeTraceLines(serverMappedPreview),
+          pending: pendingCount,
+          sent: sentCount,
+        });
+
+        if (orderIdFromUrl) {
+          setOrder((prev) => {
+            const nextLines = buildSyncedOrderLinesFromServerDoc(
+              prev,
+              data,
+              rid,
+              operationalCatalog.productDocumentsById,
+              { localDraftAuthoritative: true },
+            );
+            if (
+              cartLinesProductionSnapshotEqual(prev, nextLines) &&
+              prev.length === nextLines.length
+            ) {
+              return prev;
+            }
+            traceEmptyDraft("reactWriter.onSnapshot.orderUrl", {
+              before: summarizeTraceLines(prev),
+              after: summarizeTraceLines(nextLines),
+            });
+            orderRef.current = nextLines;
+            return nextLines;
+          });
           return;
         }
 
@@ -4818,37 +5052,62 @@ export function CartaPageContent({
 
         openDraftOrderIdByTableRef.current[tableId] = activeOrderId;
 
-        const localTableLines = ordersByTableRef.current[tableId] ?? [];
-        const hasLocalDraft = Object.prototype.hasOwnProperty.call(
-          ordersByTableRef.current,
-          tableId,
-        );
-        const nextTableLines = buildSyncedOrderLinesFromServerDoc(
-          localTableLines,
-          data,
-          rid,
-          operationalCatalog.productDocumentsById,
-          { localDraftAuthoritative: hasLocalDraft },
-        );
-
+        let nextForSelected: CartOrderLine[] | undefined;
         setOrdersByTable((prev) => {
-          const cur = prev[tableId] ?? [];
+          // 2990711: hasLocalDraft = key en ordersByTable (incluye []).
+          const localDraftAuthoritative = Object.prototype.hasOwnProperty.call(
+            prev,
+            tableId,
+          );
+          const localTableLines = prev[tableId] ?? [];
+          const nextTableLines = buildSyncedOrderLinesFromServerDoc(
+            localTableLines,
+            data,
+            rid,
+            operationalCatalog.productDocumentsById,
+            { localDraftAuthoritative },
+          );
+          traceEmptyDraft("onSnapshot.merge", {
+            tableId,
+            localDraftAuthoritative,
+            localLen: localTableLines.length,
+            nextLen: nextTableLines.length,
+            local: summarizeTraceLines(localTableLines),
+            next: summarizeTraceLines(nextTableLines),
+            resurrected:
+              localTableLines.length === 0 && nextTableLines.length > 0,
+          });
+          if (selectedTableIdRef.current === tableId) {
+            nextForSelected = nextTableLines;
+          }
           if (
-            cartLinesProductionSnapshotEqual(cur, nextTableLines) &&
-            cur.length === nextTableLines.length
+            cartLinesProductionSnapshotEqual(localTableLines, nextTableLines) &&
+            localTableLines.length === nextTableLines.length
           ) {
             return prev;
           }
-          return { ...prev, [tableId]: nextTableLines };
+          const nextMap = { ...prev, [tableId]: nextTableLines };
+          ordersByTableRef.current = nextMap;
+          return nextMap;
         });
 
-        if (selectedTableIdRef.current === tableId) {
-          setOrder((prev) =>
-            cartLinesProductionSnapshotEqual(prev, nextTableLines) &&
-            prev.length === nextTableLines.length
-              ? prev
-              : nextTableLines,
-          );
+        if (nextForSelected && selectedTableIdRef.current === tableId) {
+          const synced = nextForSelected;
+          setOrder((prev) => {
+            if (
+              cartLinesProductionSnapshotEqual(prev, synced) &&
+              prev.length === synced.length
+            ) {
+              return prev;
+            }
+            traceEmptyDraft("reactWriter.onSnapshot.setOrder", {
+              tableId,
+              before: summarizeTraceLines(prev),
+              after: summarizeTraceLines(synced),
+            });
+            orderRef.current = synced;
+            return synced;
+          });
         }
       },
       (err) => {
@@ -4887,9 +5146,10 @@ export function CartaPageContent({
     const tableRow = tablesList.find((t) => t.id === tableId);
     if (
       !tableEmptySessionWarrantsAutoClose({
-        lines: order,
-        cachedTableLines,
-        openOrderIds: openOrderIdsForTable,
+        activeLineCount: countActiveComandaLines(order),
+        cachedActiveLineCount: countActiveComandaLines(cachedTableLines ?? []),
+        linesLength: order.length,
+        openOrderIdsLength: openOrderIdsForTable.length,
         firestoreOccupied: firestoreOccupiedTableIds.has(tableId),
         draftOrderId,
         tableHasOperationalSession: tableDocHasOperationalSession(tableRow),
@@ -5023,6 +5283,7 @@ export function CartaPageContent({
       for (const mid of ids) {
         delete next[mid];
       }
+      ordersByTableRef.current = next;
       return next;
     });
   }, []);
@@ -5036,6 +5297,24 @@ export function CartaPageContent({
       try {
         const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
         if (!snapDoc) {
+          if (isLocalDraftAuthoritative(tid)) {
+            traceEmptyDraft("hydrateTableOrderFromFirestore.skip.noDoc.authoritative", {
+              tableId: tid,
+            });
+            return;
+          }
+          const localPending = ordersByTableRef.current[tid] ?? [];
+          if (countActiveComandaLines(localPending) > 0) {
+            // No vaciar comanda local con pending mientras el servidor aún no responde.
+            traceEmptyDraft("hydrateTableOrderFromFirestore.keepLocal.noDoc", {
+              tableId: tid,
+              lines: summarizeTraceLines(localPending),
+            });
+            if (selectedTableIdRef.current === tid) {
+              setOrder(localPending);
+            }
+            return;
+          }
           if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrdersByTable((prev) => ({ ...prev, [tid]: prev[tid] ?? [] }));
             if (selectedTableIdRef.current === tid) {
@@ -5050,7 +5329,66 @@ export function CartaPageContent({
           restaurantId,
           operationalCatalog.productDocumentsById,
         );
+        openDraftOrderIdByTableRef.current[tid] = snapDoc.id;
+
+        if (isLocalDraftAuthoritative(tid)) {
+          // Conservar draft local (incluso []) y solo sincronizar producción sent+.
+          let nextForSelected: CartOrderLine[] | undefined;
+          setOrdersByTable((prev) => {
+            const local = prev[tid] ?? [];
+            const next = buildSyncedOrderLinesFromServerDoc(
+              local,
+              data,
+              restaurantId,
+              operationalCatalog.productDocumentsById,
+              { localDraftAuthoritative: true },
+            );
+            traceEmptyDraft("reactWriter.hydrateTableOrderFromFirestore.authoritativeMerge", {
+              tableId: tid,
+              orderId: snapDoc.id,
+              local: summarizeTraceLines(local),
+              next: summarizeTraceLines(next),
+            });
+            if (selectedTableIdRef.current === tid) nextForSelected = next;
+            if (
+              cartLinesProductionSnapshotEqual(local, next) &&
+              local.length === next.length
+            ) {
+              return prev;
+            }
+            const nextMap = { ...prev, [tid]: next };
+            ordersByTableRef.current = nextMap;
+            return nextMap;
+          });
+          if (nextForSelected && selectedTableIdRef.current === tid) {
+            const synced = nextForSelected;
+            setOrder((prev) => {
+              if (
+                cartLinesProductionSnapshotEqual(prev, synced) &&
+                prev.length === synced.length
+              ) {
+                return prev;
+              }
+              orderRef.current = synced;
+              return synced;
+            });
+          }
+          return;
+        }
+
         if (!mapped || mapped.length === 0) {
+          const localPending = ordersByTableRef.current[tid] ?? [];
+          if (countActiveComandaLines(localPending) > 0) {
+            traceEmptyDraft("hydrateTableOrderFromFirestore.keepLocal.emptyMapped", {
+              tableId: tid,
+              orderId: snapDoc.id,
+              lines: summarizeTraceLines(localPending),
+            });
+            if (selectedTableIdRef.current === tid) {
+              setOrder(localPending);
+            }
+            return;
+          }
           if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrdersByTable((prev) => ({ ...prev, [tid]: prev[tid] ?? [] }));
             if (selectedTableIdRef.current === tid) {
@@ -5059,7 +5397,16 @@ export function CartaPageContent({
           }
           return;
         }
-        openDraftOrderIdByTableRef.current[tid] = snapDoc.id;
+        traceEmptyDraft("reactWriter.hydrateTableOrderFromFirestore", {
+          tableId: tid,
+          orderId: snapDoc.id,
+          force: opts?.force === true,
+          prevLen: ordersByTableRef.current[tid]?.length ?? null,
+          mapped: summarizeTraceLines(mapped),
+          overwritesEmpty:
+            (ordersByTableRef.current[tid]?.length ?? 0) === 0 &&
+            mapped.length > 0,
+        });
         setOrdersByTable((prev) => ({ ...prev, [tid]: mapped }));
         if (selectedTableIdRef.current === tid) {
           setOrder(mapped);
@@ -5129,6 +5476,12 @@ export function CartaPageContent({
           userOpenedTableFromMapRef.current = null;
         }
         if (!snapDoc) {
+          if (isLocalDraftAuthoritative(tid)) {
+            traceEmptyDraft("hydrateEffect.skip.noDoc.authoritative", {
+              tableId: tid,
+            });
+            return;
+          }
           if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrder([]);
             setOrdersByTable((prev) => ({ ...prev, [tid]: [] }));
@@ -5150,6 +5503,52 @@ export function CartaPageContent({
           restaurantId,
           operationalCatalog.productDocumentsById,
         );
+        openDraftOrderIdByTableRef.current[tid] = snapDoc.id;
+
+        if (isLocalDraftAuthoritative(tid)) {
+          let nextForSelected: CartOrderLine[] | undefined;
+          setOrdersByTable((prev) => {
+            const local = prev[tid] ?? [];
+            const next = buildSyncedOrderLinesFromServerDoc(
+              local,
+              data,
+              restaurantId,
+              operationalCatalog.productDocumentsById,
+              { localDraftAuthoritative: true },
+            );
+            traceEmptyDraft("reactWriter.hydrateEffect.authoritativeMerge", {
+              tableId: tid,
+              orderId: snapDoc.id,
+              local: summarizeTraceLines(local),
+              next: summarizeTraceLines(next),
+            });
+            if (selectedTableIdRef.current === tid) nextForSelected = next;
+            if (
+              cartLinesProductionSnapshotEqual(local, next) &&
+              local.length === next.length
+            ) {
+              return prev;
+            }
+            const nextMap = { ...prev, [tid]: next };
+            ordersByTableRef.current = nextMap;
+            return nextMap;
+          });
+          if (nextForSelected && selectedTableIdRef.current === tid) {
+            const synced = nextForSelected;
+            setOrder((prev) => {
+              if (
+                cartLinesProductionSnapshotEqual(prev, synced) &&
+                prev.length === synced.length
+              ) {
+                return prev;
+              }
+              orderRef.current = synced;
+              return synced;
+            });
+          }
+          return;
+        }
+
         if (!mapped || mapped.length === 0) {
           if (!firestoreOccupiedTableIdsRef.current.has(tid)) {
             setOrder([]);
@@ -5166,12 +5565,14 @@ export function CartaPageContent({
           }
           return;
         }
-        openDraftOrderIdByTableRef.current[tid] = snapDoc.id;
         setOrdersByTable((prev) => {
-          const curLocal = prev[tid];
-          if (curLocal !== undefined && curLocal.length > 0) {
-            return prev;
-          }
+          traceEmptyDraft("reactWriter.hydrateEffect", {
+            tableId: tid,
+            orderId: snapDoc.id,
+            curLocalLen: prev[tid]?.length ?? null,
+            mapped: summarizeTraceLines(mapped),
+            localDraftAuthoritative: false,
+          });
           return { ...prev, [tid]: mapped };
         });
         if (selectedTableIdRef.current === tid) {
@@ -7299,7 +7700,7 @@ export function CartaPageContent({
       const id = String(tableId).trim();
       if (!id) return;
 
-      const memberIds = groupedTablesMapHandlers?.getGroupTableIds?.(id) ?? [
+            const memberIds = groupedTablesMapHandlers?.getGroupTableIds?.(id) ?? [
         id,
       ];
       const mainId = groupedTablesMapHandlers?.resolveMainTableId?.(id) ?? id;
@@ -7310,9 +7711,12 @@ export function CartaPageContent({
       openingTableRef.current = openId;
       suppressUrlTableSelectionRef.current = false;
 
-      if (isGrouped) {
-        invalidateTableGroupOrderCache(memberIds);
-      }
+      // No invalidar cache al abrir: puede haber flush pendiente o [] autoritativo
+      // local no confirmado. La invalidación de grupo queda para mutaciones confirmadas
+      // (unión/separación), no para reopen.
+
+      // Origen 2990711: no destruir key de ordersByTable al abrir.
+      // Si hay cache local (p. ej. tras flush al mapa), hydrate hace merge autoritativo.
 
       selectedTableIdRef.current = openId;
       setSelectedTableId(openId);
@@ -7346,9 +7750,25 @@ export function CartaPageContent({
       if (!orderIdFromUrl) {
         setOrder([]);
         userOpenedTableFromMapRef.current = openId;
-        const tableOccupiedOnMap = memberIds.some((memberId) =>
-          firestoreOccupiedTableIdsRef.current.has(memberId),
+        const tableOccupiedOnMap = memberIds.some(
+          (memberId) =>
+            firestoreOccupiedTableIdsRef.current.has(memberId) ||
+            countActiveComandaLines(
+              ordersByTableRef.current[memberId] ?? [],
+            ) > 0,
         );
+        const localLines = ordersByTableRef.current[openId] ?? [];
+        traceEmptyDraft("reopen.activeOrderLookup", {
+          tableId: openId,
+          firestoreOccupied: memberIds.some((memberId) =>
+            firestoreOccupiedTableIdsRef.current.has(memberId),
+          ),
+          localActive: countActiveComandaLines(localLines) > 0,
+          tableOccupiedOnMap,
+          draftOrderId:
+            openDraftOrderIdByTableRef.current[openId]?.trim() || null,
+          localLines: summarizeTraceLines(localLines),
+        });
         if (!tableOccupiedOnMap) {
           setOrdersByTable((prev) => ({
             ...prev,
@@ -7356,7 +7776,16 @@ export function CartaPageContent({
           }));
           userOpenedTableFromMapRef.current = null;
         }
-        void hydrateTableOrderFromFirestore(openId, { force: true });
+        void hydrateTableOrderFromFirestore(openId, { force: true }).then(() => {
+          traceEmptyDraft("reopen.hydrateResult", {
+            tableId: openId,
+            orderId:
+              openDraftOrderIdByTableRef.current[openId]?.trim() || null,
+            lines: summarizeTraceLines(
+              ordersByTableRef.current[openId] ?? [],
+            ),
+          });
+        });
       } else {
         setOrdersByTable((prev) =>
           Object.prototype.hasOwnProperty.call(prev, openId)
@@ -7394,7 +7823,6 @@ export function CartaPageContent({
       orderIdFromUrl,
       router,
       groupedTablesMapHandlers,
-      invalidateTableGroupOrderCache,
       hydrateTableOrderFromFirestore,
       activeOperator,
       restaurantId,
@@ -7853,17 +8281,100 @@ export function CartaPageContent({
     ],
   );
 
-  const handleBackToMap = useCallback(() => {
-    const tid = selectedTableId?.trim();
+  const handleBackToMap = useCallback(async () => {
+    const tid = selectedTableId?.trim() || "";
     userOpenedTableFromMapRef.current = null;
+
+    const linesBeforeLeave =
+      (tid ? ordersByTableRef.current[tid] : undefined) ??
+      orderRef.current ??
+      [];
+    const activeCount = countActiveComandaLines(linesBeforeLeave);
+    const draftOrderId = tid
+      ? openDraftOrderIdByTableRef.current[tid]?.trim() || null
+      : null;
+    const hasDebounceTimer =
+      tid !== "" && draftPersistDebounceByTableRef.current[tid] != null;
+    const hasLocalDraftKey =
+      tid !== "" &&
+      Object.prototype.hasOwnProperty.call(ordersByTableRef.current, tid);
+    const hasPersistChain =
+      tid !== "" && draftPersistChainByTableRef.current[tid] != null;
+
+    traceEmptyDraft("navigation.backToMap.request", {
+      tableId: tid || null,
+      draftOrderId,
+      activeCount,
+      hasDebounceTimer,
+      hasLocalDraftKey,
+      hasPersistChain,
+      lines: summarizeTraceLines(linesBeforeLeave),
+    });
+    traceEmptyDraft("orderLifecycle.beforeLeave", {
+      tableId: tid || null,
+      draftOrderId,
+      lines: summarizeTraceLines(linesBeforeLeave),
+    });
+
     if (tid) {
-      delete openDraftOrderIdByTableRef.current[tid];
-      setOrdersByTable((prev) => {
-        const next = { ...prev };
-        delete next[tid];
-        return next;
+      const shouldFlush = shouldFlushDraftBeforeBackToMap({
+        activeLineCount: activeCount,
+        hasDebounceTimer,
+        hasDraftOrderId: Boolean(draftOrderId),
+        hasLocalDraftKey,
+        hasPersistChain,
       });
+
+      if (shouldFlush) {
+        cancelDraftPersistDebounceForTable(tid);
+        const linesToFlush =
+          ordersByTableRef.current[tid] ?? orderRef.current ?? [];
+        traceEmptyDraft("navigation.backToMap.flushStart", {
+          tableId: tid,
+          orderId: openDraftOrderIdByTableRef.current[tid] ?? null,
+          lines: summarizeTraceLines(linesToFlush),
+        });
+        try {
+          enqueueDraftPersistFlushForTable(tid, linesToFlush);
+          await (draftPersistChainByTableRef.current[tid] ?? Promise.resolve());
+          traceEmptyDraft("navigation.backToMap.flushSuccess", {
+            tableId: tid,
+            orderId: openDraftOrderIdByTableRef.current[tid] ?? null,
+            lines: summarizeTraceLines(
+              ordersByTableRef.current[tid] ?? linesToFlush,
+            ),
+          });
+        } catch (e) {
+          traceEmptyDraft("navigation.backToMap.flushError", {
+            tableId: tid,
+            orderId: openDraftOrderIdByTableRef.current[tid] ?? null,
+            error: e instanceof Error ? e.message : String(e),
+          });
+          // Sin ACK: no navegar; conservar key local (incluye [] autoritativo).
+          window.alert(
+            "No se pudo guardar la comanda. Revisa la conexión e inténtalo otra vez.",
+          );
+          return;
+        }
+      }
+
+      // Tras ACK: limpiar cache solo si no quedan líneas activas (vacío confirmado).
+      if (
+        !shouldPreserveLocalDraftCacheOnBackToMap(
+          countActiveComandaLines(ordersByTableRef.current[tid] ?? []),
+        )
+      ) {
+        delete openDraftOrderIdByTableRef.current[tid];
+        setOrdersByTable((prev) => {
+          if (!Object.prototype.hasOwnProperty.call(prev, tid)) return prev;
+          const next = { ...prev };
+          delete next[tid];
+          ordersByTableRef.current = next;
+          return next;
+        });
+      }
     }
+
     setTpvEntryMode("map");
     suppressUrlTableSelectionRef.current = true;
     setSelectedTableId(null);
@@ -7873,7 +8384,34 @@ export function CartaPageContent({
       ? "/dashboard/operacion/tpv"
       : "/dashboard/carta";
     router.replace(basePath);
-  }, [embeddedInOperacion, router, selectedTableId]);
+
+    const cachedAfter = tid ? ordersByTableRef.current[tid] ?? [] : [];
+    const orderIdAfter = tid
+      ? openDraftOrderIdByTableRef.current[tid]?.trim() || null
+      : null;
+    traceEmptyDraft("orderLifecycle.afterLeave", {
+      tableId: tid || null,
+      draftOrderId: orderIdAfter,
+      cachedLines: summarizeTraceLines(cachedAfter),
+      mapWouldBeBusy: countActiveComandaLines(cachedAfter) > 0,
+    });
+    if (tid) {
+      traceEmptyDraft("mapTableState", {
+        tableId: tid,
+        busyLocal: countActiveComandaLines(cachedAfter) > 0,
+        draftOrderId: orderIdAfter,
+        preservedLocalCache: shouldPreserveLocalDraftCacheOnBackToMap(
+          countActiveComandaLines(cachedAfter),
+        ),
+      });
+    }
+  }, [
+    embeddedInOperacion,
+    router,
+    selectedTableId,
+    cancelDraftPersistDebounceForTable,
+    enqueueDraftPersistFlushForTable,
+  ]);
 
   const handlePrintPreTicket = useCallback(() => {
     window.print();

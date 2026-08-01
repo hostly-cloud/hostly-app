@@ -1,14 +1,7 @@
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  type Firestore,
-} from "firebase/firestore";
-import {
-  computeBillableTotalFromPersistItems,
-  mergeOrderItemsForPersist,
-} from "@/lib/firestore/merge-order-items-for-persist";
-import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
+import type { Firestore } from "firebase/firestore";
+import { traceEmptyDraft } from "@/lib/debug/tpv-empty-draft-trace";
+import { selectDraftPersistableFirestoreItems } from "@/lib/firestore/merge-order-items-for-persist";
+import { persistDraftItemsViaApi } from "@/lib/firestore/tpv-mutations-via-api";
 
 export type PersistOpenOrderForTableParams = {
   restaurantId: string;
@@ -25,24 +18,15 @@ export type PersistOpenOrderForTableParams = {
 };
 
 /**
- * @deprecated LEGACY — no crea pedidos activos.
- * Solo actualiza `orders/{existingOrderId}` (items/total) para sync de borrador.
- * Altas activas: `createOpenOrderViaApi` / `handleCreateOpenOrder`.
+ * Actualiza `orders/{existingOrderId}` para sync de borrador vía API Admin.
+ * `items: []` es una mutación válida (elimina pending omitidas; conserva no-pending).
  */
 export async function persistOpenOrderForTable(
-  db: Firestore,
+  _db: Firestore,
   params: PersistOpenOrderForTableParams,
 ): Promise<string> {
-  const {
-    restaurantId,
-    tableId,
-    items,
-    total,
-    existingOrderId,
-  } = params;
-  const safeTotal = Number.isFinite(total) ? total : 0;
+  const { tableId, items, existingOrderId } = params;
   const tid = tableId.trim();
-  const rid = restaurantId.trim();
   const id = existingOrderId?.trim() ?? "";
 
   if (!id) {
@@ -51,37 +35,39 @@ export async function persistOpenOrderForTable(
     );
   }
 
-  let mergedItems = items;
-  let mergedTotal = safeTotal;
+  const draftItems = selectDraftPersistableFirestoreItems(items);
 
-  try {
-    const snap = await getDoc(doc(db, "orders", id));
-    if (snap.exists()) {
-      const serverItems = (snap.data() as { items?: unknown }).items;
-      mergedItems = mergeOrderItemsForPersist(serverItems, items);
-      mergedTotal = computeBillableTotalFromPersistItems(mergedItems);
-    }
-  } catch (mergeReadErr) {
-    console.warn(
-      "[persistOpenOrderForTable] no se pudo leer order para merge; se usa payload local.",
-      mergeReadErr,
-    );
-  }
+  traceEmptyDraft("draftApi.request", {
+    tableId: tid,
+    orderId: id,
+    localItems: items.length,
+    draftPending: draftItems.length,
+    deleteEffect: draftItems.length === 0,
+  });
 
-  await dbgUpdateDoc(
-    doc(db, "orders", id),
-    {
-      items: mergedItems,
-      total: mergedTotal,
-      updatedAt: serverTimestamp(),
-    },
-    {
-      label: "persistOpenOrderForTable:update",
-      collection: "orders",
-      restaurantId: rid,
+  const result = await persistDraftItemsViaApi({
+    orderId: id,
+    items: draftItems,
+  });
+
+  if (!result.ok) {
+    traceEmptyDraft("draftApi.error", {
       tableId: tid,
       orderId: id,
-    },
-  );
-  return id;
+      error: result.error,
+      details: result.details ?? null,
+    });
+    throw new Error(result.error);
+  }
+
+  traceEmptyDraft("draftApi.success", {
+    tableId: tid,
+    orderId: result.orderId,
+    total: result.total,
+    pendingRemoved: result.pendingRemoved,
+    nonPendingPreserved: result.nonPendingPreserved,
+    resultItems: result.items.length,
+  });
+
+  return result.orderId;
 }

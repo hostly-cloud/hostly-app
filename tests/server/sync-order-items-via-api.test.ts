@@ -91,26 +91,57 @@ describe("syncOrderItemsViaApi inventoryWarnings contract (6C2.3-CLIENT-WRAPPER)
     assert.deepEqual(result.inventoryWarnings, warnings);
   });
 
-  test("upsert conserva el mismo array de inventoryWarnings", async () => {
-    const warnings = [SAMPLE_WARNING];
+  test("persist_items usa persist-draft y conserva inventario vacío", async () => {
     const result = await syncOrderItemsViaApi(
       {
         operation: "persist_items",
-        orderId: "order-upsert",
-        items: [{ id: "line-1", productId: "prod-1", quantity: 2 }],
+        orderId: "order-draft",
+        items: [{ id: "line-1", productId: "prod-1", quantity: 2, status: "pending" }],
       },
       {
-        upsertSaleLinesViaApi: async () => ({
+        persistDraftItemsViaApi: async () => ({
           ok: true,
-          orderId: "order-upsert",
+          orderId: "order-draft",
           total: 18,
           items: [],
-          inventoryWarnings: warnings,
+          pendingRemoved: 0,
+          nonPendingPreserved: 0,
+          operationId: "test-op-draft",
         }),
       },
     );
     assertSuccessResult(result);
-    assert.deepEqual(result.inventoryWarnings, warnings);
+    assert.deepEqual(result.inventoryWarnings, []);
+  });
+
+  test("persist_items con [] llama API (no no-op)", async () => {
+    let called = false;
+    const result = await syncOrderItemsViaApi(
+      {
+        operation: "persist_items",
+        orderId: "order-empty-draft",
+        items: [],
+      },
+      {
+        persistDraftItemsViaApi: async (params) => {
+          called = true;
+          assert.equal(params.orderId, "order-empty-draft");
+          assert.deepEqual(params.items, []);
+          return {
+            ok: true,
+            orderId: "order-empty-draft",
+            total: 0,
+            items: [],
+            pendingRemoved: 1,
+            nonPendingPreserved: 0,
+            operationId: "test-op-empty",
+          };
+        },
+      },
+    );
+    assert.equal(called, true);
+    assertSuccessResult(result);
+    assert.equal(result.total, 0);
   });
 
   test("create conserva inventoryWarnings vacío", async () => {
