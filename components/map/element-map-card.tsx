@@ -16,6 +16,14 @@ import {
   HOSTLY_MAP_JOIN_ABORTED,
   HOSTLY_MAP_JOIN_ARMED,
 } from "@/lib/map/join-pinch-bridge";
+import {
+  computeFixedMenuPosition,
+  GROUP_SEPARATE_MENU_ESTIMATED_SIZE,
+  readViewportSize,
+  rectFromDomRect,
+  type FixedMenuAnchorRect,
+  type FixedMenuPosition,
+} from "@/lib/map/compute-fixed-menu-position";
 
 /** Sincroniza highlight de destino entre fichas durante join-drag. */
 const HOSTLY_MAP_JOIN_DRAG_HOVER = "hostly-map-join-drag-hover";
@@ -300,12 +308,37 @@ export const ElementCard = memo(
       y: number;
     } | null>(null);
     const [groupMenuOpen, setGroupMenuOpen] = useState(false);
-    const [groupMenuPos, setGroupMenuPos] = useState<{
-      top: number;
-      left: number;
-    } | null>(null);
+    const [groupMenuPos, setGroupMenuPos] = useState<FixedMenuPosition | null>(
+      null,
+    );
+    const groupMenuAnchorRef = useRef<FixedMenuAnchorRect | null>(null);
     const [separateFlashActive, setSeparateFlashActive] = useState(false);
     const separateFlashTimerRef = useRef<number | null>(null);
+
+    const closeGroupMenu = useCallback(() => {
+      setGroupMenuOpen(false);
+      setGroupMenuPos(null);
+      groupMenuAnchorRef.current = null;
+    }, []);
+
+    const positionGroupMenu = useCallback(
+      (anchor: FixedMenuAnchorRect, menuSize?: { width: number; height: number }) => {
+        groupMenuAnchorRef.current = anchor;
+        const measured = groupMenuPanelRef.current?.getBoundingClientRect();
+        const size = menuSize ?? {
+          width: measured?.width || GROUP_SEPARATE_MENU_ESTIMATED_SIZE.width,
+          height: measured?.height || GROUP_SEPARATE_MENU_ESTIMATED_SIZE.height,
+        };
+        setGroupMenuPos(
+          computeFixedMenuPosition({
+            anchor,
+            menuSize: size,
+            viewport: readViewportSize(),
+          }),
+        );
+      },
+      [],
+    );
 
     const separateGroupButtonRef = useRef<HTMLButtonElement | null>(null);
     const onRequestSeparateGroupedTablesRef = useRef(
@@ -313,17 +346,34 @@ export const ElementCard = memo(
     );
     onRequestSeparateGroupedTablesRef.current = onRequestSeparateGroupedTables;
 
-    /** Clic nativo en captura: la delegación de React al root a veces no recibe el click del portal. */
-    useLayoutEffect(() => {
-      if (!groupMenuOpen) return;
-      const btn = separateGroupButtonRef.current;
-      if (!btn) return;
-      const handler = (ev: MouseEvent) => {
-        if (process.env.NODE_ENV === "development") {
-          console.log("[separate] button clicked", tableId);
+    /**
+     * Un solo punto de ejecución del split en el menú (solo onClick React).
+     * No usar capture/pointerUp para lanzar la operación: duplicaban POST
+     * con operationIds distintos → GROUP_NOT_FOUND tras el primer 200.
+     */
+    const separateOnceRef = useRef(false);
+    const runSeparateGroupedTables = useCallback(
+      (origin: "onClick" | "keyboard" = "onClick") => {
+        if (separateOnceRef.current) {
+          if (process.env.NODE_ENV === "development") {
+            console.log("[Hostly:TableJoinMerge]", "split:menu-ignored", {
+              timestamp: Date.now(),
+              tableId,
+              origin,
+              reason: "menu_once_guard",
+            });
+          }
+          return;
         }
-        ev.preventDefault();
-        ev.stopPropagation();
+        separateOnceRef.current = true;
+        if (process.env.NODE_ENV === "development") {
+          console.log("[Hostly:TableJoinMerge]", "split:menu-click", {
+            timestamp: Date.now(),
+            tableId,
+            origin,
+            hasCallback: Boolean(onRequestSeparateGroupedTablesRef.current),
+          });
+        }
         if (separateFlashTimerRef.current != null) {
           window.clearTimeout(separateFlashTimerRef.current);
           separateFlashTimerRef.current = null;
@@ -333,13 +383,33 @@ export const ElementCard = memo(
           setSeparateFlashActive(false);
           separateFlashTimerRef.current = null;
         }, 420);
-        onRequestSeparateGroupedTablesRef.current?.(tableId);
-        setGroupMenuOpen(false);
-        setGroupMenuPos(null);
-      };
-      btn.addEventListener("click", handler, true);
-      return () => btn.removeEventListener("click", handler, true);
-    }, [groupMenuOpen, tableId]);
+        const cb = onRequestSeparateGroupedTablesRef.current;
+        // Ejecutar split ANTES de desmontar el portal.
+        try {
+          cb?.(tableId);
+        } finally {
+          closeGroupMenu();
+        }
+      },
+      [tableId, closeGroupMenu],
+    );
+
+    /** Al abrir el menú se habilita de nuevo el botón; al cerrar no se rearma. */
+    useLayoutEffect(() => {
+      if (groupMenuOpen) {
+        separateOnceRef.current = false;
+      }
+    }, [groupMenuOpen]);
+
+    /** Tras montar el portal: medir tamaño real y reclamar contra viewport. */
+    useLayoutEffect(() => {
+      if (!groupMenuOpen) return;
+      const anchor = groupMenuAnchorRef.current;
+      const panel = groupMenuPanelRef.current;
+      if (!anchor || !panel) return;
+      const r = panel.getBoundingClientRect();
+      positionGroupMenu(anchor, { width: r.width, height: r.height });
+    }, [groupMenuOpen, positionGroupMenu]);
 
     useEffect(() => {
       return () => {
@@ -685,8 +755,7 @@ export const ElementCard = memo(
 
     const handleTilePointerDown = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
-        setGroupMenuOpen(false);
-        setGroupMenuPos(null);
+        closeGroupMenu();
         if (e.button === 0) armPressBurst();
         handleJoinPointerDown(e);
         clearLongPressTimer();
@@ -702,13 +771,14 @@ export const ElementCard = memo(
             longPressStartRef.current = null;
             const el = tileElRef.current;
             if (el && typeof document !== "undefined") {
-              const r = el.getBoundingClientRect();
-              setGroupMenuPos({
-                top: r.bottom + 8,
-                left: r.left + r.width / 2,
-              });
+              positionGroupMenu(rectFromDomRect(el.getBoundingClientRect()));
             } else {
-              setGroupMenuPos({ top: e.clientY + 8, left: e.clientX });
+              positionGroupMenu({
+                left: e.clientX - 20,
+                top: e.clientY - 20,
+                width: 40,
+                height: 40,
+              });
             }
             longPressMenuSuppressClickRef.current = true;
             setGroupMenuOpen(true);
@@ -716,11 +786,13 @@ export const ElementCard = memo(
         }
       },
       [
+        closeGroupMenu,
         armPressBurst,
         handleJoinPointerDown,
         clearLongPressTimer,
         isMapGroupedPrimary,
         onRequestSeparateGroupedTables,
+        positionGroupMenu,
       ],
     );
 
@@ -761,24 +833,62 @@ export const ElementCard = memo(
         if (!(t instanceof Node)) return;
         if (groupMenuPanelRef.current?.contains(t)) return;
         if (tileElRef.current?.contains(t)) return;
-        setGroupMenuOpen(false);
-        setGroupMenuPos(null);
+        closeGroupMenu();
       };
       const onKey = (ev: KeyboardEvent) => {
-        if (ev.key === "Escape") {
-          setGroupMenuOpen(false);
-          setGroupMenuPos(null);
-        }
+        if (ev.key === "Escape") closeGroupMenu();
       };
+      /** Pan/zoom del mapa: cerrar (el ancla se mueve con el canvas transformado). */
+      const onWheel = () => closeGroupMenu();
+      const onTouchMove = (ev: TouchEvent) => {
+        if (ev.touches.length >= 2) closeGroupMenu();
+      };
+      const onViewportChange = () => {
+        const tile = tileElRef.current;
+        const anchor = groupMenuAnchorRef.current;
+        if (!tile || !anchor) {
+          closeGroupMenu();
+          return;
+        }
+        const next = rectFromDomRect(tile.getBoundingClientRect());
+        const moved =
+          Math.abs(next.left - anchor.left) > 2 ||
+          Math.abs(next.top - anchor.top) > 2 ||
+          Math.abs(next.width - anchor.width) > 2 ||
+          Math.abs(next.height - anchor.height) > 2;
+        if (moved) {
+          closeGroupMenu();
+          return;
+        }
+        const panel = groupMenuPanelRef.current;
+        const size = panel
+          ? {
+              width: panel.getBoundingClientRect().width,
+              height: panel.getBoundingClientRect().height,
+            }
+          : undefined;
+        positionGroupMenu(anchor, size);
+      };
+
       document.addEventListener("mousedown", onDown);
       document.addEventListener("touchstart", onDown, { passive: true });
       document.addEventListener("keydown", onKey);
+      window.addEventListener("wheel", onWheel, { passive: true, capture: true });
+      window.addEventListener("touchmove", onTouchMove, { passive: true });
+      window.addEventListener("resize", onViewportChange);
+      window.visualViewport?.addEventListener("resize", onViewportChange);
+      window.visualViewport?.addEventListener("scroll", onViewportChange);
       return () => {
         document.removeEventListener("mousedown", onDown);
         document.removeEventListener("touchstart", onDown);
         document.removeEventListener("keydown", onKey);
+        window.removeEventListener("wheel", onWheel, true);
+        window.removeEventListener("touchmove", onTouchMove);
+        window.removeEventListener("resize", onViewportChange);
+        window.visualViewport?.removeEventListener("resize", onViewportChange);
+        window.visualViewport?.removeEventListener("scroll", onViewportChange);
       };
-    }, [groupMenuOpen]);
+    }, [groupMenuOpen, closeGroupMenu, positionGroupMenu]);
 
     const planType = table.type;
     const tileBorderRadius =
@@ -996,18 +1106,22 @@ export const ElementCard = memo(
               ref={groupMenuPanelRef}
               role="dialog"
               aria-label="Mesa agrupada"
+              data-hostly-map-group-menu="1"
+              data-placement={groupMenuPos.placement}
               style={{
                 position: "fixed",
                 top: groupMenuPos.top,
                 left: groupMenuPos.left,
-                transform: "translateX(-50%)",
                 zIndex: 10000,
                 minWidth: 196,
+                maxWidth: "min(280px, calc(100vw - 16px))",
                 padding: "10px 11px 11px",
                 borderRadius: 14,
                 background: "rgba(255, 255, 255, 0.98)",
                 border: "1px solid rgba(148, 163, 184, 0.38)",
                 boxShadow: "var(--hostly-shadow-float)",
+                // Tamaño táctil independiente del zoom del mapa (portal + fixed).
+                touchAction: "manipulation",
               }}
             >
               <div
@@ -1052,6 +1166,24 @@ export const ElementCard = memo(
                 ref={separateGroupButtonRef}
                 type="button"
                 className="hostly-map-separate-group-btn"
+                onClick={(ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  runSeparateGroupedTables("onClick");
+                }}
+                onPointerDown={(ev) => {
+                  // Solo corta propagación; NO ejecuta split (evita doble POST).
+                  ev.stopPropagation();
+                }}
+                onPointerUp={(ev) => {
+                  ev.stopPropagation();
+                }}
+                onKeyDown={(ev) => {
+                  if (ev.key !== "Enter" && ev.key !== " ") return;
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  runSeparateGroupedTables("keyboard");
+                }}
                 style={{
                   width: "100%",
                   padding: "11px 12px 10px",

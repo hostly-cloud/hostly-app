@@ -26,16 +26,22 @@ export async function POST(req: Request) {
   if (!mainTableId) {
     return NextResponse.json({ ok: false, error: "TABLE_ID_REQUIRED" }, { status: 400 });
   }
-  const memberIds = Array.isArray(body.memberIds)
-    ? body.memberIds.map((id) => String(id ?? "").trim()).filter(Boolean)
-    : [];
   const secondaryTableId =
     typeof body.secondaryTableId === "string" ? body.secondaryTableId.trim() : undefined;
+  const operationId =
+    typeof body.operationId === "string" ? body.operationId.trim() : "";
+  if (!operationId) {
+    return NextResponse.json({ ok: false, error: "OPERATION_ID_REQUIRED" }, { status: 400 });
+  }
+  const memberIds = Array.isArray(body.memberIds)
+    ? body.memberIds.map((id) => String(id ?? "").trim()).filter(Boolean)
+    : undefined;
 
   const result = await handleMergeTableGroupOrders(authCtx, {
     mainTableId,
-    memberIds,
     secondaryTableId,
+    memberIds,
+    operationId,
   });
   if (isTpvMutationError(result)) return tpvMutationJsonError(result);
   return tpvMutationJsonOk(result);

@@ -219,6 +219,24 @@ describe("idempotencia A → B → A (persist-draft / transition-status)", () =>
   });
 });
 
+describe("apertura mesa agrupada sin invalidación prematura", () => {
+  test("handleOpenTableOrder no invalida cache de grupo al abrir", () => {
+    const src = read("app/dashboard/carta/carta-page-content.tsx");
+    const openBlock = src.slice(
+      src.indexOf("const handleOpenTableOrder = useCallback"),
+      src.indexOf("const persistGuestCount = useCallback"),
+    );
+    assert.ok(openBlock.length > 200);
+    assert.doesNotMatch(openBlock, /invalidateTableGroupOrderCache\s*\(/);
+    assert.match(openBlock, /No invalidar cache al abrir/);
+  });
+
+  test("invalidación de grupo se conserva para mutaciones confirmadas", () => {
+    const src = read("app/dashboard/carta/carta-page-content.tsx");
+    assert.match(src, /invalidateTableGroupOrderCache\(detail\.memberIds/);
+  });
+});
+
 describe("advanceKdsLineViaApi structural wiring", () => {
   before(() => {
     // Ensure module resolves in unit suite.

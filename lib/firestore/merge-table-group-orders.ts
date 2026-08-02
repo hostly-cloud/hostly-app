@@ -7,30 +7,38 @@ import {
 
 export type MergeOpenOrdersForTableGroupOptions = {
   secondaryTableId?: string;
+  operationId: string;
+  memberIds?: string[];
 };
 
 export type MergeOpenOrdersForTableGroupResult = {
+  ok: boolean;
   merged: boolean;
   destOrderId?: string;
+  mainTableId?: string;
+  memberIds?: string[];
+  error?: string;
   debugReport: TableJoinFirestoreDebugReport;
 };
 
 /**
- * Fusiona comandas del grupo vía API Admin (actualiza tableOrderLocks atómicamente).
- * La lógica cliente de escritura directa quedó retirada en 3B-2A.1.
+ * Join autoritativo vía API Admin (topología + pedidos + locks).
+ * El cliente no persiste tableGroups antes del ACK.
  */
 export async function mergeOpenOrdersForTableGroup(
   _db: Firestore,
   restaurantId: string,
   mainTableId: string,
   memberIds: string[],
-  options?: MergeOpenOrdersForTableGroupOptions,
+  options: MergeOpenOrdersForTableGroupOptions,
 ): Promise<MergeOpenOrdersForTableGroupResult> {
   const rid = restaurantId.trim();
   const mainId = mainTableId.trim();
   const uniqueMemberIds = [
     ...new Set(memberIds.map((id) => String(id ?? "").trim()).filter(Boolean)),
   ];
+  const secondaryTableId = options.secondaryTableId?.trim() || undefined;
+  const operationId = options.operationId.trim();
 
   const report: TableJoinFirestoreDebugReport = {
     mergeExecuted: true,
@@ -39,7 +47,7 @@ export async function mergeOpenOrdersForTableGroup(
     brokenReason: null,
     restaurantId: rid,
     mainTableId: mainId,
-    secondaryTableId: options?.secondaryTableId?.trim() || null,
+    secondaryTableId: secondaryTableId || null,
     memberIds: uniqueMemberIds,
     beforeByTable: {},
     destOrderId: null,
@@ -49,11 +57,11 @@ export async function mergeOpenOrdersForTableGroup(
     afterByTable: {},
   };
 
-  if (!rid || !mainId) {
+  if (!rid || !mainId || !operationId) {
     report.brokenAtStep = "1-validacion-ids";
-    report.brokenReason = "restaurantId o mainTableId vacío";
+    report.brokenReason = "restaurantId, mainTableId u operationId vacío";
     printTableJoinFirestoreDebugReport(report);
-    return { merged: false, debugReport: report };
+    return { ok: false, merged: false, error: "INVALID_PARAMS", debugReport: report };
   }
 
   const response = await authenticatedApiFetch("/api/tpv/orders/merge-table-group", {
@@ -61,8 +69,9 @@ export async function mergeOpenOrdersForTableGroup(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       mainTableId: mainId,
-      memberIds: uniqueMemberIds,
-      secondaryTableId: options?.secondaryTableId?.trim() || undefined,
+      secondaryTableId,
+      memberIds: uniqueMemberIds.length > 0 ? uniqueMemberIds : undefined,
+      operationId,
     }),
   });
   const payload = (await response.json().catch(() => null)) as {
@@ -70,6 +79,8 @@ export async function mergeOpenOrdersForTableGroup(
     error?: string;
     merged?: boolean;
     destOrderId?: string;
+    mainTableId?: string;
+    memberIds?: string[];
     reason?: string;
   } | null;
 
@@ -77,7 +88,12 @@ export async function mergeOpenOrdersForTableGroup(
     report.brokenAtStep = "8-batch-commit";
     report.brokenReason = payload?.error ?? "MERGE_TABLE_GROUP_FAILED";
     printTableJoinFirestoreDebugReport(report);
-    return { merged: false, debugReport: report };
+    return {
+      ok: false,
+      merged: false,
+      error: payload?.error ?? "MERGE_TABLE_GROUP_FAILED",
+      debugReport: report,
+    };
   }
 
   report.mergeMerged = payload.merged === true;
@@ -89,8 +105,11 @@ export async function mergeOpenOrdersForTableGroup(
   }
   printTableJoinFirestoreDebugReport(report);
   return {
+    ok: true,
     merged: payload.merged === true,
     destOrderId: payload.destOrderId,
+    mainTableId: payload.mainTableId,
+    memberIds: payload.memberIds,
     debugReport: report,
   };
 }

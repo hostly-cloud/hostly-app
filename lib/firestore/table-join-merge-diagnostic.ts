@@ -11,6 +11,16 @@ export type TableGroupOrdersMergedDetail = {
   destOrderId?: string;
 };
 
+/** Evento cliente: split autoritativo tras separar mesas (invalidar caché TPV). */
+export const TABLE_GROUP_ORDERS_SPLIT_EVENT = "hostly:tableGroupOrdersSplit";
+
+export type TableGroupOrdersSplitDetail = {
+  restaurantId: string;
+  mainTableId: string;
+  memberIds: string[];
+  ordersByTableId?: Record<string, string>;
+};
+
 /** Logs de diagnóstico del flujo unir mesas → fusionar comandas. Solo consola; no altera datos. */
 const PREFIX = "[Hostly:TableJoinMerge]";
 
@@ -43,20 +53,45 @@ export type TableJoinFirestoreDebugReport = {
   resultDestOrderId?: string;
 };
 
+function diagnosticsEnabled(): boolean {
+  return process.env.NODE_ENV !== "production";
+}
+
+/** Payload seguro: sin nombres de productos ni listas de items. */
+function sanitizeJoinMergePayload(
+  payload: TableJoinMergeDiagnosticPayload,
+): TableJoinMergeDiagnosticPayload {
+  const out: TableJoinMergeDiagnosticPayload = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (
+      key === "items" ||
+      key === "plannedFinalItems" ||
+      key === "beforeByTable" ||
+      key === "afterByTable" ||
+      key === "name" ||
+      key === "productName"
+    ) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
 export function logTableJoinMerge(
   phase: string,
   payload: TableJoinMergeDiagnosticPayload = {},
 ): void {
-  if (typeof console === "undefined") return;
-  console.log(PREFIX, phase, payload);
+  if (!diagnosticsEnabled() || typeof console === "undefined") return;
+  console.log(PREFIX, phase, sanitizeJoinMergePayload(payload));
 }
 
 export function logTableJoinMergeWarn(
   phase: string,
   payload: TableJoinMergeDiagnosticPayload = {},
 ): void {
-  if (typeof console === "undefined") return;
-  console.warn(PREFIX, phase, payload);
+  if (!diagnosticsEnabled() || typeof console === "undefined") return;
+  console.warn(PREFIX, phase, sanitizeJoinMergePayload(payload));
 }
 
 export function logTableJoinMergeError(
@@ -64,8 +99,11 @@ export function logTableJoinMergeError(
   error: unknown,
   payload: TableJoinMergeDiagnosticPayload = {},
 ): void {
-  if (typeof console === "undefined") return;
-  console.error(PREFIX, phase, { ...payload, error });
+  if (!diagnosticsEnabled() || typeof console === "undefined") return;
+  console.error(PREFIX, phase, {
+    ...sanitizeJoinMergePayload(payload),
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
 
 function readItemDisplayName(raw: unknown): string {
@@ -180,7 +218,7 @@ function formatTableOrdersBlock(
 export function printTableJoinFirestoreDebugReport(
   report: TableJoinFirestoreDebugReport,
 ): void {
-  if (typeof console === "undefined") return;
+  if (!diagnosticsEnabled() || typeof console === "undefined") return;
 
   const header = `${PREFIX} ═══ FIRESTORE REAL (join mesas) ═══`;
   const body = [

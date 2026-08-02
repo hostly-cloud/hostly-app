@@ -110,7 +110,9 @@ import { mergeOpenOrdersForTableGroup } from "@/lib/firestore/merge-table-group-
 import {
   logTableJoinMerge,
   TABLE_GROUP_ORDERS_MERGED_EVENT,
+  TABLE_GROUP_ORDERS_SPLIT_EVENT,
   type TableGroupOrdersMergedDetail,
+  type TableGroupOrdersSplitDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
 
@@ -1765,7 +1767,15 @@ export type CartaPageContentProps = {
     isGroupedPrimaryTable?: (tableId: string) => boolean;
     getGroupedBadgeText: (tableId: string) => string | null;
     joinTables?: (mainTableId: string, secondaryTableId: string) => void;
-    separateTable?: (tableId: string) => void;
+    separateTable?: (tableId: string, origin?: string) => void;
+    /** true mientras join/split server-side no ha ACK (bloquea apertura/join/split). */
+    isTableGroupOpPending?: (tableId?: string) => boolean;
+    tableGroupPendingOp?: {
+      type: "joining" | "splitting";
+      tableIds: string[];
+      operationId: string;
+      error?: string;
+    } | null;
   };
   /** Solo layout embebido en Operación: ocultar barra superior del shell dentro de mesa. */
   onEmbeddedOperacionChromeChange?: (state: { hideShellTopBar: boolean }) => void;
@@ -5459,6 +5469,31 @@ export function CartaPageContent({
   ]);
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<TableGroupOrdersSplitDetail>).detail;
+      if (!detail?.mainTableId?.trim()) return;
+      const rid = String(detail.restaurantId ?? "").trim();
+      if (rid && restaurantId?.trim() !== rid) return;
+      const memberIds = detail.memberIds ?? [];
+      // Tras split confirmado: invalidar y rehidratar cada mesa del grupo.
+      invalidateTableGroupOrderCache(memberIds);
+      for (const tid of memberIds) {
+        const id = String(tid ?? "").trim();
+        if (!id) continue;
+        void hydrateTableOrderFromFirestore(id, { force: true });
+      }
+    };
+    window.addEventListener(TABLE_GROUP_ORDERS_SPLIT_EVENT, handler);
+    return () => {
+      window.removeEventListener(TABLE_GROUP_ORDERS_SPLIT_EVENT, handler);
+    };
+  }, [
+    restaurantId,
+    invalidateTableGroupOrderCache,
+    hydrateTableOrderFromFirestore,
+  ]);
+
+  useEffect(() => {
     if (orderIdFromUrl) return;
     if (!isFirebaseConfigured || !restaurantId || !selectedTableId) return;
     if (!isAuthReady()) return;
@@ -7700,7 +7735,11 @@ export function CartaPageContent({
       const id = String(tableId).trim();
       if (!id) return;
 
-            const memberIds = groupedTablesMapHandlers?.getGroupTableIds?.(id) ?? [
+      if (groupedTablesMapHandlers?.isTableGroupOpPending?.(id)) {
+        return;
+      }
+
+      const memberIds = groupedTablesMapHandlers?.getGroupTableIds?.(id) ?? [
         id,
       ];
       const mainId = groupedTablesMapHandlers?.resolveMainTableId?.(id) ?? id;
@@ -8062,6 +8101,7 @@ export function CartaPageContent({
         restaurantId,
         tableId,
         [tableId],
+        { operationId: globalThis.crypto.randomUUID() },
       );
       if (!result.merged || !result.destOrderId) return;
 
@@ -8240,6 +8280,12 @@ export function CartaPageContent({
       const d = String(draggedTableId).trim();
       const t = String(targetTableId).trim();
       if (!d || !t || d === t) return;
+      if (
+        groupedTablesMapHandlers?.isTableGroupOpPending?.(d) ||
+        groupedTablesMapHandlers?.isTableGroupOpPending?.(t)
+      ) {
+        return;
+      }
       const ta = tablesById[d];
       const tb = tablesById[t];
       if (!ta || !tb) return;
@@ -16071,12 +16117,27 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                             groupedTablesMapHandlers?.separateTable &&
                             canJoinTables
                               ? (tid: string) => {
+                                  console.log(
+                                    "[Hostly:TableJoinMerge]",
+                                    "split:carta-callback",
+                                    {
+                                      timestamp: Date.now(),
+                                      tid,
+                                      origin: "carta-callback",
+                                      pending:
+                                        groupedTablesMapHandlers?.tableGroupPendingOp ??
+                                        null,
+                                    },
+                                  );
+                                  // No alertar aquí: el hook hace ignore silencioso
+                                  // si ya hay split en vuelo o el grupo ya no existe.
                                   const mainId =
                                     groupedTablesMapHandlers?.resolveMainTableId?.(
                                       tid,
                                     ) ?? tid;
                                   groupedTablesMapHandlers.separateTable?.(
                                     mainId,
+                                    "carta-callback",
                                   );
                                 }
                               : undefined

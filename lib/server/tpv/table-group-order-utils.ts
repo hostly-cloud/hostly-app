@@ -50,6 +50,27 @@ export function withTableGroupLineOrigin(
   };
 }
 
+/**
+ * Conserva provenance original si ya existe (línea de un merge previo);
+ * si no, estampa mesa/pedido de origen del merge actual.
+ */
+export function ensureTableGroupLineOrigin(
+  item: Record<string, unknown>,
+  sourceTableId: string,
+  sourceOrderId: string,
+): Record<string, unknown> {
+  const existingT =
+    typeof item.tableGroupSourceTableId === "string"
+      ? item.tableGroupSourceTableId.trim()
+      : "";
+  const existingO =
+    typeof item.tableGroupSourceOrderId === "string"
+      ? item.tableGroupSourceOrderId.trim()
+      : "";
+  if (existingT && existingO) return item;
+  return withTableGroupLineOrigin(item, sourceTableId, sourceOrderId);
+}
+
 export function mergeNotes(parts: readonly unknown[]): string {
   const out: string[] = [];
   for (const part of parts) {
