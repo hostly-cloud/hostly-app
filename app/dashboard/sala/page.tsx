@@ -1,9 +1,14 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { collection, onSnapshot, query, where, updateDoc, doc } from "firebase/firestore"
+import { collection, onSnapshot, query, where } from "firebase/firestore"
 import { useAuth } from "@/components/auth/auth-context"
 import { db } from "@/lib/firebase/client"
+import {
+  advanceKdsLineViaApi,
+  orderItemsUiStatusToOrdersExpected,
+  resolveOrderItemLineId,
+} from "@/lib/kds/advance-kds-line-via-api"
 
 function tableKeyFromItem(item: any): string {
   return String(item.tableNumber || item.tableName || "Sin mesa")
@@ -33,12 +38,6 @@ function getSalaUrgencyClass(minutes: number) {
   if (minutes >= 10) return "bg-red-100 text-red-700"
   if (minutes >= 5) return "bg-orange-100 text-orange-700"
   return "bg-green-100 text-green-700"
-}
-
-function cleanFirestoreData<T extends Record<string, any>>(data: T) {
-  return Object.fromEntries(
-    Object.entries(data).filter(([_, v]) => v !== undefined)
-  )
 }
 
 export default function SalaPage() {
@@ -125,6 +124,20 @@ export default function SalaPage() {
     prevIdsRef.current = currentIds
   }, [visibleItems])
 
+  const serveLegacyOrderItem = async (item: any) => {
+    const orderId = typeof item.orderId === "string" ? item.orderId.trim() : ""
+    if (!orderId) {
+      return { ok: false as const, error: "ORDER_ID_REQUIRED" }
+    }
+    return advanceKdsLineViaApi({
+      orderId,
+      lineId: resolveOrderItemLineId(item),
+      expectedStatus: orderItemsUiStatusToOrdersExpected(item.status),
+      nextStatus: "served",
+      quantity: 1,
+    })
+  }
+
   const handleMarkServed = async (itemId: string) => {
     const visibleNow = items.filter(item => !locallyServedIds.has(item.id))
     const target = visibleNow.find(i => i.id === itemId)
@@ -144,20 +157,17 @@ export default function SalaPage() {
     }
 
     try {
+      if (!target) return
       if (isLastOnTable && tableKey) {
         setCompletingTableIds(prev => new Set(prev).add(tableKey))
         scheduleClearCompleting(tableKey)
       }
       setLocallyServedIds(prev => new Set(prev).add(itemId))
       setLastServed([itemId])
-      await updateDoc(
-        doc(db, "orderItems", itemId),
-        cleanFirestoreData({
-          status: "served",
-          servedAt: Date.now(),
-          updatedAt: Date.now(),
-        })
-      )
+      const result = await serveLegacyOrderItem(target)
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
       setActionSuccess("Item servido")
       setTimeout(() => setActionSuccess(null), 1500)
     } catch (e) {
@@ -199,18 +209,12 @@ export default function SalaPage() {
         }, 280)
       }
       setLastServed(tableItems.map(i => i.id))
-      await Promise.all(
-        tableItems.map(item =>
-          updateDoc(
-            doc(db, "orderItems", item.id),
-            cleanFirestoreData({
-              status: "served",
-              servedAt: Date.now(),
-              updatedAt: Date.now(),
-            })
-          )
-        )
+      const results = await Promise.all(
+        tableItems.map(item => serveLegacyOrderItem(item))
       )
+      if (results.some(r => !r.ok)) {
+        throw new Error("SERVE_TABLE_PARTIAL_FAIL")
+      }
       setActionSuccess("Mesa servida")
       setTimeout(() => setActionSuccess(null), 1500)
     } catch (e) {
@@ -229,35 +233,10 @@ export default function SalaPage() {
 
   const handleUndoServed = async () => {
     if (!lastServed) return
-    isUndoingRef.current = true
-    try {
-      await Promise.all(
-        lastServed.map(id =>
-          updateDoc(
-            doc(db, "orderItems", id),
-            cleanFirestoreData({
-              status: "ready",
-              updatedAt: Date.now(),
-            })
-          )
-        )
-      )
-      setCompletingTableIds(new Set())
-      setLocallyServedIds(prev => {
-        const next = new Set(prev)
-        lastServed.forEach(id => {
-          next.delete(id)
-        })
-        return next
-      })
-      setLastServed(null)
-      setActionSuccess("Deshecho")
-      setTimeout(() => setActionSuccess(null), 1500)
-    } catch (e) {
-      isUndoingRef.current = false
-      setActionError("No se pudo deshacer")
-      setTimeout(() => setActionError(null), 3000)
-    }
+    // Retroceso served→ready no está en el lifecycle autoritativo.
+    isUndoingRef.current = false
+    setActionError("Deshacer no disponible")
+    setTimeout(() => setActionError(null), 3000)
   }
 
   useEffect(() => {

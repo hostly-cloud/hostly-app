@@ -6,18 +6,17 @@ import Link from "next/link";
 import {
   Timestamp,
   collection,
-  doc,
   onSnapshot,
   query,
-  serverTimestamp,
   where,
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
 import ServiceMetricsBar from "@/components/kds/service-metrics-bar";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
-import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
+import { advanceKdsLineViaApi } from "@/lib/kds/advance-kds-line-via-api";
+import { normalizeProductionLineStatus } from "@/lib/firestore/merge-order-items-for-persist";
 import {
   getHomogeneousPassChunkTypeLabel,
   getMenuCourseLabel,
@@ -677,36 +676,29 @@ export default function SalaView() {
     if (!isFirebaseConfigured) return;
     const order = orders.find((o) => o.id === orderId);
     if (!order) return;
+    const target = order.items.find((it) => it.id === itemId);
+    if (!target || !isPreparedStatus(target.status)) return;
     const key = `${orderId}:${itemId}`;
     if (busyItemIds[key]) return;
     setBusyItemIds((prev) => ({ ...prev, [key]: true }));
-    const now = Date.now();
-    const nextItems = order.items.map((it) =>
-      it.id === itemId && isPreparedStatus(it.status)
-        ? { ...it, status: "served", servedAt: now }
-        : it,
-    );
     try {
-      await dbgUpdateDoc(
-        doc(db, "orders", orderId),
-        {
-        items: nextItems,
-        updatedAt: serverTimestamp(),
-      },
-        {
-          label: "sala-view:handleMarkServed",
-          collection: "orders",
-          restaurantId,
-          orderId,
-          tableId: order.tableId ?? null,
-        },
-      );
+      // Sala marca la línea completa (sin split qty); forzar status API.
+      const result = await advanceKdsLineViaApi({
+        orderId,
+        lineId: itemId,
+        expectedStatus: normalizeProductionLineStatus(target.status),
+        nextStatus: "served",
+        quantity: 1,
+      });
+      if (!result.ok) {
+        console.error("SalaView.handleMarkServed", result.error);
+      }
     } catch (e) {
       console.error("SalaView.handleMarkServed", e);
       logFirestorePermissionError(
         {
           file: "components/kds/sala-view.tsx",
-          op: "updateDoc",
+          op: "transition-line-status",
           path: `orders/${orderId}`,
           restaurantId,
           orderId,

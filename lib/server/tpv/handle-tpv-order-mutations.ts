@@ -218,6 +218,22 @@ export function requireTpvCapability(
 }
 
 /** Permisos de transition-line-status: served con tpv.sell|kds.manage; resto kds.manage. */
+export function assertTransitionLineStatusCapability(
+  ctx: AuthorizedTpvRestaurantContext,
+  nextStatus: string,
+): TpvMutationError | null {
+  const next = normalizeProductionLineStatus(nextStatus);
+  if (next === "cancelled") return { status: 400, error: "KDS_CANNOT_CANCEL" };
+  if (next === "served") {
+    const canServe =
+      serverRoleHasCapability(ctx.role, "tpv.sell") ||
+      serverRoleHasCapability(ctx.role, "kds.manage");
+    if (!canServe) return { status: 403, error: "TPV_SELL_REQUIRED" };
+    return null;
+  }
+  return requireTpvCapability(ctx, "kds.manage");
+}
+
 async function applyModifierStockForItemTransition(
   tx: Transaction,
   ctx: AuthorizedTpvRestaurantContext,
@@ -948,9 +964,7 @@ export async function handleTransitionLineStatus(
   if (!orderId || !lineId) return { status: 400, error: "ORDER_AND_LINE_REQUIRED" };
 
   const next = normalizeProductionLineStatus(intent.nextStatus);
-  if (next === "cancelled") return { status: 400, error: "KDS_CANNOT_CANCEL" };
-
-  const capErr = requireTpvCapability(ctx, "kds.manage");
+  const capErr = assertTransitionLineStatusCapability(ctx, next);
   if (capErr) return capErr;
 
   const orderRef = ctx.db.collection("orders").doc(orderId);

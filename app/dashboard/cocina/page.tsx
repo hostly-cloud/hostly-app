@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
-  doc,
   onSnapshot,
   query,
   where,
@@ -11,9 +10,10 @@ import {
 import { useAuth } from "@/components/auth/auth-context";
 import { db } from "@/lib/firebase/client";
 import {
-  dbgUpdateDoc,
-  DbgWriteBatch,
-} from "@/lib/firestore/instrumentedWrites";
+  advanceKdsLineViaApi,
+  orderItemsUiStatusToOrdersExpected,
+  resolveOrderItemLineId,
+} from "@/lib/kds/advance-kds-line-via-api";
 import type { OrderItem } from "@/types/order";
 
 function getElapsedMinutes(timestamp: number) {
@@ -783,23 +783,31 @@ export default function CocinaPage() {
     prevCountRef.current = pendingItems.length;
   }, [visibleItems, soundEnabled, globalHighLoad]);
 
+  const advanceLegacyOrderItem = async (
+    itemId: string,
+    nextStatus: string,
+  ) => {
+    const row = items.find((i) => i.id === itemId);
+    if (!row?.orderId) {
+      console.error("Legacy cocina: missing orderId", itemId);
+      return;
+    }
+    // Legacy no hacía split de cantidad: transición de línea completa.
+    const result = await advanceKdsLineViaApi({
+      orderId: row.orderId,
+      lineId: resolveOrderItemLineId(row as OrderItem & { lineId?: string }),
+      expectedStatus: orderItemsUiStatusToOrdersExpected(row.status),
+      nextStatus,
+      quantity: 1,
+    });
+    if (!result.ok) {
+      console.error("Legacy cocina advance failed", result.error, itemId);
+    }
+  };
+
   const handleMarkPreparing = async (itemId: string) => {
     try {
-      const row = items.find((i) => i.id === itemId);
-      await dbgUpdateDoc(
-        doc(db, "orderItems", itemId),
-        {
-        status: "preparing",
-        updatedAt: Date.now(),
-      },
-        {
-          label: "cocina:handleMarkPreparing",
-          collection: "orderItems",
-          restaurantId,
-          orderId: row?.orderId ?? null,
-          tableId: row?.tableId ?? null,
-        },
-      );
+      await advanceLegacyOrderItem(itemId, "preparing");
     } catch (err) {
       console.error("Error marking preparing", err);
     }
@@ -807,45 +815,18 @@ export default function CocinaPage() {
 
   const handleMarkReady = async (itemId: string) => {
     try {
-      const row = items.find((i) => i.id === itemId);
-      const ref = doc(db, "orderItems", itemId);
-      await dbgUpdateDoc(
-        ref,
-        {
-        status: "ready",
-        readyAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-        {
-          label: "cocina:handleMarkReady",
-          collection: "orderItems",
-          restaurantId,
-          orderId: row?.orderId ?? null,
-          tableId: row?.tableId ?? null,
-        },
-      );
+      await advanceLegacyOrderItem(itemId, "prepared");
     } catch (e) {
       console.error("handleMarkReady", e);
     }
   };
 
   const handleMarkServed = async (itemId: string) => {
-    const row = items.find((i) => i.id === itemId);
-    await dbgUpdateDoc(
-      doc(db, "orderItems", itemId),
-      {
-      status: "served",
-      servedAt: Date.now(),
-      updatedAt: Date.now(),
-    },
-      {
-        label: "cocina:handleMarkServed",
-        collection: "orderItems",
-        restaurantId,
-        orderId: row?.orderId ?? null,
-        tableId: row?.tableId ?? null,
-      },
-    );
+    try {
+      await advanceLegacyOrderItem(itemId, "served");
+    } catch (e) {
+      console.error("handleMarkServed", e);
+    }
   };
 
   const clearPausedStats = () => {
@@ -873,67 +854,22 @@ export default function CocinaPage() {
 
   const handleUndoLast = async () => {
     if (!lastAction) return;
-    const { id } = lastAction;
-    const row = items.find((i) => i.id === id);
-    await dbgUpdateDoc(
-      doc(db, "orderItems", id),
-      {
-      status: "pending",
-      updatedAt: Date.now(),
-    },
-      {
-        label: "cocina:handleUndoLast",
-        collection: "orderItems",
-        restaurantId,
-        orderId: row?.orderId ?? null,
-        tableId: row?.tableId ?? null,
-      },
-    );
-    setFocusedItemId(id);
-    setLastAction(null);
-    setToast({ message: "Deshecho" });
+    // Retroceso a pending no está en el lifecycle autoritativo KDS.
+    setToast({ message: "Deshacer no disponible" });
     setTimeout(() => setToast(null), 1500);
+    setLastAction(null);
   };
 
-  const handleBackToPending = async (itemId: string) => {
-    try {
-      const row = items.find((i) => i.id === itemId);
-      await dbgUpdateDoc(
-        doc(db, "orderItems", itemId),
-        {
-        status: "pending",
-        updatedAt: Date.now(),
-      },
-        {
-          label: "cocina:handleBackToPending",
-          collection: "orderItems",
-          restaurantId,
-          orderId: row?.orderId ?? null,
-          tableId: row?.tableId ?? null,
-        },
-      );
-    } catch (error) {
-      console.error("Error reverting to pending:", error);
-    }
+  const handleBackToPending = async (_itemId: string) => {
+    setToast({ message: "Deshacer no disponible" });
+    setTimeout(() => setToast(null), 1500);
   };
 
   const handleMarkOrderReady = async (itemsToMark: OrderItem[]) => {
     try {
-      const batch = new DbgWriteBatch(db, {
-        label: "cocina:handleMarkOrderReady",
-        collection: "orderItems",
-        restaurantId,
-        orderId: itemsToMark[0]?.orderId ?? null,
-        tableId: itemsToMark[0]?.tableId ?? null,
-      });
-      itemsToMark.forEach((item) => {
-        const ref = doc(db, "orderItems", item.id);
-        batch.update(ref, {
-          status: "ready",
-          updatedAt: Date.now(),
-        });
-      });
-      await batch.commit();
+      for (const item of itemsToMark) {
+        await advanceLegacyOrderItem(item.id, "prepared");
+      }
     } catch (error) {
       console.error("Error marking order ready:", error);
     }
@@ -941,21 +877,9 @@ export default function CocinaPage() {
 
   const handleMarkOrderPreparing = async (itemsToMark: OrderItem[]) => {
     try {
-      const batch = new DbgWriteBatch(db, {
-        label: "cocina:handleMarkOrderPreparing",
-        collection: "orderItems",
-        restaurantId,
-        orderId: itemsToMark[0]?.orderId ?? null,
-        tableId: itemsToMark[0]?.tableId ?? null,
-      });
-      itemsToMark.forEach((item) => {
-        const ref = doc(db, "orderItems", item.id);
-        batch.update(ref, {
-          status: "preparing",
-          updatedAt: Date.now(),
-        });
-      });
-      await batch.commit();
+      for (const item of itemsToMark) {
+        await advanceLegacyOrderItem(item.id, "preparing");
+      }
     } catch (error) {
       console.error("Error marking order preparing:", error);
     }

@@ -6,20 +6,17 @@ import {
   Timestamp,
   GeoPoint,
   DocumentReference,
-  type DocumentData,
-  type UpdateData,
   collection,
-  doc,
   onSnapshot,
   query,
-  serverTimestamp,
   where,
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
-import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
+import { advanceKdsLineViaApi } from "@/lib/kds/advance-kds-line-via-api";
+import { normalizeProductionLineStatus } from "@/lib/firestore/merge-order-items-for-persist";
 import {
   resolveKdsDestination,
   type KdsDestination,
@@ -1524,37 +1521,35 @@ export default function OrderItemsBoard({
     if (busyItemIds[key]) return;
     setBusyItemIds((prev) => ({ ...prev, [key]: true }));
     const now = Date.now();
-    const baseline = (
-      orderFirestoreItemsRef.current[orderId] ?? []
-    ).map(cloneFirestoreOrderLineRecord);
-    const rawNext = applyKitchenMarkNextToRawItems(
-      baseline,
-      itemId,
-      next,
-      now,
+    const rawRow = (orderFirestoreItemsRef.current[orderId] ?? []).find(
+      (row) => String(row.id ?? "").trim() === itemId,
     );
+    if (!rawRow) {
+      setBusyItemIds((prev) => {
+        const cp = { ...prev };
+        delete cp[key];
+        return cp;
+      });
+      setActionError("No se pudo actualizar el pedido. Inténtalo otra vez.");
+      setTimeout(() => setActionError(null), 3000);
+      return;
+    }
+    const expectedStatus = normalizeProductionLineStatus(rawRow.status);
+    const quantity = readFirestoreLineQty(rawRow);
     try {
-      if (!rawNext) {
+      const result = await advanceKdsLineViaApi({
+        orderId,
+        lineId: itemId,
+        expectedStatus,
+        nextStatus: next,
+        quantity,
+      });
+      if (!result.ok) {
+        console.error("OrderItemsBoard.handleMarkNext", result.error);
         setActionError("No se pudo actualizar el pedido. Inténtalo otra vez.");
         setTimeout(() => setActionError(null), 3000);
         return;
       }
-      const sanitizedItems = rawNext.map((row) => stripUndefinedDeep(row));
-
-      await dbgUpdateDoc(
-        doc(db, "orders", orderId),
-        cleanFirestoreData({
-          items: sanitizedItems,
-          updatedAt: serverTimestamp(),
-        }) as UpdateData<DocumentData>,
-        {
-          label: "order-items-board:handleMarkNext",
-          collection: "orders",
-          restaurantId,
-          orderId,
-          tableId: order.tableId ?? null,
-        },
-      );
       if (next === "prepared") {
         const item = order.items.find((i) => i.id === itemId);
         if (item) {
@@ -1576,18 +1571,6 @@ export default function OrderItemsBoard({
       setTimeout(() => setActionSuccess(null), 1500);
     } catch (e) {
       console.error("OrderItemsBoard.handleMarkNext", e);
-      logFirestorePermissionError(
-        {
-          file: "components/kds/order-items-board.tsx",
-          op: "updateDoc",
-          path: `orders/${orderId}`,
-          restaurantId,
-          orderId,
-          uid: user?.uid ?? null,
-          email: user?.email ?? null,
-        },
-        e,
-      );
       setActionError("No se pudo actualizar el pedido. Inténtalo otra vez.");
       setTimeout(() => setActionError(null), 3000);
     } finally {
@@ -1634,73 +1617,45 @@ export default function OrderItemsBoard({
         }
 
         const now = Date.now();
-        const baseline = (
-          orderFirestoreItemsRef.current[orderId] ?? []
-        ).map(cloneFirestoreOrderLineRecord);
-        let rawWorking = baseline;
-        let orderBuildOk = true;
         for (const line of orderTargets) {
-          const advanced = applyKitchenAdvancePreparedToRawItems(
-            rawWorking,
-            line.itemId,
-            now,
+          const rawRow = (orderFirestoreItemsRef.current[orderId] ?? []).find(
+            (row) => String(row.id ?? "").trim() === line.itemId,
           );
-          if (advanced == null) {
-            orderBuildOk = false;
+          if (!rawRow) {
             updateFailed = true;
-            break;
+            continue;
           }
-          rawWorking = advanced;
-        }
-        if (!orderBuildOk) continue;
-
-        try {
-          const sanitizedItems = rawWorking.map((row) => stripUndefinedDeep(row));
-          await dbgUpdateDoc(
-            doc(db, "orders", orderId),
-            cleanFirestoreData({
-              items: sanitizedItems,
-              updatedAt: serverTimestamp(),
-            }) as UpdateData<DocumentData>,
-            {
-              label: "order-items-board:handlePreparePassChunk",
-              collection: "orders",
-              restaurantId,
-              orderId,
-              tableId: order.tableId ?? null,
-            },
-          );
-          for (const line of orderTargets) {
-            const item = order.items.find((i) => i.id === line.itemId);
-            if (!item) continue;
-            const sentAtMs = readMs(item.sentAt);
-            if (typeof sentAtMs === "number" && Number.isFinite(sentAtMs)) {
-              completedPrepTimesRef.current.push(now - sentAtMs);
-            }
-            const itemName = item.name || "Item";
-            lastPreparedRef.current.unshift({
-              name: itemName.trim() || "Item",
-              time: now,
-            });
-            if (lastPreparedRef.current.length > 5) {
-              lastPreparedRef.current.pop();
-            }
+          const expectedStatus = normalizeProductionLineStatus(rawRow.status);
+          const quantity = readFirestoreLineQty(rawRow);
+          const result = await advanceKdsLineViaApi({
+            orderId,
+            lineId: line.itemId,
+            expectedStatus,
+            nextStatus: "prepared",
+            quantity,
+          });
+          if (!result.ok) {
+            updateFailed = true;
+            console.error(
+              "OrderItemsBoard.handlePreparePassChunk",
+              result.error,
+            );
+            continue;
           }
-        } catch (e) {
-          updateFailed = true;
-          console.error("OrderItemsBoard.handlePreparePassChunk", e);
-          logFirestorePermissionError(
-            {
-              file: "components/kds/order-items-board.tsx",
-              op: "updateDoc",
-              path: `orders/${orderId}`,
-              restaurantId,
-              orderId,
-              uid: user?.uid ?? null,
-              email: user?.email ?? null,
-            },
-            e,
-          );
+          const item = order.items.find((i) => i.id === line.itemId);
+          if (!item) continue;
+          const sentAtMs = readMs(item.sentAt);
+          if (typeof sentAtMs === "number" && Number.isFinite(sentAtMs)) {
+            completedPrepTimesRef.current.push(now - sentAtMs);
+          }
+          const itemName = item.name || "Item";
+          lastPreparedRef.current.unshift({
+            name: itemName.trim() || "Item",
+            time: now,
+          });
+          if (lastPreparedRef.current.length > 5) {
+            lastPreparedRef.current.pop();
+          }
         }
       }
 
