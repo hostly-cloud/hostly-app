@@ -108,6 +108,14 @@ import {
   type TableGroupOrdersSplitDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
+import {
+  createBackToMapFlushGuard,
+  isValidPersistDraftAck,
+  shouldAbortBackToMapDueToTableChange,
+  shouldClearLocalDraftCacheAfterBackToMapAck,
+  shouldFlushDraftBeforeBackToMap,
+  shouldNavigateToMapAfterBackToMap,
+} from "@/lib/tpv/back-to-map-pending-draft";
 import { syncOrderItemsViaApi } from "@/lib/firestore/sync-order-items-via-api";
 import {
   autoCloseTableViaApi,
@@ -2791,9 +2799,10 @@ export function CartaPageContent({
   const draftPersistDebounceByTableRef = useRef<
     Record<string, number | undefined>
   >({});
-  const draftPersistChainByTableRef = useRef<Record<string, Promise<void>>>(
-    {},
-  );
+  const draftPersistChainByTableRef = useRef<
+    Record<string, Promise<string | undefined | void>>
+  >({});
+  const backToMapFlushGuardRef = useRef(createBackToMapFlushGuard());
   /** Evita que el listener realtime pise comensales durante persistGuestCount. */
   const guestCountPersistRef = useRef<{
     tableId: string;
@@ -3036,7 +3045,7 @@ export function CartaPageContent({
   }, [comandaLineEditorId]);
 
   const flushPersistDraftOrderForTable = useCallback(
-    async (tableId: string, lines: CartOrderLine[]) => {
+    async (tableId: string, lines: CartOrderLine[]): Promise<string | undefined> => {
       if (!restaurantId || !isFirebaseConfigured) return;
       const tid = tableId.trim();
       if (!tid) return;
@@ -3057,6 +3066,10 @@ export function CartaPageContent({
           const snapDoc = await fetchOpenOrderForTable(db, restaurantId, tid);
           if (snapDoc) knownId = snapDoc.id;
         }
+        // Sin pedido conocido y sin líneas: nada que crear (ACK implícito local).
+        if (!knownId && items.length === 0) {
+          return openDraftOrderIdByTableRef.current[tid]?.trim() || undefined;
+        }
         const orderId = await persistOpenOrderForTable(db, {
           restaurantId,
           tableId: tid,
@@ -3072,34 +3085,56 @@ export function CartaPageContent({
                 activeOperator,
               ),
         });
+        if (!isValidPersistDraftAck({ ok: true, orderId })) {
+          throw new Error("PERSIST_ACK_INVALID");
+        }
         openDraftOrderIdByTableRef.current[tid] = orderId;
+        return orderId;
       } catch (e) {
         console.error("[persistOpenOrderDraft]", {
           tableId,
           restaurantId,
           error: e,
         });
+        // Propagar fallo para que backToMap no navegue con ACK falso.
+        throw e;
       }
     },
     [restaurantId, isFirebaseConfigured, tablesList, activeOperator],
+  );
+
+  const cancelDraftPersistDebounceForTable = useCallback((tableId: string) => {
+    const tid = tableId.trim();
+    if (!tid) return;
+    const prevTimer = draftPersistDebounceByTableRef.current[tid];
+    if (prevTimer != null) window.clearTimeout(prevTimer);
+    draftPersistDebounceByTableRef.current[tid] = undefined;
+  }, []);
+
+  const enqueueDraftPersistFlushForTable = useCallback(
+    (tableId: string, lines: CartOrderLine[]) => {
+      const tid = tableId.trim();
+      if (!tid) return;
+      const tail =
+        draftPersistChainByTableRef.current[tid] ?? Promise.resolve();
+      draftPersistChainByTableRef.current[tid] = tail
+        .catch(() => undefined)
+        .then(() => flushPersistDraftOrderForTable(tid, lines));
+    },
+    [flushPersistDraftOrderForTable],
   );
 
   const schedulePersistDraftOrderForTable = useCallback(
     (tableId: string, lines: CartOrderLine[]) => {
       const tid = tableId.trim();
       if (!tid) return;
-      const prevTimer = draftPersistDebounceByTableRef.current[tid];
-      if (prevTimer != null) window.clearTimeout(prevTimer);
+      cancelDraftPersistDebounceForTable(tid);
       draftPersistDebounceByTableRef.current[tid] = window.setTimeout(() => {
         draftPersistDebounceByTableRef.current[tid] = undefined;
-        const tail =
-          draftPersistChainByTableRef.current[tid] ?? Promise.resolve();
-        draftPersistChainByTableRef.current[tid] = tail.then(() =>
-          flushPersistDraftOrderForTable(tid, lines),
-        );
+        enqueueDraftPersistFlushForTable(tid, lines);
       }, 380) as number;
     },
-    [flushPersistDraftOrderForTable],
+    [cancelDraftPersistDebounceForTable, enqueueDraftPersistFlushForTable],
   );
 
   const updateCurrentTableOrder = useCallback(
@@ -3129,7 +3164,8 @@ export function CartaPageContent({
             activeLineCount(nextOrder) < activeLineCount(cur) ||
             unitCount(nextOrder) < unitCount(cur);
           if (isShrink) {
-            void flushPersistDraftOrderForTable(selectedTableId, nextOrder);
+            cancelDraftPersistDebounceForTable(selectedTableId);
+            enqueueDraftPersistFlushForTable(selectedTableId, nextOrder);
           } else {
             schedulePersistDraftOrderForTable(selectedTableId, nextOrder);
           }
@@ -3145,7 +3181,8 @@ export function CartaPageContent({
       restaurantId,
       isFirebaseConfigured,
       schedulePersistDraftOrderForTable,
-      flushPersistDraftOrderForTable,
+      cancelDraftPersistDebounceForTable,
+      enqueueDraftPersistFlushForTable,
     ],
   );
 
@@ -7887,27 +7924,131 @@ export function CartaPageContent({
     ],
   );
 
-  const handleBackToMap = useCallback(() => {
-    const tid = selectedTableId?.trim();
-    userOpenedTableFromMapRef.current = null;
-    if (tid) {
-      delete openDraftOrderIdByTableRef.current[tid];
-      setOrdersByTable((prev) => {
-        const next = { ...prev };
-        delete next[tid];
-        return next;
-      });
+  const handleBackToMap = useCallback(async () => {
+    const tid = selectedTableId?.trim() || "";
+    if (!backToMapFlushGuardRef.current.tryBegin()) {
+      return;
     }
-    setTpvEntryMode("map");
-    suppressUrlTableSelectionRef.current = true;
-    setSelectedTableId(null);
-    setOrder([]);
-    sessionTableScopeRef.current = null;
-    const basePath = embeddedInOperacion
-      ? "/dashboard/operacion/tpv"
-      : "/dashboard/carta";
-    router.replace(basePath);
-  }, [embeddedInOperacion, router, selectedTableId]);
+
+    try {
+      userOpenedTableFromMapRef.current = null;
+
+      const linesBeforeLeave =
+        (tid ? ordersByTableRef.current[tid] : undefined) ??
+        orderRef.current ??
+        [];
+      const activeCount = countActiveComandaLines(linesBeforeLeave);
+      const draftOrderId = tid
+        ? openDraftOrderIdByTableRef.current[tid]?.trim() || null
+        : null;
+      const hasDebounceTimer =
+        tid !== "" && draftPersistDebounceByTableRef.current[tid] != null;
+      const hasLocalDraftKey =
+        tid !== "" &&
+        Object.prototype.hasOwnProperty.call(ordersByTableRef.current, tid);
+      const hasPersistChain =
+        tid !== "" && draftPersistChainByTableRef.current[tid] != null;
+
+      let flushRequired = false;
+      let flushSucceeded = true;
+
+      if (tid) {
+        flushRequired = shouldFlushDraftBeforeBackToMap({
+          activeLineCount: activeCount,
+          hasDebounceTimer,
+          hasDraftOrderId: Boolean(draftOrderId),
+          hasLocalDraftKey,
+          hasPersistChain,
+        });
+
+        if (flushRequired) {
+          cancelDraftPersistDebounceForTable(tid);
+          const linesToFlush =
+            ordersByTableRef.current[tid] ?? orderRef.current ?? [];
+          try {
+            enqueueDraftPersistFlushForTable(tid, linesToFlush);
+            const orderId = await (draftPersistChainByTableRef.current[tid] ??
+              Promise.resolve(undefined));
+            const ackOk =
+              Boolean(openDraftOrderIdByTableRef.current[tid]?.trim()) ||
+              isValidPersistDraftAck({
+                ok: true,
+                orderId: typeof orderId === "string" ? orderId : null,
+              }) ||
+              // Vacío sin pedido: flush no-op válido.
+              (countActiveComandaLines(linesToFlush) === 0 && !draftOrderId);
+            if (!ackOk && restaurantId && isFirebaseConfigured) {
+              throw new Error("PERSIST_ACK_INVALID");
+            }
+            flushSucceeded = true;
+          } catch {
+            flushSucceeded = false;
+            window.alert(
+              "No se pudo guardar la comanda. Revisa la conexión e inténtalo otra vez.",
+            );
+            return;
+          }
+        }
+
+        if (
+          shouldAbortBackToMapDueToTableChange({
+            startedTableId: tid,
+            currentTableId: selectedTableIdRef.current,
+          })
+        ) {
+          return;
+        }
+
+        if (
+          !shouldNavigateToMapAfterBackToMap({
+            flushRequired,
+            flushSucceeded,
+          })
+        ) {
+          return;
+        }
+
+        const activeAfter = countActiveComandaLines(
+          ordersByTableRef.current[tid] ?? [],
+        );
+        if (
+          shouldClearLocalDraftCacheAfterBackToMapAck({
+            ackValid: !flushRequired || flushSucceeded,
+            activeLineCountAfterFlush: activeAfter,
+          })
+        ) {
+          delete openDraftOrderIdByTableRef.current[tid];
+          setOrdersByTable((prev) => {
+            if (!Object.prototype.hasOwnProperty.call(prev, tid)) return prev;
+            const next = { ...prev };
+            delete next[tid];
+            ordersByTableRef.current = next;
+            return next;
+          });
+        }
+      }
+
+      setTpvEntryMode("map");
+      suppressUrlTableSelectionRef.current = true;
+      setSelectedTableId(null);
+      setOrder([]);
+      sessionTableScopeRef.current = null;
+      const basePath = embeddedInOperacion
+        ? "/dashboard/operacion/tpv"
+        : "/dashboard/carta";
+      router.replace(basePath);
+    } finally {
+      backToMapFlushGuardRef.current.end();
+    }
+  }, [
+    embeddedInOperacion,
+    router,
+    selectedTableId,
+    cancelDraftPersistDebounceForTable,
+    enqueueDraftPersistFlushForTable,
+    restaurantId,
+    isFirebaseConfigured,
+  ]);
 
   const handlePrintPreTicket = useCallback(() => {
     window.print();
@@ -8435,7 +8576,7 @@ export function CartaPageContent({
       await completeOperationalActionWithOperatorPicker(true);
     } else {
       await new Promise((r) => window.setTimeout(r, 900));
-      handleBackToMap();
+      await handleBackToMap();
     }
   }, [
     handleComanda,
