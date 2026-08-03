@@ -22,6 +22,11 @@ import {
   type PlanElementType,
   type TableVisualShape,
 } from "@/lib/firestore/tables";
+import {
+  buildBatchChunkLastOpContext,
+  buildPublicationWriteLastOpContext,
+  planPublisherWriteRemember,
+} from "@/lib/sala-editor/persistence/sala-editor-v2-publisher-write-context";
 
 export type SalaEditorV2PublicationSkippedItem = {
   id: string;
@@ -965,6 +970,54 @@ function chunkDocumentDataWrites(
   return chunks;
 }
 
+function rememberPublicationWriteFromWrite(
+  write: PublicationWrite,
+  restaurantId: string,
+  operation: PublicationWriteDiagnostic["operation"],
+): void {
+  rememberLastFirestoreOperation(
+    buildPublicationWriteLastOpContext({
+      write: {
+        ref: {
+          path: write.ref.path,
+          id: write.ref.id,
+          parent: { path: write.ref.parent.path },
+        },
+        data: write.data as Record<string, unknown>,
+        mode: write.mode,
+        diagnosticLabel: write.diagnosticLabel,
+        existingRestaurantId: write.existingRestaurantId,
+      },
+      restaurantId,
+      operation,
+      uid: currentPublisherUid(),
+    }),
+  );
+}
+
+function rememberBatchChunkOperation(
+  chunk: PublicationWrite[],
+  restaurantId: string,
+): void {
+  rememberLastFirestoreOperation(
+    buildBatchChunkLastOpContext({
+      chunk: chunk.map((write) => ({
+        ref: {
+          path: write.ref.path,
+          id: write.ref.id,
+          parent: { path: write.ref.parent.path },
+        },
+        data: write.data as Record<string, unknown>,
+        mode: write.mode,
+        diagnosticLabel: write.diagnosticLabel,
+        existingRestaurantId: write.existingRestaurantId,
+      })),
+      restaurantId,
+      uid: currentPublisherUid(),
+    }),
+  );
+}
+
 async function commitUpdateWrites(
   writes: PublicationWrite[],
   params: { restaurantId: string },
@@ -981,15 +1034,18 @@ async function commitUpdateWrites(
     }
     return;
   }
+  const rememberPlan = planPublisherWriteRemember(SALA_EDITOR_DEV_DIAGNOSTICS);
   for (const [chunkIndex, chunk] of chunks.entries()) {
-    const rows = chunk.map((write) =>
-      describePublicationWrite({
-        write,
-        restaurantId: params.restaurantId,
-        operation: write.mode === "setMerge" ? "batch.set" : "batch.update",
-      }),
-    );
-    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+    const rows = rememberPlan.buildExpensiveDiagnosticRows
+      ? chunk.map((write) =>
+          describePublicationWrite({
+            write,
+            restaurantId: params.restaurantId,
+            operation: write.mode === "setMerge" ? "batch.set" : "batch.update",
+          }),
+        )
+      : null;
+    if (rows) {
       console.groupCollapsed(
         `[SalaEditorV2][FirestoreDiag] batch.commit intento ${chunkIndex + 1}/${chunks.length}`,
       );
@@ -1011,29 +1067,29 @@ async function commitUpdateWrites(
       }
     }
     try {
-      rememberLastFirestoreOperation({
-        operation: "batch.commit",
-        documentPath:
-          rows.length === 1 ? rows[0]?.documentPath ?? null : `batch:${rows.length}:documents`,
-        collectionName:
-          rows.length === 1
-            ? rows[0]?.collectionPath ?? null
-            : [...new Set(rows.map((row) => row.collectionPath))].join(", "),
-        restaurantId: params.restaurantId,
-        uid: currentPublisherUid(),
-        payloadRestaurantId: rows.length === 1 ? rows[0]?.payloadRestaurantId ?? null : null,
-        existingRestaurantId: rows.length === 1 ? rows[0]?.existingRestaurantId ?? null : null,
-        payloadKeys: [
-          ...new Set(
-            rows.flatMap((row) =>
-              Array.isArray(row.payload.fieldKeys)
-                ? row.payload.fieldKeys.filter((key): key is string => typeof key === "string")
-                : [],
+      if (rows) {
+        rememberLastFirestoreOperation({
+          operation: "batch.commit",
+          documentPath:
+            rows.length === 1 ? rows[0]?.documentPath ?? null : `batch:${rows.length}:documents`,
+          collectionName:
+            rows.length === 1
+              ? rows[0]?.collectionPath ?? null
+              : [...new Set(rows.map((row) => row.collectionPath))].join(", "),
+          restaurantId: params.restaurantId,
+          uid: currentPublisherUid(),
+          payloadRestaurantId: rows.length === 1 ? rows[0]?.payloadRestaurantId ?? null : null,
+          existingRestaurantId: rows.length === 1 ? rows[0]?.existingRestaurantId ?? null : null,
+          payloadKeys: [
+            ...new Set(
+              rows.flatMap((row) =>
+                Array.isArray(row.payload.fieldKeys)
+                  ? row.payload.fieldKeys.filter((key): key is string => typeof key === "string")
+                  : [],
+              ),
             ),
-          ),
-        ].sort(),
-      });
-      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+          ].sort(),
+        });
         console.info("[SalaEditorV2][FirestoreDiag] batch.commit ejecutando", {
           operation: "batch.commit",
           documentPath:
@@ -1046,22 +1102,26 @@ async function commitUpdateWrites(
           uid: currentPublisherUid(),
           writes: rows.map(summarizePublicationWriteForTable),
         });
+      } else {
+        rememberBatchChunkOperation(chunk, params.restaurantId);
       }
       await batch.commit();
-      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      if (rows) {
         console.info("[SalaEditorV2][FirestoreDiag] batch.commit OK", {
           writeCount: rows.length,
         });
       }
     } catch (error) {
-      logPermissionDeniedWriteDiagnostics({
-        title: "[SalaEditorV2][FirestoreDiag] batch.commit ERROR",
-        error,
-        rows,
-      });
+      if (rows) {
+        logPermissionDeniedWriteDiagnostics({
+          title: "[SalaEditorV2][FirestoreDiag] batch.commit ERROR",
+          error,
+          rows,
+        });
+      }
       throw error;
     } finally {
-      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      if (rows) {
         console.groupEnd();
       }
     }
@@ -1082,18 +1142,28 @@ async function commitDecorativeWritesWithTrace(
     });
   }
 
+  const rememberPlan = planPublisherWriteRemember(SALA_EDITOR_DEV_DIAGNOSTICS);
+
   try {
     for (const write of writes) {
-      const row = describePublicationWrite({
-        write,
-        restaurantId: params.restaurantId,
-        operation: write.mode === "setMerge" ? "setDoc" : "updateDoc",
-      });
+      const operation: PublicationWriteDiagnostic["operation"] =
+        write.mode === "setMerge" ? "setDoc" : "updateDoc";
+      const row = rememberPlan.buildExpensiveDiagnosticRows
+        ? describePublicationWrite({
+            write,
+            restaurantId: params.restaurantId,
+            operation,
+          })
+        : null;
 
       try {
-        if (write.mode === "setMerge") {
+        if (row) {
           rememberLastFirestoreWriteOperation({ row });
-          if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        } else {
+          rememberPublicationWriteFromWrite(write, params.restaurantId, operation);
+        }
+        if (write.mode === "setMerge") {
+          if (row) {
             console.info("[SalaEditorV2][FirestoreDiag] setDoc ejecutando", {
               operation: row.operation,
               documentPath: row.documentPath,
@@ -1105,8 +1175,7 @@ async function commitDecorativeWritesWithTrace(
           }
           await setDoc(write.ref, write.data, { merge: true });
         } else {
-          rememberLastFirestoreWriteOperation({ row });
-          if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+          if (row) {
             console.info("[SalaEditorV2][FirestoreDiag] updateDoc ejecutando", {
               operation: row.operation,
               documentPath: row.documentPath,
@@ -1118,18 +1187,20 @@ async function commitDecorativeWritesWithTrace(
           }
           await updateDoc(write.ref, write.data);
         }
-        if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+        if (row) {
           console.info("[SalaEditorV2][FirestoreDiag] decorativo OK", {
             documentPath: row.documentPath,
             operation: row.operation,
           });
         }
       } catch (error) {
-        logPermissionDeniedWriteDiagnostics({
-          title: "[SalaEditorV2][FirestoreDiag] decorativo ERROR",
-          error,
-          rows: [row],
-        });
+        if (row) {
+          logPermissionDeniedWriteDiagnostics({
+            title: "[SalaEditorV2][FirestoreDiag] decorativo ERROR",
+            error,
+            rows: [row],
+          });
+        }
         throw error;
       }
     }
