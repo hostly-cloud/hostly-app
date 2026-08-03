@@ -41,6 +41,7 @@ import {
   sameSortedIds,
   type TableGroupsMap,
 } from "@/lib/server/tpv/table-group-topology";
+import { planTableGroupSplitPartition } from "@/lib/server/tpv/table-group-split-partition";
 
 export type SplitTableGroupIntent = {
   mainTableId: string;
@@ -53,18 +54,6 @@ export type SplitTableGroupIntent = {
 };
 
 const SPLIT_KIND = "split_table_group";
-
-function itemSourceTableId(item: Record<string, unknown>): string {
-  return typeof item.tableGroupSourceTableId === "string"
-    ? item.tableGroupSourceTableId.trim()
-    : "";
-}
-
-function itemSourceOrderId(item: Record<string, unknown>): string {
-  return typeof item.tableGroupSourceOrderId === "string"
-    ? item.tableGroupSourceOrderId.trim()
-    : "";
-}
 
 function resolveRestoredStatus(data: Record<string, unknown>): string {
   const original = String(data.tableGroupMergeOriginalStatus ?? "").trim();
@@ -93,15 +82,43 @@ async function fetchMergedSourcesForTable(
     .where("restaurantId", "==", ctx.restaurantId)
     .where("tableId", "==", tableId)
     .get();
-  return snap.docs
-    .filter((doc) => {
-      const data = doc.data() as Record<string, unknown>;
-      return (
-        String(data.status ?? "").trim() === "merged" &&
-        String(data.mergedIntoTableId ?? "").trim() === primaryTableId
-      );
-    })
-    .map((doc) => ({ id: doc.id, ref: doc.ref, data: doc.data() as Record<string, unknown> }));
+  const mergedDocs = snap.docs.filter((doc) => {
+    const data = doc.data() as Record<string, unknown>;
+    return String(data.status ?? "").trim() === "merged";
+  });
+
+  const direct = mergedDocs.filter((doc) => {
+    const data = doc.data() as Record<string, unknown>;
+    return String(data.mergedIntoTableId ?? "").trim() === primaryTableId;
+  });
+  if (direct.length > 0) {
+    return direct.map((doc) => ({
+      id: doc.id,
+      ref: doc.ref,
+      data: doc.data() as Record<string, unknown>,
+    }));
+  }
+
+  // Nested join: pedido merged en mesa intermedia; las líneas viven en el
+  // active primary con tableGroupSourceOrderId apuntando a este source.
+  const activePrimary = await fetchActiveOrdersForTable(ctx, primaryTableId);
+  const referencedSourceIds = new Set<string>();
+  for (const order of activePrimary) {
+    for (const item of asOrderItems(order.data.items)) {
+      const oid =
+        typeof item.tableGroupSourceOrderId === "string"
+          ? item.tableGroupSourceOrderId.trim()
+          : "";
+      if (oid) referencedSourceIds.add(oid);
+    }
+  }
+  return mergedDocs
+    .filter((doc) => referencedSourceIds.has(doc.id))
+    .map((doc) => ({
+      id: doc.id,
+      ref: doc.ref,
+      data: doc.data() as Record<string, unknown>,
+    }));
 }
 
 async function fetchActiveOrdersForTable(
@@ -142,30 +159,8 @@ export async function handleSplitTableGroupOrders(
     return { restored: true, result: "full-split", restoredOrderIds: [] };
   }
 
-  const groupRef = tableGroupsDocRef(ctx.db, ctx.restaurantId);
-  const preGroupsSnap = await groupRef.get();
-  const preGroups = normalizeTableGroupsMap(
-    preGroupsSnap.exists ? (preGroupsSnap.data() as Record<string, unknown>).groups : {},
-  );
-  const preTopology = planSplitFromRemovedHints({
-    currentGroups: preGroups,
-    mainTableId: primaryId,
-    removedTableIds: removedRaw,
-    newMainTableId: intent.newMainTableId,
-  });
-  if (!preTopology.ok) {
-    const status =
-      preTopology.error === "GROUP_TOPOLOGY_MISMATCH" ? 409 : 400;
-    return { status, error: preTopology.error };
-  }
-
-  const removed = preTopology.removedTableIds;
-  const remaining = preTopology.remainingTableIds;
-  const effectivePrimaryId = preTopology.effectiveMainTableId;
-  let plannedNextGroups: TableGroupsMap = preTopology.nextGroups;
-
   const idemKey = intent.idempotencyKey?.trim();
-  // Idempotency over client intent; remaining autoritativo se recalcula en servidor.
+  // Idempotency antes de topología: retry tras disolver el grupo debe rehidratar.
   const payloadHash = stablePayloadHash(
     buildIdempotencyPayload(ctx.uid, ctx.restaurantId, SPLIT_KIND, {
       mainTableId: primaryId,
@@ -195,6 +190,28 @@ export async function handleSplitTableGroupOrders(
       };
     }
   }
+
+  const groupRef = tableGroupsDocRef(ctx.db, ctx.restaurantId);
+  const preGroupsSnap = await groupRef.get();
+  const preGroups = normalizeTableGroupsMap(
+    preGroupsSnap.exists ? (preGroupsSnap.data() as Record<string, unknown>).groups : {},
+  );
+  const preTopology = planSplitFromRemovedHints({
+    currentGroups: preGroups,
+    mainTableId: primaryId,
+    removedTableIds: removedRaw,
+    newMainTableId: intent.newMainTableId,
+  });
+  if (!preTopology.ok) {
+    const status =
+      preTopology.error === "GROUP_TOPOLOGY_MISMATCH" ? 409 : 400;
+    return { status, error: preTopology.error };
+  }
+
+  const removed = preTopology.removedTableIds;
+  const remaining = preTopology.remainingTableIds;
+  const effectivePrimaryId = preTopology.effectiveMainTableId;
+  let plannedNextGroups: TableGroupsMap = preTopology.nextGroups;
 
   const activePrimaryOrders = await fetchActiveOrdersForTable(ctx, primaryId);
   const sourceOrdersToRestore = (
@@ -281,9 +298,31 @@ export async function handleSplitTableGroupOrders(
   const activePrimaryOrderById = new Map(activePrimaryOrders.map((o) => [o.id, o]));
   const sourceByDestOrderId = new Map<string, typeof sourceOrdersToRestore>();
   for (const source of sourceOrdersToRestore) {
-    const destId = String(source.data.mergedIntoOrderId ?? "").trim();
-    if (!destId || !activePrimaryOrderById.has(destId)) {
-      return { status: 400, error: "MERGED_SOURCE_NOT_LINKED" };
+    const directDestId = String(source.data.mergedIntoOrderId ?? "").trim();
+    let destId = "";
+    if (directDestId && activePrimaryOrderById.has(directDestId)) {
+      destId = directDestId;
+    } else {
+      // Nested merge: el source apunta a un intermedio; las líneas están en el primary activo.
+      const sourceTableId = String(source.data.tableId ?? "").trim();
+      const holders = activePrimaryOrders.filter((order) =>
+        asOrderItems(order.data.items).some((item) => {
+          const byOrder =
+            typeof item.tableGroupSourceOrderId === "string"
+              ? item.tableGroupSourceOrderId.trim()
+              : "";
+          const byTable =
+            typeof item.tableGroupSourceTableId === "string"
+              ? item.tableGroupSourceTableId.trim()
+              : "";
+          if (byOrder) return byOrder === source.id;
+          return Boolean(sourceTableId && byTable === sourceTableId);
+        }),
+      );
+      if (holders.length !== 1) {
+        return { status: 400, error: "MERGED_SOURCE_NOT_LINKED" };
+      }
+      destId = holders[0]!.id;
     }
     const list = sourceByDestOrderId.get(destId) ?? [];
     list.push(source);
@@ -297,39 +336,31 @@ export async function handleSplitTableGroupOrders(
   const primaryOrder = activePrimaryOrderById.get(destOrderId)!;
   const primaryData = primaryOrder.data;
   const primaryItems = asOrderItems(primaryData.items);
-  const sourceOrderIdSet = new Set(sourceOrders.map((s) => s.id));
-  const restoredItemsBySourceOrder = new Map<string, Record<string, unknown>[]>();
-  const restoredItemRefs = new Set<Record<string, unknown>>();
 
+  // Prefail Case F antes de abrir la TX (sin writes ni idempotency success).
+  const prePartition = planTableGroupSplitPartition({
+    restaurantId: ctx.restaurantId,
+    primaryTableId: primaryId,
+    mainTableId: preTopology.mainTableId,
+    memberTableIds: preTopology.memberIdsBefore,
+    removedTableIds: removed,
+    remainingTableIds: remaining,
+    destOrderId,
+    lines: primaryItems,
+    sourceOrders: sourceOrders.map((s) => ({
+      id: s.id,
+      tableId: String(s.data.tableId ?? "").trim(),
+    })),
+  });
+  if (!prePartition.ok) {
+    return { status: 409, error: "PROVENANCE_INSUFFICIENT" };
+  }
   for (const source of sourceOrders) {
-    const sourceTableId = String(source.data.tableId ?? "").trim();
-    const explicit: Record<string, unknown>[] = [];
-    for (const item of primaryItems) {
-      const byOrder = itemSourceOrderId(item);
-      const byTable = itemSourceTableId(item);
-      if (byOrder) {
-        if (byOrder === source.id) explicit.push(item);
-        continue;
-      }
-      if (byTable && byTable === sourceTableId) explicit.push(item);
+    if ((prePartition.bySourceOrderId[source.id] ?? []).length === 0) {
+      return { status: 409, error: "PROVENANCE_INSUFFICIENT" };
     }
-    if (explicit.length === 0) {
-      return { status: 400, error: "SOURCE_LINES_NOT_FOUND" };
-    }
-    for (const item of explicit) {
-      if (restoredItemRefs.has(item)) {
-        return { status: 409, error: "DUPLICATE_SOURCE_LINE_ASSIGNMENT" };
-      }
-      restoredItemRefs.add(item);
-    }
-    restoredItemsBySourceOrder.set(source.id, explicit);
   }
 
-  if (restoredItemsBySourceOrder.size !== sourceOrders.length) {
-    return { status: 400, error: "SOURCE_RESTORE_INCOMPLETE" };
-  }
-
-  const remainingPrimaryItems = primaryItems.filter((item) => !restoredItemRefs.has(item));
   const restoredOrderIds = sourceOrders.map((s) => s.id);
   const nowMs = Date.now();
 
@@ -401,31 +432,30 @@ export async function handleSplitTableGroupOrders(
         }
       }
 
-      const primaryItems = asOrderItems(freshPrimary.items);
+      const freshItems = asOrderItems(freshPrimary.items);
+      const txPartition = planTableGroupSplitPartition({
+        restaurantId: ctx.restaurantId,
+        primaryTableId: primaryId,
+        mainTableId: txTopology.mainTableId,
+        memberTableIds: txTopology.memberIdsBefore,
+        removedTableIds: txTopology.removedTableIds,
+        remainingTableIds: txTopology.remainingTableIds,
+        destOrderId,
+        lines: freshItems,
+        sourceOrders: sourceOrders.map((s) => ({
+          id: s.id,
+          tableId: String(s.data.tableId ?? "").trim(),
+        })),
+      });
+      if (!txPartition.ok) throw new Error("PROVENANCE_INSUFFICIENT");
+
       const restoredItemsBySourceOrder = new Map<string, Record<string, unknown>[]>();
-      const restoredItemRefs = new Set<Record<string, unknown>>();
-
       for (const source of sourceOrders) {
-        const sourceTableId = String(source.data.tableId ?? "").trim();
-        const explicit: Record<string, unknown>[] = [];
-        for (const item of primaryItems) {
-          const byOrder = itemSourceOrderId(item);
-          const byTable = itemSourceTableId(item);
-          if (byOrder) {
-            if (byOrder === source.id) explicit.push(item);
-            continue;
-          }
-          if (byTable && byTable === sourceTableId) explicit.push(item);
-        }
-        if (explicit.length === 0) throw new Error("SOURCE_LINES_NOT_FOUND");
-        for (const item of explicit) {
-          if (restoredItemRefs.has(item)) throw new Error("DUPLICATE_SOURCE_LINE_ASSIGNMENT");
-          restoredItemRefs.add(item);
-        }
-        restoredItemsBySourceOrder.set(source.id, explicit);
+        const linesForSource = txPartition.bySourceOrderId[source.id] ?? [];
+        if (linesForSource.length === 0) throw new Error("PROVENANCE_INSUFFICIENT");
+        restoredItemsBySourceOrder.set(source.id, linesForSource);
       }
-
-      const remainingPrimaryItems = primaryItems.filter((item) => !restoredItemRefs.has(item));
+      const remainingPrimaryItems = txPartition.remainingOnPrimary;
 
       const sourceSnapsPrepared: {
         source: (typeof sourceOrders)[number];
@@ -575,10 +605,15 @@ export async function handleSplitTableGroupOrders(
       };
     }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
-    if (msg === "VERSION_CONFLICT" || msg === "CONCURRENT_ORDER_CHANGE") {
+    if (
+      msg === "VERSION_CONFLICT" ||
+      msg === "CONCURRENT_ORDER_CHANGE" ||
+      msg === "PROVENANCE_INSUFFICIENT" ||
+      msg === "GROUP_TOPOLOGY_MISMATCH" ||
+      msg === "DUPLICATE_SOURCE_LINE_ASSIGNMENT"
+    ) {
       return { status: 409, error: msg };
     }
-    if (msg === "GROUP_TOPOLOGY_MISMATCH") return { status: 409, error: msg };
     if (msg === "LOCK_TENANT_MISMATCH" || msg === "LOCK_TABLE_MISMATCH") {
       return { status: 409, error: msg };
     }
@@ -594,11 +629,7 @@ export async function handleSplitTableGroupOrders(
     ) {
       return { status: 400, error: msg };
     }
-    if (
-      msg === "DUPLICATE_LINE_ID" ||
-      msg === "SOURCE_LINES_NOT_FOUND" ||
-      msg === "DUPLICATE_SOURCE_LINE_ASSIGNMENT"
-    ) {
+    if (msg === "DUPLICATE_LINE_ID" || msg === "SOURCE_LINES_NOT_FOUND") {
       return { status: 400, error: msg };
     }
     throw e;
