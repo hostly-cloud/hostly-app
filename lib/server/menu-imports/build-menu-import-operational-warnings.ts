@@ -31,6 +31,8 @@ async function readPdfPageCount(buffer: Buffer): Promise<number | undefined> {
 }
 
 async function resolvePdfPageMeta(params: {
+  restaurantId: string;
+  draftId: string;
   sourceType: ImportedMenuSourceType;
   storagePath?: string;
   ocrMethod?: MenuImportInputMetadata["ocrMethod"];
@@ -41,11 +43,16 @@ async function resolvePdfPageMeta(params: {
     params.sourceType === "pdf" && (truncated || params.ocrMethod === "vision_pdf");
   if (!needsPdfMeta) return {};
 
-  const storagePath = params.storagePath?.trim();
-  if (!storagePath) return { pdfPagesProcessed: MAX_VISION_PDF_PAGES };
+  const storagePath = params.storagePath;
+  if (typeof storagePath !== "string" || !storagePath) {
+    return { pdfPagesProcessed: MAX_VISION_PDF_PAGES };
+  }
 
   try {
-    const downloaded = await downloadMenuImportStorageFile(storagePath);
+    const downloaded = await downloadMenuImportStorageFile(storagePath, {
+      restaurantId: params.restaurantId,
+      draftId: params.draftId,
+    });
     const detected = await readPdfPageCount(downloaded.buffer);
     if (!detected) return { pdfPagesProcessed: MAX_VISION_PDF_PAGES };
     return {
@@ -71,6 +78,7 @@ function countUnresolvedCategoryItems(
 export async function buildMenuImportOperationalWarningsForDraft(params: {
   db: Firestore;
   restaurantId: string;
+  draftId: string;
   sourceType: ImportedMenuSourceType;
   storagePath?: string;
   ocrMethod?: MenuImportInputMetadata["ocrMethod"];
@@ -81,6 +89,8 @@ export async function buildMenuImportOperationalWarningsForDraft(params: {
 }): Promise<MenuImportOperationalWarning[]> {
   const [pdfMeta, categories] = await Promise.all([
     resolvePdfPageMeta({
+      restaurantId: params.restaurantId,
+      draftId: params.draftId,
       sourceType: params.sourceType,
       storagePath: params.storagePath,
       ocrMethod: params.ocrMethod,

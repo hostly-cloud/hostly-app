@@ -53,10 +53,12 @@ export type UseProductQuickCreateResult = {
   error: string | null;
   successFlash: string | null;
   canSubmit: boolean;
+  hasUnsavedChanges: boolean;
   setNombre: (value: string) => void;
   setPrecio: (value: string) => void;
   selectCategory: (categoryId: string | null) => void;
   resetDraft: () => void;
+  syncBaseline: () => void;
   submitQuickCreate: (
     mode?: ProductQuickCreateSubmitMode,
   ) => Promise<ProductQuickCreateSubmitResult | null>;
@@ -64,12 +66,38 @@ export type UseProductQuickCreateResult = {
 
 const QUICK_CREATE_SUCCESS_FLASH_MS = 2200;
 
+export function areProductQuickCreateDraftsEqual(
+  left: ProductQuickCreateDraft,
+  right: ProductQuickCreateDraft,
+): boolean {
+  return (
+    left.nombre.trim() === right.nombre.trim() &&
+    left.categoriaCartaId === right.categoriaCartaId &&
+    left.precio.trim() === right.precio.trim()
+  );
+}
+
+function snapshotQuickCreateDraft(
+  draft: ProductQuickCreateDraft,
+): ProductQuickCreateDraft {
+  return {
+    nombre: draft.nombre,
+    categoriaCartaId: draft.categoriaCartaId,
+    precio: draft.precio,
+  };
+}
+
 export function useProductQuickCreate(
   args: UseProductQuickCreateArgs,
 ): UseProductQuickCreateResult {
   const [draft, setDraft] = useState<ProductQuickCreateDraft>(
     createEmptyProductQuickCreateDraft,
   );
+  const [baselineDraft, setBaselineDraft] = useState<ProductQuickCreateDraft>(
+    createEmptyProductQuickCreateDraft,
+  );
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successFlash, setSuccessFlash] = useState<string | null>(null);
@@ -177,14 +205,28 @@ export function useProductQuickCreate(
     args.messages,
   ]);
 
+  const hasUnsavedChanges = useMemo(
+    () => !areProductQuickCreateDraftsEqual(draft, baselineDraft),
+    [draft, baselineDraft],
+  );
+
+  const syncBaseline = useCallback(() => {
+    setBaselineDraft(snapshotQuickCreateDraft(draftRef.current));
+  }, []);
+
   const resetDraft = useCallback(() => {
-    setDraft(createEmptyProductQuickCreateDraft());
+    const empty = createEmptyProductQuickCreateDraft();
+    setDraft(empty);
+    setBaselineDraft(empty);
     setError(null);
     clearSuccessFlash();
   }, [clearSuccessFlash]);
 
   const resetDraftForContinuousCreate = useCallback(() => {
-    setDraft((prev) => resetProductQuickCreateDraftKeepingCategory(prev));
+    const nextDraft = resetProductQuickCreateDraftKeepingCategory(draftRef.current);
+    draftRef.current = nextDraft;
+    setDraft(nextDraft);
+    setBaselineDraft(snapshotQuickCreateDraft(nextDraft));
     setError(null);
   }, []);
 
@@ -302,10 +344,12 @@ export function useProductQuickCreate(
     error,
     successFlash,
     canSubmit,
+    hasUnsavedChanges,
     setNombre,
     setPrecio,
     selectCategory,
     resetDraft,
+    syncBaseline,
     submitQuickCreate,
   };
 }

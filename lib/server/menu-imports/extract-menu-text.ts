@@ -18,6 +18,8 @@ import type { OcrLayoutLine } from "./menu-import-ocr-layout-types";
 import type { OcrLayoutExtractionMeta } from "./vision-ocr-layout";
 
 export type ExtractMenuTextInput = {
+  restaurantId: string;
+  draftId: string;
   sourceType: ImportedMenuSourceType;
   menuType: MenuImportMenuType;
   storagePath?: string;
@@ -62,12 +64,15 @@ async function extractFromPdfBuffer(
 }
 
 async function extractFromStorageFile(input: ExtractMenuTextInput): Promise<ExtractMenuTextResult> {
-  const storagePath = input.storagePath?.trim();
-  if (!storagePath) {
+  const storagePath = input.storagePath;
+  if (typeof storagePath !== "string" || !storagePath) {
     throw new Error("Falta storagePath para extraer la carta");
   }
 
-  const downloaded = await downloadMenuImportStorageFile(storagePath);
+  const downloaded = await downloadMenuImportStorageFile(storagePath, {
+    restaurantId: input.restaurantId,
+    draftId: input.draftId,
+  });
   const warnings: string[] = [];
 
   if (isMenuImportPipelineDiagnosticsEnabled()) {

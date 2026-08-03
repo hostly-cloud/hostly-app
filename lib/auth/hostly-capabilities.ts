@@ -6,6 +6,7 @@
  */
 
 import type { UserRestaurantRole } from "@/lib/firestore/user-restaurant-profile";
+import { normalizeAuthorizationRole } from "@/lib/auth/profile-authorization-policy";
 
 export type HostlyCapability =
   | "tpv.sell"
@@ -116,49 +117,19 @@ export const HOSTLY_CAPABILITY_LABELS: Readonly<
 };
 
 /** Normaliza roles Firebase/legacy a rol Hostly operacional. */
-export function normalizeHostlyRole(role: unknown): HostlyRole {
-  if (typeof role !== "string" || !role.trim()) return "viewer";
-  const value = role.trim().toLowerCase();
-
-  switch (value) {
-    case "owner":
-    case "propietario":
-      return "owner";
-    case "admin":
-    case "administrator":
-      return "admin";
-    case "manager":
-    case "gerente":
-      return "manager";
-    case "waiter":
-    case "camarero":
-    case "camarera":
-    case "staff_tpv":
-      return "waiter";
-    case "kitchen":
-    case "cocina":
-    case "cook":
-      return "kitchen";
-    case "viewer":
-    case "readonly":
-    case "read_only":
-      return "viewer";
-    case "staff":
-      // Legacy Firebase: conservar acceso operacional amplio hasta migración explícita.
-      return "manager";
-    default:
-      return "viewer";
-  }
+export function normalizeHostlyRole(role: unknown): HostlyRole | null {
+  return normalizeAuthorizationRole(role);
 }
 
 export function normalizeHostlyRoleFromProfile(
   role: UserRestaurantRole | unknown,
-): HostlyRole {
+): HostlyRole | null {
   return normalizeHostlyRole(role);
 }
 
 export function getCapabilitiesForRole(role: unknown): Set<HostlyCapability> {
   const normalized = normalizeHostlyRole(role);
+  if (!normalized) return new Set();
   return new Set(HOSTLY_ROLE_CAPABILITIES[normalized]);
 }
 

@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
-import { getFirestoreAdminStatus, getHostlyFirestore } from "@/lib/firebase/admin";
+import { getFirestoreAdminStatus } from "@/lib/firebase/admin";
+import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-restaurant";
+import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const authContext = await requireLegacyRestaurantApi(
+    req,
+    "settings.manage",
+  );
+  if (isAuthErrorResponse(authContext)) return authContext;
+
   const status = getFirestoreAdminStatus();
   try {
-    const db = getHostlyFirestore();
-    if (!db) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "FIRESTORE_NOT_CONFIGURED",
-          status,
-        },
-        { status: 501 },
-      );
-    }
+    const db = authContext.db;
 
     // Ping real: lectura de un doc que no existe (no requiere que existan colecciones).
     const snap = await db.collection("_debug").doc("ping").get();

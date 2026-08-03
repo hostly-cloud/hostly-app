@@ -12,17 +12,15 @@ import {
 } from "react";
 import type { User } from "firebase/auth";
 import { auth, isFirebaseConfigured } from "@/lib/firebase/client";
-import {
-  acceptInvite,
-  getMyPendingInvite,
-} from "@/lib/firestore/restaurant-invites";
 import { subscribeToAuthState } from "@/lib/auth/auth";
 import {
   loadRestaurantNameById,
   loadUserRestaurantContext,
   DEFAULT_USER_RESTAURANT_ROLE,
+  UserProfileAccessError,
   type UserRestaurantRole,
 } from "@/lib/firestore/user-restaurant-profile";
+import type { ProfileAuthorizationIssue } from "@/lib/auth/profile-authorization-policy";
 
 type AuthContextValue = {
   user: User | null;
@@ -33,6 +31,7 @@ type AuthContextValue = {
   ready: boolean;
   /** Perfil multi-restaurante resuelto (o fallido); evita mensaje de “sin restaurante” durante la carga. */
   profileReady: boolean;
+  profileAccessIssue: ProfileAuthorizationIssue | "PROFILE_UNRESOLVED" | null;
   refreshProfile: () => void;
 };
 
@@ -45,47 +44,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRestaurantRole>(DEFAULT_USER_RESTAURANT_ROLE);
   const [ready, setReady] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
+  const [profileAccessIssue, setProfileAccessIssue] = useState<
+    ProfileAuthorizationIssue | "PROFILE_UNRESOLVED" | null
+  >(null);
 
   /** Monótono: solo la ejecución con requestId === valor actual puede escribir estado de perfil. */
   const profileLoadSeqRef = useRef(0);
 
-  const applyRestaurantFromUid = useCallback((uid: string | null) => {
+  const applyRestaurantFromUser = useCallback((authUser: User | null) => {
     const requestId = ++profileLoadSeqRef.current;
+    const uid = authUser?.uid ?? null;
 
     if (!uid) {
       setRestaurantId(null);
       setRestaurantName(null);
       setRole(DEFAULT_USER_RESTAURANT_ROLE);
+      setProfileAccessIssue(null);
       setProfileReady(true);
       return;
     }
 
     setProfileReady(false);
+    setProfileAccessIssue(null);
 
     void (async () => {
       const isStale = () => requestId !== profileLoadSeqRef.current;
 
       try {
-        let ctx = await loadUserRestaurantContext(uid);
+        const ctx = await loadUserRestaurantContext(uid, authUser?.email);
         if (isStale()) {
           return;
         }
 
-        let rid = ctx.restaurantId?.trim() ?? "";
-
-        const authUser = auth.currentUser;
-        if (!rid && authUser?.email) {
-          try {
-            const invite = await getMyPendingInvite(authUser.email);
-            if (invite) {
-              await acceptInvite(invite, uid);
-              ctx = await loadUserRestaurantContext(uid);
-              rid = ctx.restaurantId?.trim() ?? "";
-            }
-          } catch (e) {
-            console.error("[AUTH] pending invite accept", e);
-          }
-        }
+        const rid = ctx.restaurantId?.trim() ?? "";
 
         if (isStale()) {
           return;
@@ -114,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRestaurantId(rid);
         setRestaurantName(rn);
         setRole(ctx.role);
+        setProfileAccessIssue(null);
       } catch (e) {
         if (isStale()) {
           return;
@@ -124,6 +116,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRestaurantId(null);
         setRestaurantName(null);
         setRole(DEFAULT_USER_RESTAURANT_ROLE);
+        setProfileAccessIssue(
+          e instanceof UserProfileAccessError ? e.code : "PROFILE_UNRESOLVED",
+        );
       } finally {
         if (isStale()) {
           return;
@@ -136,8 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(() => {
     const u = auth.currentUser;
     setUser(u);
-    applyRestaurantFromUid(u?.uid ?? null);
-  }, [applyRestaurantFromUid]);
+    applyRestaurantFromUser(u);
+  }, [applyRestaurantFromUser]);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -146,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRestaurantId(null);
       setRestaurantName(null);
       setRole(DEFAULT_USER_RESTAURANT_ROLE);
+      setProfileAccessIssue(null);
       setProfileReady(true);
       setReady(true);
       return;
@@ -153,14 +149,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const unsub = subscribeToAuthState((u) => {
       setUser(u);
-      applyRestaurantFromUid(u?.uid ?? null);
+      applyRestaurantFromUser(u);
       setReady(true);
     });
 
     return () => {
       unsub();
     };
-  }, [applyRestaurantFromUid]);
+  }, [applyRestaurantFromUser]);
 
   const value = useMemo(
     () => ({
@@ -170,9 +166,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       ready,
       profileReady,
+      profileAccessIssue,
       refreshProfile,
     }),
-    [user, restaurantId, restaurantName, role, ready, profileReady, refreshProfile],
+    [
+      user,
+      restaurantId,
+      restaurantName,
+      role,
+      ready,
+      profileReady,
+      profileAccessIssue,
+      refreshProfile,
+    ],
   );
 
   return (

@@ -1,18 +1,24 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
-import { getHostlyFirestore } from "@/lib/firebase/admin";
 import {
   applyCartaFamiliaProductionStationPatchToUpdate,
   cartaFamiliaFromFirestoreDoc,
   cartaFamiliaOperationalPatchFromBody,
 } from "@/lib/carta-categorias/familia-operational-config";
-import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
+import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-restaurant";
+import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const authContext = await requireLegacyRestaurantApi(
+    req,
+    "settings.manage",
+  );
+  if (isAuthErrorResponse(authContext)) return authContext;
+
   const { id } = await ctx.params;
   const famId = (id ?? "").trim();
   if (!famId) return badRequest("MISSING_ID");
@@ -24,12 +30,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       }
     | null;
   if (!body) return badRequest("INVALID_JSON");
-  const restauranteId = (body.restauranteId ?? "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
-  assertServerRestauranteAllowed(restauranteId);
+  const restauranteId = authContext.restaurantId;
 
-  const db = getHostlyFirestore();
-  if (!db) return NextResponse.json({ ok: false, error: "FIRESTORE_NOT_CONFIGURED" }, { status: 501 });
+  const db = authContext.db;
 
   const ref = db.collection("restaurantes").doc(restauranteId).collection("cartaFamilias").doc(famId);
   const snap = await ref.get();
@@ -85,17 +88,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const authContext = await requireLegacyRestaurantApi(
+    req,
+    "settings.manage",
+  );
+  if (isAuthErrorResponse(authContext)) return authContext;
+
   const { id } = await ctx.params;
   const famId = (id ?? "").trim();
   if (!famId) return badRequest("MISSING_ID");
 
-  const url = new URL(req.url);
-  const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
-  assertServerRestauranteAllowed(restauranteId);
+  const restauranteId = authContext.restaurantId;
 
-  const db = getHostlyFirestore();
-  if (!db) return NextResponse.json({ ok: false, error: "FIRESTORE_NOT_CONFIGURED" }, { status: 501 });
+  const db = authContext.db;
 
   const catsSnap = await db
     .collection("restaurantes")

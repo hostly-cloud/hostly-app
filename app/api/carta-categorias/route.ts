@@ -1,7 +1,5 @@
 import type { DocumentData } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
-import { getHostlyFirestore } from "@/lib/firebase/admin";
-import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
 import { readCategoryProductFamilyType } from "@/lib/carta/category-product-family";
 import type { CartaCategoria, CartaCategoriaTipo } from "@/lib/carta-categorias/types";
 import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
@@ -9,6 +7,8 @@ import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import { normalizeCategoryOperationalBehavior } from "@/lib/carta-categorias/category-operational-behavior";
 import { slugifyCartaCategoria } from "@/lib/carta-categorias/slug";
 import { normalizeModifierGroupIds } from "@/lib/modifiers/modifier-group-ids";
+import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-restaurant";
+import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
@@ -76,13 +76,11 @@ function docToCategory(restauranteId: string, id: string, d: DocumentData): Cart
 }
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
-  assertServerRestauranteAllowed(restauranteId);
+  const authContext = await requireLegacyRestaurantApi(req, "tpv.sell");
+  if (isAuthErrorResponse(authContext)) return authContext;
 
-  const db = getHostlyFirestore();
-  if (!db) return NextResponse.json({ ok: false, error: "FIRESTORE_NOT_CONFIGURED" }, { status: 501 });
+  const restauranteId = authContext.restaurantId;
+  const db = authContext.db;
 
   const snap = await db
     .collection("restaurantes")
@@ -96,6 +94,12 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const authContext = await requireLegacyRestaurantApi(
+    req,
+    "settings.manage",
+  );
+  if (isAuthErrorResponse(authContext)) return authContext;
+
   const body = (await req.json().catch(() => null)) as
     | {
         restauranteId?: string;
@@ -112,14 +116,11 @@ export async function POST(req: Request) {
       }
     | null;
   if (!body) return badRequest("INVALID_JSON");
-  const restauranteId = (body.restauranteId ?? "").trim();
+  const restauranteId = authContext.restaurantId;
   const name = (body.name ?? "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
   if (!name) return badRequest("MISSING_NAME");
-  assertServerRestauranteAllowed(restauranteId);
 
-  const db = getHostlyFirestore();
-  if (!db) return NextResponse.json({ ok: false, error: "FIRESTORE_NOT_CONFIGURED" }, { status: 501 });
+  const db = authContext.db;
 
   const type: CartaCategoriaTipo = isCartaCategoriaTipo(body.type) ? body.type : "general";
   const famRaw = typeof body.cartaFamiliaId === "string" ? body.cartaFamiliaId.trim() : "";

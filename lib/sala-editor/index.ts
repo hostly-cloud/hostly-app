@@ -17,3 +17,4 @@ export * from "@/lib/sala-editor/adapters/legacy-adapters";
 export * from "@/lib/sala-editor/navigation/editor-phase-routing";
 export * from "@/lib/sala-editor/ose";
 export * from "@/lib/sala-editor/preview/create-preview-espacios";
+export * from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";

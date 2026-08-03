@@ -69,6 +69,14 @@ function getWallAttachmentLabel(kind: SalaWallAttachmentKind): string {
   return "Puerta simple";
 }
 
+function capturePointerIfAvailable(target: HTMLElement, pointerId: number) {
+  try {
+    target.setPointerCapture(pointerId);
+  } catch {
+    // Some browser automation/touch environments can report a pointerId that cannot be captured.
+  }
+}
+
 export type SalaWallCanvasProps = {
   walls: SalaWallSegment[];
   wallAttachments?: SalaWallAttachment[];
@@ -225,6 +233,10 @@ export function SalaWallCanvas({
       x2: draft.previewX,
       y2: draft.previewY,
     });
+  const draftStart = scaledDraft ? { x: scaledDraft.x1, y: scaledDraft.y1 } : null;
+  const draftPreview = scaledDraft
+    ? { x: scaledDraft.previewX, y: scaledDraft.previewY }
+    : null;
 
   const visualModel = useMemo(
     () =>
@@ -379,7 +391,7 @@ export function SalaWallCanvas({
       }
 
       if (!onPointerDown) return;
-      event.currentTarget.setPointerCapture(event.pointerId);
+      capturePointerIfAvailable(event.currentTarget, event.pointerId);
       onPointerDown(payload);
     },
     [
@@ -429,7 +441,7 @@ export function SalaWallCanvas({
         event.stopPropagation();
         const payload = createPayload(event, target);
         if (!payload) return;
-        event.currentTarget.setPointerCapture(event.pointerId);
+        capturePointerIfAvailable(event.currentTarget, event.pointerId);
         onPointerDown(payload);
       },
       onPointerMove: (event: PointerEvent<HTMLElement>) => {
@@ -464,7 +476,7 @@ export function SalaWallCanvas({
         const displayPoint = resolvePoint(event.clientX, event.clientY);
         if (!displayPoint) return;
         const point = unscaleEditorPoint(displayPoint, coordinateScale);
-        event.currentTarget.setPointerCapture(event.pointerId);
+        capturePointerIfAvailable(event.currentTarget, event.pointerId);
         onSelectWallAttachment?.(attachment.id);
 
         setAttachmentEditSession({
@@ -660,7 +672,48 @@ export function SalaWallCanvas({
             )}
           </g>
         ) : null}
+
+        {draftStart ? (
+          <g className="hostly-sala-wall-draft-point" aria-hidden>
+            <circle
+              className="hostly-sala-wall-draft-point__halo"
+              cx={draftStart.x}
+              cy={draftStart.y}
+              r="11"
+            />
+            <circle
+              className="hostly-sala-wall-draft-point__core"
+              cx={draftStart.x}
+              cy={draftStart.y}
+              r="4.5"
+            />
+          </g>
+        ) : null}
+
+        {draftPreview && draftValid ? (
+          <circle
+            className="hostly-sala-wall-draft-endpoint"
+            cx={draftPreview.x}
+            cy={draftPreview.y}
+            r="5"
+            aria-hidden
+          />
+        ) : null}
       </svg>
+
+      {draftStart ? (
+        <div
+          className="hostly-sala-wall-draft-label"
+          style={{
+            left: draftStart.x,
+            top: draftStart.y,
+          }}
+          aria-hidden
+        >
+          <span>Inicio fijado</span>
+          <small>Haz otro clic para terminar</small>
+        </div>
+      ) : null}
 
       {renderedWallAttachments.map(({ attachment, resolved }) => {
         const selected = !readOnly && attachment.id === selectedWallAttachmentId;

@@ -106,6 +106,8 @@ async function main() {
   if (!draft) throw new Error("Draft not readable");
 
   const extracted = await extractMenuText({
+    restaurantId: pick.restaurantId,
+    draftId: pick.draftId,
     sourceType: draft.sourceType,
     menuType: draft.menuType,
     storagePath: draft.storagePath,

@@ -37,8 +37,8 @@ const STRUCTURAL_TOOL_HINTS: Record<
   wall: {
     icon: "🧱",
     cursor: "crosshair",
-    idleHint: "Haz clic para comenzar un muro.",
-    drawingHint: "Mueve el cursor y haz clic para finalizar.",
+    idleHint: "Haz clic para fijar el inicio del muro.",
+    drawingHint: "Muro iniciado. Mueve el cursor y haz otro clic para terminar.",
   },
   door: {
     icon: "🚪",

@@ -2968,26 +2968,8 @@ body {
   gap: var(--hostly-op-gap-md);
 }
 
-.hostly-dashboard-brand-lockup {
+.hostly-dashboard-brand-mark {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--hostly-navy-deep);
-}
-
-.hostly-dashboard-brand-lockup__wordmark {
-  display: none;
-  font-size: 15px;
-  font-weight: 850;
-  letter-spacing: -0.04em;
-  color: var(--hostly-ink-strong);
-}
-
-@media (min-width: 768px) {
-  .hostly-dashboard-brand-lockup__wordmark {
-    display: inline-flex;
-  }
 }
 
 .hostly-dashboard-command-eyebrow {
@@ -3253,7 +3235,7 @@ body {
 
 .hostly-dashboard-command-dock {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -3325,7 +3307,7 @@ body {
 
 @media (min-width: 768px) {
   .hostly-dashboard-command-dock {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -3335,7 +3317,7 @@ body {
   }
 
   .hostly-dashboard-command-dock {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -6686,19 +6668,8 @@ body {
 }
 
 .hostly-config-hub__brand {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 7px;
+  flex: 0 0 auto;
   margin-bottom: 1px;
-  color: var(--hostly-navy-deep);
-}
-
-.hostly-config-hub__brand-wordmark {
-  font-size: 13px;
-  font-weight: 850;
-  letter-spacing: -0.04em;
-  color: var(--hostly-ink-strong);
 }
 
 .hostly-config-hub__eyebrow {
@@ -12111,10 +12082,18 @@ main:has(.hostly-carta-config-stack--productos) .hostly-module-header-actions {
   gap: 4px;
   max-width: 100%;
   min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  box-sizing: border-box;
   border-radius: 6px;
   cursor: text;
   outline: none;
-  transition: background-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
+  touch-action: manipulation;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.hostly-data-table--inline-edit .hostly-productos-inline-cell__display--editable:not(.is-disabled) {
+  border-bottom: 1px dashed color-mix(in srgb, var(--hostly-accent) 22%, transparent);
 }
 
 .hostly-data-table--inline-edit .hostly-productos-inline-cell__display--name {
@@ -12128,8 +12107,14 @@ main:has(.hostly-carta-config-stack--productos) .hostly-module-header-actions {
   width: 100%;
 }
 
-.hostly-data-table--inline-edit .hostly-productos-inline-cell__display:hover:not(.is-disabled) {
+.hostly-data-table--inline-edit .hostly-productos-inline-cell__display:hover:not(.is-disabled),
+.hostly-data-table--inline-edit .hostly-productos-inline-cell__display:focus-visible:not(.is-disabled) {
   background: color-mix(in srgb, var(--hostly-accent) 8%, transparent);
+}
+
+.hostly-data-table--inline-edit .hostly-productos-inline-cell__display--editable:not(.is-disabled):hover,
+.hostly-data-table--inline-edit .hostly-productos-inline-cell__display--editable:not(.is-disabled):focus-visible {
+  border-bottom-color: color-mix(in srgb, var(--hostly-accent) 48%, transparent);
 }
 
 .hostly-data-table--inline-edit .hostly-productos-inline-cell__display:focus-visible:not(.is-disabled) {
@@ -12163,6 +12148,7 @@ main:has(.hostly-carta-config-stack--productos) .hostly-module-header-actions {
 .hostly-productos-inline-cell__input {
   width: 100%;
   min-width: 0;
+  min-height: 44px;
   box-sizing: border-box;
   border: 1px solid color-mix(in srgb, var(--hostly-accent) 42%, var(--hostly-table-divider-soft));
   border-radius: 6px;
@@ -12170,8 +12156,9 @@ main:has(.hostly-carta-config-stack--productos) .hostly-module-header-actions {
   color: var(--hostly-ink-strong);
   font: inherit;
   letter-spacing: inherit;
-  padding: 3px 7px;
+  padding: 6px 8px;
   line-height: 1.25;
+  touch-action: manipulation;
 }
 
 .hostly-productos-inline-cell__input--price {

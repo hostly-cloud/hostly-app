@@ -39,7 +39,6 @@ export default function EditorSalaV2PreviewPage() {
       <SalaEditorWorkspace
         restaurantId={restaurantId}
         currentUserId={user?.uid ?? null}
-        legacyEditorHref="/dashboard/configuracion/espacios/mesas"
       />
     </div>
   );

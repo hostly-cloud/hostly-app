@@ -146,6 +146,19 @@ export function mergeOrderItemsForPersist(
   return merged;
 }
 
+/**
+ * Líneas que pueden pasar por upsert de borrador (`markSent: false`).
+ * Excluye enviadas / preparación / servidas / canceladas para no provocar
+ * `LINE_STATE_CONFLICT` al incluir lineIds ya autoritativos en producción.
+ */
+export function selectDraftPersistableFirestoreItems(
+  items: readonly Record<string, unknown>[],
+): Record<string, unknown>[] {
+  return items.filter(
+    (item) => normalizeProductionLineStatus(item.status) === "pending",
+  );
+}
+
 /** Total facturable tras merge (líneas no canceladas con cantidad > 0). */
 export function computeBillableTotalFromPersistItems(
   items: readonly Record<string, unknown>[],

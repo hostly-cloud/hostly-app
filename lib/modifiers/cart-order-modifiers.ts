@@ -208,17 +208,8 @@ export function resolveCategoryForProduct(
   categories: readonly CartaCategoria[],
 ): CartaCategoria | null {
   const categoryId = product.categoryId?.trim();
-  if (categoryId) {
-    const byId = categories.find((c) => c.id === categoryId);
-    if (byId) return byId;
-  }
-  const name = String(product.categoria ?? "")
-    .trim()
-    .toLowerCase();
-  if (!name) return null;
-  return (
-    categories.find((c) => c.name.trim().toLowerCase() === name) ?? null
-  );
+  if (!categoryId) return null;
+  return categories.find((c) => c.id === categoryId) ?? null;
 }
 
 export function resolveActiveEffectiveModifierGroups(

@@ -1,4 +1,4 @@
-import { doc, setDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 
 /**
@@ -14,8 +14,11 @@ export async function syncUserRestaurantName(
   if (!uid || !name) return;
 
   const payload = { restaurantName: name };
-  await Promise.all([
-    setDoc(doc(db, "users", uid), payload, { merge: true }),
-    setDoc(doc(db, "usuarios", uid), payload, { merge: true }),
-  ]);
+  const refs = [doc(db, "users", uid), doc(db, "usuarios", uid)] as const;
+  const snapshots = await Promise.all(refs.map((ref) => getDoc(ref)));
+  await Promise.all(
+    snapshots.map((snapshot, index) =>
+      snapshot.exists() ? updateDoc(refs[index], payload) : Promise.resolve(),
+    ),
+  );
 }

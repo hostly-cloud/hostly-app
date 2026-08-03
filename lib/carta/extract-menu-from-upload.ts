@@ -1,6 +1,7 @@
 import { mapAiMenuItemsToExtractedRows, type AiMenuDetectedItem } from "@/lib/carta/map-ai-menu-items-to-rows";
 import type { ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
 import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { auth } from "@/lib/firebase/client";
 
 export class MenuImportNoProductsError extends Error {
   readonly code = "NO_PRODUCTS_DETECTED" as const;
@@ -35,10 +36,27 @@ export async function extractMenuFromUpload(file: File): Promise<{
   rows: ExtractedMenuRow[];
   ocrTextLength?: number;
 }> {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new MenuImportExtractError("UNAUTHORIZED", "UNAUTHORIZED");
+  }
+  let token: string;
+  try {
+    token = await user.getIdToken();
+  } catch {
+    throw new MenuImportExtractError(
+      "No se pudo validar la sesión. Vuelve a intentarlo.",
+      "AUTH_TOKEN_UNAVAILABLE",
+    );
+  }
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch("/api/ai/import-menu", { method: "POST", body: formData });
+  const res = await fetch("/api/ai/import-menu", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
   const text = await res.text();
   let json: ImportMenuApiResponse | null = null;
   try {

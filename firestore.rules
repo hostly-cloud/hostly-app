@@ -6,87 +6,153 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userProfileData() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
-        : (
-          exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
-            ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data
-            : null
-        );
+    function canonicalProfileExists() {
+      return isAuth()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function userRestaurantId() {
-      let profile = userProfileData();
-      return profile != null && profile.restaurantId is string
-        ? profile.restaurantId
+    function profileMirrorExists() {
+      return isAuth()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function canonicalProfileData() {
+      return canonicalProfileExists()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
         : null;
     }
 
-    // Rol crudo del perfil (`users/{uid}` o `usuarios/{uid}`).
-    function userRole() {
-      let profile = userProfileData();
+    function profileMirrorData() {
+      return profileMirrorExists()
+        ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data
+        : null;
+    }
+
+    function normalizedProfileStatus(profile) {
+      return !profile.keys().hasAny(['status'])
+          || profile.status == null
+          || !(profile.status is string)
+          || profile.status.size() == 0
+        ? 'invalid'
+        : (
+          profile.status.lower() == 'active' || profile.status.lower() == 'enabled'
+          ? 'active'
+          : (
+            profile.status.lower() == 'disabled'
+            || profile.status.lower() == 'inactive'
+            || profile.status.lower() == 'blocked'
+            || profile.status.lower() == 'suspended'
+            || profile.status.lower() == 'deactivated'
+            ? 'disabled'
+            : 'invalid'
+          )
+        );
+    }
+
+    function normalizeRoleValue(role) {
+      let value = role.lower();
+      return value.matches('^(owner|propietario)$') ? 'owner'
+        : value.matches('^(admin|administrator)$') ? 'admin'
+        : value.matches('^(manager|gerente|encargado)$') ? 'manager'
+        : value.matches('^(staff|operativo|operational|employee|empleado|waiter|camarero|camarera|staff_tpv)$') ? 'waiter'
+        : value.matches('^(kitchen|cocina|cook)$') ? 'kitchen'
+        : value.matches('^(viewer|readonly|read_only)$') ? 'viewer'
+        : 'denied';
+    }
+
+    function optionalProfileFieldsMatch(canonical, mirror) {
+      let restaurantIdsMatch =
+        !canonical.keys().hasAny(['restaurantIds'])
+          && !mirror.keys().hasAny(['restaurantIds'])
+        || (
+          canonical.keys().hasAny(['restaurantIds'])
+          && mirror.keys().hasAny(['restaurantIds'])
+          && canonical.restaurantIds == mirror.restaurantIds
+        );
+      let permissionsMatch =
+        !canonical.keys().hasAny(['permissions'])
+          && !mirror.keys().hasAny(['permissions'])
+        || (
+          canonical.keys().hasAny(['permissions'])
+          && mirror.keys().hasAny(['permissions'])
+          && canonical.permissions == mirror.permissions
+        );
+      let capabilitiesMatch =
+        !canonical.keys().hasAny(['capabilities'])
+          && !mirror.keys().hasAny(['capabilities'])
+        || (
+          canonical.keys().hasAny(['capabilities'])
+          && mirror.keys().hasAny(['capabilities'])
+          && canonical.capabilities == mirror.capabilities
+        );
+      return restaurantIdsMatch && permissionsMatch && capabilitiesMatch;
+    }
+
+    function isRecognizedProfileRole(role) {
+      let value = role.lower();
+      return value.matches(
+        '^(owner|propietario|admin|administrator|manager|gerente|encargado|staff|operativo|operational|employee|empleado|waiter|camarero|camarera|staff_tpv|kitchen|cocina|cook|viewer|readonly|read_only)$'
+      );
+    }
+
+    function profileMirrorsMatch() {
+      let canonical = canonicalProfileData();
+      let mirror = profileMirrorData();
+      let tokenEmail = request.auth.token.email;
+      return canonical != null
+        && mirror != null
+        && (!canonical.keys().hasAny(['uid']) || canonical.uid == request.auth.uid)
+        && (!mirror.keys().hasAny(['uid']) || mirror.uid == request.auth.uid)
+        && canonical.email is string
+        && mirror.email is string
+        && tokenEmail is string
+        && canonical.email.lower() == mirror.email.lower()
+        && canonical.email.lower() == tokenEmail.lower()
+        && canonical.restaurantId is string
+        && mirror.restaurantId is string
+        && canonical.restaurantId.size() > 0
+        && canonical.restaurantId == mirror.restaurantId
+        && canonical.role is string
+        && mirror.role is string
+        && canonical.role.size() > 0
+        && mirror.role.size() > 0
+        && isRecognizedProfileRole(canonical.role)
+        && isRecognizedProfileRole(mirror.role)
+        && normalizeRoleValue(canonical.role) == normalizeRoleValue(mirror.role)
+        && normalizeRoleValue(canonical.role) != 'denied'
+        && normalizedProfileStatus(canonical) == 'active'
+        && normalizedProfileStatus(canonical) == normalizedProfileStatus(mirror)
+        && optionalProfileFieldsMatch(canonical, mirror);
+    }
+
+    function hasAuthorizedProfile() {
+      return isAuth()
+        && canonicalProfileExists()
+        && profileMirrorExists()
+        && profileMirrorsMatch()
+        && normalizedProfileStatus(canonicalProfileData()) == 'active';
+    }
+
+    // Rol canónico sin reevaluar mirrors (usar solo tras hasAuthorizedProfile/sameRestaurant).
+    function canonicalNormalizedRole() {
+      let profile = canonicalProfileData();
       return profile != null && profile.role is string
-        ? profile.role.lower()
-        : '';
+        ? normalizeRoleValue(profile.role)
+        : 'denied';
     }
 
-    // Matriz alineada con lib/auth/hostly-capabilities.ts (Fase 5 / 5B).
-    // Sin role en perfil → viewer (denegar elevación por defecto).
-    // staff Firebase → manager (legacy operacional).
-    function normalizedRole() {
-      let role = userRole();
-      return role == 'owner' || role == 'propietario' ? 'owner'
-        : role == 'admin' || role == 'administrator' ? 'admin'
-        : role == 'manager' || role == 'gerente' ? 'manager'
-        : role == 'waiter' || role == 'camarero' || role == 'camarera' || role == 'staff_tpv' ? 'waiter'
-        : role == 'kitchen' || role == 'cocina' || role == 'cook' ? 'kitchen'
-        : role == 'viewer' || role == 'readonly' || role == 'read_only' ? 'viewer'
-        : role == 'staff' ? 'manager'
-        : 'viewer';
-    }
-
-    function isOwnerOrAdmin() {
-      let role = normalizedRole();
-      return role == 'owner' || role == 'admin';
-    }
-
-    function isManagerOrAbove() {
-      let role = normalizedRole();
-      return role == 'owner' || role == 'admin' || role == 'manager';
-    }
-
-    function hasOperationalRole(roleName) {
-      return normalizedRole() == roleName;
-    }
-
-    function canManageInventory() {
-      return isManagerOrAbove();
-    }
-
-    function canManagePurchases() {
-      return isManagerOrAbove();
-    }
-
-    function canManageSupplierInvoices() {
-      return isManagerOrAbove();
+    function canSellTpv() {
+      return canonicalNormalizedRole().matches('^(owner|admin|manager|waiter)$');
     }
 
     // Fase 5C: activo en payments create.
     function canChargeTpv() {
-      let role = normalizedRole();
-      return isOwnerOrAdmin() || role == 'manager' || role == 'waiter';
-    }
-
-    // Fase 5C: activo en orderItems update cuando isCancellingOrderLine().
-    function canCancelTpvLine() {
-      let role = normalizedRole();
-      return isOwnerOrAdmin() || role == 'manager' || role == 'waiter';
+      return canonicalNormalizedRole().matches('^(owner|admin|manager|waiter)$');
     }
 
     // Fase 5D: activo en payments update cuando isRefundWrite() (tpv.refund → manager+).
     function canRefundTpv() {
-      return isManagerOrAbove();
+      return canonicalNormalizedRole().matches('^(owner|admin|manager)$');
     }
 
     function isCancelledLineStatus(status) {
@@ -102,31 +168,6 @@ service cloud.firestore {
       return data.quantity is number
         ? data.quantity
         : (data.qty is number ? data.qty : null);
-    }
-
-    // Detecta cancelaciones explícitas en orderItems (no updates KDS sent→preparing→prepared/ready→served).
-    function isCancellingOrderLine() {
-      let before = resource.data;
-      let after = request.resource.data;
-      let diff = after.diff(before);
-      let affected = diff.affectedKeys();
-
-      let statusToCancelled = affected.hasAny(['status'])
-        && isCancelledLineStatus(after.status)
-        && !isCancelledLineStatus(before.status);
-
-      let cancelledAtSet = affected.hasAny(['cancelledAt'])
-        && after.cancelledAt is int
-        && (!(before.cancelledAt is int) || before.cancelledAt == null);
-
-      let beforeQty = orderItemLineQuantity(before);
-      let afterQty = orderItemLineQuantity(after);
-      let quantityToZero = (affected.hasAny(['quantity']) || affected.hasAny(['qty']))
-        && afterQty is number
-        && afterQty <= 0
-        && (beforeQty == null || beforeQty > 0);
-
-      return statusToCancelled || cancelledAtSet || quantityToZero;
     }
 
     function paymentUpdateTouchesRefundStatus() {
@@ -181,27 +222,522 @@ service cloud.firestore {
       return paymentUpdateTouchesRefundStatus() || paymentUpdateTouchesRefundFields();
     }
 
-    // Fase 5D: wired en orders update; hoy siempre false (schema sin cancelledLineIds).
-    // Cuando el TPV escriba cancelledLineIds al cancelar, exigirá canCancelTpvLine().
-    // orders.items[] cancellation remains soft-protected by UI + orderItems rules until schema adds cancelledLineIds.
-    function isCancellingOrderItemsArray() {
-      let before = resource.data;
+    function isManagerOrAbove() {
+      let role = canonicalNormalizedRole();
+      return role == 'owner' || role == 'admin' || role == 'manager';
+    }
+
+    function canManageInventory() {
+      return isManagerOrAbove();
+    }
+
+    function canViewInventory() {
+      return isManagerOrAbove();
+    }
+
+    function canManagePurchases() {
+      return isManagerOrAbove();
+    }
+
+    function canViewPurchases() {
+      return isManagerOrAbove();
+    }
+
+    function canManageSupplierInvoices() {
+      return isManagerOrAbove();
+    }
+
+    function isAllowedOrderItemCreate() {
+      let data = request.resource.data;
+      let profile = canonicalProfileData();
+      return hasAuthorizedProfile()
+        && profile != null
+        && profile.keys().hasAny(['restaurantId'])
+        && data.keys().hasAny(['restaurantId'])
+        && data.restaurantId == profile.restaurantId
+        && canSellTpv()
+        && !data.keys().hasAny([
+          'preparedAt',
+          'readyAt',
+          'servedAt',
+          'preparingAt',
+          'cancelledAt',
+          'cancelledBy',
+          'refund',
+          'refunded',
+          'refundedAt',
+          'refundAmount',
+          'tableGroupSourceTableId',
+          'tableGroupSourceOrderId',
+        ])
+        && data.keys().hasOnly([
+          'restaurantId',
+          'orderId',
+          'tableId',
+          'tableName',
+          'mesaId',
+          'lineId',
+          'productId',
+          'name',
+          'quantity',
+          'qty',
+          'status',
+          'sentAt',
+          'createdAt',
+          'updatedAt',
+          'categoryName',
+          'course',
+          'extras',
+          'selectedModifiers',
+          'modifierTotal',
+          'modifiersLabel',
+          'displayName',
+          'note',
+          'stationId',
+          'stationName',
+          'operationStationId',
+          'operationStationName',
+          'inventoryCost',
+          'id',
+          'price',
+        ])
+        && data.status is string
+        && data.status.lower().matches('^(pending|sent)$');
+    }
+
+    function orderItemImmutableOk(affected) {
       let after = request.resource.data;
-      let diff = after.diff(before);
-      return diff.affectedKeys().hasAny(['items'])
-        && after.keys().hasAny(['cancelledLineIds'])
-        && (
-          !(before.keys().hasAny(['cancelledLineIds']))
-          || after.cancelledLineIds != before.cancelledLineIds
-        );
+      let before = resource.data;
+      return (!affected.hasAny(['restaurantId'])
+          || (after.keys().hasAny(['restaurantId'])
+            && before.keys().hasAny(['restaurantId'])
+            && after.restaurantId == before.restaurantId))
+        && (!affected.hasAny(['orderId'])
+          || (after.keys().hasAny(['orderId'])
+            && before.keys().hasAny(['orderId'])
+            && after.orderId == before.orderId))
+        && (!affected.hasAny(['productId'])
+          || (after.keys().hasAny(['productId'])
+            && before.keys().hasAny(['productId'])
+            && after.productId == before.productId))
+        && (!affected.hasAny(['price'])
+          || (before.keys().hasAny(['price'])
+            && after.keys().hasAny(['price'])
+            && after.price == before.price)
+          || (!before.keys().hasAny(['price']) && !after.keys().hasAny(['price'])));
+    }
+
+    function orderItemIsCancelUpdate(affected) {
+      let after = request.resource.data;
+      return (affected.hasAny(['cancelledAt'])
+          && after.keys().hasAny(['cancelledAt'])
+          && after.cancelledAt is int)
+        || (affected.hasAny(['status'])
+          && after.keys().hasAny(['status'])
+          && isCancelledLineStatus(after.status));
+    }
+
+    function orderItemIsKdsUpdate(affected) {
+      let after = request.resource.data;
+      return affected.hasAny(['preparedAt', 'servedAt', 'preparingAt', 'readyAt', 'kitchenStatus'])
+        || (affected.hasAny(['status'])
+          && after.keys().hasAny(['status'])
+          && after.status is string
+          && after.status.lower().matches('^(preparing|prepared|served|ready)$'));
+    }
+
+    function isAllowedOrderItemUpdate() {
+      let affected = request.resource.data.diff(resource.data).affectedKeys();
+      let role = canonicalNormalizedRole();
+      let after = request.resource.data;
+      let before = resource.data;
+      let profile = canonicalProfileData();
+      let isCancel = orderItemIsCancelUpdate(affected);
+      let isKds = !isCancel && orderItemIsKdsUpdate(affected);
+      return resource != null
+        && hasAuthorizedProfile()
+        && profile != null
+        && profile.keys().hasAny(['restaurantId'])
+        && before.keys().hasAny(['restaurantId'])
+        && after.keys().hasAny(['restaurantId'])
+        && before.restaurantId == profile.restaurantId
+        && after.restaurantId == before.restaurantId
+        && orderItemImmutableOk(affected)
+        && (isCancel
+          ? role.matches('^(owner|admin|manager|waiter)$')
+            && affected.hasOnly([
+              'status',
+              'cancelledAt',
+              'cancelledBy',
+              'updatedAt',
+              'quantity',
+              'qty',
+            ])
+          : (isKds
+            ? role.matches('^(owner|admin|manager|kitchen)$')
+              && affected.hasOnly([
+                'status',
+                'preparingAt',
+                'readyAt',
+                'preparedAt',
+                'servedAt',
+                'kitchenStatus',
+                'updatedAt',
+              ])
+            : role.matches('^(owner|admin|manager|waiter)$')
+              && affected.hasOnly([
+                'quantity',
+                'qty',
+                'updatedAt',
+                'extras',
+                'note',
+                'displayName',
+                'isComped',
+                'compedAt',
+                'compedReason',
+                'selectedModifiers',
+                'modifierTotal',
+                'modifiersLabel',
+              ])));
+    }
+
+    function isAllowedPaymentUpdate() {
+      return resource != null
+        && resource.data.keys().hasAny(['restaurantId'])
+        && request.resource.data.keys().hasAny(['restaurantId'])
+        && sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && (!isRefundWrite() || canRefundTpv());
+    }
+
+    function isAllowedPaymentCreate() {
+      let data = request.resource.data;
+      let profile = canonicalProfileData();
+      return hasAuthorizedProfile()
+        && profile != null
+        && profile.keys().hasAny(['restaurantId'])
+        && data.keys().hasAny(['restaurantId'])
+        && data.restaurantId == profile.restaurantId
+        && canChargeTpv()
+        && !data.keys().hasAny([
+          'refund',
+          'refunded',
+          'refundedAt',
+          'refundAmount',
+        ])
+        && data.keys().hasOnly([
+          'restaurantId',
+          'tableId',
+          'tableName',
+          'total',
+          'amount',
+          'originalTotal',
+          'discountAmount',
+          'discountPercent',
+          'discountPercentAmount',
+          'discountTotal',
+          'finalTotal',
+          'paymentMethod',
+          'orderSessionId',
+          'orderId',
+          'waiterId',
+          'waiterEmail',
+          'tip',
+          'received',
+          'voucherAmount',
+          'voucherUsed',
+          'voucherRemaining',
+          'voucherNumber',
+          'part',
+          'totalParts',
+          'ticketNumber',
+          'status',
+          'type',
+          'paymentKind',
+          'isPartial',
+          'remainingAfterPayment',
+          'accountFinalTotal',
+          'createdBy',
+          'createdAt',
+          'updatedAt',
+          'cashReceived',
+          'change',
+          'itemIds',
+          'invoiceName',
+          'invoiceTaxId',
+          'invoiceAddress',
+          'invoiceEmail',
+        ])
+        && (!data.keys().hasAny(['amount'])
+          || (data.amount is number && data.amount >= 0))
+        && (!data.keys().hasAny(['total'])
+          || (data.total is number && data.total >= 0))
+        && (!data.keys().hasAny(['status'])
+          || (data.status is string && data.status.lower() == 'paid'))
+        && (!data.keys().hasAny(['type'])
+          || (data.type is string
+            && data.type.lower().matches('^(table_amount|split_equal|split_by_items)$')))
+        && data.keys().hasAny(['status', 'type'])
+        && data.status is string
+        && data.status.lower() == 'paid'
+        && data.type is string
+        && data.type.lower().matches('^(table_amount|split_equal|split_by_items)$')
+        && (!data.keys().hasAny(['paymentKind'])
+          || (data.paymentKind is string
+            && data.paymentKind.lower().matches('^(final|partial)$')));
     }
 
     function canManageSettings() {
-      return isOwnerOrAdmin();
+      // Se usa únicamente después de `sameRestaurant()`, que ya valida auth,
+      // mirrors, status y tenant. Evita repetir toda la evaluación del perfil.
+      let role = canonicalProfileData().role.lower();
+      return role == 'owner'
+        || role == 'propietario'
+        || role == 'admin'
+        || role == 'administrator';
     }
 
-    function canManageUsers() {
-      return isOwnerOrAdmin();
+    function isValidMenuImportSourceType(value) {
+      return value == 'image' || value == 'pdf' || value == 'qr_url';
+    }
+
+    function isValidMenuImportMenuType(value) {
+      return value == 'food'
+        || value == 'drinks'
+        || value == 'wine'
+        || value == 'cocktails'
+        || value == 'mixed';
+    }
+
+    function hasValidMenuImportStoragePath(data, restaurantId, draftId) {
+      return !data.keys().hasAny(['storagePath'])
+        || (
+          data.storagePath is string
+          && restaurantId.matches('^[A-Za-z0-9_-]+$')
+          && draftId.matches('^[A-Za-z0-9_-]+$')
+          && data.storagePath == data.storagePath.trim()
+          && data.storagePath.matches(
+            '^restaurants/' + restaurantId + '/menu-imports/' + draftId + '/[A-Za-z0-9._-]{1,120}$'
+          )
+          && !data.storagePath.matches('.*[.][.].*')
+          && data.storagePath
+            != 'restaurants/' + restaurantId + '/menu-imports/' + draftId + '/.'
+        );
+    }
+
+    function hasValidMenuImportOriginalFileName(data) {
+      return data.keys().hasAll(['originalFileName'])
+        && data.originalFileName is string
+        && data.originalFileName.matches('^[A-Za-z0-9._-]{1,120}$')
+        && !data.originalFileName.matches('.*[.][.].*')
+        && data.originalFileName != '.';
+    }
+
+    function isValidMenuImportDraftCreate(restaurantId, draftId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'id',
+          'restaurantId',
+          'sourceType',
+          'menuType',
+          'status',
+          'sections',
+          'items',
+          'createdAt',
+          'updatedAt',
+          'createdBy',
+          'updatedBy',
+          'serverSavedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'restaurantId',
+          'sourceType',
+          'sourceUrl',
+          'menuType',
+          'status',
+          'sections',
+          'items',
+          'createdAt',
+          'updatedAt',
+          'createdBy',
+          'updatedBy',
+          'serverSavedAt'
+        ])
+        && data.id == draftId
+        && data.restaurantId == restaurantId
+        && isValidMenuImportSourceType(data.sourceType)
+        && isValidMenuImportMenuType(data.menuType)
+        && data.status == 'draft'
+        && data.sections is list
+        && data.sections.size() == 0
+        && data.items is list
+        && data.items.size() == 0
+        && data.createdAt is int
+        && data.updatedAt == data.createdAt
+        && data.createdBy == request.auth.uid
+        && data.updatedBy == request.auth.uid
+        && data.serverSavedAt == request.time;
+    }
+
+    function isValidMenuImportDraftClientUpdate(restaurantId, draftId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let assignsFile = changed.hasOnly([
+        'sourceUrl',
+        'storagePath',
+        'originalFileName',
+        'updatedAt',
+        'updatedBy'
+      ])
+        && !resource.data.keys().hasAny([
+          'storagePath',
+          'originalFileName'
+        ])
+        && request.resource.data.keys().hasAll([
+          'storagePath',
+          'originalFileName'
+        ])
+        && hasValidMenuImportOriginalFileName(request.resource.data)
+        && request.resource.data.storagePath
+          == 'restaurants/' + restaurantId + '/menu-imports/' + draftId
+            + '/' + request.resource.data.originalFileName;
+      let updatesSourceUrlOnly = changed.hasOnly([
+        'sourceUrl',
+        'updatedAt',
+        'updatedBy'
+      ]);
+      let preservesAssignedFile =
+        !resource.data.keys().hasAny(['storagePath', 'originalFileName'])
+        || (
+          request.resource.data.keys().hasAll([
+            'storagePath',
+            'originalFileName'
+          ])
+          && request.resource.data.storagePath == resource.data.storagePath
+          && request.resource.data.originalFileName
+            == resource.data.originalFileName
+        );
+      return request.resource.data.restaurantId == resource.data.restaurantId
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedAt is int
+        && request.resource.data.updatedAt >= resource.data.updatedAt
+        && request.resource.data.updatedBy == request.auth.uid
+        && hasValidMenuImportStoragePath(
+          request.resource.data,
+          restaurantId,
+          draftId
+        )
+        && preservesAssignedFile
+        && (assignsFile || updatesSourceUrlOnly)
+        && resource.data.status == 'draft'
+        && request.resource.data.status == 'draft';
+    }
+
+    function supplierAliasHasValidShape(restaurantId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'restaurantId',
+          'rawText',
+          'normalizedText',
+          'inventoryProductId',
+          'inventoryProductName',
+          'usageCount',
+          'active',
+          'deletedAt',
+          'createdAt',
+          'updatedAt',
+          'lastUsedAt',
+          'matchSource'
+        ])
+        && data.keys().hasOnly([
+          'restaurantId',
+          'rawText',
+          'normalizedText',
+          'inventoryProductId',
+          'inventoryProductName',
+          'supplierName',
+          'usageCount',
+          'active',
+          'createdAt',
+          'updatedAt',
+          'lastUsedAt',
+          'deletedAt',
+          'learnedFromInvoiceId',
+          'matchSource'
+        ])
+        && data.restaurantId == restaurantId
+        && data.rawText is string
+        && data.rawText.size() > 0
+        && data.rawText.size() <= 240
+        && data.normalizedText is string
+        && data.normalizedText.size() > 0
+        && data.normalizedText.size() <= 240
+        && data.inventoryProductId is string
+        && data.inventoryProductId.size() > 0
+        && data.inventoryProductId.size() <= 128
+        && data.inventoryProductName is string
+        && data.inventoryProductName.size() > 0
+        && data.inventoryProductName.size() <= 160
+        && (
+          !data.keys().hasAny(['supplierName'])
+          || (
+            data.supplierName is string
+            && data.supplierName.size() > 0
+            && data.supplierName.size() <= 160
+          )
+        )
+        && (
+          !data.keys().hasAny(['learnedFromInvoiceId'])
+          || (
+            data.learnedFromInvoiceId is string
+            && data.learnedFromInvoiceId.size() > 0
+            && data.learnedFromInvoiceId.size() <= 128
+          )
+        )
+        && data.usageCount is int
+        && data.usageCount >= 0
+        && data.active is bool
+        && (data.deletedAt == null || data.deletedAt is int)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.lastUsedAt is timestamp
+        && (data.matchSource == 'auto' || data.matchSource == 'manual');
+    }
+
+    function isValidSupplierAliasCreate(restaurantId) {
+      return supplierAliasHasValidShape(restaurantId)
+        && request.resource.data.usageCount == 1
+        && request.resource.data.active == true
+        && request.resource.data.deletedAt == null
+        && request.resource.data.matchSource == 'auto'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastUsedAt == request.time;
+    }
+
+    function isValidSupplierAliasUpdate(restaurantId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let after = request.resource.data;
+      return changed.hasOnly([
+          'rawText',
+          'inventoryProductId',
+          'inventoryProductName',
+          'supplierName',
+          'usageCount',
+          'active',
+          'updatedAt',
+          'lastUsedAt',
+          'deletedAt',
+          'learnedFromInvoiceId',
+          'matchSource'
+        ])
+        && after.restaurantId == resource.data.restaurantId
+        && after.restaurantId == restaurantId
+        && after.normalizedText == resource.data.normalizedText
+        && after.createdAt == resource.data.createdAt
+        && after.updatedAt == request.time;
     }
 
     function productCreateTouchesInventory() {
@@ -212,62 +748,50 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(['inventory']);
     }
 
-    function profileHasRestaurant(profile, restaurantId) {
-      return profile.restaurantId == restaurantId
-        || (profile.restaurantIds is list && restaurantId in profile.restaurantIds)
-        || (
-          profile.restaurantIds is map
-          && profile.restaurantIds.keys().hasAny([restaurantId])
-        );
+    function sameRestaurant(resourceRestaurantId) {
+      return hasAuthorizedProfile()
+        && canonicalProfileData().restaurantId == resourceRestaurantId;
     }
 
-    function sameRestaurant(resourceRestaurantId) {
-      return isAuth()
-        && (
-          (
-            exists(/databases/$(database)/documents/users/$(request.auth.uid))
-            && profileHasRestaurant(
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data,
-              resourceRestaurantId
-            )
-          )
-          || (
-            exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
-            && profileHasRestaurant(
-              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data,
-              resourceRestaurantId
-            )
-          )
-        );
+    function isSafeOwnProfileUpdate(userId) {
+      return hasAuthorizedProfile()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['restaurantName'])
+        && request.resource.data.restaurantName is string
+        && request.resource.data.restaurantName.size() > 0
+        && request.resource.data.restaurantName.size() <= 120;
     }
 
     // USERS
     match /users/{userId} {
-      allow read, write: if isAuth() && request.auth.uid == userId;
+      allow read: if isAuth() && request.auth.uid == userId;
+      allow create: if false;
+      allow update: if isSafeOwnProfileUpdate(userId);
+      allow delete: if false;
     }
 
     // Legacy user profile mirror used by older Hostly accounts.
     match /usuarios/{userId} {
-      allow read, write: if isAuth() && request.auth.uid == userId;
+      allow read: if isAuth() && request.auth.uid == userId;
+      allow create: if false;
+      allow update: if isSafeOwnProfileUpdate(userId);
+      allow delete: if false;
     }
 
     // PRODUCTS
     match /products/{productId} {
-      allow read, write: if sameRestaurant(resource.data.restaurantId);
+      allow read: if sameRestaurant(resource.data.restaurantId);
       allow create: if sameRestaurant(request.resource.data.restaurantId);
+      allow update: if sameRestaurant(resource.data.restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+      allow delete: if sameRestaurant(resource.data.restaurantId);
     }
 
     // INVITES
     match /restaurant_invites/{inviteId} {
-      allow read: if isAuth() && resource.data.email == request.auth.token.email;
-
-      allow create: if isAuth()
-        && request.resource.data.restaurantId == userRestaurantId();
-
-      allow update: if isAuth()
-        && resource.data.email == request.auth.token.email;
-
-      allow delete: if false;
+      // Toda gestión pasa por endpoints Admin tenant-scoped con `users.manage`.
+      allow read, create, update, delete: if false;
     }
 
     // Catálogo central por restaurante (ruta explícita; no inferir desde el doc padre).
@@ -275,9 +799,11 @@ service cloud.firestore {
       allow read: if sameRestaurant(restaurantId);
 
       allow create: if sameRestaurant(restaurantId)
+        && isManagerOrAbove()
         && (!productCreateTouchesInventory() || canManageInventory());
 
       allow update: if sameRestaurant(restaurantId)
+        && isManagerOrAbove()
         && (!productUpdateTouchesInventory() || canManageInventory());
 
       // Borrado definitivo: gestión de carta (manager+). Desactivar usa update (active/visibleOnMenu).
@@ -285,23 +811,21 @@ service cloud.firestore {
 
       // Movimientos de stock por producto: append-only + capability inventario.
       match /stockMovements/{movementId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canViewInventory();
         allow create: if sameRestaurant(restaurantId) && canManageInventory();
       }
     }
 
     // Recepciones de inventario central (solo alta y lectura en fase 1).
     match /restaurants/{restaurantId}/inventoryReceipts/{receiptId} {
-      allow read, create: if sameRestaurant(restaurantId);
+      allow read: if sameRestaurant(restaurantId) && canViewInventory();
+      allow create: if sameRestaurant(restaurantId) && canManageInventory();
     }
 
     // RESTAURANTS (doc del restaurante + subcolecciones distintas de products/)
     match /restaurants/{restaurantId} {
-      // Primer restaurante en registro owner: aún no existe users/{uid} ni usuarios/{uid}.
-      allow create: if isAuth()
-        && !exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && !exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
-        && request.resource.data.keys().hasOnly(['name', 'createdAt']);
+      // El alta inicial se realiza únicamente mediante bootstrap Admin autenticado.
+      allow create: if false;
 
       allow read: if sameRestaurant(restaurantId);
       allow update, delete: if sameRestaurant(restaurantId) && canManageSettings();
@@ -321,7 +845,7 @@ service cloud.firestore {
       }
 
       match /inventoryProducts/{inventoryProductId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canViewInventory();
         allow create, update, delete: if false;
       }
 
@@ -357,12 +881,15 @@ service cloud.firestore {
 
       // Borradores de importación de carta (IA / OCR — sin publicar productos).
       match /menuImportDrafts/{draftId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId)
+          && canManageSettings();
         allow create: if sameRestaurant(restaurantId)
-          && request.resource.data.restaurantId == restaurantId;
+          && canManageSettings()
+          && isValidMenuImportDraftCreate(restaurantId, draftId);
         allow update: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && resource.data.restaurantId == restaurantId
-          && request.resource.data.restaurantId == restaurantId;
+          && isValidMenuImportDraftClientUpdate(restaurantId, draftId);
         allow delete: if false;
       }
 
@@ -370,8 +897,10 @@ service cloud.firestore {
       match /operationStations/{stationId} {
         allow read: if sameRestaurant(restaurantId);
         allow create: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && request.resource.data.restaurantId == restaurantId;
         allow update: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && resource.data.restaurantId == restaurantId
           && request.resource.data.restaurantId == restaurantId;
         allow delete: if false;
@@ -381,8 +910,10 @@ service cloud.firestore {
       match /productionStations/{stationId} {
         allow read: if sameRestaurant(restaurantId);
         allow create: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && request.resource.data.restaurantId == restaurantId;
         allow update: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && resource.data.restaurantId == restaurantId
           && request.resource.data.restaurantId == restaurantId;
         allow delete: if false;
@@ -392,8 +923,10 @@ service cloud.firestore {
       match /productFamilies/{familyId} {
         allow read: if sameRestaurant(restaurantId);
         allow create: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && request.resource.data.restaurantId == restaurantId;
         allow update: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && resource.data.restaurantId == restaurantId
           && request.resource.data.restaurantId == restaurantId;
         allow delete: if false;
@@ -403,8 +936,10 @@ service cloud.firestore {
       match /modifierGroups/{groupId} {
         allow read: if sameRestaurant(restaurantId);
         allow create: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && request.resource.data.restaurantId == restaurantId;
         allow update: if sameRestaurant(restaurantId)
+          && canManageSettings()
           && resource.data.restaurantId == restaurantId
           && request.resource.data.restaurantId == restaurantId;
         allow delete: if false;
@@ -423,20 +958,30 @@ service cloud.firestore {
 
       // Ledger central de movimientos (recepciones futuras, venta por modificador, etc.).
       match /stockMovements/{movementId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canViewInventory();
         allow create: if sameRestaurant(restaurantId)
-          && request.resource.data.restaurantId == restaurantId;
+          && canManageInventory()
+          && request.resource.data.restaurantId == restaurantId
+          && !(request.resource.data.source == "modifier_sale"
+            || request.resource.data.type == "modifier_sale");
         allow update: if sameRestaurant(restaurantId)
+          && canManageInventory()
           && resource.data.restaurantId == restaurantId
-          && request.resource.data.restaurantId == restaurantId;
+          && request.resource.data.restaurantId == restaurantId
+          && !(resource.data.source == "modifier_sale"
+            || resource.data.type == "modifier_sale"
+            || request.resource.data.source == "modifier_sale"
+            || request.resource.data.type == "modifier_sale");
       }
 
       // Borradores de pedido sugerido (compras inteligentes — sin envío a proveedor).
       match /purchaseDrafts/{draftId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canViewPurchases();
         allow create: if sameRestaurant(restaurantId)
+          && canManagePurchases()
           && request.resource.data.restaurantId == restaurantId;
         allow update: if sameRestaurant(restaurantId)
+          && canManagePurchases()
           && resource.data.restaurantId == restaurantId
           && request.resource.data.restaurantId == restaurantId;
         allow delete: if false;
@@ -444,7 +989,7 @@ service cloud.firestore {
 
       // Pedidos de compra internos (desde borrador — sin envío a proveedor).
       match /purchaseOrders/{purchaseOrderId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canViewPurchases();
         allow create: if sameRestaurant(restaurantId)
           && request.resource.data.restaurantId == restaurantId
           && canManagePurchases();
@@ -457,7 +1002,7 @@ service cloud.firestore {
 
       // Recepciones operativas de pedidos de compra (ledger central).
       match /purchaseReceipts/{receiptId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canViewPurchases();
         allow create: if sameRestaurant(restaurantId)
           && request.resource.data.restaurantId == restaurantId
           && canManagePurchases();
@@ -470,7 +1015,7 @@ service cloud.firestore {
 
       // Facturas de proveedor (coste real recibido — sin contabilidad ni pagos).
       match /supplierInvoices/{invoiceId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canManageSupplierInvoices();
         allow create: if sameRestaurant(restaurantId)
           && request.resource.data.restaurantId == restaurantId
           && canManageSupplierInvoices();
@@ -483,12 +1028,15 @@ service cloud.firestore {
 
       // Aliases aprendidos OCR facturas proveedor → producto inventario.
       match /supplierProductAliases/{aliasId} {
-        allow read: if sameRestaurant(restaurantId);
+        allow read: if sameRestaurant(restaurantId) && canManageSupplierInvoices();
         allow create: if sameRestaurant(restaurantId)
-          && request.resource.data.restaurantId == restaurantId;
-        allow update: if sameRestaurant(restaurantId)
+          && canManageSupplierInvoices()
+          && isValidSupplierAliasCreate(restaurantId);
+        allow update: if hasAuthorizedProfile()
+          && canonicalProfileData().restaurantId == restaurantId
+          && isManagerOrAbove()
           && resource.data.restaurantId == restaurantId
-          && request.resource.data.restaurantId == resource.data.restaurantId;
+          && isValidSupplierAliasUpdate(restaurantId);
         allow delete: if false;
       }
 
@@ -525,12 +1073,52 @@ service cloud.firestore {
       }
     }
 
-    // TABLES
+    // TABLES — lifecycle server-owned (status/groupId/mainTableId vía API TPV).
     match /tables/{tableId} {
+      function isAllowedTableClientUpdate() {
+        let affected = request.resource.data.diff(resource.data).affectedKeys();
+        let after = request.resource.data;
+        let before = resource.data;
+        return resource != null
+          && before.keys().hasAny(['restaurantId'])
+          && after.keys().hasAny(['restaurantId'])
+          && after.restaurantId == before.restaurantId
+          && sameRestaurant(before.restaurantId)
+          && !affected.hasAny([
+            'status',
+            'occupied',
+            'available',
+            'free',
+            'closed',
+            'groupId',
+            'mainTableId',
+          ])
+          && affected.hasOnly([
+            'name',
+            'label',
+            'zoneId',
+            'zoneName',
+            'guestCount',
+            'dinersCount',
+            'assignedOperatorId',
+            'assignedOperatorName',
+            'assignedAt',
+            'updatedAt',
+            'x',
+            'y',
+            'width',
+            'height',
+            'rotation',
+            'shape',
+            'capacity',
+            'notes',
+            'metadata',
+          ]);
+      }
+
       allow read: if sameRestaurant(resource.data.restaurantId);
       allow create: if sameRestaurant(request.resource.data.restaurantId);
-      allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId;
+      allow update: if isAllowedTableClientUpdate();
       allow delete: if false;
     }
 
@@ -552,25 +1140,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ORDERS — create/update general sin capability gate (Fase 5C/5D).
-    // Protegido: orderItems cancel (canCancelTpvLine). Pendiente: orders.items[] (sin cancelledLineIds).
-    // isCancellingOrderItemsArray() wired; inactivo hasta schema cancelledLineIds (no bloquea KDS hoy).
+    // ORDERS — server-write-only (Admin SDK); lectura multi-tenant en cliente.
     match /orders/{orderId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
-      allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId
-        && (!isCancellingOrderItemsArray() || canCancelTpvLine());
+      allow create: if false;
+      allow update: if false;
       allow delete: if false;
     }
 
     // ORDER ITEMS (líneas enviadas a cocina / KDS / cancel TPV)
     match /orderItems/{orderItemId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId);
-      allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId
-        && (!isCancellingOrderLine() || canCancelTpvLine());
+      allow create: if false;
+      allow update: if false;
       allow delete: if false;
     }
 
@@ -587,11 +1169,8 @@ service cloud.firestore {
     // Fase 5C: create → canChargeTpv(). Fase 5D: update refund/anulación → canRefundTpv().
     match /payments/{paymentId} {
       allow read: if sameRestaurant(resource.data.restaurantId);
-      allow create: if sameRestaurant(request.resource.data.restaurantId)
-        && canChargeTpv();
-      allow update: if sameRestaurant(resource.data.restaurantId)
-        && request.resource.data.restaurantId == resource.data.restaurantId
-        && (!isRefundWrite() || canRefundTpv());
+      allow create: if false;
+      allow update: if false;
       allow delete: if false;
     }
 

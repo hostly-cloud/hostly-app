@@ -18,16 +18,21 @@ function isImageContent(contentType: string, fileName?: string): boolean {
 }
 
 async function resolveImageDataUrl(args: {
+  restaurantId: string;
+  draftId: string;
   sourceType: "image" | "pdf" | "qr_url";
   storagePath?: string;
   originalFileName?: string;
 }): Promise<string | undefined> {
   if (args.sourceType !== "image") return undefined;
-  const storagePath = args.storagePath?.trim();
-  if (!storagePath) return undefined;
+  const storagePath = args.storagePath;
+  if (typeof storagePath !== "string" || !storagePath) return undefined;
 
   try {
-    const downloaded = await downloadMenuImportStorageFile(storagePath);
+    const downloaded = await downloadMenuImportStorageFile(storagePath, {
+      restaurantId: args.restaurantId,
+      draftId: args.draftId,
+    });
     if (!isImageContent(downloaded.contentType, args.originalFileName)) return undefined;
     const base64 = downloaded.buffer.toString("base64");
     return `data:${downloaded.contentType};base64,${base64}`;
@@ -37,6 +42,8 @@ async function resolveImageDataUrl(args: {
 }
 
 export type RunAiImportV2ShadowParams = {
+  restaurantId: string;
+  draftId: string;
   rawText: string;
   parserItems: ImportedMenuItem[];
   menuType: MenuImportMenuType;
@@ -69,6 +76,8 @@ export async function runAiImportV2Shadow(
   let imageDataUrl: string | undefined;
   try {
     imageDataUrl = await resolveImageDataUrl({
+      restaurantId: params.restaurantId,
+      draftId: params.draftId,
       sourceType: params.sourceType,
       storagePath: params.storagePath,
       originalFileName: params.originalFileName,

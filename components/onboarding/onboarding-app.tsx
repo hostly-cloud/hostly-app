@@ -19,6 +19,7 @@ import {
 } from "@/lib/carta/extract-menu-from-upload";
 import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
 import { requestCreateStaffInvite } from "@/lib/staff-invites/request-create-staff-invite";
+import { copyInviteLink } from "@/lib/staff-invites/copy-invite-link";
 import { isValidStaffInviteEmail } from "@/lib/staff-invites/validate-email";
 import {
   applyDefaultModifierFamilyIfEligible,
@@ -290,6 +291,7 @@ export default function OnboardingApp() {
   const [usersStepBusy, setUsersStepBusy] = useState(false);
   const [usersInviteError, setUsersInviteError] = useState<string | null>(null);
   const [userFormError, setUserFormError] = useState<string | null>(null);
+  const [inviteCopyFallbackId, setInviteCopyFallbackId] = useState<string | null>(null);
 
   const [escPlatoId, setEscPlatoId] = useState<string>("");
   const [escLines, setEscLines] = useState<IngLine[]>([]);
@@ -429,12 +431,14 @@ export default function OnboardingApp() {
     [authRestaurantId, restaurantNameForInvite, t, user],
   );
 
-  const copyInviteLink = useCallback(
-    async (url: string) => {
+  const copyEphemeralInviteLink = useCallback(
+    async (usuarioId: string, url: string) => {
       try {
-        await navigator.clipboard.writeText(url);
+        await copyInviteLink(url);
+        setInviteCopyFallbackId(null);
         flashSaved(t("onboarding.usersInviteCopied"));
       } catch {
+        setInviteCopyFallbackId(usuarioId);
         flashSaved(t("onboarding.usersInviteCopyFailed"));
       }
     },
@@ -716,6 +720,7 @@ export default function OnboardingApp() {
     };
     const next = [...loadUsuarios(), nu];
     persistUsersList(next);
+    setInviteCopyFallbackId(null);
     setUserSaving(true);
     try {
       const withInvite = await createInviteForUsuario(nu);
@@ -744,7 +749,7 @@ export default function OnboardingApp() {
       if (usersList.length > 0) {
         const updated: UsuarioLocal[] = [];
         for (const usuario of usersList) {
-          if (usuario.inviteStatus === "pending" && usuario.inviteUrl) {
+          if (usuario.inviteStatus === "pending" && usuario.inviteId) {
             updated.push(usuario);
             continue;
           }
@@ -1687,13 +1692,26 @@ export default function OnboardingApp() {
                       )}
                     </span>
                     {u.inviteUrl ? (
-                      <button
-                        type="button"
-                        onClick={() => void copyInviteLink(u.inviteUrl!)}
-                        className="hostly-button-secondary px-2.5 py-1 text-[11px] font-semibold min-h-[30px] !bg-transparent"
-                      >
-                        {t("onboarding.usersInviteCopyLink")}
-                      </button>
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void copyEphemeralInviteLink(u.id, u.inviteUrl!)
+                          }
+                          className="hostly-button-secondary px-2.5 py-1 text-[11px] font-semibold min-h-[30px] !bg-transparent"
+                        >
+                          {t("onboarding.usersInviteCopyLink")}
+                        </button>
+                        {inviteCopyFallbackId === u.id ? (
+                          <input
+                            readOnly
+                            value={u.inviteUrl}
+                            onFocus={(event) => event.currentTarget.select()}
+                            aria-label="Enlace de invitación para copiar manualmente"
+                            className="hostly-input min-w-0 text-xs"
+                          />
+                        ) : null}
+                      </div>
                     ) : (
                       <span aria-hidden />
                     )}

@@ -5,8 +5,12 @@ import { auth, storage } from "@/lib/firebase/client";
 export const MAX_MENU_IMPORT_FILE_BYTES = 12 * 1024 * 1024;
 const UPLOAD_TIMEOUT_MS = 120_000;
 
-const ALLOWED_IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|heic|heif|avif)$/i;
-const ALLOWED_PDF_EXT = /\.pdf$/i;
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 
 function storageErr(phase: string, e: unknown): Error {
   if (e instanceof FirebaseError) {
@@ -34,7 +38,11 @@ function sanitizeFileName(originalName: string): string {
     typeof originalName === "string" && originalName.trim() !== ""
       ? originalName.trim()
       : "archivo";
-  return base.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  const sanitized = base
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/\.{2,}/g, ".")
+    .slice(0, 120);
+  return sanitized === "." ? "archivo" : sanitized;
 }
 
 function assertAuthUser(userId: string): void {
@@ -64,18 +72,16 @@ function assertDraftId(draftId: string): string {
 }
 
 export function validateMenuImportFile(file: File, sourceType: "image" | "pdf"): void {
-  const byImageType = file.type.startsWith("image/");
+  const byImageType = ALLOWED_IMAGE_MIME_TYPES.has(file.type.toLowerCase());
   const byPdfType = file.type === "application/pdf";
-  const byImageName = ALLOWED_IMAGE_EXT.test(file.name);
-  const byPdfName = ALLOWED_PDF_EXT.test(file.name);
 
   if (sourceType === "image") {
-    if (!byImageType && !byImageName) {
-      throw new Error("El archivo debe ser una imagen (PNG, JPEG, WebP…)");
+    if (!byImageType) {
+      throw new Error("El archivo debe ser JPEG, PNG, WebP o GIF");
     }
   } else if (sourceType === "pdf") {
-    if (!byPdfType && !byPdfName && !byImageType && !byImageName) {
-      throw new Error("El archivo debe ser PDF o captura de imagen");
+    if (!byPdfType && !byImageType) {
+      throw new Error("El archivo debe ser PDF, JPEG, PNG, WebP o GIF");
     }
   }
 

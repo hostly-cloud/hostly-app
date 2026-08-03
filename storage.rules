@@ -6,63 +6,211 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function userRestaurantId() {
-      return firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
-        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.restaurantId
+    function canonicalProfileExists() {
+      return isAuth()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function profileMirrorExists() {
+      return isAuth()
+        && firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function canonicalProfileData() {
+      return canonicalProfileExists()
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data
+        : null;
+    }
+
+    function profileMirrorData() {
+      return profileMirrorExists()
+        ? firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data
+        : null;
+    }
+
+    function normalizedProfileStatus(profile) {
+      return !profile.keys().hasAny(['status'])
+          || profile.status == null
+          || !(profile.status is string)
+          || profile.status.size() == 0
+        ? 'invalid'
         : (
-          firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid))
-            ? firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.restaurantId
-            : null
+          profile.status.lower() == 'active' || profile.status.lower() == 'enabled'
+          ? 'active'
+          : (
+            profile.status.lower() == 'disabled'
+            || profile.status.lower() == 'inactive'
+            || profile.status.lower() == 'blocked'
+            || profile.status.lower() == 'suspended'
+            || profile.status.lower() == 'deactivated'
+            ? 'disabled'
+            : 'invalid'
+          )
         );
     }
 
-    function profileHasRestaurant(profile, restaurantId) {
-      return profile.restaurantId == restaurantId
-        || (profile.restaurantIds is list && restaurantId in profile.restaurantIds)
+    function normalizeRoleValue(role) {
+      let value = role.lower();
+      return value.matches('^(owner|propietario)$') ? 'owner'
+        : value.matches('^(admin|administrator)$') ? 'admin'
+        : value.matches('^(manager|gerente|encargado)$') ? 'manager'
+        : value.matches('^(staff|operativo|operational|employee|empleado|waiter|camarero|camarera|staff_tpv)$') ? 'waiter'
+        : value.matches('^(kitchen|cocina|cook)$') ? 'kitchen'
+        : value.matches('^(viewer|readonly|read_only)$') ? 'viewer'
+        : 'denied';
+    }
+
+    function optionalProfileFieldsMatch(canonical, mirror) {
+      let restaurantIdsMatch =
+        !canonical.keys().hasAny(['restaurantIds'])
+          && !mirror.keys().hasAny(['restaurantIds'])
         || (
-          profile.restaurantIds is map
-          && profile.restaurantIds.keys().hasAny([restaurantId])
+          canonical.keys().hasAny(['restaurantIds'])
+          && mirror.keys().hasAny(['restaurantIds'])
+          && canonical.restaurantIds == mirror.restaurantIds
         );
+      let permissionsMatch =
+        !canonical.keys().hasAny(['permissions'])
+          && !mirror.keys().hasAny(['permissions'])
+        || (
+          canonical.keys().hasAny(['permissions'])
+          && mirror.keys().hasAny(['permissions'])
+          && canonical.permissions == mirror.permissions
+        );
+      let capabilitiesMatch =
+        !canonical.keys().hasAny(['capabilities'])
+          && !mirror.keys().hasAny(['capabilities'])
+        || (
+          canonical.keys().hasAny(['capabilities'])
+          && mirror.keys().hasAny(['capabilities'])
+          && canonical.capabilities == mirror.capabilities
+        );
+      return restaurantIdsMatch && permissionsMatch && capabilitiesMatch;
+    }
+
+    function isRecognizedProfileRole(role) {
+      let value = role.lower();
+      return value.matches(
+        '^(owner|propietario|admin|administrator|manager|gerente|encargado|staff|operativo|operational|employee|empleado|waiter|camarero|camarera|staff_tpv|kitchen|cocina|cook|viewer|readonly|read_only)$'
+      );
+    }
+
+    function hasAuthorizedProfile() {
+      let canonical = canonicalProfileData();
+      let mirror = profileMirrorData();
+      let tokenEmail = request.auth.token.email;
+      return isAuth()
+        && canonical != null
+        && mirror != null
+        && (!canonical.keys().hasAny(['uid']) || canonical.uid == request.auth.uid)
+        && (!mirror.keys().hasAny(['uid']) || mirror.uid == request.auth.uid)
+        && canonical.email is string
+        && mirror.email is string
+        && tokenEmail is string
+        && canonical.email.lower() == mirror.email.lower()
+        && canonical.email.lower() == tokenEmail.lower()
+        && canonical.restaurantId is string
+        && mirror.restaurantId is string
+        && canonical.restaurantId.size() > 0
+        && canonical.restaurantId == mirror.restaurantId
+        && canonical.role is string
+        && mirror.role is string
+        && canonical.role.size() > 0
+        && mirror.role.size() > 0
+        && isRecognizedProfileRole(canonical.role)
+        && isRecognizedProfileRole(mirror.role)
+        && normalizeRoleValue(canonical.role) == normalizeRoleValue(mirror.role)
+        && normalizeRoleValue(canonical.role) != 'denied'
+        && normalizedProfileStatus(canonical) == 'active'
+        && normalizedProfileStatus(canonical) == normalizedProfileStatus(mirror)
+        && optionalProfileFieldsMatch(canonical, mirror);
     }
 
     function sameRestaurant(restaurantId) {
-      return isAuth()
+      return hasAuthorizedProfile()
+        && canonicalProfileData().restaurantId == restaurantId;
+    }
+
+    function normalizedRole() {
+      let role = canonicalProfileData().role.lower();
+      return role.matches('^(owner|propietario)$') ? 'owner'
+        : role.matches('^(admin|administrator)$') ? 'admin'
+        : role.matches('^(manager|gerente|encargado)$') ? 'manager'
+        : role.matches('^(staff|operativo|operational|employee|empleado|waiter|camarero|camarera|staff_tpv)$') ? 'waiter'
+        : role.matches('^(kitchen|cocina|cook)$') ? 'kitchen'
+        : role.matches('^(viewer|readonly|read_only)$') ? 'viewer'
+        : 'denied';
+    }
+
+    // Equivalente Storage de `settings.manage`.
+    function canManageStoredAssets() {
+      return normalizedRole() == 'owner' || normalizedRole() == 'admin';
+    }
+
+    function isAllowedRasterImageContentType() {
+      return request.resource.contentType == 'image/jpeg'
+        || request.resource.contentType == 'image/png'
+        || request.resource.contentType == 'image/webp'
+        || request.resource.contentType == 'image/gif';
+    }
+
+    function isValidImageUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 3 * 1024 * 1024
+        && request.resource.contentType is string
+        && isAllowedRasterImageContentType();
+    }
+
+    function isValidMenuImportUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 12 * 1024 * 1024
+        && request.resource.contentType is string
         && (
-          (
-            firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
-            && profileHasRestaurant(
-              firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data,
-              restaurantId
-            )
-          )
-          || (
-            firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid))
-            && profileHasRestaurant(
-              firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data,
-              restaurantId
-            )
-          )
+          isAllowedRasterImageContentType()
+          || request.resource.contentType == 'application/pdf'
         );
     }
 
     // Imágenes de producto (legacy por uid).
     match /productos/{userId}/{allPaths=**} {
-      allow read, write: if isAuth() && request.auth.uid == userId;
+      allow read: if hasAuthorizedProfile() && request.auth.uid == userId;
+      allow create, update: if request.auth.uid == userId
+        && hasAuthorizedProfile()
+        && canManageStoredAssets()
+        && isValidImageUpload();
+      allow delete: if request.auth.uid == userId
+        && hasAuthorizedProfile()
+        && canManageStoredAssets();
     }
 
     // Importación de carta — tenant por restaurantId en path.
     match /restaurants/{restaurantId}/menu-imports/{draftId}/{fileName} {
-      allow read, write: if sameRestaurant(restaurantId);
+      allow read: if sameRestaurant(restaurantId);
+      allow create, update: if sameRestaurant(restaurantId)
+        && canManageStoredAssets()
+        && isValidMenuImportUpload();
+      // El flujo activo no elimina borradores desde cliente.
+      allow delete: if false;
     }
 
     // Imágenes de producto — catálogo central.
     match /restaurants/{restaurantId}/products/{productId}/{fileName} {
-      allow read, write: if sameRestaurant(restaurantId);
+      allow read: if sameRestaurant(restaurantId);
+      allow create, update: if sameRestaurant(restaurantId)
+        && canManageStoredAssets()
+        && isValidImageUpload();
+      allow delete: if sameRestaurant(restaurantId) && canManageStoredAssets();
     }
 
     // Logo del restaurante — Configuración → Empresa.
     match /restaurant-logos/{restaurantId}/{fileName} {
-      allow read, write: if sameRestaurant(restaurantId);
+      allow read: if sameRestaurant(restaurantId);
+      allow create, update: if sameRestaurant(restaurantId)
+        && canManageStoredAssets()
+        && isValidImageUpload();
+      allow delete: if sameRestaurant(restaurantId) && canManageStoredAssets();
     }
   }
 }

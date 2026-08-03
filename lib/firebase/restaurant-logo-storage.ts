@@ -42,7 +42,6 @@ function logoExtension(file: File): string {
   if (type.includes("png")) return "png";
   if (type.includes("webp")) return "webp";
   if (type.includes("gif")) return "gif";
-  if (type.includes("svg")) return "svg";
   return "jpg";
 }
 
@@ -77,6 +76,13 @@ export async function uploadRestaurantLogo(
     throw storageErr("getIdToken", e);
   }
 
+  if (
+    !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(
+      file.type.toLowerCase(),
+    )
+  ) {
+    throw new Error("El logo debe ser JPEG, PNG, WebP o GIF");
+  }
   validateProductImageFile(file);
   if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
     throw new Error("La imagen supera 3 MB");

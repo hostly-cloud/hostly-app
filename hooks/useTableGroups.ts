@@ -1,23 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { onSnapshot, setDoc } from "firebase/firestore";
+import { onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
-import { mergeOpenOrdersForTableGroup } from "@/lib/firestore/merge-table-group-orders";
+import { restoreMergedOrdersForTableGroup } from "@/lib/firestore/split-table-group-orders";
+import { mergeTableGroupOrdersViaApi } from "@/lib/firestore/tpv-mutations-via-api";
 import {
   logTableJoinMerge,
   logTableJoinMergeError,
   logTableJoinMergeWarn,
   printTableJoinFirestoreDebugReport,
   TABLE_GROUP_ORDERS_MERGED_EVENT,
+  TABLE_GROUP_ORDERS_SPLIT_EVENT,
   type TableGroupOrdersMergedDetail,
+  type TableGroupOrdersSplitDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import {
   normalizeTableGroups,
-  persistTableGroups,
-  type PersistTableGroupsActivity,
   tableGroupsDocRef,
 } from "@/lib/firestore/table-groups";
 
@@ -162,18 +163,6 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
       ref,
       async (snap) => {
         if (!snap.exists()) {
-          try {
-            await setDoc(
-              ref,
-              {
-                groups: {},
-                updatedAt: Date.now(),
-              },
-              { merge: false },
-            );
-          } catch (e) {
-            console.error(e);
-          }
           setGroupedTables({});
           return;
         }
@@ -233,51 +222,96 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
     [groupedTables],
   );
 
-  const queuePersist = useCallback(
-    (
-      next: Record<string, string[]>,
-      activity?: Omit<PersistTableGroupsActivity, "actorUserId" | "actorUserName" | "actorRole">,
-      onAfterPersist?: (ctx: {
-        mainTableId: string;
-        memberIds: string[];
-      }) => void,
+  const runServerMerge = useCallback(
+    async (
+      previous: Record<string, string[]>,
+      mainTableId: string,
+      memberIds: string[],
+      secondaryTableId?: string,
     ) => {
-      if (!restaurantIdTrimmed || !isFirebaseConfigured || !isAuthReady()) {
-        logTableJoinMergeWarn("join:persist-skipped", {
-          restaurantId: restaurantIdTrimmed,
-          isFirebaseConfigured,
-          isAuthReady: isAuthReady(),
-          hint: "tableGroups no se persiste; mergeOpenOrdersForTableGroup NO se ejecutará.",
+      if (!restaurantIdTrimmed || !isFirebaseConfigured || !isAuthReady()) return;
+      const apiResult = await mergeTableGroupOrdersViaApi({
+        mainTableId,
+        memberTableIds: memberIds,
+      });
+      if (!apiResult.ok) {
+        setGroupedTables(previous);
+        throw new Error(apiResult.error);
+      }
+      if (typeof window !== "undefined" && apiResult.merged) {
+        window.dispatchEvent(
+          new CustomEvent(TABLE_GROUP_ORDERS_MERGED_EVENT, {
+            detail: {
+              restaurantId: restaurantIdTrimmed,
+              mainTableId,
+              memberIds,
+              destOrderId: apiResult.destOrderId,
+            } satisfies TableGroupOrdersMergedDetail,
+          }),
+        );
+      }
+      if (secondaryTableId) {
+        logTableJoinMerge("join:merge-finished", {
+          mainTableId,
+          secondaryTableId,
+          memberIds,
+          merged: apiResult.merged,
+          destOrderId: apiResult.destOrderId,
+        });
+      }
+    },
+    [restaurantIdTrimmed],
+  );
+
+  const runServerSplit = useCallback(
+    async (
+      previous: Record<string, string[]>,
+      next: Record<string, string[]>,
+      ctx: { mainTableId: string; memberIds: string[]; separatedTableId: string },
+    ) => {
+      if (!restaurantIdTrimmed || !isFirebaseConfigured || !isAuthReady()) return;
+      const mainTableId = ctx.mainTableId.trim();
+      const memberIds = ctx.memberIds.map((id) => String(id ?? "").trim()).filter(Boolean);
+      const remainingTableIds = collectGroupTableIds(next, mainTableId);
+      const remainingSet = new Set(remainingTableIds);
+      const removedTableIds = memberIds.filter(
+        (memberId) => !remainingSet.has(memberId),
+      );
+      const separatingPrimary = removedTableIds.includes(mainTableId);
+      const newMainTableId = separatingPrimary
+        ? remainingTableIds.find((id) => id !== mainTableId)
+        : undefined;
+      const restore = await restoreMergedOrdersForTableGroup(
+        db,
+        restaurantIdTrimmed,
+        mainTableId,
+        removedTableIds,
+        { remainingTableIds, newMainTableId },
+      );
+      if (!restore.restored && restore.unresolvedAssignments.length > 0) {
+        setGroupedTables(previous);
+        logTableJoinMergeWarn("split:restore-skipped-reverting-local-group", {
+          mainTableId,
+          memberIds,
+          removedTableIds,
+          remainingTableIds,
+          unresolvedAssignments: restore.unresolvedAssignments,
         });
         return;
       }
-      queueMicrotask(() => {
-        void (async () => {
-          await persistTableGroups(
-            restaurantIdTrimmed,
-            next,
-            activity
-              ? {
-                  ...activity,
-                  actorUserId,
-                  actorUserName,
-                  actorRole,
-                }
-              : undefined,
-          );
-          if (onAfterPersist && activity?.mainTableId?.trim()) {
-            const mainTableId = activity.mainTableId.trim();
-            onAfterPersist({
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(TABLE_GROUP_ORDERS_SPLIT_EVENT, {
+            detail: {
+              restaurantId: restaurantIdTrimmed,
               mainTableId,
-              memberIds: collectGroupTableIds(next, mainTableId),
-            });
-          }
-        })().catch((e) => {
-          console.error("queuePersist", e);
-        });
-      });
+              memberIds,
+            } satisfies TableGroupOrdersSplitDetail,
+          }),
+        );
+      }
     },
-    [restaurantIdTrimmed, actorUserId, actorUserName, actorRole],
+    [restaurantIdTrimmed],
   );
 
   const joinTables = useCallback(
@@ -317,7 +351,11 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
             mergedSourceOrderIds: [],
             afterByTable: {},
           });
-          queuePersist(next);
+          queueMicrotask(() => {
+            void runServerMerge(prev, targetMain, collectGroupTableIds(next, targetMain), secNorm).catch(
+              (e) => logTableJoinMergeError("join:merge-failed", e, { mainTableId: targetMain }),
+            );
+          });
         } else {
           const prevList = [...(afterRemoval[targetMain] ?? [])];
           const merged = [...prevList, secNorm];
@@ -326,68 +364,25 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
             ...afterRemoval,
             [targetMain]: unique,
           });
-          logTableJoinMerge("join:queue-persist-and-merge", {
+          logTableJoinMerge("join:server-merge", {
             targetMain,
             secNorm,
             nextGroups: next,
             memberIdsPreview: collectGroupTableIds(next, targetMain),
           });
-          queuePersist(
-            next,
-            {
-              type: "table_joined",
-              mainTableId: targetMain,
-              secondaryTableId: secNorm,
-            },
-            ({ mainTableId, memberIds }) => {
-              logTableJoinMerge("join:merge-invoked-after-persist", {
-                mainTableId,
-                memberIds,
-              });
-              void mergeOpenOrdersForTableGroup(
-                db,
-                restaurantIdTrimmed!,
-                mainTableId,
-                memberIds,
-                { secondaryTableId: secNorm },
-              )
-                .then((result) => {
-                  logTableJoinMerge("join:merge-finished", {
-                    mainTableId,
-                    secondaryTableId: secNorm,
-                    memberIds,
-                    result: {
-                      merged: result.merged,
-                      destOrderId: result.destOrderId,
-                      brokenAtStep: result.debugReport.brokenAtStep,
-                    },
-                  });
-                  if (result.merged && typeof window !== "undefined") {
-                    window.dispatchEvent(
-                      new CustomEvent(TABLE_GROUP_ORDERS_MERGED_EVENT, {
-                        detail: {
-                          restaurantId: restaurantIdTrimmed!,
-                          mainTableId,
-                          memberIds,
-                          destOrderId: result.destOrderId,
-                        } satisfies TableGroupOrdersMergedDetail,
-                      }),
-                    );
-                  }
-                })
-                .catch((e) => {
-                  logTableJoinMergeError("join:merge-failed", e, {
-                    mainTableId,
-                    memberIds,
-                  });
-                });
-            },
-          );
+          queueMicrotask(() => {
+            void runServerMerge(
+              prev,
+              targetMain,
+              collectGroupTableIds(next, targetMain),
+              secNorm,
+            ).catch((e) => logTableJoinMergeError("join:merge-failed", e, { mainTableId: targetMain }));
+          });
         }
         return next;
       });
     },
-    [queuePersist, restaurantIdTrimmed],
+    [restaurantIdTrimmed, runServerMerge],
   );
 
   const separateTable = useCallback(
@@ -400,6 +395,8 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
           return prev;
         }
 
+        const mainTableId = resolveMainTableIdFromMap(prev, id);
+        const memberIds = collectGroupTableIds(prev, mainTableId);
         let next: Record<string, string[]>;
 
         if (Object.prototype.hasOwnProperty.call(prev, id)) {
@@ -427,14 +424,19 @@ export function useTableGroups({ restaurantId }: UseTableGroupsOptions) {
           next = updated;
         }
 
-        queuePersist(next, {
-          type: "table_separated",
-          mainTableId: id,
+        queueMicrotask(() => {
+          void runServerSplit(prev, next, {
+            mainTableId,
+            memberIds,
+            separatedTableId: id,
+          }).catch((e) =>
+            logTableJoinMergeError("split:restore-failed", e, { mainTableId, memberIds }),
+          );
         });
         return next;
       });
     },
-    [queuePersist],
+    [runServerSplit],
   );
 
   const getGroupTableIds = useCallback(

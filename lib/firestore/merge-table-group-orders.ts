@@ -1,10 +1,8 @@
 import {
-  serverTimestamp,
-  updateDoc,
   type Firestore,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
-import { DbgWriteBatch } from "@/lib/firestore/instrumentedWrites";
+import { mergeTableGroupOrdersViaApi } from "@/lib/firestore/tpv-mutations-via-api";
 import {
   computeBillableTotalFromOrderDocLike,
   readOrderCreatedAtMs,
@@ -49,6 +47,20 @@ function normalizeMergedFirestoreItems(
     seen.add(id);
     return next;
   });
+}
+
+function withTableGroupLineOrigin(
+  item: Record<string, unknown>,
+  sourceTableId: string,
+  sourceOrderId: string,
+): Record<string, unknown> {
+  const tid = sourceTableId.trim();
+  const oid = sourceOrderId.trim();
+  return {
+    ...item,
+    ...(tid ? { tableGroupSourceTableId: tid } : {}),
+    ...(oid ? { tableGroupSourceOrderId: oid } : {}),
+  };
 }
 
 function isPaymentRequestedAtSet(raw: unknown): boolean {
@@ -228,12 +240,20 @@ export async function mergeOpenOrdersForTableGroup(
 
     report.plannedFinalItems = formatFirestoreOrderItems(destData.items);
     try {
-      await updateDoc(destDoc.ref, {
-        tableId: mainId,
-        updatedAt: serverTimestamp(),
+      const apiResult = await mergeTableGroupOrdersViaApi({
+        mainTableId: mainId,
+        memberTableIds: uniqueMemberIds,
       });
+      if (!apiResult.ok || !apiResult.merged) {
+        finishReport(
+          report,
+          "8-batch-commit",
+          apiResult.ok ? "API relocate merged=false" : apiResult.error,
+        );
+        return { merged: false, debugReport: report };
+      }
       report.mergeMerged = true;
-      report.resultDestOrderId = destDoc.id;
+      report.resultDestOrderId = apiResult.destOrderId ?? destDoc.id;
       report.afterByTable = await fetchActiveOrdersSnapshotByTable(
         db,
         rid,
@@ -254,10 +274,16 @@ export async function mergeOpenOrdersForTableGroup(
     }
   }
 
-  const destItems = asFirestoreRawItems(destData.items);
-  const flatSource = sources.flatMap((s) =>
-    asFirestoreRawItems((s.data() as { items?: unknown }).items),
+  const destItems = asFirestoreRawItems(destData.items).map((item) =>
+    withTableGroupLineOrigin(item, destTableId || mainId, destDoc.id),
   );
+  const flatSource = sources.flatMap((s) => {
+    const sourceData = s.data() as { items?: unknown; tableId?: unknown };
+    const sourceTableId = String(sourceData.tableId ?? "").trim();
+    return asFirestoreRawItems(sourceData.items).map((item) =>
+      withTableGroupLineOrigin(item, sourceTableId, s.id),
+    );
+  });
   const mergedItems = normalizeMergedFirestoreItems([...destItems, ...flatSource]);
   const mergedTotal = computeBillableTotalFromOrderDocLike({
     items: mergedItems,
@@ -294,31 +320,26 @@ export async function mergeOpenOrdersForTableGroup(
   }
 
   try {
-    const batch = new DbgWriteBatch(db, {
-      label: "mergeOpenOrdersForTableGroup",
-      collection: "orders",
-      restaurantId: rid,
-      tableId: mainId,
-      orderId: destDoc.id,
+    const apiResult = await mergeTableGroupOrdersViaApi({
+      mainTableId: mainId,
+      memberTableIds: uniqueMemberIds,
     });
-    batch.update(destDoc.ref, {
-      tableId: mainId,
-      items: mergedItems,
-      total: Number.isFinite(mergedTotal) ? mergedTotal : 0,
-      note: mergedNote,
-      paymentRequestedAt: mergedPr,
-      updatedAt: serverTimestamp(),
-    });
-    for (const s of sources) {
-      batch.update(s.ref, {
-        status: "merged",
-        mergedIntoOrderId: destDoc.id,
-        mergedIntoTableId: mainId,
-        paymentRequestedAt: null,
-        updatedAt: serverTimestamp(),
+    if (!apiResult.ok) {
+      logTableJoinMergeError("merge:api-failed", new Error(apiResult.error), {
+        destOrderId: destDoc.id,
+        mergedSourceOrderIds: report.mergedSourceOrderIds,
       });
+      finishReport(
+        report,
+        "8-batch-commit",
+        `mergeTableGroupOrdersViaApi falló: ${apiResult.error}`,
+      );
+      return { merged: false, debugReport: report };
     }
-    await batch.commit();
+    if (!apiResult.merged) {
+      finishReport(report, "8-batch-commit", "API devolvió merged=false");
+      return { merged: false, debugReport: report };
+    }
   } catch (error) {
     logTableJoinMergeError("merge:batch-failed", error, {
       destOrderId: destDoc.id,

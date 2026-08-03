@@ -1,33 +1,51 @@
-import { unstable_noStore as noStore } from "next/cache";
-import { canAccessInventoryEscandallos, getCurrentRole } from "@/lib/roles";
+"use client";
 
-export default function SensitiveModuleGate({ children }: { children: React.ReactNode }) {
-  // Evita que Next cachee el layout con un rol fijo (p. ej. admin en build) y ignore MOCK_USER_ROLE / env.
-  noStore();
+import type { ReactNode } from "react";
+import { useAuth } from "@/components/auth/auth-context";
+import {
+  CAPABILITY_DENIED_MESSAGE,
+  type HostlyCapability,
+} from "@/lib/auth/hostly-capabilities";
+import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
+import { HostlyPermissionState } from "@/components/ui/hostly";
 
-  const role = getCurrentRole();
-  const allowed = canAccessInventoryEscandallos(role);
+export function CapabilityModuleGate({
+  capability,
+  children,
+}: {
+  capability: HostlyCapability;
+  children: ReactNode;
+}) {
+  const { ready, user, profileReady, profileAccessIssue, restaurantId } =
+    useAuth();
+  const { can } = useHostlyCapabilities();
 
-  if (!allowed) {
+  if (!ready || !user || !profileReady || profileAccessIssue || !restaurantId) {
     return (
-      <div style={{ padding: 24, maxWidth: 640, margin: "0 auto" }}>
-        <div
-          style={{
-            border: "1px solid rgba(0,0,0,0.12)",
-            borderRadius: 14,
-            background: "rgba(0,0,0,0.02)",
-            padding: "20px 22px",
-            color: "rgba(0,0,0,0.78)",
-          }}
-        >
-          <h1 style={{ fontSize: 20, fontWeight: 650, margin: "0 0 8px" }}>Acceso restringido</h1>
-          <p style={{ margin: 0, lineHeight: 1.5 }}>
-            No tienes permisos para acceder a esta sección.
-          </p>
-        </div>
-      </div>
+      <HostlyPermissionState>
+        {profileAccessIssue
+          ? "No se puede autorizar el acceso a este módulo."
+          : "Validando acceso…"}
+      </HostlyPermissionState>
     );
   }
 
+  if (!can(capability)) {
+    return <HostlyPermissionState>{CAPABILITY_DENIED_MESSAGE}</HostlyPermissionState>;
+  }
+
   return <>{children}</>;
+}
+
+/** @deprecated Usa CapabilityModuleGate con capabilities canónicas. */
+export default function SensitiveModuleGate({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <CapabilityModuleGate capability="inventory.view">
+      {children}
+    </CapabilityModuleGate>
+  );
 }

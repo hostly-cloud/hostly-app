@@ -103,9 +103,23 @@ import { mergeOpenOrdersForTableGroup } from "@/lib/firestore/merge-table-group-
 import {
   logTableJoinMerge,
   TABLE_GROUP_ORDERS_MERGED_EVENT,
+  TABLE_GROUP_ORDERS_SPLIT_EVENT,
   type TableGroupOrdersMergedDetail,
+  type TableGroupOrdersSplitDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
+import { syncOrderItemsViaApi } from "@/lib/firestore/sync-order-items-via-api";
+import {
+  autoCloseTableViaApi,
+  chargeOrderViaApi,
+  closeOrderViaApi,
+  compLineViaApi,
+  patchOrderMetadataViaApi,
+  removeLineUnitViaApi,
+  transitionLineStatusViaApi,
+  voidPaymentViaApi,
+} from "@/lib/firestore/tpv-mutations-via-api";
+import type { TpvOrderItemsOperation } from "@/lib/server/tpv/order-mutation-contract";
 import {
   cartLinesProductionSnapshotEqual,
   mergeLocalLinesProductionFromServerItems,
@@ -138,24 +152,39 @@ import {
 } from "@/lib/firestore/floorPlans";
 import {
   filterTpvOperationalViewportFitElements,
-  scaleTpvOperationalMapElements,
-  scaleTpvOperationalPlanSize,
   TPV_OPERATIONAL_FIT_OFFSET_X,
   TPV_OPERATIONAL_FIT_OFFSET_Y,
   TPV_OPERATIONAL_FIT_PADDING_PX,
   TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP,
   TPV_OPERATIONAL_FIT_ZOOM_MAX_MOBILE,
   TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER,
-  TPV_OPERATIONAL_MAP_VISUAL_SCALE,
 } from "@/lib/map/tpv-operational-map-visual";
 import { listenZonesByRestaurantId, type Zone } from "@/lib/firestore/zones";
-import { getUsersByRestaurant } from "@/lib/firestore/users";
+import {
+  getUsersByRestaurant,
+  RestaurantRosterError,
+  type RestaurantRosterErrorKind,
+} from "@/lib/firestore/users";
 import {
   EditableFloorMap,
   getPlanElementBaseVisualStyle,
 } from "@/components/map/EditableFloorMap";
+import { SalaEditorReadonlyMap } from "@/components/sala-editor/readonly/sala-editor-readonly-map";
 import { PinchZoomMap } from "./_components/pinch-zoom-map";
 import { ElementCard } from "@/components/map/element-map-card";
+import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
+import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
+import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
+import type { SalaEditorReadonlyTpvOperationalState } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
+import {
+  buildTableOperationalVisualInput,
+  computeMapVisualPriorityLevel,
+} from "@/lib/map/build-table-operational-visual-input";
+import {
+  resolveTableOperationalVisualState,
+  type TableOperationalVisualState,
+} from "@/lib/map/table-operational-state";
+import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
 import {
   listenReservationsForDate,
   type Reservation,
@@ -165,6 +194,7 @@ import {
   type KdsDestination,
 } from "@/lib/kds/kds-destination";
 import {
+  formatEnviarComandaActionLabel,
   isPendingMarchPostresLine,
   isPendingMarchPrimeroLine,
   isPendingMarchSegundosLine,
@@ -213,7 +243,6 @@ import {
 } from "@/lib/firestore/print-jobs";
 import {
   applyCreatedStockMovements,
-  createStockMovementsForModifierConsumption,
   createStockMovementsForRecipeConsumption,
   createStockReversalMovementsForModifierConsumption,
   createStockReversalMovementsForRecipeConsumption,
@@ -468,42 +497,11 @@ function isFirestoreTpvConnectivityFailure(err: unknown): boolean {
   );
 }
 
-/** Prioridad visual en mapa (0–3); solo render, no Firestore. */
-function computeMapVisualPriorityLevel(
-  openedAtMs: number | undefined,
-  mapNow: number,
-  orderTotal: number | undefined,
-): number {
-  const minutes =
-    openedAtMs != null && Number.isFinite(openedAtMs)
-      ? Math.max(0, Math.floor((mapNow - openedAtMs) / 60000))
-      : 0;
-  const total =
-    typeof orderTotal === "number" && Number.isFinite(orderTotal)
-      ? orderTotal
-      : 0;
-  if (minutes >= 60) return 3;
-  if (minutes >= 30) return 2;
-  if (total > 50) return 1;
-  return 0;
-}
-
-/** Misma regla que `resolveAlertDot` en `components/map/element-map-card.tsx`. */
-function mapAlertDotFromTileInputs(
-  isCriticalTable: boolean,
-  priorityLevel: number,
-  readyToClose: boolean,
-  reservationPressure: { type: "upcoming" | "late"; time?: string } | null | undefined,
+function mapAlertDotFromOperationalState(
+  state: TableOperationalVisualState,
 ): "critical" | "attention" | null {
-  if (isCriticalTable || priorityLevel >= 3) return "critical";
-  if (
-    priorityLevel === 1 ||
-    priorityLevel === 2 ||
-    readyToClose ||
-    reservationPressure?.type === "late"
-  ) {
-    return "attention";
-  }
+  if (state === "critica") return "critical";
+  if (state === "atencion" || state === "retrasada") return "attention";
   return null;
 }
 
@@ -603,6 +601,9 @@ type CartOrderLine = {
   inventoryCost?: CartOrderLineInventoryCost;
   /** `orderItems/{id}` creado al enviar comanda; enlace directo para cancelación/KDS. */
   orderItemDocId?: string;
+  /** Procedencia explícita al unir mesas; permite separar sin inferir por nombre/posición. */
+  tableGroupSourceTableId?: string;
+  tableGroupSourceOrderId?: string;
 };
 
 const CARTA_PRESET_EXTRAS: readonly CartOrderLineExtra[] = [];
@@ -805,24 +806,27 @@ function comandaLineRowBg(
     return opts.hover ? "rgba(241, 245, 249, 0.95)" : "rgba(241, 245, 249, 0.75)";
   }
   if (status !== "pending" && !opts.selected) {
-    return opts.hover ? "rgba(241, 245, 249, 0.95)" : "rgba(241, 245, 249, 0.75)";
+    return opts.hover ? "rgba(248, 250, 252, 0.98)" : "rgba(248, 250, 252, 0.92)";
   }
   if (opts.selected) {
-    if (status === "pending") return "rgba(71, 85, 105, 0.20)";
-    if (status === "sent") return "rgba(59, 130, 246, 0.22)";
+    if (status === "pending") return "rgba(245, 158, 11, 0.22)";
+    if (status === "sent") return "rgba(148, 163, 184, 0.22)";
     if (status === "prepared") return "rgba(249, 115, 22, 0.22)";
     return "rgba(34, 197, 94, 0.20)";
   }
-  if (opts.hover) return "rgba(15, 23, 42, 0.07)";
-  if (status === "pending") return "rgba(71, 85, 105, 0.11)";
-  if (status === "sent") return "rgba(59, 130, 246, 0.14)";
+  if (opts.hover) {
+    if (status === "pending") return "rgba(245, 158, 11, 0.16)";
+    return "rgba(15, 23, 42, 0.05)";
+  }
+  if (status === "pending") return "rgba(245, 158, 11, 0.10)";
+  if (status === "sent") return "rgba(248, 250, 252, 0.92)";
   if (status === "prepared") return "rgba(249, 115, 22, 0.14)";
   return "rgba(34, 197, 94, 0.11)";
 }
 
 function comandaLineStatusOutline(status: OrderLineStatus): string {
-  if (status === "pending") return "2px solid rgba(71, 85, 105, 0.55)";
-  if (status === "sent") return "2px solid rgba(37, 99, 235, 0.5)";
+  if (status === "pending") return "2px solid rgba(217, 119, 6, 0.55)";
+  if (status === "sent") return "2px solid rgba(148, 163, 184, 0.45)";
   if (status === "prepared") return "2px solid rgba(234, 88, 12, 0.55)";
   if (status === "cancelled") return "2px solid rgba(148, 163, 184, 0.55)";
   return "2px solid rgba(22, 163, 74, 0.5)";
@@ -844,16 +848,16 @@ function comandaLineRowBgHeldForMarch(opts: { hover: boolean }): string {
 function comandaStatusBadgeStyle(status: OrderLineStatus): CSSProperties {
   if (status === "pending") {
     return {
-      background: "rgba(71, 85, 105, 0.16)",
-      color: "#334155",
-      border: "1px solid rgba(71, 85, 105, 0.28)",
+      background: "rgba(245, 158, 11, 0.22)",
+      color: "#92400e",
+      border: "1px solid rgba(217, 119, 6, 0.42)",
     };
   }
   if (status === "sent") {
     return {
-      background: "rgba(59, 130, 246, 0.28)",
-      color: "#1e40af",
-      border: "1px solid rgba(37, 99, 235, 0.55)",
+      background: "rgba(148, 163, 184, 0.18)",
+      color: "#475569",
+      border: "1px solid rgba(148, 163, 184, 0.38)",
     };
   }
   if (status === "prepared") {
@@ -1304,6 +1308,12 @@ function orderLinesToFirestoreItems(
       ...(line.orderItemDocId?.trim()
         ? { orderItemDocId: line.orderItemDocId.trim() }
         : {}),
+      ...(line.tableGroupSourceTableId?.trim()
+        ? { tableGroupSourceTableId: line.tableGroupSourceTableId.trim() }
+        : {}),
+      ...(line.tableGroupSourceOrderId?.trim()
+        ? { tableGroupSourceOrderId: line.tableGroupSourceOrderId.trim() }
+        : {}),
     };
   });
 }
@@ -1483,6 +1493,22 @@ function mapFirestoreOrderDocToCartLines(
         typeof orderItemDocIdRaw === "string" && orderItemDocIdRaw.trim()
           ? orderItemDocIdRaw.trim()
           : undefined;
+      const tableGroupSourceTableIdRaw = (it as {
+        tableGroupSourceTableId?: unknown;
+      }).tableGroupSourceTableId;
+      const tableGroupSourceTableId =
+        typeof tableGroupSourceTableIdRaw === "string" &&
+        tableGroupSourceTableIdRaw.trim()
+          ? tableGroupSourceTableIdRaw.trim()
+          : undefined;
+      const tableGroupSourceOrderIdRaw = (it as {
+        tableGroupSourceOrderId?: unknown;
+      }).tableGroupSourceOrderId;
+      const tableGroupSourceOrderId =
+        typeof tableGroupSourceOrderIdRaw === "string" &&
+        tableGroupSourceOrderIdRaw.trim()
+          ? tableGroupSourceOrderIdRaw.trim()
+          : undefined;
       const stationFields = readStationFieldsFromFirestoreRecord(
         it as Record<string, unknown>,
       );
@@ -1554,6 +1580,8 @@ function mapFirestoreOrderDocToCartLines(
         ...(courseStored != null ? { course: courseStored } : {}),
         ...(inventoryCost ? { inventoryCost } : {}),
         ...(orderItemDocId ? { orderItemDocId } : {}),
+        ...(tableGroupSourceTableId ? { tableGroupSourceTableId } : {}),
+        ...(tableGroupSourceOrderId ? { tableGroupSourceOrderId } : {}),
       };
     })
     .filter((row) => row.quantity > 0);
@@ -1915,6 +1943,18 @@ export function CartaPageContent({
   );
   const [isComandaPanelResizing, setIsComandaPanelResizing] = useState(false);
 
+  const [restaurantWaiters, setRestaurantWaiters] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [restaurantWaitersLoadStatus, setRestaurantWaitersLoadStatus] =
+    useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [
+    restaurantWaitersErrorKind,
+    setRestaurantWaitersErrorKind,
+  ] = useState<RestaurantRosterErrorKind | null>(null);
+  const [restaurantWaitersReloadToken, setRestaurantWaitersReloadToken] =
+    useState(0);
+
   useEffect(() => {
     if (!isComandaPanelResizing) return;
     const previousUserSelect = document.body.style.userSelect;
@@ -1943,6 +1983,7 @@ export function CartaPageContent({
   const { can } = useHostlyCapabilities();
   const canCharge = can("tpv.charge");
   const canCancelLine = can("tpv.cancel_line");
+  const canKdsManage = can("kds.manage");
   const canJoinTables = can("tpv.join_tables");
 
   const tableMapLibreLabel = useMemo(() => t("cartaTpv.mapLibre"), [t]);
@@ -2205,8 +2246,45 @@ export function CartaPageContent({
   const [tablesList, setTablesList] = useState<Table[]>([]);
   const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
   const [zonesList, setZonesList] = useState<Zone[]>([]);
+  const [salaEditorDraftDocument, setSalaEditorDraftDocument] =
+    useState<SalaEditorDocument | null>(null);
+  const [salaEditorDraftLoadError, setSalaEditorDraftLoadError] =
+    useState<string | null>(null);
   const [selectedTpvFloorPlanId, setSelectedTpvFloorPlanId] =
     useState<string | null>(null);
+
+  useEffect(() => {
+    const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
+    if (!authReady || !user?.uid || !rid || !isFirebaseConfigured) {
+      setSalaEditorDraftDocument(null);
+      setSalaEditorDraftLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
+    void loadSalaEditorDraft(rid)
+      .then((draft) => {
+        if (cancelled) return;
+        setSalaEditorDraftDocument(draft?.document ?? null);
+        setSalaEditorDraftLoadError(null);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : String(error ?? "unknown");
+        setSalaEditorDraftDocument(null);
+        setSalaEditorDraftLoadError(message);
+        console.warn("[TPV] readonly map draft load fallback", {
+          restaurantId: rid,
+          error: message,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user?.uid, restaurantId, isFirebaseConfigured]);
+
   const operationalFloorPlansForTpv = useMemo(
     () => floorPlans.filter((p) => p.active !== false && p.showInTpv !== false),
     [floorPlans],
@@ -2649,6 +2727,42 @@ export function CartaPageContent({
     [operationalShadowCatalogSources],
   );
 
+  const syncEmbeddedOrderItems = useCallback(
+    async (params: {
+      operation: TpvOrderItemsOperation;
+      orderId?: string | null;
+      lines: CartOrderLine[];
+      cancelledLineIds?: string[];
+      markSent?: boolean;
+    }) => {
+      const tableLabel =
+        tablesList.find((t) => t.id === selectedTableId)?.name?.trim() ||
+        selectedTableId ||
+        "";
+      const result = await syncOrderItemsViaApi({
+        operation: params.operation,
+        orderId: params.orderId,
+        tableId: selectedTableId ?? undefined,
+        tableLabel,
+        items: serializeOrderLinesToFirestoreItems(params.lines) as Record<
+          string,
+          unknown
+        >[],
+        cancelledLineIds: params.cancelledLineIds,
+        markSent: params.markSent,
+      });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      return result;
+    },
+    [
+      tablesList,
+      selectedTableId,
+      serializeOrderLinesToFirestoreItems,
+    ],
+  );
+
   const [modifierModalProduct, setModifierModalProduct] = useState<Product | null>(
     null,
   );
@@ -2877,20 +2991,8 @@ export function CartaPageContent({
       if (target.status !== "paid") return;
       if (target.type !== "split_by_items") return;
       try {
-        await dbgUpdateDoc(
-          doc(db, "payments", paymentId),
-          {
-          status: "cancelled",
-          updatedAt: Date.now(),
-        },
-          {
-            label: "carta:handleCancelPartialPayment",
-            collection: "payments",
-            restaurantId,
-            tableId: selectedTableId,
-            paymentId,
-          },
-        );
+        const result = await voidPaymentViaApi({ paymentId });
+        if (!result.ok) throw new Error(result.error);
         setPartialPayments((prev) => {
           const next = prev.filter((p) => p.id !== paymentId);
           const uniqueItemIds = new Set<string>();
@@ -3362,7 +3464,6 @@ export function CartaPageContent({
       const payload = buildTableAvailableClosePayload(closeMs);
       for (const memberId of memberIds) {
         await handlePayTableOrder(memberId, { db, restaurantId });
-        await updateDoc(doc(db, "tables", memberId), payload);
       }
     },
     [restaurantId, isFirebaseConfigured, groupedTablesMapHandlers],
@@ -3532,36 +3633,10 @@ export function CartaPageContent({
               return;
             }
           }
-          const batch = new DbgWriteBatch(db, {
-            label: "carta:autoCloseEmptyTable",
-            collection: "orders",
-            restaurantId: rid,
+          await autoCloseTableViaApi({
             tableId: tid,
+            idempotencyKey: `auto-close:${rid}:${tid}`,
           });
-          let n = 0;
-          for (const d of snap.docs) {
-            const data = d.data() as { status?: string; restaurantId?: string };
-            if (data.restaurantId !== rid) continue;
-            if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
-            batch.update(d.ref, {
-              status: "closed",
-              closedAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              total: 0,
-              paymentRequestedAt: null,
-            });
-            n++;
-          }
-          if (n > 0) await batch.commit();
-
-          const memberIds = resolveGroupMemberIdsForTable(
-            tid,
-            groupedTablesMapHandlers,
-          );
-          const closePayload = buildTableAvailableClosePayload(Date.now());
-          for (const memberId of memberIds) {
-            await updateDoc(doc(db, "tables", memberId), closePayload);
-          }
         }
         finishPaymentAndReturnToMap(tid);
       } catch (error) {
@@ -3885,6 +3960,10 @@ export function CartaPageContent({
     const primaryOrderId =
       (orderIdFromUrl?.trim() ? orderIdFromUrl.trim() : null) ??
       (openOrderIdsForTable[0]?.trim() ? openOrderIdsForTable[0]!.trim() : null);
+    if (!primaryOrderId) {
+      window.alert("No se encontró la comanda activa para cobrar.");
+      return;
+    }
 
     const now = new Date();
     const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
@@ -3983,23 +4062,48 @@ export function CartaPageContent({
         ...invoiceData,
       };
 
-      console.log("[handleConfirmPayment] await dbgAddDoc start", {
+      console.log("[handleConfirmPayment] await chargeOrderViaApi start", {
         paymentMethod: pm,
         chargeAmount,
         isAccountFinalPayment,
       });
-      const paymentRef = await dbgAddDoc(
-        collection(db, "payments"),
-        safeOpts.minimalPaymentDoc ? minimalPayload : fullTableAmountPayload,
-        {
-          label: "carta:handleConfirmPayment",
-          collection: "payments",
-          restaurantId,
-          tableId: selectedTableId || selectedTable?.id || null,
-          orderId: primaryOrderId,
-        },
-      );
-      console.log("[handleConfirmPayment] await dbgAddDoc ok", {
+      const chargeResult = await chargeOrderViaApi({
+        orderId: primaryOrderId,
+        tableId: selectedTableId || selectedTable?.id || undefined,
+        tableName:
+          selectedTable?.name ||
+          (selectedTable as { label?: string } | null)?.label ||
+          undefined,
+        paymentMethod: pm,
+        type: isSplitEqualInstallment ? "split_equal" : "table_amount",
+        amount: chargeAmount,
+        part: safeOpts.part,
+        totalParts: safeOpts.totalParts,
+        orderSessionId: orderSessionId || undefined,
+        idempotencyKey: `${primaryOrderId}:${ticketNumber}`,
+        tip: tipVal,
+        received: receivedVal,
+        cashReceived: pm === "cash" ? cashParsed : undefined,
+        change: changeVal,
+        voucherAmount: pm === "voucher" ? voucherValue : undefined,
+        voucherNumber: pm === "voucher" ? voucherNumber.trim() : undefined,
+        ticketNumber,
+        invoiceNumber: isInvoice ? invoiceNumber : undefined,
+        invoice: isInvoice
+          ? {
+              name: invoiceName,
+              taxId: invoiceTaxId,
+              email: invoiceEmail,
+            }
+          : undefined,
+        waiterId: waiterId ?? undefined,
+        waiterEmail: waiterEmail ?? undefined,
+      });
+      if (!chargeResult.ok) {
+        throw new Error(chargeResult.error);
+      }
+      const paymentRef = { id: chargeResult.paymentId };
+      console.log("[handleConfirmPayment] await chargeOrderViaApi ok", {
         paymentId: paymentRef.id,
       });
 
@@ -4303,8 +4407,13 @@ export function CartaPageContent({
   useEffect(() => {
     if (!authReady || !isFirebaseConfigured || !restaurantId) {
       setRestaurantWaiters([]);
+      setRestaurantWaitersLoadStatus("idle");
+      setRestaurantWaitersErrorKind(null);
       return;
     }
+    setRestaurantWaiters([]);
+    setRestaurantWaitersLoadStatus("loading");
+    setRestaurantWaitersErrorKind(null);
     let cancelled = false;
     void (async () => {
       try {
@@ -4315,15 +4424,26 @@ export function CartaPageContent({
           name: displayRestaurantUserName(u),
         }));
         setRestaurantWaiters(mapped);
+        setRestaurantWaitersLoadStatus("ready");
       } catch (e) {
         console.error(e);
-        if (!cancelled) setRestaurantWaiters([]);
+        if (!cancelled) {
+          setRestaurantWaitersLoadStatus("error");
+          setRestaurantWaitersErrorKind(
+            e instanceof RestaurantRosterError ? e.kind : "network",
+          );
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [authReady, restaurantId, isFirebaseConfigured]);
+  }, [
+    authReady,
+    restaurantId,
+    isFirebaseConfigured,
+    restaurantWaitersReloadToken,
+  ]);
 
   useEffect(() => {
     const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
@@ -5087,6 +5207,28 @@ export function CartaPageContent({
   ]);
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<TableGroupOrdersSplitDetail>).detail;
+      if (!detail?.mainTableId?.trim()) return;
+      const rid = String(detail.restaurantId ?? "").trim();
+      if (rid && restaurantId?.trim() !== rid) return;
+      const memberIds = detail.memberIds ?? [];
+      invalidateTableGroupOrderCache(memberIds);
+      for (const memberId of memberIds) {
+        void hydrateTableOrderFromFirestore(memberId);
+      }
+    };
+    window.addEventListener(TABLE_GROUP_ORDERS_SPLIT_EVENT, handler);
+    return () => {
+      window.removeEventListener(TABLE_GROUP_ORDERS_SPLIT_EVENT, handler);
+    };
+  }, [
+    restaurantId,
+    invalidateTableGroupOrderCache,
+    hydrateTableOrderFromFirestore,
+  ]);
+
+  useEffect(() => {
     if (orderIdFromUrl) return;
     if (!isFirebaseConfigured || !restaurantId || !selectedTableId) return;
     if (!isAuthReady()) return;
@@ -5438,20 +5580,11 @@ export function CartaPageContent({
       if (orderIdFromUrl && isFirebaseConfigured) {
         try {
           const payloadItems = serializeOrderLinesToFirestoreItems(next);
-          await dbgUpdateDoc(
-            doc(db, "orders", orderIdFromUrl),
-            {
-            items: payloadItems,
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleSendItem",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderIdFromUrl,
-            },
-          );
+          await syncEmbeddedOrderItems({
+            operation: "send_items",
+            orderId: orderIdFromUrl,
+            lines: next,
+          });
         } catch (e) {
           console.error("handleSendItem", e);
         }
@@ -5485,21 +5618,11 @@ export function CartaPageContent({
     });
     if (!didSend || !orderIdFromUrl || !isFirebaseConfigured) return;
     try {
-      const payloadItems = serializeOrderLinesToFirestoreItems(next);
-      await dbgUpdateDoc(
-        doc(db, "orders", orderIdFromUrl),
-        {
-        items: payloadItems,
-        updatedAt: serverTimestamp(),
-      },
-        {
-          label: "carta:handleSendAllItems",
-          collection: "orders",
-          restaurantId,
-          tableId: selectedTableId,
-          orderId: orderIdFromUrl,
-        },
-      );
+      await syncEmbeddedOrderItems({
+        operation: "send_items",
+        orderId: orderIdFromUrl,
+        lines: next,
+      });
     } catch (e) {
       console.error("handleSendAllItems", e);
     }
@@ -5513,6 +5636,8 @@ export function CartaPageContent({
 
   const handleServeItem = useCallback(
     async (itemId: string) => {
+      if (!canKdsManage) return;
+      const previous = order;
       let next: CartOrderLine[] = [];
       updateCurrentTableOrder((prev) => {
         next = prev.map((l) => {
@@ -5534,27 +5659,28 @@ export function CartaPageContent({
             ? openOrderIdsForTable[0]!
             : null;
       if (orderDocId && isFirebaseConfigured) {
+        const line = previous.find((l) => l.id === itemId);
+        const expectedStatus = line ? normalizeOrderLineStatus(line.status) : "prepared";
         try {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderDocId),
-            {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleServeItem",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderDocId,
-            },
-          );
+          const result = await transitionLineStatusViaApi({
+            orderId: orderDocId,
+            lineId: itemId,
+            expectedStatus,
+            nextStatus: "served",
+          });
+          if (!result.ok) {
+            throw new Error(result.error);
+          }
         } catch (e) {
+          updateCurrentTableOrder(() => previous);
           console.error("handleServeItem", e);
+          window.alert("No se pudo marcar como servido. Inténtalo de nuevo.");
         }
       }
     },
     [
+      canKdsManage,
+      order,
       orderIdFromUrl,
       openOrderIdsForTable,
       isFirebaseConfigured,
@@ -5629,99 +5755,13 @@ export function CartaPageContent({
         });
 
         const billableTotal = sumCartOrderLinesTotal(next);
-        await dbgUpdateDoc(
-          doc(db, "orders", orderDocId),
-          {
-            items: serializeOrderLinesToFirestoreItems(next),
-            total: billableTotal,
-            cancelledLineIds: arrayUnion(line.id),
-            updatedAt: serverTimestamp(),
-          },
-          {
-            label: "carta:handleCancelSentOrderLine:orders",
-            collection: "orders",
-            restaurantId,
-            tableId: selectedTableId,
-            orderId: orderDocId,
-          },
-        );
+        await syncEmbeddedOrderItems({
+          operation: "cancel_lines",
+          orderId: orderDocId,
+          lines: next,
+          cancelledLineIds: [line.id],
+        });
         orderCancellationPersisted = true;
-
-        const orderItemDocId =
-          orderItemDocIdFromLine ??
-          next.find((l) => l.id === line.id)?.orderItemDocId?.trim() ??
-          null;
-
-        const orderItemPayload = {
-          status: "cancelled",
-          cancelledAt: nowMs,
-          ...(cancelledBy ? { cancelledBy } : {}),
-          updatedAt: nowMs,
-        };
-
-        try {
-          if (orderItemDocId) {
-            await dbgUpdateDoc(
-              doc(db, "orderItems", orderItemDocId),
-              orderItemPayload,
-              {
-                label: "carta:handleCancelSentOrderLine:orderItems",
-                collection: "orderItems",
-                restaurantId,
-                tableId: selectedTableId,
-                orderId: orderDocId,
-              },
-            );
-          } else if (restaurantId?.trim()) {
-            const itemsSnap = await getDocs(
-              query(
-                collection(db, "orderItems"),
-                where("restaurantId", "==", restaurantId.trim()),
-                where("orderId", "==", orderDocId),
-              ),
-            );
-            const lineName = String(line.product.nombre ?? "").trim();
-            const lineQty = Number(line.quantity) || 0;
-            for (const itemDoc of itemsSnap.docs) {
-              const data = itemDoc.data() as Record<string, unknown>;
-              const itemSt = String(data.status ?? "")
-                .trim()
-                .toLowerCase();
-              if (
-                itemSt === "cancelled" ||
-                itemSt === "canceled" ||
-                itemSt === "cancelado"
-              ) {
-                continue;
-              }
-              const linkedLineId =
-                typeof data.lineId === "string" ? data.lineId.trim() : "";
-              const matchesByLineId = linkedLineId === line.id;
-              const matchesLegacy =
-                !linkedLineId &&
-                String(data.name ?? "").trim() === lineName &&
-                (Number(data.quantity) || 0) === lineQty;
-              if (!matchesByLineId && !matchesLegacy) continue;
-              await dbgUpdateDoc(
-                doc(db, "orderItems", itemDoc.id),
-                orderItemPayload,
-                {
-                  label: "carta:handleCancelSentOrderLine:orderItemsQuery",
-                  collection: "orderItems",
-                  restaurantId,
-                  tableId: selectedTableId,
-                  orderId: orderDocId,
-                },
-              );
-              break;
-            }
-          }
-        } catch (orderItemSyncErr) {
-          console.warn(
-            "[handleCancelSentOrderLine] orderItems sync failed; comanda anulada en orders.",
-            orderItemSyncErr,
-          );
-        }
 
         if (restaurantId) {
           try {
@@ -5908,23 +5948,12 @@ export function CartaPageContent({
       });
 
       try {
-        await dbgUpdateDoc(
-          doc(db, "orders", orderIdFromUrl),
-          {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-            ...(shouldCancelPersisted
-              ? { cancelledLineIds: arrayUnion(itemId) }
-              : {}),
-          },
-          {
-            label: "carta:handleRemoveOnePersistedUnit",
-            collection: "orders",
-            restaurantId,
-            tableId: selectedTableId,
-            orderId: orderIdFromUrl,
-          },
-        );
+        await syncEmbeddedOrderItems({
+          operation: shouldCancelPersisted ? "cancel_lines" : "persist_items",
+          orderId: orderIdFromUrl,
+          lines: next,
+          cancelledLineIds: shouldCancelPersisted ? [itemId] : undefined,
+        });
       } catch (e) {
         console.error("handleRemoveOnePersistedUnit", e);
         window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
@@ -5994,87 +6023,18 @@ export function CartaPageContent({
         }),
       );
 
-      // 1) orderItems/{id} (si existe)
-      if (orderItemDocId) {
-        try {
-          const payloadBase: Record<string, unknown> = {
-            updatedAt: Date.now(),
-          };
-          if (shouldCancel) {
-            await dbgUpdateDoc(
-              doc(db, "orderItems", orderItemDocId),
-              {
-              ...payloadBase,
-              status: "cancelled",
-              cancelledAt: Date.now(),
-            },
-              {
-                label: "carta:handleRemoveOneUnitFromLine:orderItems",
-                collection: "orderItems",
-                restaurantId,
-                tableId: selectedTableId,
-                orderId: orderDocId ?? undefined,
-              },
-            );
-          } else {
-            const existingHasQtyField = Object.prototype.hasOwnProperty.call(lineAny, "qty");
-            await dbgUpdateDoc(
-              doc(db, "orderItems", orderItemDocId),
-              {
-              ...payloadBase,
-              quantity: nextQty,
-              ...(existingHasQtyField ? { qty: nextQty } : {}),
-            } as Record<string, unknown>,
-              {
-                label: "carta:handleRemoveOneUnitFromLine:orderItems",
-                collection: "orderItems",
-                restaurantId,
-                tableId: selectedTableId,
-                orderId: orderDocId ?? undefined,
-              },
-            );
-          }
-
-        } catch (e) {
-          console.error("REMOVE ONE FIRESTORE WRITE ERROR", e);
-        }
-      }
-
-      // 2) orders/{id}.items[] (si existe)
+      // Persistencia autoritativa server-side
       if (orderDocId) {
-        let next: CartOrderLine[] = [];
-        updateCurrentTableOrder((prev) => {
-          next = prev.map((l) => {
-            if (l.id !== selectedLine.id) return l;
-            if (l.status === "pending") return l;
-            if (shouldCancel) {
-              return { ...l, status: "cancelled" as const, cancelledAt: Date.now() };
-            }
-            return { ...l, quantity: Math.max((Number(l.quantity) || 0) - 1, 0) };
-          });
-          return next;
-        });
-
         try {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderDocId),
-            {
-              items: serializeOrderLinesToFirestoreItems(next),
-              updatedAt: serverTimestamp(),
-              ...(shouldCancelPersisted
-                ? { cancelledLineIds: arrayUnion(selectedLine.id) }
-                : {}),
-            },
-            {
-              label: "carta:handleRemoveOneUnitFromLine:orders",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderDocId,
-            },
-          );
+          const result = await removeLineUnitViaApi({
+            orderId: orderDocId,
+            lineId: selectedLine.id,
+          });
+          if (!result.ok) {
+            console.error("REMOVE ONE API ERROR", result.error);
+          }
         } catch (e) {
-          console.error("REMOVE ONE FIRESTORE WRITE ERROR", e);
+          console.error("REMOVE ONE API ERROR", e);
         }
       }
 
@@ -6128,46 +6088,19 @@ export function CartaPageContent({
       });
 
       try {
-        // 1) orderItems/{id} (si existe)
-        if (orderItemDocId) {
-          await dbgUpdateDoc(
-            doc(db, "orderItems", orderItemDocId),
-            {
-            isComped: true,
-            compedAt: nowMs,
-            compedReason: "Invitación",
-            updatedAt: nowMs,
-          },
-            {
-              label: "carta:handleCompProductFromLine:orderItems",
-              collection: "orderItems",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId,
-            },
-          );
-        }
-
-        // 2) orders/{id}.items[] (si existe)
         if (orderId) {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderId),
-            {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleCompProductFromLine:orders",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId,
-            },
-          );
+          const result = await compLineViaApi({
+            orderId,
+            lineId: lineEditorTarget.id,
+            comped: true,
+            reason: "Invitación",
+          });
+          if (!result.ok) {
+            console.error("COMP PRODUCT API ERROR", result.error);
+          }
         }
-
       } catch (error) {
-        console.error("COMP PRODUCT FIRESTORE ERROR", error);
+        console.error("COMP PRODUCT API ERROR", error);
       }
 
       setComandaLineActionsOpen(false);
@@ -6201,20 +6134,11 @@ export function CartaPageContent({
       });
       if (orderIdFromUrl && isFirebaseConfigured) {
         try {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderIdFromUrl),
-            {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleRepeatItem",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderIdFromUrl,
-            },
-          );
+          await syncEmbeddedOrderItems({
+            operation: "persist_items",
+            orderId: orderIdFromUrl,
+            lines: next,
+          });
         } catch (e) {
           console.error("handleRepeatItem", e);
         }
@@ -6325,21 +6249,11 @@ export function CartaPageContent({
 
   const handleMarkOrderClosed = async () => {
     if (!orderIdFromUrl || !isFirebaseConfigured) return;
-    const ref = doc(db, "orders", orderIdFromUrl);
-    await dbgUpdateDoc(
-      ref,
-      {
-      status: "closed",
-      closedAt: serverTimestamp(),
-    },
-      {
-        label: "carta:handleMarkOrderClosed",
-        collection: "orders",
-        restaurantId,
-        tableId: selectedTableId,
-        orderId: orderIdFromUrl,
-      },
-    );
+    const result = await closeOrderViaApi({ orderId: orderIdFromUrl });
+    if (!result.ok) {
+      console.error("[handleMarkOrderClosed]", result.error);
+      return;
+    }
     setOrder([]);
   };
 
@@ -6428,8 +6342,16 @@ export function CartaPageContent({
       (element) => element.isActive !== false,
     );
     if (!selectedTpvFloorPlanId) return activeElements;
+    const visibleOperationalFloorPlans = floorPlans.filter(
+      (plan) => plan.active !== false && plan.showInTpv !== false,
+    );
+    const hasMultipleOperationalFloorPlans = visibleOperationalFloorPlans.length > 1;
     return activeElements.filter((element) =>
-      entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
+      hasMultipleOperationalFloorPlans &&
+      !isDecorativePlanElementType(element.type) &&
+      !element.floorPlanId?.trim()
+        ? false
+        : entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
     );
   }, [tablesList, selectedTpvFloorPlanId, floorPlans]);
 
@@ -6440,10 +6362,81 @@ export function CartaPageContent({
     );
   }, [zonesList, selectedTpvFloorPlanId, floorPlans]);
 
-  /** TPV embebido: un plano = un espacio; no capa ni fitting por zonas legacy. */
+  const readonlyMapIntegration = useMemo(() => {
+    const hasV2Draft = salaEditorDraftDocument != null;
+    const normalizedFloorPlanId = String(selectedTpvFloorPlanId ?? "").trim();
+    let reasonForFallback: string | null = null;
+    let matchedSpaceId: string | null = null;
+
+    if (!hasV2Draft) {
+      reasonForFallback = salaEditorDraftLoadError
+        ? "draft-load-error"
+        : "missing-v2-draft";
+    } else if (!normalizedFloorPlanId) {
+      reasonForFallback = "missing-selected-floor-plan";
+    }
+
+    const matchedSpace =
+      hasV2Draft && normalizedFloorPlanId
+        ? salaEditorDraftDocument.espacios.find(
+            (space) =>
+              String(space.legacyFloorPlanId ?? "").trim() === normalizedFloorPlanId,
+          ) ?? null
+        : null;
+
+    if (matchedSpace) {
+      matchedSpaceId = matchedSpace.id;
+    } else if (!reasonForFallback && normalizedFloorPlanId) {
+      reasonForFallback = "missing-linked-v2-space";
+    }
+
+    const contract =
+      salaEditorDraftDocument && matchedSpace
+        ? buildEditorTpvReadonlyVisualContract(
+            salaEditorDraftDocument,
+            matchedSpace.id,
+          )
+        : null;
+
+    if (!contract && matchedSpace && !reasonForFallback) {
+      reasonForFallback = "readonly-contract-unavailable";
+    }
+
+    const visualLayersEnabled = contract
+      ? [
+          contract.surfaces.length > 0 ? "surfaces" : "",
+          contract.zones.length > 0 ? "zones" : "",
+          contract.walls.length > 0 ? "walls" : "",
+          contract.wallAttachments.length > 0 ? "wallAttachments" : "",
+          contract.structuralElements.length > 0 ? "structural" : "",
+          contract.landscapeElements.length > 0 ? "landscape" : "",
+          contract.operationalElementInstances.length > 0
+            ? "operationalInstances"
+            : "",
+        ].filter(Boolean)
+      : [];
+
+    return {
+      hasV2Draft,
+      matchedSpaceId,
+      contract,
+      rendererUsed: contract ? "v2-readonly" : "legacy-fallback",
+      visualLayersEnabled,
+      operationalOverlayEnabled: true,
+      reasonForFallback,
+    } as const;
+  }, [
+    salaEditorDraftDocument,
+    salaEditorDraftLoadError,
+    selectedTpvFloorPlanId,
+  ]);
+
+  const useReadonlyV2Map = readonlyMapIntegration.rendererUsed === "v2-readonly";
+
+  /** TPV: las zonas son capa visual readonly del espacio, no elementos operativos. */
   const zonesForOperationalMapRender = useMemo(
-    () => (embeddedInOperacion ? [] : zonesForTpvMap),
-    [embeddedInOperacion, zonesForTpvMap],
+    () => (useReadonlyV2Map ? [] : zonesForTpvMap),
+    [useReadonlyV2Map, zonesForTpvMap],
   );
 
   const selectedTpvFloorPlan = useMemo(() => {
@@ -6824,10 +6817,6 @@ export function CartaPageContent({
   const isHeavyLoad = sortedTables.length > 20;
   const isUltraFastMode = isHeavyLoad || rapidChangesRef.current > 5;
 
-  const [restaurantWaiters, setRestaurantWaiters] = useState<
-    { id: string; name: string }[]
-  >([]);
-
   const handleMapWheel = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
     e.preventDefault();
   }, []);
@@ -7041,20 +7030,8 @@ export function CartaPageContent({
         ordersByTable,
       );
       const serviceTableId = group.serviceTableId;
-      const activeLineCount = countActiveComandaLines(
-        ordersByTable[serviceTableId] ?? [],
-      );
+      const tableLines = ordersByTable[serviceTableId] ?? [];
       const busy = mapOccupied;
-      const occupancyStartMs = firestoreOccupancyStartMsByTable[serviceTableId];
-      const minutesOccupied =
-        occupancyStartMs != null
-          ? Math.max(0, (now - occupancyStartMs) / 60000)
-          : 0;
-      const isCriticalTable =
-        busy &&
-        occupancyStartMs != null &&
-        minutesOccupied >= 45 &&
-        activeLineCount >= 8;
       const openedAtMsRaw = orderOpenedAtByTable[serviceTableId];
       const openedAtMs =
         typeof openedAtMsRaw === "number" && Number.isFinite(openedAtMsRaw)
@@ -7063,26 +7040,29 @@ export function CartaPageContent({
       const ot = orderTotalsByTable[serviceTableId];
       const orderTotal =
         typeof ot === "number" && Number.isFinite(ot) ? ot : undefined;
-      const priorityLevel = computeMapVisualPriorityLevel(
-        openedAtMs,
-        now,
-        orderTotal,
-      );
       const readyToClose = group.memberIds.some((memberId) =>
         salaReadyToCloseTableIds.has(memberId),
       );
       const rp = reservationPressureByTableId[tableId];
+      const operationalState = resolveTableOperationalVisualState(
+        buildTableOperationalVisualInput({
+          busy,
+          reserved: Boolean(reservedByTableId[tableId]),
+          lines: tableLines,
+          occupancyStartMs: firestoreOccupancyStartMsByTable[serviceTableId],
+          orderOpenedAtMs: openedAtMs,
+          orderTotal,
+          mapNow: now,
+          readyToClose,
+          reservationPressure: rp ?? null,
+        }),
+      );
 
       if (activeMapFilter === "delayed") {
-        return rp?.type === "late";
+        return operationalState === "retrasada";
       }
 
-      const dot = mapAlertDotFromTileInputs(
-        isCriticalTable,
-        priorityLevel,
-        readyToClose,
-        rp ?? null,
-      );
+      const dot = mapAlertDotFromOperationalState(operationalState);
 
       if (activeMapFilter === "critical") {
         return dot === "critical";
@@ -7108,51 +7088,121 @@ export function CartaPageContent({
     reservationPressureByTableId,
   ]);
 
+  const readonlyV2TableHitboxParity = useMemo(() => {
+    const contract = readonlyMapIntegration.contract;
+    const visibleTableIds = new Set(
+      mapTablesForChipFilter.map((table) => String(table.id ?? "").trim()).filter(Boolean),
+    );
+    const instanceByLegacyTableId = new Map<
+      string,
+      NonNullable<typeof contract>["operationalElementInstances"][number]
+    >();
+    const visibleV2WithoutTable: Array<{
+      instanceId: string;
+      name: string;
+      legacyTableId: string | null;
+      reason: "missing-legacy-table-id" | "table-not-renderable";
+    }> = [];
+
+    for (const instance of contract?.operationalElementInstances ?? []) {
+      if (instance.elementType !== "TABLE") continue;
+      const legacyTableId =
+        typeof instance.metadata.legacyTableId === "string"
+          ? instance.metadata.legacyTableId.trim()
+          : "";
+      if (legacyTableId && visibleTableIds.has(legacyTableId)) {
+        instanceByLegacyTableId.set(legacyTableId, instance);
+        continue;
+      }
+      visibleV2WithoutTable.push({
+        instanceId: instance.id,
+        name: instance.name,
+        legacyTableId: legacyTableId || null,
+        reason: legacyTableId ? "table-not-renderable" : "missing-legacy-table-id",
+      });
+    }
+
+    const tableWithoutV2 = mapTablesForChipFilter
+      .map((table) => ({
+        tableId: String(table.id ?? "").trim(),
+        name: String(table.name ?? "").trim(),
+      }))
+      .filter((table) => table.tableId && !instanceByLegacyTableId.has(table.tableId));
+
+    const matchedInstanceIds = [...instanceByLegacyTableId.values()].map(
+      (instance) => instance.id,
+    );
+    const rotatedMatches = [...instanceByLegacyTableId.values()].filter(
+      (instance) =>
+        typeof instance.rotation === "number" &&
+        Number.isFinite(instance.rotation) &&
+        Math.abs(instance.rotation) > 0.001,
+    ).length;
+
+    return {
+      instanceByLegacyTableId,
+      matchedInstanceIds,
+      matchedTables: instanceByLegacyTableId.size,
+      visibleV2WithoutTable,
+      tableWithoutV2,
+      rotatedMatches,
+      fallbackLegacyVisible: tableWithoutV2.length,
+    };
+  }, [mapTablesForChipFilter, readonlyMapIntegration.contract]);
+
   const decorativePlanElementsForTpv = useMemo(() => {
     return planElementsForTpvMap.filter((element) =>
       isDecorativePlanElementType(element.type),
     );
   }, [planElementsForTpvMap]);
 
-  const mapElementsForTpvRender = useMemo(() => {
+  const decorativeRenderedForTpvMap = useMemo(() => {
     const tableIds = new Set(
       mapTablesForChipFilter.map((table) => String(table.id ?? "").trim()),
     );
-    const decorative = decorativePlanElementsForTpv.filter(
+    return decorativePlanElementsForTpv.filter(
       (element) => !tableIds.has(String(element.id ?? "").trim()),
     );
-    return [...decorative, ...mapTablesForChipFilter];
   }, [decorativePlanElementsForTpv, mapTablesForChipFilter]);
 
+  const mapElementsForTpvRender = useMemo(() => {
+    if (useReadonlyV2Map) return [...mapTablesForChipFilter];
+    return [...decorativeRenderedForTpvMap, ...mapTablesForChipFilter];
+  }, [decorativeRenderedForTpvMap, mapTablesForChipFilter, useReadonlyV2Map]);
+
+  const mapViewportFitSourceForTpv = useMemo<{
+    source: "tables" | "decoratives" | "empty";
+    elements: Table[];
+  }>(() => {
+    const tableFitElements =
+      mapTablesForChipFilter.length > 0 ? mapTablesForChipFilter : tablesVisibleOnMap;
+    if (tableFitElements.length > 0) {
+      return { source: "tables", elements: tableFitElements };
+    }
+    if (decorativeRenderedForTpvMap.length > 0) {
+      return { source: "decoratives", elements: decorativeRenderedForTpvMap };
+    }
+    return { source: "empty", elements: [] };
+  }, [decorativeRenderedForTpvMap, mapTablesForChipFilter, tablesVisibleOnMap]);
+
   const mapViewportFitElementsForTpv = useMemo(() => {
-    if (mapTablesForChipFilter.length > 0) return mapTablesForChipFilter;
-    return tablesVisibleOnMap;
-  }, [mapTablesForChipFilter, tablesVisibleOnMap]);
+    return mapViewportFitSourceForTpv.elements;
+  }, [mapViewportFitSourceForTpv]);
+
+  const viewportFitSourceForTpv = mapViewportFitSourceForTpv.source;
 
   const tpvOperationalMapElementsForRender = useMemo(() => {
-    if (!embeddedInOperacion) return mapElementsForTpvRender;
-    return scaleTpvOperationalMapElements(
-      mapElementsForTpvRender,
-      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
-    );
-  }, [embeddedInOperacion, mapElementsForTpvRender]);
+    return mapElementsForTpvRender;
+  }, [mapElementsForTpvRender]);
 
   const tpvOperationalPlanSizeForRender = useMemo(() => {
-    if (!embeddedInOperacion) return selectedTpvFloorPlanSize;
-    return scaleTpvOperationalPlanSize(
-      selectedTpvFloorPlanSize,
-      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
-    );
-  }, [embeddedInOperacion, selectedTpvFloorPlanSize]);
+    return selectedTpvFloorPlanSize;
+  }, [selectedTpvFloorPlanSize]);
 
   const tpvOperationalViewportFitElements = useMemo(() => {
     if (!embeddedInOperacion) return mapViewportFitElementsForTpv;
-    const fitSource = filterTpvOperationalViewportFitElements(
+    return filterTpvOperationalViewportFitElements(
       mapViewportFitElementsForTpv,
-    );
-    return scaleTpvOperationalMapElements(
-      fitSource,
-      TPV_OPERATIONAL_MAP_VISUAL_SCALE,
     );
   }, [embeddedInOperacion, mapViewportFitElementsForTpv]);
 
@@ -7160,12 +7210,13 @@ export function CartaPageContent({
     const planKey = selectedTpvFloorPlanId ?? "legacy";
     return [
       planKey,
-      embeddedInOperacion ? TPV_OPERATIONAL_MAP_VISUAL_SCALE : 1,
       tpvOperationalPlanSizeForRender.width,
       tpvOperationalPlanSizeForRender.height,
       tpvOperationalMapElementsForRender.length,
       planElementsForTpvMap.length,
       zonesForOperationalMapRender.length,
+      readonlyMapIntegration.rendererUsed,
+      readonlyMapIntegration.matchedSpaceId ?? "",
       tpvOperationalMapElementsForRender
         .map((element) =>
           [
@@ -7202,6 +7253,8 @@ export function CartaPageContent({
     tpvOperationalPlanSizeForRender,
     tpvOperationalMapElementsForRender,
     planElementsForTpvMap,
+    readonlyMapIntegration.matchedSpaceId,
+    readonlyMapIntegration.rendererUsed,
     zonesForOperationalMapRender,
   ]);
 
@@ -7236,6 +7289,83 @@ export function CartaPageContent({
     },
     [firestoreOccupancyStartMsByTable, now],
   );
+
+  const readonlyV2OperationalStateByLegacyTableId = useMemo(() => {
+    if (!useReadonlyV2Map) return {};
+    const stateByTableId: Record<string, SalaEditorReadonlyTpvOperationalState> = {};
+    for (const table of mapTablesForChipFilter) {
+      const tableId = String(table.id ?? "").trim();
+      if (!tableId) continue;
+      const group = resolveJoinedTableGroupMapState(
+        tableId,
+        groupedTablesMapHandlers,
+        firestoreOccupiedTableIds,
+        ordersByTable,
+      );
+      const serviceTableId = group.serviceTableId;
+      const busy = group.busy;
+      const tableLines = ordersByTable[serviceTableId] ?? [];
+      const openedAtMsRaw = orderOpenedAtByTable[serviceTableId];
+      const openedAtMs =
+        typeof openedAtMsRaw === "number" && Number.isFinite(openedAtMsRaw)
+          ? openedAtMsRaw
+          : undefined;
+      const orderTotalRaw = orderTotalsByTable[serviceTableId];
+      const orderTotal =
+        typeof orderTotalRaw === "number" && Number.isFinite(orderTotalRaw)
+          ? orderTotalRaw
+          : undefined;
+      const reservationPressure = reservationPressureByTableId[tableId] ?? null;
+      const state = resolveTableOperationalVisualState(
+        buildTableOperationalVisualInput({
+          busy,
+          reserved: Boolean(reservedByTableId[tableId]),
+          lines: tableLines,
+          occupancyStartMs: firestoreOccupancyStartMsByTable[serviceTableId],
+          orderOpenedAtMs: openedAtMs,
+          orderTotal,
+          mapNow: now,
+          readyToClose: salaReadyToCloseTableIds.has(serviceTableId),
+          reservationPressure,
+        }),
+      );
+      stateByTableId[tableId] = state;
+    }
+    return stateByTableId;
+  }, [
+    firestoreOccupancyStartMsByTable,
+    firestoreOccupiedTableIds,
+    groupedTablesMapHandlers,
+    mapTablesForChipFilter,
+    now,
+    orderOpenedAtByTable,
+    orderTotalsByTable,
+    ordersByTable,
+    reservationPressureByTableId,
+    reservedByTableId,
+    salaReadyToCloseTableIds,
+    selectedTableId,
+    useReadonlyV2Map,
+  ]);
+
+  const readonlyV2SelectedLegacyTableIds = useMemo(() => {
+    if (!useReadonlyV2Map || !selectedTableId) return [];
+    return mapTablesForChipFilter
+      .map((table) => String(table.id ?? "").trim())
+      .filter((tableId) => {
+        if (!tableId) return false;
+        return (
+          selectedTableId === tableId ||
+          groupedTablesMapHandlers?.resolveMainTableId?.(tableId) ===
+            selectedTableId
+        );
+      });
+  }, [
+    groupedTablesMapHandlers,
+    mapTablesForChipFilter,
+    selectedTableId,
+    useReadonlyV2Map,
+  ]);
 
   const handleOpenTableOrder = useCallback(
     (tableId: string, options?: { entry?: "tpv" | "summary" }) => {
@@ -7432,20 +7562,10 @@ export function CartaPageContent({
     async (setRequested: boolean) => {
       if (!restaurantId || !isFirebaseConfigured) return;
       if (orderIdFromUrl) {
-        await dbgUpdateDoc(
-          doc(db, "orders", orderIdFromUrl),
-          {
-          paymentRequestedAt: setRequested ? serverTimestamp() : null,
-          updatedAt: serverTimestamp(),
-        },
-          {
-            label: "carta:updateActiveOrderPaymentRequest:byOrderId",
-            collection: "orders",
-            restaurantId,
-            tableId: selectedTableId,
-            orderId: orderIdFromUrl,
-          },
-        );
+        await patchOrderMetadataViaApi({
+          orderId: orderIdFromUrl,
+          paymentRequestedAt: setRequested ? Date.now() : null,
+        });
         return;
       }
       if (!selectedTableId) return;
@@ -7458,20 +7578,10 @@ export function CartaPageContent({
       for (const d of snap.docs) {
         const data = d.data() as { status?: string };
         if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
-        await dbgUpdateDoc(
-          d.ref,
-          {
-          paymentRequestedAt: setRequested ? serverTimestamp() : null,
-          updatedAt: serverTimestamp(),
-        },
-          {
-            label: "carta:updateActiveOrderPaymentRequest:queryFirstActive",
-            collection: "orders",
-            restaurantId,
-            tableId: selectedTableId,
-            orderId: d.id,
-          },
-        );
+        await patchOrderMetadataViaApi({
+          orderId: d.id,
+          paymentRequestedAt: setRequested ? Date.now() : null,
+        });
         break;
       }
     },
@@ -7510,20 +7620,10 @@ export function CartaPageContent({
       setIsSavingOrderNote(true);
       try {
         if (orderIdFromUrl) {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderIdFromUrl),
-            {
+          await patchOrderMetadataViaApi({
+            orderId: orderIdFromUrl,
             note: value,
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleSaveOrderNote:byOrderId",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderIdFromUrl,
-            },
-          );
+          });
         } else if (selectedTableId) {
           const q = query(
             collection(db, "orders"),
@@ -7534,20 +7634,10 @@ export function CartaPageContent({
           for (const d of snap.docs) {
             const data = d.data() as { status?: string };
             if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
-            await dbgUpdateDoc(
-              d.ref,
-              {
+            await patchOrderMetadataViaApi({
+              orderId: d.id,
               note: value,
-              updatedAt: serverTimestamp(),
-            },
-              {
-                label: "carta:handleSaveOrderNote:queryFirstActive",
-                collection: "orders",
-                restaurantId,
-                tableId: selectedTableId,
-                orderId: d.id,
-              },
-            );
+            });
             break;
           }
         }
@@ -8011,8 +8101,12 @@ export function CartaPageContent({
 
         updateCurrentTableOrder(() => nextOrder);
 
-        const items = serializeOrderLinesToFirestoreItems(nextOrder);
-        const grandTotal = sumCartOrderLinesTotal(nextOrder);
+        // Solo las líneas liberables: incluir enviadas previas provoca
+        // LINE_STATE_CONFLICT en mergeUpsertedLines y bloquea el lote.
+        const items = serializeOrderLinesToFirestoreItems(linesToSend) as Record<
+          string,
+          unknown
+        >[];
 
         const draftOrderId =
           openDraftOrderIdByTableRef.current[selectedTableId]?.trim() || "";
@@ -8025,163 +8119,23 @@ export function CartaPageContent({
                 ? openOrderIdsForTable[0]!
                 : null;
 
-        const persistedOrderRef = existingOrderId
-          ? doc(db, "orders", existingOrderId)
-          : await dbgAddDoc(
-              collection(db, "orders"),
-              {
-              restaurantId,
-              tableId: selectedTableId,
-              table: tableLabel,
-              status: "sent",
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              items,
-              total: Number.isFinite(grandTotal) ? grandTotal : 0,
-            },
-              {
-                label: "carta:sendLinesToComanda:createOrder",
-                collection: "orders",
-                restaurantId,
-                tableId: selectedTableId,
-              },
-            );
-
-        openDraftOrderIdByTableRef.current[selectedTableId] =
-          persistedOrderRef.id;
-
-        if (existingOrderId) {
-          await dbgUpdateDoc(
-            persistedOrderRef,
-            {
-            status: "sent",
-            updatedAt: serverTimestamp(),
-            items,
-            total: Number.isFinite(grandTotal) ? grandTotal : 0,
-          },
-            {
-              label: "carta:sendLinesToComanda:updateOrder",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: persistedOrderRef.id,
-            },
-          );
-        }
-
-        const batch = new DbgWriteBatch(db, {
-          label: "carta:sendLinesToComanda:orderItemsBatch",
-          collection: "orderItems",
-          restaurantId,
+        const syncResult = await syncOrderItemsViaApi({
+          operation: existingOrderId ? "send_items" : "create_open",
+          orderId: existingOrderId,
           tableId: selectedTableId,
-          orderId: persistedOrderRef.id,
+          tableLabel,
+          items,
+          markSent: !existingOrderId,
         });
-        linesToSend.forEach((l) => {
-          const shadowCatalog = buildProductResolverParityContextFromProduct(
-            l.product,
-            operationalShadowCatalogSources,
-          );
-          const { stationFields } = resolveOperationalLineFieldsForCartLine(
-            l,
-            shadowCatalog,
-          );
-          const opFields = resolveOperationStationFieldsForCartLine(l);
-          warnDevIfSentLineMissingStation({
-            lineId: l.id,
-            productId: String(l.product.id),
-            productName: String(l.product.nombre ?? ""),
-            fields: stationFields,
-          });
-          const ref = orderItemRefByLineId.get(l.id);
-          if (!ref) return;
-          const lCourse = normalizeComandaCourseForStorage(l.course);
-          const extrasPayload = Array.isArray(l.extras)
-            ? l.extras
-                .filter((ex) => ex && typeof ex.name === "string")
-                .map((ex) => ({
-                  name: String(ex.name).trim(),
-                  price: Number.isFinite(Number(ex.price))
-                    ? Number(ex.price)
-                    : 0,
-                }))
-                .filter((ex) => ex.name !== "")
-            : [];
-          const selectedModifiersPayload = selectedModifiersToFirestorePayload(
-            l.selectedModifiers,
-          );
-          const linePresentation = resolveOrderLineModifierPresentation({
-            baseProductName: String(l.product.nombre ?? ""),
-            displayName: l.displayName,
-            selectedModifiers: l.selectedModifiers,
-            lineNote: l.lineNote,
-          });
-          batch.set(ref, {
-            restaurantId,
-            orderId: persistedOrderRef.id,
-            tableId: selectedTableId,
-            tableName: tableLabel,
-            lineId: l.id,
-            productId: String(l.product.id),
-            name: linePresentation.displayName,
-            quantity: l.quantity,
-            status: "pending",
-            sentAt: now,
-            createdAt: now,
-            updatedAt: now,
-            categoryName: l.product.categoria ?? undefined,
-            ...(lCourse != null ? { course: lCourse } : {}),
-            extras: extrasPayload,
-            ...(selectedModifiersPayload.length > 0
-              ? {
-                  selectedModifiers: selectedModifiersPayload,
-                  modifierTotal: resolveLineModifierTotal(l),
-                  modifiersLabel: linePresentation.modifiersLabel,
-                }
-              : {}),
-            ...(linePresentation.displayName
-              ? { displayName: linePresentation.displayName }
-              : {}),
-            note: linePresentation.note,
-            ...stationFieldsToFirestorePayload(stationFields),
-            ...operationStationFieldsToFirestorePayload(opFields),
-            ...(inventoryCostByLineId.has(l.id)
-              ? {
-                  inventoryCost: inventoryCostSnapshotToFirestore(
-                    inventoryCostByLineId.get(l.id)!,
-                  ),
-                }
-              : {}),
-          });
-        });
-        await batch.commit();
+        if (!syncResult.ok) {
+          throw new Error(syncResult.error);
+        }
+        const persistedOrderRef = doc(db, "orders", syncResult.orderId);
+
+        openDraftOrderIdByTableRef.current[selectedTableId] = syncResult.orderId;
 
         try {
           const inventoryRestaurantId = operationalRestaurantId ?? restaurantId;
-          const inventoryResult = await createStockMovementsForModifierConsumption({
-            restaurantId: inventoryRestaurantId,
-            orderId: persistedOrderRef.id,
-            lines: linesToSend,
-            userId: waiterId,
-          });
-          if (inventoryResult.failed > 0) {
-            console.warn(
-              "[Hostly Inventory] algunos movimientos de modificador no se crearon; comanda enviada.",
-              inventoryResult,
-            );
-          }
-          if (inventoryResult.movementIds.length > 0) {
-            const applyResult = await applyCreatedStockMovements({
-              restaurantId: inventoryRestaurantId,
-              movementIds: inventoryResult.movementIds,
-            });
-            if (applyResult.failed > 0) {
-              console.warn(
-                "[Hostly Inventory] algunos movimientos no se aplicaron al stock; comanda enviada.",
-                applyResult,
-              );
-            }
-          }
-
           const recipeResult = await createStockMovementsForRecipeConsumption({
             restaurantId: inventoryRestaurantId,
             orderId: persistedOrderRef.id,
@@ -8258,7 +8212,7 @@ export function CartaPageContent({
             tableName: tableLabel,
             lineCount: linesToSend.length,
             lineIds: linesToSend.map((line) => line.id),
-            total: Number.isFinite(grandTotal) ? grandTotal : 0,
+            total: Number.isFinite(syncResult.total) ? syncResult.total : 0,
             action: options?.releaseAction ?? "send_to_comanda",
             route: "tpv",
           }),
@@ -8864,14 +8818,25 @@ export function CartaPageContent({
       .filter((g) => g.items.length > 0);
   }, [cocinaItems]);
 
-  const hasPendingItems = useMemo(
-    () => order.some((l) => l.status === "pending"),
-    [order],
+  const comandaReleasableLines = useMemo(
+    () => selectLinesToReleaseOnComanda(visibleOrderLines),
+    [visibleOrderLines],
   );
 
-  const hasPendingComandaRelease = useMemo(
-    () => selectLinesToReleaseOnComanda(visibleOrderLines).length > 0,
-    [visibleOrderLines],
+  const hasPendingComandaRelease = comandaReleasableLines.length > 0;
+
+  const enviarComandaActionLabel = useMemo(
+    () =>
+      formatEnviarComandaActionLabel({
+        isSending: isComandaSending,
+        sentFlash: comandaSentFlash,
+        releasableLineCount: comandaReleasableLines.length,
+      }),
+    [
+      comandaReleasableLines.length,
+      comandaSentFlash,
+      isComandaSending,
+    ],
   );
 
   const tpvRushMode = useMemo(
@@ -9222,7 +9187,8 @@ export function CartaPageContent({
     const coursePassChipLabel = comandaCoursePassChipLabel(courseForBadge);
     const lineSt = normalizeOrderLineStatus(item.status);
     const statusChipClickable =
-      isSentBucketOrderLineStatus(lineSt) || lineSt === "prepared";
+      canKdsManage &&
+      (isSentBucketOrderLineStatus(lineSt) || lineSt === "prepared");
     /* ¿Esta línea pertenece al pase activo? Sirve para resaltar
        sutilmente la fila y oscurecer su badge inline, ayudando al
        camarero a localizar visualmente las líneas del pase actual.
@@ -9440,13 +9406,16 @@ export function CartaPageContent({
                   }
                   style={{
                     flexShrink: 0,
-                    fontSize: 8,
-                    fontWeight: 800,
+                    fontSize: item.status === "pending" || heldForMarch ? 10 : 8,
+                    fontWeight: 860,
                     letterSpacing: "0.04em",
                     textTransform: "uppercase",
-                    padding: "1px 5px",
+                    padding:
+                      item.status === "pending" || heldForMarch
+                        ? "2px 7px"
+                        : "1px 5px",
                     borderRadius: 999,
-                    lineHeight: 1.1,
+                    lineHeight: 1.15,
                     ...(heldForMarch
                       ? comandaHeldForMarchBadgeStyle()
                       : comandaStatusBadgeStyle(item.status)),
@@ -12846,8 +12815,9 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
 .carta-comanda-line.is-pending {
   position: relative;
   padding-left: 12px !important;
-  background: rgba(15, 23, 42, 0.04) !important;
-  border: 1px solid rgba(15, 23, 42, 0.11) !important;
+  background: color-mix(in srgb, var(--hostly-warning-soft) 88%, #fff7ed) !important;
+  border: 1px solid rgba(217, 119, 6, 0.28) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 .carta-comanda-line.is-pending::before {
@@ -12858,10 +12828,15 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   transform: translateY(-50%);
   width: 3px;
   height: calc(100% - 6px);
-  max-height: 24px;
+  max-height: 28px;
   border-radius: 2px;
-  background: rgba(30, 41, 59, 0.72);
+  background: #d97706;
   pointer-events: none;
+}
+
+.carta-comanda-line.is-pending .carta-comanda-name-primary {
+  color: #1f2933;
+  font-weight: 820;
 }
 
 .carta-comanda-line.is-held-for-march {
@@ -13869,13 +13844,19 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
   z-index: 2;
 }
 
-.carta-comanda-button:hover:not(:disabled) {
-  background: #f1f5f9 !important;
-  border-color: rgba(56, 189, 248, 0.35) !important;
-}
-
 .carta-comanda-button {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   touch-action: manipulation;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
@@ -13885,8 +13866,32 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
     opacity 120ms ease !important;
 }
 
+.carta-comanda-button:hover:not(:disabled):not(.is-pending-action) {
+  background: #f1f5f9 !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+.carta-comanda-button.is-pending-action {
+  color: #78350f !important;
+  border-color: rgba(217, 119, 6, 0.55) !important;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%) !important;
+  box-shadow:
+    0 0 0 2px rgba(245, 158, 11, 0.18),
+    0 6px 16px rgba(180, 83, 9, 0.22) !important;
+}
+
+.carta-comanda-button.is-pending-action:hover:not(:disabled) {
+  filter: brightness(1.03);
+  border-color: rgba(180, 83, 9, 0.55) !important;
+}
+
 .carta-comanda-button:active:not(:disabled) {
   transform: scale(0.985);
+}
+
+.carta-comanda-button.is-sending {
+  opacity: 0.72 !important;
+  cursor: wait !important;
 }
 
 .carta-comanda-button.is-success {
@@ -13898,13 +13903,24 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
     0 5px 14px rgba(16, 185, 129, 0.14) !important;
 }
 
-.carta-comanda-button:disabled {
+.carta-comanda-button:disabled:not(.is-success):not(.is-sending) {
   opacity: 0.45 !important;
   cursor: not-allowed !important;
   background: #e5e7eb !important;
   color: #6b7280 !important;
   box-shadow: none !important;
   filter: none !important;
+}
+
+.carta-comanda-button.is-sending:disabled {
+  opacity: 0.72 !important;
+  cursor: wait !important;
+  color: #78350f !important;
+  border-color: rgba(217, 119, 6, 0.45) !important;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%) !important;
+  box-shadow:
+    0 0 0 2px rgba(245, 158, 11, 0.12),
+    0 4px 12px rgba(180, 83, 9, 0.16) !important;
 }
 
 .carta-comanda-button.is-success:disabled {
@@ -15226,6 +15242,26 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     ))}
                   </select>
                 </label>
+                {restaurantWaitersLoadStatus === "error" ? (
+                  <div
+                    className="hostly-carta-config-alert hostly-carta-config-alert--error flex min-w-0 flex-1 items-center justify-between gap-2"
+                    role="alert"
+                    data-error-kind={restaurantWaitersErrorKind ?? "network"}
+                  >
+                    <span>No se pudo cargar el equipo</span>
+                    <button
+                      type="button"
+                      className="hostly-button-secondary hostly-button-compact"
+                      onClick={() =>
+                        setRestaurantWaitersReloadToken(
+                          (current) => current + 1,
+                        )
+                      }
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                ) : null}
               </div>
               ) : null}
               {embeddedInOperacion && activeOperator ? (
@@ -15297,7 +15333,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                       cartaHeaderMobile && !embeddedInOperacion ? "420px" : 0,
                   }}
                 >
-                {tablesVisibleOnMap.length === 0 ? (
+                {tpvOperationalMapElementsForRender.length === 0 &&
+                !useReadonlyV2Map ? (
                   <p
                     style={{
                       color: "#64748b",
@@ -15308,7 +15345,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   >
                     {t("cartaTpv.mapEmpty")}
                   </p>
-                ) : mapTablesOrderedByVisualPriority.length === 0 ? (
+                ) : tablesVisibleOnMap.length > 0 &&
+                  mapTablesOrderedByVisualPriority.length === 0 ? (
                   <p
                     style={{
                       color: "#64748b",
@@ -15319,7 +15357,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                   >
                     No hay mesas para este filtro de camarero.
                   </p>
-                ) : mapTablesForChipFilter.length === 0 ? (
+                ) : tablesVisibleOnMap.length > 0 &&
+                  mapTablesForChipFilter.length === 0 ? (
                   <p
                     style={{
                       color: "#64748b",
@@ -15342,7 +15381,6 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     editorPlanSurface
                     editorVisualPreset="premium"
                     mapLayoutEmphasis
-                    hideZoneOverlays
                     floorSurfacePreset={
                       cartaHeaderMobile && embeddedInOperacion
                         ? "stone"
@@ -15351,7 +15389,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     viewportFitPaddingPx={
                       embeddedInOperacion
                         ? TPV_OPERATIONAL_FIT_PADDING_PX
-                        : 16
+                        : 8
                     }
                     viewportFitAlign="center"
                     viewportFitOffsetX={
@@ -15365,7 +15403,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         ? TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER
                         : 1
                     }
-                    viewportFitMode="content"
+                    viewportFitMode="plan"
                     viewportFitElements={tpvOperationalViewportFitElements}
                     viewportFitZones={[]}
                     viewportFitZoomMax={
@@ -15379,6 +15417,25 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                     planSize={tpvOperationalPlanSizeForRender}
                     elements={tpvOperationalMapElementsForRender}
                     zones={zonesForOperationalMapRender}
+                    readonlyUnderlay={
+                      useReadonlyV2Map && readonlyMapIntegration.contract ? (
+                        <SalaEditorReadonlyMap
+                          contract={readonlyMapIntegration.contract}
+                          mode="logical-underlay"
+                          operationalMode="tpv"
+                          operationalStateByLegacyTableId={
+                            readonlyV2OperationalStateByLegacyTableId
+                          }
+                          operationalSelectedLegacyTableIds={
+                            readonlyV2SelectedLegacyTableIds
+                          }
+                          operationalVisibleInstanceIds={
+                            readonlyV2TableHitboxParity.matchedInstanceIds
+                          }
+                          coordinateScale={1}
+                        />
+                      ) : null
+                    }
                     renderElement={(ctx) => {
                       const tableId = ctx.elementId;
                       if (isDecorativePlanElementType(ctx.element.type)) {
@@ -15403,10 +15460,21 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         return null;
                       }
                       const stableTable = tablesById[tableId] ?? ctx.element;
-                      const mapLayoutX = ctx.mapLayoutX;
-                      const mapLayoutY = ctx.mapLayoutY;
-                      const mapTileWidth = ctx.mapTileWidth;
-                      const mapTileHeight = ctx.mapTileHeight;
+                      const readonlyV2MatchedInstance = useReadonlyV2Map
+                        ? readonlyV2TableHitboxParity.instanceByLegacyTableId.get(tableId) ??
+                          null
+                        : null;
+                      const readonlyV2Geometry = readonlyV2MatchedInstance
+                        ? projectOperationalElement(readonlyV2MatchedInstance)
+                        : null;
+                      const mapLayoutX = readonlyV2Geometry?.x ?? ctx.mapLayoutX;
+                      const mapLayoutY = readonlyV2Geometry?.y ?? ctx.mapLayoutY;
+                      const mapTileWidth = readonlyV2Geometry?.width ?? ctx.mapTileWidth;
+                      const mapTileHeight = readonlyV2Geometry?.height ?? ctx.mapTileHeight;
+                      const readonlyV2InteractionOnly =
+                        useReadonlyV2Map && readonlyV2MatchedInstance != null;
+                      const readonlyV2HitboxRotation =
+                        readonlyV2Geometry?.rotation ?? 0;
                       const priorityTable =
                         mapTablesForChipFilter.find(
                           (t) => String(t.id).trim() === tableId,
@@ -15425,9 +15493,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         busy && firestoreOccupiedTableIds.has(serviceTableId)
                           ? formatMapOccupiedDuration(serviceTableId)
                           : null;
-                      const activeLineCount = countActiveComandaLines(
-                        ordersByTable[serviceTableId] ?? [],
-                      );
+                      const tableLines = ordersByTable[serviceTableId] ?? [];
+                      const activeLineCount = countActiveComandaLines(tableLines);
                       const showProductCount = busy && activeLineCount > 0;
                       const badgeTier =
                         activeLineCount >= 8
@@ -15435,36 +15502,36 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           : activeLineCount >= 4
                             ? "medium"
                             : "low";
-                      const occupancyStartMs =
-                        firestoreOccupancyStartMsByTable[serviceTableId];
-                      const minutesOccupied =
-                        occupancyStartMs != null
-                          ? Math.max(0, (now - occupancyStartMs) / 60000)
-                          : 0;
-                      const isCriticalTable =
-                        busy &&
-                        occupancyStartMs != null &&
-                        minutesOccupied >= 45 &&
-                        activeLineCount >= 8;
-                      const ariaTileBusy = busy
-                        ? cartaHeaderMobile
-                          ? `${String(stableTable.name ?? "").trim()}, ${t("cartaTpv.mapOcupada")}`
-                          : `${String(stableTable.name ?? "").trim()}${durationLabel ? `, ${durationLabel}` : ""}${showProductCount ? ` (${activeLineCount})` : ""}, ${t("cartaTpv.mapOcupada")}`
-                        : "";
-
-                      const total = orderTotalsByTable[serviceTableId];
                       const openedAt = orderOpenedAtByTable[serviceTableId];
                       const openedAtMs =
                         typeof openedAt === "number" && Number.isFinite(openedAt)
                           ? openedAt
                           : undefined;
-                      const priorityLevel = computeMapVisualPriorityLevel(
-                        openedAtMs,
-                        now,
+                      const total = orderTotalsByTable[serviceTableId];
+                      const orderTotal =
                         typeof total === "number" && Number.isFinite(total)
                           ? total
-                          : undefined,
-                      );
+                          : undefined;
+                      const mapOperationalInput = buildTableOperationalVisualInput({
+                        busy,
+                        reserved: Boolean(reservedByTableId[tableId]),
+                        lines: tableLines,
+                        occupancyStartMs:
+                          firestoreOccupancyStartMsByTable[serviceTableId],
+                        orderOpenedAtMs: openedAtMs,
+                        orderTotal,
+                        mapNow: now,
+                        readyToClose: salaReadyToCloseTableIds.has(serviceTableId),
+                        reservationPressure:
+                          reservationPressureByTableId[tableId] ?? null,
+                      });
+                      const isCriticalTable = mapOperationalInput.isCriticalTable;
+                      const priorityLevel = mapOperationalInput.priorityLevel;
+                      const ariaTileBusy = busy
+                        ? cartaHeaderMobile
+                          ? `${String(stableTable.name ?? "").trim()}, ${t("cartaTpv.mapOcupada")}`
+                          : `${String(stableTable.name ?? "").trim()}${durationLabel ? `, ${durationLabel}` : ""}${showProductCount ? ` (${activeLineCount})` : ""}, ${t("cartaTpv.mapOcupada")}`
+                        : "";
                       const lastActivityAt = lastActivityAtByTable[serviceTableId];
                       const inactiveMinutes =
                         isBusy &&
@@ -15483,7 +15550,17 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         null;
 
                       return (
-                        <ElementCard
+                        <div
+                          key={stableTable.id}
+                          data-hostly-tpv-legacy-table-overlay={
+                            readonlyV2InteractionOnly
+                              ? "interaction-only"
+                              : useReadonlyV2Map
+                                ? "legacy-fallback-visible"
+                                : undefined
+                          }
+                        >
+                          <ElementCard
                           key={stableTable.id}
                           table={stableTable}
                           tableId={tableId}
@@ -15508,6 +15585,8 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                           mapLayoutY={mapLayoutY}
                           mapTileWidth={mapTileWidth}
                           mapTileHeight={mapTileHeight}
+                          mapRotation={readonlyV2HitboxRotation}
+                          interactionOnly={readonlyV2InteractionOnly}
                           tableShape={
                             stableTable.tableShape === "round"
                               ? "round"
@@ -15593,6 +15672,7 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                               : undefined
                           }
                         />
+                        </div>
                       );
                     }}
                   />
@@ -16023,55 +16103,29 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
               >
                 <button
                   type="button"
-                  className={`carta-comanda-button${
-                    isComandaSending
-                      ? " opacity-60 cursor-not-allowed"
-                      : ""
-                  }${comandaSentFlash ? " is-success" : ""}`}
+                  className={[
+                    "carta-comanda-button",
+                    hasPendingComandaRelease && !comandaSentFlash
+                      ? "is-pending-action"
+                      : "",
+                    isComandaSending ? "is-sending" : "",
+                    comandaSentFlash ? "is-success" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   onClick={() => {
-                    if (!hasPendingItems) return;
+                    if (!hasPendingComandaRelease || isComandaSending) return;
                     void handleComandaAndExit();
                   }}
                   disabled={
                     isComandaSending ||
                     order.length === 0 ||
                     !selectedTableId ||
-                    !hasPendingItems
+                    !hasPendingComandaRelease
                   }
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    fontWeight: 700,
-                    fontSize: 15,
-                    cursor:
-                      isComandaSending ||
-                      order.length === 0 ||
-                      !selectedTableId ||
-                      !hasPendingItems
-                        ? "not-allowed"
-                        : "pointer",
-                    borderRadius: 14,
-                    border: "1px solid rgba(203, 213, 225, 0.9)",
-                    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-                    color: "#111827",
-                    minHeight: 44,
-                    opacity:
-                      isComandaSending
-                        ? 0.6
-                        : order.length === 0 ||
-                            !selectedTableId ||
-                            !hasPendingItems
-                          ? 0.5
-                          : 1,
-                    filter: comandaSentFlash ? "brightness(1.03)" : "none",
-                    transition:
-                      "filter 120ms ease, opacity 120ms ease, background-color 120ms ease",
-                    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.05)",
-                  }}
+                  aria-busy={isComandaSending || undefined}
                 >
-                  {comandaSentFlash
-                    ? "Comanda enviada"
-                    : `Enviar comanda${linesPending.length > 0 ? ` · ${linesPending.length}` : ""}`}
+                  {enviarComandaActionLabel}
                 </button>
                 <div
                   className="carta-tpv-dock-pre-ticket-wrap"
@@ -17341,49 +17395,41 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                                   pm === "cash" ? Math.max(cashParsed - amountToPay, 0) : 0;
 
                                 try {
-                                  const breakdown = calculateFinalTotal(selectedTotal);
-                                  await dbgAddDoc(
-                                    collection(db, "payments"),
-                                    {
-                                    restaurantId,
-                                    tableId: selectedTableId || selectedTable?.id || null,
+                                  const primaryOrderId =
+                                    (orderIdFromUrl?.trim() ? orderIdFromUrl.trim() : null) ??
+                                    (openOrderIdsForTable[0]?.trim()
+                                      ? openOrderIdsForTable[0]!.trim()
+                                      : null);
+                                  if (!primaryOrderId) {
+                                    window.alert("No se encontró la comanda activa para cobrar.");
+                                    return;
+                                  }
+                                  const chargeResult = await chargeOrderViaApi({
+                                    orderId: primaryOrderId,
+                                    tableId: selectedTableId || selectedTable?.id || undefined,
                                     tableName:
                                       selectedTable?.name ||
                                       (selectedTable as { label?: string } | null)?.label ||
-                                      "",
-                                    total: breakdown.finalTotal,
-                                    originalTotal: selectedTotal,
-                                    discountAmount: breakdown.discountAmountValue,
-                                    discountPercent: breakdown.discountPercentValue,
-                                    discountPercentAmount: breakdown.percentAmount,
-                                    discountTotal: breakdown.discountTotal,
-                                    finalTotal: breakdown.finalTotal,
-                                    paymentMethod,
-                                    orderSessionId: orderSessionId || null,
-                                    waiterId,
-                                    waiterEmail,
+                                      undefined,
+                                    paymentMethod: pm,
+                                    type: "split_by_items",
+                                    amount: amountToPay,
+                                    itemIds: selectedItemIds,
+                                    orderSessionId: orderSessionId || undefined,
                                     tip: tipVal,
                                     received: receivedVal,
-                                    voucherAmount: pm === "voucher" ? voucherValue : null,
-                                    voucherUsed: pm === "voucher" ? voucherUsed : null,
-                                    voucherRemaining: pm === "voucher" ? voucherRemaining : null,
-                                    voucherNumber: pm === "voucher" ? voucherNumber.trim() : null,
-                                    cashReceived: pm === "cash" ? cashParsed : null,
+                                    cashReceived: pm === "cash" ? cashParsed : undefined,
                                     change: changeVal,
-                                    status: "paid",
-                                    type: "split_by_items",
-                                    itemIds: selectedItemIds,
-                                    createdAt: Date.now(),
-                                    updatedAt: Date.now(),
-                                  },
-                                    {
-                                      label: "carta:splitByItemsPayment",
-                                      collection: "payments",
-                                      restaurantId,
-                                      tableId: selectedTableId || selectedTable?.id || null,
-                                      orderId: orderIdFromUrl ?? null,
-                                    },
-                                  );
+                                    voucherAmount: pm === "voucher" ? voucherValue : undefined,
+                                    voucherNumber:
+                                      pm === "voucher" ? voucherNumber.trim() : undefined,
+                                    waiterId: waiterId ?? undefined,
+                                    waiterEmail: waiterEmail ?? undefined,
+                                    idempotencyKey: `${primaryOrderId}:split:${selectedItemIds.join(",")}`,
+                                  });
+                                  if (!chargeResult.ok) {
+                                    throw new Error(chargeResult.error);
+                                  }
                                   if (pm === "voucher") {
                                     await upsertVoucherBalanceAfterPayment(
                                       db,

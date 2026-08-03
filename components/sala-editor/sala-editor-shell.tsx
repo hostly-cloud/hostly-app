@@ -19,11 +19,19 @@ export type SalaEditorShellProps = {
   leftPanel: ReactNode;
   workspace: ReactNode;
   inspector: ReactNode;
+  notice?: ReactNode;
   legacyEditorHref?: string;
   canUndo?: boolean;
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  onAutoLinkTables?: () => void;
+  autoLinkTablesDisabled?: boolean;
+  autoLinkTablesPending?: boolean;
+  onPublishToTpv?: () => void;
+  publishToTpvDisabled?: boolean;
+  publishToTpvPending?: boolean;
+  publishToTpvStatus?: string | null;
   contextActionTarget?: SalaEditorContextActionTarget | null;
 };
 
@@ -39,13 +47,25 @@ export function SalaEditorShell({
   leftPanel,
   workspace,
   inspector,
+  notice = null,
   legacyEditorHref,
   canUndo = false,
   canRedo = false,
   onUndo,
   onRedo,
+  onAutoLinkTables,
+  autoLinkTablesDisabled = false,
+  autoLinkTablesPending = false,
+  onPublishToTpv,
+  publishToTpvDisabled = false,
+  publishToTpvPending = false,
+  publishToTpvStatus = null,
   contextActionTarget = null,
 }: SalaEditorShellProps) {
+  const handlePublishClick = () => {
+    onPublishToTpv?.();
+  };
+
   return (
     <section
       className={[
@@ -72,6 +92,31 @@ export function SalaEditorShell({
           ) : null}
         </div>
         <div className="hostly-sala-editor-workbench__toolbar-meta">
+          {publishToTpvStatus ? (
+            <span className="hostly-sala-editor-workbench__publish-status">
+              {publishToTpvStatus}
+            </span>
+          ) : null}
+          {onAutoLinkTables ? (
+            <button
+              type="button"
+              className="hostly-sala-editor-workbench__publish-btn hostly-sala-editor-workbench__publish-btn--secondary"
+              onClick={onAutoLinkTables}
+              disabled={autoLinkTablesDisabled || autoLinkTablesPending}
+            >
+              {autoLinkTablesPending ? "Enlazando..." : "Enlazar automáticamente"}
+            </button>
+          ) : null}
+          {onPublishToTpv ? (
+            <button
+              type="button"
+              className="hostly-sala-editor-workbench__publish-btn"
+              onClick={handlePublishClick}
+              disabled={publishToTpvDisabled || publishToTpvPending}
+            >
+              {publishToTpvPending ? "Publicando..." : "Publicar en TPV"}
+            </button>
+          ) : null}
           <span className="hostly-sala-editor-workbench__count">
             {espaciosCount} espacio{espaciosCount === 1 ? "" : "s"}
           </span>
@@ -84,6 +129,7 @@ export function SalaEditorShell({
       </header>
 
       <SalaEditorContextActionBar target={contextActionTarget} />
+      {notice}
 
       <div className="hostly-sala-editor-workbench__body">
         <aside className="hostly-sala-editor-workbench__panel hostly-sala-editor-workbench__panel--toolbox">

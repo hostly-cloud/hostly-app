@@ -34,6 +34,7 @@ import {
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { clientToStagePoint } from "@/lib/sala-editor/canvas/canvas-viewport";
 import { unscaleEditorPoint } from "@/lib/sala-editor/canvas/editor-visual-scale";
+import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
 import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import { SalaOperationalInstanceCanvasObject } from "@/components/sala-editor/panels/sala-operational-instance-canvas-object";
 
@@ -46,6 +47,7 @@ export type SalaOperacionWorkspaceProps = {
   draggingInstanceId: string | null;
   resizingInstanceId: string | null;
   dropAnimatingInstanceId: string | null;
+  linkedTableNamesById?: Record<string, string>;
   snapGuides?: SnapGuide[];
   isDragging: () => boolean;
   isResizing: () => boolean;
@@ -93,6 +95,7 @@ export type SalaOperationalInstancesLayerProps = {
   draggingInstanceId?: string | null;
   resizingInstanceId?: string | null;
   dropAnimatingInstanceId?: string | null;
+  linkedTableNamesById?: Record<string, string>;
   createMoveHandlers?: (
     instance: OperationalElementInstance,
   ) => OperationalInstanceMoveHandlers;
@@ -117,6 +120,7 @@ export function SalaOperacionWorkspace({
   draggingInstanceId,
   resizingInstanceId,
   dropAnimatingInstanceId,
+  linkedTableNamesById,
   snapGuides,
   isDragging,
   isResizing,
@@ -176,6 +180,7 @@ export function SalaOperacionWorkspace({
         draggingInstanceId={draggingInstanceId}
         resizingInstanceId={resizingInstanceId}
         dropAnimatingInstanceId={dropAnimatingInstanceId}
+        linkedTableNamesById={linkedTableNamesById}
         snapGuides={snapGuides}
         isDragging={isDragging}
         isResizing={isResizing}
@@ -201,6 +206,7 @@ function SalaOperacionCanvasContent({
   draggingInstanceId,
   resizingInstanceId,
   dropAnimatingInstanceId,
+  linkedTableNamesById,
   snapGuides,
   isDragging,
   isResizing,
@@ -311,6 +317,7 @@ function SalaOperacionCanvasContent({
         draggingInstanceId={draggingInstanceId}
         resizingInstanceId={resizingInstanceId}
         dropAnimatingInstanceId={dropAnimatingInstanceId}
+        linkedTableNamesById={linkedTableNamesById}
         createMoveHandlers={createMoveHandlers}
         onResizeStart={onResizeStart}
         onResizeMove={onResizeMove}
@@ -327,6 +334,7 @@ export function SalaOperationalInstancesLayer({
   draggingInstanceId = null,
   resizingInstanceId = null,
   dropAnimatingInstanceId = null,
+  linkedTableNamesById = {},
   createMoveHandlers,
   onResizeStart,
   onResizeMove,
@@ -361,24 +369,37 @@ export function SalaOperationalInstancesLayer({
         const resizing = !readOnly && resizingInstanceId === instance.id;
         const dropAnimating = dropAnimatingInstanceId === instance.id;
         const size = getOperationalInstanceCanvasSize(instance);
+        const geometry = projectOperationalElement(instance, {
+          coordinateScale,
+          size,
+        });
+        const linkedTableId =
+          typeof instance.metadata.legacyTableId === "string"
+            ? instance.metadata.legacyTableId.trim()
+            : "";
 
         return (
           <div
             key={instance.id}
             className="absolute"
             style={{
-              left: instance.position.x * coordinateScale,
-              top: instance.position.y * coordinateScale,
+              left: geometry.x,
+              top: geometry.y,
             }}
           >
             <SalaOperationalInstanceCanvasObject
               instance={instance}
               catalogColor={instanceCatalog?.color}
-              size={size}
+              geometry={geometry}
               selected={!readOnly && instance.id === selectedInstanceId}
               isDragging={dragging}
               isResizing={resizing}
               isDropAnimating={dropAnimating}
+              linkedTableLabel={
+                linkedTableId
+                  ? linkedTableNamesById[linkedTableId] ?? linkedTableId
+                  : null
+              }
               {...moveHandlers}
               {...resizeHandlers}
             />

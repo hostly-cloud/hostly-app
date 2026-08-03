@@ -7,13 +7,35 @@ import {
   type Firestore,
 } from "firebase/firestore";
 import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
-import { fetchOpenOrderForTable } from "@/lib/firestore/open-orders-same-table";
 import {
   hasTableOperatorAssignment,
   type TableOperatorAssignment,
 } from "@/lib/tpv/table-operator-assignment";
 
 const UNAUTHORIZED_TABLE_ACCESS = "No autorizado para modificar esta mesa";
+
+type AssignTableOperatorViaApiParams = {
+  tableId: string;
+  orderId?: string;
+  assignedOperatorId: string;
+  assignedOperatorName: string;
+};
+
+type AssignTableOperatorViaApiResult =
+  | { ok: true; assigned: boolean; tableId: string; orderId?: string }
+  | { ok: false; error: string; details?: string | null };
+
+type AssignTableOperatorViaApiFn = (
+  params: AssignTableOperatorViaApiParams,
+) => Promise<AssignTableOperatorViaApiResult>;
+
+let assignTableOperatorViaApiImpl: AssignTableOperatorViaApiFn | null = null;
+
+async function resolveAssignTableOperatorViaApi(): Promise<AssignTableOperatorViaApiFn> {
+  if (assignTableOperatorViaApiImpl) return assignTableOperatorViaApiImpl;
+  const mod = await import("@/lib/firestore/tpv-mutations-via-api");
+  return mod.assignTableOperatorViaApi;
+}
 
 function assertTableTenant(
   data: Record<string, unknown>,
@@ -31,13 +53,20 @@ export type AssignTableOperatorOnFirstOpenParams = {
   restaurantId: string;
   tableId: string;
   operator: Pick<TableOperatorAssignment, "assignedOperatorId" | "assignedOperatorName">;
-  /** Evita lectura si la mesa en memoria ya tiene asignación. */
+  /** Solo información visual en UI; no afecta la llamada server-side. */
   tableAssignmentHint?: TableOperatorAssignment | null;
 };
 
+/** Hook interno para tests; restaurar con `null` al terminar. */
+export function setAssignTableOperatorViaApiForTests(
+  impl: AssignTableOperatorViaApiFn | null,
+): void {
+  assignTableOperatorViaApiImpl = impl;
+}
+
 /**
- * Primera apertura TPV: registra operador activo en mesa y, si existe, en la
- * comanda abierta. No sobrescribe asignaciones existentes.
+ * Primera apertura TPV: delega la asignación de operador al servidor.
+ * No aplica política write-once en cliente.
  */
 export async function assignTableOperatorOnFirstOpen(
   params: AssignTableOperatorOnFirstOpenParams,
@@ -48,53 +77,14 @@ export async function assignTableOperatorOnFirstOpen(
   const operatorName = params.operator.assignedOperatorName.trim();
   if (!rid || !tid || !operatorId || !operatorName) return false;
 
-  if (params.tableAssignmentHint?.assignedOperatorId) return false;
-
-  const tableRef = doc(params.db, "tables", tid);
-  const tableSnap = await getDoc(tableRef);
-  if (!tableSnap.exists()) return false;
-
-  const tableData = tableSnap.data() as Record<string, unknown>;
-  assertTableTenant(tableData, rid);
-  if (hasTableOperatorAssignment(tableData)) return false;
-
-  const openOrderSnap = await fetchOpenOrderForTable(params.db, rid, tid);
-  if (
-    openOrderSnap &&
-    hasTableOperatorAssignment(openOrderSnap.data() as Record<string, unknown>)
-  ) {
-    return false;
-  }
-
-  const assignmentPayload = {
+  const callApi = await resolveAssignTableOperatorViaApi();
+  const result = await callApi({
+    tableId: tid,
     assignedOperatorId: operatorId,
     assignedOperatorName: operatorName,
-    assignedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  } satisfies DocumentData;
-
-  await dbgUpdateDoc(tableRef, assignmentPayload, {
-    label: "tpv:assignTableOperatorOnFirstOpen:table",
-    collection: "tables",
-    restaurantId: rid,
-    tableId: tid,
   });
-
-  if (openOrderSnap) {
-    await dbgUpdateDoc(
-      doc(params.db, "orders", openOrderSnap.id),
-      assignmentPayload,
-      {
-        label: "tpv:assignTableOperatorOnFirstOpen:order",
-        collection: "orders",
-        restaurantId: rid,
-        tableId: tid,
-        orderId: openOrderSnap.id,
-      },
-    );
-  }
-
-  return true;
+  if (!result.ok) return false;
+  return result.assigned;
 }
 
 /** Campos Firestore para borrar asignación TPV en `tables` (no tocar `orders`). */

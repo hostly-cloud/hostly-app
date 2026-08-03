@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { ConfigBtnPrimary, ConfigBtnSecondary } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
-import { ProductQuickCreateDrinkFormat } from "@/components/productos/product-quick-create-drink-format";
 import type {
   ProductQuickCreateSubmitMode,
   UseProductQuickCreateResult,
@@ -13,6 +12,118 @@ import type { ProductQuickCreateInheritedDraft } from "@/lib/productos/product-c
 
 const drawerInputClass =
   "hostly-input hostly-carta-config-field-input hostly-product-quick-create-v3__input";
+
+function ProductQuickCreateDiscardConfirm({
+  open,
+  saving,
+  onKeepEditing,
+  onDiscard,
+}: {
+  open: boolean;
+  saving: boolean;
+  onKeepEditing: () => void;
+  onDiscard: () => void;
+}) {
+  const keepEditingRef = useRef<HTMLButtonElement | null>(null);
+  const discardRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    keepEditingRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onKeepEditing();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const keepEditing = keepEditingRef.current;
+      const discard = discardRef.current;
+      if (!keepEditing || !discard) return;
+
+      const focusables = [keepEditing, discard];
+      const active = document.activeElement;
+      const currentIndex = focusables.indexOf(active as HTMLButtonElement);
+
+      if (currentIndex === -1) {
+        event.preventDefault();
+        keepEditing.focus();
+        return;
+      }
+
+      event.preventDefault();
+      const nextIndex = event.shiftKey
+        ? currentIndex === 0
+          ? focusables.length - 1
+          : currentIndex - 1
+        : currentIndex === focusables.length - 1
+          ? 0
+          : currentIndex + 1;
+      focusables[nextIndex]?.focus();
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [open, onKeepEditing]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="hostly-productos-bulk-course-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onKeepEditing();
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="hostly-product-quick-create-discard-title"
+        aria-describedby="hostly-product-quick-create-discard-message"
+        className="hostly-productos-bulk-course-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <h2
+          id="hostly-product-quick-create-discard-title"
+          className="hostly-productos-bulk-course-modal__title"
+        >
+          ¿Descartar producto?
+        </h2>
+        <p
+          id="hostly-product-quick-create-discard-message"
+          className="hostly-productos-bulk-course-modal__hint"
+        >
+          Perderás los cambios que todavía no has guardado.
+        </p>
+        <div className="hostly-productos-bulk-course-modal__actions">
+          <button
+            ref={keepEditingRef}
+            type="button"
+            className="hostly-button-secondary hostly-button-compact"
+            disabled={saving}
+            onClick={onKeepEditing}
+          >
+            Seguir editando
+          </button>
+          <button
+            ref={discardRef}
+            type="button"
+            className="hostly-button-danger hostly-button-compact"
+            disabled={saving}
+            onClick={onDiscard}
+          >
+            Descartar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export type ProductQuickCreateDrawerProps = {
   open: boolean;
@@ -46,7 +157,9 @@ export function ProductQuickCreateDrawer({
   addCategoryOpen = false,
 }: ProductQuickCreateDrawerProps) {
   const nombreInputRef = useRef<HTMLInputElement | null>(null);
-  const showDrinkFormat = quickCreate.inheritedDraft.tipoVenta === "bebida";
+  const submitInFlightRef = useRef(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [submittingMode, setSubmittingMode] = useState<ProductQuickCreateSubmitMode | null>(null);
 
   const focusNombre = useCallback((selectAll = false) => {
     window.setTimeout(() => {
@@ -59,45 +172,94 @@ export function ProductQuickCreateDrawer({
     }, 30);
   }, []);
 
+  const dismissDiscardConfirm = useCallback(() => {
+    setDiscardConfirmOpen(false);
+    focusNombre(false);
+  }, [focusNombre]);
+
+  const requestClose = useCallback(() => {
+    if (addCategoryOpen || quickCreate.saving || submittingMode !== null) return;
+    if (quickCreate.hasUnsavedChanges) {
+      setDiscardConfirmOpen(true);
+      return;
+    }
+    onClose();
+  }, [addCategoryOpen, onClose, quickCreate.hasUnsavedChanges, quickCreate.saving, submittingMode]);
+
+  const confirmDiscard = useCallback(() => {
+    setDiscardConfirmOpen(false);
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) {
+      setDiscardConfirmOpen(false);
+      setSubmittingMode(null);
+      return;
+    }
+    quickCreate.syncBaseline();
+    focusNombre(false);
+  }, [open, quickCreate.syncBaseline, focusNombre]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (addCategoryOpen) return;
+      if (addCategoryOpen || discardConfirmOpen) return;
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        requestClose();
       }
     };
     window.addEventListener("keydown", onKey);
-    focusNombre(false);
     return () => {
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose, focusNombre, addCategoryOpen]);
+  }, [open, requestClose, addCategoryOpen, discardConfirmOpen]);
 
   if (!open) return null;
 
-  async function handleSubmit(mode: ProductQuickCreateSubmitMode) {
-    const result = await quickCreate.submitQuickCreate(mode);
-    if (!result) return;
-    onCreated?.(result.productId);
-    if (mode === "close") {
-      onClose();
-      return;
+  const isSubmitting = quickCreate.saving || submittingMode !== null;
+  const closeButtonBusy = submittingMode === "close" && quickCreate.saving;
+  const continueButtonBusy = submittingMode === "continue" && quickCreate.saving;
+
+  const handleSubmit = async (mode: ProductQuickCreateSubmitMode) => {
+    if (submitInFlightRef.current) return;
+    if (!quickCreate.canSubmit) return;
+
+    submitInFlightRef.current = true;
+    setSubmittingMode(mode);
+
+    let clearSubmittingMode = true;
+    try {
+      const result = await quickCreate.submitQuickCreate(mode);
+      if (!result) return;
+
+      onCreated?.(result.productId);
+      if (mode === "close") {
+        onClose();
+        clearSubmittingMode = false;
+        return;
+      }
+      focusNombre(true);
+    } finally {
+      submitInFlightRef.current = false;
+      if (clearSubmittingMode) {
+        setSubmittingMode(null);
+      }
     }
-    focusNombre(true);
-  }
+  };
 
   return (
+    <>
     <div
-      className={`hostly-product-quick-create-v3-backdrop${addCategoryOpen ? " hostly-product-quick-create-v3-backdrop--blocked" : ""}`}
+      className={`hostly-product-quick-create-v3-backdrop${addCategoryOpen ? " hostly-product-quick-create-v3-backdrop--blocked" : ""}${discardConfirmOpen ? " hostly-product-quick-create-v3-backdrop--blocked" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label={t("carta.newProduct")}
       data-hostly-product-quick-create=""
       onMouseDown={(e) => {
-        if (addCategoryOpen) return;
-        if (e.currentTarget === e.target) onClose();
+        if (addCategoryOpen || discardConfirmOpen) return;
+        if (e.currentTarget === e.target) requestClose();
       }}
     >
       <aside
@@ -116,7 +278,7 @@ export function ProductQuickCreateDrawer({
           <button
             type="button"
             className="hostly-product-quick-create-v3__close"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label={t("common.cancel")}
           >
             ×
@@ -127,8 +289,8 @@ export function ProductQuickCreateDrawer({
           className="hostly-product-quick-create-v3__form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (quickCreate.canSubmit) {
-              void handleSubmit("continue");
+            if (quickCreate.canSubmit && !isSubmitting) {
+              void handleSubmit("close");
             }
           }}
         >
@@ -144,7 +306,7 @@ export function ProductQuickCreateDrawer({
                 onChange={(e) => quickCreate.setNombre(e.target.value)}
                 autoComplete="off"
                 placeholder="Ej. Fanta Naranja, Croquetas…"
-                disabled={quickCreate.saving}
+                disabled={isSubmitting}
               />
             </label>
 
@@ -154,7 +316,7 @@ export function ProductQuickCreateDrawer({
                 <select
                   className={`${drawerInputClass} hostly-product-quick-create-v3__category-select`}
                   value={quickCreate.draft.categoriaCartaId ?? ""}
-                  disabled={quickCreate.saving}
+                  disabled={isSubmitting}
                   aria-label={t("carta.fieldCategoria")}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -173,7 +335,7 @@ export function ProductQuickCreateDrawer({
                   <button
                     type="button"
                     className="hostly-product-quick-create-v3__category-add"
-                    disabled={quickCreate.saving}
+                    disabled={isSubmitting}
                     aria-label={t("cartaCategories.addFromForm")}
                     title="Nueva categoría"
                     onClick={onOpenAddCategory}
@@ -195,15 +357,9 @@ export function ProductQuickCreateDrawer({
                 value={quickCreate.draft.precio}
                 onChange={(e) => quickCreate.setPrecio(e.target.value)}
                 placeholder="0.00"
-                disabled={quickCreate.saving}
+                disabled={isSubmitting}
               />
             </label>
-
-            {showDrinkFormat ? (
-              <ProductQuickCreateDrinkFormat
-                compositionType={quickCreate.inheritedDraft.productCompositionType}
-              />
-            ) : null}
 
             {quickCreate.error ? (
               <div
@@ -219,25 +375,27 @@ export function ProductQuickCreateDrawer({
             <div className="hostly-product-quick-create-v3__actions">
               <ConfigBtnPrimary
                 type="submit"
-                className="hostly-product-quick-create-v3__save"
-                disabled={quickCreate.saving || !quickCreate.canSubmit}
+                className="hostly-product-quick-create-v3__save-close"
+                disabled={isSubmitting || !quickCreate.canSubmit}
+                aria-busy={closeButtonBusy || undefined}
               >
-                {quickCreate.saving ? t("common.preparing") : t("common.save")}
+                {closeButtonBusy ? "Guardando…" : "Guardar y cerrar"}
               </ConfigBtnPrimary>
               <ConfigBtnSecondary
                 type="button"
-                className="hostly-product-quick-create-v3__save-close"
-                disabled={quickCreate.saving || !quickCreate.canSubmit}
-                onClick={() => void handleSubmit("close")}
+                className="hostly-product-quick-create-v3__save"
+                disabled={isSubmitting || !quickCreate.canSubmit}
+                aria-busy={continueButtonBusy || undefined}
+                onClick={() => void handleSubmit("continue")}
               >
-                Guardar y cerrar
+                {continueButtonBusy ? "Guardando…" : "Guardar y crear otro"}
               </ConfigBtnSecondary>
             </div>
             {onOpenAdvancedConfig ? (
               <button
                 type="button"
                 className="hostly-product-quick-create-v3__more-options"
-                disabled={quickCreate.saving}
+                disabled={isSubmitting}
                 onClick={() =>
                   onOpenAdvancedConfig(quickCreate.draft, quickCreate.inheritedDraft)
                 }
@@ -249,5 +407,12 @@ export function ProductQuickCreateDrawer({
         </form>
       </aside>
     </div>
+    <ProductQuickCreateDiscardConfirm
+      open={discardConfirmOpen}
+      saving={quickCreate.saving}
+      onKeepEditing={dismissDiscardConfirm}
+      onDiscard={confirmDiscard}
+    />
+    </>
   );
 }

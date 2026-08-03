@@ -27,7 +27,7 @@ export function AiSection() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-[14px] font-semibold tracking-[-0.02em]">{feature.title}</h3>
+                        <h3 className="text-[14px] font-semibold tracking-normal">{feature.title}</h3>
                         {feature.badge ? (
                           <span className="rounded-full bg-[color:var(--hostly-accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[color:var(--hostly-navy-deep)]">
                             {feature.badge}

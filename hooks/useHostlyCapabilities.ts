@@ -12,11 +12,19 @@ import {
 } from "@/lib/auth/hostly-capabilities";
 
 export function useHostlyCapabilities() {
-  const { user, role: profileRole } = useAuth();
+  const {
+    user,
+    restaurantId,
+    role: profileRole,
+    profileAccessIssue,
+  } = useAuth();
 
-  const role = useMemo<HostlyRole>(
-    () => normalizeHostlyRoleFromProfile(profileRole),
-    [profileRole],
+  const role = useMemo<HostlyRole | null>(
+    () =>
+      user && restaurantId && !profileAccessIssue
+        ? normalizeHostlyRoleFromProfile(profileRole)
+        : null,
+    [profileAccessIssue, profileRole, restaurantId, user],
   );
 
   const capabilities = useMemo(

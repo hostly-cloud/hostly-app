@@ -3,12 +3,20 @@ import { fetchActiveOrdersForTable } from "@/lib/firestore/open-orders-same-tabl
 
 /** Evento cliente: fusión operativa de comandas tras unir mesas (invalidar caché TPV). */
 export const TABLE_GROUP_ORDERS_MERGED_EVENT = "hostly:tableGroupOrdersMerged";
+/** Evento cliente: restauración operativa tras separar mesas agrupadas. */
+export const TABLE_GROUP_ORDERS_SPLIT_EVENT = "hostly:tableGroupOrdersSplit";
 
 export type TableGroupOrdersMergedDetail = {
   restaurantId: string;
   mainTableId: string;
   memberIds: string[];
   destOrderId?: string;
+};
+
+export type TableGroupOrdersSplitDetail = {
+  restaurantId: string;
+  mainTableId: string;
+  memberIds: string[];
 };
 
 /** Logs de diagnóstico del flujo unir mesas → fusionar comandas. Solo consola; no altera datos. */

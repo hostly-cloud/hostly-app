@@ -18,7 +18,7 @@ import {
 import { useAuth } from "@/components/auth/auth-context";
 import { useOperationFilter } from "@/components/kds/operation-filter-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
-import { dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
+import { transitionLineQuantityViaApi, transitionLineStatusViaApi } from "@/lib/firestore/tpv-mutations-via-api";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
 import {
   resolveKdsDestination,
@@ -1534,27 +1534,32 @@ export default function OrderItemsBoard({
       now,
     );
     try {
-      if (!rawNext) {
+      const row = baseline.find((r) => String(r.id ?? "") === itemId);
+      if (!row) {
         setActionError("No se pudo actualizar el pedido. Inténtalo otra vez.");
         setTimeout(() => setActionError(null), 3000);
         return;
       }
-      const sanitizedItems = rawNext.map((row) => stripUndefinedDeep(row));
-
-      await dbgUpdateDoc(
-        doc(db, "orders", orderId),
-        cleanFirestoreData({
-          items: sanitizedItems,
-          updatedAt: serverTimestamp(),
-        }) as UpdateData<DocumentData>,
-        {
-          label: "order-items-board:handleMarkNext",
-          collection: "orders",
-          restaurantId,
-          orderId,
-          tableId: order.tableId ?? null,
-        },
-      );
+      const expectedStatus = String(row.status ?? "sent");
+      const qty = readFirestoreLineQty(row);
+      const result =
+        qty > 1
+          ? await transitionLineQuantityViaApi({
+              orderId,
+              lineId: itemId,
+              units: 1,
+              expectedStatus,
+              nextStatus: next,
+            })
+          : await transitionLineStatusViaApi({
+              orderId,
+              lineId: itemId,
+              expectedStatus,
+              nextStatus: next,
+            });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
       if (next === "prepared") {
         const item = order.items.find((i) => i.id === itemId);
         if (item) {
@@ -1655,21 +1660,29 @@ export default function OrderItemsBoard({
         if (!orderBuildOk) continue;
 
         try {
-          const sanitizedItems = rawWorking.map((row) => stripUndefinedDeep(row));
-          await dbgUpdateDoc(
-            doc(db, "orders", orderId),
-            cleanFirestoreData({
-              items: sanitizedItems,
-              updatedAt: serverTimestamp(),
-            }) as UpdateData<DocumentData>,
-            {
-              label: "order-items-board:handlePreparePassChunk",
-              collection: "orders",
-              restaurantId,
-              orderId,
-              tableId: order.tableId ?? null,
-            },
-          );
+          for (const line of orderTargets) {
+            const row = baseline.find((r) => String(r.id ?? "") === line.itemId);
+            const expectedStatus = String(row?.status ?? "sent");
+            const qty = row ? readFirestoreLineQty(row) : 1;
+            const result =
+              qty > 1
+                ? await transitionLineQuantityViaApi({
+                    orderId,
+                    lineId: line.itemId,
+                    units: 1,
+                    expectedStatus,
+                    nextStatus: "prepared",
+                  })
+                : await transitionLineStatusViaApi({
+                    orderId,
+                    lineId: line.itemId,
+                    expectedStatus,
+                    nextStatus: "prepared",
+                  });
+            if (!result.ok) {
+              throw new Error(result.error);
+            }
+          }
           for (const line of orderTargets) {
             const item = order.items.find((i) => i.id === line.itemId);
             if (!item) continue;

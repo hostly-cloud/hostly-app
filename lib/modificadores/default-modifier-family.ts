@@ -7,6 +7,11 @@ import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import { inferFamilyFromCategory } from "@/lib/catalog/familyAutoAssign";
 import type { PlatoCarta } from "@/lib/platos-local";
 
+async function getAuthenticatedApiFetch() {
+  const { authenticatedApiFetch } = await import("@/lib/auth/authenticated-api-fetch");
+  return authenticatedApiFetch;
+}
+
 export type ModifierFamilyRow = { id: string; nombre?: string };
 
 function norm(s: string): string {
@@ -23,7 +28,8 @@ const BASE_MODIFIER_FAMILIES: { block: ModifierFamilyBlock; nombre: string }[] =
 async function loadModifierFamiliesFromApi(restauranteId: string): Promise<{ ok: boolean; items: ModifierFamilyRow[] }> {
   const rid = typeof restauranteId === "string" ? restauranteId.trim() : "";
   if (!rid) return { ok: false, items: [] };
-  const res = await fetch(`/api/modifiers/families?restauranteId=${encodeURIComponent(rid)}`);
+  const authenticatedApiFetch = await getAuthenticatedApiFetch();
+  const res = await authenticatedApiFetch(`/api/modifiers/families?restauranteId=${encodeURIComponent(rid)}`);
   const j = (await res.json().catch(() => ({}))) as { items?: unknown };
   if (!res.ok) return { ok: false, items: [] };
   const items = Array.isArray(j.items) ? (j.items as ModifierFamilyRow[]) : [];
@@ -49,7 +55,8 @@ export async function ensureBaseModifierFamilies<T extends ModifierFamilyRow = M
   let needRefresh = false;
   for (const spec of BASE_MODIFIER_FAMILIES) {
     if (findModifierFamilyIdForBlock(list, spec.block)) continue;
-    const res = await fetch("/api/modifiers/families", {
+    const authenticatedApiFetch = await getAuthenticatedApiFetch();
+    const res = await authenticatedApiFetch("/api/modifiers/families", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

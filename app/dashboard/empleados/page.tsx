@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
-  getUsersByRestaurant,
-  removeUserFromRestaurant,
-  updateUserRole,
-} from "@/lib/firestore/users";
+  requestManagedRestaurantUsers,
+  requestManagedUserUpdate,
+} from "@/lib/users/request-manage-users";
 import ModulePageShell from "@/components/module-page-shell";
+import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
+import { normalizeAuthorizationRole } from "@/lib/auth/profile-authorization-policy";
+import type { ManagedAssignableRole } from "@/lib/server/users/manage-restaurant-users";
 
 type UserRow = {
   id: string;
@@ -17,6 +19,8 @@ type UserRow = {
   displayName?: string;
   role?: string | null;
   restaurantId?: string | null;
+  status?: "active" | "legacy_active" | "disabled" | "review_required";
+  reviewRequired?: boolean;
 };
 
 function displayNombre(row: UserRow): string {
@@ -29,25 +33,39 @@ function displayNombre(row: UserRow): string {
   return em || "—";
 }
 
+function managedRoleValue(role: unknown): ManagedAssignableRole | "owner" | "" {
+  return normalizeAuthorizationRole(role) ?? "";
+}
+
+function isManagedOwner(role: unknown): boolean {
+  return managedRoleValue(role) === "owner";
+}
+
+function isManagedAdmin(role: unknown): boolean {
+  return managedRoleValue(role) === "admin";
+}
+
 export default function EmpleadosPage({
   embedInConfig = false,
 }: {
   embedInConfig?: boolean;
 }) {
-  const { user, restaurantId, role, ready: authReady } = useAuth();
+  const { user, restaurantId, ready: authReady } = useAuth();
+  const { can, role: actorRole } = useHostlyCapabilities();
+  const canManageUsers = can("users.manage");
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!isFirebaseConfigured || !restaurantId || role !== "owner") {
+    if (!isFirebaseConfigured || !restaurantId || !canManageUsers) {
       setRows([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const list = await getUsersByRestaurant(restaurantId);
+      const list = await requestManagedRestaurantUsers();
       setRows(list as UserRow[]);
     } catch (e) {
       console.error(e);
@@ -55,7 +73,7 @@ export default function EmpleadosPage({
     } finally {
       setLoading(false);
     }
-  }, [restaurantId, role]);
+  }, [restaurantId, canManageUsers]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -84,7 +102,7 @@ export default function EmpleadosPage({
     );
   }
 
-  if (role !== "owner") {
+  if (!canManageUsers) {
     return (
       <ModulePageShell
         title={shellTitle}
@@ -107,8 +125,12 @@ export default function EmpleadosPage({
     if (!restaurantId) return;
     setRemovingId(userId);
     try {
-      await removeUserFromRestaurant(userId);
-      const list = await getUsersByRestaurant(restaurantId);
+      const row = rows.find((candidate) => candidate.id === userId);
+      await requestManagedUserUpdate({
+        userId,
+        status: row?.status === "disabled" ? "active" : "disabled",
+      });
+      const list = await requestManagedRestaurantUsers();
       setRows(list as UserRow[]);
     } catch (e) {
       console.error(e);
@@ -116,8 +138,6 @@ export default function EmpleadosPage({
       setRemovingId(null);
     }
   };
-
-  const owners = rows.filter((u) => u.role === "owner");
 
   return (
     <ModulePageShell
@@ -162,20 +182,20 @@ export default function EmpleadosPage({
                 </td>
                 <td style={{ padding: "10px 12px" }}>
                   <select
-                    value={row.role === "owner" ? "owner" : "staff"}
-                    disabled={row.id === user?.uid && owners.length === 1}
+                    value={managedRoleValue(row.role)}
+                    disabled={
+                      row.id === user?.uid ||
+                      isManagedOwner(row.role) ||
+                      (isManagedAdmin(row.role) && actorRole !== "owner") ||
+                      row.reviewRequired
+                    }
                     onChange={(e) => {
                       void (async () => {
-                        const newRole = e.target.value as "owner" | "staff";
-                        if (
-                          row.role === "owner" &&
-                          newRole === "staff" &&
-                          owners.length === 1
-                        ) {
-                          alert("Debe haber al menos un owner");
-                          return;
-                        }
-                        await updateUserRole(row.id, newRole);
+                        const newRole = e.target.value as ManagedAssignableRole;
+                        await requestManagedUserUpdate({
+                          userId: row.id,
+                          role: newRole,
+                        });
                         await load();
                       })();
                     }}
@@ -187,14 +207,31 @@ export default function EmpleadosPage({
                       color: "#fff",
                     }}
                   >
-                    <option value="owner">Owner</option>
-                    <option value="staff">Staff</option>
+                    {isManagedOwner(row.role) ? (
+                      <option value="owner">Owner</option>
+                    ) : null}
+                    {row.reviewRequired ? (
+                      <option value="">Revisión necesaria</option>
+                    ) : null}
+                    <option value="admin" disabled={actorRole !== "owner"}>
+                      Administrador
+                    </option>
+                    <option value="manager">Encargado</option>
+                    <option value="waiter">Operativo / Camarero</option>
+                    <option value="kitchen">Cocina</option>
+                    <option value="viewer">Solo lectura</option>
                   </select>
                 </td>
                 <td style={{ padding: "10px 0 10px 12px" }}>
                   <button
                     type="button"
-                    disabled={removingId === row.id}
+                    disabled={
+                      removingId === row.id ||
+                      row.id === user?.uid ||
+                      isManagedOwner(row.role) ||
+                      (isManagedAdmin(row.role) && actorRole !== "owner") ||
+                      row.reviewRequired
+                    }
                     onClick={() => void onRemove(row.id)}
                     style={{
                       padding: "6px 10px",
@@ -202,10 +239,21 @@ export default function EmpleadosPage({
                       border: "1px solid #666",
                       backgroundColor: "#2a2a2a",
                       color: "#fff",
-                      cursor: removingId === row.id ? "not-allowed" : "pointer",
+                      cursor:
+                        removingId === row.id ||
+                        row.id === user?.uid ||
+                        isManagedOwner(row.role) ||
+                        (isManagedAdmin(row.role) && actorRole !== "owner") ||
+                        row.reviewRequired
+                          ? "not-allowed"
+                          : "pointer",
                     }}
                   >
-                    Eliminar
+                    {row.reviewRequired
+                      ? "Revisión necesaria"
+                      : row.status === "disabled"
+                        ? "Activar"
+                        : "Desactivar"}
                   </button>
                 </td>
               </tr>

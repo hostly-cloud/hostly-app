@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getHostlyFirestore } from "@/lib/firebase/admin";
-import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
+import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-restaurant";
+import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
 function badRequest(message: string, status = 400) {
   return NextResponse.json({ ok: false as const, error: message }, { status });
@@ -27,18 +27,14 @@ function numOrUndef(v: unknown): number | undefined {
 }
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const restauranteId = (url.searchParams.get("restauranteId") ?? "").trim();
-  if (!restauranteId) return badRequest("MISSING_RESTAURANTE_ID");
+  const authContext = await requireLegacyRestaurantApi(
+    req,
+    "settings.manage",
+  );
+  if (isAuthErrorResponse(authContext)) return authContext;
 
-  try {
-    assertServerRestauranteAllowed(restauranteId);
-  } catch {
-    return badRequest("HOSTLY_RESTAURANTE_NOT_ALLOWED", 403);
-  }
-
-  const db = getHostlyFirestore();
-  if (!db) return badRequest("FIRESTORE_NOT_CONFIGURED", 501);
+  const restauranteId = authContext.restaurantId;
+  const db = authContext.db;
 
   const coll = db.collection("restaurantes").doc(restauranteId).collection("productos");
 

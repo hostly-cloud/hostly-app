@@ -3,9 +3,9 @@
 import type { PointerEvent } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import type {
-  OperationalInstanceCanvasSize,
   OperationalInstanceResizeCorner,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import type { V2ProjectedGeometry } from "@/lib/sala-editor/geometry/v2-geometry-projection";
 import { resolveOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
 
@@ -19,11 +19,12 @@ const RESIZE_CORNERS: readonly OperationalInstanceResizeCorner[] = [
 export type SalaOperationalInstanceCanvasObjectProps = {
   instance: OperationalElementInstance;
   catalogColor?: string;
-  size: OperationalInstanceCanvasSize;
+  geometry: V2ProjectedGeometry;
   selected: boolean;
   isDragging?: boolean;
   isResizing?: boolean;
   isDropAnimating?: boolean;
+  linkedTableLabel?: string | null;
   onBodyPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onBodyPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
@@ -42,11 +43,12 @@ export type SalaOperationalInstanceCanvasObjectProps = {
 export function SalaOperationalInstanceCanvasObject({
   instance,
   catalogColor = "#315f7d",
-  size,
+  geometry,
   selected,
   isDragging = false,
   isResizing = false,
   isDropAnimating = false,
+  linkedTableLabel = null,
   onBodyPointerDown,
   onBodyPointerMove,
   onBodyPointerUp,
@@ -61,6 +63,8 @@ export function SalaOperationalInstanceCanvasObject({
     instance.metadata,
     instance.elementType,
   );
+  const showLinkBadge = instance.elementType === "TABLE";
+  const linked = typeof linkedTableLabel === "string" && linkedTableLabel.trim() !== "";
   const createResizePointerHandlers = (corner: OperationalInstanceResizeCorner) => ({
     onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0) return;
@@ -105,15 +109,30 @@ export function SalaOperationalInstanceCanvasObject({
         .filter(Boolean)
         .join(" ")}
       style={{
-        width: size.width,
-        height: size.height,
-        transform: isDragging
-          ? "translate(-50%, -50%) scale(1.02)"
-          : "translate(-50%, -50%)",
+        width: geometry.width,
+        height: geometry.height,
+        transform:
+          [
+            geometry.rotation !== 0 ? `rotate(${geometry.rotation}deg)` : "",
+            isDragging ? "scale(1.02)" : "",
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined,
+        transformOrigin: "center center",
         zIndex: isDragging || isResizing ? 40 : selected ? 20 : 1,
       }}
     >
       {selected ? <div className="hostly-sala-canvas-object__frame" aria-hidden /> : null}
+      {showLinkBadge ? (
+        <span
+          className={[
+            "hostly-sala-canvas-object__link-badge",
+            linked ? "is-linked" : "is-unlinked",
+          ].join(" ")}
+        >
+          {linked ? `Enlazada con ${linkedTableLabel}` : "No enlazada"}
+        </span>
+      ) : null}
 
       <div
         role="button"

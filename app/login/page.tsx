@@ -3,10 +3,18 @@
 import { FirebaseError } from "firebase/app";
 import { Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { authErrorMessage, login, logout, register } from "@/lib/auth/auth";
+import {
+  authErrorMessage,
+  login,
+  logout,
+  refreshEmailVerification,
+  register,
+  resendEmailVerification,
+} from "@/lib/auth/auth";
+import { applyPendingInviteForUser } from "@/lib/auth/invite-resolution";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { useAuth } from "@/components/auth/auth-context";
-import { HostlyBrandMark } from "@/components/brand/hostly-brand";
+import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
 
 const DEFAULT_NEXT = "/dashboard";
 
@@ -53,6 +61,16 @@ function friendlyAuthError(error: unknown): string {
   if (raw.includes("Firebase no está")) {
     return "La aplicación no está configurada correctamente. Contacta con soporte.";
   }
+  if (raw.includes("EMAIL_NOT_VERIFIED")) {
+    return "Verifica tu correo antes de aceptar la invitación.";
+  }
+  if (
+    raw.includes("CONTROLLED_ACCESS_INVITE_REQUIRED") ||
+    raw.includes("OWNER_SELF_SERVICE_DISABLED") ||
+    raw.includes("INVITE_REQUIRED")
+  ) {
+    return "Hostly está en acceso controlado. Necesitas una invitación válida.";
+  }
   return "No pudimos completar la operación. Revisa los datos e inténtalo de nuevo.";
 }
 
@@ -80,28 +98,6 @@ function IconLock(props: { className?: string }) {
         strokeWidth="1.75"
         strokeLinecap="round"
       />
-    </svg>
-  );
-}
-
-function IconStore(props: { className?: string }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden className={props.className}>
-      <path
-        d="M4 10V20h16V10M4 10l2-7h12l2 7M9 14h6M9 18h6"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconChevronDown(props: { className?: string }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden className={props.className}>
-      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -270,15 +266,20 @@ function LoginPageContent() {
     () => safeNextPath(searchParams.get("next")),
     [searchParams],
   );
+  const inviteToken = searchParams.get("inviteToken")?.trim() || undefined;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [restaurantNameInput, setRestaurantNameInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"login" | "register" | null>(
+  const [pendingAction, setPendingAction] = useState<
+    "login" | "register" | "verify" | "resend" | null
+  >(
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(
+    null,
+  );
 
   const handleLogin = async () => {
     setLoading(true);
@@ -289,7 +290,13 @@ function LoginPageContent() {
         setError("La aplicación no está configurada correctamente.");
         return;
       }
-      await login(email, password);
+      const loggedInUser = await login(email, password, inviteToken);
+      if (inviteToken && !loggedInUser.emailVerified) {
+        setVerificationMessage(
+          "Verifica tu correo para completar el acceso mediante invitación.",
+        );
+        return;
+      }
       refreshProfile();
       router.replace(nextPath);
     } catch (err: unknown) {
@@ -311,9 +318,14 @@ function LoginPageContent() {
         setError("La aplicación no está configurada correctamente.");
         return;
       }
-      await register(email, password, restaurantNameInput.trim() || undefined);
-      refreshProfile();
-      router.replace(nextPath);
+      await register(
+        email,
+        password,
+        inviteToken,
+      );
+      setVerificationMessage(
+        "Te hemos enviado un correo de verificación. Confírmalo para aceptar la invitación.",
+      );
     } catch (err: unknown) {
       console.error("[REGISTER ERROR]", authErrorMessage(err), err);
       setError(friendlyAuthError(err));
@@ -323,10 +335,78 @@ function LoginPageContent() {
     }
   };
 
+  const handleInviteContinue = async () => {
+    if (!user || !inviteToken) return;
+    setLoading(true);
+    setPendingAction("verify");
+    setError(null);
+    try {
+      const refreshedUser = await refreshEmailVerification(user);
+      if (!refreshedUser.emailVerified) {
+        setVerificationMessage(
+          "El correo aún no figura como verificado. Ábrelo y vuelve a intentarlo.",
+        );
+        return;
+      }
+      await applyPendingInviteForUser(refreshedUser, inviteToken);
+      refreshProfile();
+      router.replace(nextPath);
+    } catch (err) {
+      setError(friendlyAuthError(err));
+    } finally {
+      setLoading(false);
+      setPendingAction(null);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!user) return;
+    setLoading(true);
+    setPendingAction("resend");
+    setError(null);
+    try {
+      await resendEmailVerification(user);
+      setVerificationMessage("Correo de verificación reenviado.");
+    } catch (err) {
+      setError(friendlyAuthError(err));
+    } finally {
+      setLoading(false);
+      setPendingAction(null);
+    }
+  };
+
   useEffect(() => {
     if (!ready || !user) return;
-    router.replace(nextPath);
-  }, [ready, user, router, nextPath]);
+    if (!inviteToken) {
+      router.replace(nextPath);
+      return;
+    }
+    if (!user.emailVerified) {
+      setVerificationMessage(
+        "Verifica tu correo para completar el acceso mediante invitación.",
+      );
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      try {
+        await applyPendingInviteForUser(user, inviteToken);
+        if (cancelled) return;
+        refreshProfile();
+        router.replace(nextPath);
+      } catch (err) {
+        if (cancelled) return;
+        setError(friendlyAuthError(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken, nextPath, ready, refreshProfile, router, user]);
 
   if (!isFirebaseConfigured) {
     return (
@@ -353,6 +433,7 @@ function LoginPageContent() {
   }
 
   if (user) {
+    const completingInvite = Boolean(inviteToken);
     return (
       <div style={shellStyle}>
         <div
@@ -368,23 +449,15 @@ function LoginPageContent() {
         >
           <header className="hostly-mobile-header" style={{ paddingLeft: 0, paddingRight: 0, textAlign: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-              <HostlyBrandMark size={48} tone="premium" />
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  letterSpacing: "0.2em",
-                  color: "var(--hostly-navy-deep)",
-                }}
-              >
-                HOSTLY
-              </span>
+              <HostlyBrandLockup size={54} tone="app" />
             </div>
             <h1 className="hostly-mobile-title" style={{ textAlign: "center", marginTop: 16 }}>
-              Sesión activa
+              {completingInvite ? "Completa tu invitación" : "Sesión activa"}
             </h1>
             <p className="hostly-mobile-subtitle" style={{ textAlign: "center" }}>
-              {user.email ?? user.uid}
+              {completingInvite && !user.emailVerified
+                ? "Verifica tu correo antes de acceder al restaurante."
+                : user.email ?? user.uid}
             </p>
           </header>
           <div style={{ ...loginCardStyle, marginTop: 16 }}>
@@ -401,13 +474,41 @@ function LoginPageContent() {
                 background: "linear-gradient(180deg, #1e5278 0%, var(--hostly-navy-deep) 100%)",
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 12px rgba(15,39,68,0.12)",
               }}
-              onClick={() => router.replace(nextPath)}
+              onClick={() =>
+                completingInvite
+                  ? void handleInviteContinue()
+                  : router.replace(nextPath)
+              }
             >
-              <span style={{ flex: 1, textAlign: "center" }}>Entrar en Hostly</span>
+              <span style={{ flex: 1, textAlign: "center" }}>
+                {loading && pendingAction === "verify"
+                  ? "Comprobando…"
+                  : completingInvite
+                    ? "Ya he verificado mi correo"
+                    : "Entrar en Hostly"}
+              </span>
               <span style={{ opacity: 0.95, display: "flex" }}>
                 <IconArrowRight />
               </span>
             </button>
+            {completingInvite && !user.emailVerified ? (
+              <button
+                type="button"
+                disabled={loading}
+                className="hostly-button-ghost"
+                style={{
+                  width: "100%",
+                  marginTop: 10,
+                  border: "1px solid rgba(49, 95, 125, 0.22)",
+                  background: "rgba(255,255,255,0.65)",
+                }}
+                onClick={() => void handleResendVerification()}
+              >
+                {loading && pendingAction === "resend"
+                  ? "Reenviando…"
+                  : "Reenviar correo de verificación"}
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={loading}
@@ -435,6 +536,11 @@ function LoginPageContent() {
             >
               Cerrar sesión
             </button>
+            {verificationMessage ? (
+              <p role="status" className="hostly-muted mb-0 mt-3 text-sm">
+                {verificationMessage}
+              </p>
+            ) : null}
             {error ? (
               <p role="alert" style={{ ...errorBoxStyle, marginBottom: 0 }}>
                 {error}
@@ -472,18 +578,7 @@ function LoginPageContent() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <HostlyBrandMark size={58} tone="premium" />
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 800,
-                letterSpacing: "0.22em",
-                color: "var(--hostly-navy-deep)",
-                lineHeight: 1.2,
-              }}
-            >
-              HOSTLY
-            </div>
+            <HostlyBrandLockup size={60} tone="app" />
             <p
               style={{
                 margin: 0,
@@ -590,7 +685,6 @@ function LoginPageContent() {
             </p>
           </div>
 
-          {/* Restaurante — secundario */}
           <div
             className="hostly-panel-soft"
             style={{
@@ -602,53 +696,14 @@ function LoginPageContent() {
               boxShadow: "none",
             }}
           >
-            <label
-              style={{
-                display: "block",
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "var(--hostly-ink-soft)",
-              }}
-            >
-              Nombre del restaurante (opcional)
-              <span style={inputIconWrap}>
-                <span style={{ ...inputIconLeft, top: "calc(50% + 3px)" }}>
-                  <IconStore />
-                </span>
-                <span
-                  style={{
-                    position: "absolute",
-                    right: 12,
-                    top: "calc(50% + 3px)",
-                    transform: "translateY(-50%)",
-                    color: "var(--hostly-ink-soft)",
-                    pointerEvents: "none",
-                    opacity: 0.55,
-                  }}
-                >
-                  <IconChevronDown />
-                </span>
-                <input
-                  type="text"
-                  autoComplete="organization"
-                  className="hostly-input"
-                  style={{
-                    ...inputWithIcon,
-                    marginTop: 7,
-                    minHeight: 42,
-                    fontSize: 14,
-                    paddingRight: 40,
-                    borderRadius: 12,
-                    background: "rgba(255,255,255,0.95)",
-                  }}
-                  value={restaurantNameInput}
-                  onChange={(e) => setRestaurantNameInput(e.target.value)}
-                  placeholder="Mi restaurante"
-                />
-              </span>
-            </label>
+            <p className="m-0 text-xs font-bold uppercase tracking-[0.06em] text-[color:var(--hostly-ink-soft)]">
+              Acceso controlado
+            </p>
+            <p className="hostly-muted mb-0 mt-2 text-sm leading-snug">
+              {inviteToken
+                ? "Esta invitación permite crear una cuenta y unirte al restaurante asignado."
+                : "El alta pública de restaurantes está deshabilitada durante el piloto. Solicita una invitación a un administrador."}
+            </p>
           </div>
 
           {error ? (
@@ -683,29 +738,33 @@ function LoginPageContent() {
             </span>
           </button>
 
-          <button
-            type="button"
-            disabled={loading}
-            className="hostly-button-ghost"
-            style={{
-              width: "100%",
-              marginTop: 10,
-              minHeight: 46,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              border: "1px solid rgba(49, 95, 125, 0.28)",
-              background: "rgba(255,255,255,0.52)",
-              color: "var(--hostly-accent)",
-              borderRadius: 16,
-              fontWeight: 680,
-            }}
-            onClick={() => void handleRegister()}
-          >
-            <IconUserPlus />
-            {loading && pendingAction === "register" ? "Creando cuenta…" : "Crear cuenta"}
-          </button>
+          {inviteToken ? (
+            <button
+              type="button"
+              disabled={loading}
+              className="hostly-button-ghost"
+              style={{
+                width: "100%",
+                marginTop: 10,
+                minHeight: 46,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                border: "1px solid rgba(49, 95, 125, 0.28)",
+                background: "rgba(255,255,255,0.52)",
+                color: "var(--hostly-accent)",
+                borderRadius: 16,
+                fontWeight: 680,
+              }}
+              onClick={() => void handleRegister()}
+            >
+              <IconUserPlus />
+              {loading && pendingAction === "register"
+                ? "Creando cuenta…"
+                : "Crear cuenta con invitación"}
+            </button>
+          ) : null}
         </div>
 
         <footer

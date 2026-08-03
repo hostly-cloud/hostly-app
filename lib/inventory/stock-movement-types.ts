@@ -41,6 +41,31 @@ export type ModifierSaleStockMovementDocument = StockMovementApplyFields & {
   idempotencyKey: string;
   createdAt: number;
   createdBy?: string;
+  sentSegmentLineId?: string;
+  selectionOccurrence?: number;
+  movementFingerprint?: string;
+  sentQuantity?: number;
+  inventoryQuantityPerUnit?: number;
+};
+
+export type ModifierStockConsumptionWarningReason =
+  | "PRODUCT_NOT_FOUND"
+  | "PRODUCT_INACTIVE"
+  | "INVENTORY_DISABLED"
+  | "INVALID_CURRENT_STOCK"
+  | "UNKNOWN_PRODUCT_UNIT"
+  | "INCOMPATIBLE_UNIT"
+  | "INVALID_CONSUMPTION_QUANTITY";
+
+export type ModifierStockConsumptionWarning = {
+  inventoryProductId?: string;
+  orderId: string;
+  lineId: string;
+  groupId: string;
+  optionId: string;
+  reason: ModifierStockConsumptionWarningReason;
+  requestedQuantity?: number;
+  unit?: string;
 };
 
 export type ModifierSaleReversalStockMovementDocument = StockMovementApplyFields & {
@@ -63,6 +88,16 @@ export type ModifierSaleReversalStockMovementDocument = StockMovementApplyFields
   reversalOfMovementId: string;
   createdAt: number;
   createdBy?: string;
+  sentSegmentLineId?: string;
+  selectionOccurrence?: number;
+  /** Aggregated reversal schema version (3 = per-operation). */
+  movementSchemaVersion?: number;
+  /** Stable idempotency key for the logical mutation (API key or derived). */
+  operationIdempotencyKey?: string;
+  movementFingerprint?: string;
+  inventoryQuantityPerUnit?: number;
+  /** Sale units reversed by this aggregated operation document. */
+  reversedSaleUnits?: number;
 };
 
 export type CreateModifierStockMovementsResult = {

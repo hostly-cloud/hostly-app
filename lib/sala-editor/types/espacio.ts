@@ -37,7 +37,13 @@ export type SalaEspacio = {
 
 export type SalaEspacioDraft = Pick<
   SalaEspacio,
-  "name" | "tipo" | "color" | "sortOrder" | "visible" | "active"
+  | "name"
+  | "tipo"
+  | "color"
+  | "sortOrder"
+  | "visible"
+  | "active"
+  | "legacyFloorPlanId"
 >;
 
 export const DEFAULT_SALA_ESPACIO_COLOR = "#315f7d";

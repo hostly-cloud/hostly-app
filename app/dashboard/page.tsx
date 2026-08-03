@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import type { HostlyCapability } from "@/lib/auth/hostly-capabilities";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyBrandLockup } from "@/components/brand/hostly-brand";
+import { HostlyBrandMark } from "@/components/brand/hostly-brand";
 import { HostlyKpiCard, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import { DEFAULT_RESTAURANT_NAME } from "@/lib/firestore/user-restaurant-profile";
 import { getRestaurantById } from "@/lib/firestore/restaurants";
@@ -227,45 +227,6 @@ function IconSettings({ size = 22 }: { size?: number }) {
   );
 }
 
-function IconCarta({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path d="M9 8h6M9 12h6M9 16h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconAI({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 3l1.4 4.1L18 8.5l-4.1 1.4L12 14l-1.9-4.1L6 8.5l4.6-1.4L12 3z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M6.5 13l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function IconOperacion({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -350,11 +311,7 @@ type SecondaryModule = {
 };
 
 const MANAGEMENT_MODULES: SecondaryModule[] = [
-  { path: "/dashboard/configuracion/carta/categorias", label: "Carta", Icon: IconCarta },
-  { path: "/dashboard/productos", label: "Productos", Icon: IconBox },
-  { path: "/dashboard/configuracion/carta/importacion", label: "Importar carta IA", Icon: IconAI },
-  { path: "/dashboard/inventario", label: "Inventario", Icon: IconBox },
-  { path: "/dashboard/compras", label: "Compras", Icon: IconBox },
+  { path: "/dashboard/configuracion/carta/productos", label: "Productos", Icon: IconBox },
   { path: "/dashboard/configuracion", label: "Configuración", Icon: IconSettings },
   { path: "/dashboard/analisis", label: "Análisis", Icon: IconChart },
 ];
@@ -374,11 +331,7 @@ const OPERATION_VISUAL_KEYS: Record<string, string> = {
 };
 
 const MANAGEMENT_VISUAL_KEYS: Record<string, string> = {
-  Carta: "menu",
   Productos: "products",
-  "Importar carta IA": "ai",
-  Inventario: "inventory",
-  Compras: "purchases",
   Configuración: "settings",
   Análisis: "analytics",
 };
@@ -392,7 +345,7 @@ function isSecondaryModuleVisible(
       return can("tpv.sell") || can("kds.manage");
     case "/dashboard/configuracion":
     case "/dashboard/configuracion/carta/escandallos":
-    case "/dashboard/productos":
+    case "/dashboard/configuracion/carta/productos":
     case "/dashboard/configuracion/carta/categorias":
     case "/dashboard/configuracion/carta/importacion":
       return can("settings.manage");
@@ -674,11 +627,10 @@ export default function DashboardPage() {
         <div className="hostly-dashboard-command-center">
           <header className="hostly-dashboard-command-header">
             <div className="hostly-dashboard-command-brand">
-              <HostlyBrandLockup
-                className="hostly-dashboard-brand-lockup"
+              <HostlyBrandMark
+                className="hostly-dashboard-brand-mark"
                 size={34}
                 tone="app"
-                wordmarkClassName="hostly-dashboard-brand-lockup__wordmark"
               />
               <div className="min-w-0">
                 <p className="hostly-dashboard-command-eyebrow">{homeTitleText}</p>

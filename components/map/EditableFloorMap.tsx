@@ -1,6 +1,10 @@
 "use client";
 
-import type { CSSProperties, WheelEvent as ReactWheelEvent } from "react";
+import type {
+  CSSProperties,
+  ReactNode,
+  WheelEvent as ReactWheelEvent,
+} from "react";
 import {
   Fragment,
   useCallback,
@@ -209,6 +213,8 @@ export type EditableFloorMapProps = {
   /** Tipo a crear al hacer click en el fondo (modo editor). */
   createType?: PlanElementType | null;
   renderElement?: (ctx: FloorMapRenderContext) => React.ReactNode;
+  /** Capa visual no interactiva renderizada dentro de la misma transformación del mapa. */
+  readonlyUnderlay?: ReactNode;
   /** Solo modo editor: fondo de plano (rejilla) para alinear elementos. */
   editorPlanSurface?: boolean;
   /** Solo visual: material base del suelo del restaurante. No altera coordenadas ni datos. */
@@ -553,6 +559,32 @@ export function fitBoundsToViewport(
   return { zoom: z, pan };
 }
 
+function getPlanSizeBounds(
+  planSize?: FloorPlanCanvasSize | null,
+): PlanContentBounds | null {
+  if (
+    !planSize ||
+    typeof planSize.width !== "number" ||
+    typeof planSize.height !== "number" ||
+    !Number.isFinite(planSize.width) ||
+    !Number.isFinite(planSize.height) ||
+    planSize.width <= 0 ||
+    planSize.height <= 0
+  ) {
+    return null;
+  }
+  return {
+    minX: 0,
+    minY: 0,
+    maxX: planSize.width,
+    maxY: planSize.height,
+    width: planSize.width,
+    height: planSize.height,
+    centerX: planSize.width / 2,
+    centerY: planSize.height / 2,
+  };
+}
+
 function editorChromeForPlanType(
   planType: PlanElementType,
   tableShape: Table["tableShape"],
@@ -723,6 +755,235 @@ export function getPlanElementBaseVisualStyle(
   };
 }
 
+function readPlanElementRotation(element: Table): number | null {
+  const direct = (element as { rotation?: unknown }).rotation;
+  if (typeof direct === "number" && Number.isFinite(direct)) return direct;
+  const metadata = (element as { metadata?: unknown }).metadata;
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+    const raw = (metadata as { rotation?: unknown }).rotation;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  }
+  return null;
+}
+
+type ReadonlyDecorativeRenderBranch =
+  | "readonly-wall"
+  | "readonly-bar"
+  | "readonly-column"
+  | "readonly-pool"
+  | "readonly-door"
+  | "readonly-planter";
+
+function readonlyDecorativeRenderBranch(
+  element: Table,
+): ReadonlyDecorativeRenderBranch | null {
+  if (element.type === "wall") return "readonly-wall";
+  if (element.type === "bar") return "readonly-bar";
+  if (element.type === "column") return "readonly-column";
+  if (element.type === "pool") return "readonly-pool";
+  if (element.type === "door") return "readonly-door";
+  if (element.type === "planter") return "readonly-planter";
+  return null;
+}
+
+function readonlyDecorativeElementStyle(
+  element: Table,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): CSSProperties {
+  const rotation = readPlanElementRotation(element);
+  const baseVisual = getPlanElementBaseVisualStyle(element, "premium");
+  const branch = readonlyDecorativeRenderBranch(element);
+  const zIndex =
+    branch === "readonly-wall"
+      ? 3
+      : branch === "readonly-pool" || branch === "readonly-planter"
+        ? 5
+        : branch === "readonly-bar" || branch === "readonly-door"
+          ? 8
+          : 7;
+  return {
+    position: "absolute",
+    left: x,
+    top: y,
+    width,
+    height,
+    boxSizing: "border-box",
+    pointerEvents: "none",
+    userSelect: "none",
+    overflow: "hidden",
+    zIndex,
+    ...baseVisual,
+    ...(branch === "readonly-pool"
+      ? {
+          borderRadius: Math.min(24, Math.max(10, height / 2)),
+          border: "1px solid rgba(56, 189, 248, 0.5)",
+          background: [
+            "repeating-linear-gradient(105deg, transparent 0, transparent 13px, rgba(255,255,255,0.12) 13px, rgba(255,255,255,0.12) 14px)",
+            "radial-gradient(ellipse 95% 70% at 50% 12%, rgba(224, 242, 254, 0.44) 0%, transparent 62%)",
+            "linear-gradient(172deg, rgba(56, 189, 248, 0.62) 0%, rgba(14, 116, 144, 0.66) 46%, rgba(8, 47, 73, 0.72) 100%)",
+          ].join(", "),
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -10px 18px rgba(8, 47, 73, 0.16), 0 6px 16px rgba(8, 60, 90, 0.2)",
+        }
+      : {}),
+    ...(branch === "readonly-bar"
+      ? {
+          borderRadius: Math.min(18, Math.max(8, height / 3)),
+          border: "1px solid rgba(120, 75, 42, 0.62)",
+          background: [
+            "linear-gradient(180deg, rgba(255, 244, 219, 0.24) 0%, transparent 24%)",
+            "repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 2px, transparent 2px, transparent 18px)",
+            "linear-gradient(180deg, rgba(111, 72, 42, 0.98) 0%, rgba(74, 48, 31, 0.99) 52%, rgba(47, 32, 24, 1) 100%)",
+          ].join(", "),
+          boxShadow:
+            "inset 0 3px 0 rgba(251, 226, 184, 0.38), inset 0 -9px 16px rgba(24, 16, 10, 0.34), 0 8px 18px rgba(44, 30, 18, 0.22)",
+        }
+      : {}),
+    ...(branch === "readonly-planter"
+      ? {
+          borderRadius: Math.min(20, Math.max(9, height / 2)),
+          border: "1px solid rgba(45, 110, 72, 0.62)",
+          background: [
+            "radial-gradient(circle at 12% 34%, rgba(134, 239, 172, 0.96) 0 5px, transparent 6px)",
+            "radial-gradient(circle at 28% 24%, rgba(74, 222, 128, 0.92) 0 6px, transparent 7px)",
+            "radial-gradient(circle at 46% 36%, rgba(22, 163, 74, 0.94) 0 7px, transparent 8px)",
+            "radial-gradient(circle at 65% 25%, rgba(132, 204, 22, 0.9) 0 6px, transparent 7px)",
+            "radial-gradient(circle at 82% 36%, rgba(34, 197, 94, 0.92) 0 5px, transparent 6px)",
+            "linear-gradient(180deg, rgba(31, 125, 75, 0.96) 0%, rgba(20, 83, 45, 0.96) 52%, rgba(121, 85, 55, 0.96) 53%, rgba(77, 52, 37, 0.98) 100%)",
+          ].join(", "),
+          boxShadow:
+            "inset 0 2px 0 rgba(220, 252, 231, 0.28), inset 0 -7px 11px rgba(48, 31, 19, 0.24), 0 5px 13px rgba(20, 83, 45, 0.2)",
+        }
+      : {}),
+    ...(branch === "readonly-wall"
+      ? {
+          borderRadius: 3,
+          border: "1px solid rgba(15, 23, 42, 0.74)",
+          background:
+            "linear-gradient(180deg, rgba(51, 55, 50, 0.98) 0%, rgba(20, 23, 24, 1) 100%)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.08), 0 3px 8px rgba(2, 6, 23, 0.18)",
+        }
+      : {}),
+    transform:
+      rotation != null && rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+    transformOrigin: "center center",
+  };
+}
+
+function renderReadonlyDecorativeElement(
+  element: Table,
+  elementId: string,
+  mapLayoutX: number,
+  mapLayoutY: number,
+  mapTileWidth: number,
+  mapTileHeight: number,
+): React.ReactNode {
+  const branch = readonlyDecorativeRenderBranch(element);
+  if (!branch) return null;
+  return (
+    <div
+      key={elementId}
+      aria-hidden
+      data-hostly-readonly-decorative-id={elementId}
+      data-hostly-readonly-decorative-type={element.type}
+      style={readonlyDecorativeElementStyle(
+        element,
+        mapLayoutX,
+        mapLayoutY,
+        mapTileWidth,
+        mapTileHeight,
+      )}
+    />
+  );
+}
+
+function renderReadonlyZoneElement(
+  zone: EditableFloorMapZone,
+  editorVisualPreset: "default" | "premium",
+): React.ReactNode {
+  const hasRect =
+    typeof zone.x === "number" &&
+    typeof zone.y === "number" &&
+    typeof zone.width === "number" &&
+    typeof zone.height === "number" &&
+    Number.isFinite(zone.x) &&
+    Number.isFinite(zone.y) &&
+    Number.isFinite(zone.width) &&
+    Number.isFinite(zone.height);
+  if (!hasRect) return null;
+
+  const inferred =
+    editorVisualPreset === "premium" ? inferSpatialAreaVisual(zone.name) : null;
+  const border = zone.color
+    ? `1px solid ${zone.color}`
+    : inferred
+      ? `1px solid ${inferred.border}`
+      : "1px solid rgba(100, 116, 139, 0.2)";
+  const background = zone.color
+    ? editorVisualPreset === "premium"
+      ? `${zone.color}14`
+      : `${zone.color}10`
+    : inferred
+      ? inferred.fill
+      : "rgba(148, 163, 184, 0.045)";
+
+  return (
+    <div
+      key={zone.id}
+      aria-hidden
+      style={{
+        position: "absolute",
+        left: zone.x,
+        top: zone.y,
+        width: zone.width,
+        height: zone.height,
+        boxSizing: "border-box",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 12,
+        borderRadius: editorVisualPreset === "premium" ? 18 : 14,
+        border,
+        background,
+        opacity: 0.62,
+        zIndex: 1,
+        pointerEvents: "none",
+        userSelect: "none",
+        overflow: "hidden",
+        boxShadow:
+          editorVisualPreset === "premium"
+            ? "inset 0 1px 0 rgba(255,255,255,0.06)"
+            : undefined,
+      }}
+    >
+      <span
+        style={{
+          maxWidth: "100%",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          fontSize: editorVisualPreset === "premium" ? 12 : 11,
+          fontWeight: 650,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color:
+            editorVisualPreset === "premium" && inferred
+              ? inferred.labelTint
+              : "rgba(51, 65, 85, 0.68)",
+          opacity: 0.78,
+          pointerEvents: "none",
+        }}
+      >
+        {zone.name}
+      </span>
+    </div>
+  );
+}
+
 export function EditableFloorMap({
   elements,
   editable,
@@ -736,6 +997,7 @@ export function EditableFloorMap({
   onCreate,
   createType,
   renderElement,
+  readonlyUnderlay,
   editorPlanSurface = false,
   floorSurfacePreset = "ice",
   planSize = null,
@@ -899,46 +1161,58 @@ export function EditableFloorMap({
     const vw = root.clientWidth;
     const vh = root.clientHeight;
     if (vw < 32 || vh < 32) return;
-    const bounds = getPlanContentBounds(
-      mapFitElementsRef.current,
-      mapFitZonesRef.current,
-      viewportFitMode === "plan" ? planSize : null,
-    );
-    let { zoom: z } = fitBoundsToViewport(bounds, vw, vh, {
-      paddingPx: fitPaddingPx,
-      maxZoom: Math.max(ZOOM_MAX, fitZoomMax),
-      fitZoomMax,
-      align: viewportFitAlign,
-    });
-    // `mapLayoutEmphasis` solo ajusta el zoom (lienzo "denso" del editor en modo
-    // plan); el pan se calcula UNA sola vez con el zoom final para evitar dobles
-    // cálculos y que `viewportFitOffsetX/Y` sea predecible.
-    if (mapLayoutEmphasis && viewportFitMode !== "content") {
-      const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
-      z = clamp(z * 1.085, 0.06, cap);
+    const planBounds = getPlanSizeBounds(planSize);
+    const usePlanFit = viewportFitMode === "plan" && planBounds != null;
+    const bounds = usePlanFit
+      ? planBounds
+      : getPlanContentBounds(mapFitElementsRef.current, mapFitZonesRef.current, null);
+    let z: number;
+    let p: { x: number; y: number };
+    if (usePlanFit) {
+      const availableWidth = Math.max(32, vw - fitPaddingPx);
+      const availableHeight = Math.max(32, vh - fitPaddingPx);
+      const rawScale = Math.min(
+        availableWidth / bounds.width,
+        availableHeight / bounds.height,
+      );
+      z = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 0.06;
+      const renderedWidthForPlan = bounds.width * z;
+      const renderedHeightForPlan = bounds.height * z;
+      p = {
+        x: (vw - renderedWidthForPlan) / 2,
+        y: (vh - renderedHeightForPlan) / 2,
+      };
+    } else {
+      ({ zoom: z, pan: p } = fitBoundsToViewport(bounds, vw, vh, {
+        paddingPx: fitPaddingPx,
+        maxZoom: Math.max(ZOOM_MAX, fitZoomMax),
+        fitZoomMax,
+        align: viewportFitAlign,
+      }));
+      if (mapLayoutEmphasis) {
+        const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
+        z = clamp(z * 1.085, 0.06, cap);
+      }
+      if (
+        viewportFitZoomMultiplier !== 1 &&
+        Number.isFinite(viewportFitZoomMultiplier) &&
+        viewportFitZoomMultiplier > 0
+      ) {
+        const zoomCeil = Math.max(ZOOM_MAX, fitZoomMax);
+        z = clamp(z * viewportFitZoomMultiplier, 0.06, zoomCeil);
+      }
+      const inset = fitPaddingPx / 2;
+      p =
+        viewportFitAlign === "start"
+          ? {
+              x: inset - bounds.minX * z,
+              y: inset - bounds.minY * z,
+            }
+          : {
+              x: vw / 2 - bounds.centerX * z,
+              y: vh / 2 - bounds.centerY * z,
+            };
     }
-    // Multiplicador visual de zoom (solo UX, p. ej. TPV operativo). No altera el
-    // pan: la fórmula de pan ya consume el zoom final, así el contenido crece
-    // manteniendo el mismo centrado.
-    if (
-      viewportFitZoomMultiplier !== 1 &&
-      Number.isFinite(viewportFitZoomMultiplier) &&
-      viewportFitZoomMultiplier > 0
-    ) {
-      const zoomCeil = Math.max(ZOOM_MAX, fitZoomMax);
-      z = clamp(z * viewportFitZoomMultiplier, 0.06, zoomCeil);
-    }
-    const inset = fitPaddingPx / 2;
-    let p =
-      viewportFitAlign === "start"
-        ? {
-            x: inset - bounds.minX * z,
-            y: inset - bounds.minY * z,
-          }
-        : {
-            x: vw / 2 - bounds.centerX * z,
-            y: vh / 2 - bounds.centerY * z,
-          };
     if (viewportFitOffsetX !== 0 || viewportFitOffsetY !== 0) {
       p = { x: p.x + viewportFitOffsetX, y: p.y + viewportFitOffsetY };
     }
@@ -1774,7 +2048,10 @@ export function EditableFloorMap({
       : null;
 
   if (!editable) {
-    if (!renderElement) return null;
+    const hasReadonlyDecorativeElements = elements.some(
+      (element) => readonlyDecorativeRenderBranch(element) != null,
+    );
+    if (!renderElement && !hasReadonlyDecorativeElements && !readonlyUnderlay) return null;
     return (
       <div
         ref={setFloorRef}
@@ -1802,65 +2079,27 @@ export function EditableFloorMap({
           }}
         >
           {logicalFrameStyle ? <div aria-hidden style={logicalFrameStyle} /> : null}
+          {readonlyUnderlay}
           {zones && showZoneLayer
-            ? zones.map((z) => {
-                const hasRect =
-                  typeof z.x === "number" &&
-                  typeof z.y === "number" &&
-                  typeof z.width === "number" &&
-                  typeof z.height === "number" &&
-                  Number.isFinite(z.x) &&
-                  Number.isFinite(z.y) &&
-                  Number.isFinite(z.width) &&
-                  Number.isFinite(z.height);
-                if (!hasRect) return null;
-                const inferred =
-                  editorVisualPreset === "premium"
-                    ? inferSpatialAreaVisual(z.name)
-                    : null;
-                const border = z.color
-                  ? `1px solid ${z.color}`
-                  : inferred
-                    ? `1px solid ${inferred.border}`
-                    : "1px solid rgba(148, 163, 184, 0.18)";
-                const bg = z.color
-                  ? editorVisualPreset === "premium"
-                    ? `${z.color}1C`
-                    : `${z.color}14`
-                  : inferred
-                    ? inferred.fill
-                    : "rgba(148, 163, 184, 0.05)";
-                return (
-                  <div
-                    key={z.id}
-                    aria-hidden
-                    style={{
-                      position: "absolute",
-                      left: z.x,
-                      top: z.y,
-                      width: z.width,
-                      height: z.height,
-                      boxSizing: "border-box",
-                      borderRadius: editorVisualPreset === "premium" ? 18 : 14,
-                      border,
-                      background: bg,
-                      zIndex: 1,
-                      pointerEvents: "none",
-                      userSelect: "none",
-                      boxShadow:
-                        editorVisualPreset === "premium"
-                          ? "inset 0 1px 0 rgba(255,255,255,0.08)"
-                          : undefined,
-                    }}
-                  />
-                );
-              })
+            ? zones.map((zone) => renderReadonlyZoneElement(zone, editorVisualPreset))
             : null}
           {elements.map((element) => {
             const elementId = String(element.id).trim();
             const { w, h } = elementSize(element);
             const mapLayoutX = element.x ?? 0;
             const mapLayoutY = element.y ?? 0;
+            const readonlyDecorative = renderReadonlyDecorativeElement(
+              element,
+              elementId,
+              mapLayoutX,
+              mapLayoutY,
+              w,
+              h,
+            );
+            if (readonlyDecorative) {
+              return <Fragment key={element.id}>{readonlyDecorative}</Fragment>;
+            }
+            if (!renderElement) return null;
             return (
               <Fragment key={element.id}>
                 {renderElement({
@@ -2110,6 +2349,7 @@ export function EditableFloorMap({
         }}
       >
       {logicalFrameStyle ? <div aria-hidden style={logicalFrameStyle} /> : null}
+      {readonlyUnderlay}
       <div
         onPointerDown={handleFloorPointerDown}
         style={{

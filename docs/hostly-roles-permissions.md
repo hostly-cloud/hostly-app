@@ -38,18 +38,19 @@ Roles normalizados (`HostlyRole`) usados por la matriz de capabilities:
 
 ### 2.1 Perfil Firebase actual (`users/{uid}`)
 
-Hoy el schema persistido es limitado:
+El perfil persiste roles canónicos (`owner`, `admin`, `manager`, `waiter`,
+`kitchen`, `viewer`) o aliases históricos reconocidos. `users/{uid}` es la
+autoridad y `usuarios/{uid}` debe contener el mismo tenant, email, status y un
+rol crudo cuya **normalización canónica** coincida con el canónico.
 
-```ts
-// lib/firestore/user-restaurant-profile.ts
-type UserRestaurantRole = "owner" | "staff";
-```
+Las invitaciones nuevas persisten `admin`, `manager` o `waiter`. Los perfiles e
+invitaciones históricos con `staff` se interpretan como `waiter`.
 
-- **`owner`** → rol operacional `owner`
-- **`staff`** → rol operacional **`manager`** (legacy, ver §3)
-- **`admin`** en perfil → parseado como `staff` en cliente → **`manager`** tras normalizar
+### 2.3 Status obligatorio
 
-Los roles granulares (`waiter`, `kitchen`, `viewer`, `manager` explícito) funcionan si el campo `role` en Firestore contiene ese string (preparado para ampliación futura sin migración masiva).
+`status` ausente, vacío, nulo o desconocido invalida el perfil en todas las
+capas. Solo `active` / `enabled` autorizan operación. `inactive`, `suspended` y
+`disabled` fallan cerrados.
 
 ### 2.2 Aliases legacy (normalización)
 
@@ -59,35 +60,28 @@ Tanto en frontend (`normalizeHostlyRole`) como en rules (`normalizedRole()`):
 |-----------------|-----------------|
 | `owner`, `propietario` | `owner` |
 | `admin`, `administrator` | `admin` |
-| `manager`, `gerente` | `manager` |
-| `waiter`, `camarero`, `camarera`, `staff_tpv` | `waiter` |
+| `manager`, `gerente`, `encargado` | `manager` |
+| `staff`, `operativo`, `operational`, `employee`, `empleado`, `waiter`, `camarero`, `camarera`, `staff_tpv` | `waiter` |
 | `kitchen`, `cocina`, `cook` | `kitchen` |
 | `viewer`, `readonly`, `read_only` | `viewer` |
-| **`staff`** | **`manager`** (legacy Firebase) |
-| *(vacío / ausente)* | Ver §3 |
+| *(vacío / ausente / desconocido)* | Perfil no autorizado |
 
 Comparación insensible a mayúsculas/minúsculas.
 
 ---
 
-## 3. Compatibilidad legacy crítica
+## 3. Compatibilidad legacy segura
 
-### 3.1 `staff` → `manager`
+### 3.1 `staff` → `waiter`
 
-Invitaciones y perfiles antiguos con `role: "staff"` conservan acceso operacional amplio (inventario, compras, join mesas) hasta migración explícita de roles.
+Los perfiles antiguos con `role: "staff"` conservan únicamente la operación de
+sala: vender, cancelar líneas y cobrar. No obtienen inventario, compras,
+devoluciones, unión de mesas, KDS, analítica ni administración.
 
-**Frontend:** `normalizeHostlyRole("staff")` → `manager`  
-**Firestore rules:** `normalizedRole()` → `manager` → `isManagerOrAbove()` = true
+### 3.2 Rol ausente o desconocido
 
-### 3.2 Sin `role` en perfil → `owner` (rules)
-
-En **Firestore rules**, perfil sin campo `role` o string vacío se trata como **`owner`** — alineado con `loadUserRestaurantProfile` (`role ?? "owner"`).
-
-> **Nota frontend:** `normalizeHostlyRole(undefined)` devuelve `viewer`, pero el contexto auth hidrata `role: "owner"` por defecto antes de leer perfil. En la práctica, tenants existentes sin campo `role` se comportan como owner en cliente y rules.
-
-### 3.3 Rol desconocido → `viewer`
-
-Cualquier string no reconocido → `viewer` (permisos mínimos en frontend; writes sensibles denegados en rules).
+Un rol ausente, vacío o desconocido invalida el perfil en frontend, servidor,
+Firestore Rules y Storage Rules. No existe fallback con capabilities.
 
 ---
 
@@ -425,6 +419,69 @@ Activity log (`action: "line_cancelled"`): metadata incluye `cancelledLineIds: [
 
 ---
 
+## 7.4 Hardening Bloque 1 — Iteración B (mutaciones TPV)
+
+Autorización **server-side tipada** para mutaciones sensibles de comandas, KDS y pagos. El cliente operativo no puede reemplazar `orders.items[]`, escribir `orderItems` ni crear/actualizar `payments` directamente.
+
+### Fuente canónica y proyección
+
+| Superficie | Rol | Escritura |
+|------------|-----|-----------|
+| **`orders.items[]`** | Proyección server-owned | Solo Admin SDK en transacción con `orderItems` |
+| **`orderItems/{id}`** | Líneas enviadas+ (KDS/cancel) | Solo Admin SDK, sincronizado con `items[]` |
+| **`orders/{id}` metadata** | Cliente | Sin `items[]`, `total`, `cancelledLineIds` |
+| **`payments/{id}`** | Cobros/refunds | Solo Admin SDK |
+
+El servidor reconstruye precio, producto, modificadores y totales desde catálogo `restaurants/{rid}/products` + `modifierGroups`. El cliente envía **intención mínima**: `lineId`, `productId`, `quantity`, IDs de modificadores, `note`.
+
+### Operaciones API (reemplazan `sync-items`)
+
+| Endpoint | Capability | Intención |
+|----------|------------|-----------|
+| `POST /api/tpv/orders/create-open` | `tpv.sell` | `tableId`, `lines[]`, `markSent?` |
+| `POST /api/tpv/orders/upsert-sale-lines` | `tpv.sell` | `orderId`, `lines[]`, `markSent?`, `expectedUpdatedAtMs?` |
+| `POST /api/tpv/orders/cancel-lines` | `tpv.cancel_line` | `orderId`, `lineIds[]` |
+| `POST /api/tpv/orders/transition-line-status` | `kds.manage` | `orderId`, `lineId`, `expectedStatus`, `nextStatus` |
+| `POST /api/tpv/payments/charge` | `tpv.charge` | `orderId`, `amount`, `paymentMethod`, `type`, … |
+| `POST /api/tpv/payments/refund` | `tpv.refund` | `paymentId` |
+
+`POST /api/tpv/orders/sync-items` → **410 Gone** (deprecado).
+
+### Rules cliente (Firestore)
+
+| Colección | create/update cliente |
+|-----------|----------------------|
+| `orders` | Metadata waiter permitida; **`items[]`, `total`, `cancelledLineIds` denegados** para todos los roles |
+| `orderItems` | **Denegado** (`false`) |
+| `payments` | **Denegado** (`false`) |
+
+### Riesgos abiertos (no cerrados en esta iteración)
+
+- Descuentos de mesa en `orders` no recalculados server-side en `charge_order`.
+- Split KDS con `qty > 1` (avance parcial de línea) sin operación `split_line` dedicada.
+- `handleCancelPartialPayment` (cancelar split_by_items) aún sin endpoint tipado.
+- Productos abiertos / precio manual sin operación diferenciada → fallo cerrado si no hay catálogo.
+
+### Compatibilidad operativa
+
+- TPV Carta y `persist-open-order-for-table` / `useMesaComanda` usan API para `items[]`.
+- KDS (`order-items-board`, `sala-view`) sigue escribiendo `orders.items[]` con `kds.manage`.
+- Cocina legacy escribe `orderItems` con transiciones KDS.
+- Sala que marque servido requiere `kds.manage` según matriz (waiter no recibe el permiso).
+
+### Gap cerrado vs pendiente
+
+| Hallazgo | Estado Iter B |
+|----------|----------------|
+| Bypass `orders.items[]` waiter | **Cerrado** — rules + API |
+| Create orders con privilegios | **Cerrado** — allowlist |
+| Create orderItems con KDS/cancel | **Cerrado** |
+| Update orderItems arbitrario | **Cerrado** — allowlists por camino |
+| Create payments refund | **Cerrado** — allowlist + status/type |
+| Validación profunda precio vs catálogo en rules | **No en rules** — API valida shape TPV; precio canónico catálogo queda fuera de alcance rules |
+
+---
+
 ## 8. Paths NO protegidos aún
 
 | Path / operación | Riesgo | Fase prevista |
@@ -436,7 +493,8 @@ Activity log (`action: "line_cancelled"`): metadata incluye `cancelledLineIds: [
 | `products/{productId}` (legacy root) | Catálogo legacy | Sin plan |
 | `tables`, `zones`, `floorPlans` | Mapa sala | Evaluar |
 | Doc padre `restaurants/{rid}` write | Metadatos restaurante | Evaluar |
-| `payments` create con payload refund | Bypass create vs update gate | Evaluar |
+
+> **Iteración B:** `payments` create refund y bypass `orders.items[]` waiter quedan cerrados (§7.4). La fila histórica anterior ya no aplica.
 
 ### Endurecidos TPV (referencia 5C–5F)
 
@@ -446,6 +504,10 @@ Activity log (`action: "line_cancelled"`): metadata incluye `cancelledLineIds: [
 | `payments/{id}` | **update** (refund) | `canRefundTpv()` si `isRefundWrite()` |
 | `orderItems/{id}` | **update** (cancel) | `canCancelTpvLine()` si `isCancellingOrderLine()` |
 | `orders/{id}` | **update** (cancel) | `canCancelTpvLine()` si `isCancellingOrderItemsArray()` |
+| `orders/{id}` | **update** `items[]` (waiter) | **Denegado** — usar API `sync-items` |
+| `orders/{id}` | **create/update** (waiter) | Allowlists §7.4 — sin `items[]` en create |
+| `orderItems/{id}` | **create/update** | Allowlists cerradas §7.4 |
+| `payments/{id}` | **create** | Allowlist §7.4 — sin refund preinyectado |
 
 ---
 
@@ -458,8 +520,8 @@ Activity log (`action: "line_cancelled"`): metadata incluye `cancelledLineIds: [
 5. **API routes server-side** — Admin SDK / routes Next.js no pasan por estas rules de cliente.
 6. **Deploy desincronizado** — Rules 5D sin app 5E/5F: refunds protegidos pero gap `orders` persiste hasta deploy app.
 7. **Pedidos legacy** — Cancelaciones anteriores a 5E sin `cancelledLineIds`; carga TPV OK; auditoría histórica incompleta en campo.
-8. **`payments` create refund** — Crear payment con status refund no pasa por `isRefundWrite()` (solo update).
-9. **Bypass técnico `orders` sin `cancelledLineIds`** — Cliente modificado que cancela solo `items[]` sin escribir campo evita gate; mitigación: app oficial siempre escribe `arrayUnion`.
+8. **Precio canónico en create orderItems** — Rules no validan precio contra catálogo; confianza en app + shape allowlist.
+9. **KDS/manager `orders.items[]`** — Rules no validan profundamente cada línea del array; mitigación por rol (`kds.manage` / manager).
 
 ---
 
