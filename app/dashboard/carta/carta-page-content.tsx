@@ -47,7 +47,6 @@ import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   dbgAddDoc,
   dbgUpdateDoc,
-  DbgWriteBatch,
 } from "@/lib/firestore/instrumentedWrites";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { paymentSaleAmount } from "@/lib/payments/paymentSaleAmount";
@@ -63,13 +62,11 @@ import {
 import type { TableOperatorAssignment } from "@/lib/tpv/table-operator-assignment";
 import type { ActiveOperatorSession } from "@/lib/tpv/active-operator-session";
 import { clearOperacionTpvUrlParams } from "@/lib/tpv/clear-operacion-tpv-url";
-
 import {
   shouldFlushDraftBeforeBackToMap,
   shouldPreserveLocalDraftCacheOnBackToMap,
 } from "@/lib/tpv/back-to-map-pending-draft";
 import { tableEmptySessionWarrantsAutoClose } from "@/lib/tpv/table-empty-session-auto-close";
-
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import {
   buildTpvInventoryProductsById,
@@ -115,7 +112,6 @@ import {
   type TableGroupOrdersSplitDetail,
 } from "@/lib/firestore/table-join-merge-diagnostic";
 import { persistOpenOrderForTable } from "@/lib/firestore/persist-open-order-for-table";
-
 import {
   summarizeTraceLines,
   traceEmptyDraft,
@@ -152,7 +148,6 @@ import {
   type FloorPlan,
 } from "@/lib/firestore/floorPlans";
 import {
-  filterTpvOperationalViewportFitElements,
   scaleTpvOperationalMapElements,
   scaleTpvOperationalPlanSize,
   TPV_OPERATIONAL_FIT_OFFSET_X,
@@ -163,6 +158,31 @@ import {
   TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER,
   TPV_OPERATIONAL_MAP_VISUAL_SCALE,
 } from "@/lib/map/tpv-operational-map-visual";
+import {
+  buildTpvMapCameraFitKey,
+  hasValidTpvPlanSize,
+  logTpvMapCamera,
+} from "@/lib/map/tpv-map-camera";
+import { loadSalaEditorPublishedViaApi } from "@/lib/sala-editor/persistence/load-sala-editor-published-via-api";
+import type { SalaEditorPublishedDocument } from "@/lib/sala-editor/persistence/sala-editor-published-types";
+import {
+  logReadonlyMapSource,
+  resolveTpvMapSource,
+} from "@/lib/sala-editor/persistence/sala-editor-published-types";
+import { resolvePublishedDisplayLayout } from "@/lib/sala-editor/persistence/sala-published-geometry";
+import {
+  buildReadonlyMapPublishedDiag,
+  logReadonlyMapPublishedDiag,
+  resolvePublishedEspacioForTpvPlan,
+  shouldShowLegacyMapEmptyState,
+} from "@/lib/sala-editor/persistence/sala-published-readonly-resolve";
+import {
+  collectPublishedOperationalTables,
+  logReadonlyMapTableBinding,
+} from "@/lib/sala-editor/persistence/resolve-published-table-binding";
+import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
+import { SalaPublishedReadonlyMap } from "@/components/map/sala-published-readonly-map";
+import { SalaPublishedReadonlyViewport } from "@/components/map/sala-published-readonly-viewport";
 import { listenZonesByRestaurantId, type Zone } from "@/lib/firestore/zones";
 import { getUsersByRestaurant } from "@/lib/firestore/users";
 import {
@@ -1575,6 +1595,7 @@ function buildSyncedOrderLinesFromServerDoc(
 ): CartOrderLine[] {
   const serverMapped =
     mapFirestoreOrderDocToCartLines(data, restaurantId, catalogById) ?? [];
+  // Origen 2990711: flag explícito (key en ordersByTable, incluye []) O hay líneas locales.
   const useLocalBase =
     opts?.localDraftAuthoritative === true || localLines.length > 0;
   const baseLocal = useLocalBase ? localLines : serverMapped;
@@ -2221,6 +2242,12 @@ export function CartaPageContent({
   const [zonesList, setZonesList] = useState<Zone[]>([]);
   const [selectedTpvFloorPlanId, setSelectedTpvFloorPlanId] =
     useState<string | null>(null);
+  const [salaPublishedDoc, setSalaPublishedDoc] =
+    useState<SalaEditorPublishedDocument | null>(null);
+  const tpvMapSource = useMemo(
+    () => resolveTpvMapSource(salaPublishedDoc),
+    [salaPublishedDoc],
+  );
   const operationalFloorPlansForTpv = useMemo(
     () => floorPlans.filter((p) => p.active !== false && p.showInTpv !== false),
     [floorPlans],
@@ -2406,6 +2433,31 @@ export function CartaPageContent({
     setActiveMapFilter("all");
     setTpvFloorPlanMenuOpen(false);
   }, []);
+
+  /** TPV lee published vía Admin API (nunca draft). */
+  useEffect(() => {
+    if (!restaurantId || !isFirebaseConfigured) {
+      setSalaPublishedDoc(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void loadSalaEditorPublishedViaApi().then((result) => {
+        if (cancelled) return;
+        setSalaPublishedDoc(result.published);
+        logReadonlyMapSource(result.source, {
+          restaurantId,
+          planId: selectedTpvFloorPlanId,
+        });
+      });
+    };
+    load();
+    const interval = window.setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [restaurantId, selectedTpvFloorPlanId]);
 
   useEffect(() => {
     return () => {
@@ -3567,6 +3619,7 @@ export function CartaPageContent({
     if (ids.length === 0) return;
     for (const tid of ids) {
       delete openDraftOrderIdByTableRef.current[tid];
+      // Autoridad 2990711: borrar key de ordersByTable (abajo) libera el borrador.
       window.dispatchEvent(
         new CustomEvent("tablesReadyToClose:clear", { detail: tid }),
       );
@@ -3574,6 +3627,7 @@ export function CartaPageContent({
     setOrdersByTable((prev) => {
       const next = { ...prev };
       for (const tid of ids) delete next[tid];
+      ordersByTableRef.current = next;
       return next;
     });
     setFirestoreOccupancyStartMsByTable((prev) => {
@@ -3775,6 +3829,7 @@ export function CartaPageContent({
             };
             if (data.restaurantId !== rid) continue;
             if (!isOrderStatusActiveForTableOccupancy(data.status)) continue;
+            // Pedido open con pending/sent activos: nunca autoClose (no es draft vacío).
             if (orderDocHasActiveLinesForMapOccupancy(data)) {
               traceEmptyDraft("autoClose.skip.hasActiveLines", {
                 tableId: tid,
@@ -5261,14 +5316,43 @@ export function CartaPageContent({
         if (selectedTableIdRef.current !== openId) return;
         const lines = ordersByTableRef.current[openId];
         if (lines !== undefined) {
+          traceEmptyDraft("reactWriter.syncOrderAfterOpenGate", {
+            tableId: openId,
+            lines: summarizeTraceLines(lines),
+          });
           setOrder(lines);
         }
       }, 320);
       return () => window.clearTimeout(t);
     }
     const lines = ordersByTable[tid];
+    // Con autoridad local, solo espeja el draft local (puede ser []); no inventa pending.
+    if (isLocalDraftAuthoritative(tid) && lines === undefined) {
+      traceEmptyDraft("reactWriter.syncOrderFromOrdersByTable.skipMissingKey", {
+        tableId: tid,
+        localDraftAuthoritative: true,
+      });
+      return;
+    }
+    traceEmptyDraft("reactWriter.syncOrderFromOrdersByTable", {
+      tableId: tid,
+      lines: summarizeTraceLines(lines ?? []),
+      keyMissing: lines === undefined,
+      localDraftAuthoritative: isLocalDraftAuthoritative(tid),
+    });
     setOrder(lines ?? []);
   }, [selectedTableId, ordersByTable, orderIdFromUrl]);
+
+  useLayoutEffect(() => {
+    if (!selectedTableId) return;
+    const tid = selectedTableId.trim();
+    traceEmptyDraft("react.preRender", {
+      tableId: tid,
+      order: summarizeTraceLines(order),
+      ordersByTable: summarizeTraceLines(ordersByTable[tid] ?? []),
+      hasKey: Object.prototype.hasOwnProperty.call(ordersByTable, tid),
+    });
+  }, [selectedTableId, order, ordersByTable]);
 
   useEffect(() => {
     if (orderIdFromUrl) return;
@@ -5927,6 +6011,21 @@ export function CartaPageContent({
     holdDidRepeatRef.current = false;
   };
 
+  const resolveActiveOrderDocId = useCallback((): string | null => {
+    const fromUrl =
+      orderIdFromUrl && orderIdFromUrl.trim() !== ""
+        ? orderIdFromUrl.trim()
+        : null;
+    if (fromUrl) return fromUrl;
+    if (openOrderIdsForTable.length > 0) return openOrderIdsForTable[0]!;
+    const tid = selectedTableId?.trim();
+    if (tid) {
+      const draft = openDraftOrderIdByTableRef.current[tid]?.trim();
+      if (draft) return draft;
+    }
+    return null;
+  }, [orderIdFromUrl, openOrderIdsForTable, selectedTableId]);
+
   const handleSendItem = useCallback(
     async (itemId: string) => {
       let next: CartOrderLine[] = [];
@@ -6383,66 +6482,6 @@ export function CartaPageContent({
 
   const handleCancelProductFromLine = handleCancelSentOrderLine;
 
-  const handleRemoveOnePersistedUnit = useCallback(
-    async (itemId: string) => {
-      if (!orderIdFromUrl || !isFirebaseConfigured) return;
-      const target = order.find((l) => l.id === itemId);
-      if (!target) return;
-      const lineStatus = normalizeOrderLineStatus(target.status);
-      if (lineStatus === "cancelled") return;
-
-      const ok = window.confirm("¿Quitar 1 unidad de este producto?");
-      if (!ok) return;
-
-      const qtyBefore = Number(target.quantity) || 0;
-      const shouldCancelPersisted =
-        lineStatus !== "pending" && qtyBefore <= 1;
-
-      let next: CartOrderLine[] = [];
-      updateCurrentTableOrder((prev) => {
-        next = prev.map((l) => {
-          if (l.id !== itemId) return l;
-          if (l.status === "pending" || l.status === "cancelled") return l;
-          const q = Number(l.quantity) || 0;
-          if (q > 1) return { ...l, quantity: q - 1 };
-          return { ...l, status: "cancelled" as const, cancelledAt: Date.now() };
-        });
-        return next;
-      });
-
-      try {
-        await dbgUpdateDoc(
-          doc(db, "orders", orderIdFromUrl),
-          {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-            ...(shouldCancelPersisted
-              ? { cancelledLineIds: arrayUnion(itemId) }
-              : {}),
-          },
-          {
-            label: "carta:handleRemoveOnePersistedUnit",
-            collection: "orders",
-            restaurantId,
-            tableId: selectedTableId,
-            orderId: orderIdFromUrl,
-          },
-        );
-      } catch (e) {
-        console.error("handleRemoveOnePersistedUnit", e);
-        window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
-      }
-    },
-    [
-      order,
-      orderIdFromUrl,
-      isFirebaseConfigured,
-      updateCurrentTableOrder,
-      restaurantId,
-      selectedTableId,
-    ],
-  );
-
   const handleRemoveOneUnitFromLine = useCallback(
     async (line: CartOrderLine) => {
       if (!isFirebaseConfigured) return;
@@ -6588,6 +6627,66 @@ export function CartaPageContent({
     [
       orderIdFromUrl,
       openOrderIdsForTable,
+      isFirebaseConfigured,
+      updateCurrentTableOrder,
+      restaurantId,
+      selectedTableId,
+    ],
+  );
+
+  const handleRemoveOnePersistedUnit = useCallback(
+    async (itemId: string) => {
+      if (!orderIdFromUrl || !isFirebaseConfigured) return;
+      const target = order.find((l) => l.id === itemId);
+      if (!target) return;
+      const lineStatus = normalizeOrderLineStatus(target.status);
+      if (lineStatus === "cancelled") return;
+
+      const ok = window.confirm("¿Quitar 1 unidad de este producto?");
+      if (!ok) return;
+
+      const qtyBefore = Number(target.quantity) || 0;
+      const shouldCancelPersisted =
+        lineStatus !== "pending" && qtyBefore <= 1;
+
+      let next: CartOrderLine[] = [];
+      updateCurrentTableOrder((prev) => {
+        next = prev.map((l) => {
+          if (l.id !== itemId) return l;
+          if (l.status === "pending" || l.status === "cancelled") return l;
+          const q = Number(l.quantity) || 0;
+          if (q > 1) return { ...l, quantity: q - 1 };
+          return { ...l, status: "cancelled" as const, cancelledAt: Date.now() };
+        });
+        return next;
+      });
+
+      try {
+        await dbgUpdateDoc(
+          doc(db, "orders", orderIdFromUrl),
+          {
+            items: serializeOrderLinesToFirestoreItems(next),
+            updatedAt: serverTimestamp(),
+            ...(shouldCancelPersisted
+              ? { cancelledLineIds: arrayUnion(itemId) }
+              : {}),
+          },
+          {
+            label: "carta:handleRemoveOnePersistedUnit",
+            collection: "orders",
+            restaurantId,
+            tableId: selectedTableId,
+            orderId: orderIdFromUrl,
+          },
+        );
+      } catch (e) {
+        console.error("handleRemoveOnePersistedUnit", e);
+        window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
+      }
+    },
+    [
+      order,
+      orderIdFromUrl,
       isFirebaseConfigured,
       updateCurrentTableOrder,
       restaurantId,
@@ -6916,7 +7015,57 @@ export function CartaPageContent({
     });
   }, [tablesList, ordersByTable]);
 
+  /** Espacio published del plano TPV seleccionado (antes de contadores / filtros). */
+  const salaPublishedEspacio = useMemo(() => {
+    if (tpvMapSource !== "v2-published" || !salaPublishedDoc) return null;
+    return resolvePublishedEspacioForTpvPlan(
+      salaPublishedDoc.document,
+      selectedTpvFloorPlanId,
+    );
+  }, [tpvMapSource, salaPublishedDoc, selectedTpvFloorPlanId]);
+
+  /**
+   * Con v2-published: mesas operativas = instancias TABLE del espacio ∩ runtime tables.
+   * No depende de entityBelongsToFloorPlan(selectedPlanId) (evita contador 0 por mismatch de IDs).
+   */
+  const publishedOperationalForTpv = useMemo(() => {
+    if (
+      tpvMapSource !== "v2-published" ||
+      !salaPublishedDoc ||
+      !salaPublishedEspacio ||
+      !restaurantId
+    ) {
+      return null;
+    }
+    const hidden = new Set(
+      tablesList
+        .map((t) => String(t.id).trim())
+        .filter(
+          (id) =>
+            Boolean(id) &&
+            Boolean(groupedTablesMapHandlers?.isJoinedSecondaryTable?.(id)),
+        ),
+    );
+    return collectPublishedOperationalTables({
+      instances: salaPublishedDoc.document.operationalElementInstances ?? [],
+      activeSpace: salaPublishedEspacio,
+      runtimeTables: tablesList,
+      restaurantId,
+      hiddenTableIds: hidden,
+    });
+  }, [
+    tpvMapSource,
+    salaPublishedDoc,
+    salaPublishedEspacio,
+    restaurantId,
+    tablesList,
+    groupedTablesMapHandlers,
+  ]);
+
   const planElementsForTpvMap = useMemo(() => {
+    if (publishedOperationalForTpv) {
+      return publishedOperationalForTpv.boundTables;
+    }
     const activeElements = tablesList.filter(
       (element) => element.isActive !== false,
     );
@@ -6924,7 +7073,12 @@ export function CartaPageContent({
     return activeElements.filter((element) =>
       entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
     );
-  }, [tablesList, selectedTpvFloorPlanId, floorPlans]);
+  }, [
+    publishedOperationalForTpv,
+    tablesList,
+    selectedTpvFloorPlanId,
+    floorPlans,
+  ]);
 
   const zonesForTpvMap = useMemo(() => {
     if (!selectedTpvFloorPlanId) return zonesList;
@@ -7089,7 +7243,10 @@ export function CartaPageContent({
     return map;
   }, [tablesList]);
 
-  /** Mesas con al menos una order activa en Firestore (regla `orderDocHasActiveLinesForMapOccupancy`). */
+  /**
+   * Mesas con al menos una order activa en Firestore
+   * (regla `orderDocHasActiveLinesForMapOccupancy`: pending con qty>0 cuenta).
+   */
   const openOrdersByTable = useMemo(() => {
     const m: Record<string, true> = {};
     for (const id of firestoreOccupiedTableIds) {
@@ -7101,6 +7258,11 @@ export function CartaPageContent({
   /** Por mesa: instante de la comanda activa más antigua (ms), alineado con ocupación. */
   const orderOpenedAtByTable = firestoreOccupancyStartMsByTable;
 
+  /**
+   * Criterio producto mapa: ocupada si hay order Firestore con líneas activas
+   * (pending o sent) O cache local con líneas activas (borrador no enviado).
+   * Una mesa con solo pending NO se muestra libre.
+   */
   const isTableOccupiedOnMap = useCallback(
     (tableId: string) =>
       resolveJoinedTableGroupMapState(
@@ -7617,11 +7779,6 @@ export function CartaPageContent({
     return [...decorative, ...mapTablesForChipFilter];
   }, [decorativePlanElementsForTpv, mapTablesForChipFilter]);
 
-  const mapViewportFitElementsForTpv = useMemo(() => {
-    if (mapTablesForChipFilter.length > 0) return mapTablesForChipFilter;
-    return tablesVisibleOnMap;
-  }, [mapTablesForChipFilter, tablesVisibleOnMap]);
-
   const tpvOperationalMapElementsForRender = useMemo(() => {
     if (!embeddedInOperacion) return mapElementsForTpvRender;
     return scaleTpvOperationalMapElements(
@@ -7638,64 +7795,102 @@ export function CartaPageContent({
     );
   }, [embeddedInOperacion, selectedTpvFloorPlanSize]);
 
-  const tpvOperationalViewportFitElements = useMemo(() => {
-    if (!embeddedInOperacion) return mapViewportFitElementsForTpv;
-    const fitSource = filterTpvOperationalViewportFitElements(
-      mapViewportFitElementsForTpv,
-    );
+  /**
+   * Fallback legacy de encuadre: TODOS los elementos persistidos del plano
+   * (nunca solo mesas filtradas/visibles/agrupadas).
+   */
+  const tpvLegacyViewportFitElements = useMemo(() => {
+    if (!embeddedInOperacion) return mapElementsForTpvRender;
     return scaleTpvOperationalMapElements(
-      fitSource,
+      mapElementsForTpvRender,
       TPV_OPERATIONAL_MAP_VISUAL_SCALE,
     );
-  }, [embeddedInOperacion, mapViewportFitElementsForTpv]);
+  }, [embeddedInOperacion, mapElementsForTpvRender]);
+
+  const tpvCameraUsesPlanSize = hasValidTpvPlanSize(
+    tpvOperationalPlanSizeForRender,
+  );
 
   const tpvMapAutoFitKey = useMemo(() => {
-    const planKey = selectedTpvFloorPlanId ?? "legacy";
-    return [
-      planKey,
-      embeddedInOperacion ? TPV_OPERATIONAL_MAP_VISUAL_SCALE : 1,
-      tpvOperationalPlanSizeForRender.width,
-      tpvOperationalPlanSizeForRender.height,
-      tpvOperationalMapElementsForRender.length,
-      planElementsForTpvMap.length,
-      zonesForOperationalMapRender.length,
-      tpvOperationalMapElementsForRender
-        .map((element) =>
-          [
-            element.id,
-            element.type,
-            element.x,
-            element.y,
-            element.width,
-            element.height,
-          ].join(":"),
-        )
-        .join("|"),
-      planElementsForTpvMap
-        .map((element) =>
-          [
-            element.id,
-            element.type,
-            element.x,
-            element.y,
-            element.width,
-            element.height,
-          ].join(":"),
-        )
-        .join("|"),
-      zonesForOperationalMapRender
-        .map((zone) =>
-          [zone.id, zone.x, zone.y, zone.width, zone.height].join(":"),
-        )
-        .join("|"),
-    ].join("::");
+    const key = buildTpvMapCameraFitKey({
+      planId: selectedTpvFloorPlanId,
+      planWidth: tpvOperationalPlanSizeForRender.width,
+      planHeight: tpvOperationalPlanSizeForRender.height,
+      visualScale: embeddedInOperacion ? TPV_OPERATIONAL_MAP_VISUAL_SCALE : 1,
+      paddingPx: embeddedInOperacion ? TPV_OPERATIONAL_FIT_PADDING_PX : 16,
+    });
+    if (!tpvCameraUsesPlanSize) {
+      logTpvMapCamera("legacy-fallback", {
+        key,
+        planId: selectedTpvFloorPlanId,
+        planSize: tpvOperationalPlanSizeForRender,
+      });
+    }
+    return key;
   }, [
     selectedTpvFloorPlanId,
     embeddedInOperacion,
     tpvOperationalPlanSizeForRender,
-    tpvOperationalMapElementsForRender,
-    planElementsForTpvMap,
-    zonesForOperationalMapRender,
+    tpvCameraUsesPlanSize,
+  ]);
+
+  /** Stage display (paridad Editor V2); la cámara TPV encaja este tamaño. */
+  const salaPublishedCanvas = useMemo(() => {
+    if (!salaPublishedEspacio) return null;
+    const layout = resolvePublishedDisplayLayout(
+      normalizeSalaEspacioBase(salaPublishedEspacio.base),
+    );
+    return { width: layout.stageWidth, height: layout.stageHeight };
+  }, [salaPublishedEspacio]);
+
+  /** Solo mesas published vinculadas al runtime (no todo el restaurante). */
+  const interactivePublishedTableIds = useMemo(() => {
+    if (publishedOperationalForTpv) {
+      return publishedOperationalForTpv.interactiveTableIds;
+    }
+    return new Set(
+      filterTablesForTpvMap(tablesList)
+        .map((t) => String(t.id ?? "").trim())
+        .filter(Boolean),
+    );
+  }, [publishedOperationalForTpv, tablesList]);
+
+  useEffect(() => {
+    if (tpvMapSource !== "v2-published" && !salaPublishedDoc) return;
+    const diag = buildReadonlyMapPublishedDiag({
+      source: tpvMapSource,
+      published: salaPublishedDoc,
+      selectedPlanId: selectedTpvFloorPlanId,
+      selectedSpaceId: salaPublishedEspacio?.id ?? null,
+      legacyActiveTableIds: interactivePublishedTableIds,
+      legacyKnownTableIds: tablesList
+        .map((t) => String(t.id ?? "").trim())
+        .filter(Boolean),
+      legacyActiveTableCount: tablesVisibleOnMap.length,
+      hiddenTableIds: tablesList
+        .map((t) => String(t.id).trim())
+        .filter(
+          (id) =>
+            Boolean(id) &&
+            Boolean(groupedTablesMapHandlers?.isJoinedSecondaryTable?.(id)),
+        ),
+    });
+    logReadonlyMapPublishedDiag(diag);
+    if (publishedOperationalForTpv) {
+      for (const binding of publishedOperationalForTpv.bindings) {
+        logReadonlyMapTableBinding(binding);
+      }
+    }
+  }, [
+    tpvMapSource,
+    salaPublishedDoc,
+    selectedTpvFloorPlanId,
+    salaPublishedEspacio?.id,
+    interactivePublishedTableIds,
+    tablesList,
+    tablesVisibleOnMap.length,
+    groupedTablesMapHandlers,
+    publishedOperationalForTpv,
   ]);
 
   const formatMapOccupiedDuration = useCallback(
@@ -8299,7 +8494,15 @@ export function CartaPageContent({
         selectedTpvFloorPlanId,
         floorPlans,
       );
-      if (fpA !== fpB) return;
+      /**
+       * V2 published: ambas mesas vinculadas al espacio activo pueden unirse
+       * aunque floorPlanId legacy y espacio.id difieran (misma sala canónica).
+       */
+      const samePublishedSpace =
+        tpvMapSource === "v2-published" &&
+        interactivePublishedTableIds.has(d) &&
+        interactivePublishedTableIds.has(t);
+      if (fpA !== fpB && !samePublishedSpace) return;
       logTableJoinMerge("join:ui-drop", {
         targetTableId: t,
         draggedTableId: d,
@@ -8323,6 +8526,8 @@ export function CartaPageContent({
       tablesById,
       selectedTpvFloorPlanId,
       floorPlans,
+      tpvMapSource,
+      interactivePublishedTableIds,
       ordersByTable,
     ],
   );
@@ -9003,7 +9208,7 @@ export function CartaPageContent({
       await completeOperationalActionWithOperatorPicker(true);
     } else {
       await new Promise((r) => window.setTimeout(r, 900));
-      handleBackToMap();
+      await handleBackToMap();
     }
   }, [
     handleComanda,
@@ -15832,7 +16037,190 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                       cartaHeaderMobile && !embeddedInOperacion ? "420px" : 0,
                   }}
                 >
-                {tablesVisibleOnMap.length === 0 ? (
+                {tpvMapSource === "v2-published" &&
+                salaPublishedDoc &&
+                salaPublishedEspacio &&
+                salaPublishedCanvas ? (
+                  <PinchZoomMap
+                    enabled={cartaHeaderMobile && embeddedInOperacion}
+                    minZoom={0.6}
+                    maxZoom={2.5}
+                    initialZoom={1}
+                  >
+                    <SalaPublishedReadonlyViewport
+                      planId={salaPublishedEspacio.id}
+                      planWidth={salaPublishedCanvas.width}
+                      planHeight={salaPublishedCanvas.height}
+                    >
+                      <SalaPublishedReadonlyMap
+                        document={salaPublishedDoc.document}
+                        espacioId={salaPublishedEspacio.id}
+                        selectedTableId={selectedTableId}
+                        onTableClick={handleTableMapTileClick}
+                        interactiveTableIds={interactivePublishedTableIds}
+                        mapJoinDragEnabled={Boolean(
+                          groupedTablesMapHandlers?.joinTables && canJoinTables,
+                        )}
+                        onMapTableJoinDrop={handleMapTableJoinDrop}
+                        mapJoinClusterMainIdByTableId={Object.fromEntries(
+                          [...interactivePublishedTableIds].map((tid) => [
+                            tid,
+                            String(
+                              groupedTablesMapHandlers?.resolveMainTableId?.(
+                                tid,
+                              ) ?? tid,
+                            ).trim(),
+                          ]),
+                        )}
+                        groupedPrimaryTableIds={
+                          new Set(
+                            [...interactivePublishedTableIds].filter((tid) =>
+                              Boolean(
+                                groupedTablesMapHandlers?.isGroupedPrimaryTable?.(
+                                  tid,
+                                ),
+                              ),
+                            ),
+                          )
+                        }
+                        groupedTotalTablesLabelByTableId={Object.fromEntries(
+                          [...interactivePublishedTableIds]
+                            .map((tid) => {
+                              const badge =
+                                groupedTablesMapHandlers?.getGroupedBadgeText?.(
+                                  tid,
+                                ) ?? null;
+                              const t = badge?.trim();
+                              if (!t?.startsWith("+")) return null;
+                              const sec = Number.parseInt(t.slice(1), 10);
+                              if (!Number.isFinite(sec) || sec < 1) return null;
+                              const total = sec + 1;
+                              return [
+                                tid,
+                                total === 2
+                                  ? "2 mesas unidas"
+                                  : `${total} mesas unidas`,
+                              ] as const;
+                            })
+                            .filter(
+                              (row): row is readonly [string, string] =>
+                                row != null,
+                            ),
+                        )}
+                        onRequestSeparateGroupedTables={
+                          groupedTablesMapHandlers?.separateTable &&
+                          canJoinTables
+                            ? (tid: string) => {
+                                console.log(
+                                  "[Hostly:TableJoinMerge]",
+                                  "split:carta-callback",
+                                  {
+                                    timestamp: Date.now(),
+                                    tid,
+                                    origin: "carta-v2-callback",
+                                    pending:
+                                      groupedTablesMapHandlers?.tableGroupPendingOp ??
+                                      null,
+                                  },
+                                );
+                                const mainId =
+                                  groupedTablesMapHandlers?.resolveMainTableId?.(
+                                    tid,
+                                  ) ?? tid;
+                                groupedTablesMapHandlers.separateTable?.(
+                                  mainId,
+                                  "carta-callback",
+                                );
+                              }
+                            : undefined
+                        }
+                        hiddenTableIds={
+                          new Set(
+                            tablesList
+                              .map((t) => String(t.id).trim())
+                              .filter(
+                                (id) =>
+                                  Boolean(id) &&
+                                  Boolean(
+                                    groupedTablesMapHandlers?.isJoinedSecondaryTable?.(
+                                      id,
+                                    ),
+                                  ),
+                              ),
+                          )
+                        }
+                        overlaysByTableId={Object.fromEntries(
+                          (mapTablesForChipFilter.length > 0
+                            ? mapTablesForChipFilter
+                            : tablesVisibleOnMap
+                          ).map((table) => {
+                            const tid = table.id;
+                            const group = resolveJoinedTableGroupMapState(
+                              tid,
+                              groupedTablesMapHandlers,
+                              firestoreOccupiedTableIds,
+                              ordersByTable,
+                            );
+                            const serviceTableId = group.serviceTableId;
+                            const busy = group.busy;
+                            const reserved = Boolean(reservedByTableId[tid]);
+                            const durationLabel =
+                              busy &&
+                              firestoreOccupiedTableIds.has(serviceTableId)
+                                ? formatMapOccupiedDuration(serviceTableId)
+                                : null;
+                            const activeLineCount = countActiveComandaLines(
+                              ordersByTable[serviceTableId] ?? [],
+                            );
+                            const occupancyStartMs =
+                              firestoreOccupancyStartMsByTable[serviceTableId];
+                            const minutesOccupied =
+                              occupancyStartMs != null
+                                ? Math.max(0, (now - occupancyStartMs) / 60000)
+                                : 0;
+                            const critical =
+                              busy &&
+                              occupancyStartMs != null &&
+                              minutesOccupied >= 45 &&
+                              activeLineCount >= 8;
+                            const lastActivityAt =
+                              lastActivityAtByTable[serviceTableId];
+                            const inactiveMinutes =
+                              busy &&
+                              lastActivityAt != null &&
+                              Number.isFinite(lastActivityAt)
+                                ? Math.max(
+                                    0,
+                                    Math.floor((now - lastActivityAt) / 60000),
+                                  )
+                                : 0;
+                            return [
+                              tid,
+                              {
+                                tableId: tid,
+                                busy,
+                                reserved,
+                                attention: inactiveMinutes >= 20 && busy,
+                                critical,
+                                delayed: inactiveMinutes >= 35 && busy,
+                                selected: selectedTableId === tid,
+                                groupBadge:
+                                  groupedTablesMapHandlers?.getGroupedBadgeText?.(
+                                    tid,
+                                  ) ?? null,
+                                durationLabel,
+                                productCount: activeLineCount || null,
+                              },
+                            ] as const;
+                          }),
+                        )}
+                      />
+                    </SalaPublishedReadonlyViewport>
+                  </PinchZoomMap>
+                ) : shouldShowLegacyMapEmptyState(
+                    tpvMapSource,
+                    tablesVisibleOnMap.length,
+                  ) ? (
                   <p
                     style={{
                       color: "#64748b",
@@ -15900,9 +16288,18 @@ button.carta-comanda-pass-chip--postres.is-pending-march:hover:not(:disabled) {
                         ? TPV_OPERATIONAL_FINAL_ZOOM_MULTIPLIER
                         : 1
                     }
-                    viewportFitMode="content"
-                    viewportFitElements={tpvOperationalViewportFitElements}
-                    viewportFitZones={[]}
+                    viewportFitApplyEmphasisZoom={false}
+                    preserveCameraUntilPlanChange
+                    viewportFitDebugTag="tpv"
+                    viewportFitMode={tpvCameraUsesPlanSize ? "plan" : "content"}
+                    viewportFitElements={
+                      tpvCameraUsesPlanSize
+                        ? []
+                        : tpvLegacyViewportFitElements
+                    }
+                    viewportFitZones={
+                      tpvCameraUsesPlanSize ? [] : zonesForOperationalMapRender
+                    }
                     viewportFitZoomMax={
                       embeddedInOperacion
                         ? cartaHeaderMobile

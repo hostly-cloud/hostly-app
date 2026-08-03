@@ -48,6 +48,7 @@ import {
   loadSalaEditorDraft,
   saveSalaEditorDraft,
 } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
+import { publishSalaEditorMapViaApi } from "@/lib/sala-editor/persistence/publish-sala-editor-map-via-api";
 import { loadLegacySalaEditorDocument } from "@/lib/sala-editor/adapters/legacy-adapters";
 import { normalizeSalaEspacioBase } from "@/lib/sala-editor/types/espacio-base";
 import { SalaEditorShell } from "@/components/sala-editor/sala-editor-shell";
@@ -130,6 +131,7 @@ export function SalaEditorWorkspace({
     useState<SnapGuide[]>(EMPTY_SMART_SNAP_GUIDES);
   const [draftReady, setDraftReady] = useState(!draftPersistenceEnabled);
   const [legacyHydratedReadOnly, setLegacyHydratedReadOnly] = useState(false);
+  const [publishMapBusy, setPublishMapBusy] = useState(false);
   const draftLoadSeqRef = useRef(0);
   const lastDraftSignatureRef = useRef<string | null>(null);
   const documentSnapshotRef = useRef<SalaEditorDocument | null>(null);
@@ -282,6 +284,46 @@ export function SalaEditorWorkspace({
       }
     })();
   }, [draftPersistenceEnabled, replaceDocument, restaurantId]);
+
+  const handlePublishMap = useCallback(async () => {
+    if (publishMapBusy) return;
+    if (!draftPersistenceEnabled) {
+      window.alert("Activa la persistencia del borrador para publicar.");
+      return;
+    }
+    setPublishMapBusy(true);
+    try {
+      // Persistir draft actual antes de publicar (la API lee draft en servidor).
+      historyApi.flushScheduledCommits(getDocumentSnapshot);
+      await saveSalaEditorDraft(restaurantId, document, {
+        updatedBy: currentUserId,
+      });
+      lastDraftSignatureRef.current = JSON.stringify(document);
+      const result = await publishSalaEditorMapViaApi();
+      if (!result.ok) {
+        window.alert(
+          `No se pudo publicar el mapa.\nCódigo: ${result.error}${
+            result.details ? `\n${result.details}` : ""
+          }`,
+        );
+        return;
+      }
+      window.alert("Mapa publicado. El TPV usará esta versión operativa.");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "PUBLISH_FAILED";
+      window.alert(`No se pudo publicar el mapa.\n${msg}`);
+    } finally {
+      setPublishMapBusy(false);
+    }
+  }, [
+    currentUserId,
+    document,
+    draftPersistenceEnabled,
+    getDocumentSnapshot,
+    historyApi,
+    publishMapBusy,
+    restaurantId,
+  ]);
 
   useEffect(() => {
     if (!draftPersistenceEnabled || !draftReady) return;
@@ -1138,6 +1180,14 @@ export function SalaEditorWorkspace({
         onUndo={handleUndo}
         onRedo={handleRedo}
         contextActionTarget={contextActionTarget}
+        onPublishMap={
+          draftPersistenceEnabled && !legacyHydratedReadOnly
+            ? () => {
+                void handlePublishMap();
+              }
+            : undefined
+        }
+        publishMapBusy={publishMapBusy}
         leftPanel={
           <SalaEditorLeftPanel
             phase={document.navigation.phase}

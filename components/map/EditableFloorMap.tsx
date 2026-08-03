@@ -276,6 +276,18 @@ export type EditableFloorMapProps = {
    * Solo UX; no altera coordenadas de elementos.
    */
   viewportFitPaddingPx?: number;
+  /**
+   * Si false, `mapLayoutEmphasis` no multiplica el zoom del fit (sí conserva estilos).
+   * Útil en TPV readonly para encajar el plano completo sin recorte.
+   */
+  viewportFitApplyEmphasisZoom?: boolean;
+  /**
+   * Tras el primer fit de un `mapAutoFitKey`, no sobrescribir zoom/pan por resize
+   * ni por re-renders si el usuario ya movió la cámara. Cambio de plano (key) sí re-inicia.
+   */
+  preserveCameraUntilPlanChange?: boolean;
+  /** Etiqueta opcional para logs de cámara en desarrollo (`[Hostly:MapCamera]`). */
+  viewportFitDebugTag?: string;
   /** Editor de plano “denso”: mesas más presentes, encaje algo más cercano, lienzo con más relieve. */
   mapLayoutEmphasis?: boolean;
   /**
@@ -765,6 +777,9 @@ export function EditableFloorMap({
   hideInlineZoomControls = false,
   viewportControlsRef,
   viewportFitPaddingPx,
+  viewportFitApplyEmphasisZoom = true,
+  preserveCameraUntilPlanChange = false,
+  viewportFitDebugTag,
   mapLayoutEmphasis = false,
   hideZoneOverlays = false,
   selectedIdsRef,
@@ -891,6 +906,20 @@ export function EditableFloorMap({
 
   const fitPaddingPx = viewportFitPaddingPx ?? VIEW_PADDING_PX;
   const fitZoomMax = viewportFitZoomMax ?? FIT_ZOOM_MAX;
+  const userAdjustedCameraRef = useRef(false);
+  const lastAutoFitKeyRef = useRef<string | null>(null);
+  const markUserAdjustedCamera = useCallback(() => {
+    if (!preserveCameraUntilPlanChange) return;
+    userAdjustedCameraRef.current = true;
+    if (process.env.NODE_ENV === "development" && viewportFitDebugTag) {
+      console.log("[Hostly:MapCamera] preserve", {
+        tag: viewportFitDebugTag,
+        reason: "user-adjusted",
+        zoom: zoomRef.current,
+        pan: panRef.current,
+      });
+    }
+  }, [preserveCameraUntilPlanChange, viewportFitDebugTag]);
 
   const applyFitToViewport = useCallback(() => {
     if (!editorPlanSurface) return;
@@ -899,11 +928,15 @@ export function EditableFloorMap({
     const vw = root.clientWidth;
     const vh = root.clientHeight;
     if (vw < 32 || vh < 32) return;
-    const bounds = getPlanContentBounds(
-      mapFitElementsRef.current,
-      mapFitZonesRef.current,
-      viewportFitMode === "plan" ? planSize : null,
-    );
+    // Modo `plan`: dimensiones canónicas del plano. No expandir por mesas visibles.
+    const bounds =
+      viewportFitMode === "plan"
+        ? getPlanContentBounds([], [], planSize)
+        : getPlanContentBounds(
+            mapFitElementsRef.current,
+            mapFitZonesRef.current,
+            null,
+          );
     let { zoom: z } = fitBoundsToViewport(bounds, vw, vh, {
       paddingPx: fitPaddingPx,
       maxZoom: Math.max(ZOOM_MAX, fitZoomMax),
@@ -913,7 +946,11 @@ export function EditableFloorMap({
     // `mapLayoutEmphasis` solo ajusta el zoom (lienzo "denso" del editor en modo
     // plan); el pan se calcula UNA sola vez con el zoom final para evitar dobles
     // cálculos y que `viewportFitOffsetX/Y` sea predecible.
-    if (mapLayoutEmphasis && viewportFitMode !== "content") {
+    if (
+      mapLayoutEmphasis &&
+      viewportFitApplyEmphasisZoom &&
+      viewportFitMode !== "content"
+    ) {
       const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
       z = clamp(z * 1.085, 0.06, cap);
     }
@@ -944,6 +981,16 @@ export function EditableFloorMap({
     }
     setZoom(z);
     setPan(p);
+    if (process.env.NODE_ENV === "development" && viewportFitDebugTag) {
+      console.log("[Hostly:MapCamera] init", {
+        tag: viewportFitDebugTag,
+        mode: viewportFitMode,
+        planSize: planSize ?? null,
+        zoom: z,
+        pan: p,
+        viewport: { w: vw, h: vh },
+      });
+    }
   }, [
     editorPlanSurface,
     fitPaddingPx,
@@ -951,23 +998,27 @@ export function EditableFloorMap({
     mapLayoutEmphasis,
     planSize,
     viewportFitAlign,
+    viewportFitApplyEmphasisZoom,
+    viewportFitDebugTag,
     viewportFitOffsetX,
     viewportFitOffsetY,
     viewportFitZoomMultiplier,
     viewportFitMode,
   ]);
-
   const applyNaturalZoomCentered = useCallback(() => {
     const root = floorRef.current;
     if (!root) return;
     const vw = root.clientWidth;
     const vh = root.clientHeight;
     if (vw < 32 || vh < 32) return;
-    const bounds = getPlanContentBounds(
-      mapFitElementsRef.current,
-      mapFitZonesRef.current,
-      viewportFitMode === "plan" ? planSize : null,
-    );
+    const bounds =
+      viewportFitMode === "plan"
+        ? getPlanContentBounds([], [], planSize)
+        : getPlanContentBounds(
+            mapFitElementsRef.current,
+            mapFitZonesRef.current,
+            null,
+          );
     setZoom(1);
     setPan({
       x: vw / 2 - bounds.centerX,
@@ -980,30 +1031,74 @@ export function EditableFloorMap({
   useImperativeHandle(
     viewportControlsRef ?? viewportControlsFallbackRef,
     () => ({
-      zoomIn: () =>
-        setZoom((z) => clamp(z + 0.1, ZOOM_MIN, ZOOM_MAX)),
-      zoomOut: () =>
-        setZoom((z) => clamp(z - 0.1, ZOOM_MIN, ZOOM_MAX)),
+      zoomIn: () => {
+        markUserAdjustedCamera();
+        setZoom((z) => clamp(z + 0.1, ZOOM_MIN, ZOOM_MAX));
+      },
+      zoomOut: () => {
+        markUserAdjustedCamera();
+        setZoom((z) => clamp(z - 0.1, ZOOM_MIN, ZOOM_MAX));
+      },
       resetNaturalZoom: () => {
+        userAdjustedCameraRef.current = false;
         applyNaturalZoomCentered();
       },
       fitToViewport: () => {
+        userAdjustedCameraRef.current = false;
         applyFitToViewport();
       },
     }),
-    [applyNaturalZoomCentered, applyFitToViewport],
+    [applyNaturalZoomCentered, applyFitToViewport, markUserAdjustedCamera],
   );
 
   useLayoutEffect(() => {
     if (!editorPlanSurface) return;
     const root = floorRef.current;
     if (!root) return;
-    const run = () => {
+    const fitKey = `${mapAutoFitKey ?? ""}::${mapAutoFitNonce}`;
+    const planChanged = lastAutoFitKeyRef.current !== fitKey;
+    if (planChanged) {
+      lastAutoFitKeyRef.current = fitKey;
+      userAdjustedCameraRef.current = false;
+      if (process.env.NODE_ENV === "development" && viewportFitDebugTag) {
+        console.log("[Hostly:MapCamera] plan-change", {
+          tag: viewportFitDebugTag,
+          mapAutoFitKey: mapAutoFitKey ?? null,
+          mapAutoFitNonce,
+        });
+      }
+    }
+    const run = (reason: "init" | "resize" | "effect") => {
+      if (
+        preserveCameraUntilPlanChange &&
+        userAdjustedCameraRef.current &&
+        !planChanged
+      ) {
+        if (process.env.NODE_ENV === "development" && viewportFitDebugTag) {
+          console.log("[Hostly:MapCamera] preserve", {
+            tag: viewportFitDebugTag,
+            reason,
+          });
+        }
+        return;
+      }
+      // Con cámara estable: no re-fit por identidad de callbacks si el plano no cambió
+      // y ya hubo un fit (resize sí recalcula mientras el usuario no haya tocado).
+      if (
+        preserveCameraUntilPlanChange &&
+        !planChanged &&
+        reason === "effect" &&
+        !userAdjustedCameraRef.current
+      ) {
+        return;
+      }
       applyFitToViewport();
     };
-    const id = requestAnimationFrame(run);
+    const id = requestAnimationFrame(() =>
+      run(planChanged ? "init" : "effect"),
+    );
     const ro = new ResizeObserver(() => {
-      requestAnimationFrame(run);
+      requestAnimationFrame(() => run("resize"));
     });
     ro.observe(root);
     return () => {
@@ -1016,6 +1111,8 @@ export function EditableFloorMap({
     mapAutoFitNonce,
     editorVisualPreset,
     applyFitToViewport,
+    preserveCameraUntilPlanChange,
+    viewportFitDebugTag,
   ]);
 
   const beginPan = useCallback((e: React.PointerEvent) => {
@@ -1076,7 +1173,10 @@ export function EditableFloorMap({
         y: session.startPanY + (e.clientY - session.startClientY),
       });
     };
-    const onUp = () => setPanSession(null);
+    const onUp = () => {
+      markUserAdjustedCamera();
+      setPanSession(null);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -1085,7 +1185,7 @@ export function EditableFloorMap({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [panSession]);
+  }, [panSession, markUserAdjustedCamera]);
 
   const [drag, setDrag] = useState<{
     id: string;
@@ -1612,6 +1712,7 @@ export function EditableFloorMap({
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         const factor = e.deltaY > 0 ? 0.94 : 1.06;
+        markUserAdjustedCamera();
         setZoom((z) => clamp(z * factor, ZOOM_MIN, ZOOM_MAX));
         return;
       }
@@ -1619,7 +1720,7 @@ export function EditableFloorMap({
     };
     el.addEventListener("wheel", onNativeWheel, { passive: false });
     return () => el.removeEventListener("wheel", onNativeWheel);
-  }, [editable, onWheel]);
+  }, [editable, onWheel, markUserAdjustedCamera]);
 
   const handleFloorPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {

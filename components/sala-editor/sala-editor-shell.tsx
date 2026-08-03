@@ -25,6 +25,10 @@ export type SalaEditorShellProps = {
   onUndo?: () => void;
   onRedo?: () => void;
   contextActionTarget?: SalaEditorContextActionTarget | null;
+  /** Publicación explícita draft → published (TPV). */
+  onPublishMap?: () => void;
+  publishMapBusy?: boolean;
+  publishMapLabel?: string;
 };
 
 /**
@@ -45,6 +49,9 @@ export function SalaEditorShell({
   onUndo,
   onRedo,
   contextActionTarget = null,
+  onPublishMap,
+  publishMapBusy = false,
+  publishMapLabel = "Publicar mapa",
 }: SalaEditorShellProps) {
   return (
     <section
@@ -75,6 +82,26 @@ export function SalaEditorShell({
           <span className="hostly-sala-editor-workbench__count">
             {espaciosCount} espacio{espaciosCount === 1 ? "" : "s"}
           </span>
+          {onPublishMap ? (
+            <button
+              type="button"
+              className="hostly-sala-editor-workbench__publish-btn"
+              onClick={onPublishMap}
+              disabled={publishMapBusy || espaciosCount < 1}
+              style={{
+                border: "1px solid rgba(15,23,42,0.14)",
+                background: publishMapBusy ? "#94a3b8" : "#0f172a",
+                color: "#fff",
+                borderRadius: 8,
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: publishMapBusy ? "wait" : "pointer",
+              }}
+            >
+              {publishMapBusy ? "Publicando…" : publishMapLabel}
+            </button>
+          ) : null}
           {legacyEditorHref ? (
             <Link href={legacyEditorHref} className="hostly-sala-editor-workbench__legacy-link">
               Editor actual

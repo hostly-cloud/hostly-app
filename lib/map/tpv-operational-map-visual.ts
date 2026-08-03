@@ -8,12 +8,15 @@ import {
 /** Factor de escala del layout TPV operativo (solo render; no muta Firestore). */
 export const TPV_OPERATIONAL_MAP_VISUAL_SCALE = 1.4;
 
-/** Margen del auto-fit TPV (px totales restados del viewport). */
-export const TPV_OPERATIONAL_FIT_PADDING_PX = 4;
+/** Margen del auto-fit TPV (px totales restados del viewport). Plano completo. */
+export const TPV_OPERATIONAL_FIT_PADDING_PX = 40;
 
-/** Tope de zoom del auto-fit TPV (evita techo artificial bajo). */
-export const TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP = 3.4;
-export const TPV_OPERATIONAL_FIT_ZOOM_MAX_MOBILE = 3.8;
+/**
+ * Tope de zoom del auto-fit TPV. Con modo `plan` la escala la marca el plano;
+ * este techo solo evita valores extremos, no “llenar” con mesas.
+ */
+export const TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP = 2.4;
+export const TPV_OPERATIONAL_FIT_ZOOM_MAX_MOBILE = 2.6;
 
 /**
  * Offset de pan TPV-only aplicado tras el encuadre centrado. Recentra el
