@@ -4,6 +4,60 @@ import type { ResolvedSaleModifier } from "@/lib/server/tpv/load-tpv-catalog-adm
 import { modifierInventoryFieldsToPayload } from "@/lib/modifiers/modifier-inventory-consumption";
 import { normalizeProductionLineStatus } from "@/lib/firestore/merge-order-items-for-persist";
 import { normalizeMenuCourseValue } from "@/lib/carta/menu-course";
+import {
+  mapPreparationAreaToStation,
+  mapStationToPreparationArea,
+} from "@/lib/carta/map-station-to-preparation-area";
+
+function normalizeKdsStation(
+  raw: unknown,
+): "kitchen" | "bar" | "cocktail" | null {
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (s === "kitchen" || s === "cocina") return "kitchen";
+  if (s === "bar" || s === "barra") return "bar";
+  if (s === "cocktail" || s === "cocteleria") return "cocktail";
+  return null;
+}
+
+function normalizeKdsPreparationArea(
+  raw: unknown,
+): "cocina" | "barra" | "cocteleria" | null {
+  const mapped = mapStationToPreparationArea(
+    typeof raw === "string" ? raw : undefined,
+  );
+  if (mapped === "cocina" || mapped === "barra" || mapped === "cocteleria") {
+    return mapped;
+  }
+  return null;
+}
+
+/** Deriva station/preparationArea desde catálogo (origen histórico KDS). */
+function resolveCatalogStationFields(product: ProductDocument): {
+  station?: "kitchen" | "bar" | "cocktail";
+  preparationArea?: "cocina" | "barra" | "cocteleria";
+} {
+  const stationFromProduct = normalizeKdsStation(product.station);
+  const prepFromProduct = normalizeKdsPreparationArea(product.preparationArea);
+  const stationFromPrep = normalizeKdsStation(
+    mapPreparationAreaToStation(prepFromProduct ?? product.preparationArea ?? null),
+  );
+  const station = stationFromProduct ?? stationFromPrep ?? undefined;
+  const preparationArea =
+    prepFromProduct ??
+    (station
+      ? normalizeKdsPreparationArea(mapStationToPreparationArea(station))
+      : undefined) ??
+    undefined;
+  const out: {
+    station?: "kitchen" | "bar" | "cocktail";
+    preparationArea?: "cocina" | "barra" | "cocteleria";
+  } = {};
+  if (station) out.station = station;
+  if (preparationArea) out.preparationArea = preparationArea;
+  return out;
+}
 
 export type BuildAuthoritativeSaleLineParams = {
   intent: SaleLineIntent;
@@ -104,6 +158,19 @@ export function buildAuthoritativeSaleLine(
     const catalogCourse = normalizeMenuCourseValue(product.course);
     if (catalogCourse != null) line.course = catalogCourse;
   }
+
+  // station/preparationArea desde catálogo (no del cliente) — parity KDS junio.
+  const existingStation = existing
+    ? normalizeKdsStation(existing.station)
+    : null;
+  const existingPrep = existing
+    ? normalizeKdsPreparationArea(existing.preparationArea)
+    : null;
+  const catalogStation = resolveCatalogStationFields(product);
+  const station = existingStation ?? catalogStation.station;
+  const preparationArea = existingPrep ?? catalogStation.preparationArea;
+  if (station) line.station = station;
+  if (preparationArea) line.preparationArea = preparationArea;
 
   if (modifiers.length > 0) {
     line.selectedModifiers = modifiers.map((m) => ({

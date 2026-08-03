@@ -1,13 +1,37 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
+import { buildAuthoritativeSaleLine } from "@/lib/server/tpv/build-authoritative-sale-line";
 import { tableEmptySessionWarrantsAutoClose } from "@/lib/tpv/table-empty-session-auto-close";
 import { orderDocHasActiveLinesForMapOccupancy } from "@/lib/firestore/order-table-occupancy";
+import type { ProductDocument } from "@/lib/firestore/products";
 
 const CARTA = "app/dashboard/carta/carta-page-content.tsx";
 
 function read(path: string): string {
   return readFileSync(path, "utf8");
+}
+
+function baseProduct(overrides: Partial<ProductDocument> = {}): ProductDocument {
+  return {
+    id: "p1",
+    name: "Test",
+    categoryId: "c1",
+    categoryName: "Cat",
+    price: 5,
+    active: true,
+    station: null,
+    type: null,
+    inventory: {
+      enabled: false,
+      unit: "ud",
+      currentStock: 10,
+      minStock: 0,
+      costPerUnit: 1,
+    },
+    recipe: { enabled: false, ingredients: [] },
+    ...overrides,
+  };
 }
 
 describe("BLOQUE 1 — autoridad key 2990711", () => {
@@ -76,6 +100,59 @@ describe("BLOQUE 4 — volver al mapa", () => {
       src,
       /const handleBackToMap = useCallback\(\(\) => \{\s*const tid[\s\S]*?delete openDraftOrderIdByTableRef\.current\[tid\];/,
     );
+  });
+});
+
+describe("BLOQUE 5 — station/preparationArea en sale line", () => {
+  test("bebida bar → station bar + preparationArea barra", () => {
+    const line = buildAuthoritativeSaleLine({
+      intent: { lineId: "l1", productId: "p1", quantity: 1 },
+      product: baseProduct({
+        station: "bar",
+        name: "Cerveza",
+        tipoVenta: "bebida",
+      }),
+      modifiers: [],
+      defaultStatus: "sent",
+    });
+    assert.equal(line.station, "bar");
+    assert.equal(line.preparationArea, "barra");
+  });
+
+  test("comida kitchen → station kitchen + preparationArea cocina", () => {
+    const line = buildAuthoritativeSaleLine({
+      intent: { lineId: "l2", productId: "p2", quantity: 1 },
+      product: baseProduct({
+        id: "p2",
+        station: "kitchen",
+        name: "Bruschetta",
+        tipoVenta: "plato",
+      }),
+      modifiers: [],
+      defaultStatus: "sent",
+    });
+    assert.equal(line.station, "kitchen");
+    assert.equal(line.preparationArea, "cocina");
+  });
+
+  test("cocktail → cocteleria", () => {
+    const line = buildAuthoritativeSaleLine({
+      intent: { lineId: "l3", productId: "p3", quantity: 1 },
+      product: baseProduct({
+        id: "p3",
+        station: "cocktail",
+        name: "Mojito",
+      }),
+      modifiers: [],
+    });
+    assert.equal(line.station, "cocktail");
+    assert.equal(line.preparationArea, "cocteleria");
+  });
+
+  test("allowlist incluye station y preparationArea", () => {
+    const src = read("lib/server/tpv/order-mutation-contract.ts");
+    assert.match(src, /"station"/);
+    assert.match(src, /"preparationArea"/);
   });
 });
 

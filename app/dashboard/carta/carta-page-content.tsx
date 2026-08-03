@@ -2,7 +2,6 @@
 
 import {
   addDoc,
-  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -252,14 +251,18 @@ import {
 } from "@/lib/firestore/stock-movements";
 import {
   applyAuthoritativeSnapshotsToLines,
+  cartOrderLinesToSaleLineIntents,
   parseAuthoritativeLineSnapshots,
   rollbackReleaseLinesSelective,
   sendCartaProductionReleaseViaTpvApi,
 } from "@/lib/carta/send-production-release-via-tpv-api";
 import {
+  cancelLinesViaApi,
   closeTpvOrderViaApi,
   createOpenOrderViaApi,
   resolveActiveOrderForTableViaApi,
+  transitionLineStatusViaApi,
+  upsertSaleLinesViaApi,
 } from "@/lib/firestore/tpv-mutations-via-api";
 import { fetchCartaCategorias, fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
@@ -6028,139 +6031,132 @@ export function CartaPageContent({
 
   const handleSendItem = useCallback(
     async (itemId: string) => {
-      let next: CartOrderLine[] = [];
-      updateCurrentTableOrder((prev) => {
-        next = prev.map((l) =>
+      const target = order.find(
+        (l) => l.id === itemId && normalizeOrderLineStatus(l.status) === "pending",
+      );
+      if (!target) return;
+      const orderDocId = resolveActiveOrderDocId();
+      if (!orderDocId || !isFirebaseConfigured) {
+        updateCurrentTableOrder((prev) =>
+          prev.map((l) =>
+            l.id === itemId && l.status === "pending"
+              ? { ...l, status: "sent" as const, sentAt: Date.now() }
+              : l,
+          ),
+        );
+        return;
+      }
+      const intents = cartOrderLinesToSaleLineIntents([target]);
+      if (intents.length === 0) return;
+      const result = await upsertSaleLinesViaApi({
+        orderId: orderDocId,
+        lines: intents,
+        markSent: true,
+      });
+      if (!result.ok) {
+        console.error("handleSendItem", result.error);
+        window.alert("No se pudo enviar la línea. Inténtalo otra vez.");
+        return;
+      }
+      updateCurrentTableOrder((prev) =>
+        prev.map((l) =>
           l.id === itemId && l.status === "pending"
             ? { ...l, status: "sent" as const, sentAt: Date.now() }
             : l,
-        );
-        return next;
-      });
-      if (orderIdFromUrl && isFirebaseConfigured) {
-        try {
-          const payloadItems = serializeOrderLinesToFirestoreItems(next);
-          await dbgUpdateDoc(
-            doc(db, "orders", orderIdFromUrl),
-            {
-            items: payloadItems,
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleSendItem",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderIdFromUrl,
-            },
-          );
-        } catch (e) {
-          console.error("handleSendItem", e);
-        }
-      }
+        ),
+      );
     },
     [
-      orderIdFromUrl,
+      order,
       isFirebaseConfigured,
       updateCurrentTableOrder,
-      restaurantId,
-      selectedTableId,
+      resolveActiveOrderDocId,
     ],
   );
 
   const handleSendAllItems = useCallback(async () => {
-    let next: CartOrderLine[] = [];
-    let didSend = false;
-    updateCurrentTableOrder((prev) => {
-      if (getPendingItems(prev).length === 0) {
-        next = prev;
-        return prev;
-      }
-      didSend = true;
+    const pending = getPendingItems(order);
+    if (pending.length === 0) return;
+    const orderDocId = resolveActiveOrderDocId();
+    if (!orderDocId || !isFirebaseConfigured) {
       const now = Date.now();
-      next = prev.map((l) =>
+      updateCurrentTableOrder((prev) =>
+        prev.map((l) =>
+          l.status === "pending"
+            ? { ...l, status: "sent" as const, sentAt: now }
+            : l,
+        ),
+      );
+      return;
+    }
+    const intents = cartOrderLinesToSaleLineIntents(pending);
+    if (intents.length === 0) return;
+    const result = await upsertSaleLinesViaApi({
+      orderId: orderDocId,
+      lines: intents,
+      markSent: true,
+    });
+    if (!result.ok) {
+      console.error("handleSendAllItems", result.error);
+      window.alert("No se pudo enviar la comanda. Inténtalo otra vez.");
+      return;
+    }
+    const now = Date.now();
+    updateCurrentTableOrder((prev) =>
+      prev.map((l) =>
         l.status === "pending"
           ? { ...l, status: "sent" as const, sentAt: now }
           : l,
-      );
-      return next;
-    });
-    if (!didSend || !orderIdFromUrl || !isFirebaseConfigured) return;
-    try {
-      const payloadItems = serializeOrderLinesToFirestoreItems(next);
-      await dbgUpdateDoc(
-        doc(db, "orders", orderIdFromUrl),
-        {
-        items: payloadItems,
-        updatedAt: serverTimestamp(),
-      },
-        {
-          label: "carta:handleSendAllItems",
-          collection: "orders",
-          restaurantId,
-          tableId: selectedTableId,
-          orderId: orderIdFromUrl,
-        },
-      );
-    } catch (e) {
-      console.error("handleSendAllItems", e);
-    }
+      ),
+    );
   }, [
-    orderIdFromUrl,
+    order,
     isFirebaseConfigured,
     updateCurrentTableOrder,
-    restaurantId,
-    selectedTableId,
+    resolveActiveOrderDocId,
   ]);
 
   const handleServeItem = useCallback(
     async (itemId: string) => {
-      let next: CartOrderLine[] = [];
-      updateCurrentTableOrder((prev) => {
-        next = prev.map((l) => {
-          const st = normalizeOrderLineStatus(l.status);
-          if (
-            l.id === itemId &&
-            (st === "sent" || st === "preparing" || st === "prepared")
-          ) {
-            return { ...l, status: "served" as const, servedAt: Date.now() };
-          }
-          return l;
-        });
-        return next;
-      });
-      const orderDocId =
-        orderIdFromUrl && orderIdFromUrl.trim() !== ""
-          ? orderIdFromUrl
-          : openOrderIdsForTable.length > 0
-            ? openOrderIdsForTable[0]!
-            : null;
-      if (orderDocId && isFirebaseConfigured) {
-        try {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderDocId),
-            {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleServeItem",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderDocId,
-            },
-          );
-        } catch (e) {
-          console.error("handleServeItem", e);
-        }
+      const target = order.find((l) => l.id === itemId);
+      if (!target) return;
+      const st = normalizeOrderLineStatus(target.status);
+      if (st !== "sent" && st !== "preparing" && st !== "prepared") return;
+      const orderDocId = resolveActiveOrderDocId();
+      if (!orderDocId || !isFirebaseConfigured) {
+        updateCurrentTableOrder((prev) =>
+          prev.map((l) =>
+            l.id === itemId
+              ? { ...l, status: "served" as const, servedAt: Date.now() }
+              : l,
+          ),
+        );
+        return;
       }
+      const result = await transitionLineStatusViaApi({
+        orderId: orderDocId,
+        lineId: itemId,
+        expectedStatus: st,
+        nextStatus: "served",
+      });
+      if (!result.ok) {
+        console.error("handleServeItem", result.error);
+        window.alert("No se pudo marcar como servido. Inténtalo otra vez.");
+        return;
+      }
+      updateCurrentTableOrder((prev) =>
+        prev.map((l) =>
+          l.id === itemId
+            ? { ...l, status: "served" as const, servedAt: Date.now() }
+            : l,
+        ),
+      );
     },
     [
-      orderIdFromUrl,
-      openOrderIdsForTable,
+      order,
       isFirebaseConfigured,
       updateCurrentTableOrder,
+      resolveActiveOrderDocId,
     ],
   );
 
@@ -6184,15 +6180,7 @@ export function CartaPageContent({
       if (!ok) return;
       if (!confirmCriticalActionIfUnstable(connectivityStatus)) return;
 
-      const lineAny = line as unknown as {
-        orderItemDocId?: unknown;
-        orderId?: unknown;
-      };
-      const orderItemDocIdFromLine =
-        typeof lineAny.orderItemDocId === "string" &&
-        lineAny.orderItemDocId.trim()
-          ? lineAny.orderItemDocId.trim()
-          : null;
+      const lineAny = line as unknown as { orderId?: unknown };
       const draftOrderId =
         selectedTableId != null
           ? openDraftOrderIdByTableRef.current[selectedTableId]?.trim() || null
@@ -6201,8 +6189,7 @@ export function CartaPageContent({
         (typeof lineAny.orderId === "string" && lineAny.orderId.trim()
           ? lineAny.orderId.trim()
           : null) ??
-        (orderIdFromUrl && orderIdFromUrl.trim() ? orderIdFromUrl.trim() : null) ??
-        (openOrderIdsForTable.length > 0 ? openOrderIdsForTable[0]! : null) ??
+        resolveActiveOrderDocId() ??
         draftOrderId;
 
       if (!orderDocId) {
@@ -6216,9 +6203,17 @@ export function CartaPageContent({
       setCancellingLineIds((prev) => new Set(prev).add(line.id));
       let orderCancellationPersisted = false;
       try {
-        let next: CartOrderLine[] = [];
-        updateCurrentTableOrder((prev) => {
-          next = prev.map((l) => {
+        const cancelResult = await cancelLinesViaApi({
+          orderId: orderDocId,
+          lineIds: [line.id],
+        });
+        if (!cancelResult.ok) {
+          throw new Error(cancelResult.error || "CANCEL_LINES_FAILED");
+        }
+        orderCancellationPersisted = true;
+
+        updateCurrentTableOrder((prev) =>
+          prev.map((l) => {
             if (l.id !== line.id) return l;
             return {
               ...l,
@@ -6226,104 +6221,8 @@ export function CartaPageContent({
               cancelledAt: nowMs,
               cancelledBy,
             };
-          });
-          return next;
-        });
-
-        const billableTotal = sumCartOrderLinesTotal(next);
-        await dbgUpdateDoc(
-          doc(db, "orders", orderDocId),
-          {
-            items: serializeOrderLinesToFirestoreItems(next),
-            total: billableTotal,
-            cancelledLineIds: arrayUnion(line.id),
-            updatedAt: serverTimestamp(),
-          },
-          {
-            label: "carta:handleCancelSentOrderLine:orders",
-            collection: "orders",
-            restaurantId,
-            tableId: selectedTableId,
-            orderId: orderDocId,
-          },
+          }),
         );
-        orderCancellationPersisted = true;
-
-        const orderItemDocId =
-          orderItemDocIdFromLine ??
-          next.find((l) => l.id === line.id)?.orderItemDocId?.trim() ??
-          null;
-
-        const orderItemPayload = {
-          status: "cancelled",
-          cancelledAt: nowMs,
-          ...(cancelledBy ? { cancelledBy } : {}),
-          updatedAt: nowMs,
-        };
-
-        try {
-          if (orderItemDocId) {
-            await dbgUpdateDoc(
-              doc(db, "orderItems", orderItemDocId),
-              orderItemPayload,
-              {
-                label: "carta:handleCancelSentOrderLine:orderItems",
-                collection: "orderItems",
-                restaurantId,
-                tableId: selectedTableId,
-                orderId: orderDocId,
-              },
-            );
-          } else if (restaurantId?.trim()) {
-            const itemsSnap = await getDocs(
-              query(
-                collection(db, "orderItems"),
-                where("restaurantId", "==", restaurantId.trim()),
-                where("orderId", "==", orderDocId),
-              ),
-            );
-            const lineName = String(line.product.nombre ?? "").trim();
-            const lineQty = Number(line.quantity) || 0;
-            for (const itemDoc of itemsSnap.docs) {
-              const data = itemDoc.data() as Record<string, unknown>;
-              const itemSt = String(data.status ?? "")
-                .trim()
-                .toLowerCase();
-              if (
-                itemSt === "cancelled" ||
-                itemSt === "canceled" ||
-                itemSt === "cancelado"
-              ) {
-                continue;
-              }
-              const linkedLineId =
-                typeof data.lineId === "string" ? data.lineId.trim() : "";
-              const matchesByLineId = linkedLineId === line.id;
-              const matchesLegacy =
-                !linkedLineId &&
-                String(data.name ?? "").trim() === lineName &&
-                (Number(data.quantity) || 0) === lineQty;
-              if (!matchesByLineId && !matchesLegacy) continue;
-              await dbgUpdateDoc(
-                doc(db, "orderItems", itemDoc.id),
-                orderItemPayload,
-                {
-                  label: "carta:handleCancelSentOrderLine:orderItemsQuery",
-                  collection: "orderItems",
-                  restaurantId,
-                  tableId: selectedTableId,
-                  orderId: orderDocId,
-                },
-              );
-              break;
-            }
-          }
-        } catch (orderItemSyncErr) {
-          console.warn(
-            "[handleCancelSentOrderLine] orderItems sync failed; comanda anulada en orders.",
-            orderItemSyncErr,
-          );
-        }
 
         if (restaurantId) {
           try {
@@ -6488,136 +6387,72 @@ export function CartaPageContent({
       const ok = window.confirm("¿Quitar 1 unidad de este producto?");
       if (!ok) return;
 
-      const selectedLine = line;
+      const lineStatus = normalizeOrderLineStatus(line.status);
+      if (lineStatus === "pending" || lineStatus === "cancelled") return;
 
-      const lineAny = line as unknown as {
-        itemId?: unknown;
-        orderItemId?: unknown;
-        firestoreId?: unknown;
-        orderItemDocId?: unknown;
-        orderId?: unknown;
-        source?: unknown;
-        qty?: unknown;
-        quantity?: unknown;
-      };
-      const orderItemDocId =
-        typeof lineAny.orderItemDocId === "string" && lineAny.orderItemDocId.trim()
-          ? lineAny.orderItemDocId.trim()
-          : null;
-
-      const orderDocId =
-        (typeof lineAny.orderId === "string" && lineAny.orderId.trim()
-          ? lineAny.orderId.trim()
-          : null) ??
-        (orderIdFromUrl && orderIdFromUrl.trim() ? orderIdFromUrl.trim() : null) ??
-        (openOrderIdsForTable.length > 0 ? openOrderIdsForTable[0]! : null);
-
-      const qtyRaw =
-        Number(
-          (line as unknown as { quantity?: unknown; qty?: unknown }).quantity ??
-            (line as unknown as { qty?: unknown }).qty,
-        ) || 0;
-      const qty = qtyRaw;
-      const nextQty = Math.max(qty - 1, 0);
-      const shouldCancel = qty <= 1;
-      const lineStatus = normalizeOrderLineStatus(selectedLine.status);
-      const shouldCancelPersisted =
-        shouldCancel && lineStatus !== "pending" && lineStatus !== "cancelled";
-
-      // Siempre actualiza UI local (comanda) para feedback inmediato.
-      updateCurrentTableOrder((prev) =>
-        prev.map((l) => {
-          if (l.id !== selectedLine.id) return l;
-          if (l.status === "pending") return l;
-          if (shouldCancel) {
-            return { ...l, status: "cancelled" as const, cancelledAt: Date.now() };
-          }
-          return { ...l, quantity: Math.max((Number(l.quantity) || 0) - 1, 0) };
-        }),
-      );
-
-      // 1) orderItems/{id} (si existe)
-      if (orderItemDocId) {
-        try {
-          const payloadBase: Record<string, unknown> = {
-            updatedAt: Date.now(),
-          };
-          if (shouldCancel) {
-            await dbgUpdateDoc(
-              doc(db, "orderItems", orderItemDocId),
-              {
-              ...payloadBase,
-              status: "cancelled",
-              cancelledAt: Date.now(),
-            },
-              {
-                label: "carta:handleRemoveOneUnitFromLine:orderItems",
-                collection: "orderItems",
-                restaurantId,
-                tableId: selectedTableId,
-                orderId: orderDocId ?? undefined,
-              },
-            );
-          } else {
-            const existingHasQtyField = Object.prototype.hasOwnProperty.call(lineAny, "qty");
-            await dbgUpdateDoc(
-              doc(db, "orderItems", orderItemDocId),
-              {
-              ...payloadBase,
-              quantity: nextQty,
-              ...(existingHasQtyField ? { qty: nextQty } : {}),
-            } as Record<string, unknown>,
-              {
-                label: "carta:handleRemoveOneUnitFromLine:orderItems",
-                collection: "orderItems",
-                restaurantId,
-                tableId: selectedTableId,
-                orderId: orderDocId ?? undefined,
-              },
-            );
-          }
-
-        } catch (e) {
-          console.error("REMOVE ONE FIRESTORE WRITE ERROR", e);
-        }
+      const orderDocId = resolveActiveOrderDocId();
+      if (!orderDocId) {
+        window.alert("No se encontró la comanda activa de esta mesa.");
+        return;
       }
 
-      // 2) orders/{id}.items[] (si existe)
-      if (orderDocId) {
-        let next: CartOrderLine[] = [];
-        updateCurrentTableOrder((prev) => {
-          next = prev.map((l) => {
-            if (l.id !== selectedLine.id) return l;
-            if (l.status === "pending") return l;
-            if (shouldCancel) {
-              return { ...l, status: "cancelled" as const, cancelledAt: Date.now() };
-            }
-            return { ...l, quantity: Math.max((Number(l.quantity) || 0) - 1, 0) };
-          });
-          return next;
+      const qty = Number(line.quantity) || 0;
+      if (qty <= 1) {
+        const cancelResult = await cancelLinesViaApi({
+          orderId: orderDocId,
+          lineIds: [line.id],
         });
-
-        try {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderDocId),
-            {
-              items: serializeOrderLinesToFirestoreItems(next),
-              updatedAt: serverTimestamp(),
-              ...(shouldCancelPersisted
-                ? { cancelledLineIds: arrayUnion(selectedLine.id) }
-                : {}),
-            },
-            {
-              label: "carta:handleRemoveOneUnitFromLine:orders",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderDocId,
-            },
-          );
-        } catch (e) {
-          console.error("REMOVE ONE FIRESTORE WRITE ERROR", e);
+        if (!cancelResult.ok) {
+          console.error("handleRemoveOneUnitFromLine", cancelResult.error);
+          window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
+          return;
         }
+        updateCurrentTableOrder((prev) =>
+          prev.map((l) =>
+            l.id === line.id
+              ? { ...l, status: "cancelled" as const, cancelledAt: Date.now() }
+              : l,
+          ),
+        );
+      } else {
+        // Cancelar línea completa y recrear qty-1 enviada (sin write cliente).
+        const cancelResult = await cancelLinesViaApi({
+          orderId: orderDocId,
+          lineIds: [line.id],
+        });
+        if (!cancelResult.ok) {
+          console.error("handleRemoveOneUnitFromLine", cancelResult.error);
+          window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
+          return;
+        }
+        const replacement: CartOrderLine = {
+          ...line,
+          id: generateOrderLineId(),
+          quantity: qty - 1,
+          status: "sent",
+          sentAt: line.sentAt ?? Date.now(),
+          orderItemDocId: undefined,
+          serverQuantity: undefined,
+        };
+        const intents = cartOrderLinesToSaleLineIntents([replacement]);
+        const upsert = await upsertSaleLinesViaApi({
+          orderId: orderDocId,
+          lines: intents,
+          markSent: true,
+        });
+        if (!upsert.ok) {
+          console.error("handleRemoveOneUnitFromLine recreate", upsert.error);
+          window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
+          return;
+        }
+        updateCurrentTableOrder((prev) => {
+          const without = prev.map((l) =>
+            l.id === line.id
+              ? { ...l, status: "cancelled" as const, cancelledAt: Date.now() }
+              : l,
+          );
+          return [...without, replacement];
+        });
       }
 
       setEditSplitEnabled(false);
@@ -6625,73 +6460,19 @@ export function CartaPageContent({
       setComandaLineEditorId(null);
     },
     [
-      orderIdFromUrl,
-      openOrderIdsForTable,
       isFirebaseConfigured,
       updateCurrentTableOrder,
-      restaurantId,
-      selectedTableId,
+      resolveActiveOrderDocId,
     ],
   );
 
   const handleRemoveOnePersistedUnit = useCallback(
     async (itemId: string) => {
-      if (!orderIdFromUrl || !isFirebaseConfigured) return;
       const target = order.find((l) => l.id === itemId);
       if (!target) return;
-      const lineStatus = normalizeOrderLineStatus(target.status);
-      if (lineStatus === "cancelled") return;
-
-      const ok = window.confirm("¿Quitar 1 unidad de este producto?");
-      if (!ok) return;
-
-      const qtyBefore = Number(target.quantity) || 0;
-      const shouldCancelPersisted =
-        lineStatus !== "pending" && qtyBefore <= 1;
-
-      let next: CartOrderLine[] = [];
-      updateCurrentTableOrder((prev) => {
-        next = prev.map((l) => {
-          if (l.id !== itemId) return l;
-          if (l.status === "pending" || l.status === "cancelled") return l;
-          const q = Number(l.quantity) || 0;
-          if (q > 1) return { ...l, quantity: q - 1 };
-          return { ...l, status: "cancelled" as const, cancelledAt: Date.now() };
-        });
-        return next;
-      });
-
-      try {
-        await dbgUpdateDoc(
-          doc(db, "orders", orderIdFromUrl),
-          {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-            ...(shouldCancelPersisted
-              ? { cancelledLineIds: arrayUnion(itemId) }
-              : {}),
-          },
-          {
-            label: "carta:handleRemoveOnePersistedUnit",
-            collection: "orders",
-            restaurantId,
-            tableId: selectedTableId,
-            orderId: orderIdFromUrl,
-          },
-        );
-      } catch (e) {
-        console.error("handleRemoveOnePersistedUnit", e);
-        window.alert("No se pudo actualizar la cantidad. Inténtalo otra vez.");
-      }
+      await handleRemoveOneUnitFromLine(target);
     },
-    [
-      order,
-      orderIdFromUrl,
-      isFirebaseConfigured,
-      updateCurrentTableOrder,
-      restaurantId,
-      selectedTableId,
-    ],
+    [order, handleRemoveOneUnitFromLine],
   );
 
   const handleCompProductFromLine = useCallback(
@@ -6700,129 +6481,65 @@ export function CartaPageContent({
       const ok = window.confirm("¿Invitar este producto?");
       if (!ok) return;
 
-      const lineEditorTarget = line;
-      const lineAny = line as unknown as { orderId?: unknown; orderItemDocId?: unknown };
-      const orderItemDocId =
-        typeof lineAny.orderItemDocId === "string" && lineAny.orderItemDocId.trim()
-          ? lineAny.orderItemDocId.trim()
-          : null;
-      const orderId =
-        (typeof lineAny.orderId === "string" && lineAny.orderId.trim()
-          ? lineAny.orderId.trim()
-          : null) ??
-        (orderIdFromUrl && orderIdFromUrl.trim() ? orderIdFromUrl.trim() : null) ??
-        (openOrderIdsForTable.length > 0 ? openOrderIdsForTable[0]! : null);
-
+      // Sin API dedicada de invitación: solo UI local.
+      // No escribir orders.items desde cliente.
       const nowMs = Date.now();
-
-      let next: CartOrderLine[] = [];
-      updateCurrentTableOrder((prev) => {
-        next = prev.map((l) => {
-          if (l.id !== lineEditorTarget.id) return l;
+      updateCurrentTableOrder((prev) =>
+        prev.map((l) => {
+          if (l.id !== line.id) return l;
           return {
             ...l,
             isComped: true,
             compedAt: nowMs,
             compedReason: "Invitación",
           };
-        });
-        return next;
-      });
-
-      try {
-        // 1) orderItems/{id} (si existe)
-        if (orderItemDocId) {
-          await dbgUpdateDoc(
-            doc(db, "orderItems", orderItemDocId),
-            {
-            isComped: true,
-            compedAt: nowMs,
-            compedReason: "Invitación",
-            updatedAt: nowMs,
-          },
-            {
-              label: "carta:handleCompProductFromLine:orderItems",
-              collection: "orderItems",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId,
-            },
-          );
-        }
-
-        // 2) orders/{id}.items[] (si existe)
-        if (orderId) {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderId),
-            {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleCompProductFromLine:orders",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId,
-            },
-          );
-        }
-
-      } catch (error) {
-        console.error("COMP PRODUCT FIRESTORE ERROR", error);
-      }
+        }),
+      );
 
       setComandaLineActionsOpen(false);
       setComandaLineActionsTargetId(null);
       setComandaLineActionsAnchorRect(null);
     },
-    [
-      orderIdFromUrl,
-      openOrderIdsForTable,
-      isFirebaseConfigured,
-      updateCurrentTableOrder,
-    ],
+    [isFirebaseConfigured, updateCurrentTableOrder],
   );
 
   const handleRepeatItem = useCallback(
     async (item: CartOrderLine) => {
-      let next: CartOrderLine[] = [];
-      updateCurrentTableOrder((prev) => {
-        const dup: CartOrderLine = {
-          ...item,
-          id: generateOrderLineId(),
-          status: "pending",
-          addedAt: Date.now(),
-          createdAt: Date.now(),
-          sentAt: undefined,
-          preparedAt: undefined,
-          servedAt: undefined,
-        };
-        next = [...prev, dup];
-        return next;
-      });
-      if (orderIdFromUrl && isFirebaseConfigured) {
-        try {
-          await dbgUpdateDoc(
-            doc(db, "orders", orderIdFromUrl),
-            {
-            items: serializeOrderLinesToFirestoreItems(next),
-            updatedAt: serverTimestamp(),
-          },
-            {
-              label: "carta:handleRepeatItem",
-              collection: "orders",
-              restaurantId,
-              tableId: selectedTableId,
-              orderId: orderIdFromUrl,
-            },
-          );
-        } catch (e) {
-          console.error("handleRepeatItem", e);
+      const dup: CartOrderLine = {
+        ...item,
+        id: generateOrderLineId(),
+        status: "pending",
+        addedAt: Date.now(),
+        createdAt: Date.now(),
+        sentAt: undefined,
+        preparedAt: undefined,
+        servedAt: undefined,
+        orderItemDocId: undefined,
+        serverQuantity: undefined,
+      };
+      // Persistencia vía updateCurrentTableOrder → persist-draft / create-open.
+      updateCurrentTableOrder((prev) => [...prev, dup]);
+      const orderDocId = resolveActiveOrderDocId();
+      if (orderDocId && orderIdFromUrl && isFirebaseConfigured) {
+        const intents = cartOrderLinesToSaleLineIntents([dup]);
+        if (intents.length > 0) {
+          const result = await upsertSaleLinesViaApi({
+            orderId: orderDocId,
+            lines: intents,
+            markSent: false,
+          });
+          if (!result.ok) {
+            console.error("handleRepeatItem", result.error);
+          }
         }
       }
     },
-    [orderIdFromUrl, isFirebaseConfigured, updateCurrentTableOrder],
+    [
+      orderIdFromUrl,
+      isFirebaseConfigured,
+      updateCurrentTableOrder,
+      resolveActiveOrderDocId,
+    ],
   );
 
   const handleApplyInlineMixer = useCallback(

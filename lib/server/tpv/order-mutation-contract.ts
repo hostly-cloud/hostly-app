@@ -96,6 +96,9 @@ export const ORDER_EMBEDDED_LINE_KEYS = [
   "stationName",
   "operationStationId",
   "operationStationName",
+  /** Buckets KDS históricos (d8f8b83 / 5fd1195): kitchen|bar|cocktail + área ES. */
+  "station",
+  "preparationArea",
   "modifiersLabel",
 ] as const;
 
@@ -224,6 +227,8 @@ export const ORDER_ITEM_CREATE_KEYS = [
   "stationName",
   "operationStationId",
   "operationStationName",
+  "station",
+  "preparationArea",
   "inventoryCost",
   "id",
   "price",
