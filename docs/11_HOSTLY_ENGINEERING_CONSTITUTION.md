@@ -2,10 +2,10 @@
 
 > Constitución Técnica de Hostly. Referencia suprema para construir, evolucionar y mantener el producto durante años.
 
-**Estado:** oficial  
-**Versión:** 1.0  
-**Autoridad documental:** nivel 1 (ingeniería)  
-**Ámbito:** arquitectura, código, Firebase, Git, calidad, seguridad, IA y evolución técnica  
+**Estado:** oficial
+**Versión:** 1.0
+**Autoridad documental:** nivel 1 (ingeniería)
+**Ámbito:** arquitectura, código, Firebase, Git, calidad, seguridad, IA y evolución técnica
 **Stack:** Next.js App Router · React · TypeScript · Tailwind · Firebase Auth · Firestore · Firebase Storage · Vercel
 
 ---

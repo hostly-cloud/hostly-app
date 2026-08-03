@@ -2,11 +2,11 @@
 
 > Diseño de alto nivel del motor de inteligencia artificial de Hostly. Documento de arquitectura; **no es especificación de implementación**.
 
-**Estado:** borrador arquitectónico oficial  
-**Versión:** 0.1  
-**Autoridad documental:** nivel 2 (IA / plataforma)  
-**Ámbito:** pipeline de importación, enriquecimiento, validación y aprendizaje multi-módulo  
-**Subordinado a:** `00_HOSTLY_PRODUCT_BIBLE.md`, `11_HOSTLY_ENGINEERING_CONSTITUTION.md`  
+**Estado:** borrador arquitectónico oficial
+**Versión:** 0.1
+**Autoridad documental:** nivel 2 (IA / plataforma)
+**Ámbito:** pipeline de importación, enriquecimiento, validación y aprendizaje multi-módulo
+**Subordinado a:** `00_HOSTLY_PRODUCT_BIBLE.md`, `11_HOSTLY_ENGINEERING_CONSTITUTION.md`
 **Relacionado con:** `06_HOSTLY_AI_GUIDELINES.md`, importación de carta existente (`lib/server/menu-imports/`)
 
 ---
@@ -512,7 +512,7 @@ Campos mínimos job: `restaurantId`, `createdBy`, `domain`, `status`, `pipelineV
 
 ## 12.1 Fase 1 — Fundación (Carta)
 
-**Entradas:** PDF, Imagen, QR, Texto  
+**Entradas:** PDF, Imagen, QR, Texto
 
 **Entregables arquitectónicos:**
 
@@ -526,9 +526,9 @@ Campos mínimos job: `restaurantId`, `createdBy`, `domain`, `status`, `pipelineV
 
 ## 12.2 Fase 2 — Operaciones backoffice
 
-**Dominios:** Escandallos, Inventario, Proveedores  
+**Dominios:** Escandallos, Inventario, Proveedores
 
-**Entradas nuevas:** Excel, Word (limitado)  
+**Entradas nuevas:** Excel, Word (limitado)
 
 **Entregables:**
 
@@ -544,7 +544,7 @@ Campos mínimos job: `restaurantId`, `createdBy`, `domain`, `status`, `pipelineV
 - Optimización sugerida (par levels, carta rotation)
 - Compras inteligentes (sugerencia pedido según consumo)
 
-**Entradas:** APIs proveedor, voz (POC)  
+**Entradas:** APIs proveedor, voz (POC)
 
 **Prerequisito:** Fases 1–2 estables + learning loop maduro.
 

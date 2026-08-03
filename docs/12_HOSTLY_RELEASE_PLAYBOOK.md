@@ -2,10 +2,10 @@
 
 > Procedimiento oficial de releases de Hostly para desarrolladores, Cursor, Codex, ChatGPT y futuras IAs.
 
-**Estado:** oficial  
-**Versión:** 1.0  
-**Autoridad documental:** nivel 2 (operaciones y release)  
-**Ámbito:** Git, validación, merge, deploy Vercel, deploy Firebase, rollback e incidencias  
+**Estado:** oficial
+**Versión:** 1.0
+**Autoridad documental:** nivel 2 (operaciones y release)
+**Ámbito:** Git, validación, merge, deploy Vercel, deploy Firebase, rollback e incidencias
 **Subordinado a:** `00_HOSTLY_PRODUCT_BIBLE.md`, `11_HOSTLY_ENGINEERING_CONSTITUTION.md`
 
 **Documentos complementarios (no sustitutos):**
@@ -372,7 +372,7 @@ npx firebase deploy --only firestore:rules,firestore:indexes,storage
    - otro tenant o sin auth → denegado
 4. Consola cliente sin `storage/unauthorized` ni `permission-denied` inesperados
 
-**Bucket canónico:** `hostly-app-8b902.firebasestorage.app`  
+**Bucket canónico:** `hostly-app-8b902.firebasestorage.app`
 Verificar `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` en Vercel coincide.
 
 ---

@@ -2,11 +2,11 @@
 
 > Mapa oficial de todos los módulos de Hostly: propósito, usuarios, datos, dependencias y evolución.
 
-**Estado:** oficial  
-**Versión:** 1.0  
-**Autoridad documental:** nivel 2 (referencia de producto y arquitectura funcional)  
-**Ámbito:** módulos operativos, de catálogo, inventario, inteligencia y administración  
-**Subordinado a:** `00_HOSTLY_PRODUCT_BIBLE.md`, `11_HOSTLY_ENGINEERING_CONSTITUTION.md`  
+**Estado:** oficial
+**Versión:** 1.0
+**Autoridad documental:** nivel 2 (referencia de producto y arquitectura funcional)
+**Ámbito:** módulos operativos, de catálogo, inventario, inteligencia y administración
+**Subordinado a:** `00_HOSTLY_PRODUCT_BIBLE.md`, `11_HOSTLY_ENGINEERING_CONSTITUTION.md`
 **Relacionado con:** `01_HOSTLY_ARCHITECTURE_GUIDE.md`, `03_HOSTLY_ROADMAP.md`, `05_HOSTLY_STATE_AUDIT.md`, `13_HOSTLY_AI_ENGINE_ARCHITECTURE.md`
 
 ---
@@ -632,15 +632,15 @@ Detalle completo en `01_HOSTLY_ARCHITECTURE_GUIDE.md` §7.
 
 Este archivo define **7 secciones principales** más **2 apéndices**:
 
-1. Visión general del producto  
-2. Módulos actuales (19 módulos solicitados)  
-3. Relaciones entre módulos  
-4. Dependencias críticas  
-5. Roadmap funcional (Completado / En desarrollo / Planificado / Futuro)  
-6. Invariantes  
-7. Prioridades de evolución  
-- Apéndice A: mapa de rutas  
-- Apéndice B: colecciones Firestore  
+1. Visión general del producto
+2. Módulos actuales (19 módulos solicitados)
+3. Relaciones entre módulos
+4. Dependencias críticas
+5. Roadmap funcional (Completado / En desarrollo / Planificado / Futuro)
+6. Invariantes
+7. Prioridades de evolución
+- Apéndice A: mapa de rutas
+- Apéndice B: colecciones Firestore
 
 ### Relación con la documentación existente
 

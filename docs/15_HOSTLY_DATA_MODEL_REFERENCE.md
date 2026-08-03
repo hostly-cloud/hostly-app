@@ -2,11 +2,11 @@
 
 > Contrato oficial del modelo de datos de Hostly: entidades, relaciones, estados, persistencia e integridad.
 
-**Estado:** oficial  
-**Versión:** 1.0  
-**Autoridad documental:** nivel 2 (contrato de datos)  
-**Ámbito:** entidades de negocio, persistencia Firestore, estados, invariantes y evolución del schema  
-**Subordinado a:** `00_HOSTLY_PRODUCT_BIBLE.md`, `11_HOSTLY_ENGINEERING_CONSTITUTION.md`  
+**Estado:** oficial
+**Versión:** 1.0
+**Autoridad documental:** nivel 2 (contrato de datos)
+**Ámbito:** entidades de negocio, persistencia Firestore, estados, invariantes y evolución del schema
+**Subordinado a:** `00_HOSTLY_PRODUCT_BIBLE.md`, `11_HOSTLY_ENGINEERING_CONSTITUTION.md`
 **Relacionado con:** `01_HOSTLY_ARCHITECTURE_GUIDE.md`, `14_HOSTLY_MODULES_REFERENCE.md`, `13_HOSTLY_AI_ENGINE_ARCHITECTURE.md`
 
 ---
@@ -757,42 +757,42 @@ Campos recomendados en jobs y publicaciones futuras:
 
 ## 9.1 Divergencia dual Order / orderItems
 
-**Riesgo:** KDS y TPV leen rutas distintas; estados desalineados.  
+**Riesgo:** KDS y TPV leen rutas distintas; estados desalineados.
 **Mitigación:** merge monotónico al persistir; misión de convergencia documentada; tests de caracterización por línea.
 
 ## 9.2 Stock: ledger vs. `currentStock` vs. localStorage
 
-**Riesgo:** tres fuentes de verdad en transición.  
+**Riesgo:** tres fuentes de verdad en transición.
 **Mitigación:** declarar ledger canónico; recalcular proyección; prohibir nuevo negocio en localStorage; evento `STOCK_CHANGED` solo como refresco UI.
 
 ## 9.3 Denormalización obsoleta
 
-**Riesgo:** nombres de mesa/producto desactualizados en pedidos antiguos confunden soporte.  
+**Riesgo:** nombres de mesa/producto desactualizados en pedidos antiguos confunden soporte.
 **Mitigación:** aceptado en histórico; pedidos abiertos rehidratan desde catálogo cuando sea seguro.
 
 ## 9.4 Idempotencia incompleta en cobros
 
-**Riesgo:** doble tap en cobro genera dos payments.  
+**Riesgo:** doble tap en cobro genera dos payments.
 **Mitigación:** claves de idempotencia en UI; transacciones; rules que rechacen duplicados detectables.
 
 ## 9.5 Listeners sin límite
 
-**Riesgo:** coste Firestore y datos stale en Analítica/TPV.  
+**Riesgo:** coste Firestore y datos stale en Analítica/TPV.
 **Mitigación:** queries acotadas por fecha/estado; agregaciones server-side planificadas; no listeners de histórico completo.
 
 ## 9.6 IA escribiendo sin revisión
 
-**Riesgo:** catálogo corrupto o precios erróneos.  
+**Riesgo:** catálogo corrupto o precios erróneos.
 **Mitigación:** preview obligatorio; publish explícito; trazas OCR → ítem; límites de coste.
 
 ## 9.7 Eventos globales no tipados
 
-**Riesgo:** regresiones invisibles entre Sala, KDS y TPV.  
+**Riesgo:** regresiones invisibles entre Sala, KDS y TPV.
 **Mitigación:** contrato tipado en misión dedicada; no nuevos eventos stringly-typed.
 
 ## 9.8 Supplier sin colección canónica
 
-**Riesgo:** mismos proveedor con nombres distintos; OCR inconsistente.  
+**Riesgo:** mismos proveedor con nombres distintos; OCR inconsistente.
 **Mitigación:** aliases + matching; evolución a entidad Supplier en Firestore con IDs estables.
 
 ---
