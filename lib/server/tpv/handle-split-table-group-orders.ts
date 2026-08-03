@@ -35,6 +35,12 @@ import {
   tableOrderLockRef,
   writeTableOrderLockClaim,
 } from "@/lib/server/tpv/table-order-lock";
+import {
+  normalizeTableGroupsMap,
+  planSplitFromRemovedHints,
+  sameSortedIds,
+  type TableGroupsMap,
+} from "@/lib/server/tpv/table-group-topology";
 
 export type SplitTableGroupIntent = {
   mainTableId: string;
@@ -132,31 +138,40 @@ export async function handleSplitTableGroupOrders(
 
   const primaryId = intent.mainTableId.trim();
   const removedRaw = [...new Set(intent.removedTableIds.map((id) => id.trim()).filter(Boolean))];
-  const separatingPrimary = removedRaw.includes(primaryId);
-  if (separatingPrimary && !intent.newMainTableId?.trim()) {
-    return { status: 400, error: "NEW_MAIN_TABLE_ID_REQUIRED" };
-  }
-  const newMainId = intent.newMainTableId?.trim() || primaryId;
-  const removed = separatingPrimary
-    ? removedRaw
-    : removedRaw.filter((id) => id !== primaryId);
-  const remaining = [
-    ...new Set(
-      (intent.remainingTableIds ?? [primaryId]).map((id) => id.trim()).filter(Boolean),
-    ),
-  ];
-  const effectivePrimaryId = separatingPrimary ? newMainId : primaryId;
-  if (!primaryId || removed.length === 0) {
-    return { restored: true, result: remaining.length > 1 ? "partial-split" : "full-split", restoredOrderIds: [] };
+  if (!primaryId || removedRaw.length === 0) {
+    return { restored: true, result: "full-split", restoredOrderIds: [] };
   }
 
+  const groupRef = tableGroupsDocRef(ctx.db, ctx.restaurantId);
+  const preGroupsSnap = await groupRef.get();
+  const preGroups = normalizeTableGroupsMap(
+    preGroupsSnap.exists ? (preGroupsSnap.data() as Record<string, unknown>).groups : {},
+  );
+  const preTopology = planSplitFromRemovedHints({
+    currentGroups: preGroups,
+    mainTableId: primaryId,
+    removedTableIds: removedRaw,
+    newMainTableId: intent.newMainTableId,
+  });
+  if (!preTopology.ok) {
+    const status =
+      preTopology.error === "GROUP_TOPOLOGY_MISMATCH" ? 409 : 400;
+    return { status, error: preTopology.error };
+  }
+
+  const removed = preTopology.removedTableIds;
+  const remaining = preTopology.remainingTableIds;
+  const effectivePrimaryId = preTopology.effectiveMainTableId;
+  let plannedNextGroups: TableGroupsMap = preTopology.nextGroups;
+
   const idemKey = intent.idempotencyKey?.trim();
+  // Idempotency over client intent; remaining autoritativo se recalcula en servidor.
   const payloadHash = stablePayloadHash(
     buildIdempotencyPayload(ctx.uid, ctx.restaurantId, SPLIT_KIND, {
       mainTableId: primaryId,
       newMainTableId: intent.newMainTableId ?? null,
-      removedTableIds: removed,
-      remainingTableIds: remaining,
+      removedTableIds: removedRaw,
+      remainingTableIds: intent.remainingTableIds ?? null,
     }),
   );
 
@@ -187,7 +202,77 @@ export async function handleSplitTableGroupOrders(
   ).flat();
 
   if (sourceOrdersToRestore.length === 0) {
-    return { restored: true, result: remaining.length > 1 ? "partial-split" : "full-split", restoredOrderIds: [] };
+    // Split sin pedidos merged: persiste topología autoritativa.
+    const resultKind = remaining.length > 1 ? "partial-split" : "full-split";
+    try {
+      await ctx.db.runTransaction(async (tx) => {
+        if (idemKey) {
+          const idemSnap = await tx.get(idempotencyDocRef(ctx.db, ctx.restaurantId, idemKey));
+          const hit = readIdempotencyHit(idemSnap, SPLIT_KIND, payloadHash);
+          if (hit?.conflict) throw new Error("IDEMPOTENCY_CONFLICT");
+          if (hit?.restored != null) {
+            throw new Error(
+              `IDEM_OK:${hit.restored === true}:${hit.result ?? "aborted"}:${JSON.stringify(hit.restoredOrderIds ?? [])}`,
+            );
+          }
+        }
+        const groupSnap = await tx.get(groupRef);
+        const groupData = groupSnap.exists ? (groupSnap.data() as Record<string, unknown>) : {};
+        const txTopology = planSplitFromRemovedHints({
+          currentGroups: normalizeTableGroupsMap(groupData.groups),
+          mainTableId: primaryId,
+          removedTableIds: removedRaw,
+          newMainTableId: intent.newMainTableId,
+        });
+        if (!txTopology.ok) throw new Error(txTopology.error);
+        plannedNextGroups = txTopology.nextGroups;
+        // Sin merge: el mapa `groups` debe sustituirse entero.
+        tx.set(groupRef, {
+          groups: plannedNextGroups,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        if (idemKey) {
+          writeIdempotencyRecord(
+            tx,
+            idempotencyDocRef(ctx.db, ctx.restaurantId, idemKey),
+            SPLIT_KIND,
+            payloadHash,
+            { restored: true, result: resultKind, restoredOrderIds: [] },
+          );
+        }
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.startsWith("IDEM_OK:")) {
+        const [, restoredFlag, resultKindHit, idsJson] = msg.split(":");
+        let ids: string[] = [];
+        try {
+          ids = JSON.parse(idsJson ?? "[]") as string[];
+        } catch {
+          ids = [];
+        }
+        return {
+          restored: restoredFlag === "true",
+          result:
+            resultKindHit === "partial-split" || resultKindHit === "full-split"
+              ? resultKindHit
+              : "aborted",
+          restoredOrderIds: ids,
+        };
+      }
+      if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+      if (msg === "GROUP_TOPOLOGY_MISMATCH") return { status: 409, error: msg };
+      if (
+        msg === "TABLE_ID_REQUIRED" ||
+        msg === "GROUP_NOT_FOUND" ||
+        msg === "TABLE_NOT_IN_GROUP" ||
+        msg === "NEW_MAIN_TABLE_ID_REQUIRED"
+      ) {
+        return { status: 400, error: msg };
+      }
+      throw e;
+    }
+    return { restored: true, result: resultKind, restoredOrderIds: [] };
   }
   if (activePrimaryOrders.length === 0) {
     return { status: 400, error: "NO_ACTIVE_PRIMARY_ORDER" };
@@ -246,7 +331,6 @@ export async function handleSplitTableGroupOrders(
 
   const remainingPrimaryItems = primaryItems.filter((item) => !restoredItemRefs.has(item));
   const restoredOrderIds = sourceOrders.map((s) => s.id);
-  const groupRef = tableGroupsDocRef(ctx.db, ctx.restaurantId);
   const nowMs = Date.now();
 
   try {
@@ -261,6 +345,26 @@ export async function handleSplitTableGroupOrders(
           );
         }
       }
+
+      const groupSnapEarly = await tx.get(groupRef);
+      const groupDataEarly = groupSnapEarly.exists
+        ? (groupSnapEarly.data() as Record<string, unknown>)
+        : {};
+      const txTopology = planSplitFromRemovedHints({
+        currentGroups: normalizeTableGroupsMap(groupDataEarly.groups),
+        mainTableId: primaryId,
+        removedTableIds: removedRaw,
+        newMainTableId: intent.newMainTableId,
+      });
+      if (!txTopology.ok) throw new Error(txTopology.error);
+      if (
+        txTopology.effectiveMainTableId !== effectivePrimaryId ||
+        !sameSortedIds(txTopology.removedTableIds, removed) ||
+        !sameSortedIds(txTopology.remainingTableIds, remaining)
+      ) {
+        throw new Error("CONCURRENT_ORDER_CHANGE");
+      }
+      plannedNextGroups = txTopology.nextGroups;
 
       const lockTableIds = sortTableIdsForLockAcquisition([
         primaryId,
@@ -357,9 +461,6 @@ export async function handleSplitTableGroupOrders(
       const dupRemaining = assertNoDuplicateLineIds(remainingPrimaryItems);
       if (dupRemaining) throw new Error(dupRemaining);
 
-      const groupSnap = await tx.get(groupRef);
-      const groupData = groupSnap.exists ? (groupSnap.data() as Record<string, unknown>) : {};
-
       const meta = orderProjectionMetaFromOrder(destOrderId, freshPrimary, ctx.restaurantId);
       const primaryPlan = planOrderProjectionWrites(
         ctx.db,
@@ -413,30 +514,11 @@ export async function handleSplitTableGroupOrders(
         applyProjectionWritePlan(tx, sourcePlan);
       }
 
-      const groupsRaw =
-        groupData.groups && typeof groupData.groups === "object"
-          ? (groupData.groups as Record<string, unknown>)
-          : {};
-      const nextGroups: Record<string, string[]> = {};
-      for (const [key, value] of Object.entries(groupsRaw)) {
-        if (!Array.isArray(value)) continue;
-        const filtered = value
-          .map((id) => String(id).trim())
-          .filter((id) => id && !removed.includes(id));
-        if (filtered.length > 0) nextGroups[key] = filtered;
-      }
-      if (remaining.length > 1) {
-        const joined = remaining.filter((id) => id !== effectivePrimaryId);
-        if (joined.length > 0) nextGroups[effectivePrimaryId] = joined;
-      } else {
-        delete nextGroups[effectivePrimaryId];
-      }
-      if (separatingPrimary) delete nextGroups[primaryId];
-      tx.set(
-        groupRef,
-        { groups: nextGroups, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true },
-      );
+      // Sin merge: sustituye `groups` entero (evita claves huérfanas por deep-merge).
+      tx.set(groupRef, {
+        groups: plannedNextGroups,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
 
       // Ownership: primary conserva dest; cada mesa restaurada reclama su order restaurado.
       const claimLock = (tableId: string, orderId: string) => {
@@ -493,7 +575,10 @@ export async function handleSplitTableGroupOrders(
       };
     }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
-    if (msg === "VERSION_CONFLICT") return { status: 409, error: "VERSION_CONFLICT" };
+    if (msg === "VERSION_CONFLICT" || msg === "CONCURRENT_ORDER_CHANGE") {
+      return { status: 409, error: msg };
+    }
+    if (msg === "GROUP_TOPOLOGY_MISMATCH") return { status: 409, error: msg };
     if (msg === "LOCK_TENANT_MISMATCH" || msg === "LOCK_TABLE_MISMATCH") {
       return { status: 409, error: msg };
     }
@@ -501,7 +586,14 @@ export async function handleSplitTableGroupOrders(
     if (msg === "PRIMARY_NOT_FOUND" || msg === "SOURCE_NOT_FOUND") {
       return { status: 404, error: msg };
     }
-    if (msg === "NEW_MAIN_TABLE_ID_REQUIRED") return { status: 400, error: msg };
+    if (
+      msg === "NEW_MAIN_TABLE_ID_REQUIRED" ||
+      msg === "TABLE_ID_REQUIRED" ||
+      msg === "GROUP_NOT_FOUND" ||
+      msg === "TABLE_NOT_IN_GROUP"
+    ) {
+      return { status: 400, error: msg };
+    }
     if (
       msg === "DUPLICATE_LINE_ID" ||
       msg === "SOURCE_LINES_NOT_FOUND" ||

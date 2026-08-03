@@ -38,6 +38,12 @@ import {
   tableOrderLockRef,
   writeTableOrderLockClaim,
 } from "@/lib/server/tpv/table-order-lock";
+import {
+  normalizeTableGroupsMap,
+  planMergeFromMemberHints,
+  sameSortedIds,
+  type TableGroupsMap,
+} from "@/lib/server/tpv/table-group-topology";
 
 export type MergeTableGroupIntent = {
   mainTableId: string;
@@ -123,16 +129,21 @@ export async function handleMergeTableGroupOrders(
     return { status: 403, error: "TPV_JOIN_TABLES_REQUIRED" };
   }
 
-  const mainId = intent.mainTableId.trim();
-  const memberIds = [...new Set(intent.memberTableIds.map((id) => id.trim()).filter(Boolean))];
-  if (!mainId || memberIds.length === 0) return { status: 400, error: "TABLE_GROUP_INVALID" };
-  if (!memberIds.includes(mainId)) memberIds.unshift(mainId);
+  const mainHint = intent.mainTableId.trim();
+  const clientMemberIds = [
+    ...new Set(intent.memberTableIds.map((id) => id.trim()).filter(Boolean)),
+  ];
+  if (!mainHint || clientMemberIds.length === 0) {
+    return { status: 400, error: "TABLE_GROUP_INVALID" };
+  }
+  if (!clientMemberIds.includes(mainHint)) clientMemberIds.unshift(mainHint);
 
   const idemKey = intent.idempotencyKey?.trim();
+  // Idempotency over client intent (estable); la topología server se recalcula.
   const payloadHash = stablePayloadHash(
     buildIdempotencyPayload(ctx.uid, ctx.restaurantId, MERGE_KIND, {
-      mainTableId: mainId,
-      memberTableIds: memberIds,
+      mainTableId: mainHint,
+      memberTableIds: clientMemberIds,
     }),
   );
 
@@ -151,8 +162,90 @@ export async function handleMergeTableGroupOrders(
     }
   }
 
+  const groupRef = tableGroupsDocRef(ctx.db, ctx.restaurantId);
+  const preGroupsSnap = await groupRef.get();
+  const preGroups = normalizeTableGroupsMap(
+    preGroupsSnap.exists ? (preGroupsSnap.data() as Record<string, unknown>).groups : {},
+  );
+  const preTopology = planMergeFromMemberHints({
+    currentGroups: preGroups,
+    mainTableId: mainHint,
+    clientMemberIds,
+  });
+  if (!preTopology.ok) {
+    const status =
+      preTopology.error === "GROUP_TOPOLOGY_MISMATCH" || preTopology.error === "SAME_TABLE"
+        ? 409
+        : 400;
+    return { status, error: preTopology.error };
+  }
+
+  const mainId = preTopology.mainTableId;
+  const memberIds = preTopology.memberIds;
+
   const discovered = await discoverActiveOrders(ctx, memberIds);
-  if (discovered.length === 0) return { merged: false };
+  if (discovered.length === 0) {
+    // Join sin pedidos: persiste topología autoritativa; no hay líneas que mover.
+    try {
+      await ctx.db.runTransaction(async (tx) => {
+        if (idemKey) {
+          const idemSnap = await tx.get(idempotencyDocRef(ctx.db, ctx.restaurantId, idemKey));
+          const hit = readIdempotencyHit(idemSnap, MERGE_KIND, payloadHash);
+          if (hit?.conflict) throw new Error("IDEMPOTENCY_CONFLICT");
+          if (hit?.merged != null) {
+            throw new Error(
+              `IDEM_OK:${hit.merged === true}:${typeof hit.destOrderId === "string" ? hit.destOrderId : ""}`,
+            );
+          }
+        }
+        const groupSnap = await tx.get(groupRef);
+        const groupData = groupSnap.exists ? (groupSnap.data() as Record<string, unknown>) : {};
+        const txTopology = planMergeFromMemberHints({
+          currentGroups: normalizeTableGroupsMap(groupData.groups),
+          mainTableId: mainHint,
+          clientMemberIds,
+        });
+        if (!txTopology.ok) throw new Error(txTopology.error);
+        // Sin merge: el mapa `groups` debe sustituirse entero (merge deep conserva claves huérfanas).
+        tx.set(groupRef, {
+          groups: txTopology.nextGroups,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        if (idemKey) {
+          writeIdempotencyRecord(
+            tx,
+            idempotencyDocRef(ctx.db, ctx.restaurantId, idemKey),
+            MERGE_KIND,
+            payloadHash,
+            { merged: false },
+          );
+        }
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.startsWith("IDEM_OK:")) {
+        const [, mergedFlag, destId] = msg.split(":");
+        return {
+          merged: mergedFlag === "true",
+          destOrderId: destId || undefined,
+        };
+      }
+      if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+      if (msg === "GROUP_TOPOLOGY_MISMATCH" || msg === "SAME_TABLE") {
+        return { status: 409, error: msg };
+      }
+      if (
+        msg === "TABLE_ID_REQUIRED" ||
+        msg === "GROUP_NOT_FOUND" ||
+        msg === "TABLE_NOT_IN_GROUP" ||
+        msg === "NEW_MAIN_TABLE_ID_REQUIRED"
+      ) {
+        return { status: 400, error: msg };
+      }
+      throw e;
+    }
+    return { merged: false };
+  }
 
   const dest = pickDestination(discovered, mainId);
   if (!dest) return { merged: false };
@@ -161,10 +254,10 @@ export async function handleMergeTableGroupOrders(
   const destRef = ctx.db.collection("orders").doc(dest.id);
   const sourceRefs = sources.map((s) => ctx.db.collection("orders").doc(s.id));
   const tableRefs = memberIds.map((tid) => ctx.db.collection("tables").doc(tid));
-  const groupRef = tableGroupsDocRef(ctx.db, ctx.restaurantId);
   const nowMs = Date.now();
   let resultDestOrderId = dest.id;
   let resultMerged = true;
+  let plannedNextGroups: TableGroupsMap = preTopology.nextGroups;
 
   try {
     await ctx.db.runTransaction(async (tx) => {
@@ -178,6 +271,24 @@ export async function handleMergeTableGroupOrders(
           );
         }
       }
+
+      // Topología autoritativa dentro de la TX (antes de locks/mutaciones).
+      const groupSnap = await tx.get(groupRef);
+      const groupData = groupSnap.exists ? (groupSnap.data() as Record<string, unknown>) : {};
+      const txGroups = normalizeTableGroupsMap(groupData.groups);
+      const txTopology = planMergeFromMemberHints({
+        currentGroups: txGroups,
+        mainTableId: mainHint,
+        clientMemberIds,
+      });
+      if (!txTopology.ok) throw new Error(txTopology.error);
+      if (
+        txTopology.mainTableId !== mainId ||
+        !sameSortedIds(txTopology.memberIds, memberIds)
+      ) {
+        throw new Error("CONCURRENT_ORDER_CHANGE");
+      }
+      plannedNextGroups = txTopology.nextGroups;
 
       // Adquisición determinista de locks (orden lexicográfico) antes de mutar.
       const lockTableIds = sortTableIdsForLockAcquisition(memberIds);
@@ -231,13 +342,6 @@ export async function handleMergeTableGroupOrders(
         if (String(data.restaurantId ?? "") !== ctx.restaurantId) throw new Error("TABLE_TENANT_MISMATCH");
       }
 
-      const groupSnap = await tx.get(groupRef);
-      const groupData = groupSnap.exists ? (groupSnap.data() as Record<string, unknown>) : {};
-      const groupsRaw =
-        groupData.groups && typeof groupData.groups === "object"
-          ? (groupData.groups as Record<string, unknown>)
-          : {};
-
       const destTableId = String(destData.tableId ?? "").trim();
       if (!memberIds.includes(destTableId)) throw new Error("DEST_TABLE_NOT_IN_GROUP");
 
@@ -255,10 +359,19 @@ export async function handleMergeTableGroupOrders(
         });
       };
 
+      const writeAuthoritativeGroups = () => {
+        // Sin merge: sustituye `groups` entero (evita claves huérfanas por deep-merge).
+        tx.set(groupRef, {
+          groups: plannedNextGroups,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      };
+
       if (sources.length === 0) {
         if (destTableId === mainId) {
           resultMerged = false;
           claimMainLock();
+          writeAuthoritativeGroups();
           if (idemKey) {
             writeIdempotencyRecord(
               tx,
@@ -293,6 +406,7 @@ export async function handleMergeTableGroupOrders(
           }
         }
         claimMainLock();
+        writeAuthoritativeGroups();
         if (idemKey) {
           writeIdempotencyRecord(
             tx,
@@ -428,20 +542,7 @@ export async function handleMergeTableGroupOrders(
         }
       }
       claimMainLock();
-
-      const nextGroups: Record<string, string[]> = {};
-      for (const [key, value] of Object.entries(groupsRaw)) {
-        if (Array.isArray(value)) {
-          nextGroups[key] = value.filter((id): id is string => typeof id === "string");
-        }
-      }
-      const joined = memberIds.filter((id) => id !== mainId);
-      if (joined.length > 0) nextGroups[mainId] = joined;
-      tx.set(
-        groupRef,
-        { groups: nextGroups, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true },
-      );
+      writeAuthoritativeGroups();
 
       if (idemKey) {
         writeIdempotencyRecord(
@@ -475,6 +576,17 @@ export async function handleMergeTableGroupOrders(
     if (msg === "TABLE_NOT_FOUND") return { status: 404, error: msg };
     if (msg === "LOCK_TENANT_MISMATCH" || msg === "LOCK_TABLE_MISMATCH") {
       return { status: 409, error: msg };
+    }
+    if (msg === "GROUP_TOPOLOGY_MISMATCH" || msg === "SAME_TABLE") {
+      return { status: 409, error: msg };
+    }
+    if (
+      msg === "TABLE_ID_REQUIRED" ||
+      msg === "GROUP_NOT_FOUND" ||
+      msg === "TABLE_NOT_IN_GROUP" ||
+      msg === "NEW_MAIN_TABLE_ID_REQUIRED"
+    ) {
+      return { status: 400, error: msg };
     }
     if (
       msg === "DUPLICATE_LINE_ID" ||
