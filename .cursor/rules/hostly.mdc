@@ -58,6 +58,7 @@ Devolver siempre:
 Consultar antes de decisiones de producto, arquitectura, UI u operación:
 
 - `docs/00_HOSTLY_PRODUCT_BIBLE.md`
+- `docs/11_HOSTLY_ENGINEERING_CONSTITUTION.md` — Constitución Técnica
 - `docs/01_HOSTLY_ARCHITECTURE_GUIDE.md`
 - `docs/02_HOSTLY_DESIGN_SYSTEM.md`
 - `docs/03_HOSTLY_ROADMAP.md`
@@ -68,8 +69,16 @@ Consultar antes de decisiones de producto, arquitectura, UI u operación:
 - `docs/08_HOSTLY_BOOTSTRAP.md`
 - `docs/09_HOSTLY_PATTERNS.md`
 - `docs/10_HOSTLY_TECHNICAL_DEBT.md`
+- `docs/12_HOSTLY_RELEASE_PLAYBOOK.md` — releases
+- `docs/13_HOSTLY_AI_ENGINE_ARCHITECTURE.md` — arquitectura del motor IA
+- `docs/14_HOSTLY_MODULES_REFERENCE.md` — referencia de módulos
+- `docs/15_HOSTLY_DATA_MODEL_REFERENCE.md` — modelo de datos
 
-Prioridad: Product Bible → Architecture Guide → Design System.
+Prioridad: Product Bible → Engineering Constitution → Architecture Guide → Design System.
+
+Los agentes Cursor deben respetar esa jerarquía: producto (`00`) define el *qué*;
+ingeniería (`11`) el *cómo*; `12`–`15` son referencias maestras subordinadas
+(releases, IA, módulos, datos) y no sustituyen `00` ni `11`.
 
 # ENGINEERING PRINCIPLES
 
@@ -185,6 +194,7 @@ No hacer commit automáticamente salvo petición expresa.
 Cuando una decisión afecte al producto de forma permanente, indicar si debe actualizarse alguno de:
 
 - `docs/00_HOSTLY_PRODUCT_BIBLE.md`
+- `docs/11_HOSTLY_ENGINEERING_CONSTITUTION.md`
 - `docs/01_HOSTLY_ARCHITECTURE_GUIDE.md`
 - `docs/02_HOSTLY_DESIGN_SYSTEM.md`
 - `docs/03_HOSTLY_ROADMAP.md`
@@ -195,6 +205,10 @@ Cuando una decisión afecte al producto de forma permanente, indicar si debe act
 - `docs/08_HOSTLY_BOOTSTRAP.md`
 - `docs/09_HOSTLY_PATTERNS.md`
 - `docs/10_HOSTLY_TECHNICAL_DEBT.md`
+- `docs/12_HOSTLY_RELEASE_PLAYBOOK.md`
+- `docs/13_HOSTLY_AI_ENGINE_ARCHITECTURE.md`
+- `docs/14_HOSTLY_MODULES_REFERENCE.md`
+- `docs/15_HOSTLY_DATA_MODEL_REFERENCE.md`
 
 ## 10. Mentalidad Hostly
 
