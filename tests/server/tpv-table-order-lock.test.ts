@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import { isActiveOrderStatus } from "@/lib/server/tpv/table-group-order-utils";
 import {
   assertTableOrderLockIntegrity,
+  assertTableOrderLockOwner,
   filterActiveOrdersForTable,
   sortTableIdsForLockAcquisition,
   tableOrderLockDocumentId,
@@ -82,5 +83,54 @@ describe("filterActiveOrdersForTable (main open|sent)", () => {
     );
     assert.equal(isActiveOrderStatus("sent"), true);
     assert.equal(isActiveOrderStatus("paid"), false);
+  });
+});
+
+describe("assertTableOrderLockOwner (upsert/persist)", () => {
+  const base = { restaurantId: "r1", tableId: "t1", orderId: "o1" };
+
+  test("ok when lock owns the order", () => {
+    assert.equal(
+      assertTableOrderLockOwner(
+        { restaurantId: "r1", tableId: "t1", orderId: "o1" },
+        base,
+      ),
+      null,
+    );
+  });
+
+  test("conflict when lock missing, free, or owned by other order", () => {
+    assert.equal(assertTableOrderLockOwner(null, base), "TABLE_ORDER_LOCK_CONFLICT");
+    assert.equal(
+      assertTableOrderLockOwner(
+        { restaurantId: "r1", tableId: "t1", orderId: null },
+        base,
+      ),
+      "TABLE_ORDER_LOCK_CONFLICT",
+    );
+    assert.equal(
+      assertTableOrderLockOwner(
+        { restaurantId: "r1", tableId: "t1", orderId: "other" },
+        base,
+      ),
+      "TABLE_ORDER_LOCK_CONFLICT",
+    );
+  });
+
+  test("tenant/table mismatch without leaking foreign ids to callers", () => {
+    assert.equal(
+      assertTableOrderLockOwner(
+        { restaurantId: "rX", tableId: "t1", orderId: "o1" },
+        base,
+      ),
+      "LOCK_TENANT_MISMATCH",
+    );
+    assert.equal(
+      assertTableOrderLockOwner(
+        { restaurantId: "r1", tableId: "tX", orderId: "o1" },
+        base,
+      ),
+      "LOCK_TABLE_MISMATCH",
+    );
   });
 });

@@ -32,6 +32,10 @@ import {
   assignTableOperatorOnFirstOpen,
   setAssignTableOperatorViaApiForTests,
 } from "@/lib/firestore/table-operator-assignment";
+import {
+  tableOrderLockRef,
+  writeTableOrderLockClaim,
+} from "@/lib/server/tpv/table-order-lock";
 
 const RESTAURANT_A = "rest-a-tpv";
 const RESTAURANT_B = "rest-b-tpv-price";
@@ -3248,6 +3252,15 @@ describe("tpv mutations emulator", () => {
         { id: "line-update", status: "pending", quantity: 1, productId: "prod-1", price: 5, total: 5 },
       ],
       total: 10,
+    });
+    await adminDb.runTransaction(async (tx) => {
+      writeTableOrderLockClaim(tx, tableOrderLockRef(adminDb, RESTAURANT_A, "mesa-1"), {
+        restaurantId: RESTAURANT_A,
+        tableId: "mesa-1",
+        orderId: "order-upsert",
+        create: true,
+        lastOperation: "test_seed",
+      });
     });
     const result = await handleUpsertSaleLines(authCtx("waiter"), {
       orderId: "order-upsert",

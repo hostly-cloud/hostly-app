@@ -61,6 +61,7 @@ import type { ModifierStockConsumptionWarning } from "@/lib/inventory/stock-move
 import { isTpvMutationError } from "@/lib/server/tpv/tpv-mutation-response";
 import {
   assertTableOrderLockIntegrity,
+  assertTableOrderLockOwner,
   filterActiveOrdersForTable,
   readTableOrderLockData,
   tableOrderLockRef,
@@ -761,6 +762,11 @@ export async function handleUpsertSaleLines(
   if (String(preData.restaurantId ?? "") !== ctx.restaurantId) {
     return { status: 403, error: "TENANT_MISMATCH" };
   }
+  const preTableId = String(preData.tableId ?? "").trim();
+  if (!preTableId) return { status: 400, error: "TABLE_ID_REQUIRED" };
+  if (!isActiveOrderStatus(preData.status)) {
+    return { status: 409, error: "ORDER_NOT_ACTIVE" };
+  }
 
   const existingItems = existingItemsArray(preData.items);
   const existingById = indexItemsByLineId(existingItems);
@@ -796,6 +802,21 @@ export async function handleUpsertSaleLines(
       const orderData = readOrderSnapData(orderSnap);
       if (!orderData) throw new Error("ORDER_NOT_FOUND");
       if (String(orderData.restaurantId ?? "") !== ctx.restaurantId) throw new Error("TENANT_MISMATCH");
+      const tableId = String(orderData.tableId ?? "").trim();
+      if (!tableId) throw new Error("TABLE_ID_REQUIRED");
+      if (!isActiveOrderStatus(orderData.status)) throw new Error("ORDER_NOT_ACTIVE");
+
+      // Lock ownership: lectura en la misma TX que la mutación (sin reclamar).
+      const lockRef = tableOrderLockRef(ctx.db, ctx.restaurantId, tableId);
+      const lockSnap = await tx.get(lockRef);
+      const lock = readTableOrderLockData(lockSnap);
+      const lockErr = assertTableOrderLockOwner(lock, {
+        restaurantId: ctx.restaurantId,
+        tableId,
+        orderId,
+      });
+      if (lockErr) throw new Error(lockErr);
+
       const verErr = assertExpectedVersion(orderData, intent.expectedUpdatedAtMs);
       if (verErr) throw new Error(verErr.error);
 
@@ -874,6 +895,13 @@ export async function handleUpsertSaleLines(
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
     if (msg === "TENANT_MISMATCH") return { status: 403, error: "TENANT_MISMATCH" };
+    if (msg === "ORDER_NOT_ACTIVE") return { status: 409, error: "ORDER_NOT_ACTIVE" };
+    if (msg === "TABLE_ORDER_LOCK_CONFLICT") {
+      return { status: 409, error: "TABLE_ORDER_LOCK_CONFLICT" };
+    }
+    if (msg === "LOCK_TENANT_MISMATCH") return { status: 409, error: "LOCK_TENANT_MISMATCH" };
+    if (msg === "LOCK_TABLE_MISMATCH") return { status: 409, error: "LOCK_TABLE_MISMATCH" };
+    if (msg === "TABLE_ID_REQUIRED") return { status: 400, error: "TABLE_ID_REQUIRED" };
     if (msg === "VERSION_CONFLICT") return { status: 409, error: "VERSION_CONFLICT" };
     if (msg === "DUPLICATE_LINE_ID") return { status: 400, error: msg };
     if (msg.startsWith("LINE_STATE_CONFLICT:")) {
