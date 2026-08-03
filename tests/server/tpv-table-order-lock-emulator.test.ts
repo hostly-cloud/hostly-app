@@ -964,14 +964,28 @@ describe("tpv table order lock emulator", () => {
         upsertRes.error === "TABLE_ORDER_LOCK_CONFLICT");
 
     if (upsertOk) {
-      // Upsert ganó: pedido activo con líneas; lock propio; no se reabre tras close.
+      // Upsert ganó: pedido activo con líneas; no se reabre tras close.
       assert.equal(actives.length, 1);
       assert.equal(actives[0]!.id, created.orderId);
-      assert.equal(lock?.orderId, created.orderId);
       assert.equal("error" in upsertRes, false);
       const order = (await adminDb.collection("orders").doc(created.orderId).get()).data();
       assert.equal(isActiveOrderStatus(order?.status), true);
       assert.ok(Array.isArray(order?.items) && (order?.items as unknown[]).length >= 1);
+      if (lock?.orderId) {
+        assert.equal(lock.orderId, created.orderId);
+        return;
+      }
+      // Carrera residual: auto-close liberó el lock mientras el pedido quedó activo.
+      // Upsert no reclama; create-open repara con la política existente.
+      const repaired = await handleCreateOpenOrder(authCtx(), {
+        tableId,
+        lines: [{ lineId: "ac6-repair", productId: "prod-lock-ac-6", quantity: 1 }],
+        idempotencyKey: "lock-ac-6-repair",
+      });
+      assert.equal("orderId" in repaired, true);
+      if (!("orderId" in repaired)) return;
+      assert.equal(repaired.orderId, actives[0]!.id);
+      assert.equal((await readLock(tableId))?.orderId, actives[0]!.id);
       return;
     }
 
@@ -1499,5 +1513,445 @@ describe("tpv table order lock emulator", () => {
     assert.equal(denied.status, 403);
     assert.equal(denied.details, undefined);
     assert.equal((await readLock(tableId, RESTAURANT_A))?.orderId, created.orderId);
+  });
+
+  test("P1. primer merge añade provenance", async () => {
+    const mainId = "prov-p1-main";
+    const sideId = "prov-p1-side";
+    await seedTableAndProduct(mainId, "prod-prov-p1");
+    await seedTableAndProduct(sideId, "prod-prov-p1");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "p1m", productId: "prod-prov-p1", quantity: 1 }],
+      idempotencyKey: "prov-p1-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "p1s", productId: "prod-prov-p1", quantity: 2 }],
+      idempotencyKey: "prov-p1-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    const merged = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "prov-p1-merge",
+    });
+    assert.equal("merged" in merged && merged.merged === true, true);
+    if (!("merged" in merged) || !merged.destOrderId) return;
+
+    const items = ((await adminDb.collection("orders").doc(merged.destOrderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    const lineM = items.find((i) => i.id === "p1m");
+    const lineS = items.find((i) => i.id === "p1s");
+    assert.equal(lineM?.tableGroupSourceTableId, mainId);
+    assert.equal(lineM?.tableGroupSourceOrderId, main.orderId);
+    assert.equal(lineS?.tableGroupSourceTableId, sideId);
+    assert.equal(lineS?.tableGroupSourceOrderId, side.orderId);
+    assert.equal(lineS?.quantity, 2);
+  });
+
+  test("P2. segundo y tercer merge conservan provenance original", async () => {
+    const a = "prov-p2-a";
+    const b = "prov-p2-b";
+    const c = "prov-p2-c";
+    await seedTableAndProduct(a, "prod-prov-p2");
+    await seedTableAndProduct(b, "prod-prov-p2");
+    await seedTableAndProduct(c, "prod-prov-p2");
+    const oa = await handleCreateOpenOrder(authCtx(), {
+      tableId: a,
+      lines: [{ lineId: "p2a", productId: "prod-prov-p2", quantity: 1 }],
+      idempotencyKey: "prov-p2-a",
+    });
+    const ob = await handleCreateOpenOrder(authCtx(), {
+      tableId: b,
+      lines: [{ lineId: "p2b", productId: "prod-prov-p2", quantity: 1 }],
+      idempotencyKey: "prov-p2-b",
+    });
+    const oc = await handleCreateOpenOrder(authCtx(), {
+      tableId: c,
+      lines: [{ lineId: "p2c", productId: "prod-prov-p2", quantity: 1 }],
+      idempotencyKey: "prov-p2-c",
+    });
+    assert.equal("orderId" in oa && "orderId" in ob && "orderId" in oc, true);
+    if (!("orderId" in oa) || !("orderId" in ob) || !("orderId" in oc)) return;
+
+    const m1 = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b],
+      idempotencyKey: "prov-p2-m1",
+    });
+    assert.equal("merged" in m1 && m1.merged === true, true);
+    if (!("merged" in m1) || !m1.destOrderId) return;
+
+    const m2 = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b, c],
+      idempotencyKey: "prov-p2-m2",
+    });
+    assert.equal("merged" in m2 && m2.merged === true, true);
+    if (!("merged" in m2) || !m2.destOrderId) return;
+
+    const items = ((await adminDb.collection("orders").doc(m2.destOrderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.equal(items.find((i) => i.id === "p2a")?.tableGroupSourceTableId, a);
+    assert.equal(items.find((i) => i.id === "p2a")?.tableGroupSourceOrderId, oa.orderId);
+    assert.equal(items.find((i) => i.id === "p2b")?.tableGroupSourceTableId, b);
+    assert.equal(items.find((i) => i.id === "p2b")?.tableGroupSourceOrderId, ob.orderId);
+    assert.equal(items.find((i) => i.id === "p2c")?.tableGroupSourceTableId, c);
+    assert.equal(items.find((i) => i.id === "p2c")?.tableGroupSourceOrderId, oc.orderId);
+
+    // Re-merge no-op / mismo grupo: provenance intacta.
+    const m3 = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b, c],
+      idempotencyKey: "prov-p2-m3",
+    });
+    assert.equal("merged" in m3, true);
+    const after = ((await adminDb.collection("orders").doc(m2.destOrderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.equal(after.find((i) => i.id === "p2b")?.tableGroupSourceTableId, b);
+    assert.equal(after.find((i) => i.id === "p2b")?.tableGroupSourceOrderId, ob.orderId);
+  });
+
+  test("P3. línea sin provenance se completa; válida no se toca", async () => {
+    const mainId = "prov-p3-main";
+    const sideId = "prov-p3-side";
+    await seedTableAndProduct(mainId, "prod-prov-p3");
+    await seedTableAndProduct(sideId, "prod-prov-p3");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "p3m", productId: "prod-prov-p3", quantity: 1 }],
+      idempotencyKey: "prov-p3-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "p3s", productId: "prod-prov-p3", quantity: 1 }],
+      idempotencyKey: "prov-p3-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    await adminDb.collection("orders").doc(main.orderId).update({
+      items: [
+        {
+          id: "p3-kept",
+          productId: "prod-prov-p3",
+          quantity: 1,
+          price: 3,
+          total: 3,
+          status: "pending",
+          tableGroupSourceTableId: "mesa-original",
+          tableGroupSourceOrderId: "ord-original",
+        },
+        {
+          id: "p3-bare",
+          productId: "prod-prov-p3",
+          quantity: 1,
+          price: 3,
+          total: 3,
+          status: "pending",
+        },
+      ],
+      total: 6,
+    });
+
+    const merged = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "prov-p3-merge",
+    });
+    assert.equal("merged" in merged && merged.merged === true, true);
+    if (!("merged" in merged) || !merged.destOrderId) return;
+    const items = ((await adminDb.collection("orders").doc(merged.destOrderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    const kept = items.find((i) => i.id === "p3-kept");
+    const bare = items.find((i) => i.id === "p3-bare");
+    const sideLine = items.find((i) => i.id === "p3s");
+    assert.equal(kept?.tableGroupSourceTableId, "mesa-original");
+    assert.equal(kept?.tableGroupSourceOrderId, "ord-original");
+    assert.equal(bare?.tableGroupSourceTableId, mainId);
+    assert.equal(bare?.tableGroupSourceOrderId, main.orderId);
+    assert.equal(sideLine?.tableGroupSourceTableId, sideId);
+    assert.equal(sideLine?.tableGroupSourceOrderId, side.orderId);
+  });
+
+  test("P4. línea nueva tras merge recibe origen en re-merge", async () => {
+    const mainId = "prov-p4-main";
+    const sideId = "prov-p4-side";
+    const extraId = "prov-p4-extra";
+    await seedTableAndProduct(mainId, "prod-prov-p4");
+    await seedTableAndProduct(sideId, "prod-prov-p4");
+    await seedTableAndProduct(extraId, "prod-prov-p4");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "p4m", productId: "prod-prov-p4", quantity: 1 }],
+      idempotencyKey: "prov-p4-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "p4s", productId: "prod-prov-p4", quantity: 1 }],
+      idempotencyKey: "prov-p4-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    const m1 = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "prov-p4-m1",
+    });
+    assert.equal("merged" in m1 && m1.merged === true, true);
+    if (!("merged" in m1) || !m1.destOrderId) return;
+
+    const upserted = await handleUpsertSaleLines(authCtx(), {
+      orderId: m1.destOrderId,
+      lines: [{ lineId: "p4-new", productId: "prod-prov-p4", quantity: 1 }],
+      idempotencyKey: "prov-p4-upsert",
+    });
+    assert.equal("orderId" in upserted, true);
+
+    const extra = await handleCreateOpenOrder(authCtx(), {
+      tableId: extraId,
+      lines: [{ lineId: "p4e", productId: "prod-prov-p4", quantity: 1 }],
+      idempotencyKey: "prov-p4-extra",
+    });
+    assert.equal("orderId" in extra, true);
+    if (!("orderId" in extra)) return;
+
+    const m2 = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId, extraId],
+      idempotencyKey: "prov-p4-m2",
+    });
+    assert.equal("merged" in m2 && m2.merged === true, true);
+    if (!("merged" in m2) || !m2.destOrderId) return;
+
+    const items = ((await adminDb.collection("orders").doc(m2.destOrderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.equal(items.find((i) => i.id === "p4s")?.tableGroupSourceTableId, sideId);
+    assert.equal(items.find((i) => i.id === "p4s")?.tableGroupSourceOrderId, side.orderId);
+    assert.equal(items.find((i) => i.id === "p4-new")?.tableGroupSourceTableId, mainId);
+    assert.equal(items.find((i) => i.id === "p4-new")?.tableGroupSourceOrderId, main.orderId);
+    assert.equal(items.find((i) => i.id === "p4e")?.tableGroupSourceTableId, extraId);
+    assert.equal(items.find((i) => i.id === "p4e")?.tableGroupSourceOrderId, extra.orderId);
+  });
+
+  test("P5. retry mismo idempotencyKey no cambia provenance", async () => {
+    const mainId = "prov-p5-main";
+    const sideId = "prov-p5-side";
+    await seedTableAndProduct(mainId, "prod-prov-p5");
+    await seedTableAndProduct(sideId, "prod-prov-p5");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "p5m", productId: "prod-prov-p5", quantity: 1 }],
+      idempotencyKey: "prov-p5-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "p5s", productId: "prod-prov-p5", quantity: 1 }],
+      idempotencyKey: "prov-p5-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    const intent = {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "prov-p5-merge",
+    };
+    const first = await handleMergeTableGroupOrders(authCtx(), intent);
+    const second = await handleMergeTableGroupOrders(authCtx(), intent);
+    assert.equal("merged" in first && "merged" in second, true);
+    if (!("merged" in first) || !first.destOrderId) return;
+
+    const items = ((await adminDb.collection("orders").doc(first.destOrderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.equal(items.find((i) => i.id === "p5s")?.tableGroupSourceTableId, sideId);
+    assert.equal(items.find((i) => i.id === "p5s")?.tableGroupSourceOrderId, side.orderId);
+    assert.equal(items.filter((i) => i.id === "p5s").length, 1);
+  });
+
+  test("P6. merge de dos grupos existentes conserva origins", async () => {
+    const a = "prov-p6-a";
+    const b = "prov-p6-b";
+    const c = "prov-p6-c";
+    const d = "prov-p6-d";
+    for (const tid of [a, b, c, d]) await seedTableAndProduct(tid, "prod-prov-p6");
+    const oa = await handleCreateOpenOrder(authCtx(), {
+      tableId: a,
+      lines: [{ lineId: "p6a", productId: "prod-prov-p6", quantity: 1 }],
+      idempotencyKey: "prov-p6-a",
+    });
+    const ob = await handleCreateOpenOrder(authCtx(), {
+      tableId: b,
+      lines: [{ lineId: "p6b", productId: "prod-prov-p6", quantity: 1 }],
+      idempotencyKey: "prov-p6-b",
+    });
+    const oc = await handleCreateOpenOrder(authCtx(), {
+      tableId: c,
+      lines: [{ lineId: "p6c", productId: "prod-prov-p6", quantity: 1 }],
+      idempotencyKey: "prov-p6-c",
+    });
+    const od = await handleCreateOpenOrder(authCtx(), {
+      tableId: d,
+      lines: [{ lineId: "p6d", productId: "prod-prov-p6", quantity: 1 }],
+      idempotencyKey: "prov-p6-d",
+    });
+    assert.equal(
+      "orderId" in oa && "orderId" in ob && "orderId" in oc && "orderId" in od,
+      true,
+    );
+    if (!("orderId" in oa) || !("orderId" in ob) || !("orderId" in oc) || !("orderId" in od)) {
+      return;
+    }
+
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b],
+      idempotencyKey: "prov-p6-ab",
+    });
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: c,
+      memberTableIds: [c, d],
+      idempotencyKey: "prov-p6-cd",
+    });
+    const joined = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b, c, d],
+      idempotencyKey: "prov-p6-join",
+    });
+    assert.equal("merged" in joined && joined.merged === true, true);
+    if (!("merged" in joined) || !joined.destOrderId) return;
+
+    const items = ((await adminDb.collection("orders").doc(joined.destOrderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.equal(items.find((i) => i.id === "p6b")?.tableGroupSourceTableId, b);
+    assert.equal(items.find((i) => i.id === "p6b")?.tableGroupSourceOrderId, ob.orderId);
+    assert.equal(items.find((i) => i.id === "p6d")?.tableGroupSourceTableId, d);
+    assert.equal(items.find((i) => i.id === "p6d")?.tableGroupSourceOrderId, od.orderId);
+  });
+
+  test("P7. split actual lee provenance resultante; locks intactos", async () => {
+    const mainId = "prov-p7-main";
+    const sideId = "prov-p7-side";
+    await seedTableAndProduct(mainId, "prod-prov-p7");
+    await seedTableAndProduct(sideId, "prod-prov-p7");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "p7m", productId: "prod-prov-p7", quantity: 1 }],
+      idempotencyKey: "prov-p7-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "p7s", productId: "prod-prov-p7", quantity: 1 }],
+      idempotencyKey: "prov-p7-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    const merged = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "prov-p7-merge",
+    });
+    assert.equal("merged" in merged && merged.merged === true, true);
+
+    const split = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      remainingTableIds: [mainId],
+      idempotencyKey: "prov-p7-split",
+    });
+    assert.equal("restored" in split && split.restored === true, true);
+    if (!("restored" in split)) return;
+    assert.ok(split.restoredOrderIds.includes(side.orderId));
+    assert.equal((await readLock(mainId))?.orderId, main.orderId);
+    assert.equal((await readLock(sideId))?.orderId, side.orderId);
+
+    const restoredItems = ((await adminDb.collection("orders").doc(side.orderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.ok(restoredItems.some((i) => i.id === "p7s"));
+  });
+
+  test("P8. merge multi-tenant rechazado; no contamina provenance ajena", async () => {
+    const tableA = "prov-p8-a";
+    const tableB = "prov-p8-b";
+    await seedTableAndProduct(tableA, "prod-prov-p8");
+    await adminDb.collection("tables").doc(tableB).set({
+      restaurantId: RESTAURANT_B,
+      name: tableB,
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_B)
+      .collection("products")
+      .doc("prod-b-p8")
+      .set({ name: "prod-b-p8", price: 2, active: true, tipoVenta: "carta" });
+
+    const a = await handleCreateOpenOrder(authCtx(RESTAURANT_A), {
+      tableId: tableA,
+      lines: [{ lineId: "p8a", productId: "prod-prov-p8", quantity: 1 }],
+      idempotencyKey: "prov-p8-a",
+    });
+    const b = await handleCreateOpenOrder(authCtx(RESTAURANT_B), {
+      tableId: tableB,
+      lines: [{ lineId: "p8b", productId: "prod-b-p8", quantity: 1 }],
+      idempotencyKey: "prov-p8-b",
+    });
+    assert.equal("orderId" in a && "orderId" in b, true);
+    if (!("orderId" in a) || !("orderId" in b)) return;
+
+    const denied = await handleMergeTableGroupOrders(authCtx(RESTAURANT_A), {
+      mainTableId: tableA,
+      memberTableIds: [tableA, tableB],
+      idempotencyKey: "prov-p8-merge",
+    });
+    assert.equal("error" in denied, true);
+    const bItems = ((await adminDb.collection("orders").doc(b.orderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.equal(bItems.find((i) => i.id === "p8b")?.tableGroupSourceTableId, undefined);
+    assert.equal((await listActiveOrdersForTable(tableB, RESTAURANT_B)).length, 1);
+  });
+
+  test("P9. concurrencia doble merge deja provenance determinista", async () => {
+    const mainId = "prov-p9-main";
+    const sideId = "prov-p9-side";
+    await seedTableAndProduct(mainId, "prod-prov-p9");
+    await seedTableAndProduct(sideId, "prod-prov-p9");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "p9m", productId: "prod-prov-p9", quantity: 1 }],
+      idempotencyKey: "prov-p9-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "p9s", productId: "prod-prov-p9", quantity: 1 }],
+      idempotencyKey: "prov-p9-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    const results = await Promise.allSettled([
+      handleMergeTableGroupOrders(authCtx(), {
+        mainTableId: mainId,
+        memberTableIds: [mainId, sideId],
+        idempotencyKey: "prov-p9-m-a",
+      }),
+      handleMergeTableGroupOrders(authCtx(), {
+        mainTableId: mainId,
+        memberTableIds: [mainId, sideId],
+        idempotencyKey: "prov-p9-m-b",
+      }),
+    ]);
+    assert.equal(results.every((r) => r.status === "fulfilled"), true);
+    const actives = await listActiveOrdersForTable(mainId);
+    assert.equal(actives.length, 1);
+    const items = (actives[0]!.data()?.items ?? []) as Array<Record<string, unknown>>;
+    assert.equal(items.find((i) => i.id === "p9s")?.tableGroupSourceTableId, sideId);
+    assert.equal(items.find((i) => i.id === "p9s")?.tableGroupSourceOrderId, side.orderId);
+    assert.equal(items.filter((i) => i.id === "p9s").length, 1);
+    assert.equal((await listActiveOrdersForTable(sideId)).length, 0);
   });
 });

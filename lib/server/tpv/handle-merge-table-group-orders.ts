@@ -17,11 +17,11 @@ import {
 } from "@/lib/server/tpv/order-projection";
 import {
   asOrderItems,
+  ensureTableGroupLineOrigin,
   isActiveOrderStatus,
   mergeNotes,
   pickLatestPaymentRequestedAt,
   tableGroupsDocRef,
-  withTableGroupLineOrigin,
 } from "@/lib/server/tpv/table-group-order-utils";
 import {
   buildIdempotencyPayload,
@@ -330,12 +330,12 @@ export async function handleMergeTableGroupOrders(
 
       const mergedItems = [
         ...asOrderItems(destData.items).map((item) =>
-          withTableGroupLineOrigin(item, destTableId, dest.id),
+          ensureTableGroupLineOrigin(item, destTableId, dest.id),
         ),
         ...sourceSnaps.flatMap(({ data, ref }) => {
           const sourceTableId = String(data.tableId ?? "").trim();
           return asOrderItems(data.items).map((item) =>
-            withTableGroupLineOrigin(item, sourceTableId, ref.id),
+            ensureTableGroupLineOrigin(item, sourceTableId, ref.id),
           );
         }),
       ];
