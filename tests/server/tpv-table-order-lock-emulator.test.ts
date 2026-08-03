@@ -19,8 +19,13 @@ import {
 import { handlePayTableOrders } from "@/lib/server/tpv/handle-pay-table-orders";
 import { handleMergeTableGroupOrders } from "@/lib/server/tpv/handle-merge-table-group-orders";
 import { handleSplitTableGroupOrders } from "@/lib/server/tpv/handle-split-table-group-orders";
+import {
+  handleAcquireReleaseEffectLease,
+  handleCompleteReleaseEffect,
+} from "@/lib/server/tpv/handle-claim-release-effect";
 import { tableOrderLockRef } from "@/lib/server/tpv/table-order-lock";
 import { isActiveTpvOrderStatus } from "@/lib/server/tpv/is-active-tpv-order-status";
+import { buildReleaseEventId } from "@/lib/carta/release-event-id";
 
 const RESTAURANT_A = "rest-a-lock";
 const MANAGER_UID = "manager-lock-a";
@@ -539,6 +544,188 @@ describe("tpv table order lock emulator (3B-2A)", () => {
     assert.equal(order?.tableId, mainId);
     assert.equal((await readLock(mainId))?.orderId, onSec.orderId);
     assert.equal((await readLock(secId))?.orderId ?? null, null);
+  });
+
+  test("3B-2B.1 release effects: lease + completed effectively-once", async () => {
+    const t0 = 1_700_000_000_000;
+    const releaseEventId = await buildReleaseEventId({
+      restaurantId: RESTAURANT_A,
+      orderId: "ord-rel-1",
+      releaseAction: "send_to_comanda",
+      lineIds: ["l1", "l2"],
+      markSent: true,
+    });
+
+    // 1. lease nuevo
+    const first = await handleAcquireReleaseEffectLease(authCtx(), {
+      releaseEventId,
+      effect: "print",
+      leaseOwner: "owner-a",
+      leaseDurationMs: 60_000,
+      nowMs: t0,
+    });
+    assert.equal("acquired" in first && first.acquired, true);
+
+    // 7. doble click / otro cliente con lease válido → no ejecuta
+    const second = await handleAcquireReleaseEffectLease(authCtx(), {
+      releaseEventId,
+      effect: "print",
+      leaseOwner: "owner-b",
+      leaseDurationMs: 60_000,
+      nowMs: t0 + 1_000,
+    });
+    assert.equal("acquired" in second && second.acquired, false);
+    assert.equal("leaseHeld" in second && second.leaseHeld, true);
+
+    // 11. markCompleted
+    const done = await handleCompleteReleaseEffect(authCtx(), {
+      releaseEventId,
+      effect: "print",
+      leaseOwner: "owner-a",
+      nowMs: t0 + 2_000,
+    });
+    assert.equal("completed" in done && done.completed, true);
+
+    // 2+6. completed → replay no ejecuta
+    const replay = await handleAcquireReleaseEffectLease(authCtx(), {
+      releaseEventId,
+      effect: "print",
+      leaseOwner: "owner-c",
+      leaseDurationMs: 60_000,
+      nowMs: t0 + 3_000,
+    });
+    assert.equal("acquired" in replay && replay.acquired, false);
+    assert.equal("alreadyCompleted" in replay && replay.alreadyCompleted, true);
+
+    // activity: mismo patrón
+    const act1 = await handleAcquireReleaseEffectLease(authCtx(), {
+      releaseEventId,
+      effect: "activity",
+      leaseOwner: "act-a",
+      leaseDurationMs: 60_000,
+      nowMs: t0,
+    });
+    assert.equal("acquired" in act1 && act1.acquired, true);
+    const actHeld = await handleAcquireReleaseEffectLease(authCtx(), {
+      releaseEventId,
+      effect: "activity",
+      leaseOwner: "act-b",
+      leaseDurationMs: 60_000,
+      nowMs: t0 + 500,
+    });
+    assert.equal("leaseHeld" in actHeld && actHeld.leaseHeld, true);
+    const actDone = await handleCompleteReleaseEffect(authCtx(), {
+      releaseEventId,
+      effect: "activity",
+      leaseOwner: "act-a",
+    });
+    assert.equal("completed" in actDone && actDone.completed, true);
+
+    // 3+4+5. lease expirado sin complete → retry puede reclamar
+    const retryEventId = await buildReleaseEventId({
+      restaurantId: RESTAURANT_A,
+      orderId: "ord-rel-retry",
+      releaseAction: "send_to_comanda",
+      lineIds: ["r1"],
+      markSent: true,
+    });
+    const crashed = await handleAcquireReleaseEffectLease(authCtx(), {
+      releaseEventId: retryEventId,
+      effect: "print",
+      leaseOwner: "crashed",
+      leaseDurationMs: 5_000,
+      nowMs: t0,
+    });
+    assert.equal("acquired" in crashed && crashed.acquired, true);
+    // sin complete (caída)
+    const afterExpiry = await handleAcquireReleaseEffectLease(authCtx(), {
+      releaseEventId: retryEventId,
+      effect: "print",
+      leaseOwner: "retry-owner",
+      leaseDurationMs: 60_000,
+      nowMs: t0 + 10_000,
+    });
+    assert.equal("acquired" in afterExpiry && afterExpiry.acquired, true);
+    const retryComplete = await handleCompleteReleaseEffect(authCtx(), {
+      releaseEventId: retryEventId,
+      effect: "print",
+      leaseOwner: "retry-owner",
+    });
+    assert.equal("completed" in retryComplete && retryComplete.completed, true);
+
+    // 9. print falla ⇒ no complete ⇒ mismatch si otro intenta complete
+    const failEventId = await buildReleaseEventId({
+      restaurantId: RESTAURANT_A,
+      orderId: "ord-rel-fail",
+      releaseAction: "marchar",
+      lineIds: ["f1"],
+      markSent: true,
+    });
+    const failLease = await handleAcquireReleaseEffectLease(authCtx(), {
+      releaseEventId: failEventId,
+      effect: "print",
+      leaseOwner: "fail-owner",
+      leaseDurationMs: 60_000,
+      nowMs: t0,
+    });
+    assert.equal("acquired" in failLease && failLease.acquired, true);
+    const wrongComplete = await handleCompleteReleaseEffect(authCtx(), {
+      releaseEventId: failEventId,
+      effect: "print",
+      leaseOwner: "other-owner",
+    });
+    assert.equal("error" in wrongComplete && wrongComplete.error, "LEASE_OWNER_MISMATCH");
+    // doc sigue sin completed
+    const failDoc = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("tpvReleaseEffects")
+      .doc(failEventId)
+      .get();
+    const failEffects = failDoc.data()?.effects as Record<string, { completed?: boolean }>;
+    assert.equal(failEffects?.print?.completed === true, false);
+
+    // 8. concurrencia: solo un acquired
+    const concurrentEventId = await buildReleaseEventId({
+      restaurantId: RESTAURANT_A,
+      orderId: "ord-rel-2",
+      releaseAction: "send_to_comanda",
+      lineIds: ["x"],
+      markSent: true,
+    });
+    const concurrent = await Promise.allSettled([
+      handleAcquireReleaseEffectLease(authCtx(), {
+        releaseEventId: concurrentEventId,
+        effect: "print",
+        leaseOwner: "c1",
+        leaseDurationMs: 60_000,
+        nowMs: t0,
+      }),
+      handleAcquireReleaseEffectLease(authCtx(), {
+        releaseEventId: concurrentEventId,
+        effect: "print",
+        leaseOwner: "c2",
+        leaseDurationMs: 60_000,
+        nowMs: t0,
+      }),
+    ]);
+    const acquiredCount = concurrent.filter(
+      (r) =>
+        r.status === "fulfilled" &&
+        "acquired" in r.value &&
+        r.value.acquired === true,
+    ).length;
+    assert.equal(acquiredCount, 1);
+
+    // 12. releaseEventId estable
+    const stableAgain = await buildReleaseEventId({
+      restaurantId: RESTAURANT_A,
+      orderId: "ord-rel-1",
+      releaseAction: "send_to_comanda",
+      lineIds: ["l2", "l1"],
+      markSent: true,
+    });
+    assert.equal(stableAgain, releaseEventId);
   });
 
   test("merge combines two actives: sources merged, main lock owns dest", async () => {

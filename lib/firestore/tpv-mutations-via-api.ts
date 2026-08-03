@@ -231,6 +231,111 @@ export async function resolveActiveOrderForTableViaApi(
   };
 }
 
+export async function claimReleaseEffectViaApi(
+  params: {
+    releaseEventId: string;
+    effect: "print" | "activity";
+    leaseOwner: string;
+  },
+  options?: { apiFetch?: TpvMutationApiFetch },
+): Promise<
+  | {
+      ok: true;
+      releaseEventId: string;
+      effect: "print" | "activity";
+      acquired: boolean;
+      claimed: boolean;
+      alreadyCompleted: boolean;
+      leaseHeld: boolean;
+      alreadyProcessed: boolean;
+      leaseOwner: string | null;
+      leaseUntil: number | null;
+    }
+  | ApiFail
+> {
+  const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
+  const response = await apiFetch("/api/tpv/release-effects/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      releaseEventId: params.releaseEventId,
+      effect: params.effect,
+      leaseOwner: params.leaseOwner,
+    }),
+  });
+  const parsed = await parseApiResponse<{
+    releaseEventId: string;
+    effect: "print" | "activity";
+    acquired?: boolean;
+    claimed?: boolean;
+    alreadyCompleted?: boolean;
+    leaseHeld?: boolean;
+    alreadyProcessed?: boolean;
+    leaseOwner?: string | null;
+    leaseUntil?: number | null;
+  }>(response);
+  if (!parsed.ok) return parsed;
+  const acquired = parsed.acquired === true || parsed.claimed === true;
+  return {
+    ok: true,
+    releaseEventId: String(parsed.releaseEventId ?? params.releaseEventId),
+    effect: parsed.effect === "activity" ? "activity" : "print",
+    acquired,
+    claimed: acquired,
+    alreadyCompleted: parsed.alreadyCompleted === true,
+    leaseHeld: parsed.leaseHeld === true,
+    alreadyProcessed: parsed.alreadyProcessed === true || parsed.alreadyCompleted === true,
+    leaseOwner:
+      typeof parsed.leaseOwner === "string" && parsed.leaseOwner.trim()
+        ? parsed.leaseOwner.trim()
+        : null,
+    leaseUntil:
+      typeof parsed.leaseUntil === "number" && Number.isFinite(parsed.leaseUntil)
+        ? parsed.leaseUntil
+        : null,
+  };
+}
+
+export async function completeReleaseEffectViaApi(
+  params: {
+    releaseEventId: string;
+    effect: "print" | "activity";
+    leaseOwner: string;
+  },
+  options?: { apiFetch?: TpvMutationApiFetch },
+): Promise<
+  | {
+      ok: true;
+      releaseEventId: string;
+      effect: "print" | "activity";
+      completed: boolean;
+    }
+  | ApiFail
+> {
+  const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
+  const response = await apiFetch("/api/tpv/release-effects/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      releaseEventId: params.releaseEventId,
+      effect: params.effect,
+      leaseOwner: params.leaseOwner,
+    }),
+  });
+  const parsed = await parseApiResponse<{
+    releaseEventId: string;
+    effect: "print" | "activity";
+    completed?: boolean;
+  }>(response);
+  if (!parsed.ok) return parsed;
+  return {
+    ok: true,
+    releaseEventId: String(parsed.releaseEventId ?? params.releaseEventId),
+    effect: parsed.effect === "activity" ? "activity" : "print",
+    completed: parsed.completed === true,
+  };
+}
+
 export async function upsertSaleLinesViaApi(
   params: {
     orderId: string;

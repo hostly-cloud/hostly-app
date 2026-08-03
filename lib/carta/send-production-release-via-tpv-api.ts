@@ -6,6 +6,7 @@ import type { ModifierStockConsumptionWarning } from "@/lib/inventory/stock-move
 import type { SaleLineIntent } from "@/lib/server/tpv/tpv-mutation-dtos";
 import { normalizeMenuCourseValue } from "@/lib/carta/menu-course";
 import { buildHashedIdempotencyKey } from "@/lib/carta/tpv-release-idempotency-key";
+import { buildReleaseEventId } from "@/lib/carta/release-event-id";
 import { normalizeProductionLineStatus } from "@/lib/firestore/merge-order-items-for-persist";
 
 /** Subconjunto mínimo de línea de carrito para el envío autoritativo. */
@@ -38,6 +39,8 @@ export type SendCartaProductionReleaseParams = {
   /** Todas las líneas pending del carrito antes del envío (incluye linesToSend). */
   allPendingBeforeSend: readonly CartaReleaseCartLine[];
   releaseAction?: string;
+  /** Para releaseEventId determinista (exactly-once print/activity). */
+  restaurantId?: string;
 };
 
 export type SendCartaProductionReleaseSuccess = {
@@ -48,6 +51,8 @@ export type SendCartaProductionReleaseSuccess = {
   items: AuthoritativeLineSnapshot[];
   /** true si el éxito viene de reconciliación (ya aplicado / timeout). */
   reconciled?: boolean;
+  /** Identidad estable de la liberación lógica (3B-2B). */
+  releaseEventId?: string;
 };
 
 export type SendFailureClass = "confirmed" | "uncertain" | "already_applied_unverified";
@@ -231,19 +236,36 @@ async function maybeReconcileSuccess(
   orderId: string | null,
   linesToSend: readonly CartaReleaseCartLine[],
   readOrderLines: SendCartaProductionReleaseDeps["readOrderLines"],
+  opts?: {
+    restaurantId?: string;
+    releaseAction?: string;
+  },
 ): Promise<SendCartaProductionReleaseSuccess | null> {
   if (!orderId?.trim() || !readOrderLines) return null;
   try {
     const serverLines = await readOrderLines(orderId.trim());
     if (!serverLines) return null;
     if (!linesToSendAreReleasedOnServer(linesToSend, serverLines)) return null;
+    const oid = orderId.trim();
+    let releaseEventId: string | undefined;
+    const rid = opts?.restaurantId?.trim();
+    if (rid) {
+      releaseEventId = await buildReleaseEventId({
+        restaurantId: rid,
+        orderId: oid,
+        releaseAction: opts?.releaseAction ?? "send_to_comanda",
+        lineIds: linesToSend.map((l) => String(l.id).trim()).filter(Boolean),
+        markSent: true,
+      });
+    }
     return {
       ok: true,
-      orderId: orderId.trim(),
+      orderId: oid,
       total: 0,
       inventoryWarnings: [],
       items: serverLines,
       reconciled: true,
+      ...(releaseEventId ? { releaseEventId } : {}),
     };
   } catch {
     return null;
@@ -278,6 +300,11 @@ export async function sendCartaProductionReleaseViaTpvApi(
   const remainingIntents = cartOrderLinesToSaleLineIntents(remainingPending);
   const releaseAction =
     (params.releaseAction ?? "send_to_comanda").trim() || "send_to_comanda";
+  const reconcile = (orderId: string | null) =>
+    maybeReconcileSuccess(orderId, params.linesToSend, deps.readOrderLines, {
+      restaurantId: params.restaurantId,
+      releaseAction,
+    });
   let existingOrderId = params.existingOrderId?.trim() || null;
 
   // Evitar create-open duplicado si el listener aún no conoce el pedido.
@@ -295,6 +322,7 @@ export async function sendCartaProductionReleaseViaTpvApi(
     total: number,
     inventoryWarnings: ModifierStockConsumptionWarning[],
     itemsRaw: Record<string, unknown>[] | AuthoritativeLineSnapshot[],
+    reconciled?: boolean,
   ): Promise<SendCartaProductionReleaseSuccess> => {
     let items =
       itemsRaw.length > 0 && "lineId" in itemsRaw[0]!
@@ -304,12 +332,25 @@ export async function sendCartaProductionReleaseViaTpvApi(
       const reread = await deps.readOrderLines(orderId);
       if (reread) items = reread;
     }
+    let releaseEventId: string | undefined;
+    const rid = params.restaurantId?.trim();
+    if (rid) {
+      releaseEventId = await buildReleaseEventId({
+        restaurantId: rid,
+        orderId,
+        releaseAction,
+        lineIds: lineIdsKeyPart(linesToSendIntents),
+        markSent: true,
+      });
+    }
     return {
       ok: true,
       orderId,
       total,
       inventoryWarnings,
       items,
+      ...(reconciled ? { reconciled: true } : {}),
+      ...(releaseEventId ? { releaseEventId } : {}),
     };
   };
 
@@ -391,19 +432,11 @@ export async function sendCartaProductionReleaseViaTpvApi(
       if (!sent.ok) {
         const cls = classifyApiError(sent.error);
         if (cls === "already_applied_unverified" || sent.error === "LINE_STATE_CONFLICT") {
-          const reconciled = await maybeReconcileSuccess(
-            created.orderId,
-            params.linesToSend,
-            deps.readOrderLines,
-          );
+          const reconciled = await reconcile(created.orderId);
           if (reconciled) return reconciled;
         }
         if (cls === "uncertain") {
-          const reconciled = await maybeReconcileSuccess(
-            created.orderId,
-            params.linesToSend,
-            deps.readOrderLines,
-          );
+          const reconciled = await reconcile(created.orderId);
           if (reconciled) return reconciled;
           return fail(sent.error, sent.details, "uncertain", true);
         }
@@ -436,11 +469,7 @@ export async function sendCartaProductionReleaseViaTpvApi(
         if (synced.error === "LINE_STATE_CONFLICT") {
           // Sync pending puede chocar si alguna línea ya no es pending; intentar solo markSent.
         } else if (cls === "uncertain") {
-          const reconciled = await maybeReconcileSuccess(
-            existingOrderId,
-            params.linesToSend,
-            deps.readOrderLines,
-          );
+          const reconciled = await reconcile(existingOrderId);
           if (reconciled) return reconciled;
           return fail(synced.error, synced.details, "uncertain", true);
         } else {
@@ -464,11 +493,7 @@ export async function sendCartaProductionReleaseViaTpvApi(
     });
     if (!sent.ok) {
       if (sent.error === "LINE_STATE_CONFLICT") {
-        const reconciled = await maybeReconcileSuccess(
-          existingOrderId,
-          params.linesToSend,
-          deps.readOrderLines,
-        );
+        const reconciled = await reconcile(existingOrderId);
         if (reconciled) return reconciled;
         return fail(sent.error, sent.details, "confirmed", true);
       }
@@ -477,11 +502,7 @@ export async function sendCartaProductionReleaseViaTpvApi(
       }
       const cls = classifyApiError(sent.error);
       if (cls === "uncertain") {
-        const reconciled = await maybeReconcileSuccess(
-          existingOrderId,
-          params.linesToSend,
-          deps.readOrderLines,
-        );
+        const reconciled = await reconcile(existingOrderId);
         if (reconciled) return reconciled;
         return fail(sent.error, sent.details, "uncertain", true);
       }
@@ -500,11 +521,7 @@ export async function sendCartaProductionReleaseViaTpvApi(
       return fail(msg, null, "confirmed", true);
     }
     const orderHint = existingOrderId;
-    const reconciled = await maybeReconcileSuccess(
-      orderHint,
-      params.linesToSend,
-      deps.readOrderLines,
-    );
+    const reconciled = await reconcile(orderHint);
     if (reconciled) return reconciled;
     // Timeout/red sin evidencia: rollback selectivo; listener puede rehidratar después.
     return fail(msg, null, "uncertain", true);

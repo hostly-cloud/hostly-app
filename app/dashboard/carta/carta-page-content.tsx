@@ -264,6 +264,8 @@ import {
   transitionLineStatusViaApi,
   upsertSaleLinesViaApi,
 } from "@/lib/firestore/tpv-mutations-via-api";
+import { buildReleaseEventId } from "@/lib/carta/release-event-id";
+import { runReleaseSideEffectsExactlyOnce } from "@/lib/carta/run-release-side-effects-exactly-once";
 import { fetchCartaCategorias, fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
 import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
@@ -8597,6 +8599,7 @@ export function CartaPageContent({
             linesToSend,
             allPendingBeforeSend,
             releaseAction: options?.releaseAction ?? "send_to_comanda",
+            restaurantId,
           },
           {
             resolveOpenOrderIdForTable: async (tableId) => {
@@ -8669,28 +8672,72 @@ export function CartaPageContent({
           );
         }
 
-        try {
-          const printerConfig = await getPrinterConfig(restaurantId);
-          const printResult = await createPrintJobsForComandaLines({
+        const releaseAction = options?.releaseAction ?? "send_to_comanda";
+        const lineIds = linesToSend.map((line) => line.id);
+        const releaseEventId =
+          apiResult.releaseEventId?.trim() ||
+          (await buildReleaseEventId({
             restaurantId,
             orderId: apiResult.orderId,
-            tableId: selectedTableId,
-            tableName: tableLabel,
-            lines: linesToSend,
-            printerConfig,
-          });
-          if (printResult.failed > 0) {
-            console.warn(
-              "[Hostly Print] algunos jobs no se crearon; comanda enviada.",
-              printResult,
-            );
-          }
-        } catch (printErr) {
-          console.warn(
-            "[Hostly Print] cola no disponible; comanda enviada.",
-            printErr,
-          );
-        }
+            releaseAction,
+            lineIds,
+            markSent: true,
+          }));
+
+        // Exactly-once print + activity (3B-2B), incluso en replay/reconcile/doble click.
+        await runReleaseSideEffectsExactlyOnce({
+          restaurantId,
+          orderId: apiResult.orderId,
+          releaseAction,
+          lineIds,
+          markSent: true,
+          releaseEventId,
+          runPrint: async () => {
+            try {
+              const printerConfig = await getPrinterConfig(restaurantId);
+              const printResult = await createPrintJobsForComandaLines({
+                restaurantId,
+                orderId: apiResult.orderId,
+                tableId: selectedTableId,
+                tableName: tableLabel,
+                lines: linesToSend,
+                printerConfig,
+              });
+              if (printResult.failed > 0) {
+                console.warn(
+                  "[Hostly Print] algunos jobs no se crearon; comanda enviada.",
+                  printResult,
+                );
+              }
+            } catch (printErr) {
+              console.warn(
+                "[Hostly Print] cola no disponible; comanda enviada.",
+                printErr,
+              );
+            }
+          },
+          runActivity: async () => {
+            void createActivityLog({
+              restaurantId,
+              type: existingOrderId ? "order_updated" : "order_created",
+              entityType: "order",
+              entityId: apiResult.orderId,
+              actorUserId: waiterId ?? undefined,
+              actorUserName: activityActorName,
+              actorRole: activityActorRole,
+              idempotencyKey: `relact_${releaseEventId}`,
+              metadata: buildActivityMetadata({
+                tableId: selectedTableId,
+                tableName: tableLabel,
+                lineCount: linesToSend.length,
+                lineIds,
+                total: Number.isFinite(apiResult.total) ? apiResult.total : 0,
+                action: releaseAction,
+                route: "tpv",
+              }),
+            });
+          },
+        });
 
         setComandaSentFlash(true);
         if (comandaFlashTimeoutRef.current != null) {
@@ -8701,24 +8748,8 @@ export function CartaPageContent({
           comandaFlashTimeoutRef.current = null;
         }, 1000);
 
-        void createActivityLog({
-          restaurantId,
-          type: existingOrderId ? "order_updated" : "order_created",
-          entityType: "order",
-          entityId: apiResult.orderId,
-          actorUserId: waiterId ?? undefined,
-          actorUserName: activityActorName,
-          actorRole: activityActorRole,
-          metadata: buildActivityMetadata({
-            tableId: selectedTableId,
-            tableName: tableLabel,
-            lineCount: linesToSend.length,
-            lineIds: linesToSend.map((line) => line.id),
-            total: Number.isFinite(apiResult.total) ? apiResult.total : 0,
-            action: options?.releaseAction ?? "send_to_comanda",
-            route: "tpv",
-          }),
-        });
+        // Tras envío: líneas locales ya están en sent+; key ordersByTable se conserva
+        // (autoridad 2990711) y onSnapshot solo sincroniza producción.
 
         return true;
       } catch (e) {

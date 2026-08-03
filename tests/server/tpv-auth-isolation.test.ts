@@ -30,6 +30,8 @@ const TPV_ROUTES = [
   "app/api/tpv/orders/pay-table/route.ts",
   "app/api/tpv/orders/merge-table-group/route.ts",
   "app/api/tpv/orders/split-table-group/route.ts",
+  "app/api/tpv/release-effects/claim/route.ts",
+  "app/api/tpv/release-effects/complete/route.ts",
 ] as const;
 
 const LEGACY_API_ROUTES = [
