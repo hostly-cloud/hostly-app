@@ -20,8 +20,11 @@ import {
 } from "@/lib/server/tpv/order-projection";
 import { isActiveOrderStatus, lineHasActiveQuantity } from "@/lib/server/tpv/table-group-order-utils";
 import {
+  assertTableOrderLockIntegrity,
+  readTableOrderLockData,
   releaseTableOrderLockIfOwnerInTransaction,
   tableOrderLockRef,
+  writeTableOrderLockClaim,
   writeTableOrderLockRelease,
 } from "@/lib/server/tpv/table-order-lock";
 import {
@@ -261,9 +264,30 @@ export async function handleReopenOrder(
   const orderId = intent.orderId.trim();
   if (!orderId) return { status: 400, error: "ORDER_ID_REQUIRED" };
   const orderRef = ctx.db.collection("orders").doc(orderId);
+  const idemKey = intent.idempotencyKey?.trim();
+  const payloadHash = stablePayloadHash(
+    buildIdempotencyPayload(ctx.uid, ctx.restaurantId, "reopen_order", { orderId }),
+  );
+
+  if (idemKey) {
+    const hit = readIdempotencyHit(
+      await idempotencyDocRef(ctx.db, ctx.restaurantId, idemKey).get(),
+      "reopen_order",
+      payloadHash,
+    );
+    if (hit?.conflict) return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+    if (hit?.orderId) return { orderId: String(hit.orderId), status: "open" };
+  }
 
   try {
     await ctx.db.runTransaction(async (tx) => {
+      if (idemKey) {
+        const idemSnap = await tx.get(idempotencyDocRef(ctx.db, ctx.restaurantId, idemKey));
+        const hit = readIdempotencyHit(idemSnap, "reopen_order", payloadHash);
+        if (hit?.conflict) throw new Error("IDEMPOTENCY_CONFLICT");
+        if (hit?.orderId) throw new Error(`IDEM_OK:${hit.orderId}`);
+      }
+
       const orderSnap = await tx.get(orderRef);
       const orderData = readOrderSnapData(orderSnap);
       if (!orderData) throw new Error("ORDER_NOT_FOUND");
@@ -279,46 +303,133 @@ export async function handleReopenOrder(
         orderId,
       );
 
+      const tableId = String(orderData.tableId ?? "").trim();
+      let tableRef: FirebaseFirestore.DocumentReference | null = null;
+      let tableSnap: FirebaseFirestore.DocumentSnapshot | null = null;
+      let tableOrders: Awaited<ReturnType<typeof loadTableOrdersInTransaction>> = [];
+      const lockRef = tableId ? tableOrderLockRef(ctx.db, ctx.restaurantId, tableId) : null;
+      const lockSnap = lockRef ? await tx.get(lockRef) : null;
+      if (tableId) {
+        tableRef = ctx.db.collection("tables").doc(tableId);
+        tableSnap = await tx.get(tableRef);
+        tableOrders = await loadTableOrdersInTransaction(tx, ctx.db, ctx.restaurantId, tableId);
+      }
+
       const status = String(orderData.status ?? "").trim().toLowerCase();
+      const alreadyActive = isActiveOrderStatus(status);
+
       if (status === "paid") throw new Error("REOPEN_REQUIRES_REFUND");
-      if (status !== "closed") throw new Error("STATUS_TRANSITION_NOT_ALLOWED");
+      if (!alreadyActive && status !== "closed") {
+        throw new Error("STATUS_TRANSITION_NOT_ALLOWED");
+      }
       if (
+        !alreadyActive &&
         hasPaidPaymentRecords(payments) &&
         !isOrderEconomicallySettled(orderData, items, payments)
       ) {
         throw new Error("REOPEN_REQUIRES_REFUND");
       }
 
-      const tableId = String(orderData.tableId ?? "").trim();
-      let tableRef: FirebaseFirestore.DocumentReference | null = null;
-      let tableSnap: FirebaseFirestore.DocumentSnapshot | null = null;
       if (tableId) {
-        tableRef = ctx.db.collection("tables").doc(tableId);
-        tableSnap = await tx.get(tableRef);
+        for (const { ref, data } of tableOrders) {
+          if (ref.id === orderId) continue;
+          if (isActiveOrderStatus(data.status)) {
+            throw new Error("MULTIPLE_ACTIVE_ORDERS_FOR_TABLE");
+          }
+        }
+
+        if (lockRef && lockSnap) {
+          const lock = readTableOrderLockData(lockSnap);
+          if (lock) {
+            const integrity = assertTableOrderLockIntegrity(
+              lock,
+              ctx.restaurantId,
+              tableId,
+            );
+            if (integrity) throw new Error(integrity.code);
+            const lockedOrderId = lock.orderId?.trim() || "";
+            if (lockedOrderId && lockedOrderId !== orderId) {
+              const lockedRow = tableOrders.find((row) => row.ref.id === lockedOrderId);
+              let lockedActive = lockedRow
+                ? isActiveOrderStatus(lockedRow.data.status)
+                : false;
+              if (!lockedRow) {
+                const lockedSnap = await tx.get(ctx.db.collection("orders").doc(lockedOrderId));
+                if (lockedSnap.exists) {
+                  const lockedData = lockedSnap.data() as Record<string, unknown>;
+                  if (String(lockedData.restaurantId ?? "").trim() !== ctx.restaurantId) {
+                    throw new Error("LOCK_ORDER_TENANT_MISMATCH");
+                  }
+                  lockedActive = isActiveOrderStatus(lockedData.status);
+                }
+              }
+              if (lockedActive) throw new Error("TABLE_ORDER_LOCK_CONFLICT");
+              // Lock huérfano / pedido terminal: se reasigna al reabrir.
+            }
+          }
+        }
       }
 
-      tx.update(orderRef, {
-        status: "open",
-        reopenedAt: Date.now(),
-        closedAt: FieldValue.delete(),
-        paidAt: FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      if (tableId && tableRef && tableSnap?.exists) {
-        tx.update(tableRef, {
-          status: "occupied",
+      if (!alreadyActive) {
+        tx.update(orderRef, {
+          status: "open",
+          reopenedAt: Date.now(),
+          closedAt: FieldValue.delete(),
+          paidAt: FieldValue.delete(),
           updatedAt: FieldValue.serverTimestamp(),
         });
+
+        if (tableId && tableRef && tableSnap?.exists) {
+          tx.update(tableRef, {
+            status: "occupied",
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      if (tableId && lockRef) {
+        writeTableOrderLockClaim(tx, lockRef, {
+          restaurantId: ctx.restaurantId,
+          tableId,
+          orderId,
+          create: !lockSnap?.exists,
+          claimedByUid: ctx.uid,
+          lastOperation: "reopen_order",
+          lastClaimKey: idemKey ?? null,
+        });
+      }
+
+      if (idemKey) {
+        writeIdempotencyRecord(
+          tx,
+          idempotencyDocRef(ctx.db, ctx.restaurantId, idemKey),
+          "reopen_order",
+          payloadHash,
+          { orderId },
+        );
       }
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
+    if (msg.startsWith("IDEM_OK:")) return { orderId: msg.slice(8), status: "open" };
+    if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (msg === "ORDER_NOT_FOUND") return { status: 404, error: "ORDER_NOT_FOUND" };
     if (msg === "TENANT_MISMATCH") return { status: 403, error: "TENANT_MISMATCH" };
     if (msg === "VERSION_CONFLICT") return { status: 409, error: "VERSION_CONFLICT" };
     if (msg === "STATUS_TRANSITION_NOT_ALLOWED" || msg === "REOPEN_REQUIRES_REFUND") {
       return { status: 400, error: msg };
+    }
+    if (msg === "MULTIPLE_ACTIVE_ORDERS_FOR_TABLE") {
+      return { status: 409, error: "MULTIPLE_ACTIVE_ORDERS_FOR_TABLE" };
+    }
+    if (msg === "TABLE_ORDER_LOCK_CONFLICT") {
+      return { status: 409, error: "TABLE_ORDER_LOCK_CONFLICT" };
+    }
+    if (msg === "LOCK_TENANT_MISMATCH" || msg === "LOCK_ORDER_TENANT_MISMATCH") {
+      return { status: 409, error: "LOCK_TENANT_MISMATCH" };
+    }
+    if (msg === "LOCK_TABLE_MISMATCH") {
+      return { status: 409, error: "LOCK_TABLE_MISMATCH" };
     }
     throw e;
   }
@@ -689,6 +800,9 @@ export async function handleAutoCloseEmptyTable(
 
       const tableOrders = await loadTableOrdersInTransaction(tx, ctx.db, ctx.restaurantId, tableId);
       const tableSnap = await tx.get(tableRef);
+      const lockRef = tableOrderLockRef(ctx.db, ctx.restaurantId, tableId);
+      // Lectura de lock antes de cualquier write (reglas de transacción Firestore).
+      const lockSnap = await tx.get(lockRef);
 
       for (const { ref, data } of tableOrders) {
         if (!isActiveOrderStatus(data.status)) continue;
@@ -708,19 +822,55 @@ export async function handleAutoCloseEmptyTable(
         closedOrderIds.push(ref.id);
       }
 
-      let canFreeTable = true;
-      for (const { ref, data } of tableOrders) {
-        if (closedOrderIds.includes(ref.id)) continue;
-        if (isActiveOrderStatus(data.status)) {
-          canFreeTable = false;
-          break;
-        }
-      }
+      const remainingActives = tableOrders.filter(
+        ({ ref, data }) =>
+          !closedOrderIds.includes(ref.id) && isActiveOrderStatus(data.status),
+      );
+      const canFreeTable = remainingActives.length === 0;
+
       if (canFreeTable && tableSnap.exists) {
         tx.update(tableRef, {
           status: "free",
           updatedAt: FieldValue.serverTimestamp(),
         });
+      }
+
+      const lock = readTableOrderLockData(lockSnap);
+      if (lock) {
+        const integrity = assertTableOrderLockIntegrity(lock, ctx.restaurantId, tableId);
+        if (integrity) throw new Error(integrity.code);
+      }
+
+      if (canFreeTable) {
+        const lockedOrderId = lock?.orderId?.trim() || "";
+        // Mesa libre: liberar solo si el lock era nuestro (o ya libre/ausente).
+        // Huérfano (orderId no cerrado aquí): no forzar release; create-open repara.
+        if (!lockedOrderId || closedOrderIds.includes(lockedOrderId)) {
+          releaseTableOrderLockIfOwnerInTransaction(tx, lockRef, lockSnap, {
+            restaurantId: ctx.restaurantId,
+            tableId,
+            orderId: lockedOrderId || closedOrderIds[0] || "",
+            claimedByUid: ctx.uid,
+            lastOperation: "auto_close_table",
+            lastClaimKey: idemKey ?? null,
+          });
+        }
+      } else if (closedOrderIds.length > 0 && remainingActives.length === 1) {
+        const remainingId = remainingActives[0]!.ref.id;
+        const lockedOrderId = lock?.orderId?.trim() || "";
+        // Si cerramos al propietario del lock, reasignar ownership al activo restante.
+        if (!lockedOrderId || closedOrderIds.includes(lockedOrderId)) {
+          writeTableOrderLockClaim(tx, lockRef, {
+            restaurantId: ctx.restaurantId,
+            tableId,
+            orderId: remainingId,
+            create: !lockSnap.exists,
+            claimedByUid: ctx.uid,
+            lastOperation: "auto_close_table",
+            lastClaimKey: idemKey ?? null,
+          });
+        }
+        // Lock de otro pedido activo restante: no tocar.
       }
 
       if (idemKey) {
@@ -744,6 +894,8 @@ export async function handleAutoCloseEmptyTable(
       }
     }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+    if (msg === "LOCK_TENANT_MISMATCH") return { status: 409, error: "LOCK_TENANT_MISMATCH" };
+    if (msg === "LOCK_TABLE_MISMATCH") return { status: 409, error: "LOCK_TABLE_MISMATCH" };
     throw e;
   }
 
