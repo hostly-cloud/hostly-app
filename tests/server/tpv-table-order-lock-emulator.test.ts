@@ -951,29 +951,36 @@ describe("tpv table order lock emulator", () => {
       }),
     ]);
     assert.equal(results.every((r) => r.status === "fulfilled"), true);
+    const closeRes = results[0]!.status === "fulfilled" ? results[0].value : null;
+    const upsertRes = results[1]!.status === "fulfilled" ? results[1].value : null;
+    assert.ok(closeRes && upsertRes);
+
     const actives = await listActiveOrdersForTable(tableId);
-    assert.ok(actives.length <= 1);
     const lock = await readLock(tableId);
-    if (actives.length === 0) {
-      assert.equal(lock?.orderId ?? null, null);
+    const upsertOk = "orderId" in upsertRes;
+    const upsertDenied =
+      "error" in upsertRes &&
+      (upsertRes.error === "ORDER_NOT_ACTIVE" ||
+        upsertRes.error === "TABLE_ORDER_LOCK_CONFLICT");
+
+    if (upsertOk) {
+      // Upsert ganó: pedido activo con líneas; lock propio; no se reabre tras close.
+      assert.equal(actives.length, 1);
+      assert.equal(actives[0]!.id, created.orderId);
+      assert.equal(lock?.orderId, created.orderId);
+      assert.equal("error" in upsertRes, false);
+      const order = (await adminDb.collection("orders").doc(created.orderId).get()).data();
+      assert.equal(isActiveOrderStatus(order?.status), true);
+      assert.ok(Array.isArray(order?.items) && (order?.items as unknown[]).length >= 1);
       return;
     }
-    assert.equal(actives.length, 1);
-    if (lock?.orderId) {
-      assert.equal(lock.orderId, actives[0]!.id);
-      return;
-    }
-    // Carrera: auto-close liberó el lock mientras upsert dejó el pedido activo.
-    // Upsert no reclama lock; create-open repara con la política existente.
-    const repaired = await handleCreateOpenOrder(authCtx(), {
-      tableId,
-      lines: [{ lineId: "ac6-repair", productId: "prod-lock-ac-6", quantity: 1 }],
-      idempotencyKey: "lock-ac-6-repair",
-    });
-    assert.equal("orderId" in repaired, true);
-    if (!("orderId" in repaired)) return;
-    assert.equal(repaired.orderId, actives[0]!.id);
-    assert.equal((await readLock(tableId))?.orderId, actives[0]!.id);
+
+    // Auto-close ganó: upsert aborta; pedido terminal; sin ownership activo.
+    assert.equal(upsertDenied, true);
+    assert.equal(actives.length, 0);
+    assert.equal(lock?.orderId ?? null, null);
+    const closed = (await adminDb.collection("orders").doc(created.orderId).get()).data();
+    assert.equal(String(closed?.status ?? ""), "closed");
   });
 
   test("A16. auto-close vs merge no deja ownership parcial", async () => {
@@ -1058,5 +1065,439 @@ describe("tpv table order lock emulator", () => {
     });
     assert.equal((await readLock(tableA, RESTAURANT_A))?.orderId ?? null, null);
     assert.equal((await readLock(tableB, RESTAURANT_B))?.orderId, b.orderId);
+  });
+
+  test("U1. upsert open con lock propio → OK", async () => {
+    const tableId = "lock-upsert-open";
+    await seedTableAndProduct(tableId, "prod-lock-up-1");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u1a", productId: "prod-lock-up-1", quantity: 1 }],
+      idempotencyKey: "lock-up-1-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    const upserted = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u1b", productId: "prod-lock-up-1", quantity: 1 }],
+      idempotencyKey: "lock-up-1-upsert",
+    });
+    assert.equal("orderId" in upserted, true);
+    if (!("orderId" in upserted)) return;
+    assert.equal(upserted.orderId, created.orderId);
+    assert.equal((await readLock(tableId))?.orderId, created.orderId);
+    assert.equal((await listActiveOrdersForTable(tableId)).length, 1);
+  });
+
+  test("U2. upsert sent con lock propio → OK", async () => {
+    const tableId = "lock-upsert-sent";
+    await seedTableAndProduct(tableId, "prod-lock-up-2");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u2a", productId: "prod-lock-up-2", quantity: 1 }],
+      markSent: true,
+      idempotencyKey: "lock-up-2-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    const status = String(
+      (await adminDb.collection("orders").doc(created.orderId).get()).data()?.status ?? "",
+    );
+    assert.equal(status, "sent");
+    const upserted = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u2b", productId: "prod-lock-up-2", quantity: 1 }],
+      idempotencyKey: "lock-up-2-upsert",
+    });
+    assert.equal("orderId" in upserted, true);
+    assert.equal((await readLock(tableId))?.orderId, created.orderId);
+  });
+
+  test("U3. upsert closed → ORDER_NOT_ACTIVE 409 y no reabre", async () => {
+    const tableId = "lock-upsert-closed";
+    await seedTableAndProduct(tableId, "prod-lock-up-3");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u3a", productId: "prod-lock-up-3", quantity: 1 }],
+      idempotencyKey: "lock-up-3-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await adminDb.collection("orders").doc(created.orderId).update({
+      status: "closed",
+      closedAt: Date.now(),
+      items: [],
+      total: 0,
+    });
+    await adminDb.runTransaction(async (tx) => {
+      writeTableOrderLockRelease(tx, tableOrderLockRef(adminDb, RESTAURANT_A, tableId), {
+        restaurantId: RESTAURANT_A,
+        tableId,
+        lastOperation: "test_force_close",
+      });
+    });
+    const denied = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u3b", productId: "prod-lock-up-3", quantity: 1 }],
+      idempotencyKey: "lock-up-3-upsert",
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "ORDER_NOT_ACTIVE");
+    assert.equal(denied.status, 409);
+    const after = (await adminDb.collection("orders").doc(created.orderId).get()).data();
+    assert.equal(String(after?.status ?? ""), "closed");
+    assert.equal((await listActiveOrdersForTable(tableId)).length, 0);
+  });
+
+  test("U4. upsert terminal paid → ORDER_NOT_ACTIVE", async () => {
+    const tableId = "lock-upsert-paid";
+    await seedTableAndProduct(tableId, "prod-lock-up-4");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u4a", productId: "prod-lock-up-4", quantity: 1 }],
+      idempotencyKey: "lock-up-4-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await adminDb.collection("orders").doc(created.orderId).update({ status: "paid" });
+    const denied = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u4b", productId: "prod-lock-up-4", quantity: 1 }],
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "ORDER_NOT_ACTIVE");
+    assert.equal(denied.status, 409);
+  });
+
+  test("U5. upsert con lock de otro pedido → 409", async () => {
+    const tableId = "lock-upsert-other-owner";
+    await seedTableAndProduct(tableId, "prod-lock-up-5");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u5a", productId: "prod-lock-up-5", quantity: 1 }],
+      idempotencyKey: "lock-up-5-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await adminDb.runTransaction(async (tx) => {
+      writeTableOrderLockClaim(tx, tableOrderLockRef(adminDb, RESTAURANT_A, tableId), {
+        restaurantId: RESTAURANT_A,
+        tableId,
+        orderId: "foreign-order-owner",
+        create: false,
+        lastOperation: "test_steal",
+      });
+    });
+    const denied = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u5b", productId: "prod-lock-up-5", quantity: 1 }],
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "TABLE_ORDER_LOCK_CONFLICT");
+    assert.equal(denied.status, 409);
+    assert.equal((await readLock(tableId))?.orderId, "foreign-order-owner");
+  });
+
+  test("U6. upsert sin lock → TABLE_ORDER_LOCK_CONFLICT (no reclama)", async () => {
+    const tableId = "lock-upsert-missing";
+    await seedTableAndProduct(tableId, "prod-lock-up-6");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u6a", productId: "prod-lock-up-6", quantity: 1 }],
+      idempotencyKey: "lock-up-6-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await tableOrderLockRef(adminDb, RESTAURANT_A, tableId).delete();
+    const denied = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u6b", productId: "prod-lock-up-6", quantity: 1 }],
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "TABLE_ORDER_LOCK_CONFLICT");
+    assert.equal(denied.status, 409);
+    assert.equal(await readLock(tableId), null);
+  });
+
+  test("U7. lock de otra mesa → LOCK_TABLE_MISMATCH", async () => {
+    const tableId = "lock-upsert-table-mismatch";
+    await seedTableAndProduct(tableId, "prod-lock-up-7");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u7a", productId: "prod-lock-up-7", quantity: 1 }],
+      idempotencyKey: "lock-up-7-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await tableOrderLockRef(adminDb, RESTAURANT_A, tableId).set({
+      restaurantId: RESTAURANT_A,
+      tableId: "otra-mesa",
+      orderId: created.orderId,
+    });
+    const denied = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u7b", productId: "prod-lock-up-7", quantity: 1 }],
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "LOCK_TABLE_MISMATCH");
+    assert.equal(denied.status, 409);
+    assert.equal("details" in denied && denied.details != null, false);
+  });
+
+  test("U8. lock de otro restaurante → LOCK_TENANT_MISMATCH sin fuga", async () => {
+    const tableId = "lock-upsert-tenant-mismatch";
+    await seedTableAndProduct(tableId, "prod-lock-up-8");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u8a", productId: "prod-lock-up-8", quantity: 1 }],
+      idempotencyKey: "lock-up-8-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await tableOrderLockRef(adminDb, RESTAURANT_A, tableId).set({
+      restaurantId: RESTAURANT_B,
+      tableId,
+      orderId: created.orderId,
+    });
+    const denied = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u8b", productId: "prod-lock-up-8", quantity: 1 }],
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "LOCK_TENANT_MISMATCH");
+    assert.equal(denied.status, 409);
+    assert.equal(denied.details, undefined);
+  });
+
+  test("U9. retry misma idempotency key no duplica líneas", async () => {
+    const tableId = "lock-upsert-idem";
+    await seedTableAndProduct(tableId, "prod-lock-up-9");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u9a", productId: "prod-lock-up-9", quantity: 1 }],
+      idempotencyKey: "lock-up-9-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    const intent = {
+      orderId: created.orderId,
+      lines: [{ lineId: "u9b", productId: "prod-lock-up-9", quantity: 2 }],
+      idempotencyKey: "lock-up-9-upsert",
+    };
+    const first = await handleUpsertSaleLines(authCtx(), intent);
+    const second = await handleUpsertSaleLines(authCtx(), intent);
+    assert.equal("orderId" in first && "orderId" in second, true);
+    if (!("orderId" in first) || !("orderId" in second)) return;
+    assert.equal(second.total, first.total);
+    const items = (await adminDb.collection("orders").doc(created.orderId).get()).data()
+      ?.items as Array<Record<string, unknown>>;
+    const lineB = items.filter((l) => l.id === "u9b");
+    assert.equal(lineB.length, 1);
+    assert.equal(lineB[0]?.quantity, 2);
+  });
+
+  test("U10. retry tras auto-close → rechazo determinista", async () => {
+    const tableId = "lock-upsert-retry-after-close";
+    await seedTableAndProduct(tableId, "prod-lock-up-10");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u10a", productId: "prod-lock-up-10", quantity: 1 }],
+      idempotencyKey: "lock-up-10-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await adminDb.collection("orders").doc(created.orderId).update({ items: [], total: 0 });
+    const closed = await handleAutoCloseEmptyTable(authCtx(), {
+      tableId,
+      idempotencyKey: "lock-up-10-close",
+    });
+    assert.equal("closedOrderIds" in closed, true);
+    if (!("closedOrderIds" in closed)) return;
+    assert.deepEqual(closed.closedOrderIds, [created.orderId]);
+
+    const intent = {
+      orderId: created.orderId,
+      lines: [{ lineId: "u10b", productId: "prod-lock-up-10", quantity: 1 }],
+      idempotencyKey: "lock-up-10-upsert",
+    };
+    const first = await handleUpsertSaleLines(authCtx(), intent);
+    const second = await handleUpsertSaleLines(authCtx(), intent);
+    assert.equal("error" in first && "error" in second, true);
+    if (!("error" in first) || !("error" in second)) return;
+    assert.equal(first.error, "ORDER_NOT_ACTIVE");
+    assert.equal(second.error, "ORDER_NOT_ACTIVE");
+    assert.equal(first.status, 409);
+    assert.equal(second.status, 409);
+    const after = (await adminDb.collection("orders").doc(created.orderId).get()).data();
+    assert.equal(String(after?.status ?? ""), "closed");
+  });
+
+  test("U11. upsert gana antes de auto-close → pedido activo con líneas", async () => {
+    const tableId = "lock-upsert-wins";
+    await seedTableAndProduct(tableId, "prod-lock-up-11");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u11a", productId: "prod-lock-up-11", quantity: 1 }],
+      idempotencyKey: "lock-up-11-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await adminDb.collection("orders").doc(created.orderId).update({ items: [], total: 0 });
+
+    const upserted = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u11b", productId: "prod-lock-up-11", quantity: 1 }],
+      idempotencyKey: "lock-up-11-upsert",
+    });
+    assert.equal("orderId" in upserted, true);
+
+    const closed = await handleAutoCloseEmptyTable(authCtx(), {
+      tableId,
+      idempotencyKey: "lock-up-11-close",
+    });
+    assert.equal("closedOrderIds" in closed, true);
+    if (!("closedOrderIds" in closed)) return;
+    assert.deepEqual(closed.closedOrderIds, []);
+    assert.equal((await listActiveOrdersForTable(tableId)).length, 1);
+    assert.equal((await readLock(tableId))?.orderId, created.orderId);
+  });
+
+  test("U12. auto-close gana antes de upsert → ORDER_NOT_ACTIVE", async () => {
+    const tableId = "lock-autoclose-wins";
+    await seedTableAndProduct(tableId, "prod-lock-up-12");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u12a", productId: "prod-lock-up-12", quantity: 1 }],
+      idempotencyKey: "lock-up-12-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await adminDb.collection("orders").doc(created.orderId).update({ items: [], total: 0 });
+    const closed = await handleAutoCloseEmptyTable(authCtx(), {
+      tableId,
+      idempotencyKey: "lock-up-12-close",
+    });
+    assert.equal("closedOrderIds" in closed, true);
+    if (!("closedOrderIds" in closed)) return;
+    assert.deepEqual(closed.closedOrderIds, [created.orderId]);
+
+    const denied = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u12b", productId: "prod-lock-up-12", quantity: 1 }],
+      idempotencyKey: "lock-up-12-upsert",
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "ORDER_NOT_ACTIVE");
+    assert.equal(denied.status, 409);
+  });
+
+  test("U13. response perdida + retry → resultado idempotente", async () => {
+    const tableId = "lock-upsert-lost-response";
+    await seedTableAndProduct(tableId, "prod-lock-up-13");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u13a", productId: "prod-lock-up-13", quantity: 1 }],
+      idempotencyKey: "lock-up-13-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    const intent = {
+      orderId: created.orderId,
+      lines: [{ lineId: "u13b", productId: "prod-lock-up-13", quantity: 3 }],
+      idempotencyKey: "lock-up-13-upsert",
+    };
+    const first = await handleUpsertSaleLines(authCtx(), intent);
+    assert.equal("orderId" in first, true);
+    if (!("orderId" in first)) return;
+    // Simula respuesta perdida: mismo key, sin reescritura.
+    const retry = await handleUpsertSaleLines(authCtx(), intent);
+    assert.equal("orderId" in retry, true);
+    if (!("orderId" in retry)) return;
+    assert.equal(retry.total, first.total);
+    assert.deepEqual(retry.items, first.items);
+    const items = (await adminDb.collection("orders").doc(created.orderId).get()).data()
+      ?.items as Array<Record<string, unknown>>;
+    assert.equal(items.filter((l) => l.id === "u13b").length, 1);
+  });
+
+  test("U14. persist sin orderId conserva create-open (no segundo pedido)", async () => {
+    const tableId = "lock-persist-create-open";
+    await seedTableAndProduct(tableId, "prod-lock-up-14");
+    const first = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u14a", productId: "prod-lock-up-14", quantity: 1 }],
+      idempotencyKey: "lock-up-14-a",
+    });
+    const second = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u14b", productId: "prod-lock-up-14", quantity: 1 }],
+      idempotencyKey: "lock-up-14-b",
+    });
+    assert.equal("orderId" in first && "orderId" in second, true);
+    if (!("orderId" in first) || !("orderId" in second)) return;
+    assert.equal(second.orderId, first.orderId);
+    assert.equal(second.reusedExistingOrder, true);
+    assert.equal((await listActiveOrdersForTable(tableId)).length, 1);
+    assert.equal((await readLock(tableId))?.orderId, first.orderId);
+  });
+
+  test("U15. upsert no reclama lock ajeno ni crea pedido", async () => {
+    const tableId = "lock-upsert-no-claim";
+    await seedTableAndProduct(tableId, "prod-lock-up-15");
+    const created = await handleCreateOpenOrder(authCtx(), {
+      tableId,
+      lines: [{ lineId: "u15a", productId: "prod-lock-up-15", quantity: 1 }],
+      idempotencyKey: "lock-up-15-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    await adminDb.runTransaction(async (tx) => {
+      writeTableOrderLockClaim(tx, tableOrderLockRef(adminDb, RESTAURANT_A, tableId), {
+        restaurantId: RESTAURANT_A,
+        tableId,
+        orderId: "someone-else",
+        create: false,
+        lastOperation: "foreign",
+      });
+    });
+    const beforeOrders = await listActiveOrdersForTable(tableId);
+    const denied = await handleUpsertSaleLines(authCtx(), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u15b", productId: "prod-lock-up-15", quantity: 1 }],
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "TABLE_ORDER_LOCK_CONFLICT");
+    assert.equal((await readLock(tableId))?.orderId, "someone-else");
+    assert.equal((await listActiveOrdersForTable(tableId)).length, beforeOrders.length);
+  });
+
+  test("U16. upsert multi-tenant → TENANT_MISMATCH 403", async () => {
+    const tableId = "lock-upsert-mt";
+    await seedTableAndProduct(tableId, "prod-lock-up-16");
+    const created = await handleCreateOpenOrder(authCtx(RESTAURANT_A), {
+      tableId,
+      lines: [{ lineId: "u16a", productId: "prod-lock-up-16", quantity: 1 }],
+      idempotencyKey: "lock-up-16-create",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+    const denied = await handleUpsertSaleLines(authCtx(RESTAURANT_B), {
+      orderId: created.orderId,
+      lines: [{ lineId: "u16b", productId: "prod-lock-up-16", quantity: 1 }],
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.equal(denied.error, "TENANT_MISMATCH");
+    assert.equal(denied.status, 403);
+    assert.equal(denied.details, undefined);
+    assert.equal((await readLock(tableId, RESTAURANT_A))?.orderId, created.orderId);
   });
 });

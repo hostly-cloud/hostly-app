@@ -113,6 +113,33 @@ export function assertTableOrderLockIntegrity(
   return null;
 }
 
+export type TableOrderLockOwnershipErrorCode =
+  | "TABLE_ORDER_LOCK_CONFLICT"
+  | "LOCK_TENANT_MISMATCH"
+  | "LOCK_TABLE_MISMATCH";
+
+/**
+ * Ownership de mesa para mutaciones sobre pedido existente (upsert/persist).
+ * No reclama ni libera: exige lock presente y orderId propietario.
+ */
+export function assertTableOrderLockOwner(
+  lock: TableOrderLockDocument | null,
+  params: { restaurantId: string; tableId: string; orderId: string },
+): TableOrderLockOwnershipErrorCode | null {
+  if (!lock) return "TABLE_ORDER_LOCK_CONFLICT";
+  const integrity = assertTableOrderLockIntegrity(
+    lock,
+    params.restaurantId,
+    params.tableId,
+  );
+  if (integrity) return integrity.code;
+  const lockedOrderId = lock.orderId?.trim() || "";
+  if (!lockedOrderId || lockedOrderId !== params.orderId.trim()) {
+    return "TABLE_ORDER_LOCK_CONFLICT";
+  }
+  return null;
+}
+
 export function writeTableOrderLockClaim(
   tx: Transaction,
   ref: DocumentReference,

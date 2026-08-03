@@ -156,6 +156,27 @@ describe("back-to-map pending draft policy", () => {
     );
   });
 
+  test("10b. 409 ORDER_NOT_ACTIVE / TABLE_ORDER_LOCK_CONFLICT → conserva draft", () => {
+    for (const error of ["ORDER_NOT_ACTIVE", "TABLE_ORDER_LOCK_CONFLICT", "LOCK_TENANT_MISMATCH"]) {
+      assert.equal(isValidPersistDraftAck({ ok: false, error }), false);
+      assert.equal(
+        shouldNavigateToMapAfterBackToMap({
+          flushRequired: true,
+          flushSucceeded: false,
+        }),
+        false,
+      );
+      assert.equal(
+        shouldClearLocalDraftCacheAfterBackToMapAck({
+          ackValid: false,
+          activeLineCountAfterFlush: 2,
+        }),
+        false,
+      );
+      assert.equal(shouldPreserveLocalDraftCacheOnBackToMap(2), true);
+    }
+  });
+
   test("12. flushea debounce o cadena en vuelo", () => {
     assert.equal(
       shouldFlushDraftBeforeBackToMap({
