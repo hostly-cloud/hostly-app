@@ -1833,6 +1833,132 @@ describe("tpv table order lock emulator", () => {
     assert.equal(items.find((i) => i.id === "p6d")?.tableGroupSourceOrderId, od.orderId);
   });
 
+  test("T1. join con hint parcial absorbe grupo secundario completo (C → C+D)", async () => {
+    const a = "topo-t1-a";
+    const b = "topo-t1-b";
+    const c = "topo-t1-c";
+    const d = "topo-t1-d";
+    for (const tid of [a, b, c, d]) await seedTableAndProduct(tid, "prod-topo-t1");
+    const oa = await handleCreateOpenOrder(authCtx(), {
+      tableId: a,
+      lines: [{ lineId: "t1a", productId: "prod-topo-t1", quantity: 1 }],
+      idempotencyKey: "topo-t1-a",
+    });
+    const ob = await handleCreateOpenOrder(authCtx(), {
+      tableId: b,
+      lines: [{ lineId: "t1b", productId: "prod-topo-t1", quantity: 1 }],
+      idempotencyKey: "topo-t1-b",
+    });
+    const oc = await handleCreateOpenOrder(authCtx(), {
+      tableId: c,
+      lines: [{ lineId: "t1c", productId: "prod-topo-t1", quantity: 1 }],
+      idempotencyKey: "topo-t1-c",
+    });
+    const od = await handleCreateOpenOrder(authCtx(), {
+      tableId: d,
+      lines: [{ lineId: "t1d", productId: "prod-topo-t1", quantity: 1 }],
+      idempotencyKey: "topo-t1-d",
+    });
+    assert.equal(
+      "orderId" in oa && "orderId" in ob && "orderId" in oc && "orderId" in od,
+      true,
+    );
+    if (!("orderId" in oa) || !("orderId" in ob) || !("orderId" in oc) || !("orderId" in od)) {
+      return;
+    }
+
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b],
+      idempotencyKey: "topo-t1-ab",
+    });
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: c,
+      memberTableIds: [c, d],
+      idempotencyKey: "topo-t1-cd",
+    });
+    // Cliente solo envía C; servidor debe absorber D.
+    const joined = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, c],
+      idempotencyKey: "topo-t1-join-partial",
+    });
+    assert.equal("merged" in joined && joined.merged === true, true);
+    if (!("merged" in joined) || !joined.destOrderId) return;
+
+    const groupsSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("config")
+      .doc("tableGroups")
+      .get();
+    const groups = (groupsSnap.data()?.groups ?? {}) as Record<string, string[]>;
+    assert.deepEqual([...(groups[a] ?? [])].sort(), [b, c, d].sort());
+    assert.equal(groups[c], undefined);
+
+    const items = ((await adminDb.collection("orders").doc(joined.destOrderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.ok(items.some((i) => i.id === "t1b"));
+    assert.ok(items.some((i) => i.id === "t1c"));
+    assert.ok(items.some((i) => i.id === "t1d"));
+    assert.equal((await listActiveOrdersForTable(d)).length, 0);
+    assert.equal((await listActiveOrdersForTable(c)).length, 0);
+  });
+
+  test("T2. split usa remaining autoritativo; omitir remainingTableIds del cliente", async () => {
+    const mainId = "topo-t2-main";
+    const sideId = "topo-t2-side";
+    const extraId = "topo-t2-extra";
+    for (const tid of [mainId, sideId, extraId]) {
+      await seedTableAndProduct(tid, "prod-topo-t2");
+    }
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "t2m", productId: "prod-topo-t2", quantity: 1 }],
+      idempotencyKey: "topo-t2-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "t2s", productId: "prod-topo-t2", quantity: 1 }],
+      idempotencyKey: "topo-t2-side",
+    });
+    const extra = await handleCreateOpenOrder(authCtx(), {
+      tableId: extraId,
+      lines: [{ lineId: "t2e", productId: "prod-topo-t2", quantity: 1 }],
+      idempotencyKey: "topo-t2-extra",
+    });
+    assert.equal("orderId" in main && "orderId" in side && "orderId" in extra, true);
+    if (!("orderId" in main) || !("orderId" in side) || !("orderId" in extra)) return;
+
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId, extraId],
+      idempotencyKey: "topo-t2-merge",
+    });
+
+    const split = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      // sin remainingTableIds: servidor calcula [main, extra]
+      idempotencyKey: "topo-t2-split",
+    });
+    assert.equal("restored" in split && split.restored === true, true);
+    if (!("restored" in split)) return;
+    assert.ok(split.restoredOrderIds.includes(side.orderId));
+    assert.equal(split.result, "partial-split");
+
+    const groupsSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("config")
+      .doc("tableGroups")
+      .get();
+    const groups = (groupsSnap.data()?.groups ?? {}) as Record<string, string[]>;
+    assert.deepEqual(groups[mainId], [extraId]);
+    assert.equal((await readLock(sideId))?.orderId, side.orderId);
+    assert.equal((await readLock(mainId))?.orderId, main.orderId);
+  });
+
   test("P7. split actual lee provenance resultante; locks intactos", async () => {
     const mainId = "prov-p7-main";
     const sideId = "prov-p7-side";
