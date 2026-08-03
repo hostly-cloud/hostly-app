@@ -247,6 +247,7 @@ import {
   createStockReversalMovementsForModifierConsumption,
   createStockReversalMovementsForRecipeConsumption,
 } from "@/lib/firestore/stock-movements";
+import { runReleaseSideEffectsExactlyOnce } from "@/lib/carta/run-release-side-effects-exactly-once";
 import { fetchCartaCategorias, fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
 import { listenModifierGroups } from "@/lib/firestore/modifier-groups";
@@ -8134,61 +8135,92 @@ export function CartaPageContent({
 
         openDraftOrderIdByTableRef.current[selectedTableId] = syncResult.orderId;
 
-        try {
-          const inventoryRestaurantId = operationalRestaurantId ?? restaurantId;
-          const recipeResult = await createStockMovementsForRecipeConsumption({
-            restaurantId: inventoryRestaurantId,
-            orderId: persistedOrderRef.id,
-            lines: linesToSend,
-            userId: waiterId,
-          });
-          if (recipeResult.failed > 0) {
-            console.warn(
-              "[Hostly Inventory] algunos movimientos de escandallo no se crearon; comanda enviada.",
-              recipeResult,
-            );
-          }
-          if (recipeResult.movementIds.length > 0) {
-            const recipeApplyResult = await applyCreatedStockMovements({
-              restaurantId: inventoryRestaurantId,
-              movementIds: recipeResult.movementIds,
-            });
-            if (recipeApplyResult.failed > 0) {
+        const releaseAction = options?.releaseAction ?? "send_to_comanda";
+        await runReleaseSideEffectsExactlyOnce({
+          restaurantId,
+          orderId: persistedOrderRef.id,
+          releaseAction,
+          lineIds: linesToSend.map((line) => line.id),
+          markSent: true,
+          runStock: async () => {
+            try {
+              const inventoryRestaurantId = operationalRestaurantId ?? restaurantId;
+              const recipeResult = await createStockMovementsForRecipeConsumption({
+                restaurantId: inventoryRestaurantId,
+                orderId: persistedOrderRef.id,
+                lines: linesToSend,
+                userId: waiterId,
+              });
+              if (recipeResult.failed > 0) {
+                console.warn(
+                  "[Hostly Inventory] algunos movimientos de escandallo no se crearon; comanda enviada.",
+                  recipeResult,
+                );
+              }
+              if (recipeResult.movementIds.length > 0) {
+                const recipeApplyResult = await applyCreatedStockMovements({
+                  restaurantId: inventoryRestaurantId,
+                  movementIds: recipeResult.movementIds,
+                });
+                if (recipeApplyResult.failed > 0) {
+                  console.warn(
+                    "[Hostly Inventory] escandallo no aplicado al stock; comanda enviada.",
+                    recipeApplyResult,
+                  );
+                }
+              }
+            } catch (inventoryErr) {
               console.warn(
-                "[Hostly Inventory] escandallo no aplicado al stock; comanda enviada.",
-                recipeApplyResult,
+                "[Hostly Inventory] ledger de inventario no disponible; comanda enviada.",
+                inventoryErr,
               );
             }
-          }
-        } catch (inventoryErr) {
-          console.warn(
-            "[Hostly Inventory] ledger de inventario no disponible; comanda enviada.",
-            inventoryErr,
-          );
-        }
-
-        try {
-          const printerConfig = await getPrinterConfig(restaurantId);
-          const printResult = await createPrintJobsForComandaLines({
-            restaurantId,
-            orderId: persistedOrderRef.id,
-            tableId: selectedTableId,
-            tableName: tableLabel,
-            lines: linesToSend,
-            printerConfig,
-          });
-          if (printResult.failed > 0) {
-            console.warn(
-              "[Hostly Print] algunos jobs no se crearon; comanda enviada.",
-              printResult,
-            );
-          }
-        } catch (printErr) {
-          console.warn(
-            "[Hostly Print] cola no disponible; comanda enviada.",
-            printErr,
-          );
-        }
+          },
+          runPrint: async () => {
+            try {
+              const printerConfig = await getPrinterConfig(restaurantId);
+              const printResult = await createPrintJobsForComandaLines({
+                restaurantId,
+                orderId: persistedOrderRef.id,
+                tableId: selectedTableId,
+                tableName: tableLabel,
+                lines: linesToSend,
+                printerConfig,
+              });
+              if (printResult.failed > 0) {
+                console.warn(
+                  "[Hostly Print] algunos jobs no se crearon; comanda enviada.",
+                  printResult,
+                );
+              }
+            } catch (printErr) {
+              console.warn(
+                "[Hostly Print] cola no disponible; comanda enviada.",
+                printErr,
+              );
+            }
+          },
+          runActivity: async () => {
+            await createActivityLog({
+              restaurantId,
+              type: existingOrderId ? "order_updated" : "order_created",
+              entityType: "order",
+              entityId: persistedOrderRef.id,
+              actorUserId: waiterId ?? undefined,
+              actorUserName: activityActorName,
+              actorRole: activityActorRole,
+              metadata: buildActivityMetadata({
+                tableId: selectedTableId,
+                tableName: tableLabel,
+                lineCount: linesToSend.length,
+                lineIds: linesToSend.map((line) => line.id),
+                total: Number.isFinite(syncResult.total) ? syncResult.total : 0,
+                action: releaseAction,
+                route: "tpv",
+              }),
+            });
+          },
+        });
 
         setComandaSentFlash(true);
         if (comandaFlashTimeoutRef.current != null) {
@@ -8198,25 +8230,6 @@ export function CartaPageContent({
           setComandaSentFlash(false);
           comandaFlashTimeoutRef.current = null;
         }, 1000);
-
-        void createActivityLog({
-          restaurantId,
-          type: existingOrderId ? "order_updated" : "order_created",
-          entityType: "order",
-          entityId: persistedOrderRef.id,
-          actorUserId: waiterId ?? undefined,
-          actorUserName: activityActorName,
-          actorRole: activityActorRole,
-          metadata: buildActivityMetadata({
-            tableId: selectedTableId,
-            tableName: tableLabel,
-            lineCount: linesToSend.length,
-            lineIds: linesToSend.map((line) => line.id),
-            total: Number.isFinite(syncResult.total) ? syncResult.total : 0,
-            action: options?.releaseAction ?? "send_to_comanda",
-            route: "tpv",
-          }),
-        });
 
         return true;
       } catch (e) {

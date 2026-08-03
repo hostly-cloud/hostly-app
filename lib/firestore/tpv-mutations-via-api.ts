@@ -632,3 +632,119 @@ export async function refundPaymentViaApi(params: {
     refundAmount: Number(parsed.refundAmount) || 0,
   };
 }
+
+export type ReleaseSideEffectName = "stock" | "print" | "activity";
+
+function normalizeReleaseSideEffectName(
+  value: unknown,
+  fallback: ReleaseSideEffectName,
+): ReleaseSideEffectName {
+  if (value === "stock" || value === "print" || value === "activity") return value;
+  return fallback;
+}
+
+export async function claimReleaseEffectViaApi(
+  params: {
+    releaseEventId: string;
+    effect: ReleaseSideEffectName;
+    leaseOwner: string;
+  },
+  options?: { apiFetch?: TpvMutationApiFetch },
+): Promise<
+  | {
+      ok: true;
+      releaseEventId: string;
+      effect: ReleaseSideEffectName;
+      acquired: boolean;
+      claimed: boolean;
+      alreadyCompleted: boolean;
+      leaseHeld: boolean;
+      alreadyProcessed: boolean;
+      leaseOwner: string | null;
+      leaseUntil: number | null;
+    }
+  | ApiFail
+> {
+  const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
+  const response = await apiFetch("/api/tpv/release-effects/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      releaseEventId: params.releaseEventId,
+      effect: params.effect,
+      leaseOwner: params.leaseOwner,
+    }),
+  });
+  const parsed = await parseApiResponse<{
+    releaseEventId: string;
+    effect: ReleaseSideEffectName;
+    acquired?: boolean;
+    claimed?: boolean;
+    alreadyCompleted?: boolean;
+    leaseHeld?: boolean;
+    alreadyProcessed?: boolean;
+    leaseOwner?: string | null;
+    leaseUntil?: number | null;
+  }>(response);
+  if (!parsed.ok) return parsed;
+  const acquired = parsed.acquired === true || parsed.claimed === true;
+  return {
+    ok: true,
+    releaseEventId: String(parsed.releaseEventId ?? params.releaseEventId),
+    effect: normalizeReleaseSideEffectName(parsed.effect, params.effect),
+    acquired,
+    claimed: acquired,
+    alreadyCompleted: parsed.alreadyCompleted === true,
+    leaseHeld: parsed.leaseHeld === true,
+    alreadyProcessed:
+      parsed.alreadyProcessed === true || parsed.alreadyCompleted === true,
+    leaseOwner:
+      typeof parsed.leaseOwner === "string" && parsed.leaseOwner.trim()
+        ? parsed.leaseOwner.trim()
+        : null,
+    leaseUntil:
+      typeof parsed.leaseUntil === "number" && Number.isFinite(parsed.leaseUntil)
+        ? parsed.leaseUntil
+        : null,
+  };
+}
+
+export async function completeReleaseEffectViaApi(
+  params: {
+    releaseEventId: string;
+    effect: ReleaseSideEffectName;
+    leaseOwner: string;
+  },
+  options?: { apiFetch?: TpvMutationApiFetch },
+): Promise<
+  | {
+      ok: true;
+      releaseEventId: string;
+      effect: ReleaseSideEffectName;
+      completed: boolean;
+    }
+  | ApiFail
+> {
+  const apiFetch = options?.apiFetch ?? authenticatedApiFetch;
+  const response = await apiFetch("/api/tpv/release-effects/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      releaseEventId: params.releaseEventId,
+      effect: params.effect,
+      leaseOwner: params.leaseOwner,
+    }),
+  });
+  const parsed = await parseApiResponse<{
+    releaseEventId: string;
+    effect: ReleaseSideEffectName;
+    completed?: boolean;
+  }>(response);
+  if (!parsed.ok) return parsed;
+  return {
+    ok: true,
+    releaseEventId: String(parsed.releaseEventId ?? params.releaseEventId),
+    effect: normalizeReleaseSideEffectName(parsed.effect, params.effect),
+    completed: parsed.completed === true,
+  };
+}
