@@ -16,6 +16,8 @@ import { useSalaEditorHistory } from "@/hooks/useSalaEditorHistory";
 import { useSalaWallDrawing } from "@/hooks/useSalaWallDrawing";
 import { useOperationalElementDragging } from "@/hooks/useOperationalElementDragging";
 import { useOperationalElementResizing } from "@/hooks/useOperationalElementResizing";
+import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
+import { CAPABILITY_DENIED_MESSAGE } from "@/lib/auth/hostly-capabilities";
 import {
   getDefaultOperationalInstanceCanvasSize,
   getOperationalInstanceCanvasSize,
@@ -126,6 +128,8 @@ export function SalaEditorWorkspace({
   currentUserId = null,
   draftPersistenceEnabled = true,
 }: SalaEditorWorkspaceProps) {
+  const { can } = useHostlyCapabilities();
+  const canPublishMap = can("settings.manage");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [operationalSnapGuides, setOperationalSnapGuides] =
     useState<SnapGuide[]>(EMPTY_SMART_SNAP_GUIDES);
@@ -287,6 +291,10 @@ export function SalaEditorWorkspace({
 
   const handlePublishMap = useCallback(async () => {
     if (publishMapBusy) return;
+    if (!canPublishMap) {
+      window.alert(CAPABILITY_DENIED_MESSAGE);
+      return;
+    }
     if (!draftPersistenceEnabled) {
       window.alert("Activa la persistencia del borrador para publicar.");
       return;
@@ -301,6 +309,10 @@ export function SalaEditorWorkspace({
       lastDraftSignatureRef.current = JSON.stringify(document);
       const result = await publishSalaEditorMapViaApi();
       if (!result.ok) {
+        if (result.error === "SETTINGS_MANAGE_REQUIRED") {
+          window.alert(CAPABILITY_DENIED_MESSAGE);
+          return;
+        }
         window.alert(
           `No se pudo publicar el mapa.\nCódigo: ${result.error}${
             result.details ? `\n${result.details}` : ""
@@ -316,6 +328,7 @@ export function SalaEditorWorkspace({
       setPublishMapBusy(false);
     }
   }, [
+    canPublishMap,
     currentUserId,
     document,
     draftPersistenceEnabled,
@@ -1181,7 +1194,9 @@ export function SalaEditorWorkspace({
         onRedo={handleRedo}
         contextActionTarget={contextActionTarget}
         onPublishMap={
-          draftPersistenceEnabled && !legacyHydratedReadOnly
+          canPublishMap &&
+          draftPersistenceEnabled &&
+          !legacyHydratedReadOnly
             ? () => {
                 void handlePublishMap();
               }
