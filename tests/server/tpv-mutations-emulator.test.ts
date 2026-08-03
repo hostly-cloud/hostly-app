@@ -277,8 +277,14 @@ describe("tpv mutations emulator", () => {
   });
 
   test("idempotent create-open returns same order", async () => {
+    // Mesa dedicada: create-open autoritativo reutiliza activos existentes y
+    // rechaza múltiples activos; no debe depender de contaminación de mesa-1.
+    await adminDb.collection("tables").doc("mesa-idem-create").set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa idem create",
+    });
     const intent = {
-      tableId: "mesa-1",
+      tableId: "mesa-idem-create",
       lines: [{ lineId: "line-x", productId: "prod-1", quantity: 1 }],
       idempotencyKey: "idem-create-2",
     };

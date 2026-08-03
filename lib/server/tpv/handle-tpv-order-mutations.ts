@@ -58,6 +58,14 @@ import {
 } from "@/lib/server/tpv/plan-initial-modifier-stock-consumption";
 import { applyModifierStockReversalInTransaction, isModifierReversalBlockedError } from "@/lib/server/tpv/plan-modifier-stock-reversal";
 import type { ModifierStockConsumptionWarning } from "@/lib/inventory/stock-movement-types";
+import { isTpvMutationError } from "@/lib/server/tpv/tpv-mutation-response";
+import {
+  assertTableOrderLockIntegrity,
+  filterActiveOrdersForTable,
+  readTableOrderLockData,
+  tableOrderLockRef,
+  writeTableOrderLockClaim,
+} from "@/lib/server/tpv/table-order-lock";
 
 export type TpvMutationError = { status: number; error: string; details?: string };
 
@@ -65,6 +73,8 @@ export type CreateOpenOrderResult = {
   orderId: string;
   total: number;
   inventoryWarnings: ModifierStockConsumptionWarning[];
+  /** true cuando create-open reutiliza el pedido activo ya locked/reclamado. */
+  reusedExistingOrder?: boolean;
 };
 
 export type UpsertSaleLinesResult = {
@@ -94,6 +104,7 @@ function createOpenResultFromIdempotencyHit(hit: Record<string, unknown>): Creat
     orderId: String(hit.orderId),
     total: Number(hit.total) || 0,
     inventoryWarnings: readInventoryWarningsFromIdempotencyResult(hit),
+    reusedExistingOrder: hit.reusedExistingOrder === true,
   };
 }
 
@@ -479,9 +490,10 @@ export async function handleCreateOpenOrder(
   }
 
   const total = computeAuthoritativeOrderTotal(built);
-  const orderRef = ctx.db.collection("orders").doc();
   let inventoryWarnings: ModifierStockConsumptionWarning[] = [];
   let rehydratedResult: CreateOpenOrderResult | null = null;
+  let createdOrderId: string | null = null;
+  let reuseOrderId: string | null = null;
 
   try {
     await ctx.db.runTransaction(async (tx) => {
@@ -502,6 +514,76 @@ export async function handleCreateOpenOrder(
         throw new Error("TABLE_TENANT_MISMATCH");
       }
 
+      const lockRef = tableOrderLockRef(ctx.db, ctx.restaurantId, tableId);
+      const lockSnap = await tx.get(lockRef);
+      const ordersSnap = await tx.get(
+        ctx.db
+          .collection("orders")
+          .where("restaurantId", "==", ctx.restaurantId)
+          .where("tableId", "==", tableId),
+      );
+
+      const activeOrders = filterActiveOrdersForTable(
+        ordersSnap.docs.map((d) => ({
+          id: d.id,
+          data: () => d.data() as Record<string, unknown>,
+        })),
+        ctx.restaurantId,
+        tableId,
+      );
+
+      let resolvedReuseId: string | null = null;
+      const lock = readTableOrderLockData(lockSnap);
+      if (lock) {
+        const integrity = assertTableOrderLockIntegrity(lock, ctx.restaurantId, tableId);
+        if (integrity) throw new Error(integrity.code);
+        const lockedOrderId = lock.orderId?.trim() || "";
+        if (lockedOrderId) {
+          let lockedOrderDoc = ordersSnap.docs.find((d) => d.id === lockedOrderId) ?? null;
+          let lockedData: Record<string, unknown> | null = lockedOrderDoc
+            ? ((lockedOrderDoc.data() as Record<string, unknown>) ?? null)
+            : null;
+          if (!lockedOrderDoc) {
+            const orphanSnap = await tx.get(ctx.db.collection("orders").doc(lockedOrderId));
+            if (orphanSnap.exists) {
+              lockedData = (orphanSnap.data() as Record<string, unknown>) ?? null;
+            }
+          }
+          if (!lockedData) {
+            // Lock huérfano: se sobrescribe al reclamar el nuevo order.
+          } else {
+            const orderRid = String(lockedData.restaurantId ?? "").trim();
+            const orderTid = String(lockedData.tableId ?? "").trim();
+            if (orderRid !== ctx.restaurantId) throw new Error("LOCK_ORDER_TENANT_MISMATCH");
+            if (orderTid !== tableId) throw new Error("LOCK_ORDER_TABLE_MISMATCH");
+            if (isActiveOrderStatus(lockedData.status)) {
+              resolvedReuseId = lockedOrderId;
+            }
+            // Pedido terminal en lock: se repara al reclamar.
+          }
+        }
+      }
+
+      if (!resolvedReuseId) {
+        if (activeOrders.length > 1) throw new Error("MULTIPLE_ACTIVE_ORDERS_FOR_TABLE");
+        if (activeOrders.length === 1) resolvedReuseId = activeOrders[0]!.id;
+      }
+
+      if (resolvedReuseId) {
+        writeTableOrderLockClaim(tx, lockRef, {
+          restaurantId: ctx.restaurantId,
+          tableId,
+          orderId: resolvedReuseId,
+          create: !lockSnap.exists,
+          claimedByUid: ctx.uid,
+          lastOperation: "create_open",
+          lastClaimKey: idemKey ?? null,
+        });
+        reuseOrderId = resolvedReuseId;
+        return;
+      }
+
+      const orderRef = ctx.db.collection("orders").doc();
       const loaded = { byLineId: new Map(), byDocId: new Map(), allRefs: [] };
       const meta = orderProjectionMetaFromOrder(
         orderRef.id,
@@ -531,6 +613,15 @@ export async function handleCreateOpenOrder(
         ...buildTableOperatorAssignmentAdminFields(intent.operatorAssignment ?? null),
       });
       applyProjectionWritePlan(tx, plan);
+      writeTableOrderLockClaim(tx, lockRef, {
+        restaurantId: ctx.restaurantId,
+        tableId,
+        orderId: orderRef.id,
+        create: !lockSnap.exists,
+        claimedByUid: ctx.uid,
+        lastOperation: "create_open",
+        lastClaimKey: idemKey ?? null,
+      });
 
       if (idemKey) {
         writeIdempotencyRecord(
@@ -542,11 +633,13 @@ export async function handleCreateOpenOrder(
             {
               orderId: orderRef.id,
               total,
+              reusedExistingOrder: false,
             },
             inventoryPlan.warnings,
           ),
         );
       }
+      createdOrderId = orderRef.id;
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
@@ -555,13 +648,77 @@ export async function handleCreateOpenOrder(
     if (msg === "TABLE_NOT_FOUND") return { status: 404, error: "TABLE_NOT_FOUND" };
     if (msg === "TABLE_TENANT_MISMATCH") return { status: 403, error: "TABLE_TENANT_MISMATCH" };
     if (msg === "STOCK_MOVEMENT_ID_CONFLICT") return { status: 409, error: "STOCK_MOVEMENT_ID_CONFLICT" };
+    if (msg === "MULTIPLE_ACTIVE_ORDERS_FOR_TABLE") {
+      return { status: 409, error: "MULTIPLE_ACTIVE_ORDERS_FOR_TABLE" };
+    }
+    if (msg === "LOCK_TENANT_MISMATCH" || msg === "LOCK_ORDER_TENANT_MISMATCH") {
+      return { status: 409, error: "LOCK_TENANT_MISMATCH" };
+    }
+    if (msg === "LOCK_TABLE_MISMATCH" || msg === "LOCK_ORDER_TABLE_MISMATCH") {
+      return { status: 409, error: "LOCK_TABLE_MISMATCH" };
+    }
     throw e;
   }
 
+  if (reuseOrderId) {
+    const upsert = await handleUpsertSaleLines(ctx, {
+      orderId: reuseOrderId,
+      lines: intent.lines,
+      markSent: intent.markSent === true,
+      idempotencyKey: idemKey ? `${idemKey}__create_open_reuse_upsert` : undefined,
+    });
+    if (isTpvMutationError(upsert)) return upsert;
+
+    if (idemKey) {
+      try {
+        await ctx.db.runTransaction(async (tx) => {
+          const idemSnap = await tx.get(idemRef(ctx.db, ctx.restaurantId, idemKey));
+          const hit = readIdempotencyHit(idemSnap, "create_open_order", payloadHash);
+          if (hit?.conflict) throw new Error("IDEMPOTENCY_CONFLICT");
+          if (hit?.orderId) {
+            rehydratedResult = createOpenResultFromIdempotencyHit(hit);
+            throw new Error("IDEM_OK");
+          }
+          writeIdempotencyRecord(
+            tx,
+            idemRef(ctx.db, ctx.restaurantId, idemKey),
+            "create_open_order",
+            payloadHash,
+            buildIdempotencyResultWithInventoryWarnings(
+              {
+                orderId: reuseOrderId,
+                total: upsert.total,
+                reusedExistingOrder: true,
+              },
+              upsert.inventoryWarnings,
+            ),
+          );
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "IDEM_OK" && rehydratedResult) return rehydratedResult;
+        if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
+        throw e;
+      }
+    }
+
+    return {
+      orderId: reuseOrderId,
+      total: upsert.total,
+      inventoryWarnings: sortInventoryWarningsStable(upsert.inventoryWarnings),
+      reusedExistingOrder: true,
+    };
+  }
+
+  if (!createdOrderId) {
+    throw new Error("CREATE_OPEN_ORDER_FAILED");
+  }
+
   return {
-    orderId: orderRef.id,
+    orderId: createdOrderId,
     total,
     inventoryWarnings: sortInventoryWarningsStable(inventoryWarnings),
+    reusedExistingOrder: false,
   };
 }
 

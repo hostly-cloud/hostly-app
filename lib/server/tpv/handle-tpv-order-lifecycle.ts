@@ -20,6 +20,11 @@ import {
 } from "@/lib/server/tpv/order-projection";
 import { isActiveOrderStatus, lineHasActiveQuantity } from "@/lib/server/tpv/table-group-order-utils";
 import {
+  releaseTableOrderLockIfOwnerInTransaction,
+  tableOrderLockRef,
+  writeTableOrderLockRelease,
+} from "@/lib/server/tpv/table-order-lock";
+import {
   computeOrderBalance,
   hasPaidPaymentRecords,
   isOrderEconomicallySettled,
@@ -146,8 +151,22 @@ export async function handleCloseOrder(
         tableOrders = await loadTableOrdersInTransaction(tx, ctx.db, ctx.restaurantId, tableId);
       }
 
+      // Lecturas de lock antes de cualquier write.
+      const lockRef = tableId ? tableOrderLockRef(ctx.db, ctx.restaurantId, tableId) : null;
+      const lockSnap = lockRef ? await tx.get(lockRef) : null;
+
       const status = String(orderData.status ?? "").trim().toLowerCase();
       if (status === "closed") {
+        if (lockRef && lockSnap) {
+          releaseTableOrderLockIfOwnerInTransaction(tx, lockRef, lockSnap, {
+            restaurantId: ctx.restaurantId,
+            tableId,
+            orderId,
+            claimedByUid: ctx.uid,
+            lastOperation: "close_order",
+            lastClaimKey: idemKey ?? null,
+          });
+        }
         if (idemKey) {
           writeIdempotencyRecord(
             tx,
@@ -188,6 +207,17 @@ export async function handleCloseOrder(
         tx.update(tableRef, {
           status: "free",
           updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (lockRef && lockSnap) {
+        releaseTableOrderLockIfOwnerInTransaction(tx, lockRef, lockSnap, {
+          restaurantId: ctx.restaurantId,
+          tableId,
+          orderId,
+          claimedByUid: ctx.uid,
+          lastOperation: "close_order",
+          lastClaimKey: idemKey ?? null,
         });
       }
 
@@ -781,9 +811,22 @@ export async function handleFinalizeTableAfterPayment(
         }
       }
 
+      const lockRef = tableOrderLockRef(ctx.db, ctx.restaurantId, tableId);
+      // Lectura requerida antes de liberar (reglas de transacción Firestore).
+      await tx.get(lockRef);
+
       tx.update(tableRef, {
         status: "free",
         updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Mesa sin pedidos activos pendientes de cobro: liberar ownership.
+      writeTableOrderLockRelease(tx, lockRef, {
+        restaurantId: ctx.restaurantId,
+        tableId,
+        claimedByUid: ctx.uid,
+        lastOperation: "finalize_table",
+        lastClaimKey: idemKey ?? null,
       });
 
       if (idemKey) {

@@ -28,6 +28,13 @@ import {
   stablePayloadHash,
   writeIdempotencyRecord,
 } from "@/lib/server/tpv/tpv-idempotency";
+import {
+  assertTableOrderLockIntegrity,
+  readTableOrderLockData,
+  sortTableIdsForLockAcquisition,
+  tableOrderLockRef,
+  writeTableOrderLockClaim,
+} from "@/lib/server/tpv/table-order-lock";
 
 export type SplitTableGroupIntent = {
   mainTableId: string;
@@ -255,6 +262,30 @@ export async function handleSplitTableGroupOrders(
         }
       }
 
+      const lockTableIds = sortTableIdsForLockAcquisition([
+        primaryId,
+        effectivePrimaryId,
+        ...removed,
+        ...restoredOrderIds.map((id) => {
+          const src = sourceOrders.find((s) => s.id === id);
+          return String(src?.data.tableId ?? "").trim();
+        }),
+      ]);
+      const lockRefs = lockTableIds.map((tid) =>
+        tableOrderLockRef(ctx.db, ctx.restaurantId, tid),
+      );
+      const lockSnaps = await Promise.all(lockRefs.map((ref) => tx.get(ref)));
+      for (let i = 0; i < lockTableIds.length; i++) {
+        const lock = readTableOrderLockData(lockSnaps[i]!);
+        if (!lock) continue;
+        const integrity = assertTableOrderLockIntegrity(
+          lock,
+          ctx.restaurantId,
+          lockTableIds[i]!,
+        );
+        if (integrity) throw new Error(integrity.code);
+      }
+
       const primarySnap = await tx.get(primaryOrder.ref);
       const freshPrimary = readOrderSnapData(primarySnap);
       if (!freshPrimary) throw new Error("PRIMARY_NOT_FOUND");
@@ -407,6 +438,27 @@ export async function handleSplitTableGroupOrders(
         { merge: true },
       );
 
+      // Ownership: primary conserva dest; cada mesa restaurada reclama su order restaurado.
+      const claimLock = (tableId: string, orderId: string) => {
+        const idx = lockTableIds.indexOf(tableId);
+        if (idx < 0) return;
+        writeTableOrderLockClaim(tx, lockRefs[idx]!, {
+          restaurantId: ctx.restaurantId,
+          tableId,
+          orderId,
+          create: !lockSnaps[idx]!.exists,
+          claimedByUid: ctx.uid,
+          lastOperation: "split_table_group",
+          lastClaimKey: idemKey ?? null,
+        });
+      };
+
+      claimLock(effectivePrimaryId, destOrderId);
+      for (const source of sourceOrders) {
+        const sourceTableId = String(source.data.tableId ?? "").trim();
+        if (sourceTableId) claimLock(sourceTableId, source.id);
+      }
+
       const resultKind = remaining.length > 1 ? "partial-split" : "full-split";
       if (idemKey) {
         writeIdempotencyRecord(
@@ -442,6 +494,9 @@ export async function handleSplitTableGroupOrders(
     }
     if (msg === "IDEMPOTENCY_CONFLICT") return { status: 409, error: "IDEMPOTENCY_CONFLICT" };
     if (msg === "VERSION_CONFLICT") return { status: 409, error: "VERSION_CONFLICT" };
+    if (msg === "LOCK_TENANT_MISMATCH" || msg === "LOCK_TABLE_MISMATCH") {
+      return { status: 409, error: msg };
+    }
     if (msg === "TENANT_MISMATCH") return { status: 403, error: msg };
     if (msg === "PRIMARY_NOT_FOUND" || msg === "SOURCE_NOT_FOUND") {
       return { status: 404, error: msg };

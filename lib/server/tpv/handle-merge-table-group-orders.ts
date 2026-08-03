@@ -30,6 +30,14 @@ import {
   stablePayloadHash,
   writeIdempotencyRecord,
 } from "@/lib/server/tpv/tpv-idempotency";
+import {
+  assertTableOrderLockIntegrity,
+  readTableOrderLockData,
+  releaseTableOrderLockIfOwnerInTransaction,
+  sortTableIdsForLockAcquisition,
+  tableOrderLockRef,
+  writeTableOrderLockClaim,
+} from "@/lib/server/tpv/table-order-lock";
 
 export type MergeTableGroupIntent = {
   mainTableId: string;
@@ -171,6 +179,23 @@ export async function handleMergeTableGroupOrders(
         }
       }
 
+      // Adquisición determinista de locks (orden lexicográfico) antes de mutar.
+      const lockTableIds = sortTableIdsForLockAcquisition(memberIds);
+      const lockRefs = lockTableIds.map((tid) =>
+        tableOrderLockRef(ctx.db, ctx.restaurantId, tid),
+      );
+      const lockSnaps = await Promise.all(lockRefs.map((ref) => tx.get(ref)));
+      for (let i = 0; i < lockTableIds.length; i++) {
+        const lock = readTableOrderLockData(lockSnaps[i]!);
+        if (!lock) continue;
+        const integrity = assertTableOrderLockIntegrity(
+          lock,
+          ctx.restaurantId,
+          lockTableIds[i]!,
+        );
+        if (integrity) throw new Error(integrity.code);
+      }
+
       const destSnap = await tx.get(destRef);
       const destData = readOrderSnapData(destSnap);
       if (!destData) throw new Error("DEST_NOT_FOUND");
@@ -216,9 +241,24 @@ export async function handleMergeTableGroupOrders(
       const destTableId = String(destData.tableId ?? "").trim();
       if (!memberIds.includes(destTableId)) throw new Error("DEST_TABLE_NOT_IN_GROUP");
 
+      const claimMainLock = () => {
+        const idx = lockTableIds.indexOf(mainId);
+        if (idx < 0) return;
+        writeTableOrderLockClaim(tx, lockRefs[idx]!, {
+          restaurantId: ctx.restaurantId,
+          tableId: mainId,
+          orderId: dest.id,
+          create: !lockSnaps[idx]!.exists,
+          claimedByUid: ctx.uid,
+          lastOperation: "merge_table_group",
+          lastClaimKey: idemKey ?? null,
+        });
+      };
+
       if (sources.length === 0) {
         if (destTableId === mainId) {
           resultMerged = false;
+          claimMainLock();
           if (idemKey) {
             writeIdempotencyRecord(
               tx,
@@ -234,6 +274,25 @@ export async function handleMergeTableGroupOrders(
           tableId: mainId,
           updatedAt: FieldValue.serverTimestamp(),
         });
+        if (destTableId && destTableId !== mainId) {
+          const oldIdx = lockTableIds.indexOf(destTableId);
+          if (oldIdx >= 0) {
+            releaseTableOrderLockIfOwnerInTransaction(
+              tx,
+              lockRefs[oldIdx]!,
+              lockSnaps[oldIdx]!,
+              {
+                restaurantId: ctx.restaurantId,
+                tableId: destTableId,
+                orderId: dest.id,
+                claimedByUid: ctx.uid,
+                lastOperation: "merge_table_group",
+                lastClaimKey: idemKey ?? null,
+              },
+            );
+          }
+        }
+        claimMainLock();
         if (idemKey) {
           writeIdempotencyRecord(
             tx,
@@ -316,6 +375,7 @@ export async function handleMergeTableGroupOrders(
       for (const { ref, data } of sourceSnaps) {
         const originalStatus = String(data.status ?? "").trim();
         const originalPaymentRequestedAt = data.paymentRequestedAt;
+        const sourceTableId = String(data.tableId ?? "").trim();
         tx.update(ref, {
           status: "merged",
           items: [],
@@ -329,7 +389,45 @@ export async function handleMergeTableGroupOrders(
           paymentRequestedAt: null,
           updatedAt: FieldValue.serverTimestamp(),
         });
+        if (sourceTableId) {
+          const sIdx = lockTableIds.indexOf(sourceTableId);
+          if (sIdx >= 0) {
+            releaseTableOrderLockIfOwnerInTransaction(
+              tx,
+              lockRefs[sIdx]!,
+              lockSnaps[sIdx]!,
+              {
+                restaurantId: ctx.restaurantId,
+                tableId: sourceTableId,
+                orderId: ref.id,
+                claimedByUid: ctx.uid,
+                lastOperation: "merge_table_group",
+                lastClaimKey: idemKey ?? null,
+              },
+            );
+          }
+        }
       }
+
+      if (destTableId && destTableId !== mainId) {
+        const oldIdx = lockTableIds.indexOf(destTableId);
+        if (oldIdx >= 0) {
+          releaseTableOrderLockIfOwnerInTransaction(
+            tx,
+            lockRefs[oldIdx]!,
+            lockSnaps[oldIdx]!,
+            {
+              restaurantId: ctx.restaurantId,
+              tableId: destTableId,
+              orderId: dest.id,
+              claimedByUid: ctx.uid,
+              lastOperation: "merge_table_group",
+              lastClaimKey: idemKey ?? null,
+            },
+          );
+        }
+      }
+      claimMainLock();
 
       const nextGroups: Record<string, string[]> = {};
       for (const [key, value] of Object.entries(groupsRaw)) {
@@ -375,6 +473,9 @@ export async function handleMergeTableGroupOrders(
       return { status: 403, error: msg };
     }
     if (msg === "TABLE_NOT_FOUND") return { status: 404, error: msg };
+    if (msg === "LOCK_TENANT_MISMATCH" || msg === "LOCK_TABLE_MISMATCH") {
+      return { status: 409, error: msg };
+    }
     if (
       msg === "DUPLICATE_LINE_ID" ||
       msg === "SOURCE_NOT_ACTIVE" ||
