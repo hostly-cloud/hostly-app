@@ -13,14 +13,29 @@
 
 Cuando dos documentos parezcan contradecirse, prevalece el que estÃ© mÃ¡s arriba:
 
-1. `00_HOSTLY_PRODUCT_BIBLE.md`
-2. `01_HOSTLY_ARCHITECTURE_GUIDE.md`
-3. `02_HOSTLY_DESIGN_SYSTEM.md`
-4. `03_HOSTLY_ROADMAP.md`
-5. `04_HOSTLY_DECISIONS_LOG.md`
-6. `05_HOSTLY_STATE_AUDIT.md`
-7. `06_HOSTLY_AI_GUIDELINES.md`
-8. `07_HOSTLY_OPERATIONS_GUIDE.md`
+1. `00_HOSTLY_PRODUCT_BIBLE.md` — constituciÃ³n de producto (autoridad mÃ¡xima en producto y experiencia)
+2. `11_HOSTLY_ENGINEERING_CONSTITUTION.md` — **ConstituciÃ³n TÃ©cnica** (autoridad mÃ¡xima en ingenierÃ­a e implementaciÃ³n)
+3. `01_HOSTLY_ARCHITECTURE_GUIDE.md`
+4. `02_HOSTLY_DESIGN_SYSTEM.md`
+5. `03_HOSTLY_ROADMAP.md`
+6. `04_HOSTLY_DECISIONS_LOG.md`
+7. `05_HOSTLY_STATE_AUDIT.md`
+8. `06_HOSTLY_AI_GUIDELINES.md`
+9. `07_HOSTLY_OPERATIONS_GUIDE.md`
+10. `08_HOSTLY_BOOTSTRAP.md`
+11. `09_HOSTLY_PATTERNS.md`
+12. `10_HOSTLY_TECHNICAL_DEBT.md`
+
+**Regla de resoluciÃ³n:** la Product Bible prevalece en *quÃ©* construimos; la ConstituciÃ³n TÃ©cnica (`11`) prevalece en *cÃ³mo* lo construimos.
+
+**Referencias maestras de ingenierÃ­a** (subordinadas a `00` y `11`; no sustituyen la lista anterior):
+
+- `12_HOSTLY_RELEASE_PLAYBOOK.md` — procedimiento oficial de releases
+- `13_HOSTLY_AI_ENGINE_ARCHITECTURE.md` — arquitectura del motor de IA
+- `14_HOSTLY_MODULES_REFERENCE.md` — mapa de mÃ³dulos
+- `15_HOSTLY_DATA_MODEL_REFERENCE.md` — contrato del modelo de datos
+
+RelaciÃ³n: la ConstituciÃ³n (`11`) fija el *cÃ³mo*; el Release Playbook (`12`) opera el ciclo de entrega; AI Engine (`13`) define la plataforma IA; MÃ³dulos (`14`) y Modelo de datos (`15`) son contratos de referencia funcional y de persistencia.
 
 Los documentos especializados existentes en `docs/` desarrollan dominios concretos,
 pero no sustituyen esta jerarquÃ­a.

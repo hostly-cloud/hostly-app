@@ -12,11 +12,20 @@
 Antes de cambios importantes:
 
 1. `00_HOSTLY_PRODUCT_BIBLE.md`
-2. `01_HOSTLY_ARCHITECTURE_GUIDE.md`
-3. `02_HOSTLY_DESIGN_SYSTEM.md`
+2. `11_HOSTLY_ENGINEERING_CONSTITUTION.md` — ConstituciÃ³n TÃ©cnica
+3. `01_HOSTLY_ARCHITECTURE_GUIDE.md`
+4. `02_HOSTLY_DESIGN_SYSTEM.md`
+5. `.cursor/rules/hostly.mdc` — regla de proyecto Cursor (siempre activa en el IDE)
 
 DespuÃ©s, leer el documento especializado del dominio: roles, stock, catÃ¡logo, KDS,
 layouts, OCR o release.
+
+SegÃºn el dominio, completar con las referencias maestras:
+
+- releases / deploy → `12_HOSTLY_RELEASE_PLAYBOOK.md`
+- arquitectura del motor IA → `13_HOSTLY_AI_ENGINE_ARCHITECTURE.md`
+- mapa de mÃ³dulos → `14_HOSTLY_MODULES_REFERENCE.md`
+- modelo de datos / Firestore → `15_HOSTLY_DATA_MODEL_REFERENCE.md`
 
 ---
 

@@ -13,11 +13,19 @@ Hostly no es un proyecto de demo. Es un SaaS comercial para hosteleria con opera
 Antes de empezar cualquier tarea, leer siempre en este orden:
 
 1. `docs/00_HOSTLY_PRODUCT_BIBLE.md`
-2. `docs/01_HOSTLY_ARCHITECTURE_GUIDE.md`
-3. `docs/02_HOSTLY_DESIGN_SYSTEM.md`
-4. `docs/06_HOSTLY_AI_GUIDELINES.md`
+2. `docs/11_HOSTLY_ENGINEERING_CONSTITUTION.md` — Constitucion Tecnica
+3. `docs/01_HOSTLY_ARCHITECTURE_GUIDE.md`
+4. `docs/02_HOSTLY_DESIGN_SYSTEM.md`
+5. `docs/06_HOSTLY_AI_GUIDELINES.md`
 
 Solo despues de esa lectura se puede ejecutar la tarea.
+
+Segun el dominio, completar con las referencias maestras (subordinadas a 00 y 11):
+
+- releases / merge / deploy → `docs/12_HOSTLY_RELEASE_PLAYBOOK.md`
+- motor IA / pipeline → `docs/13_HOSTLY_AI_ENGINE_ARCHITECTURE.md`
+- mapa de modulos → `docs/14_HOSTLY_MODULES_REFERENCE.md`
+- modelo de datos → `docs/15_HOSTLY_DATA_MODEL_REFERENCE.md`
 
 ## 3. Como identificar el dominio de la tarea
 

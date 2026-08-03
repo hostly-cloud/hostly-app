@@ -1,10 +1,20 @@
 # Hostly Architecture Guide v1
 
-> ConstituciÃ³n tÃ©cnica y referencia maestra de arquitectura de Hostly.
+> Referencia maestra de arquitectura de Hostly.
 
-**Autoridad documental:** nivel 2. Este documento estÃ¡ subordinado Ãºnicamente a
-`00_HOSTLY_PRODUCT_BIBLE.md`. Ante una contradicciÃ³n de producto, prevalece la
-Product Bible; ante una decisiÃ³n tÃ©cnica, esta guÃ­a es la referencia principal.
+**Autoridad documental:** nivel 3. Este documento estÃ¡ subordinado a
+`00_HOSTLY_PRODUCT_BIBLE.md` y a `11_HOSTLY_ENGINEERING_CONSTITUTION.md`.
+Ante una contradicciÃ³n de producto, prevalece la Product Bible; ante una
+decisiÃ³n de ingenierÃ­a o implementaciÃ³n, prevalece la ConstituciÃ³n TÃ©cnica.
+
+> **Nota para implementaciÃ³n:** toda decisiÃ³n de cÃ³digo, Firebase, Git, calidad
+> o evoluciÃ³n tÃ©cnica debe respetar `docs/11_HOSTLY_ENGINEERING_CONSTITUTION.md`.
+> Esta guÃ­a desarrolla el estado actual y objetivo de la arquitectura; no sustituye
+> la ConstituciÃ³n TÃ©cnica.
+>
+> **Referencias maestras relacionadas:** `12_HOSTLY_RELEASE_PLAYBOOK.md` (releases),
+> `13_HOSTLY_AI_ENGINE_ARCHITECTURE.md` (IA), `14_HOSTLY_MODULES_REFERENCE.md` (mÃ³dulos),
+> `15_HOSTLY_DATA_MODEL_REFERENCE.md` (modelo de datos).
 
 **Estado:** oficial
 **VersiÃ³n:** 1.0
