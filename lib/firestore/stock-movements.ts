@@ -37,11 +37,17 @@ import {
 import { buildRecipeInventoryConsumption } from "@/lib/recipes/product-recipe-helpers";
 import { buildModifierSaleV2MovementId } from "@/lib/inventory/modifier-sale-movement-identity";
 import {
+  buildRecipeIngredientEconomicKey,
+  buildRecipeSaleV2MovementId,
+  normalizeRecipeSaleUnit,
+} from "@/lib/inventory/recipe-sale-movement-identity";
+import {
   areInventoryUnitsCompatible,
   convertInventoryQuantity,
   resolveInventoryUnitGroup,
   roundInventoryQuantity,
 } from "@/lib/inventory/unit-conversions";
+import { isRecipeInventoryUnit } from "@/lib/recipes/product-recipe-helpers";
 
 export type ModifierConsumptionComandaLine = {
   id: string;
@@ -911,16 +917,49 @@ export async function createStockReversalMovementsForRecipeConsumption(
   if (!recipe?.enabled) return result;
 
   const lineQty = Math.max(1, Math.floor(Number(params.line.quantity) || 1));
-  const consumptions = buildRecipeInventoryConsumption(recipe, lineQty, {
+  // Per-unit consumptions preserve economic identity for recipe_sale_v2 lookup.
+  const consumptions = buildRecipeInventoryConsumption(recipe, 1, {
     saleProductId,
   });
   if (consumptions.length === 0) return result;
 
   const saleProductName =
     String(params.line.product.nombre ?? "").trim() || "Producto";
+  const occurrenceCounter = new Map<string, number>();
 
   for (const consumption of consumptions) {
-    const originalMovementId = buildRecipeConsumptionMovementId(
+    const recipeUnit = isRecipeInventoryUnit(consumption.unit)
+      ? normalizeRecipeSaleUnit(consumption.unit)
+      : "";
+    if (!recipeUnit) continue;
+    const recipeQuantityPerUnit = consumption.quantity;
+    if (
+      typeof recipeQuantityPerUnit !== "number" ||
+      !Number.isFinite(recipeQuantityPerUnit) ||
+      recipeQuantityPerUnit <= 0
+    ) {
+      continue;
+    }
+
+    const economicKey = buildRecipeIngredientEconomicKey({
+      inventoryProductId: consumption.productId,
+      recipeQuantityPerUnit,
+      recipeUnit,
+    });
+    const ingredientOccurrence = occurrenceCounter.get(economicKey) ?? 0;
+    occurrenceCounter.set(economicKey, ingredientOccurrence + 1);
+
+    const v2MovementId = buildRecipeSaleV2MovementId({
+      restaurantId: rid,
+      orderId,
+      sentSegmentLineId: params.line.id,
+      saleProductId,
+      inventoryProductId: consumption.productId,
+      recipeQuantityPerUnit,
+      recipeUnit,
+      ingredientOccurrence,
+    });
+    const legacyMovementId = buildRecipeConsumptionMovementId(
       orderId,
       params.line.id,
       consumption.productId,
@@ -932,15 +971,19 @@ export async function createStockReversalMovementsForRecipeConsumption(
     );
     result.movementIds.push(reversalMovementId);
 
-    const originalRef = stockMovementDocRef(rid, originalMovementId);
-    const reversalRef = stockMovementDocRef(rid, reversalMovementId);
-    const quantityDelta = consumption.quantity;
+    let originalMovementId = v2MovementId;
+    const quantityDelta = roundInventoryQuantity(recipeQuantityPerUnit * lineQty);
 
     try {
-      const [originalSnap, existingReversalSnap] = await Promise.all([
-        getDoc(originalRef),
-        getDoc(reversalRef),
-      ]);
+      let originalRef = stockMovementDocRef(rid, originalMovementId);
+      let originalSnap = await getDoc(originalRef);
+      if (!originalSnap.exists()) {
+        originalMovementId = legacyMovementId;
+        originalRef = stockMovementDocRef(rid, originalMovementId);
+        originalSnap = await getDoc(originalRef);
+      }
+      const reversalRef = stockMovementDocRef(rid, reversalMovementId);
+      const existingReversalSnap = await getDoc(reversalRef);
 
       if (existingReversalSnap.exists()) {
         result.skipped += 1;
@@ -975,7 +1018,7 @@ export async function createStockReversalMovementsForRecipeConsumption(
         saleProductId,
         saleProductName,
         quantityDelta,
-        unit: consumption.unit,
+        unit: recipeUnit,
         idempotencyKey: reversalMovementId,
         reversalOfMovementId: originalMovementId,
         applied: false,

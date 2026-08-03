@@ -268,7 +268,8 @@ export function readStoredModifierSaleAggregatedReversalFingerprint(
 }
 
 /** Reused domain error: deterministic reversal id exists with incoherent ledger payload. */
-export const MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR = "STOCK_MOVEMENT_ID_CONFLICT";
+export const STOCK_MOVEMENT_ID_CONFLICT = "STOCK_MOVEMENT_ID_CONFLICT";
+export const MODIFIER_REVERSAL_LEDGER_CONFLICT_ERROR = STOCK_MOVEMENT_ID_CONFLICT;
 
 export type ExpectedModifierSaleAggregatedReversalDocument = {
   movementId: string;

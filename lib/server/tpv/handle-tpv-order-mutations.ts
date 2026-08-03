@@ -170,6 +170,7 @@ async function applyModifierStockForItemTransition(
   afterItems: readonly Record<string, unknown>[],
   nowMs: number,
 ): Promise<ModifierStockConsumptionPlan> {
+  // Modifier planner also resolves embedded recipes and writes recipe_sale in the same tx.
   return applyInitialModifierStockConsumptionInTransaction({
     tx,
     db: ctx.db,

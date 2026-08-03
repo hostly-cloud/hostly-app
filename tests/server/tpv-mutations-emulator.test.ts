@@ -25,6 +25,7 @@ import {
   buildModifierSaleAggregatedReversalV3MovementId,
   MODIFIER_SALE_REVERSAL_SCHEMA_V3,
 } from "@/lib/inventory/modifier-sale-movement-identity";
+import { buildRecipeSaleV2MovementId } from "@/lib/inventory/recipe-sale-movement-identity";
 import { buildModifierReversalOperationIdempotencyKey } from "@/lib/server/tpv/plan-modifier-stock-reversal";
 import type { Firestore as ClientFirestore } from "firebase/firestore";
 import {
@@ -4083,5 +4084,274 @@ describe("tpv mutations emulator", () => {
     const items = orderAfter?.items as Array<Record<string, unknown>> | undefined;
     assert.equal(items?.[0]?.quantity, 2);
     await assertSucceeds(getDoc(doc(waiterClientDb, "orders", created.orderId)));
+  });
+
+  test("P1. create-open sent con receta crea recipe_sale_v2 y decrementa stock", async () => {
+    const invProductId = "inv-recipe-p1";
+    const saleProductId = "prod-recipe-p1";
+    const tableId = "mesa-recipe-p1";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa Recipe P1",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .set({
+        restaurantId: RESTAURANT_A,
+        name: "Harina",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 20 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(saleProductId)
+      .set({
+        restaurantId: RESTAURANT_A,
+        name: "Pan",
+        price: 3,
+        active: true,
+        visibleOnMenu: true,
+        recipe: {
+          enabled: true,
+          ingredients: [
+            { productId: invProductId, quantity: 2, unit: "unit", name: "Harina" },
+          ],
+        },
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{ lineId: "line-recipe-p1", productId: saleProductId, quantity: 2 }],
+      markSent: true,
+      idempotencyKey: "create-recipe-p1",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const expectedMovementId = buildRecipeSaleV2MovementId({
+      restaurantId: RESTAURANT_A,
+      orderId: created.orderId,
+      sentSegmentLineId: "line-recipe-p1",
+      saleProductId,
+      inventoryProductId: invProductId,
+      recipeQuantityPerUnit: 2,
+      recipeUnit: "unit",
+      ingredientOccurrence: 0,
+    });
+    const movementSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .doc(expectedMovementId)
+      .get();
+    assert.equal(movementSnap.exists, true);
+    const movement = movementSnap.data();
+    assert.equal(movement?.type, "recipe_sale");
+    assert.equal(movement?.applied, true);
+    assert.equal(movement?.quantityDelta, -4);
+    assert.equal(movement?.stockBefore, 20);
+    assert.equal(movement?.stockAfter, 16);
+
+    const invSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invSnap.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      16,
+    );
+
+    const retry = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{ lineId: "line-recipe-p1", productId: saleProductId, quantity: 2 }],
+      markSent: true,
+      idempotencyKey: "create-recipe-p1",
+    });
+    assert.equal("orderId" in retry, true);
+    if ("orderId" in retry) assert.equal(retry.orderId, created.orderId);
+
+    const invAfterRetry = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invProductId)
+      .get();
+    assert.equal(
+      (invAfterRetry.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      16,
+    );
+  });
+
+  test("P1. producto sin receta no crea recipe_sale", async () => {
+    const saleProductId = "prod-no-recipe-p1";
+    const tableId = "mesa-no-recipe-p1";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa No Recipe",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(saleProductId)
+      .set({
+        restaurantId: RESTAURANT_A,
+        name: "Agua",
+        price: 1,
+        active: true,
+        visibleOnMenu: true,
+        recipe: { enabled: false, ingredients: [] },
+      });
+
+    const created = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [{ lineId: "line-no-recipe-p1", productId: saleProductId, quantity: 1 }],
+      markSent: true,
+      idempotencyKey: "create-no-recipe-p1",
+    });
+    assert.equal("orderId" in created, true);
+    if (!("orderId" in created)) return;
+
+    const movementsSnap = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", created.orderId)
+      .where("type", "==", "recipe_sale")
+      .get();
+    assert.equal(movementsSnap.size, 0);
+  });
+
+  test("P1. coexistencia modifier+recipe misma tx y retry no re-descuenta", async () => {
+    const invShared = "inv-shared-p1";
+    const groupId = "grp-recipe-mod-p1";
+    const optionId = "opt-recipe-mod-p1";
+    const saleProductId = "prod-recipe-mod-p1";
+    const tableId = "mesa-recipe-mod-p1";
+    await adminDb.collection("tables").doc(tableId).set({
+      restaurantId: RESTAURANT_A,
+      name: "Mesa Recipe+Mod",
+    });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invShared)
+      .set({
+        restaurantId: RESTAURANT_A,
+        name: "Shared inv",
+        active: true,
+        inventory: { enabled: true, unit: "ud", currentStock: 10 },
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("modifierGroups")
+      .doc(groupId)
+      .set({
+        name: "Mixer",
+        type: "mixer",
+        active: true,
+        options: [
+          {
+            id: optionId,
+            name: "Tónica",
+            priceDelta: 0,
+            active: true,
+            inventoryProductId: invShared,
+            inventoryProductName: "Shared inv",
+            inventoryQuantity: 1,
+            inventoryUnit: "unit",
+          },
+        ],
+      });
+    await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(saleProductId)
+      .set({
+        restaurantId: RESTAURANT_A,
+        name: "Gin Tonic",
+        price: 10,
+        active: true,
+        visibleOnMenu: true,
+        modifierGroupIds: [groupId],
+        recipe: {
+          enabled: true,
+          ingredients: [
+            { productId: invShared, quantity: 1, unit: "unit", name: "Gin base" },
+          ],
+        },
+      });
+
+    const ok = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId: "line-recipe-mod-ok",
+          productId: saleProductId,
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-recipe-mod-ok",
+    });
+    assert.equal("orderId" in ok, true);
+    if (!("orderId" in ok)) return;
+
+    const movementsOk = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("stockMovements")
+      .where("orderId", "==", ok.orderId)
+      .get();
+    assert.equal(movementsOk.size, 2);
+    const types = movementsOk.docs.map((d) => d.data().type).sort();
+    assert.deepEqual(types, ["modifier_sale", "recipe_sale"]);
+
+    const invAfterOk = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invShared)
+      .get();
+    assert.equal(
+      (invAfterOk.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      8,
+    );
+
+    const retry = await handleCreateOpenOrder(authCtx("waiter"), {
+      tableId,
+      lines: [
+        {
+          lineId: "line-recipe-mod-ok",
+          productId: saleProductId,
+          quantity: 1,
+          selectedModifiers: [{ groupId, optionId }],
+        },
+      ],
+      markSent: true,
+      idempotencyKey: "create-recipe-mod-ok",
+    });
+    assert.equal("orderId" in retry, true);
+    const invAfterRetry = await adminDb
+      .collection("restaurants")
+      .doc(RESTAURANT_A)
+      .collection("products")
+      .doc(invShared)
+      .get();
+    assert.equal(
+      (invAfterRetry.data()?.inventory as Record<string, unknown> | undefined)?.currentStock,
+      8,
+    );
   });
 });

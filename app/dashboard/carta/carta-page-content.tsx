@@ -250,8 +250,6 @@ import {
   createPrintJobsForComandaLines,
 } from "@/lib/firestore/print-jobs";
 import {
-  applyCreatedStockMovements,
-  createStockMovementsForRecipeConsumption,
   createStockReversalMovementsForModifierConsumption,
   createStockReversalMovementsForRecipeConsumption,
 } from "@/lib/firestore/stock-movements";
@@ -8283,40 +8281,9 @@ export function CartaPageContent({
           releaseAction,
           lineIds: linesToSend.map((line) => line.id),
           markSent: true,
-          runStock: async () => {
-            try {
-              const inventoryRestaurantId = operationalRestaurantId ?? restaurantId;
-              const recipeResult = await createStockMovementsForRecipeConsumption({
-                restaurantId: inventoryRestaurantId,
-                orderId: persistedOrderRef.id,
-                lines: linesToSend,
-                userId: waiterId,
-              });
-              if (recipeResult.failed > 0) {
-                console.warn(
-                  "[Hostly Inventory] algunos movimientos de escandallo no se crearon; comanda enviada.",
-                  recipeResult,
-                );
-              }
-              if (recipeResult.movementIds.length > 0) {
-                const recipeApplyResult = await applyCreatedStockMovements({
-                  restaurantId: inventoryRestaurantId,
-                  movementIds: recipeResult.movementIds,
-                });
-                if (recipeApplyResult.failed > 0) {
-                  console.warn(
-                    "[Hostly Inventory] escandallo no aplicado al stock; comanda enviada.",
-                    recipeApplyResult,
-                  );
-                }
-              }
-            } catch (inventoryErr) {
-              console.warn(
-                "[Hostly Inventory] ledger de inventario no disponible; comanda enviada.",
-                inventoryErr,
-              );
-            }
-          },
+          // Recipe/escandallo stock is authoritative in the send mutation (server).
+          // Release Effects keeps the stock lease for coordination / idempotency only.
+          runStock: async () => {},
           runPrint: async () => {
             try {
               const printerConfig = await getPrinterConfig(restaurantId);
