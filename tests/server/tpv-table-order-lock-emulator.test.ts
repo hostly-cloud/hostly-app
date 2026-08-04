@@ -2080,4 +2080,504 @@ describe("tpv table order lock emulator", () => {
     assert.equal(items.filter((i) => i.id === "p9s").length, 1);
     assert.equal((await listActiveOrdersForTable(sideId)).length, 0);
   });
+
+  test("S1. split partition simple correcto", async () => {
+    const mainId = "spf-s1-main";
+    const sideId = "spf-s1-side";
+    await seedTableAndProduct(mainId, "prod-spf-s1");
+    await seedTableAndProduct(sideId, "prod-spf-s1");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "s1m", productId: "prod-spf-s1", quantity: 2 }],
+      idempotencyKey: "spf-s1-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "s1s", productId: "prod-spf-s1", quantity: 3 }],
+      idempotencyKey: "spf-s1-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    const merged = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "spf-s1-merge",
+    });
+    assert.equal("merged" in merged && merged.merged === true, true);
+
+    const split = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      idempotencyKey: "spf-s1-split",
+    });
+    assert.equal("restored" in split && split.restored === true, true);
+    if (!("restored" in split)) return;
+    assert.ok(split.restoredOrderIds.includes(side.orderId));
+
+    const mainItems = ((await adminDb.collection("orders").doc(main.orderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    const sideItems = ((await adminDb.collection("orders").doc(side.orderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.ok(mainItems.some((i) => i.id === "s1m"));
+    assert.ok(sideItems.some((i) => i.id === "s1s"));
+    assert.equal(sideItems.find((i) => i.id === "s1s")?.quantity, 3);
+  });
+
+  test("S2. split parcial grupo de 3", async () => {
+    const a = "spf-s2-a";
+    const b = "spf-s2-b";
+    const c = "spf-s2-c";
+    for (const tid of [a, b, c]) await seedTableAndProduct(tid, "prod-spf-s2");
+    const oa = await handleCreateOpenOrder(authCtx(), {
+      tableId: a,
+      lines: [{ lineId: "s2a", productId: "prod-spf-s2", quantity: 1 }],
+      idempotencyKey: "spf-s2-a",
+    });
+    const ob = await handleCreateOpenOrder(authCtx(), {
+      tableId: b,
+      lines: [{ lineId: "s2b", productId: "prod-spf-s2", quantity: 1 }],
+      idempotencyKey: "spf-s2-b",
+    });
+    const oc = await handleCreateOpenOrder(authCtx(), {
+      tableId: c,
+      lines: [{ lineId: "s2c", productId: "prod-spf-s2", quantity: 1 }],
+      idempotencyKey: "spf-s2-c",
+    });
+    assert.equal("orderId" in oa && "orderId" in ob && "orderId" in oc, true);
+    if (!("orderId" in oa) || !("orderId" in ob) || !("orderId" in oc)) return;
+
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b, c],
+      idempotencyKey: "spf-s2-merge",
+    });
+    const split = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      removedTableIds: [c],
+      idempotencyKey: "spf-s2-split",
+    });
+    assert.equal("restored" in split && split.restored === true, true);
+    if (!("restored" in split)) return;
+    assert.ok(split.restoredOrderIds.includes(oc.orderId));
+    assert.equal(split.result, "partial-split");
+
+    const groups = (
+      await adminDb
+        .collection("restaurants")
+        .doc(RESTAURANT_A)
+        .collection("config")
+        .doc("tableGroups")
+        .get()
+    ).data()?.groups as Record<string, string[]>;
+    assert.deepEqual(groups[a], [b]);
+  });
+
+  test("S3. grupo absorbido por topology y luego split", async () => {
+    const a = "spf-s3-a";
+    const b = "spf-s3-b";
+    const c = "spf-s3-c";
+    const d = "spf-s3-d";
+    for (const tid of [a, b, c, d]) await seedTableAndProduct(tid, "prod-spf-s3");
+    for (const [tid, key, lid] of [
+      [a, "spf-s3-a", "s3a"],
+      [b, "spf-s3-b", "s3b"],
+      [c, "spf-s3-c", "s3c"],
+      [d, "spf-s3-d", "s3d"],
+    ] as const) {
+      const created = await handleCreateOpenOrder(authCtx(), {
+        tableId: tid,
+        lines: [{ lineId: lid, productId: "prod-spf-s3", quantity: 1 }],
+        idempotencyKey: key,
+      });
+      assert.equal("orderId" in created, true);
+    }
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b],
+      idempotencyKey: "spf-s3-ab",
+    });
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: c,
+      memberTableIds: [c, d],
+      idempotencyKey: "spf-s3-cd",
+    });
+    const joined = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, c],
+      idempotencyKey: "spf-s3-join",
+    });
+    assert.equal("merged" in joined && joined.merged === true, true);
+
+    const split = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      removedTableIds: [d],
+      idempotencyKey: "spf-s3-split-d",
+    });
+    assert.equal(
+      "restored" in split && split.restored === true,
+      true,
+      `S3 split failed: ${JSON.stringify(split)}`,
+    );
+    if (!("restored" in split)) return;
+    assert.equal(split.result, "partial-split");
+    assert.equal((await listActiveOrdersForTable(d)).length, 1);
+  });
+
+  test("S4. re-merge + split conserva origen histórico", async () => {
+    const a = "spf-s4-a";
+    const b = "spf-s4-b";
+    const c = "spf-s4-c";
+    for (const tid of [a, b, c]) await seedTableAndProduct(tid, "prod-spf-s4");
+    const oa = await handleCreateOpenOrder(authCtx(), {
+      tableId: a,
+      lines: [{ lineId: "s4a", productId: "prod-spf-s4", quantity: 1 }],
+      idempotencyKey: "spf-s4-a",
+    });
+    const ob = await handleCreateOpenOrder(authCtx(), {
+      tableId: b,
+      lines: [{ lineId: "s4b", productId: "prod-spf-s4", quantity: 1 }],
+      idempotencyKey: "spf-s4-b",
+    });
+    const oc = await handleCreateOpenOrder(authCtx(), {
+      tableId: c,
+      lines: [{ lineId: "s4c", productId: "prod-spf-s4", quantity: 1 }],
+      idempotencyKey: "spf-s4-c",
+    });
+    assert.equal("orderId" in oa && "orderId" in ob && "orderId" in oc, true);
+    if (!("orderId" in oa) || !("orderId" in ob) || !("orderId" in oc)) return;
+
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b],
+      idempotencyKey: "spf-s4-m1",
+    });
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      memberTableIds: [a, b, c],
+      idempotencyKey: "spf-s4-m2",
+    });
+    const split = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: a,
+      removedTableIds: [b],
+      idempotencyKey: "spf-s4-split",
+    });
+    assert.equal("restored" in split && split.restored === true, true);
+    if (!("restored" in split)) return;
+    assert.ok(split.restoredOrderIds.includes(ob.orderId));
+    const sideItems = ((await adminDb.collection("orders").doc(ob.orderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.ok(sideItems.some((i) => i.id === "s4b"));
+    assert.equal(sideItems.find((i) => i.id === "s4b")?.tableGroupSourceOrderId, ob.orderId);
+  });
+
+  test("S5. línea nueva posterior al merge permanece en primary", async () => {
+    const mainId = "spf-s5-main";
+    const sideId = "spf-s5-side";
+    await seedTableAndProduct(mainId, "prod-spf-s5");
+    await seedTableAndProduct(sideId, "prod-spf-s5");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "s5m", productId: "prod-spf-s5", quantity: 1 }],
+      idempotencyKey: "spf-s5-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "s5s", productId: "prod-spf-s5", quantity: 1 }],
+      idempotencyKey: "spf-s5-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "spf-s5-merge",
+    });
+    const upsert = await handleUpsertSaleLines(authCtx(), {
+      orderId: main.orderId,
+      lines: [
+        { lineId: "s5m", productId: "prod-spf-s5", quantity: 1 },
+        { lineId: "s5new", productId: "prod-spf-s5", quantity: 1 },
+      ],
+      idempotencyKey: "spf-s5-upsert",
+    });
+    assert.equal("error" in upsert, false);
+
+    const split = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      idempotencyKey: "spf-s5-split",
+    });
+    assert.equal("restored" in split && split.restored === true, true);
+    const mainItems = ((await adminDb.collection("orders").doc(main.orderId).get()).data()
+      ?.items ?? []) as Array<Record<string, unknown>>;
+    assert.ok(mainItems.some((i) => i.id === "s5new"));
+  });
+
+  test("S6-S10. Case F aborta sin writes; retry sigue fallando; locks/groups intactos", async () => {
+    const mainId = "spf-s6-main";
+    const sideId = "spf-s6-side";
+    await seedTableAndProduct(mainId, "prod-spf-s6");
+    await seedTableAndProduct(sideId, "prod-spf-s6");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "s6m", productId: "prod-spf-s6", quantity: 1 }],
+      idempotencyKey: "spf-s6-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "s6s", productId: "prod-spf-s6", quantity: 1 }],
+      idempotencyKey: "spf-s6-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    const merged = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "spf-s6-merge",
+    });
+    assert.equal("merged" in merged && merged.merged === true, true);
+    if (!("merged" in merged) || !merged.destOrderId) return;
+
+    // Strip provenance → Case F
+    const destRef = adminDb.collection("orders").doc(merged.destOrderId);
+    const before = (await destRef.get()).data() as Record<string, unknown>;
+    const stripped = ((before.items as Array<Record<string, unknown>>) ?? []).map((item) => {
+      const next = { ...item };
+      delete next.tableGroupSourceTableId;
+      delete next.tableGroupSourceOrderId;
+      return next;
+    });
+    await destRef.set({ ...before, items: stripped }, { merge: true });
+
+    const groupsBefore = (
+      await adminDb
+        .collection("restaurants")
+        .doc(RESTAURANT_A)
+        .collection("config")
+        .doc("tableGroups")
+        .get()
+    ).data();
+    const lockMainBefore = await readLock(mainId);
+    const lockSideBefore = await readLock(sideId);
+
+    const fail1 = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      idempotencyKey: "spf-s6-split-a",
+    });
+    assert.equal("error" in fail1 && fail1.error === "PROVENANCE_INSUFFICIENT", true);
+    assert.equal("status" in fail1 && fail1.status === 409, true);
+
+    const fail2 = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      idempotencyKey: "spf-s6-split-b",
+    });
+    assert.equal("error" in fail2 && fail2.error === "PROVENANCE_INSUFFICIENT", true);
+
+    const after = (await destRef.get()).data() as Record<string, unknown>;
+    assert.deepEqual(after.items, stripped);
+    assert.equal(String(after.status ?? ""), String(before.status ?? ""));
+    const groupsAfter = (
+      await adminDb
+        .collection("restaurants")
+        .doc(RESTAURANT_A)
+        .collection("config")
+        .doc("tableGroups")
+        .get()
+    ).data();
+    assert.deepEqual(groupsAfter?.groups, groupsBefore?.groups);
+    assert.equal((await readLock(mainId))?.orderId, lockMainBefore?.orderId);
+    assert.equal((await readLock(sideId))?.orderId, lockSideBefore?.orderId);
+    assert.equal((await listActiveOrdersForTable(sideId)).length, 0);
+  });
+
+  test("S11. corregir provenance y reintentar funciona", async () => {
+    const mainId = "spf-s11-main";
+    const sideId = "spf-s11-side";
+    await seedTableAndProduct(mainId, "prod-spf-s11");
+    await seedTableAndProduct(sideId, "prod-spf-s11");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "s11m", productId: "prod-spf-s11", quantity: 1 }],
+      idempotencyKey: "spf-s11-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "s11s", productId: "prod-spf-s11", quantity: 1 }],
+      idempotencyKey: "spf-s11-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+
+    const merged = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "spf-s11-merge",
+    });
+    assert.equal("merged" in merged && merged.merged === true, true);
+    if (!("merged" in merged) || !merged.destOrderId) return;
+
+    const destRef = adminDb.collection("orders").doc(merged.destOrderId);
+    const data = (await destRef.get()).data() as Record<string, unknown>;
+    const stripped = ((data.items as Array<Record<string, unknown>>) ?? []).map((item) => {
+      const next = { ...item };
+      delete next.tableGroupSourceTableId;
+      delete next.tableGroupSourceOrderId;
+      return next;
+    });
+    await destRef.set({ ...data, items: stripped }, { merge: true });
+
+    const fail = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      idempotencyKey: "spf-s11-fail",
+    });
+    assert.equal("error" in fail && fail.error === "PROVENANCE_INSUFFICIENT", true);
+
+    const fixed = stripped.map((item) => {
+      if (item.id === "s11s") {
+        return {
+          ...item,
+          tableGroupSourceTableId: sideId,
+          tableGroupSourceOrderId: side.orderId,
+        };
+      }
+      if (item.id === "s11m") {
+        return {
+          ...item,
+          tableGroupSourceTableId: mainId,
+          tableGroupSourceOrderId: main.orderId,
+        };
+      }
+      return item;
+    });
+    await destRef.set({ ...data, items: fixed }, { merge: true });
+
+    const ok = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      idempotencyKey: "spf-s11-ok",
+    });
+    assert.equal("restored" in ok && ok.restored === true, true);
+    if (!("restored" in ok)) return;
+    assert.ok(ok.restoredOrderIds.includes(side.orderId));
+  });
+
+  test("S12. retry success no duplica", async () => {
+    const mainId = "spf-s12-main";
+    const sideId = "spf-s12-side";
+    await seedTableAndProduct(mainId, "prod-spf-s12");
+    await seedTableAndProduct(sideId, "prod-spf-s12");
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "s12m", productId: "prod-spf-s12", quantity: 1 }],
+      idempotencyKey: "spf-s12-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "s12s", productId: "prod-spf-s12", quantity: 1 }],
+      idempotencyKey: "spf-s12-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+    await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "spf-s12-merge",
+    });
+    const intent = {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      idempotencyKey: "spf-s12-split",
+    };
+    const first = await handleSplitTableGroupOrders(authCtx(), intent);
+    const second = await handleSplitTableGroupOrders(authCtx(), intent);
+    assert.equal(
+      "restored" in first && first.restored === true,
+      true,
+      `S12 first failed: ${JSON.stringify(first)}`,
+    );
+    assert.equal(
+      "restored" in second && second.restored === true,
+      true,
+      `S12 second failed: ${JSON.stringify(second)}`,
+    );
+    if (!("restored" in first) || !("restored" in second)) return;
+    assert.deepEqual(first.restoredOrderIds, second.restoredOrderIds);
+    assert.equal((await listActiveOrdersForTable(sideId)).length, 1);
+  });
+
+  test("S19. cantidades y totals invariantes tras split", async () => {
+    const mainId = "spf-s19-main";
+    const sideId = "spf-s19-side";
+    await seedTableAndProduct(mainId, "prod-spf-s19", 5);
+    await seedTableAndProduct(sideId, "prod-spf-s19", 5);
+    const main = await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "s19m", productId: "prod-spf-s19", quantity: 2 }],
+      idempotencyKey: "spf-s19-main",
+    });
+    const side = await handleCreateOpenOrder(authCtx(), {
+      tableId: sideId,
+      lines: [{ lineId: "s19s", productId: "prod-spf-s19", quantity: 4 }],
+      idempotencyKey: "spf-s19-side",
+    });
+    assert.equal("orderId" in main && "orderId" in side, true);
+    if (!("orderId" in main) || !("orderId" in side)) return;
+    const merged = await handleMergeTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      memberTableIds: [mainId, sideId],
+      idempotencyKey: "spf-s19-merge",
+    });
+    assert.equal("merged" in merged && merged.merged === true, true);
+    if (!("merged" in merged) || !merged.destOrderId) return;
+    const beforeTotal = Number(
+      ((await adminDb.collection("orders").doc(merged.destOrderId).get()).data() as Record<
+        string,
+        unknown
+      >)?.total ?? 0,
+    );
+    await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: [sideId],
+      idempotencyKey: "spf-s19-split",
+    });
+    const mainTotal = Number(
+      ((await adminDb.collection("orders").doc(main.orderId).get()).data() as Record<
+        string,
+        unknown
+      >)?.total ?? 0,
+    );
+    const sideTotal = Number(
+      ((await adminDb.collection("orders").doc(side.orderId).get()).data() as Record<
+        string,
+        unknown
+      >)?.total ?? 0,
+    );
+    assert.equal(mainTotal + sideTotal, beforeTotal);
+  });
+
+  test("S22. split sin grupo → GROUP_NOT_FOUND", async () => {
+    const mainId = "spf-s22-main";
+    await seedTableAndProduct(mainId, "prod-spf-s22");
+    await handleCreateOpenOrder(authCtx(), {
+      tableId: mainId,
+      lines: [{ lineId: "s22m", productId: "prod-spf-s22", quantity: 1 }],
+      idempotencyKey: "spf-s22-main",
+    });
+    const denied = await handleSplitTableGroupOrders(authCtx(), {
+      mainTableId: mainId,
+      removedTableIds: ["spf-s22-ghost"],
+      idempotencyKey: "spf-s22-split",
+    });
+    assert.equal("error" in denied, true);
+    if (!("error" in denied)) return;
+    assert.ok(
+      denied.error === "GROUP_NOT_FOUND" || denied.error === "TABLE_NOT_IN_GROUP",
+    );
+  });
 });
