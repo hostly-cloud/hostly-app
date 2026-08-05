@@ -3,13 +3,32 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 import {
-  readFirebaseClientEnvFromProcess,
   resolveFirebaseClientConfig,
+  trimFirebaseEnvValue,
 } from "@/lib/firebase/client-config";
 
 const isProd = process.env.NODE_ENV === "production";
 
-const envInput = readFirebaseClientEnvFromProcess();
+/**
+ * Next.js only guarantees NEXT_PUBLIC_* replacement in client bundles when each
+ * variable is referenced statically. Do not pass `process.env` through a helper
+ * here: dynamic property access can compile as undefined in the browser even
+ * when `.env.local` is complete.
+ */
+const envInput = {
+  apiKey: trimFirebaseEnvValue(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
+  authDomain: trimFirebaseEnvValue(
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  ),
+  projectId: trimFirebaseEnvValue(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
+  storageBucket: trimFirebaseEnvValue(
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  ),
+  messagingSenderId: trimFirebaseEnvValue(
+    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  ),
+  appId: trimFirebaseEnvValue(process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
+};
 
 const ENV_DEBUG: readonly [string, string][] = [
   ["NEXT_PUBLIC_FIREBASE_API_KEY", envInput.apiKey],
