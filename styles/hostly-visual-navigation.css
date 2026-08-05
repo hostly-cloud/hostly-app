@@ -28,6 +28,7 @@
   overflow: hidden;
   isolation: isolate;
   border: 1px solid rgba(49, 95, 125, 0.11);
+  color: var(--hostly-ink-strong);
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
@@ -41,10 +42,17 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: -1;
+  z-index: 0;
   background-repeat: no-repeat;
   background-position: right center;
   background-size: auto 100%;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero > *,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station > *,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item > * {
+  position: relative;
+  z-index: 2;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
@@ -53,7 +61,9 @@
   padding-right: clamp(320px, 42vw, 560px);
   display: flex;
   align-items: flex-end;
+  gap: 16px;
   border-radius: 30px;
+  text-decoration: none;
   background:
     radial-gradient(circle at 18% 16%, rgba(143, 199, 223, 0.26), transparent 34%),
     linear-gradient(115deg, rgba(255,255,255,.99) 0%, rgba(247,252,255,.97) 44%, rgba(232,244,252,.82) 100%);
@@ -61,22 +71,45 @@
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before {
-  background-image: url('/visual/dashboard/tpv.svg');
-  background-size: auto 94%;
-  background-position: 102% center;
+  background-image:
+    linear-gradient(90deg, rgba(255,255,255,0) 42%, rgba(255,255,255,.18) 62%, rgba(255,255,255,.02) 100%),
+    url('/visual/dashboard/tpv.svg');
+  background-size: 100% 100%, auto 94%;
+  background-position: center, 102% center;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__icon {
   width: 54px;
   height: 54px;
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
   border-radius: 18px;
   background: rgba(15, 39, 68, 0.08);
   color: var(--hostly-navy-deep);
+  backdrop-filter: blur(8px);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero__copy,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero__copy {
+  max-width: 340px;
+  padding: 18px 20px;
+  border: 1px solid rgba(49, 95, 125, 0.1);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 14px 34px rgba(15, 39, 68, 0.1);
+  backdrop-filter: blur(14px);
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__label {
+  display: block;
+  color: var(--hostly-ink-strong);
   font-size: clamp(30px, 4vw, 52px);
   line-height: .98;
   letter-spacing: -0.04em;
@@ -84,9 +117,11 @@
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__sub {
+  display: block;
   margin-top: 10px;
-  font-size: 15px;
   color: var(--hostly-ink-muted);
+  font-size: 15px;
+  line-height: 1.35;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-operation {
@@ -105,10 +140,11 @@
   min-height: 188px;
   padding: 20px;
   padding-top: 88px;
+  display: flex;
   align-items: flex-end;
   border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.94) 60%, #fff 100%);
+  text-decoration: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.94) 60%, #fff 100%);
   box-shadow: 0 12px 32px rgba(15, 39, 68, 0.07);
 }
 
@@ -127,13 +163,27 @@
   display: none;
 }
 
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station__copy {
+  max-width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+}
+
 .hostly-dashboard-premium-shell .hostly-dashboard-command-station__label {
+  display: block;
+  color: var(--hostly-ink-strong);
   font-size: 18px;
   font-weight: 780;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-station__sub {
+  display: block;
+  margin-top: 3px;
+  color: var(--hostly-ink-muted);
   font-size: 12px;
+  line-height: 1.3;
   max-width: 16ch;
 }
 
@@ -151,11 +201,11 @@
   min-height: 146px;
   padding: 22px;
   padding-right: 44%;
+  display: flex;
   align-items: flex-end;
   text-align: left;
   border-radius: 22px;
-  background:
-    linear-gradient(90deg, rgba(255,255,255,.99) 0%, rgba(255,255,255,.94) 54%, rgba(240,248,252,.64) 100%);
+  background: linear-gradient(90deg, rgba(255,255,255,.99) 0%, rgba(255,255,255,.94) 54%, rgba(240,248,252,.64) 100%);
   box-shadow: 0 10px 28px rgba(15, 39, 68, 0.06);
 }
 
@@ -174,8 +224,14 @@
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__label {
+  display: inline-flex;
+  padding: 9px 12px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--hostly-ink-strong);
   font-size: 16px;
   font-weight: 760;
+  backdrop-filter: blur(10px);
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::after,
@@ -185,6 +241,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 1;
   border-radius: inherit;
   box-shadow: inset 0 0 0 1px rgba(49, 95, 125, 0.06);
 }
@@ -231,6 +288,10 @@
   .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before {
     background-size: auto 72%;
     background-position: 126% 6%;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__copy {
+    max-width: 100%;
   }
 
   .hostly-dashboard-premium-shell .hostly-dashboard-command-station {
