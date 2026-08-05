@@ -20,11 +20,11 @@ export type SalaEditorLibraryProps = {
 
 const PHASE_COPY: Record<SalaEditorLibraryPhase, string> = {
   base: "Define la base del plano",
-  terrain: "Configura superficies y terreno",
-  zones: "Organiza espacios opcionales",
-  structure: "Añade límites y accesos",
-  landscape: "Completa el ambiente",
-  operation: "Coloca los elementos del servicio",
+  terreno: "Configura superficies y terreno",
+  zonas: "Organiza espacios opcionales",
+  estructura: "Añade límites y accesos",
+  paisajismo: "Completa el ambiente",
+  operacion: "Coloca los elementos del servicio",
 };
 
 export function SalaEditorLibrary({
