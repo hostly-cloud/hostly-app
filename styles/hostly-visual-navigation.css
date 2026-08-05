@@ -1,0 +1,134 @@
+/* Hostly Visual Navigation — dashboard illustrations + visual categories */
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station::before,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-repeat: no-repeat;
+  background-position: right center;
+  background-size: auto 100%;
+  opacity: 1;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
+  min-height: 164px;
+  padding-right: clamp(145px, 34vw, 360px);
+  background:
+    linear-gradient(90deg, rgba(247, 252, 255, 0.99) 0%, rgba(247, 252, 255, 0.95) 43%, rgba(247, 252, 255, 0.58) 74%, rgba(247, 252, 255, 0.1) 100%),
+    var(--hostly-surface-card-solid);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before {
+  background-image: url('/visual/dashboard/tpv.svg');
+  background-size: auto 100%;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station {
+  min-height: 148px;
+  padding-right: 42%;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.94) 48%, rgba(255,255,255,.55) 76%, rgba(255,255,255,.08) 100%),
+    var(--hostly-surface-card-solid);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='kitchen']::before {
+  background-image: url('/visual/dashboard/kitchen.svg');
+}
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='bar']::before {
+  background-image: url('/visual/dashboard/bar.svg');
+}
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='cocktail']::before {
+  background-image: url('/visual/dashboard/cocktail.svg');
+}
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='reservations']::before {
+  background-image: url('/visual/dashboard/reservations.svg');
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+  min-height: 112px;
+  padding-right: 44%;
+  align-items: flex-start;
+  text-align: left;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.92) 52%, rgba(255,255,255,.42) 80%, rgba(255,255,255,.04) 100%),
+    var(--hostly-surface-card-solid);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='products']::before {
+  background-image: url('/visual/dashboard/products.svg');
+}
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='settings']::before {
+  background-image: url('/visual/dashboard/settings.svg');
+}
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='analytics']::before {
+  background-image: url('/visual/dashboard/analytics.svg');
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero::after,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station::after,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(49, 95, 125, 0.08);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero:hover,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station:hover,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(15, 39, 68, 0.11);
+}
+
+@media (max-width: 767px) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
+    min-height: 142px;
+    padding-right: 42%;
+  }
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+    min-height: 126px;
+    padding-right: 40%;
+  }
+}
+
+/* TPV/product visual mode: white-first canvas and consistent imagery. */
+.hostly-visual-category-card,
+.hostly-visual-product-card {
+  background: #fff;
+  border: 1px solid rgba(54, 86, 116, 0.12);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.hostly-visual-category-card img,
+.hostly-visual-product-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #fff;
+}
+
+.hostly-visual-card-label {
+  padding: 10px 12px 12px;
+  color: var(--hostly-ink-strong);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.15;
+}
