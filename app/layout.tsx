@@ -4,6 +4,7 @@ import { Providers } from "@/components/providers";
 import { SelectedTableProvider } from "@/context/SelectedTableContext";
 import "./globals.css";
 import "@/styles/hostly-visual-navigation.css";
+import "@/styles/hostly-dashboard-v4.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
