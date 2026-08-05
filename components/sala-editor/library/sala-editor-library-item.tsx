@@ -11,12 +11,34 @@ export type SalaEditorLibraryItemProps = {
   onSelect: (item: SalaEditorLibraryItem) => void;
 };
 
+function getLibraryItemMeta(item: SalaEditorLibraryItem): string {
+  if (item.operationalType != null) return "Operación";
+  if (item.structuralKind != null) return "Estructura";
+  if (item.landscapeKind != null) return "Paisajismo";
+  if (item.zoneType != null) return "Zona";
+  if (item.surfaceMaterial != null) return "Superficie";
+  if (item.baseToolId != null) return "Base del plano";
+  return "Elemento";
+}
+
+function getLibraryItemVisual(item: SalaEditorLibraryItem): string {
+  if (item.operationalType != null) return "OP";
+  if (item.structuralKind != null) return "ES";
+  if (item.landscapeKind != null) return "PA";
+  if (item.zoneType != null) return "ZO";
+  if (item.surfaceMaterial != null) return "SU";
+  if (item.baseToolId != null) return "BA";
+  return "EL";
+}
+
 export function SalaEditorLibraryItemRow({
   item,
   selected,
   onSelect,
 }: SalaEditorLibraryItemProps) {
   const disabled = item.status === "upcoming";
+  const meta = getLibraryItemMeta(item);
+  const visual = getLibraryItemVisual(item);
 
   return (
     <li className="hostly-sala-library__item">
@@ -38,10 +60,24 @@ export function SalaEditorLibraryItemRow({
           onSelect(item);
         }}
       >
-        <span className="hostly-sala-library__item-marker" aria-hidden>
-          ○
+        <span className="hostly-sala-library__item-preview" aria-hidden>
+          <span className="hostly-sala-library__item-preview-mark">{visual}</span>
         </span>
-        <span className="hostly-sala-library__item-label">{item.label}</span>
+
+        <span className="hostly-sala-library__item-copy">
+          <span className="hostly-sala-library__item-label">{item.label}</span>
+          <span className="hostly-sala-library__item-meta">
+            {disabled ? "Disponible próximamente" : meta}
+          </span>
+        </span>
+
+        <span
+          className="hostly-sala-library__item-state"
+          aria-hidden
+        >
+          {disabled ? "" : selected ? "✓" : "+"}
+        </span>
+
         {disabled ? (
           <span className="hostly-sala-library__item-badge">Próximamente</span>
         ) : null}
