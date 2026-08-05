@@ -218,6 +218,14 @@
 }
 
 @media (max-width: 840px) {
+  .hostly-dashboard-premium-shell {
+    padding-inline: 4px;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-center {
+    gap: 22px;
+  }
+
   .hostly-dashboard-premium-shell .hostly-dashboard-command-stations,
   .hostly-dashboard-premium-shell .hostly-dashboard-command-dock {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -230,32 +238,126 @@
 }
 
 @media (max-width: 560px) {
+  .hostly-dashboard-premium-shell {
+    padding-inline: 0;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-center {
+    gap: 18px;
+  }
+
   .hostly-dashboard-premium-shell .hostly-dashboard-command-header {
-    padding-inline: 2px;
+    padding: 10px 2px 2px;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-brand {
+    gap: 12px;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-brand-mark {
+    transform: scale(.92);
+    transform-origin: top left;
   }
 
   .hostly-dashboard-premium-shell .hostly-dashboard-command-title::after {
-    font-size: 34px;
+    font-size: clamp(31px, 10vw, 38px);
+    line-height: 1.02;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-subtitle::after {
+    font-size: 14px;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-main {
+    gap: 18px;
   }
 
   .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
-    min-height: 320px;
-    padding: 22px;
-    padding-top: 176px;
+    min-height: 300px;
+    padding: 18px;
+    padding-top: 156px;
+    border-radius: 26px;
+    box-shadow: 0 22px 54px rgba(15, 39, 68, .12);
   }
 
   .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before {
-    background-size: auto 72%;
-    background-position: 128% 4%;
+    background-size: auto 68%;
+    background-position: 126% 0;
   }
 
   .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__copy {
     width: 100%;
     max-width: none;
+    padding: 17px 18px;
+    border-radius: 20px;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__label {
+    font-size: clamp(34px, 12vw, 46px);
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__sub {
+    font-size: 14px;
   }
 
   .hostly-dashboard-premium-shell .hostly-dashboard-command-stations,
   .hostly-dashboard-premium-shell .hostly-dashboard-command-dock {
     grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+    min-height: 132px;
+    border-radius: 20px;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station {
+    padding: 16px;
+    padding-top: 66px;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station::before {
+    background-size: auto 74%;
+    background-position: 112% -10px;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+    padding: 18px;
+    padding-right: 40%;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station__copy,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__label {
+    min-height: 48px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero:hover,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station:hover,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item:hover {
+    transform: none;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero:active,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station:active,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item:active {
+    transform: scale(.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+    transition: none !important;
   }
 }
