@@ -6,6 +6,10 @@
   position: relative;
   overflow: hidden;
   isolation: isolate;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before,
@@ -94,15 +98,44 @@
   box-shadow: 0 18px 40px rgba(15, 39, 68, 0.11);
 }
 
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero:focus-visible,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station:focus-visible,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item:focus-visible {
+  outline: none;
+  box-shadow: var(--hostly-focus-ring), 0 18px 40px rgba(15, 39, 68, 0.11);
+}
+
 @media (max-width: 767px) {
   .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
     min-height: 142px;
     padding-right: 42%;
   }
+
   .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
   .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
     min-height: 126px;
     padding-right: 40%;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station::before,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item::before {
+    background-position: 112% center;
+    background-size: auto 92%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+    transition: none;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero:hover,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station:hover,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item:hover {
+    transform: none;
   }
 }
 
