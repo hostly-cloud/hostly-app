@@ -9,6 +9,7 @@ import { SalaEditorHistoryControls } from "@/components/sala-editor/sala-editor-
 import type { SalaEditorContextActionTarget } from "@/components/sala-editor/sala-editor-context-action-bar";
 import { SalaEditorContextActionBar } from "@/components/sala-editor/sala-editor-context-action-bar";
 import "@/components/sala-editor/sala-editor-workbench.css";
+import "@/components/sala-editor/sala-editor-consolidation.css";
 
 export type SalaEditorShellProps = {
   navigation: SalaEditorNavigation;
