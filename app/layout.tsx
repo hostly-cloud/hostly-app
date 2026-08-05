@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { SelectedTableProvider } from "@/context/SelectedTableContext";
 import "./globals.css";
+import "@/styles/hostly-visual-navigation.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
