@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import Script from "next/script";
 import { Providers } from "@/components/providers";
 import { SelectedTableProvider } from "@/context/SelectedTableContext";
 import "./globals.css";
@@ -81,17 +82,22 @@ export default function RootLayout({
         <SelectedTableProvider>
           <Providers>{children}</Providers>
         </SelectedTableProvider>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
-        });
-      }
-    `,
-          }}
-        />
+        <Script id="hostly-service-worker" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator && window.isSecureContext) {
+              window.addEventListener('load', function registerHostlyServiceWorker() {
+                navigator.serviceWorker
+                  .register('/sw.js', { updateViaCache: 'none' })
+                  .then(function onRegistered(registration) {
+                    registration.update().catch(function ignoreUpdateError() {});
+                  })
+                  .catch(function onRegistrationError(error) {
+                    console.warn('[Hostly][PWA] Service worker registration failed', error);
+                  });
+              }, { once: true });
+            }
+          `}
+        </Script>
       </body>
     </html>
   );
