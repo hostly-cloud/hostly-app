@@ -18,6 +18,15 @@ export type SalaEditorLibraryProps = {
   onSelectItem: (item: SalaEditorLibraryItem) => void;
 };
 
+const PHASE_COPY: Record<SalaEditorLibraryPhase, string> = {
+  base: "Define la base del plano",
+  terrain: "Configura superficies y terreno",
+  zones: "Organiza espacios opcionales",
+  structure: "Añade límites y accesos",
+  landscape: "Completa el ambiente",
+  operation: "Coloca los elementos del servicio",
+};
+
 export function SalaEditorLibrary({
   phase,
   selection,
@@ -51,16 +60,21 @@ export function SalaEditorLibrary({
   return (
     <div className="hostly-sala-library">
       <div className="hostly-sala-library__head">
-        <p className="hostly-sala-library__title">Elementos</p>
+        <div className="hostly-sala-library__heading-copy">
+          <p className="hostly-sala-library__eyebrow">Biblioteca</p>
+          <h2 className="hostly-sala-library__title">Elementos</h2>
+          <p className="hostly-sala-library__subtitle">{PHASE_COPY[phase]}</p>
+        </div>
+
         <label className="hostly-sala-library__search">
           <span className="hostly-sala-library__search-icon" aria-hidden>
-            🔍
+            ⌕
           </span>
           <input
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Buscar elementos…"
+            placeholder="Buscar en esta fase"
             className="hostly-sala-library__search-input"
             aria-label="Buscar elementos"
             autoComplete="off"
@@ -73,10 +87,13 @@ export function SalaEditorLibrary({
         {!hasSearchResults ? (
           <div className="hostly-sala-library__empty" role="status">
             <span className="hostly-sala-library__empty-icon" aria-hidden>
-              🔍
+              ⌕
             </span>
             <p className="hostly-sala-library__empty-title">
               No hay elementos que coincidan
+            </p>
+            <p className="hostly-sala-library__empty-copy">
+              Prueba con otro nombre o elimina el filtro de búsqueda.
             </p>
           </div>
         ) : (
