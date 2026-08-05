@@ -1,11 +1,33 @@
 /* Hostly Visual Navigation — dashboard illustrations + visual categories */
 
+.hostly-dashboard-premium-shell .hostly-dashboard-command-center {
+  display: grid;
+  gap: 22px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-header {
+  padding: 8px 4px 2px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-main {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(340px, 0.95fr) !important;
+  gap: 22px;
+  align-items: stretch;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero-wrap,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-operation {
+  min-width: 0;
+}
+
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero,
 .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
 .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
   position: relative;
   overflow: hidden;
   isolation: isolate;
+  border: 1px solid rgba(49, 95, 125, 0.11);
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
@@ -23,61 +45,137 @@
   background-repeat: no-repeat;
   background-position: right center;
   background-size: auto 100%;
-  opacity: 1;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
-  min-height: 164px;
-  padding-right: clamp(145px, 34vw, 360px);
+  min-height: 390px;
+  padding: clamp(28px, 4vw, 50px);
+  padding-right: clamp(320px, 42vw, 560px);
+  display: flex;
+  align-items: flex-end;
+  border-radius: 30px;
   background:
-    linear-gradient(90deg, rgba(247, 252, 255, 0.99) 0%, rgba(247, 252, 255, 0.95) 43%, rgba(247, 252, 255, 0.58) 74%, rgba(247, 252, 255, 0.1) 100%),
-    var(--hostly-surface-card-solid);
+    radial-gradient(circle at 18% 16%, rgba(143, 199, 223, 0.26), transparent 34%),
+    linear-gradient(115deg, rgba(255,255,255,.99) 0%, rgba(247,252,255,.97) 44%, rgba(232,244,252,.82) 100%);
+  box-shadow: 0 24px 60px rgba(15, 39, 68, 0.12);
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before {
   background-image: url('/visual/dashboard/tpv.svg');
-  background-size: auto 100%;
+  background-size: auto 94%;
+  background-position: 102% center;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero__icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: rgba(15, 39, 68, 0.08);
+  color: var(--hostly-navy-deep);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero__label {
+  font-size: clamp(30px, 4vw, 52px);
+  line-height: .98;
+  letter-spacing: -0.04em;
+  font-weight: 820;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero__sub {
+  margin-top: 10px;
+  font-size: 15px;
+  color: var(--hostly-ink-muted);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-operation {
+  display: flex;
+  flex-direction: column;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-stations {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  flex: 1;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-station {
-  min-height: 148px;
-  padding-right: 42%;
+  min-height: 188px;
+  padding: 20px;
+  padding-top: 88px;
+  align-items: flex-end;
+  border-radius: 22px;
   background:
-    linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.94) 48%, rgba(255,255,255,.55) 76%, rgba(255,255,255,.08) 100%),
-    var(--hostly-surface-card-solid);
+    linear-gradient(180deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.94) 60%, #fff 100%);
+  box-shadow: 0 12px 32px rgba(15, 39, 68, 0.07);
 }
 
-.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='kitchen']::before {
-  background-image: url('/visual/dashboard/kitchen.svg');
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station::before {
+  background-size: auto 78%;
+  background-position: 118% -14px;
+  opacity: .9;
 }
-.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='bar']::before {
-  background-image: url('/visual/dashboard/bar.svg');
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='kitchen']::before { background-image: url('/visual/dashboard/kitchen.svg'); }
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='bar']::before { background-image: url('/visual/dashboard/bar.svg'); }
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='cocktail']::before { background-image: url('/visual/dashboard/cocktail.svg'); }
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='reservations']::before { background-image: url('/visual/dashboard/reservations.svg'); }
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station__icon {
+  display: none;
 }
-.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='cocktail']::before {
-  background-image: url('/visual/dashboard/cocktail.svg');
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station__label {
+  font-size: 18px;
+  font-weight: 780;
 }
-.hostly-dashboard-premium-shell .hostly-dashboard-command-station[data-visual='reservations']::before {
-  background-image: url('/visual/dashboard/reservations.svg');
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station__sub {
+  font-size: 12px;
+  max-width: 16ch;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-management {
+  margin-top: 4px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 14px !important;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
-  min-height: 112px;
+  min-height: 146px;
+  padding: 22px;
   padding-right: 44%;
-  align-items: flex-start;
+  align-items: flex-end;
   text-align: left;
+  border-radius: 22px;
   background:
-    linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.92) 52%, rgba(255,255,255,.42) 80%, rgba(255,255,255,.04) 100%),
-    var(--hostly-surface-card-solid);
+    linear-gradient(90deg, rgba(255,255,255,.99) 0%, rgba(255,255,255,.94) 54%, rgba(240,248,252,.64) 100%);
+  box-shadow: 0 10px 28px rgba(15, 39, 68, 0.06);
 }
 
-.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='products']::before {
-  background-image: url('/visual/dashboard/products.svg');
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item::before {
+  background-size: auto 94%;
+  background-position: 112% center;
+  opacity: .9;
 }
-.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='settings']::before {
-  background-image: url('/visual/dashboard/settings.svg');
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='products']::before { background-image: url('/visual/dashboard/products.svg'); }
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='settings']::before { background-image: url('/visual/dashboard/settings.svg'); }
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='analytics']::before { background-image: url('/visual/dashboard/analytics.svg'); }
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__icon {
+  display: none;
 }
-.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item[data-visual='analytics']::before {
-  background-image: url('/visual/dashboard/analytics.svg');
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__label {
+  font-size: 16px;
+  font-weight: 760;
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::after,
@@ -88,40 +186,59 @@
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgba(49, 95, 125, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(49, 95, 125, 0.06);
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero:hover,
 .hostly-dashboard-premium-shell .hostly-dashboard-command-station:hover,
 .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 40px rgba(15, 39, 68, 0.11);
+  transform: translateY(-3px);
+  border-color: rgba(49, 95, 125, 0.18);
+  box-shadow: 0 20px 48px rgba(15, 39, 68, 0.12);
 }
 
 .hostly-dashboard-premium-shell .hostly-dashboard-command-hero:focus-visible,
 .hostly-dashboard-premium-shell .hostly-dashboard-command-station:focus-visible,
 .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item:focus-visible {
   outline: none;
-  box-shadow: var(--hostly-focus-ring), 0 18px 40px rgba(15, 39, 68, 0.11);
+  box-shadow: var(--hostly-focus-ring), 0 20px 48px rgba(15, 39, 68, 0.12);
+}
+
+@media (max-width: 1100px) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-main {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
+    min-height: 320px;
+  }
 }
 
 @media (max-width: 767px) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-main,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-stations,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock {
+    grid-template-columns: 1fr !important;
+  }
+
   .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
-    min-height: 142px;
-    padding-right: 42%;
+    min-height: 300px;
+    padding: 24px;
+    padding-top: 170px;
+    align-items: flex-end;
   }
 
-  .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before {
+    background-size: auto 72%;
+    background-position: 126% 6%;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station {
+    min-height: 150px;
+  }
+
   .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
-    min-height: 126px;
-    padding-right: 40%;
-  }
-
-  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before,
-  .hostly-dashboard-premium-shell .hostly-dashboard-command-station::before,
-  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item::before {
-    background-position: 112% center;
-    background-size: auto 92%;
+    min-height: 132px;
   }
 }
 
@@ -139,7 +256,6 @@
   }
 }
 
-/* TPV/product visual mode: white-first canvas and consistent imagery. */
 .hostly-visual-category-card,
 .hostly-visual-product-card {
   background: #fff;
