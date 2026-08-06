@@ -1,0 +1,278 @@
+/* Editor V2 · Biblioteca B2.3
+   Jerarquía visual de catálogo. Presentación únicamente. */
+
+.hostly-sala-library__head {
+  display: grid;
+  gap: 12px;
+  padding: 4px 4px 10px;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.12);
+}
+
+.hostly-sala-library__heading-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.hostly-sala-library__eyebrow {
+  margin: 0;
+  color: #6f8290;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.hostly-sala-library__title {
+  margin: 0;
+  color: #173a55;
+  font-size: 18px;
+  font-weight: 780;
+  line-height: 1.1;
+}
+
+.hostly-sala-library__subtitle {
+  margin: 0;
+  color: #748894;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.hostly-sala-library__search {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(100, 116, 139, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.hostly-sala-library__search:focus-within {
+  border-color: rgba(77, 145, 184, 0.48);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(77, 145, 184, 0.1);
+}
+
+.hostly-sala-library__search-icon {
+  display: grid;
+  place-items: center;
+  color: #7d909d;
+  font-size: 15px;
+}
+
+.hostly-sala-library__search-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #173a55;
+  font-size: 12px;
+}
+
+.hostly-sala-library__search-input::placeholder {
+  color: #91a0aa;
+}
+
+.hostly-sala-library__scroll {
+  display: grid;
+  gap: 12px;
+  padding: 12px 3px 8px;
+}
+
+.hostly-sala-library__catalog {
+  gap: 14px;
+}
+
+.hostly-sala-library__category {
+  overflow: hidden;
+  border: 1px solid rgba(100, 116, 139, 0.13);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.hostly-sala-library__category.is-expanded {
+  border-color: rgba(77, 145, 184, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 22px rgba(15, 39, 68, 0.055);
+}
+
+.hostly-sala-library__category-toggle {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 16px 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: #173a55;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hostly-sala-library__category-toggle:hover {
+  background: rgba(240, 247, 250, 0.72);
+}
+
+.hostly-sala-library__category-toggle:focus-visible {
+  outline: 2px solid rgba(77, 145, 184, 0.48);
+  outline-offset: -2px;
+}
+
+.hostly-sala-library__category-chevron {
+  width: 16px;
+  display: grid;
+  place-items: center;
+  color: #738693;
+  font-size: 11px;
+  transition: transform 140ms ease;
+}
+
+.hostly-sala-library__category.is-expanded .hostly-sala-library__category-chevron {
+  transform: rotate(0deg);
+}
+
+.hostly-sala-library__category-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(77, 145, 184, 0.16);
+  border-radius: 9px;
+  background: linear-gradient(145deg, #ffffff, #edf6fa);
+  color: #315f7d;
+  font-size: 14px;
+}
+
+.hostly-sala-library__category-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.hostly-sala-library__category-label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #173a55;
+  font-size: 12px;
+  font-weight: 790;
+  letter-spacing: 0.01em;
+}
+
+.hostly-sala-library__category-count {
+  min-width: 22px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  padding-inline: 6px;
+  border-radius: 999px;
+  background: rgba(77, 145, 184, 0.1);
+  color: #426f89;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.hostly-sala-library__category-meta {
+  color: #8a99a3;
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.hostly-sala-library__category-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 160ms ease,
+    opacity 140ms ease;
+}
+
+.hostly-sala-library__category-panel.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.hostly-sala-library__category-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hostly-sala-library__category-panel.is-open .hostly-sala-library__category-panel-inner {
+  padding: 2px 9px 10px;
+}
+
+.hostly-sala-library__category.is-empty,
+.hostly-sala-library__category.is-disabled {
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+.hostly-sala-library__category-toggle--static {
+  cursor: default;
+}
+
+.hostly-sala-library__empty {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 22px 14px;
+  border: 1px dashed rgba(100, 116, 139, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+  text-align: center;
+}
+
+.hostly-sala-library__empty-icon {
+  color: #79909e;
+  font-size: 18px;
+}
+
+.hostly-sala-library__empty-title {
+  margin: 0;
+  color: #315f7d;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.hostly-sala-library__empty-copy {
+  margin: 0;
+  color: #80919b;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .hostly-sala-library__category-toggle {
+    min-height: 52px;
+  }
+
+  .hostly-sala-library__category-toggle:hover {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostly-sala-library__search,
+  .hostly-sala-library__category,
+  .hostly-sala-library__category-chevron,
+  .hostly-sala-library__category-panel {
+    transition: none;
+  }
+}
