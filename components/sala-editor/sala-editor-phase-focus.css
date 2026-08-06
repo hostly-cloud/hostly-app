@@ -1,0 +1,147 @@
+/* Editor V2 · Phase focus A2
+   Visual-only emphasis for the active conceptual group. */
+
+@media (min-width: 1024px) {
+  .hostly-sala-editor-phase-groups {
+    width: min(100%, 980px);
+    align-items: stretch;
+  }
+
+  .hostly-sala-editor-phase-group {
+    flex: 0 0 auto;
+  }
+
+  .hostly-sala-editor-phase-group.is-active {
+    flex: 1 1 460px;
+    min-width: 360px;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active) {
+    max-width: 150px;
+    padding-inline: 7px;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__heading {
+    margin-bottom: 4px;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__description {
+    display: none;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__steps {
+    gap: 2px;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__button {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__marker {
+    width: 12px;
+    height: 12px;
+    flex-basis: 12px;
+    border-width: 1px;
+    font-size: 7px;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__optional {
+    display: none;
+  }
+
+  .hostly-sala-editor-phase-group.is-active
+    .hostly-sala-editor-phase-group__heading {
+    min-height: 20px;
+  }
+
+  .hostly-sala-editor-phase-group.is-active
+    .hostly-sala-editor-phase-group__steps {
+    gap: 8px;
+  }
+
+  .hostly-sala-editor-phase-group.is-active
+    .hostly-sala-editor-phase-group__button {
+    min-height: 38px;
+    padding-inline: 12px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .hostly-sala-editor-phase-group.is-active {
+    min-width: 430px;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active) {
+    max-width: 172px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hostly-sala-editor-phase-groups {
+    scroll-snap-type: x proximity;
+  }
+
+  .hostly-sala-editor-phase-group {
+    scroll-snap-align: start;
+  }
+
+  .hostly-sala-editor-phase-group.is-active {
+    min-width: min(76vw, 520px);
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active) {
+    min-width: max-content;
+    opacity: 0.58;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__description,
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__optional {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .hostly-sala-editor-phase-groups {
+    scroll-snap-type: x mandatory;
+  }
+
+  .hostly-sala-editor-phase-group {
+    scroll-snap-align: start;
+  }
+
+  .hostly-sala-editor-phase-group.is-active {
+    min-width: calc(100vw - 56px);
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active) {
+    opacity: 0.52;
+  }
+
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__description,
+  .hostly-sala-editor-phase-group:not(.is-active)
+    .hostly-sala-editor-phase-group__optional {
+    display: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hostly-sala-editor-phase-group:not(.is-active):hover {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostly-sala-editor-phase-group {
+    transition: none;
+  }
+}
