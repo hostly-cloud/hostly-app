@@ -13,15 +13,33 @@ export type SalaEditorPhaseNavProps = {
   onPhaseChange: (phase: SalaEditorPhase) => void;
 };
 
-const PHASE_INDEX: Record<SalaEditorPhase, string> = {
-  espacios: "•",
-  base: "•",
-  zonas: "•",
-  terreno: "•",
-  estructura: "•",
-  operacion: "•",
-  paisajismo: "•",
+type PhaseGroup = {
+  id: "space" | "environment" | "operation";
+  label: string;
+  description: string;
+  phases: SalaEditorPhase[];
 };
+
+const PHASE_GROUPS: PhaseGroup[] = [
+  {
+    id: "space",
+    label: "Espacio",
+    description: "Prepara la base y organiza el plano",
+    phases: ["base", "terreno", "zonas"],
+  },
+  {
+    id: "environment",
+    label: "Ambiente",
+    description: "Define límites y completa el entorno",
+    phases: ["estructura", "paisajismo"],
+  },
+  {
+    id: "operation",
+    label: "Operación",
+    description: "Coloca mesas y puntos de servicio",
+    phases: ["operacion"],
+  },
+];
 
 export function SalaEditorPhaseNav({
   phase,
@@ -33,49 +51,78 @@ export function SalaEditorPhaseNav({
   const activeIndex = SALA_EDITOR_VISIBLE_PHASE_ORDER.indexOf(visiblePhase);
 
   return (
-    <nav className="hostly-sala-editor-stepper" aria-label="Áreas para preparar tu restaurante">
-      <ol className="hostly-sala-editor-stepper__track">
-        {SALA_EDITOR_VISIBLE_PHASE_ORDER.map((item, index) => {
-          const isActive = item === visiblePhase;
-          const isDisabled = disabled.has(item);
-          const isComplete = activeIndex > index;
-          const isPending = !isActive && !isComplete;
+    <nav
+      className="hostly-sala-editor-phase-groups"
+      aria-label="Preparación del restaurante"
+    >
+      {PHASE_GROUPS.map((group) => {
+        const activeInGroup = group.phases.includes(visiblePhase);
 
-          return (
-            <li
-              key={item}
-              className={[
-                "hostly-sala-editor-stepper__segment",
-                isActive ? "is-active" : "",
-                isComplete ? "is-complete" : "",
-                isPending ? "is-pending" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              <button
-                type="button"
-                disabled={isDisabled}
-                aria-current={isActive ? "page" : undefined}
-                title={SALA_EDITOR_PHASE_DESCRIPTIONS[item]}
-                onClick={() => onPhaseChange(item)}
-                className="hostly-sala-editor-stepper__node"
-              >
-                <span className="hostly-sala-editor-stepper__marker" aria-hidden>
-                  {PHASE_INDEX[item]}
-                </span>
-                <span className="hostly-sala-editor-stepper__label">
-                  {SALA_EDITOR_PHASE_LABELS[item]}
-                </span>
-              </button>
+        return (
+          <section
+            key={group.id}
+            className={[
+              "hostly-sala-editor-phase-group",
+              activeInGroup ? "is-active" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            aria-label={group.label}
+          >
+            <div className="hostly-sala-editor-phase-group__heading">
+              <span className="hostly-sala-editor-phase-group__label">
+                {group.label}
+              </span>
+              <span className="hostly-sala-editor-phase-group__description">
+                {group.description}
+              </span>
+            </div>
 
-              {index < SALA_EDITOR_VISIBLE_PHASE_ORDER.length - 1 ? (
-                <span className="hostly-sala-editor-stepper__rail" aria-hidden />
-              ) : null}
-            </li>
-          );
-        })}
-      </ol>
+            <ol className="hostly-sala-editor-phase-group__steps">
+              {group.phases.map((item) => {
+                const itemIndex = SALA_EDITOR_VISIBLE_PHASE_ORDER.indexOf(item);
+                const isActive = item === visiblePhase;
+                const isDisabled = disabled.has(item);
+                const isComplete = activeIndex > itemIndex;
+
+                return (
+                  <li key={item} className="hostly-sala-editor-phase-group__step">
+                    <button
+                      type="button"
+                      disabled={isDisabled}
+                      aria-current={isActive ? "step" : undefined}
+                      title={SALA_EDITOR_PHASE_DESCRIPTIONS[item]}
+                      onClick={() => onPhaseChange(item)}
+                      className={[
+                        "hostly-sala-editor-phase-group__button",
+                        isActive ? "is-active" : "",
+                        isComplete ? "is-complete" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <span
+                        className="hostly-sala-editor-phase-group__marker"
+                        aria-hidden
+                      >
+                        {isComplete ? "✓" : ""}
+                      </span>
+                      <span className="hostly-sala-editor-phase-group__button-label">
+                        {SALA_EDITOR_PHASE_LABELS[item]}
+                      </span>
+                      {item === "zonas" ? (
+                        <span className="hostly-sala-editor-phase-group__optional">
+                          Opcional
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        );
+      })}
     </nav>
   );
 }
