@@ -43,19 +43,22 @@ export function SalaEditorLibrary({
     isExpanded,
   } = useSalaEditorLibraryState(phase);
 
+  const availableCategories = categories
+    .map((category) => ({
+      category,
+      items: category.items.filter((item) => item.status === "available"),
+    }))
+    .filter(({ items }) => items.length > 0);
+
+  const upcomingItemsCount = categories.reduce(
+    (total, category) =>
+      total + category.items.filter((item) => item.status === "upcoming").length,
+    0,
+  );
+
   const visibleCategories = isSearching
     ? filteredCategories
-    : categories.map((category) => {
-        const hasAvailableItems = category.items.some(
-          (item) => item.status === "available",
-        );
-        return {
-          category,
-          items: hasAvailableItems
-            ? category.items
-            : category.items.filter((item) => item.status === "available"),
-        };
-      });
+    : availableCategories;
 
   return (
     <div className="hostly-sala-library">
@@ -97,25 +100,35 @@ export function SalaEditorLibrary({
             </p>
           </div>
         ) : (
-          visibleCategories.map(({ category, items }) => (
-            <SalaEditorLibraryCategorySection
-              key={category.id}
-              category={category}
-              expanded={isExpanded(category.id)}
-              onToggle={() => toggleCategory(category.id)}
-            >
-              <ul className="hostly-sala-library__items">
-                {items.map((item) => (
-                  <SalaEditorLibraryItemRow
-                    key={item.id}
-                    item={item}
-                    selected={isLibraryItemSelected(item, selection)}
-                    onSelect={onSelectItem}
-                  />
-                ))}
-              </ul>
-            </SalaEditorLibraryCategorySection>
-          ))
+          <>
+            <div className="hostly-sala-library__catalog" aria-label="Elementos disponibles">
+              {visibleCategories.map(({ category, items }) => (
+                <SalaEditorLibraryCategorySection
+                  key={category.id}
+                  category={category}
+                  expanded={isExpanded(category.id)}
+                  onToggle={() => toggleCategory(category.id)}
+                >
+                  <ul className="hostly-sala-library__items">
+                    {items.map((item) => (
+                      <SalaEditorLibraryItemRow
+                        key={item.id}
+                        item={item}
+                        selected={isLibraryItemSelected(item, selection)}
+                        onSelect={onSelectItem}
+                      />
+                    ))}
+                  </ul>
+                </SalaEditorLibraryCategorySection>
+              ))}
+            </div>
+
+            {!isSearching && upcomingItemsCount > 0 ? (
+              <p className="hostly-sala-library__upcoming-summary">
+                {upcomingItemsCount} elemento{upcomingItemsCount === 1 ? "" : "s"} más en preparación
+              </p>
+            ) : null}
+          </>
         )}
       </div>
     </div>
