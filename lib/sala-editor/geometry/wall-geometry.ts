@@ -4,14 +4,14 @@
 
 import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 
-export const SALA_WALL_STROKE_WIDTH = 10;
+export const SALA_WALL_STROKE_WIDTH = 8;
 export const SALA_WALL_MIN_LENGTH = 6;
 /** Umbral de selección en px (hit test sobre el trazo). */
 export const SALA_WALL_HIT_THRESHOLD = 10;
 export const SALA_WALL_ENDPOINT_HIT_RADIUS = 12;
 
-/** Color gris Hostly para paredes y preview. */
-export const SALA_WALL_STROKE_COLOR = "var(--hostly-ink-muted, #667085)";
+/** Gris arquitectónico Hostly: visible, pero subordinado a la operación. */
+export const SALA_WALL_STROKE_COLOR = "var(--hostly-ink-muted, #7a8793)";
 
 export type SalaPoint = { x: number; y: number };
 export type SalaWallEndpoint = "start" | "end";
@@ -108,7 +108,7 @@ export function distancePointToSegment(
   const lenSq = dx * dx + dy * dy;
   if (lenSq === 0) return Math.hypot(point.x - a.x, point.y - a.y);
 
-  let t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq;
+  let t = ((point.x - a.x) * dx + (point.y - a.y)) / lenSq;
   t = Math.max(0, Math.min(1, t));
   const projX = a.x + t * dx;
   const projY = a.y + t * dy;
