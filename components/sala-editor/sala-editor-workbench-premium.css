@@ -83,6 +83,8 @@
   align-items: start;
   gap: 8px;
   padding: 9px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .hostly-sala-library__item-preview {
@@ -90,6 +92,10 @@
   height: 72px;
   grid-column: 1 / -1;
   border-radius: 12px;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
 }
 
 .hostly-sala-library__item-preview > * {
@@ -97,6 +103,7 @@
   height: 62px;
   max-width: 62px;
   max-height: 62px;
+  transition: transform 140ms ease;
 }
 
 .hostly-sala-library__item-copy {
@@ -125,6 +132,50 @@
   height: 20px;
   align-self: end;
   font-size: 11px;
+}
+
+/* W3 · Touch First: selección evidente y pulsación inmediata. */
+.hostly-sala-library__item-btn:hover:not(:disabled) .hostly-sala-library__item-preview > * {
+  transform: scale(1.06);
+}
+
+.hostly-sala-library__item-btn:active:not(:disabled) {
+  transform: scale(0.985);
+  box-shadow: 0 4px 12px rgba(15, 39, 68, 0.08);
+}
+
+.hostly-sala-library__item-btn:active:not(:disabled) .hostly-sala-library__item-preview {
+  transform: scale(0.985);
+}
+
+.hostly-sala-library__item-btn.is-selected {
+  border-color: rgba(77, 145, 184, 0.74);
+  background: linear-gradient(145deg, #ffffff, rgba(225, 243, 250, 0.98));
+  box-shadow:
+    0 12px 26px rgba(15, 39, 68, 0.13),
+    inset 0 0 0 1px rgba(77, 145, 184, 0.2);
+}
+
+.hostly-sala-library__item-btn.is-selected .hostly-sala-library__item-preview {
+  border-color: rgba(77, 145, 184, 0.34);
+  background: radial-gradient(circle at 50% 34%, #ffffff, rgba(222, 241, 249, 0.96));
+}
+
+.hostly-sala-library__item-btn.is-selected .hostly-sala-library__item-preview > * {
+  transform: scale(1.08);
+}
+
+.hostly-sala-library__item-btn.is-selected .hostly-sala-library__item-label {
+  color: #12344d;
+}
+
+.hostly-sala-library__item-btn.is-selected .hostly-sala-library__item-meta {
+  color: #52768c;
+}
+
+.hostly-sala-library__item-btn:focus-visible {
+  outline: 3px solid rgba(77, 145, 184, 0.28);
+  outline-offset: 2px;
 }
 
 @media (max-width: 820px) {
@@ -157,6 +208,31 @@
   }
 
   .hostly-sala-library__item-btn {
-    min-height: 112px;
+    min-height: 116px;
+  }
+
+  .hostly-sala-library__item-btn:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .hostly-sala-library__item-btn:hover:not(:disabled) .hostly-sala-library__item-preview > * {
+    transform: none;
+  }
+
+  .hostly-sala-library__item-btn:active:not(:disabled) {
+    transform: scale(0.975);
+    background: rgba(236, 247, 251, 0.98);
+  }
+
+  .hostly-sala-library__item-btn.is-selected:hover:not(:disabled) .hostly-sala-library__item-preview > * {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostly-sala-library__item-btn,
+  .hostly-sala-library__item-preview,
+  .hostly-sala-library__item-preview > * {
+    transition: none;
   }
 }
