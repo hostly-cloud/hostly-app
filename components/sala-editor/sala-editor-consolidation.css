@@ -88,3 +88,228 @@
     min-height: 44px;
   }
 }
+
+/* Phase navigation — user-facing model: Espacio, Ambiente, Operacion. */
+.hostly-sala-editor-phase-groups {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
+}
+
+.hostly-sala-editor-phase-groups::-webkit-scrollbar {
+  display: none;
+}
+
+.hostly-sala-editor-phase-group {
+  min-width: max-content;
+  padding: 7px 8px;
+  border: 1px solid rgba(100, 116, 139, 0.14);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.72);
+  opacity: 0.72;
+  transition:
+    opacity 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.hostly-sala-editor-phase-group.is-active {
+  border-color: rgba(77, 145, 184, 0.28);
+  background: rgba(239, 248, 252, 0.96);
+  box-shadow: 0 8px 22px rgba(15, 39, 68, 0.08);
+  opacity: 1;
+}
+
+.hostly-sala-editor-phase-group__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 6px;
+  padding-inline: 2px;
+}
+
+.hostly-sala-editor-phase-group__label {
+  color: #173a55;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hostly-sala-editor-phase-group__description {
+  max-width: 0;
+  overflow: hidden;
+  color: #6b7f8f;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    max-width 180ms ease,
+    opacity 180ms ease;
+}
+
+.hostly-sala-editor-phase-group.is-active .hostly-sala-editor-phase-group__description {
+  max-width: 230px;
+  opacity: 1;
+}
+
+.hostly-sala-editor-phase-group__steps {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hostly-sala-editor-phase-group__step {
+  min-width: 0;
+}
+
+.hostly-sala-editor-phase-group__button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #617686;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.hostly-sala-editor-phase-group__button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.88);
+  color: #315f7d;
+}
+
+.hostly-sala-editor-phase-group__button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.hostly-sala-editor-phase-group__button:focus-visible {
+  outline: 2px solid rgba(77, 145, 184, 0.48);
+  outline-offset: 2px;
+}
+
+.hostly-sala-editor-phase-group__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.hostly-sala-editor-phase-group__button.is-active {
+  border-color: rgba(77, 145, 184, 0.3);
+  background: #ffffff;
+  color: #173a55;
+  box-shadow: 0 4px 12px rgba(15, 39, 68, 0.08);
+}
+
+.hostly-sala-editor-phase-group__button.is-complete:not(.is-active) {
+  color: #47738f;
+}
+
+.hostly-sala-editor-phase-group__marker {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(100, 116, 139, 0.26);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #4d91b8;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.hostly-sala-editor-phase-group__button.is-active .hostly-sala-editor-phase-group__marker {
+  border-color: #4d91b8;
+  background: #4d91b8;
+  box-shadow: inset 0 0 0 4px #ffffff;
+}
+
+.hostly-sala-editor-phase-group__button.is-complete .hostly-sala-editor-phase-group__marker {
+  border-color: rgba(77, 145, 184, 0.4);
+  background: rgba(222, 242, 250, 0.86);
+}
+
+.hostly-sala-editor-phase-group__optional {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.08);
+  color: #718392;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1180px) {
+  .hostly-sala-editor-phase-group__description {
+    display: none;
+  }
+
+  .hostly-sala-editor-phase-group.is-active .hostly-sala-editor-phase-group__description {
+    max-width: 0;
+    opacity: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .hostly-sala-editor-phase-groups {
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .hostly-sala-editor-phase-group {
+    padding: 6px;
+    border-radius: 12px;
+  }
+
+  .hostly-sala-editor-phase-group__heading {
+    margin-bottom: 4px;
+  }
+
+  .hostly-sala-editor-phase-group__button {
+    min-height: 38px;
+    padding-inline: 8px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .hostly-sala-editor-phase-group__button {
+    min-height: 44px;
+  }
+
+  .hostly-sala-editor-phase-group__button:hover:not(:disabled) {
+    background: transparent;
+  }
+
+  .hostly-sala-editor-phase-group__button.is-active:hover:not(:disabled) {
+    background: #ffffff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostly-sala-editor-phase-group,
+  .hostly-sala-editor-phase-group__description,
+  .hostly-sala-editor-phase-group__button {
+    transition: none;
+  }
+}
