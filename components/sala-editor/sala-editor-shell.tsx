@@ -10,6 +10,7 @@ import type { SalaEditorContextActionTarget } from "@/components/sala-editor/sal
 import { SalaEditorContextActionBar } from "@/components/sala-editor/sala-editor-context-action-bar";
 import "@/components/sala-editor/sala-editor-workbench.css";
 import "@/components/sala-editor/sala-editor-consolidation.css";
+import "@/components/sala-editor/sala-editor-phase-focus.css";
 
 export type SalaEditorShellProps = {
   navigation: SalaEditorNavigation;
