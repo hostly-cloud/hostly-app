@@ -71,10 +71,82 @@
   min-width: 0;
 }
 
+/* W2 · Elementos reconocibles: la forma domina sobre controles secundarios. */
+.hostly-sala-library__items {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.hostly-sala-library__item-btn {
+  min-height: 118px;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  grid-template-rows: 72px auto;
+  align-items: start;
+  gap: 8px;
+  padding: 9px;
+}
+
+.hostly-sala-library__item-preview {
+  width: 100%;
+  height: 72px;
+  grid-column: 1 / -1;
+  border-radius: 12px;
+}
+
+.hostly-sala-library__item-preview > * {
+  width: 62px;
+  height: 62px;
+  max-width: 62px;
+  max-height: 62px;
+}
+
+.hostly-sala-library__item-copy {
+  min-width: 0;
+  align-self: end;
+  gap: 3px;
+}
+
+.hostly-sala-library__item-label {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: normal;
+  text-overflow: clip;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hostly-sala-library__item-meta {
+  font-size: 9px;
+}
+
+.hostly-sala-library__item-state {
+  width: 20px;
+  height: 20px;
+  align-self: end;
+  font-size: 11px;
+}
+
 @media (max-width: 820px) {
   .hostly-sala-editor-workbench__toolbar {
     padding-block: 5px !important;
     padding-inline: 6px !important;
+  }
+
+  .hostly-sala-library__item-btn {
+    min-height: 104px;
+    grid-template-rows: 62px auto;
+  }
+
+  .hostly-sala-library__item-preview {
+    height: 62px;
+  }
+
+  .hostly-sala-library__item-preview > * {
+    width: 54px;
+    height: 54px;
+    max-width: 54px;
+    max-height: 54px;
   }
 }
 
@@ -82,5 +154,9 @@
   .hostly-sala-editor-workbench__publish-btn,
   .hostly-sala-editor-workbench__legacy-link {
     min-height: 40px;
+  }
+
+  .hostly-sala-library__item-btn {
+    min-height: 112px;
   }
 }
