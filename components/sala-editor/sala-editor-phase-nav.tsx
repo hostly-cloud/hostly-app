@@ -17,6 +17,7 @@ type PhaseGroup = {
   id: "space" | "environment" | "operation";
   label: string;
   description: string;
+  guidance: string;
   phases: SalaEditorPhase[];
 };
 
@@ -25,18 +26,21 @@ const PHASE_GROUPS: PhaseGroup[] = [
     id: "space",
     label: "Espacio",
     description: "Prepara la base y organiza el plano",
+    guidance: "Define la base y la distribución del local.",
     phases: ["base", "terreno", "zonas"],
   },
   {
     id: "environment",
     label: "Ambiente",
     description: "Define límites y completa el entorno",
+    guidance: "Da forma a la estructura y al entorno.",
     phases: ["estructura", "paisajismo"],
   },
   {
     id: "operation",
     label: "Operación",
     description: "Coloca mesas y puntos de servicio",
+    guidance: "Coloca mesas, barras y puntos de servicio.",
     phases: ["operacion"],
   },
 ];
@@ -77,6 +81,12 @@ export function SalaEditorPhaseNav({
                 {group.description}
               </span>
             </div>
+
+            {activeInGroup ? (
+              <p className="hostly-sala-editor-phase-group__guidance">
+                {group.guidance}
+              </p>
+            ) : null}
 
             <ol className="hostly-sala-editor-phase-group__steps">
               {group.phases.map((item) => {
