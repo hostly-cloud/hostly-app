@@ -20,6 +20,7 @@ import {
   type SalaEditorReadonlyTpvOperationalState,
 } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
 import "@/components/sala-editor/sala-editor-workbench.css";
+import "@/components/sala-editor/sala-editor-workbench-premium.css";
 
 export type SalaEditorReadonlyOperationalMode = "all" | "non-table" | "none" | "tpv";
 export type SalaEditorReadonlyMapMode = "standalone" | "logical-underlay";
