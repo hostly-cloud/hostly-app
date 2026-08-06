@@ -12,6 +12,7 @@ import "@/components/sala-editor/sala-editor-workbench.css";
 import "@/components/sala-editor/sala-editor-consolidation.css";
 import "@/components/sala-editor/sala-editor-phase-focus.css";
 import "@/components/sala-editor/sala-editor-library-catalog.css";
+import "@/components/sala-editor/sala-editor-workbench-premium.css";
 
 export type SalaEditorShellProps = {
   navigation: SalaEditorNavigation;
