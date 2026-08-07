@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { SalaEditorNavigation } from "@/lib/sala-editor/types/editor-navigation";
 import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation";
@@ -13,6 +13,7 @@ import "@/components/sala-editor/sala-editor-consolidation.css";
 import "@/components/sala-editor/sala-editor-phase-focus.css";
 import "@/components/sala-editor/sala-editor-library-catalog.css";
 import "@/components/sala-editor/sala-editor-workbench-premium.css";
+import "@/components/sala-editor/sala-editor-canvas-focus.css";
 
 export type SalaEditorShellProps = {
   navigation: SalaEditorNavigation;
@@ -66,6 +67,8 @@ export function SalaEditorShell({
   publishToTpvStatus = null,
   contextActionTarget = null,
 }: SalaEditorShellProps) {
+  const [canvasFocus, setCanvasFocus] = useState(false);
+
   const handlePublishClick = () => {
     onPublishToTpv?.();
   };
@@ -75,6 +78,7 @@ export function SalaEditorShell({
       className={[
         "hostly-sala-editor-workbench",
         inspectorOpen ? "hostly-sala-editor-workbench--inspector-open" : "",
+        canvasFocus ? "hostly-sala-editor-workbench--canvas-focus" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -96,6 +100,16 @@ export function SalaEditorShell({
           ) : null}
         </div>
         <div className="hostly-sala-editor-workbench__toolbar-meta">
+          <button
+            type="button"
+            className="hostly-sala-editor-workbench__canvas-focus-btn"
+            aria-pressed={canvasFocus}
+            aria-label={canvasFocus ? "Mostrar herramientas del editor" : "Dar más espacio al plano"}
+            title={canvasFocus ? "Mostrar herramientas" : "Ampliar plano"}
+            onClick={() => setCanvasFocus((current) => !current)}
+          >
+            {canvasFocus ? "Mostrar herramientas" : "Ampliar plano"}
+          </button>
           {publishToTpvStatus ? (
             <span className="hostly-sala-editor-workbench__publish-status">
               {publishToTpvStatus}
