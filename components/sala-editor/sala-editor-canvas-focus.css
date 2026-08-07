@@ -1,0 +1,83 @@
+/* Editor V2 · Canvas Focus
+   Modo de trabajo visual: el plano pasa a ser el protagonista sin alterar lógica ni datos. */
+
+.hostly-sala-editor-workbench--canvas-focus .hostly-sala-editor-workbench__body {
+  grid-template-columns: 0 minmax(0, 1fr) !important;
+}
+
+.hostly-sala-editor-workbench--canvas-focus.hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
+  grid-template-columns: 0 minmax(0, 1fr) 0 !important;
+}
+
+.hostly-sala-editor-workbench--canvas-focus .hostly-sala-editor-workbench__panel--toolbox,
+.hostly-sala-editor-workbench--canvas-focus .hostly-sala-editor-workbench__panel--inspector {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hostly-sala-editor-workbench--canvas-focus .hostly-sala-editor-workbench__canvas {
+  width: 100%;
+  min-width: 0;
+}
+
+.hostly-sala-editor-workbench__canvas-focus-btn {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(77, 145, 184, 0.24);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #315f7d;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.hostly-sala-editor-workbench__canvas-focus-btn:hover {
+  border-color: rgba(77, 145, 184, 0.42);
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 39, 68, 0.07);
+}
+
+.hostly-sala-editor-workbench__canvas-focus-btn:active {
+  transform: scale(0.98);
+}
+
+.hostly-sala-editor-workbench__canvas-focus-btn[aria-pressed="true"] {
+  border-color: rgba(77, 145, 184, 0.54);
+  background: rgba(231, 245, 251, 0.98);
+  color: #173a55;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .hostly-sala-editor-workbench__canvas-focus-btn {
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 767px) {
+  .hostly-sala-editor-workbench--canvas-focus .hostly-sala-editor-workbench__body,
+  .hostly-sala-editor-workbench--canvas-focus.hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostly-sala-editor-workbench__canvas-focus-btn {
+    transition: none;
+  }
+}
