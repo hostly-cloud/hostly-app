@@ -4,7 +4,6 @@ import type { SalaEditorPhase } from "@/lib/sala-editor/types/editor-navigation"
 import {
   SALA_EDITOR_PHASE_DESCRIPTIONS,
   SALA_EDITOR_PHASE_LABELS,
-  SALA_EDITOR_VISIBLE_PHASE_ORDER,
 } from "@/lib/sala-editor/types/editor-navigation";
 
 export type SalaEditorPhaseNavProps = {
@@ -52,7 +51,6 @@ export function SalaEditorPhaseNav({
 }: SalaEditorPhaseNavProps) {
   const disabled = new Set(disabledPhases);
   const visiblePhase = phase === "espacios" ? "base" : phase;
-  const activeIndex = SALA_EDITOR_VISIBLE_PHASE_ORDER.indexOf(visiblePhase);
 
   return (
     <nav
@@ -90,10 +88,8 @@ export function SalaEditorPhaseNav({
 
             <ol className="hostly-sala-editor-phase-group__steps">
               {group.phases.map((item) => {
-                const itemIndex = SALA_EDITOR_VISIBLE_PHASE_ORDER.indexOf(item);
                 const isActive = item === visiblePhase;
                 const isDisabled = disabled.has(item);
-                const isComplete = activeIndex > itemIndex;
 
                 return (
                   <li key={item} className="hostly-sala-editor-phase-group__step">
@@ -106,17 +102,11 @@ export function SalaEditorPhaseNav({
                       className={[
                         "hostly-sala-editor-phase-group__button",
                         isActive ? "is-active" : "",
-                        isComplete ? "is-complete" : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
                     >
-                      <span
-                        className="hostly-sala-editor-phase-group__marker"
-                        aria-hidden
-                      >
-                        {isComplete ? "✓" : ""}
-                      </span>
+                      <span className="hostly-sala-editor-phase-group__marker" aria-hidden />
                       <span className="hostly-sala-editor-phase-group__button-label">
                         {SALA_EDITOR_PHASE_LABELS[item]}
                       </span>
