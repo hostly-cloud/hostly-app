@@ -1,8 +1,15 @@
-import { auth } from "@/lib/firebase/client";
+import type { User } from "firebase/auth";
 
 export type OperationalRestaurantUser = {
   id: string;
   displayName: string;
+};
+
+export type RestaurantRosterUser = Pick<User, "uid" | "getIdToken">;
+
+export type GetUsersByRestaurantParams = {
+  restaurantId: string;
+  user: RestaurantRosterUser | null | undefined;
 };
 
 export type RestaurantRosterErrorKind =
@@ -27,10 +34,11 @@ export class RestaurantRosterError extends Error {
   }
 }
 
-export const getUsersByRestaurant = async (
-  restaurantId: string,
-): Promise<OperationalRestaurantUser[]> => {
-  if (!auth.currentUser) {
+export const getUsersByRestaurant = async ({
+  restaurantId,
+  user,
+}: GetUsersByRestaurantParams): Promise<OperationalRestaurantUser[]> => {
+  if (!user) {
     throw new RestaurantRosterError("unauthorized", "UNAUTHORIZED", 401);
   }
   const rid = restaurantId.trim();
@@ -42,7 +50,7 @@ export const getUsersByRestaurant = async (
   }
 
   try {
-    const token = await auth.currentUser.getIdToken();
+    const token = await user.getIdToken();
     const response = await fetch("/api/users/roster", {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",

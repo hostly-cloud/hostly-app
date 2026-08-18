@@ -1890,6 +1890,7 @@ export function CartaPageContent({
     restaurantId: profileRestaurantId,
     role,
     ready: authReady,
+    profileReady,
   } = useAuth();
   const { activeOperator, requestOperatorChange } = useActiveOperator();
   const searchParams = useSearchParams();
@@ -4441,7 +4442,14 @@ export function CartaPageContent({
   }, [authReady, user?.uid ?? null, restaurantId, isFirebaseConfigured]);
 
   useEffect(() => {
-    if (!authReady || !isFirebaseConfigured || !restaurantId) {
+    const rid = restaurantId?.trim() ?? "";
+    if (
+      !authReady ||
+      !profileReady ||
+      !user?.uid ||
+      !isFirebaseConfigured ||
+      !rid
+    ) {
       setRestaurantWaiters([]);
       setRestaurantWaitersLoadStatus("idle");
       setRestaurantWaitersErrorKind(null);
@@ -4453,7 +4461,7 @@ export function CartaPageContent({
     let cancelled = false;
     void (async () => {
       try {
-        const list = await getUsersByRestaurant(restaurantId);
+        const list = await getUsersByRestaurant({ restaurantId: rid, user });
         if (cancelled) return;
         const mapped = (list as RestaurantUserRow[]).map((u) => ({
           id: u.id,
@@ -4476,6 +4484,8 @@ export function CartaPageContent({
     };
   }, [
     authReady,
+    profileReady,
+    user,
     restaurantId,
     isFirebaseConfigured,
     restaurantWaitersReloadToken,

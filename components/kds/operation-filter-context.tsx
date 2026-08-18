@@ -105,7 +105,7 @@ function readString(v: unknown): string {
 }
 
 export function OperationFilterProvider({ children }: { children: ReactNode }) {
-  const { user, restaurantId, ready } = useAuth();
+  const { user, restaurantId, ready, profileReady } = useAuth();
   const [waiterFilter, setWaiterFilter] =
     useState<OperationWaiterFilter>("all");
   const [zoneFilter, setZoneFilter] = useState<OperationZoneFilter>("all");
@@ -131,7 +131,8 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
     typeof user?.email === "string" ? user.email : null;
 
   useEffect(() => {
-    if (!ready || !isFirebaseConfigured || !restaurantId) {
+    const rid = restaurantId?.trim() ?? "";
+    if (!ready || !profileReady || !user?.uid || !isFirebaseConfigured || !rid) {
       setWaiters([]);
       setWaitersLoadStatus("idle");
       setWaitersErrorKind(null);
@@ -143,7 +144,7 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       try {
-        const list = await getUsersByRestaurant(restaurantId);
+        const list = await getUsersByRestaurant({ restaurantId: rid, user });
         if (cancelled) return;
         const mapped: OperationWaiter[] = (list as Record<string, unknown>[])
           .map((u) => ({
@@ -169,7 +170,7 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [ready, restaurantId, waitersReloadToken]);
+  }, [ready, profileReady, user, restaurantId, waitersReloadToken]);
 
   const retryWaiters = useCallback(() => {
     setWaitersReloadToken((current) => current + 1);
