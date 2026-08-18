@@ -39,7 +39,7 @@ export function useSalaEditorHistory(): {
   historyRevision: number;
 } {
   const engineRef = useRef<SalaEditorHistoryEngine | null>(null);
-  if (!engineRef.current) {
+  if (engineRef.current === null) {
     engineRef.current = new SalaEditorHistoryEngine();
   }
 

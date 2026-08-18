@@ -58,7 +58,9 @@ import { getFloorPlans, type FloorPlan } from "@/lib/firestore/floorPlans";
 import { getTables, type Table } from "@/lib/firestore/tables";
 import {
   computeSafeLegacyTableAutoLinks,
+  isLegacyOperationalTableCandidate,
   readLegacyTableIdFromMetadata,
+  shouldOfferLegacyTableAutoLink,
   type LegacyTableAutoLinkReason,
   type LegacyTableAutoLinkResult,
 } from "@/lib/sala-editor/linking/legacy-table-linking";
@@ -303,6 +305,17 @@ function stringOrEmpty(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function createPersistableDocumentSignature(document: SalaEditorDocument): string {
+  const {
+    navigation: _navigation,
+    updatedAt: _updatedAt,
+    ...persistableDocument
+  } = document;
+  void _navigation;
+  void _updatedAt;
+  return JSON.stringify(persistableDocument);
+}
+
 function normalizeRepairName(value: string): string {
   return value
     .normalize("NFD")
@@ -444,62 +457,6 @@ function traceBeforePublisherSpaces(document: SalaEditorDocument): void {
     selectedSpaceLegacyFloorPlanId: selectedSpace?.legacyFloorPlanId ?? null,
   });
   console.table(salaEditorSpaceTraceRows(document));
-}
-
-function SalaEditorLegacyFloorPlanLinkNotice({
-  spaces,
-  floorPlans,
-  onLinkSpace,
-}: {
-  spaces: SalaEspacio[];
-  floorPlans: FloorPlan[];
-  onLinkSpace: (spaceId: string, floorPlanId: string) => void;
-}) {
-  if (spaces.length === 0) return null;
-
-  return (
-    <section className="hostly-sala-editor-legacy-link-notice">
-      <div className="hostly-sala-editor-legacy-link-notice__summary">
-        <strong>Vincula espacios con planos TPV</strong>
-        <span>
-          {spaces.length} espacio{spaces.length === 1 ? "" : "s"} necesita
-          {spaces.length === 1 ? "" : "n"} un plano legacy para publicar con scope
-          preciso.
-        </span>
-      </div>
-      <div className="hostly-sala-editor-legacy-link-notice__list">
-        {spaces.map((space) => (
-          <label key={space.id} className="hostly-sala-editor-legacy-link-notice__row">
-            <span className="hostly-sala-editor-legacy-link-notice__space">
-              <span>{space.name.trim() || "Espacio sin nombre"}</span>
-              <small>{space.id}</small>
-            </span>
-            <select
-              className="hostly-sala-editor-legacy-link-notice__select"
-              value=""
-              onChange={(event) => {
-                const floorPlanId = event.target.value;
-                if (!floorPlanId) return;
-                onLinkSpace(space.id, floorPlanId);
-              }}
-              disabled={floorPlans.length === 0}
-            >
-              <option value="">
-                {floorPlans.length === 0
-                  ? "No hay planos TPV disponibles"
-                  : "Seleccionar plano TPV..."}
-              </option>
-              {floorPlans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name || plan.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
-      </div>
-    </section>
-  );
 }
 
 function repairSalaEditorLegacyFloorPlanLinks(
@@ -784,6 +741,7 @@ const AUTO_LINK_REASON_LABELS: Record<LegacyTableAutoLinkReason, string> = {
   LEGACY_OCUPADA: "legacy ocupada",
   LEGACY_YA_ENLAZADA: "legacy ya enlazada",
   LEGACY_NO_EXISTE: "legacy no existe o inactiva",
+  ENTIDAD_NO_OPERATIVA: "entidad no operativa",
   RESTAURANT_DISTINTO: "de otro restaurante",
   SIN_NUMERO: "sin número",
   SIN_NOMBRE: "sin nombre",
@@ -895,6 +853,7 @@ export function SalaEditorWorkspace({
   const [operationalSnapGuides, setOperationalSnapGuides] =
     useState<SnapGuide[]>(EMPTY_SMART_SNAP_GUIDES);
   const [draftReady, setDraftReady] = useState(!draftPersistenceEnabled);
+  const [draftLoadBlocked, setDraftLoadBlocked] = useState(false);
   const [legacyHydratedReadOnly, setLegacyHydratedReadOnly] = useState(false);
   const [publishToTpvPending, setPublishToTpvPending] = useState(false);
   const [autoLinkTablesPending, setAutoLinkTablesPending] = useState(false);
@@ -902,12 +861,17 @@ export function SalaEditorWorkspace({
   const [legacyTablesForLinking, setLegacyTablesForLinking] = useState<Table[]>([]);
   const [legacyFloorPlansForLinking, setLegacyFloorPlansForLinking] = useState<FloorPlan[]>([]);
   const draftLoadSeqRef = useRef(0);
+  const currentUserIdRef = useRef(currentUserId);
   const lastDraftSignatureRef = useRef<string | null>(null);
+  const legacyHydrationBaselineRef = useRef<{
+    restaurantId: string;
+    signature: string;
+  } | null>(null);
   const documentSnapshotRef = useRef<SalaEditorDocument | null>(null);
   const knownOperationalInstanceIdsRef = useRef<Set<string>>(new Set());
   const knownOperationalInstanceIdsReadyRef = useRef(false);
 
-  const { historyApi, historyRevision } = useSalaEditorHistory();
+  const { historyApi } = useSalaEditorHistory();
 
   const getDocumentSnapshot = useCallback(() => {
     return documentSnapshotRef.current!;
@@ -982,6 +946,7 @@ export function SalaEditorWorkspace({
     selectLandscapeElement,
     clearLandscapeSelection,
     selectOperationalElement,
+    clearOperationalElement,
     placeOperationalElementAt,
     selectOperationalElementInstance,
     clearOperationalElementInstance,
@@ -1014,6 +979,10 @@ export function SalaEditorWorkspace({
   documentSnapshotRef.current = document;
 
   useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
+
+  useEffect(() => {
     knownOperationalInstanceIdsRef.current = new Set();
     knownOperationalInstanceIdsReadyRef.current = false;
   }, [restaurantId]);
@@ -1026,6 +995,7 @@ export function SalaEditorWorkspace({
 
     const requestId = ++draftLoadSeqRef.current;
     setDraftReady(false);
+    setDraftLoadBlocked(false);
 
     void (async () => {
       try {
@@ -1033,6 +1003,7 @@ export function SalaEditorWorkspace({
         if (requestId !== draftLoadSeqRef.current) return;
 
         if (draft) {
+          legacyHydrationBaselineRef.current = null;
           let documentToLoad = draft.document;
           let lastPersistedSignature = JSON.stringify(draft.document);
           try {
@@ -1055,7 +1026,7 @@ export function SalaEditorWorkspace({
             if (repair.stats.repairedSpaces > 0) {
               try {
                 await saveSalaEditorDraft(rid, repair.document, {
-                  updatedBy: currentUserId,
+                  updatedBy: currentUserIdRef.current,
                 });
                 lastPersistedSignature = JSON.stringify(repair.document);
                 console.info("[SalaEditorV2] legacyFloorPlanId repair persisted", {
@@ -1095,6 +1066,10 @@ export function SalaEditorWorkspace({
           if (requestId !== draftLoadSeqRef.current) return;
 
           if (legacyHydration) {
+            legacyHydrationBaselineRef.current = {
+              restaurantId: restaurantId.trim(),
+              signature: createPersistableDocumentSignature(legacyHydration.document),
+            };
             traceReplaceDocumentBefore({
               branch: "legacy_hydration",
               restaurantId,
@@ -1114,6 +1089,7 @@ export function SalaEditorWorkspace({
               );
             }
           } else {
+            legacyHydrationBaselineRef.current = null;
             lastDraftSignatureRef.current = JSON.stringify(
               initialLocalDocumentRef.current,
             );
@@ -1125,10 +1101,13 @@ export function SalaEditorWorkspace({
           console.warn("[SalaEditorV2] No se pudo cargar el borrador", error);
         }
         if (requestId !== draftLoadSeqRef.current) return;
-        lastDraftSignatureRef.current = JSON.stringify(
-          initialLocalDocumentRef.current,
+        legacyHydrationBaselineRef.current = null;
+        lastDraftSignatureRef.current = null;
+        setLegacyHydratedReadOnly(true);
+        setDraftLoadBlocked(true);
+        setPublishToTpvStatus(
+          "No se pudo cargar el borrador. El guardado automático y la publicación están bloqueados para proteger los datos existentes.",
         );
-        setLegacyHydratedReadOnly(false);
       } finally {
         if (requestId === draftLoadSeqRef.current) {
           setDraftReady(true);
@@ -1136,7 +1115,6 @@ export function SalaEditorWorkspace({
       }
     })();
   }, [
-    currentUserId,
     draftPersistenceEnabled,
     replaceDocument,
     restaurantId,
@@ -1144,8 +1122,29 @@ export function SalaEditorWorkspace({
   ]);
 
   useEffect(() => {
+    if (!draftPersistenceEnabled || !draftReady || !legacyHydratedReadOnly) return;
+
+    const baseline = legacyHydrationBaselineRef.current;
+    const rid = restaurantId.trim();
+    if (!baseline || !rid || baseline.restaurantId !== rid) return;
+    if (document.restaurantId !== rid) return;
+    if (createPersistableDocumentSignature(document) === baseline.signature) return;
+
+    legacyHydrationBaselineRef.current = null;
+    setLegacyHydratedReadOnly(false);
+  }, [
+    document,
+    draftPersistenceEnabled,
+    draftReady,
+    legacyHydratedReadOnly,
+    restaurantId,
+  ]);
+
+  useEffect(() => {
     if (!draftPersistenceEnabled || !draftReady) return;
+    if (draftLoadBlocked) return;
     if (legacyHydratedReadOnly) return;
+    if (document.restaurantId !== restaurantId.trim()) return;
 
     const signature = JSON.stringify(document);
     if (signature === lastDraftSignatureRef.current) return;
@@ -1169,6 +1168,7 @@ export function SalaEditorWorkspace({
   }, [
     currentUserId,
     document,
+    draftLoadBlocked,
     draftPersistenceEnabled,
     draftReady,
     getDocumentSnapshot,
@@ -1190,7 +1190,9 @@ export function SalaEditorWorkspace({
       .then(([tables, floorPlans]) => {
         if (cancelled) return;
         setLegacyTablesForLinking(
-          tables.filter((table) => table.restaurantId === rid && table.isActive !== false),
+          tables.filter((table) =>
+            isLegacyOperationalTableCandidate(table, rid),
+          ),
         );
         setLegacyFloorPlansForLinking(
           floorPlans.filter((plan) => plan.restaurantId === rid),
@@ -1275,6 +1277,8 @@ export function SalaEditorWorkspace({
     handleCanvasPointerDown: operationalCanvasPointerDown,
   } = useOperationalElementDragging({
     enabled: operationalDragEnabled,
+    activePlacementTool: activeOperationalCatalogItem != null,
+    escapeCancellationBlocked: addDialogOpen,
     onUpdatePosition: (instanceId, position) => {
       const instance = operationalElementInstancesInEspacio.find(
         (item) => item.id === instanceId,
@@ -1292,6 +1296,7 @@ export function SalaEditorWorkspace({
     },
     onSelectInstance: selectOperationalElementInstance,
     onClearSelection: clearOperationalElementInstance,
+    onCancelPlacementTool: clearOperationalElement,
     onDragSessionStart: () => {
       historyApi.beginTransaction(documentSnapshotRef.current!);
     },
@@ -1917,6 +1922,20 @@ export function SalaEditorWorkspace({
       return;
     }
 
+    if (
+      !draftReady ||
+      draftLoadBlocked ||
+      legacyHydratedReadOnly ||
+      initialSnapshot?.restaurantId !== rid
+    ) {
+      setPublishToTpvStatus(
+        draftLoadBlocked
+          ? "No se puede publicar porque el borrador no se cargó de forma segura."
+          : "Espera a que el borrador esté listo antes de publicar.",
+      );
+      return;
+    }
+
     if (!rid) {
       if (SALA_EDITOR_DEV_DIAGNOSTICS) {
         console.warn("[SalaEditorV2] Publicacion cancelada: restaurantId vacio");
@@ -1964,15 +1983,25 @@ export function SalaEditorWorkspace({
             newOperationalTableLinks: result.newOperationalTableLinks.length,
           });
         }
-        if (result.newOperationalTableLinks.length > 0) {
+        const applyPublicationLinks = (
+          sourceDocument: SalaEditorDocument,
+        ): { document: SalaEditorDocument; linkedCount: number } => {
           const linksByInstanceId = new Map(
             result.newOperationalTableLinks.map((link) => [link.instanceId, link]),
           );
-          const currentDocument = getDocumentSnapshot();
+          const linksBySpaceId = new Map(
+            result.newSpaceFloorPlanLinks.map((link) => [link.spaceId, link]),
+          );
           let linkedCount = 0;
-          const nextDocument: SalaEditorDocument = {
-            ...currentDocument,
-            operationalElementInstances: currentDocument.operationalElementInstances.map(
+          const linkedDocument: SalaEditorDocument = {
+            ...sourceDocument,
+            espacios: sourceDocument.espacios.map((space) => {
+              const link = linksBySpaceId.get(space.id);
+              if (!link || stringOrEmpty(space.legacyFloorPlanId)) return space;
+              linkedCount += 1;
+              return { ...space, legacyFloorPlanId: link.legacyFloorPlanIdAfter };
+            }),
+            operationalElementInstances: sourceDocument.operationalElementInstances.map(
               (instance) => {
                 const link = linksByInstanceId.get(instance.id);
                 if (!link) return instance;
@@ -1993,28 +2022,27 @@ export function SalaEditorWorkspace({
             ),
             updatedAt: Date.now(),
           };
+          return { document: linkedDocument, linkedCount };
+        };
 
-          if (linkedCount > 0) {
-            restoreDocumentSnapshot(nextDocument);
-            if (draftPersistenceEnabled && draftReady) {
-              const signature = JSON.stringify(nextDocument);
-              await saveSalaEditorDraft(rid, nextDocument, {
-                updatedBy: currentUserId,
-              });
-              lastDraftSignatureRef.current = signature;
-            }
-            if (SALA_EDITOR_DEV_DIAGNOSTICS) {
-              console.info("[SalaEditorV2][NewOperationalTablePublish] Draft links persisted", {
-                linkedCount,
-                links: result.newOperationalTableLinks.map((link) => ({
-                  instanceId: link.instanceId,
-                  legacyTableIdBefore: link.legacyTableIdBefore,
-                  legacyTableIdAfter: link.legacyTableIdAfter,
-                  floorPlanId: link.floorPlanId,
-                  action: link.action,
-                })),
-              });
-            }
+        const currentProjection = applyPublicationLinks(getDocumentSnapshot());
+        if (currentProjection.linkedCount > 0) {
+          const nextDocument = currentProjection.document;
+          restoreDocumentSnapshot(nextDocument);
+          if (draftPersistenceEnabled && draftReady) {
+            const signature = JSON.stringify(nextDocument);
+            await saveSalaEditorDraft(rid, nextDocument, {
+              updatedBy: currentUserIdRef.current,
+            });
+            lastDraftSignatureRef.current = signature;
+          }
+
+          if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+            console.info("[SalaEditorV2][PublicationLinks] Draft links persisted", {
+              linkedCount: currentProjection.linkedCount,
+              floorPlanLinks: result.newSpaceFloorPlanLinks,
+              tableLinks: result.newOperationalTableLinks,
+            });
           }
         }
         logSalaEditorPublicationDebug(result);
@@ -2055,10 +2083,12 @@ export function SalaEditorWorkspace({
       });
   }, [
     draftPersistenceEnabled,
+    draftLoadBlocked,
     draftReady,
     getDocumentSnapshot,
     historyApi,
     currentUserId,
+    legacyHydratedReadOnly,
     publishToTpvPending,
     restaurantId,
     restoreDocumentSnapshot,
@@ -2070,6 +2100,16 @@ export function SalaEditorWorkspace({
         .map((instance) => readLegacyTableIdFromMetadata(instance.metadata))
         .filter((legacyTableId) => legacyTableId !== ""),
     [document.operationalElementInstances],
+  );
+
+  const offerLegacyTableAutoLink = useMemo(
+    () =>
+      shouldOfferLegacyTableAutoLink({
+        instances: document.operationalElementInstances,
+        legacyTables: legacyTablesForLinking,
+        restaurantId,
+      }),
+    [document.operationalElementInstances, legacyTablesForLinking, restaurantId],
   );
 
   const linkedTableNamesById = useMemo(() => {
@@ -2185,7 +2225,12 @@ export function SalaEditorWorkspace({
         const candidate = legacyTablesForLinking.find(
           (table) => table.id === nextLegacyTableId,
         );
-        if (!candidate || candidate.restaurantId !== restaurantId) return;
+        if (
+          !candidate ||
+          !isLegacyOperationalTableCandidate(candidate, restaurantId)
+        ) {
+          return;
+        }
 
         const alreadyLinked = snapshot.operationalElementInstances.some(
           (item) =>
@@ -2214,110 +2259,12 @@ export function SalaEditorWorkspace({
     [legacyTablesForLinking, restaurantId, updateOperationalElement],
   );
 
-  const canUndoHistory = useMemo(
-    () => historyApi.canUndo(),
-    [historyApi, historyRevision],
-  );
-  const canRedoHistory = useMemo(
-    () => historyApi.canRedo(),
-    [historyApi, historyRevision],
-  );
+  const canUndoHistory = historyApi.canUndo();
+  const canRedoHistory = historyApi.canRedo();
 
   const selectedElementCount = selectedEspacio
     ? (elementCountByEspacioId[selectedEspacio.id] ?? 0)
     : 0;
-
-  const floorPlansAvailableForSpaceLinking = useMemo(
-    () =>
-      legacyFloorPlansForLinking
-        .filter((plan) => {
-          const planId = stringOrEmpty(plan.id);
-          return (
-            isSafeLegacyFloorPlan(plan, restaurantId.trim()) &&
-            planId !== "" &&
-            !planId.startsWith("local-")
-          );
-        })
-        .sort((a, b) => a.name.localeCompare(b.name, "es")),
-    [legacyFloorPlansForLinking, restaurantId],
-  );
-
-  const spacesMissingLegacyFloorPlanLink = useMemo(
-    () =>
-      document.espacios
-        .filter((space) => !stringOrEmpty(space.legacyFloorPlanId))
-        .sort((a, b) => {
-          if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-          return a.name.localeCompare(b.name, "es");
-        }),
-    [document.espacios],
-  );
-
-  const handleLinkEspacioToLegacyFloorPlan = useCallback(
-    (spaceId: string, floorPlanId: string) => {
-      const rid = restaurantId.trim();
-      const nextFloorPlanId = floorPlanId.trim();
-      if (!rid || !nextFloorPlanId || nextFloorPlanId.startsWith("local-")) return;
-
-      const floorPlan = floorPlansAvailableForSpaceLinking.find(
-        (candidate) => candidate.id === nextFloorPlanId,
-      );
-      if (!floorPlan || floorPlan.restaurantId !== rid) return;
-
-      const snapshot = documentSnapshotRef.current;
-      const space = snapshot?.espacios.find((candidate) => candidate.id === spaceId);
-      if (!snapshot || !space) return;
-
-      const nextDocument: SalaEditorDocument = {
-        ...snapshot,
-        espacios: snapshot.espacios.map((candidate) =>
-          candidate.id === spaceId
-            ? {
-                ...candidate,
-                legacyFloorPlanId: floorPlan.id,
-                updatedAt: Date.now(),
-              }
-            : candidate,
-        ),
-        updatedAt: Date.now(),
-      };
-
-      setLegacyHydratedReadOnly(false);
-      updateEspacio(spaceId, { legacyFloorPlanId: floorPlan.id });
-      setPublishToTpvStatus(`Espacio ${space.name} vinculado a ${floorPlan.name}.`);
-
-      if (!draftPersistenceEnabled || !draftReady) return;
-
-      const signature = JSON.stringify(nextDocument);
-      void saveSalaEditorDraft(rid, nextDocument, {
-        updatedBy: currentUserId,
-      })
-        .then(() => {
-          lastDraftSignatureRef.current = signature;
-          console.info("[SalaEditorV2] legacyFloorPlanId manual link persisted", {
-            restaurantId: rid,
-            spaceId,
-            spaceName: space.name,
-            floorPlanId: floorPlan.id,
-            floorPlanName: floorPlan.name,
-          });
-        })
-        .catch((error) => {
-          console.warn(
-            "[SalaEditorV2] No se pudo persistir vinculacion manual legacyFloorPlanId; autosave intentara guardar el documento",
-            error,
-          );
-        });
-    },
-    [
-      currentUserId,
-      draftPersistenceEnabled,
-      draftReady,
-      floorPlansAvailableForSpaceLinking,
-      restaurantId,
-      updateEspacio,
-    ],
-  );
 
   const inspectorOpen = hasSalaEditorInspectorSelection({
     phase: document.navigation.phase,
@@ -2458,23 +2405,19 @@ export function SalaEditorWorkspace({
         canRedo={canRedoHistory}
         onUndo={handleUndo}
         onRedo={handleRedo}
-        onAutoLinkTables={handleAutoLinkTables}
+        onAutoLinkTables={offerLegacyTableAutoLink ? handleAutoLinkTables : undefined}
         autoLinkTablesDisabled={!draftReady || legacyTablesForLinking.length === 0}
         autoLinkTablesPending={autoLinkTablesPending}
         onPublishToTpv={handlePublishToTpv}
-        publishToTpvDisabled={false}
+        publishToTpvDisabled={
+          !draftReady ||
+          draftLoadBlocked ||
+          legacyHydratedReadOnly ||
+          document.restaurantId !== restaurantId.trim()
+        }
         publishToTpvPending={publishToTpvPending}
         publishToTpvStatus={publishToTpvStatus}
         contextActionTarget={contextActionTarget}
-        notice={
-          draftReady && spacesMissingLegacyFloorPlanLink.length > 0 ? (
-            <SalaEditorLegacyFloorPlanLinkNotice
-              spaces={spacesMissingLegacyFloorPlanLink}
-              floorPlans={floorPlansAvailableForSpaceLinking}
-              onLinkSpace={handleLinkEspacioToLegacyFloorPlan}
-            />
-          ) : null
-        }
         leftPanel={
           <SalaEditorLeftPanel
             phase={document.navigation.phase}
@@ -2606,11 +2549,13 @@ export function SalaEditorWorkspace({
         }
       />
 
-      <SalaAddEspacioDialog
-        open={addDialogOpen}
-        onClose={() => setAddDialogOpen(false)}
-        onCreate={handleCreateEspacio}
-      />
+      {addDialogOpen ? (
+        <SalaAddEspacioDialog
+          open
+          onClose={() => setAddDialogOpen(false)}
+          onCreate={handleCreateEspacio}
+        />
+      ) : null}
     </>
   );
 }

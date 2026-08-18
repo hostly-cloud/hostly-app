@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
   type MouseEvent,
@@ -78,11 +77,6 @@ export function SalaEspacioCard({
     if (!selected) return;
     rootRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selected]);
-
-  useEffect(() => {
-    if (renaming) return;
-    setDraftName(espacio.name);
-  }, [espacio.name, renaming]);
 
   useEffect(() => {
     if (!renaming) return;
@@ -194,7 +188,7 @@ export function SalaEspacioCard({
   );
 
   const handleRenameBlur = useCallback(
-    (_event: FocusEvent<HTMLInputElement>) => {
+    () => {
       commitRenaming();
     },
     [commitRenaming],
@@ -220,6 +214,20 @@ export function SalaEspacioCard({
     [closeMenu, onDuplicateEspacio],
   );
 
+  const dragHandle = dragHandleProps
+    ? {
+        attributes: dragHandleProps.attributes,
+        listeners: dragHandleProps.listeners,
+        disabled: dragHandleProps.disabled,
+      }
+    : null;
+  const setDragActivatorNode = useCallback(
+    (node: HTMLButtonElement | null) => {
+      dragHandleProps?.setActivatorNodeRef(node);
+    },
+    [dragHandleProps],
+  );
+
   return (
     <div
       ref={rootRef}
@@ -233,15 +241,15 @@ export function SalaEspacioCard({
         .join(" ")}
       style={{ "--espacio-accent": espacio.color } as CSSProperties}
     >
-      {dragHandleProps ? (
+      {dragHandle ? (
         <button
-          ref={dragHandleProps.setActivatorNodeRef}
+          ref={setDragActivatorNode}
           type="button"
           className="hostly-sala-editor-space-chip__drag-handle"
           aria-label={`Reordenar espacio ${espacio.name}`}
-          disabled={dragHandleProps.disabled}
-          {...dragHandleProps.attributes}
-          {...dragHandleProps.listeners}
+          disabled={dragHandle.disabled}
+          {...dragHandle.attributes}
+          {...dragHandle.listeners}
         >
           <span aria-hidden>⋮⋮</span>
         </button>

@@ -8,7 +8,9 @@ export type LandscapeElementKind =
 
 export type ResizableLandscapeElementKind =
   | "rectangularPlanter"
-  | "roundPlanter";
+  | "roundPlanter"
+  | "palm"
+  | "olive";
 
 export type LandscapeElement = {
   id: LandscapeElementId;
@@ -34,10 +36,10 @@ export const LANDSCAPE_ELEMENT_DEFAULT_SIZE: Record<
   LandscapeElementKind,
   { width: number; height: number }
 > = {
-  rectangularPlanter: { width: 132, height: 42 },
-  roundPlanter: { width: 64, height: 64 },
-  palm: { width: 72, height: 72 },
-  olive: { width: 76, height: 76 },
+  rectangularPlanter: { width: 152, height: 50 },
+  roundPlanter: { width: 76, height: 76 },
+  palm: { width: 88, height: 88 },
+  olive: { width: 88, height: 84 },
 };
 
 const LANDSCAPE_ELEMENT_KINDS: readonly LandscapeElementKind[] = [
@@ -59,7 +61,12 @@ export function isLandscapeElementKind(
 export function isResizableLandscapeElementKind(
   value: LandscapeElementKind,
 ): value is ResizableLandscapeElementKind {
-  return value === "rectangularPlanter" || value === "roundPlanter";
+  return (
+    value === "rectangularPlanter" ||
+    value === "roundPlanter" ||
+    value === "palm" ||
+    value === "olive"
+  );
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

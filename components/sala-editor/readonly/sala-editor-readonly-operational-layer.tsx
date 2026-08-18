@@ -117,6 +117,8 @@ export function SalaEditorReadonlyOperationalLayer({
                   label={instance.name}
                   color={accentColor ?? instanceCatalog?.color ?? "#315f7d"}
                   visualVariant={visualVariant}
+                  seatCount={instance.capacity}
+                  canvasSize={{ width: geometry.width, height: geometry.height }}
                 />
               </div>
             </div>

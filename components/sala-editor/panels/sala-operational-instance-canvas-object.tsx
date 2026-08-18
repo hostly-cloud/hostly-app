@@ -156,6 +156,8 @@ export function SalaOperationalInstanceCanvasObject({
           label={instance.name}
           color={catalogColor}
           visualVariant={visualVariant}
+          seatCount={instance.capacity}
+          canvasSize={{ width: geometry.width, height: geometry.height }}
         />
       </div>
 

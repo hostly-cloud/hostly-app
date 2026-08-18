@@ -12,15 +12,57 @@ export type OperationalDragSessionOutcome = "complete" | "cancel";
 
 export type UseOperationalElementDraggingOptions = {
   enabled: boolean;
+  activePlacementTool: boolean;
+  escapeCancellationBlocked?: boolean;
   onUpdatePosition: (
     instanceId: string,
     position: OperationalElementPosition,
   ) => void;
   onSelectInstance: (instanceId: string) => void;
   onClearSelection: () => void;
+  onCancelPlacementTool: () => void;
   onDragSessionStart?: () => void;
   onDragSessionEnd?: (outcome: OperationalDragSessionOutcome) => void;
 };
+
+export type OperationalEscapeAction =
+  | "cancel-drag"
+  | "cancel-tool"
+  | "clear-selection"
+  | null;
+
+export function resolveOperationalEscapeAction(input: {
+  activePlacementTool: boolean;
+  blocked: boolean;
+  defaultPrevented: boolean;
+  editableTarget: boolean;
+  hasPendingDrag: boolean;
+  isDragging: boolean;
+}): OperationalEscapeAction {
+  if (input.blocked || input.defaultPrevented || input.editableTarget) return null;
+  if (input.isDragging || input.hasPendingDrag) return "cancel-drag";
+  if (input.activePlacementTool) return "cancel-tool";
+  return "clear-selection";
+}
+
+export function registerOperationalEscapeListener(
+  target: EventTarget,
+  listener: (event: KeyboardEvent) => void,
+): () => void {
+  const eventListener = listener as EventListener;
+  target.addEventListener("keydown", eventListener);
+  return () => target.removeEventListener("keydown", eventListener);
+}
+
+function isEditableEscapeTarget(target: EventTarget | null): boolean {
+  const candidate = target as { closest?: (selector: string) => Element | null } | null;
+  if (typeof candidate?.closest !== "function") return false;
+  return Boolean(
+    candidate.closest(
+      'input, textarea, select, [contenteditable="true"], [role="dialog"]',
+    ),
+  );
+}
 
 export type OperationalInstancePointerSample = OperationalInstancePointerPayload & {
   canvasPoint: OperationalElementPosition;
@@ -30,9 +72,12 @@ const DROP_ANIMATION_MS = 130;
 
 export function useOperationalElementDragging({
   enabled,
+  activePlacementTool,
+  escapeCancellationBlocked = false,
   onUpdatePosition,
   onSelectInstance,
   onClearSelection,
+  onCancelPlacementTool,
   onDragSessionStart,
   onDragSessionEnd,
 }: UseOperationalElementDraggingOptions) {
@@ -132,7 +177,6 @@ export function useOperationalElementDragging({
       }
 
       const finishedId = draggingInstanceIdRef.current;
-      const hadActiveDrag = finishedId != null;
       syncDraggingRef(null);
 
       if (!finishedId) return;
@@ -225,6 +269,8 @@ export function useOperationalElementDragging({
 
   useEffect(() => {
     if (!enabled) {
+      // Disabling the interaction must synchronously discard transient pointer state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       cancelDragging();
     }
   }, [cancelDragging, enabled]);
@@ -242,18 +288,35 @@ export function useOperationalElementDragging({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (!isDragging() && !pendingDragRef.current) {
-        event.preventDefault();
-        onClearSelection();
-        return;
-      }
+      const action = resolveOperationalEscapeAction({
+        activePlacementTool,
+        blocked: escapeCancellationBlocked,
+        defaultPrevented: event.defaultPrevented,
+        editableTarget: isEditableEscapeTarget(event.target),
+        hasPendingDrag: pendingDragRef.current != null,
+        isDragging: isDragging(),
+      });
+      if (!action) return;
       event.preventDefault();
-      cancelDragging();
+      if (action === "cancel-drag") {
+        cancelDragging();
+      } else if (action === "cancel-tool") {
+        onCancelPlacementTool();
+      } else {
+        onClearSelection();
+      }
     };
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cancelDragging, enabled, isDragging, onClearSelection]);
+    return registerOperationalEscapeListener(window, onKeyDown);
+  }, [
+    activePlacementTool,
+    cancelDragging,
+    enabled,
+    escapeCancellationBlocked,
+    isDragging,
+    onCancelPlacementTool,
+    onClearSelection,
+  ]);
 
   return {
     draggingInstanceId,

@@ -221,6 +221,8 @@ export function SalaStructureObjectsLayer({
   const hitAreaRef = useRef<HTMLDivElement>(null);
   const [moveSession, setMoveSession] = useState<StructureMoveSession | null>(null);
   const [resizeSession, setResizeSession] = useState<StructureResizeSession | null>(null);
+  const moveSessionRef = useRef<StructureMoveSession | null>(null);
+  const resizeSessionRef = useRef<StructureResizeSession | null>(null);
   const [smartSnapGuides, setSmartSnapGuides] = useState<SnapGuide[]>([]);
   const activeObjectKind =
     !readOnly && isSalaStructuralObjectKind(activeToolKind) ? activeToolKind : null;
@@ -272,49 +274,49 @@ export function SalaStructureObjectsLayer({
   );
 
   const finishMoveSession = useCallback(() => {
-    setMoveSession((session) => {
-      setSmartSnapGuides([]);
-      if (session?.active) onMoveEnd?.("complete");
-      return null;
-    });
+    const session = moveSessionRef.current;
+    moveSessionRef.current = null;
+    setMoveSession(null);
+    setSmartSnapGuides([]);
+    if (session?.active) onMoveEnd?.("complete");
   }, [onMoveEnd]);
 
   const cancelMoveSession = useCallback(() => {
-    setMoveSession((session) => {
-      setSmartSnapGuides([]);
-      if (session?.active) {
-        onUpdateStructuralElement?.(session.objectId, {
-          x: session.originObject.x,
-          y: session.originObject.y,
-        });
-        onMoveEnd?.("cancel");
-      }
-      return null;
-    });
+    const session = moveSessionRef.current;
+    moveSessionRef.current = null;
+    setMoveSession(null);
+    setSmartSnapGuides([]);
+    if (session?.active) {
+      onUpdateStructuralElement?.(session.objectId, {
+        x: session.originObject.x,
+        y: session.originObject.y,
+      });
+      onMoveEnd?.("cancel");
+    }
   }, [onMoveEnd, onUpdateStructuralElement]);
 
   const finishResizeSession = useCallback(() => {
-    setResizeSession((session) => {
-      setSmartSnapGuides([]);
-      if (session?.active) onResizeEnd?.("complete");
-      return null;
-    });
+    const session = resizeSessionRef.current;
+    resizeSessionRef.current = null;
+    setResizeSession(null);
+    setSmartSnapGuides([]);
+    if (session?.active) onResizeEnd?.("complete");
   }, [onResizeEnd]);
 
   const cancelResizeSession = useCallback(() => {
-    setResizeSession((session) => {
-      setSmartSnapGuides([]);
-      if (session?.active) {
-        onUpdateStructuralElement?.(session.objectId, {
-          x: session.originObject.x,
-          y: session.originObject.y,
-          width: session.originObject.width,
-          height: session.originObject.height,
-        });
-        onResizeEnd?.("cancel");
-      }
-      return null;
-    });
+    const session = resizeSessionRef.current;
+    resizeSessionRef.current = null;
+    setResizeSession(null);
+    setSmartSnapGuides([]);
+    if (session?.active) {
+      onUpdateStructuralElement?.(session.objectId, {
+        x: session.originObject.x,
+        y: session.originObject.y,
+        width: session.originObject.width,
+        height: session.originObject.height,
+      });
+      onResizeEnd?.("cancel");
+    }
   }, [onResizeEnd, onUpdateStructuralElement]);
 
   const handlePlacementPointerDown = useCallback(
@@ -357,38 +359,41 @@ export function SalaStructureObjectsLayer({
         if (!point) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         onSelectStructuralElement?.(element.id);
-        setMoveSession({
+        const session: StructureMoveSession = {
           objectId: element.id,
           originPointer: point,
           originObject: element,
           active: false,
-        });
+        };
+        moveSessionRef.current = session;
+        setMoveSession(session);
       },
       onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
 
-        setMoveSession((session) => {
-          if (!session || session.objectId !== element.id) return session;
-          const delta = {
-            x: point.x - session.originPointer.x,
-            y: point.y - session.originPointer.y,
-          };
-          const shouldActivate =
-            session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
-          if (!shouldActivate) return session;
-          if (!session.active) onMoveStart?.();
+        const session = moveSessionRef.current;
+        if (!session || session.objectId !== element.id) return;
+        const delta = {
+          x: point.x - session.originPointer.x,
+          y: point.y - session.originPointer.y,
+        };
+        const shouldActivate =
+          session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
+        if (!shouldActivate) return;
+        if (!session.active) onMoveStart?.();
 
-          const moved = translateObject(session.originObject, delta, gridSize);
-          const snapResult = resolveSmartSnap(element.id, moved);
-          onUpdateStructuralElement?.(element.id, {
-            x: snapResult.rect.x,
-            y: snapResult.rect.y,
-          });
-          setSmartSnapGuides(snapResult.guides);
-          return { ...session, active: true };
+        const moved = translateObject(session.originObject, delta, gridSize);
+        const snapResult = resolveSmartSnap(element.id, moved);
+        onUpdateStructuralElement?.(element.id, {
+          x: snapResult.rect.x,
+          y: snapResult.rect.y,
         });
+        setSmartSnapGuides(snapResult.guides);
+        const nextSession = { ...session, active: true };
+        moveSessionRef.current = nextSession;
+        setMoveSession(nextSession);
       },
       onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -427,50 +432,53 @@ export function SalaStructureObjectsLayer({
         if (!point) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         onSelectStructuralElement?.(element.id);
-        setResizeSession({
+        const session: StructureResizeSession = {
           objectId: element.id,
           resizeHandle: handle,
           originPointer: point,
           originObject: element,
           active: false,
-        });
+        };
+        resizeSessionRef.current = session;
+        setResizeSession(session);
       },
       onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
 
-        setResizeSession((session) => {
-          if (!session || session.objectId !== element.id) return session;
-          const delta = {
-            x: point.x - session.originPointer.x,
-            y: point.y - session.originPointer.y,
-          };
-          const shouldActivate =
-            session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
-          if (!shouldActivate) return session;
-          if (!session.active) onResizeStart?.();
+        const session = resizeSessionRef.current;
+        if (!session || session.objectId !== element.id) return;
+        const delta = {
+          x: point.x - session.originPointer.x,
+          y: point.y - session.originPointer.y,
+        };
+        const shouldActivate =
+          session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
+        if (!shouldActivate) return;
+        if (!session.active) onResizeStart?.();
 
-          const resized = resizeObject(
-            session.originObject,
-            session.resizeHandle,
-            delta,
-            gridSize,
-          );
-          const snapResult = resolveSmartSnap(
-            element.id,
-            resized,
-            getResizeActiveEdges(session.resizeHandle),
-          );
-          onUpdateStructuralElement?.(element.id, {
-            x: snapResult.rect.x,
-            y: snapResult.rect.y,
-            width: snapResult.rect.width,
-            height: snapResult.rect.height,
-          });
-          setSmartSnapGuides(snapResult.guides);
-          return { ...session, active: true };
+        const resized = resizeObject(
+          session.originObject,
+          session.resizeHandle,
+          delta,
+          gridSize,
+        );
+        const snapResult = resolveSmartSnap(
+          element.id,
+          resized,
+          getResizeActiveEdges(session.resizeHandle),
+        );
+        onUpdateStructuralElement?.(element.id, {
+          x: snapResult.rect.x,
+          y: snapResult.rect.y,
+          width: snapResult.rect.width,
+          height: snapResult.rect.height,
         });
+        setSmartSnapGuides(snapResult.guides);
+        const nextSession = { ...session, active: true };
+        resizeSessionRef.current = nextSession;
+        setResizeSession(nextSession);
       },
       onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -575,8 +583,15 @@ export function SalaStructureObjectsLayer({
                   .join(" ")}
                 aria-label="Objeto estructural"
                 tabIndex={readOnly ? -1 : 0}
+                onClick={
+                  readOnly
+                    ? undefined
+                    : () => onSelectStructuralElement?.(element.id)
+                }
                 {...handlers}
-              />
+              >
+                <span className="hostly-sala-structure-object__material" aria-hidden />
+              </button>
               {selected
                 ? STRUCTURE_RESIZE_HANDLES.map((handle) => (
                     <button

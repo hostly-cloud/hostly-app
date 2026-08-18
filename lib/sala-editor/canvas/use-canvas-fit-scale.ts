@@ -11,15 +11,11 @@ export function useCanvasFitScale(
   viewportRef: RefObject<HTMLElement | null>,
   contentRef: RefObject<HTMLElement | null>,
   enabled: boolean,
-  deps: readonly unknown[] = [],
 ): number {
   const [scale, setScale] = useState(1);
 
   useLayoutEffect(() => {
-    if (!enabled) {
-      setScale(1);
-      return;
-    }
+    if (!enabled) return;
 
     const viewport = viewportRef.current;
     const content = contentRef.current;
@@ -43,7 +39,7 @@ export function useCanvasFitScale(
     observer.observe(content);
 
     return () => observer.disconnect();
-  }, [contentRef, enabled, viewportRef, ...deps]);
+  }, [contentRef, enabled, viewportRef]);
 
-  return scale;
+  return enabled ? scale : 1;
 }

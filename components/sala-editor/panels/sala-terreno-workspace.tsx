@@ -311,8 +311,12 @@ function SalaTerrenoCanvasContent({
   const [moveSession, setMoveSession] = useState<SurfaceMoveSession | null>(null);
   const [resizeSession, setResizeSession] =
     useState<SurfaceResizeSession | null>(null);
+  const moveSessionRef = useRef<SurfaceMoveSession | null>(null);
+  const resizeSessionRef = useRef<SurfaceResizeSession | null>(null);
   const [smartSnapGuides, setSmartSnapGuides] = useState<SnapGuide[]>([]);
   const activeMaterial = getSurfaceMaterialCatalogItem(activeSurfaceMaterial);
+  const activeDraft =
+    draft?.material === activeSurfaceMaterial ? draft : null;
 
   const resolveLogicalPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -332,9 +336,13 @@ function SalaTerrenoCanvasContent({
   );
 
   const previewStyle = useMemo(() => {
-    if (!draft) return null;
-    return createSurfaceStyle(draft.rect, draft.material, coordinateScale);
-  }, [coordinateScale, draft]);
+    if (!activeDraft) return null;
+    return createSurfaceStyle(
+      activeDraft.rect,
+      activeDraft.material,
+      coordinateScale,
+    );
+  }, [activeDraft, coordinateScale]);
 
   const resolveSmartSnap = useCallback(
     (
@@ -374,7 +382,7 @@ function SalaTerrenoCanvasContent({
     (event: PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
       if (event.target !== event.currentTarget) return;
-      if (draftRef.current || draft || moveSession || resizeSession) return;
+      if (draftRef.current || moveSession || resizeSession) return;
       onSurfaceObjectClearSelection?.();
       if (!activeSurfaceMaterial) return;
       const point = resolveLogicalPoint(event.clientX, event.clientY);
@@ -393,7 +401,6 @@ function SalaTerrenoCanvasContent({
     },
     [
       activeSurfaceMaterial,
-      draft,
       moveSession,
       onSurfaceObjectClearSelection,
       resizeSession,
@@ -406,7 +413,9 @@ function SalaTerrenoCanvasContent({
     if (!current || current.material === activeSurfaceMaterial) return;
     creationPointerIdRef.current = null;
     draftRef.current = null;
-    setDraft(null);
+    window.queueMicrotask(() => {
+      setDraft((value) => (value === current ? null : value));
+    });
   }, [activeSurfaceMaterial]);
 
   const handlePointerMove = useCallback(
@@ -428,59 +437,51 @@ function SalaTerrenoCanvasContent({
     [resolveLogicalPoint],
   );
 
-  const cancelMoveSession = useCallback(() => {
-    setMoveSession((session) => {
-      setSmartSnapGuides([]);
-      if (!session) return null;
-      if (session.active) {
-        onSurfaceObjectUpdate?.(session.objectId, {
-          x: session.originObject.x,
-          y: session.originObject.y,
-        });
-        onSurfaceObjectMoveEnd?.("cancel");
-      }
-      return null;
-    });
-  }, [onSurfaceObjectMoveEnd, onSurfaceObjectUpdate]);
-
-  const cancelResizeSession = useCallback(() => {
-    setResizeSession((session) => {
-      setSmartSnapGuides([]);
-      if (!session) return null;
-      if (session.active) {
-        onSurfaceObjectUpdate?.(session.objectId, {
-          x: session.originObject.x,
-          y: session.originObject.y,
-          width: session.originObject.width,
-          height: session.originObject.height,
-        });
-        onSurfaceObjectResizeEnd?.("cancel");
-      }
-      return null;
-    });
-  }, [onSurfaceObjectResizeEnd, onSurfaceObjectUpdate]);
-
   const finishMoveSession = useCallback(() => {
-    setMoveSession((session) => {
-      setSmartSnapGuides([]);
-      if (!session) return null;
-      if (session.active) {
-        onSurfaceObjectMoveEnd?.("complete");
-      }
-      return null;
-    });
+    const session = moveSessionRef.current;
+    moveSessionRef.current = null;
+    setMoveSession(null);
+    setSmartSnapGuides([]);
+    if (session?.active) onSurfaceObjectMoveEnd?.("complete");
   }, [onSurfaceObjectMoveEnd]);
 
+  const cancelMoveSession = useCallback(() => {
+    const session = moveSessionRef.current;
+    moveSessionRef.current = null;
+    setMoveSession(null);
+    setSmartSnapGuides([]);
+    if (session?.active) {
+      onSurfaceObjectUpdate?.(session.objectId, {
+        x: session.originObject.x,
+        y: session.originObject.y,
+      });
+      onSurfaceObjectMoveEnd?.("cancel");
+    }
+  }, [onSurfaceObjectMoveEnd, onSurfaceObjectUpdate]);
+
   const finishResizeSession = useCallback(() => {
-    setResizeSession((session) => {
-      setSmartSnapGuides([]);
-      if (!session) return null;
-      if (session.active) {
-        onSurfaceObjectResizeEnd?.("complete");
-      }
-      return null;
-    });
+    const session = resizeSessionRef.current;
+    resizeSessionRef.current = null;
+    setResizeSession(null);
+    setSmartSnapGuides([]);
+    if (session?.active) onSurfaceObjectResizeEnd?.("complete");
   }, [onSurfaceObjectResizeEnd]);
+
+  const cancelResizeSession = useCallback(() => {
+    const session = resizeSessionRef.current;
+    resizeSessionRef.current = null;
+    setResizeSession(null);
+    setSmartSnapGuides([]);
+    if (session?.active) {
+      onSurfaceObjectUpdate?.(session.objectId, {
+        x: session.originObject.x,
+        y: session.originObject.y,
+        width: session.originObject.width,
+        height: session.originObject.height,
+      });
+      onSurfaceObjectResizeEnd?.("cancel");
+    }
+  }, [onSurfaceObjectResizeEnd, onSurfaceObjectUpdate]);
 
   const createSurfacePointerHandlers = useCallback(
     (surface: SurfaceObject) => ({
@@ -494,40 +495,43 @@ function SalaTerrenoCanvasContent({
         if (!point) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         onSurfaceObjectSelect?.(surface.id);
-        setMoveSession({
+        const session: SurfaceMoveSession = {
           objectId: surface.id,
           mode: "move",
           originPointer: point,
           originObject: surface,
           active: false,
           pointerType: event.pointerType,
-        });
+        };
+        moveSessionRef.current = session;
+        setMoveSession(session);
       },
       onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
 
-        setMoveSession((session) => {
-          if (!session || session.objectId !== surface.id) return session;
-          const delta = {
-            x: point.x - session.originPointer.x,
-            y: point.y - session.originPointer.y,
-          };
-          const shouldActivate =
-            session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
-          if (!shouldActivate) return session;
-          if (!session.active) onSurfaceObjectMoveStart?.();
+        const session = moveSessionRef.current;
+        if (!session || session.objectId !== surface.id) return;
+        const delta = {
+          x: point.x - session.originPointer.x,
+          y: point.y - session.originPointer.y,
+        };
+        const shouldActivate =
+          session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
+        if (!shouldActivate) return;
+        if (!session.active) onSurfaceObjectMoveStart?.();
 
-          const moved = translateSurfaceObject(session.originObject, delta, gridSize);
-          const snapResult = resolveSmartSnap(surface.id, moved);
-          onSurfaceObjectUpdate?.(surface.id, {
-            x: snapResult.rect.x,
-            y: snapResult.rect.y,
-          });
-          setSmartSnapGuides(snapResult.guides);
-          return { ...session, active: true };
+        const moved = translateSurfaceObject(session.originObject, delta, gridSize);
+        const snapResult = resolveSmartSnap(surface.id, moved);
+        onSurfaceObjectUpdate?.(surface.id, {
+          x: snapResult.rect.x,
+          y: snapResult.rect.y,
         });
+        setSmartSnapGuides(snapResult.guides);
+        const nextSession = { ...session, active: true };
+        moveSessionRef.current = nextSession;
+        setMoveSession(nextSession);
       },
       onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -568,7 +572,7 @@ function SalaTerrenoCanvasContent({
         if (!point) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         onSurfaceObjectSelect?.(surface.id);
-        setResizeSession({
+        const session: SurfaceResizeSession = {
           objectId: surface.id,
           mode: "resize",
           resizeHandle: handle,
@@ -576,44 +580,47 @@ function SalaTerrenoCanvasContent({
           originObject: surface,
           active: false,
           pointerType: event.pointerType,
-        });
+        };
+        resizeSessionRef.current = session;
+        setResizeSession(session);
       },
       onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
         const point = resolveLogicalPoint(event.clientX, event.clientY);
         if (!point) return;
 
-        setResizeSession((session) => {
-          if (!session || session.objectId !== surface.id) return session;
-          const delta = {
-            x: point.x - session.originPointer.x,
-            y: point.y - session.originPointer.y,
-          };
-          const shouldActivate =
-            session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
-          if (!shouldActivate) return session;
-          if (!session.active) onSurfaceObjectResizeStart?.();
+        const session = resizeSessionRef.current;
+        if (!session || session.objectId !== surface.id) return;
+        const delta = {
+          x: point.x - session.originPointer.x,
+          y: point.y - session.originPointer.y,
+        };
+        const shouldActivate =
+          session.active || Math.abs(delta.x) >= 1 || Math.abs(delta.y) >= 1;
+        if (!shouldActivate) return;
+        if (!session.active) onSurfaceObjectResizeStart?.();
 
-          const resized = resizeSurfaceObject(
-            session.originObject,
-            session.resizeHandle,
-            delta,
-            gridSize,
-          );
-          const snapResult = resolveSmartSnap(
-            surface.id,
-            resized,
-            getSurfaceResizeActiveEdges(session.resizeHandle),
-          );
-          onSurfaceObjectUpdate?.(surface.id, {
-            x: snapResult.rect.x,
-            y: snapResult.rect.y,
-            width: snapResult.rect.width,
-            height: snapResult.rect.height,
-          });
-          setSmartSnapGuides(snapResult.guides);
-          return { ...session, active: true };
+        const resized = resizeSurfaceObject(
+          session.originObject,
+          session.resizeHandle,
+          delta,
+          gridSize,
+        );
+        const snapResult = resolveSmartSnap(
+          surface.id,
+          resized,
+          getSurfaceResizeActiveEdges(session.resizeHandle),
+        );
+        onSurfaceObjectUpdate?.(surface.id, {
+          x: snapResult.rect.x,
+          y: snapResult.rect.y,
+          width: snapResult.rect.width,
+          height: snapResult.rect.height,
         });
+        setSmartSnapGuides(snapResult.guides);
+        const nextSession = { ...session, active: true };
+        resizeSessionRef.current = nextSession;
+        setResizeSession(nextSession);
       },
       onPointerUp: (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -672,7 +679,7 @@ function SalaTerrenoCanvasContent({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (draft) {
+      if (activeDraft) {
         event.preventDefault();
         creationPointerIdRef.current = null;
         draftRef.current = null;
@@ -700,7 +707,7 @@ function SalaTerrenoCanvasContent({
   }, [
     cancelMoveSession,
     cancelResizeSession,
-    draft,
+    activeDraft,
     moveSession,
     onSurfaceObjectClearSelection,
     selectedSurfaceObjectId,
@@ -711,7 +718,7 @@ function SalaTerrenoCanvasContent({
     ? getSurfaceMaterialToolHint(activeSurfaceMaterial)
     : null;
   const toolHintState = resolveSurfaceInteractionState({
-    draftActive: Boolean(draft),
+    draftActive: Boolean(activeDraft),
     moveActive: Boolean(moveSession?.active),
     resizeActive: Boolean(resizeSession?.active),
   });
@@ -731,7 +738,7 @@ function SalaTerrenoCanvasContent({
         createSurfaceResizeHandlers={createSurfaceResizeHandlers}
       />
       <div className="hostly-sala-terreno-preview-layer" aria-hidden>
-        {draft && previewStyle ? (
+        {activeDraft && previewStyle ? (
           <div
             className="hostly-sala-surface-object hostly-sala-surface-object--preview"
             style={previewStyle}

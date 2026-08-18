@@ -209,7 +209,6 @@ export function SalaEspaciosSidebar({
       <SpaceReorderDndRoot
         sortedIds={sortedIds}
         activeDragEspacio={activeDragEspacio}
-        reorderDisabled={reorderDisabled}
         onDragStart={(event) => setActiveDragId(String(event.active.id))}
         onDragEnd={(event) => {
           setActiveDragId(null);
@@ -255,7 +254,6 @@ export function SalaEspaciosSidebar({
 function SpaceReorderDndRoot({
   sortedIds,
   activeDragEspacio,
-  reorderDisabled,
   onDragStart,
   onDragEnd,
   onDragCancel,
@@ -263,7 +261,6 @@ function SpaceReorderDndRoot({
 }: {
   sortedIds: string[];
   activeDragEspacio: SalaEspacio | null;
-  reorderDisabled: boolean;
   onDragStart: (event: DragStartEvent) => void;
   onDragEnd: (event: DragEndEvent) => void;
   onDragCancel: () => void;

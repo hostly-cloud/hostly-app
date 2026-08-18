@@ -37,6 +37,7 @@ export default function EditorSalaV2PreviewPage() {
   return (
     <div className="hostly-sala-editor-page">
       <SalaEditorWorkspace
+        key={restaurantId}
         restaurantId={restaurantId}
         currentUserId={user?.uid ?? null}
       />

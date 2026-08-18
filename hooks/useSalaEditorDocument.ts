@@ -50,6 +50,7 @@ import {
   createActiveOperationalElement,
   DEFAULT_ACTIVE_OPERATIONAL_ELEMENT_TYPE,
   isOperationalElementTypeSelected,
+  toggleActiveOperationalElement,
 } from "@/lib/sala-editor/ose/active-operational-element";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
@@ -65,6 +66,7 @@ import {
 import {
   getDisabledSalaEditorPhases,
   navigateSalaEditorPhase,
+  selectNewSalaEspacioInNavigation,
   selectSalaEspacioInNavigation,
 } from "@/lib/sala-editor/navigation/editor-phase-routing";
 import { duplicateSalaEditorSpace } from "@/lib/sala-editor/spaces/duplicate-sala-editor-space";
@@ -695,14 +697,20 @@ export function useSalaEditorDocument({
 
   const selectOperationalElement = useCallback(
     (type: OperationalElementType, visualVariant?: OperationalVisualVariant) => {
-      setActiveOperationalElement(createActiveOperationalElement(type, visualVariant));
+      const nextActiveOperationalElement = toggleActiveOperationalElement(
+        activeOperationalElement,
+        type,
+        visualVariant,
+      );
+      setActiveOperationalElement(nextActiveOperationalElement);
+      if (!nextActiveOperationalElement) return;
       setSelectedOperationalElementInstanceId(null);
       setSelectedZoneId(null);
       setSelectedSurfaceObjectId(null);
       setSelectedLandscapeElementId(null);
       setSelectedStructuralElementId(null);
     },
-    [],
+    [activeOperationalElement],
   );
 
   const addOperationalElement = useCallback((instance: OperationalElementInstance) => {
@@ -1247,7 +1255,7 @@ export function useSalaEditorDocument({
       nextDocument = {
         ...prev,
         espacios: [...prev.espacios, espacio],
-        navigation: selectSalaEspacioInNavigation(prev.navigation, espacio.id),
+        navigation: selectNewSalaEspacioInNavigation(prev.navigation, espacio.id),
         updatedAt: Date.now(),
       };
       return nextDocument;

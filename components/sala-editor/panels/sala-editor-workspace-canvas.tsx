@@ -522,7 +522,7 @@ export function SalaEditorWorkspaceCanvas({
     );
   }
 
-  if (phase === "operacion" && espacio && activeOperationalCatalogItem) {
+  if (phase === "operacion" && espacio) {
     return (
       <div key={spaceWorkspaceKey} className="hostly-sala-space-workspace-root">
         <SalaOperacionWorkspace
@@ -530,24 +530,24 @@ export function SalaEditorWorkspaceCanvas({
           restaurantId={restaurantId}
           activeCatalogItem={activeOperationalCatalogItem}
           instances={operationalElementInstances}
-        selectedInstanceId={selectedOperationalElementInstanceId}
-        draggingInstanceId={draggingOperationalInstanceId}
-        resizingInstanceId={resizingOperationalInstanceId}
-        dropAnimatingInstanceId={dropAnimatingOperationalInstanceId}
-        linkedTableNamesById={linkedTableNamesById}
-        snapGuides={operationalSnapGuides}
-        isDragging={isOperationalDragging ?? (() => false)}
-        isResizing={isOperationalResizing ?? (() => false)}
-        onCanvasPointerDown={onOperationalCanvasPointerDown ?? (() => undefined)}
-        onInstancePointerDown={onOperationalInstancePointerDown ?? (() => undefined)}
-        onInstancePointerMove={onOperationalInstancePointerMove ?? (() => undefined)}
-        onInstancePointerUp={onOperationalInstancePointerUp ?? (() => undefined)}
-        onInstancePointerCancel={onOperationalInstancePointerCancel ?? (() => undefined)}
-        onResizeStart={onOperationalResizeStart ?? (() => undefined)}
-        onResizeMove={onOperationalResizeMove ?? (() => undefined)}
-        onResizeEnd={onOperationalResizeEnd ?? (() => undefined)}
-        onResizeCancel={onOperationalResizeCancel ?? (() => undefined)}
-        onDuplicateInstance={onOperationalDuplicateInstance ?? (() => undefined)}
+          selectedInstanceId={selectedOperationalElementInstanceId}
+          draggingInstanceId={draggingOperationalInstanceId}
+          resizingInstanceId={resizingOperationalInstanceId}
+          dropAnimatingInstanceId={dropAnimatingOperationalInstanceId}
+          linkedTableNamesById={linkedTableNamesById}
+          snapGuides={operationalSnapGuides}
+          isDragging={isOperationalDragging ?? (() => false)}
+          isResizing={isOperationalResizing ?? (() => false)}
+          onCanvasPointerDown={onOperationalCanvasPointerDown ?? (() => undefined)}
+          onInstancePointerDown={onOperationalInstancePointerDown ?? (() => undefined)}
+          onInstancePointerMove={onOperationalInstancePointerMove ?? (() => undefined)}
+          onInstancePointerUp={onOperationalInstancePointerUp ?? (() => undefined)}
+          onInstancePointerCancel={onOperationalInstancePointerCancel ?? (() => undefined)}
+          onResizeStart={onOperationalResizeStart ?? (() => undefined)}
+          onResizeMove={onOperationalResizeMove ?? (() => undefined)}
+          onResizeEnd={onOperationalResizeEnd ?? (() => undefined)}
+          onResizeCancel={onOperationalResizeCancel ?? (() => undefined)}
+          onDuplicateInstance={onOperationalDuplicateInstance ?? (() => undefined)}
           canvasLayers={
             <>
               {terrainLayer}
@@ -558,16 +558,6 @@ export function SalaEditorWorkspaceCanvas({
           }
         />
       </div>
-    );
-  }
-
-  if (phase === "operacion") {
-    return (
-      <SalaEditorEmptyState
-        title="Elige qué quieres colocar para el servicio."
-        hint="Mesa, barra, recepción o punto de apoyo."
-        glyph="◎"
-      />
     );
   }
 

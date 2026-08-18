@@ -52,7 +52,10 @@ export function useSalaEditorLibraryState(phase: SalaEditorLibraryPhase) {
   );
   const preSearchExpandedIdsRef = useRef<string[] | null>(null);
   const manualExpandedIdsRef = useRef(manualExpandedIds);
-  manualExpandedIdsRef.current = manualExpandedIds;
+
+  useEffect(() => {
+    manualExpandedIdsRef.current = manualExpandedIds;
+  }, [manualExpandedIds]);
 
   const normalizedSearch = normalizeLibrarySearchQuery(searchQuery);
   const isSearching = normalizedSearch.length > 0;
@@ -66,12 +69,6 @@ export function useSalaEditorLibraryState(phase: SalaEditorLibraryPhase) {
     () => filteredCategories.map((entry) => entry.category.id),
     [filteredCategories],
   );
-
-  useEffect(() => {
-    setSearchQuery("");
-    preSearchExpandedIdsRef.current = null;
-    setManualExpandedIds(resolveExpandedIds(phase));
-  }, [phase]);
 
   useEffect(() => {
     if (isSearching) {

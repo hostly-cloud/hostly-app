@@ -395,3 +395,772 @@
     transition: none;
   }
 }
+
+@media (max-width: 767px) {
+  .hostly-sala-editor-workbench__body,
+  .hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
+    position: relative;
+    grid-template-columns: minmax(104px, 112px) minmax(0, 1fr) !important;
+  }
+
+  .hostly-sala-editor-workbench__panel--inspector {
+    position: absolute;
+    z-index: 30;
+    top: 6px;
+    right: 6px;
+    bottom: 6px;
+    width: min(232px, calc(100% - 124px));
+    border: 1px solid rgba(100, 116, 139, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+  }
+}
+
+/* Editor V2 · Architectural visual system
+   One shared renderer for Editor, readonly map and TPV. */
+
+.hostly-sala-espacio-frame__stage--bounded-plan {
+  box-shadow:
+    inset 0 0 0 1px rgba(72, 83, 89, 0.16),
+    inset 0 0 42px rgba(38, 48, 55, 0.035),
+    0 16px 42px rgba(38, 48, 55, 0.1);
+}
+
+.hostly-sala-editor-dot-grid--soft {
+  opacity: 0.26;
+  mix-blend-mode: multiply;
+}
+
+/* Space · material fields remain quiet below architecture and operation. */
+.hostly-sala-surface-object {
+  border: 1px solid rgba(67, 76, 80, 0.12);
+  border-radius: 2px;
+  opacity: 0.68;
+  filter: saturate(0.72) contrast(0.96);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 20px rgba(52, 57, 54, 0.035);
+}
+
+.hostly-sala-surface-object.is-selected,
+.hostly-sala-surface-object.is-dragging,
+.hostly-sala-surface-object.is-resizing {
+  opacity: 1;
+  filter: saturate(0.92) contrast(1);
+}
+
+.hostly-sala-surface-object[data-surface-material="wood"],
+.hostly-sala-surface-object[data-surface-material="deck"] {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(69, 47, 29, 0.06)),
+    repeating-linear-gradient(
+      90deg,
+      #d4b58d 0 20px,
+      #a97f57 20px 21px,
+      #c9a57d 21px 42px,
+      #966f4a 42px 43px
+    );
+}
+
+.hostly-sala-surface-object[data-surface-material="wood"]::before,
+.hostly-sala-surface-object[data-surface-material="deck"]::before {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(83, 57, 35, 0.22) 31px 32px),
+    radial-gradient(ellipse at 18% 24%, transparent 0 10px, rgba(94, 61, 35, 0.12) 11px 12px, transparent 13px),
+    radial-gradient(ellipse at 72% 68%, transparent 0 13px, rgba(94, 61, 35, 0.11) 14px 15px, transparent 16px);
+  opacity: 0.62;
+}
+
+.hostly-sala-surface-object[data-surface-material="deck"]::after {
+  background: repeating-linear-gradient(90deg, transparent 0 8px, rgba(76, 51, 31, 0.16) 8px 9px);
+  opacity: 0.62;
+}
+
+.hostly-sala-surface-object[data-surface-material="stone"],
+.hostly-sala-surface-object[data-surface-material="tile"] {
+  background:
+    radial-gradient(ellipse at 24% 32%, rgba(255, 255, 255, 0.34), transparent 34%),
+    linear-gradient(145deg, #d5d8d5, #b9c0bd);
+}
+
+.hostly-sala-surface-object[data-surface-material="stone"]::before {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(78, 88, 90, 0.18) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 47px, rgba(78, 88, 90, 0.16) 47px 48px),
+    radial-gradient(circle at 28% 36%, rgba(80, 88, 86, 0.13) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 72% 66%, rgba(255, 255, 255, 0.4) 0 1px, transparent 1.5px);
+  background-size: auto, auto, 31px 27px, 37px 33px;
+  opacity: 0.56;
+}
+
+.hostly-sala-surface-object[data-surface-material="tile"]::before {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(83, 94, 99, 0.22) 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, rgba(83, 94, 99, 0.2) 23px 24px);
+  opacity: 0.58;
+}
+
+.hostly-sala-surface-object[data-surface-material="grass"] {
+  background:
+    radial-gradient(ellipse at 18% 26%, rgba(224, 236, 201, 0.14), transparent 36%),
+    linear-gradient(145deg, #8ca77a, #637f5b);
+}
+
+.hostly-sala-surface-object[data-surface-material="grass"]::before {
+  background:
+    repeating-linear-gradient(104deg, transparent 0 4px, rgba(40, 76, 43, 0.2) 4px 5px, transparent 5px 8px),
+    repeating-linear-gradient(76deg, transparent 0 7px, rgba(239, 244, 216, 0.16) 7px 8px, transparent 8px 12px);
+  opacity: 0.55;
+}
+
+.hostly-sala-surface-object[data-surface-material="sand"] {
+  background:
+    radial-gradient(ellipse at 28% 22%, rgba(255, 249, 226, 0.32), transparent 38%),
+    linear-gradient(150deg, #ead9b3, #d3bb8d);
+}
+
+.hostly-sala-surface-object[data-surface-material="sand"]::before {
+  background:
+    radial-gradient(circle, rgba(112, 88, 51, 0.26) 0 0.7px, transparent 1px),
+    radial-gradient(circle, rgba(255, 249, 224, 0.52) 0 0.8px, transparent 1.1px);
+  background-position: 0 0, 7px 9px;
+  background-size: 13px 11px, 17px 15px;
+  opacity: 0.6;
+}
+
+.hostly-sala-surface-object[data-surface-material="water"] {
+  border-color: rgba(50, 119, 135, 0.22);
+  background:
+    radial-gradient(ellipse at 22% 18%, rgba(255, 255, 255, 0.52), transparent 28%),
+    linear-gradient(145deg, #b9dde2 0%, #79b8c3 54%, #619dac 100%);
+  box-shadow:
+    inset 0 0 0 3px rgba(242, 250, 249, 0.44),
+    inset 0 0 24px rgba(25, 91, 108, 0.12);
+}
+
+.hostly-sala-surface-object[data-surface-material="water"]::before {
+  background:
+    repeating-radial-gradient(ellipse at 20% 0%, transparent 0 13px, rgba(255, 255, 255, 0.3) 14px, transparent 15px 29px);
+  transform: rotate(-4deg) scale(1.08);
+  opacity: 0.55;
+}
+
+.hostly-sala-surface-object[data-surface-material="water"]::after {
+  background:
+    repeating-linear-gradient(168deg, transparent 0 17px, rgba(34, 116, 136, 0.14) 18px, transparent 19px 34px);
+  opacity: 0.56;
+}
+
+.hostly-sala-surface-object[data-surface-material="carpet"] {
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.045) 0 2px, transparent 2px 5px),
+    linear-gradient(145deg, #9b8077, #705f5b);
+}
+
+.hostly-sala-surface-object[data-surface-material="custom"] {
+  background:
+    repeating-linear-gradient(135deg, rgba(79, 93, 101, 0.1) 0 1px, transparent 1px 9px),
+    linear-gradient(145deg, #e4e7e5, #cbd1cf);
+}
+
+/* Architecture · walls, apertures, columns and fixed separators. */
+.hostly-sala-wall__depth {
+  filter: blur(0.35px);
+}
+
+.hostly-sala-wall__body {
+  filter: saturate(0.46) contrast(1.04);
+}
+
+.hostly-sala-wall-junctions {
+  filter: drop-shadow(1.5px 2px 0 rgba(38, 48, 55, 0.18));
+}
+
+.hostly-sala-wall-attachment__panel {
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1.5px rgba(255, 255, 255, 0.9),
+    1px 2px 4px rgba(38, 48, 55, 0.2);
+}
+
+.hostly-sala-wall-attachment--door .hostly-sala-wall-attachment__panel {
+  height: 4px;
+  border-color: #6f5b48;
+  background:
+    repeating-linear-gradient(90deg, #c7a47b 0 5px, #9f7955 5px 6px);
+}
+
+.hostly-sala-wall-attachment__door-swing {
+  border-color: rgba(82, 70, 58, 0.55);
+  border-width: 1px;
+  box-shadow: 7px -7px 12px -10px rgba(38, 48, 55, 0.34);
+}
+
+.hostly-sala-wall-attachment--glass .hostly-sala-wall-attachment__panel {
+  height: 6px;
+  border-color: rgba(52, 141, 164, 0.54);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.72), rgba(139, 207, 220, 0.76) 34%, rgba(235, 249, 251, 0.9) 52%, rgba(112, 184, 201, 0.68));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.72),
+    1px 2px 4px rgba(42, 100, 114, 0.14);
+}
+
+.hostly-sala-structure-object {
+  overflow: hidden;
+  border-color: rgba(66, 74, 78, 0.44);
+  background: linear-gradient(145deg, #d9dcda, #aeb5b2);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.55),
+    inset -2px -2px 5px rgba(58, 65, 68, 0.12),
+    2px 3px 6px rgba(38, 48, 55, 0.14);
+}
+
+.hostly-sala-structure-object__material {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 26% 31%, rgba(255, 255, 255, 0.34) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 72% 66%, rgba(64, 71, 74, 0.12) 0 1px, transparent 1.5px);
+  background-size: 17px 19px, 23px 21px;
+  pointer-events: none;
+}
+
+.hostly-sala-structure-object--roundColumn {
+  background: radial-gradient(circle at 35% 30%, #f0f1ed 0 8%, #c5cac6 42%, #87908d 100%);
+}
+
+.hostly-sala-structure-object--squareColumn {
+  border-radius: 3px;
+  background: linear-gradient(135deg, #eef0ed 0%, #c3c8c4 48%, #8b9491 100%);
+}
+
+.hostly-sala-structure-object--divider {
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0 10px, rgba(69, 77, 80, 0.08) 10px 11px),
+    linear-gradient(180deg, #c4c9c6, #939c98);
+}
+
+/* Ambience · planters and botanical plan symbols. */
+.hostly-sala-landscape-element {
+  isolation: isolate;
+  opacity: 0.82;
+  filter: saturate(0.74) contrast(0.98);
+}
+
+.hostly-sala-landscape-element.is-selected,
+.hostly-sala-landscape-element.is-dragging,
+.hostly-sala-landscape-element.is-resizing {
+  opacity: 1;
+  filter: saturate(0.94) contrast(1);
+}
+
+.hostly-sala-landscape-element:focus-visible,
+.hostly-sala-structure-object:focus-visible {
+  outline: 2px solid #315f7d;
+  outline-offset: 3px;
+}
+
+.hostly-sala-landscape-element__ground,
+.hostly-sala-landscape-element__foliage,
+.hostly-sala-landscape-element__palm,
+.hostly-sala-landscape-element__olive {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hostly-sala-landscape-element--rectangularPlanter,
+.hostly-sala-landscape-element--roundPlanter {
+  border-color: rgba(80, 65, 50, 0.36);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.14),
+    inset -2px -3px 6px rgba(50, 38, 27, 0.16),
+    2px 3px 6px rgba(38, 48, 55, 0.12);
+}
+
+.hostly-sala-landscape-element--rectangularPlanter .hostly-sala-landscape-element__ground,
+.hostly-sala-landscape-element--roundPlanter .hostly-sala-landscape-element__ground {
+  inset: 12%;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 24% 38%, rgba(183, 155, 105, 0.2) 0 1px, transparent 1.6px),
+    #57493b;
+  box-shadow: inset 0 2px 4px rgba(27, 23, 18, 0.3);
+}
+
+.hostly-sala-landscape-element--rectangularPlanter .hostly-sala-landscape-element__foliage,
+.hostly-sala-landscape-element--roundPlanter .hostly-sala-landscape-element__foliage {
+  inset: 14%;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 12% 52%, #83946f 0 11%, transparent 12%),
+    radial-gradient(ellipse at 29% 38%, #5d7658 0 15%, transparent 16%),
+    radial-gradient(ellipse at 49% 58%, #91a078 0 14%, transparent 15%),
+    radial-gradient(ellipse at 69% 40%, #647d5c 0 15%, transparent 16%),
+    radial-gradient(ellipse at 88% 55%, #49664e 0 12%, transparent 13%);
+  filter: drop-shadow(1px 2px 1px rgba(38, 48, 55, 0.18));
+}
+
+.hostly-sala-landscape-element--palm,
+.hostly-sala-landscape-element--olive {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hostly-sala-landscape-element--palm::before,
+.hostly-sala-landscape-element--palm::after,
+.hostly-sala-landscape-element--olive::before,
+.hostly-sala-landscape-element--olive::after {
+  display: none;
+}
+
+.hostly-sala-landscape-element--palm .hostly-sala-landscape-element__ground,
+.hostly-sala-landscape-element--olive .hostly-sala-landscape-element__ground {
+  inset: 19%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 58% 62%, rgba(42, 52, 46, 0.16), transparent 64%);
+  transform: translate(4%, 7%) rotate(-18deg);
+  filter: blur(2px);
+}
+
+.hostly-sala-landscape-element__palm-leaf {
+  position: absolute;
+  left: 39%;
+  top: 5%;
+  z-index: 1;
+  width: 22%;
+  height: 46%;
+  border-radius: 52% 48% 18% 16% / 72% 68% 26% 22%;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 12%, rgba(225, 232, 191, 0.2) 13% 15%, transparent 16% 24%),
+    linear-gradient(90deg, rgba(40, 70, 47, 0.96), rgba(118, 143, 84, 0.92) 45%, rgba(48, 82, 52, 0.96));
+  box-shadow:
+    inset 1px 0 rgba(226, 231, 190, 0.28),
+    inset -2px 0 rgba(38, 70, 45, 0.16);
+  transform-origin: 50% 98%;
+  filter: drop-shadow(1px 2px 1px rgba(38, 48, 55, 0.16));
+}
+
+.hostly-sala-landscape-element__palm-leaf--1 { transform: rotate(-11deg) scaleY(1.03); }
+.hostly-sala-landscape-element__palm-leaf--2 { transform: rotate(43deg) scaleY(0.88); }
+.hostly-sala-landscape-element__palm-leaf--3 { transform: rotate(91deg) scaleY(1.08); }
+.hostly-sala-landscape-element__palm-leaf--4 { transform: rotate(143deg) scaleY(0.82); }
+.hostly-sala-landscape-element__palm-leaf--5 { transform: rotate(197deg) scaleY(0.98); }
+.hostly-sala-landscape-element__palm-leaf--6 { transform: rotate(249deg) scaleY(0.87); }
+.hostly-sala-landscape-element__palm-leaf--7 { transform: rotate(306deg) scaleY(1.04); }
+.hostly-sala-landscape-element__palm-leaf--8,
+.hostly-sala-landscape-element__palm-leaf--9 { display: none; }
+
+.hostly-sala-landscape-element__trunk {
+  position: absolute;
+  left: 44%;
+  top: 44%;
+  z-index: 3;
+  width: 12%;
+  height: 12%;
+  border-radius: 48% 52% 45% 55%;
+  background: radial-gradient(circle at 35% 30%, #b08f65 0 18%, #72573d 46%, #493a2b 100%);
+  box-shadow:
+    1px 2px 2px rgba(38, 48, 55, 0.24),
+    0 0 0 1px rgba(71, 85, 61, 0.16);
+}
+
+.hostly-sala-landscape-element__olive-crown {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid rgba(65, 76, 59, 0.08);
+  border-radius: 46% 54% 42% 58% / 58% 44% 56% 42%;
+  background:
+    radial-gradient(circle at 28% 30%, rgba(230, 229, 205, 0.28) 0 2%, transparent 4%),
+    radial-gradient(circle at 68% 62%, rgba(54, 67, 52, 0.24) 0 2%, transparent 4%),
+    linear-gradient(145deg, #a3aa90, #66725f);
+  background-size: 11px 10px, 13px 12px, auto;
+  box-shadow: 1px 2px 3px rgba(38, 48, 55, 0.18);
+}
+
+.hostly-sala-landscape-element__olive-crown--1 { left: 11%; top: 18%; width: 38%; height: 34%; transform: rotate(-13deg); }
+.hostly-sala-landscape-element__olive-crown--2 { left: 38%; top: 9%; width: 43%; height: 37%; transform: rotate(11deg); }
+.hostly-sala-landscape-element__olive-crown--3 { left: 59%; top: 33%; width: 34%; height: 38%; transform: rotate(21deg); }
+.hostly-sala-landscape-element__olive-crown--4 { left: 38%; top: 55%; width: 42%; height: 33%; transform: rotate(-8deg); }
+.hostly-sala-landscape-element__olive-crown--5 { left: 9%; top: 49%; width: 39%; height: 36%; transform: rotate(16deg); }
+.hostly-sala-landscape-element__olive-crown--6 { left: 27%; top: 30%; width: 42%; height: 39%; transform: rotate(-19deg); background: linear-gradient(145deg, #a7ad93, #74806a); }
+.hostly-sala-landscape-element__olive-crown--7 { left: 48%; top: 35%; width: 29%; height: 27%; transform: rotate(12deg); background: linear-gradient(145deg, #7e8873, #596453); }
+
+.hostly-sala-landscape-element__olive-branches {
+  position: absolute;
+  z-index: 2;
+  left: 31%;
+  top: 29%;
+  width: 38%;
+  height: 38%;
+  background:
+    linear-gradient(32deg, transparent 46%, rgba(101, 79, 57, 0.55) 47% 51%, transparent 52%),
+    linear-gradient(145deg, transparent 46%, rgba(101, 79, 57, 0.48) 47% 51%, transparent 52%);
+  opacity: 0.72;
+}
+
+.hostly-sala-landscape-element__olive .hostly-sala-landscape-element__trunk {
+  left: 45%;
+  top: 45%;
+  width: 11%;
+  height: 11%;
+}
+
+/* Operation · tables and seats remain the highest-contrast visual layer. */
+.hostly-sala-op-visual[data-type="TABLE"] {
+  position: relative;
+  isolation: isolate;
+  filter: drop-shadow(2px 3px 4px rgba(38, 48, 55, 0.18));
+}
+
+.hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph {
+  border-color: color-mix(in srgb, var(--op-accent) 48%, #4f5960 52%);
+  background:
+    radial-gradient(circle at 36% 28%, rgba(255, 255, 255, 0.9), transparent 28%),
+    repeating-linear-gradient(90deg, rgba(86, 64, 44, 0.05) 0 1px, transparent 1px 7px),
+    color-mix(in srgb, var(--op-accent) 8%, #f0ede6);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.62),
+    inset -2px -2px 4px rgba(53, 59, 61, 0.08),
+    1px 2px 4px rgba(38, 48, 55, 0.14);
+}
+
+.hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph::before {
+  content: "";
+  position: absolute;
+  inset: 6%;
+  border: 1px solid color-mix(in srgb, var(--op-accent) 16%, transparent);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.hostly-sala-op-visual__table-layout {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.hostly-sala-op-visual[data-type="TABLE"][data-visual-variant]
+  .hostly-sala-op-visual__table-layout
+  > .hostly-sala-op-visual__glyph {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+.hostly-sala-op-visual:not(.hostly-sala-op-visual--mini)[data-type="TABLE"]::before,
+.hostly-sala-op-visual:not(.hostly-sala-op-visual--mini)[data-type="TABLE"]::after {
+  content: none;
+}
+
+.hostly-sala-op-visual__seats {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hostly-sala-op-visual__seat {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid;
+  border-radius: 4px;
+  border-color: color-mix(in srgb, var(--op-accent) 34%, #6c767b 66%);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.72), color-mix(in srgb, var(--op-accent) 13%, #d9ddda));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.45),
+    1px 2px 3px rgba(38, 48, 55, 0.14);
+  pointer-events: none;
+}
+
+.hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__glyph,
+.hostly-sala-op-visual[data-type="TABLE"] .hostly-sala-op-visual__name {
+  z-index: 1;
+}
+
+.hostly-sala-op-visual[data-type="SOFA"] .hostly-sala-op-visual__glyph,
+.hostly-sala-op-visual[data-type="SUNBED"] .hostly-sala-op-visual__glyph,
+.hostly-sala-op-visual[data-type="BALINESE_BED"] .hostly-sala-op-visual__glyph {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.34),
+    inset -2px -2px 5px rgba(38, 48, 55, 0.08),
+    2px 3px 5px rgba(38, 48, 55, 0.13);
+}
+
+.hostly-sala-op-visual[data-type="BAR_STRAIGHT"] .hostly-sala-op-visual__glyph,
+.hostly-sala-op-visual[data-type="BAR_L"] .hostly-sala-op-visual__glyph {
+  filter: saturate(0.7) contrast(0.98);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.2),
+    2px 3px 6px rgba(38, 48, 55, 0.16);
+}
+
+/* Catalog previews use the same restrained architectural vocabulary. */
+.hostly-sala-element-preview__surface {
+  stroke: rgba(72, 83, 89, 0.12);
+  stroke-width: 0.8;
+}
+
+.hostly-sala-element-preview__planter-shell {
+  fill: #8a715b;
+  stroke: #665343;
+  stroke-width: 1;
+}
+
+.hostly-sala-element-preview__planter-rim {
+  fill: #a58d73;
+  stroke: rgba(239, 228, 210, 0.42);
+  stroke-width: 0.65;
+}
+
+.hostly-sala-element-preview__planter-soil {
+  fill: #51443a;
+}
+
+.hostly-sala-element-preview__foliage { fill: #728464; }
+.hostly-sala-element-preview__foliage.is-light { fill: #91a07a; }
+.hostly-sala-element-preview__foliage.is-dark { fill: #536a52; }
+
+.hostly-sala-element-preview__palm-leaf {
+  fill: #667e56;
+  stroke: #435f46;
+  stroke-width: 0.65;
+}
+
+.hostly-sala-element-preview__palm-leaf.is-b,
+.hostly-sala-element-preview__palm-leaf.is-e { fill: #829668; }
+.hostly-sala-element-preview__palm-leaf.is-c,
+.hostly-sala-element-preview__palm-leaf.is-f { fill: #526c4d; }
+.hostly-sala-element-preview__palm-leaf.is-g { fill: #74885e; }
+
+.hostly-sala-element-preview__olive-crown {
+  fill: #87907a;
+  stroke: rgba(76, 88, 70, 0.42);
+  stroke-width: 0.7;
+}
+
+.hostly-sala-element-preview__olive-crown.is-b { fill: #a0a58d; }
+.hostly-sala-element-preview__olive-crown.is-c { fill: #6e7867; }
+.hostly-sala-element-preview__olive-crown.is-d { fill: #939b83; }
+.hostly-sala-element-preview__olive-crown.is-e { fill: #7b8672; }
+
+.hostly-sala-element-preview__olive-leaves {
+  fill: #87907a;
+  stroke: rgba(76, 88, 70, 0.42);
+  stroke-width: 0.55;
+}
+
+.hostly-sala-element-preview__olive-leaves ellipse:nth-child(3n + 2) { fill: #a0a58d; }
+.hostly-sala-element-preview__olive-leaves ellipse:nth-child(3n) { fill: #6e7867; }
+
+.hostly-sala-element-preview__olive-branch {
+  fill: none;
+  stroke: #735f4c;
+  stroke-width: 1.1;
+  stroke-linecap: round;
+}
+
+.hostly-sala-element-preview__trunk {
+  fill: #715943;
+  stroke: #4f4135;
+  stroke-width: 0.7;
+}
+
+.hostly-sala-element-preview__flower {
+  fill: #a84d44;
+  stroke: rgba(103, 49, 43, 0.4);
+  stroke-width: 0.4;
+}
+
+.hostly-sala-element-preview__flower.is-white {
+  fill: #f3f0e7;
+  stroke: rgba(112, 106, 91, 0.46);
+}
+
+@media (prefers-contrast: more) {
+  .hostly-sala-surface-object,
+  .hostly-sala-landscape-element {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+/* Visual adjustment 1 · recognizable botanical silhouettes and planters. */
+.hostly-sala-landscape-element {
+  overflow: visible;
+}
+
+.hostly-sala-landscape-element--palm,
+.hostly-sala-landscape-element--olive,
+.hostly-sala-landscape-element--rectangularPlanter,
+.hostly-sala-landscape-element--roundPlanter {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hostly-sala-landscape-element--palm::before,
+.hostly-sala-landscape-element--palm::after,
+.hostly-sala-landscape-element--olive::before,
+.hostly-sala-landscape-element--olive::after,
+.hostly-sala-landscape-element--rectangularPlanter::before,
+.hostly-sala-landscape-element--rectangularPlanter::after,
+.hostly-sala-landscape-element--roundPlanter::before,
+.hostly-sala-landscape-element--roundPlanter::after {
+  display: none;
+}
+
+.hostly-sala-landscape-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(1.2px 1.8px 1px rgba(38, 48, 43, 0.16));
+}
+
+.hostly-sala-landscape-art * {
+  vector-effect: non-scaling-stroke;
+}
+
+.hostly-sala-landscape-art__shadow {
+  fill: rgba(37, 48, 42, 0.14);
+  filter: blur(2px);
+  transform: translate(3px, 4px);
+}
+
+.hostly-sala-landscape-art__palm-fronds path {
+  fill: #637c54;
+  stroke: rgba(50, 77, 49, 0.34);
+  stroke-width: 0.8;
+}
+
+.hostly-sala-landscape-art__palm-fronds path:nth-child(2),
+.hostly-sala-landscape-art__palm-fronds path:nth-child(5) {
+  fill: #819368;
+}
+
+.hostly-sala-landscape-art__palm-fronds path:nth-child(3),
+.hostly-sala-landscape-art__palm-fronds path:nth-child(7) {
+  fill: #4f6b4c;
+}
+
+.hostly-sala-landscape-art__palm-fronds .is-short {
+  fill: #91a174;
+  opacity: 0.92;
+}
+
+.hostly-sala-landscape-art__palm-veins {
+  fill: none;
+  stroke: rgba(222, 227, 184, 0.42);
+  stroke-linecap: round;
+  stroke-width: 0.75;
+}
+
+.hostly-sala-landscape-art__trunk-ring {
+  fill: rgba(75, 91, 63, 0.38);
+}
+
+.hostly-sala-landscape-art__trunk {
+  fill: #745a40;
+  stroke: rgba(70, 53, 38, 0.52);
+  stroke-width: 0.75;
+}
+
+.hostly-sala-landscape-art__olive-branches {
+  fill: none;
+  stroke: rgba(111, 84, 60, 0.68);
+  stroke-linecap: round;
+  stroke-width: 2.1;
+}
+
+.hostly-sala-landscape-art__olive-clusters > g {
+  fill: #818b75;
+  stroke: rgba(76, 89, 70, 0.26);
+  stroke-width: 0.7;
+}
+
+.hostly-sala-landscape-art__olive-clusters > g:nth-child(2),
+.hostly-sala-landscape-art__olive-clusters > g:nth-child(5) {
+  fill: #9da48a;
+}
+
+.hostly-sala-landscape-art__olive-clusters > g:nth-child(3),
+.hostly-sala-landscape-art__olive-clusters > g:nth-child(6) {
+  fill: #687462;
+}
+
+.hostly-sala-landscape-art__olive-clusters .is-inner {
+  fill: #89927b;
+  opacity: 0.92;
+}
+
+.hostly-sala-landscape-art__planter-shadow {
+  fill: rgba(41, 47, 43, 0.2);
+  filter: blur(1.5px);
+}
+
+.hostly-sala-landscape-art__planter-shell {
+  fill: #806b58;
+  stroke: rgba(83, 65, 49, 0.56);
+  stroke-width: 1.1;
+}
+
+.hostly-sala-landscape-art__planter-rim {
+  fill: #a28a70;
+  stroke: rgba(238, 226, 207, 0.32);
+  stroke-width: 0.85;
+}
+
+.hostly-sala-landscape-art__soil {
+  fill: #50443a;
+  stroke: rgba(47, 37, 29, 0.38);
+  stroke-width: 0.75;
+}
+
+.hostly-sala-landscape-art__planter-leaves {
+  fill: #667b5b;
+  stroke: rgba(68, 88, 62, 0.22);
+  stroke-width: 0.55;
+}
+
+.hostly-sala-landscape-art__planter-leaves .is-light {
+  fill: #899875;
+}
+
+.hostly-sala-landscape-art__planter-leaves .is-dark {
+  fill: #50674f;
+}
+
+.hostly-sala-landscape-art__flowers > g > ellipse {
+  fill: #a64d44;
+  stroke: rgba(104, 49, 43, 0.3);
+  stroke-width: 0.35;
+}
+
+.hostly-sala-landscape-art__flowers > .is-white > ellipse {
+  fill: #f2efe5;
+  stroke: rgba(116, 110, 94, 0.34);
+}
+
+.hostly-sala-landscape-art__flowers > g > circle {
+  fill: #c6a65c;
+  stroke: rgba(93, 75, 39, 0.34);
+  stroke-width: 0.3;
+}
+
+.hostly-sala-landscape-element.is-selected .hostly-sala-landscape-art {
+  filter:
+    drop-shadow(1.2px 1.8px 1px rgba(38, 48, 43, 0.16))
+    drop-shadow(0 0 3px rgba(49, 95, 125, 0.24));
+}

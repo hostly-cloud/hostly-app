@@ -17,6 +17,10 @@ import {
 } from "@/lib/firestore/reservations";
 import { computeReservationDayMetrics } from "@/lib/reservas/reservation-metrics";
 import {
+  activeReservationTables,
+  reservationTableOptionsForReference,
+} from "@/lib/reservas/reservation-table-options";
+import {
   ReservationFloorMapPicker,
   type ReservationFloorMapPickerConfirm,
 } from "@/components/reservas/reservation-floor-map-picker";
@@ -253,10 +257,8 @@ export default function ReservasView() {
   }, [authReady, restaurantId]);
 
   const tablesOptions = useMemo(() => {
-    return [...tables]
-      .filter((t) => t.type === "table")
-      .sort((a, b) => a.name.localeCompare(b.name, "es", { numeric: true }));
-  }, [tables]);
+    return activeReservationTables(tables, restaurantId ?? "");
+  }, [tables, restaurantId]);
 
   const [nowMin, setNowMin] = useState(() => {
     const d = new Date();
@@ -928,6 +930,12 @@ export default function ReservasView() {
               <div className="flex flex-col gap-2.5">
                 {reservations.map((r) => {
                   const tableZone = [r.tableLabel, r.floorName, r.zoneName].filter(Boolean).join(" · ");
+                  const reservationTableOptions = reservationTableOptionsForReference({
+                    activeTables: tablesOptions,
+                    allTables: tables,
+                    restaurantId: restaurantId ?? "",
+                    reference: r,
+                  });
                   return (
                     <div
                       key={r.id}
@@ -963,9 +971,13 @@ export default function ReservasView() {
                             disabled={busy}
                           >
                             <option value="">Sin mesa</option>
-                            {tablesOptions.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
+                            {reservationTableOptions.map((option) => (
+                              <option
+                                key={option.id}
+                                value={option.id}
+                                disabled={option.disabled}
+                              >
+                                {option.label}
                               </option>
                             ))}
                           </select>

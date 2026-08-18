@@ -36,3 +36,13 @@ export function isOperationalElementTypeSelected(
   if (visualVariant != null) return active.visualVariant === visualVariant;
   return active.visualVariant == null;
 }
+
+export function toggleActiveOperationalElement(
+  active: ActiveOperationalElementSelection,
+  type: OperationalElementType,
+  visualVariant?: OperationalVisualVariant,
+): ActiveOperationalElementSelection {
+  return isOperationalElementTypeSelected(active, type, visualVariant)
+    ? null
+    : createActiveOperationalElement(type, visualVariant);
+}

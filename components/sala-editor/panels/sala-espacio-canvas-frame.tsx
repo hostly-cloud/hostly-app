@@ -60,7 +60,6 @@ export function SalaEspacioCanvasFrame({
     viewportRef,
     basePreview,
     hasBoundedPlan,
-    [espacio.id, basePreview?.dimensions.width, basePreview?.dimensions.height],
   );
 
   const previewWidth = hasBoundedPlan ? visualLayout.stageWidth : undefined;

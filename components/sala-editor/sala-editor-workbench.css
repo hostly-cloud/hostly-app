@@ -5048,6 +5048,22 @@
   inset: var(--hostly-editor-selection-touch-inset);
 }
 
+.hostly-sala-landscape-element__resize-handle--nw::before {
+  inset: -22px -8px -8px -22px;
+}
+
+.hostly-sala-landscape-element__resize-handle--ne::before {
+  inset: -22px -22px -8px -8px;
+}
+
+.hostly-sala-landscape-element__resize-handle--sw::before {
+  inset: -8px -8px -22px -22px;
+}
+
+.hostly-sala-landscape-element__resize-handle--se::before {
+  inset: -8px -22px -22px -8px;
+}
+
 .hostly-sala-landscape-element__resize-handle--nw {
   top: -7px;
   left: -7px;
@@ -5076,12 +5092,13 @@
   position: absolute;
   inset: 0;
   z-index: 5;
-  pointer-events: auto;
+  pointer-events: none;
   touch-action: none;
 }
 
 .hostly-sala-landscape-placement-hit-area.is-creating {
   cursor: crosshair;
+  pointer-events: auto;
 }
 
 .hostly-sala-operational-layer {
@@ -5936,5 +5953,185 @@
 
 .hostly-sala-zone-placement-hit-area.is-creating {
   pointer-events: auto;
+}
+
+/* ─── Editor V2 · Library Compact Pass (iteración 1) ───
+ * Un solo overflow-y en .hostly-sala-editor-left-panel.
+ * Switcher + biblioteca fluyen en el mismo scroll.
+ * Override táctil local vía --hostly-touch-min heredado (ya consumido por globals).
+ */
+
+/* Propietario final del scroll.
+ * min-height: 0 ya viene del flex chain (page → workbench → body → panel → panel-inner);
+ * se reafirma aquí para que el panel pueda encogerse al alto disponible y scrollear
+ * internamente sin empujar scroll de página. */
+.hostly-sala-editor-left-panel {
+  gap: 6px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.hostly-sala-editor-left-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.hostly-sala-editor-left-panel::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+  background-clip: padding-box;
+}
+
+.hostly-sala-editor-left-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Descendientes: crecer con contenido, sin scroll propio ni recorte.
+ * flex: 0 0 auto evita que left-panel__scroll / library se repartan el alto
+ * restante y creen un segundo viewport con overflow interno. */
+.hostly-sala-editor-left-panel__scroll,
+.hostly-sala-editor-left-panel__scroll > .hostly-sala-editor-toolbox,
+.hostly-sala-editor-left-panel__scroll > .hostly-sala-editor-toolbox--library,
+.hostly-sala-editor-left-panel__scroll > .hostly-sala-editor-toolbox--base-config,
+.hostly-sala-editor-left-panel__scroll > .hostly-sala-editor-toolbox--spaces,
+.hostly-sala-editor-toolbox--library,
+.hostly-sala-library,
+.hostly-sala-library__scroll {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  height: auto;
+}
+
+.hostly-sala-editor-left-panel__scroll {
+  gap: 6px;
+}
+
+/* Eliminar scroll anidado del selector de espacios (antes max-height + overflow-y). */
+.hostly-sala-editor-space-switcher {
+  gap: 4px;
+  padding: 0 0 6px;
+}
+
+.hostly-sala-editor-space-switcher__list {
+  max-height: none;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+.hostly-sala-editor-space-switcher__item,
+.hostly-sala-editor-space-switcher__add {
+  min-height: 44px;
+  padding: 8px;
+}
+
+/* Compactar cabecera / búsqueda / categorías / filas (~44–48 px táctil). */
+.hostly-sala-library {
+  gap: 6px;
+  padding: 0;
+  border-radius: 14px;
+  background: transparent;
+}
+
+.hostly-sala-library__head {
+  gap: 5px;
+  padding: 0 1px;
+}
+
+.hostly-sala-library__title {
+  margin: 0;
+  padding-left: 3px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.hostly-sala-library__search {
+  min-height: 44px;
+  gap: 7px;
+  border-radius: 11px;
+  padding: 0 9px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.hostly-sala-library__search-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hostly-sala-library__search-input {
+  padding: 8px 0;
+  font-size: 11.5px;
+}
+
+.hostly-sala-library__scroll {
+  gap: 5px;
+  padding: 0 1px 4px;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+.hostly-sala-library__scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.hostly-sala-library__category-toggle,
+.hostly-sala-library__category-toggle--static {
+  min-height: 44px;
+  gap: 7px;
+  padding: 7px 8px;
+}
+
+.hostly-sala-library__category-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.hostly-sala-library__category-label {
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.hostly-sala-library__category-meta {
+  font-size: 8px;
+}
+
+.hostly-sala-library__items {
+  padding: 1px 6px 6px;
+}
+
+.hostly-sala-library__item + .hostly-sala-library__item {
+  margin-top: 3px;
+}
+
+.hostly-sala-library__item-btn {
+  min-height: 44px;
+  gap: 7px;
+  padding: 7px 8px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.hostly-sala-library__item-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 7px;
+}
+
+.hostly-sala-library__item-label {
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+/* Override mínimo táctil global (50px !important) solo en la columna izquierda
+ * del Editor V2. Reutiliza --hostly-touch-min ya consumido por globals.css;
+ * no se introduce variable nueva. */
+.hostly-sala-editor-workbench .hostly-sala-editor-left-panel {
+  --hostly-touch-min: 44px;
 }
 

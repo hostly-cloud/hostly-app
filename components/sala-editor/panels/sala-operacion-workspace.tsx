@@ -26,6 +26,7 @@ import {
   getOperationalToolHint,
   resolveEditorToolHint,
   resolveOperationalInteractionState,
+  type EditorToolHintProfile,
 } from "@/lib/sala-editor/ux/editor-tool-hints";
 import {
   getBaseFloorCatalogEntry,
@@ -41,7 +42,7 @@ import { SalaOperationalInstanceCanvasObject } from "@/components/sala-editor/pa
 export type SalaOperacionWorkspaceProps = {
   espacio: SalaEspacio;
   restaurantId: string;
-  activeCatalogItem: OperationalElementCatalogItem;
+  activeCatalogItem: OperationalElementCatalogItem | null;
   instances: OperationalElementInstance[];
   selectedInstanceId: string | null;
   draggingInstanceId: string | null;
@@ -73,6 +74,14 @@ export type SalaOperacionWorkspaceProps = {
   onResizeCancel: () => void;
   onDuplicateInstance: (instanceId: string) => void;
   canvasLayers?: ReactNode;
+};
+
+const NEUTRAL_OPERATIONAL_TOOL_HINT: EditorToolHintProfile = {
+  icon: "◎",
+  cursor: "default",
+  idleHint: "Selecciona una mesa del plano o elige un elemento para colocarlo.",
+  draggingHint: "Suelta para fijar la mesa en su nueva posición.",
+  resizingHint: "Suelta para confirmar el tamaño.",
 };
 
 type SalaOperacionCanvasContentProps = Omit<
@@ -138,7 +147,9 @@ export function SalaOperacionWorkspace({
 }: SalaOperacionWorkspaceProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const base = normalizeSalaEspacioBase(espacio.base);
-  const toolHintProfile = getOperationalToolHint(activeCatalogItem);
+  const toolHintProfile = activeCatalogItem
+    ? getOperationalToolHint(activeCatalogItem)
+    : NEUTRAL_OPERATIONAL_TOOL_HINT;
   const toolHint = resolveEditorToolHint(
     toolHintProfile,
     resolveOperationalInteractionState({
@@ -219,7 +230,6 @@ function SalaOperacionCanvasContent({
   onResizeMove,
   onResizeEnd,
   onResizeCancel,
-  onDuplicateInstance,
 }: SalaOperacionCanvasContentProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
@@ -234,7 +244,7 @@ function SalaOperacionCanvasContent({
       if (!displayPoint) return null;
       return unscaleEditorPoint(displayPoint, coordinateScale);
     },
-    [canvasViewport, coordinateScale],
+    [canvasViewport, coordinateScale, surfaceRef],
   );
 
   const handleCanvasPointerDown = useCallback(
