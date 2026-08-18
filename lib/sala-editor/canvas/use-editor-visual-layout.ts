@@ -27,15 +27,11 @@ export function useEditorVisualLayout(
   viewportRef: RefObject<HTMLElement | null>,
   basePreview: SalaEspacioBase | null | undefined,
   enabled: boolean,
-  deps: readonly unknown[] = [],
 ): EditorVisualLayoutState {
   const [layout, setLayout] = useState<EditorVisualLayoutState>(EMPTY_LAYOUT);
 
   useLayoutEffect(() => {
-    if (!enabled || !basePreview) {
-      setLayout(EMPTY_LAYOUT);
-      return;
-    }
+    if (!enabled || !basePreview) return;
 
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -65,7 +61,7 @@ export function useEditorVisualLayout(
     observer.observe(viewport);
 
     return () => observer.disconnect();
-  }, [basePreview, enabled, viewportRef, ...deps]);
+  }, [basePreview, enabled, viewportRef]);
 
-  return layout;
+  return enabled && basePreview ? layout : EMPTY_LAYOUT;
 }

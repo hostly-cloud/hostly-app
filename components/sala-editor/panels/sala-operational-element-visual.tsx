@@ -7,12 +7,17 @@ import {
   type OperationalElementType,
 } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
+import { createTableSeatLayout } from "@/lib/sala-editor/canvas/table-seat-layout";
+import type { OperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 
 export type SalaOperationalElementVisualProps = {
   elementType: OperationalElementType;
   label: string;
   color: string;
   visualVariant?: OperationalVisualVariant | null;
+  seatCount?: number;
+  canvasSize?: OperationalInstanceCanvasSize;
   mini?: boolean;
 };
 
@@ -43,11 +48,23 @@ export function SalaOperationalElementVisual({
   label,
   color,
   visualVariant = null,
+  seatCount,
+  canvasSize,
   mini = false,
 }: SalaOperationalElementVisualProps) {
+  const canvasViewport = useCanvasViewport();
   const tableLabel =
     elementType === "TABLE" && !mini ? resolveTableVisualLabel(label) : null;
   const showName = !mini && (!tableLabel || tableLabel.name);
+  const tableLayout =
+    elementType === "TABLE" && !mini
+      ? createTableSeatLayout(
+          seatCount,
+          visualVariant,
+          canvasSize,
+          canvasViewport?.scale,
+        )
+      : null;
 
   return (
     <div
@@ -61,13 +78,40 @@ export function SalaOperationalElementVisual({
       {...(visualVariant ? { "data-visual-variant": visualVariant } : {})}
       style={{ "--op-accent": color } as CSSProperties}
     >
-      <div className="hostly-sala-op-visual__glyph" aria-hidden>
-        {tableLabel ? (
-          <span className="hostly-sala-op-visual__table-number">
-            {tableLabel.number}
-          </span>
-        ) : null}
-      </div>
+      {tableLayout ? (
+        <div
+          className="hostly-sala-op-visual__table-layout"
+          style={{
+            width: tableLayout.tableTop.width,
+            height: tableLayout.tableTop.height,
+          }}
+        >
+          {tableLayout.seats.length > 0 ? (
+            <div className="hostly-sala-op-visual__seats" aria-hidden>
+              {tableLayout.seats.map((seat, index) => (
+                <span
+                  key={index}
+                  className="hostly-sala-op-visual__seat"
+                  style={{
+                    left: seat.x,
+                    top: seat.y,
+                    width: tableLayout.seatSize.width,
+                    height: tableLayout.seatSize.height,
+                    transform: `translate(-50%, -50%) rotate(${seat.rotationDegrees}deg)`,
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          <div className="hostly-sala-op-visual__glyph" aria-hidden>
+            <span className="hostly-sala-op-visual__table-number">
+              {tableLabel?.number}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="hostly-sala-op-visual__glyph" aria-hidden />
+      )}
       {showName ? (
         <span className="hostly-sala-op-visual__name">
           {tableLabel?.name ?? label}

@@ -67,6 +67,16 @@ export function selectSalaEspacioInNavigation(
   };
 }
 
+export function selectNewSalaEspacioInNavigation(
+  navigation: SalaEditorNavigation,
+  espacioId: string,
+): SalaEditorNavigation {
+  return {
+    ...selectSalaEspacioInNavigation(navigation, espacioId),
+    phase: "base",
+  };
+}
+
 export function resetSalaEditorNavigation(): SalaEditorNavigation {
   return createDefaultSalaEditorNavigation();
 }

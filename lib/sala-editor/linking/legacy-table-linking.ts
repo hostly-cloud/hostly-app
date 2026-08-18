@@ -15,6 +15,7 @@ export type LegacyTableAutoLinkReason =
   | "LEGACY_OCUPADA"
   | "LEGACY_YA_ENLAZADA"
   | "LEGACY_NO_EXISTE"
+  | "ENTIDAD_NO_OPERATIVA"
   | "RESTAURANT_DISTINTO"
   | "SIN_NUMERO"
   | "SIN_NOMBRE"
@@ -52,12 +53,100 @@ export type LegacyTableAutoLinkResult = {
   debug: LegacyTableAutoLinkDebugEntry[];
 };
 
+export type LegacyOperationalTableCandidate = {
+  id: string;
+  restaurantId: string;
+  type?: unknown;
+  isActive?: unknown;
+  editorV2ElementType?: unknown;
+  metadata?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isTableEditorV2ElementType(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "table" || normalized === "operational:table";
+}
+
+/**
+ * Contrato canónico para permitir que un documento de `tables` actúe como
+ * destino de una instancia operativa TABLE del Editor V2.
+ */
+export function isLegacyOperationalTableCandidate(
+  candidate: LegacyOperationalTableCandidate,
+  restaurantId: string,
+): boolean {
+  const expectedRestaurantId = restaurantId.trim();
+  const candidateRestaurantId = candidate.restaurantId.trim();
+  const candidateId = candidate.id.trim();
+  if (
+    !expectedRestaurantId ||
+    !candidateId ||
+    candidateRestaurantId !== expectedRestaurantId ||
+    candidate.isActive === false ||
+    candidateId.startsWith("v2-map-")
+  ) {
+    return false;
+  }
+
+  if (candidate.type !== undefined && candidate.type !== null && candidate.type !== "") {
+    if (typeof candidate.type !== "string" || candidate.type.trim().toLowerCase() !== "table") {
+      return false;
+    }
+  }
+
+  if (
+    candidate.editorV2ElementType !== undefined &&
+    candidate.editorV2ElementType !== null &&
+    candidate.editorV2ElementType !== ""
+  ) {
+    if (
+      typeof candidate.editorV2ElementType !== "string" ||
+      !isTableEditorV2ElementType(candidate.editorV2ElementType)
+    ) {
+      return false;
+    }
+  }
+
+  if (candidate.metadata !== undefined && candidate.metadata !== null) {
+    if (!isRecord(candidate.metadata)) return false;
+    for (const key of ["editorV2ElementType", "elementType", "type"] as const) {
+      const signal = candidate.metadata[key];
+      if (signal === undefined || signal === null || signal === "") continue;
+      if (typeof signal !== "string" || !isTableEditorV2ElementType(signal)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 export function readLegacyTableIdFromMetadata(
   metadata: Record<string, unknown>,
 ): string {
   return typeof metadata.legacyTableId === "string"
     ? metadata.legacyTableId.trim()
     : "";
+}
+
+export function shouldOfferLegacyTableAutoLink(params: {
+  instances: readonly OperationalElementInstance[];
+  legacyTables: readonly Table[];
+  restaurantId: string;
+}): boolean {
+  const restaurantId = params.restaurantId.trim();
+  if (!restaurantId) return false;
+  return (
+    computeSafeLegacyTableAutoLinks({
+      instances: [...params.instances],
+      legacyTables: [...params.legacyTables],
+      restaurantId,
+    }).updates.length > 0
+  );
 }
 
 export function normalizeLegacyTableLinkText(value: string): string {
@@ -87,12 +176,18 @@ function candidateDebug(
   const alreadyLinked = usedLegacyTableIds.has(table.id);
   const wrongRestaurant = table.restaurantId !== restaurantId;
   const inactive = table.isActive === false;
+  const incompatible =
+    !wrongRestaurant &&
+    !inactive &&
+    !isLegacyOperationalTableCandidate(table, restaurantId);
   const discardReason =
     primaryDiscardReason ??
     (wrongRestaurant
       ? "RESTAURANT_DISTINTO"
       : inactive
         ? "LEGACY_NO_EXISTE"
+        : incompatible
+          ? "ENTIDAD_NO_OPERATIVA"
         : alreadyLinked
           ? "LEGACY_YA_ENLAZADA"
           : null);
@@ -114,6 +209,7 @@ function reasonForNoCompatibleCandidate(params: {
   rawMatches: Table[];
   sameRestaurantMatches: Table[];
   activeMatches: Table[];
+  operationalMatches: Table[];
   availableMatches: Table[];
   duplicateReason: Exclude<LegacyTableAutoLinkReason, "LINKED">;
   noMatchReason: Exclude<LegacyTableAutoLinkReason, "LINKED">;
@@ -122,6 +218,7 @@ function reasonForNoCompatibleCandidate(params: {
     rawMatches,
     sameRestaurantMatches,
     activeMatches,
+    operationalMatches,
     availableMatches,
     duplicateReason,
     noMatchReason,
@@ -130,6 +227,7 @@ function reasonForNoCompatibleCandidate(params: {
   if (rawMatches.length === 0) return noMatchReason;
   if (sameRestaurantMatches.length === 0) return "RESTAURANT_DISTINTO";
   if (activeMatches.length === 0) return "LEGACY_NO_EXISTE";
+  if (operationalMatches.length === 0) return "ENTIDAD_NO_OPERATIVA";
   if (availableMatches.length === 0) return "LEGACY_YA_ENLAZADA";
   if (availableMatches.length > 1) return duplicateReason;
   return "OTRA_CAUSA";
@@ -176,7 +274,10 @@ export function resolveSafeLegacyTableAutoLink(params: {
     const activeMatches = sameRestaurantMatches.filter(
       (table) => table.isActive !== false,
     );
-    const availableMatches = activeMatches.filter(
+    const operationalMatches = activeMatches.filter((table) =>
+      isLegacyOperationalTableCandidate(table, restaurantId),
+    );
+    const availableMatches = operationalMatches.filter(
       (table) => !usedLegacyTableIds.has(table.id),
     );
     if (availableMatches.length === 1) {
@@ -204,6 +305,7 @@ export function resolveSafeLegacyTableAutoLink(params: {
       rawMatches,
       sameRestaurantMatches,
       activeMatches,
+      operationalMatches,
       availableMatches,
       duplicateReason: "NUMERO_DUPLICADO",
       noMatchReason: "SIN_COINCIDENCIA_NUMERO",
@@ -255,7 +357,10 @@ export function resolveSafeLegacyTableAutoLink(params: {
   const activeMatches = sameRestaurantMatches.filter(
     (table) => table.isActive !== false,
   );
-  const availableMatches = activeMatches.filter(
+  const operationalMatches = activeMatches.filter((table) =>
+    isLegacyOperationalTableCandidate(table, restaurantId),
+  );
+  const availableMatches = operationalMatches.filter(
     (table) => !usedLegacyTableIds.has(table.id),
   );
   if (availableMatches.length === 1) {
@@ -283,6 +388,7 @@ export function resolveSafeLegacyTableAutoLink(params: {
     rawMatches,
     sameRestaurantMatches,
     activeMatches,
+    operationalMatches,
     availableMatches,
     duplicateReason: "NOMBRE_DUPLICADO",
     noMatchReason: "SIN_COINCIDENCIA_NOMBRE",

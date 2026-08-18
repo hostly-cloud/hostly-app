@@ -5048,6 +5048,22 @@
   inset: var(--hostly-editor-selection-touch-inset);
 }
 
+.hostly-sala-landscape-element__resize-handle--nw::before {
+  inset: -22px -8px -8px -22px;
+}
+
+.hostly-sala-landscape-element__resize-handle--ne::before {
+  inset: -22px -22px -8px -8px;
+}
+
+.hostly-sala-landscape-element__resize-handle--sw::before {
+  inset: -8px -8px -22px -22px;
+}
+
+.hostly-sala-landscape-element__resize-handle--se::before {
+  inset: -8px -22px -22px -8px;
+}
+
 .hostly-sala-landscape-element__resize-handle--nw {
   top: -7px;
   left: -7px;
@@ -5076,12 +5092,13 @@
   position: absolute;
   inset: 0;
   z-index: 5;
-  pointer-events: auto;
+  pointer-events: none;
   touch-action: none;
 }
 
 .hostly-sala-landscape-placement-hit-area.is-creating {
   cursor: crosshair;
+  pointer-events: auto;
 }
 
 .hostly-sala-operational-layer {

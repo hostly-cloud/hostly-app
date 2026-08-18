@@ -44,6 +44,10 @@ import type { SalaWallSegment } from "@/lib/sala-editor/types/wall-segment";
 import type { OperationalElementState, OperationalElementType } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { withOperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import {
+  DEFAULT_ZONE_SIZE,
+  type Zone as SalaEditorZone,
+} from "@/lib/sala-editor/zones/zone";
 
 const LEGACY_FALLBACK_SPACE_ID = "legacy-main-floor";
 
@@ -202,6 +206,36 @@ function legacyElementSpaceId(
   const explicit = element.floorPlanId?.trim();
   if (explicit) return explicit;
   return legacyUnscopedFloorPlanAnchorId(floorPlans) ?? LEGACY_FALLBACK_SPACE_ID;
+}
+
+function legacyZoneToEditorZone(
+  zone: Zone,
+  floorPlans: FloorPlan[],
+): SalaEditorZone {
+  const now = Date.now();
+  return {
+    id: zone.id,
+    espacioId: legacyElementSpaceId(zone, floorPlans),
+    type: "dining",
+    name: zone.name.trim() || "Zona",
+    x: Math.round(numberOrDefault(zone.x, 0)),
+    y: Math.round(numberOrDefault(zone.y, 0)),
+    width: Math.max(48, Math.round(numberOrDefault(zone.width, DEFAULT_ZONE_SIZE.width))),
+    height: Math.max(
+      48,
+      Math.round(numberOrDefault(zone.height, DEFAULT_ZONE_SIZE.height)),
+    ),
+    color: zone.color?.trim() || DEFAULT_SALA_ESPACIO_COLOR,
+    locked: false,
+    visible: true,
+    metadata: {
+      source: "legacy",
+      legacyZoneId: zone.id,
+      legacyFloorPlanId: zone.floorPlanId,
+    },
+    createdAt: numberOrDefault(zone.createdAt, now),
+    updatedAt: numberOrDefault(zone.updatedAt, now),
+  };
 }
 
 function buildLegacyMetadata(
@@ -413,8 +447,21 @@ export function buildSalaEditorDocumentFromLegacy(params: {
     );
   }
 
+  for (const zone of params.zones) {
+    const spaceId = legacyElementSpaceId(zone, params.floorPlans);
+    espacios = ensureSpaceForLegacyFloorPlanId(
+      espacios,
+      restaurantId,
+      spaceId,
+      warnings,
+    );
+  }
+
   const zonesById = new Map(params.zones.map((zone) => [zone.id, zone]));
   const zonesByName = new Map(params.zones.map((zone) => [zone.name, zone]));
+  const hydratedZones = params.zones.map((zone) =>
+    legacyZoneToEditorZone(zone, params.floorPlans),
+  );
   const operationalElementInstances: OperationalElementInstance[] = [];
   const structuralElements: SalaStructuralElement[] = [];
   const walls: SalaWallSegment[] = [];
@@ -462,15 +509,25 @@ export function buildSalaEditorDocumentFromLegacy(params: {
 
   const sortedSpaces = sortSalaEspacios(espacios);
   const selectedEspacioId = sortedSpaces[0]?.id ?? null;
+  const hasLegacyEditorContent =
+    hydratedZones.length > 0 ||
+    structuralElements.length > 0 ||
+    walls.length > 0 ||
+    operationalElementInstances.length > 0;
   const document: SalaEditorDocument = normalizeSalaEditorDocument({
     ...createEmptySalaEditorDocument(restaurantId),
     version: SALA_EDITOR_DOCUMENT_VERSION,
     espacios: sortedSpaces,
     walls,
+    zones: hydratedZones,
     structuralElements,
     operationalElementInstances,
     navigation: {
-      phase: selectedEspacioId ? "operacion" : "espacios",
+      phase: selectedEspacioId
+        ? hasLegacyEditorContent
+          ? "operacion"
+          : "base"
+        : "espacios",
       selectedEspacioId,
     },
     updatedAt: Date.now(),

@@ -121,13 +121,28 @@ function renderWallStroke(
   extraProps?: {
     opacity?: number;
     strokeDasharray?: string;
+    architectural?: boolean;
   },
 ) {
   const halfWidth = strokeWidth / 2;
 
   return (
     <>
+      {extraProps?.architectural ? (
+        <line
+          className="hostly-sala-wall__depth"
+          x1={segment.x1}
+          y1={segment.y1}
+          x2={segment.x2}
+          y2={segment.y2}
+          stroke="rgba(38, 48, 55, 0.24)"
+          strokeWidth={strokeWidth + 3}
+          strokeLinecap="butt"
+          transform="translate(1.5 2)"
+        />
+      ) : null}
       <line
+        className={extraProps?.architectural ? "hostly-sala-wall__body" : undefined}
         x1={segment.x1}
         y1={segment.y1}
         x2={segment.x2}
@@ -138,6 +153,19 @@ function renderWallStroke(
         opacity={extraProps?.opacity}
         strokeDasharray={extraProps?.strokeDasharray}
       />
+      {extraProps?.architectural ? (
+        <line
+          className="hostly-sala-wall__light"
+          x1={segment.x1}
+          y1={segment.y1}
+          x2={segment.x2}
+          y2={segment.y2}
+          stroke="rgba(255, 255, 255, 0.5)"
+          strokeWidth="1.25"
+          strokeLinecap="butt"
+          transform="translate(-0.8 -0.8)"
+        />
+      ) : null}
       {segment.capStart === "round" ? (
         <circle
           cx={segment.x1}
@@ -190,6 +218,9 @@ export function SalaWallCanvas({
   );
   const [attachmentEditSession, setAttachmentEditSession] =
     useState<WallAttachmentInteractionSession | null>(null);
+  const attachmentEditSessionRef = useRef<WallAttachmentInteractionSession | null>(
+    null,
+  );
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const attachmentPlacementEnabled =
@@ -255,9 +286,18 @@ export function SalaWallCanvas({
         .map((attachment) => {
           const wall = scaledWallById.get(attachment.wallId);
           if (!wall || !isRenderedWallAttachmentKind(attachment.kind)) return null;
+          const scaledAttachment = attachment.offset
+            ? {
+                ...attachment,
+                offset: {
+                  tangent: (attachment.offset.tangent ?? 0) * coordinateScale,
+                  normal: (attachment.offset.normal ?? 0) * coordinateScale,
+                },
+              }
+            : attachment;
           return {
             attachment,
-            resolved: resolveWallAttachment(wall, attachment),
+            resolved: resolveWallAttachment(wall, scaledAttachment),
           };
         })
         .filter(
@@ -268,7 +308,7 @@ export function SalaWallCanvas({
             resolved: ReturnType<typeof resolveWallAttachment>;
           } => item != null,
         ),
-    [scaledWallById, wallAttachments],
+    [coordinateScale, scaledWallById, wallAttachments],
   );
 
   const resolvePoint = useCallback(
@@ -303,27 +343,25 @@ export function SalaWallCanvas({
   );
 
   const cancelAttachmentEditSession = useCallback(() => {
-    setAttachmentEditSession((session) => {
-      if (!session) return null;
-      if (session.active) {
-        onUpdateWallAttachment?.(session.objectId, {
-          positionRatio: session.originObject.positionRatio,
-          offset: session.originObject.offset,
-        });
-        onWallAttachmentMoveEnd?.("cancel");
-      }
-      return null;
-    });
+    const session = attachmentEditSessionRef.current;
+    attachmentEditSessionRef.current = null;
+    setAttachmentEditSession(null);
+    if (session?.active) {
+      onUpdateWallAttachment?.(session.objectId, {
+        positionRatio: session.originObject.positionRatio,
+        offset: session.originObject.offset,
+      });
+      onWallAttachmentMoveEnd?.("cancel");
+    }
   }, [onUpdateWallAttachment, onWallAttachmentMoveEnd]);
 
   const finishAttachmentEditSession = useCallback(() => {
-    setAttachmentEditSession((session) => {
-      if (!session) return null;
-      if (session.active) {
-        onWallAttachmentMoveEnd?.("complete");
-      }
-      return null;
-    });
+    const session = attachmentEditSessionRef.current;
+    attachmentEditSessionRef.current = null;
+    setAttachmentEditSession(null);
+    if (session?.active) {
+      onWallAttachmentMoveEnd?.("complete");
+    }
   }, [onWallAttachmentMoveEnd]);
 
   const findAttachmentTargetWall = useCallback(
@@ -396,11 +434,13 @@ export function SalaWallCanvas({
     },
     [
       attachmentPlacementEnabled,
+      attachmentPlacementKind,
       createPayload,
       findAttachmentTargetWall,
       onClearWallAttachmentSelection,
       onPlaceWallAttachment,
       onPointerDown,
+      resolveConstrainedAttachmentPosition,
     ],
   );
 
@@ -427,9 +467,11 @@ export function SalaWallCanvas({
     },
     [
       attachmentPlacementEnabled,
+      attachmentPlacementKind,
       createPayload,
       findAttachmentTargetWall,
       onPointerMove,
+      resolveConstrainedAttachmentPosition,
     ],
   );
 
@@ -479,17 +521,19 @@ export function SalaWallCanvas({
         capturePointerIfAvailable(event.currentTarget, event.pointerId);
         onSelectWallAttachment?.(attachment.id);
 
-        setAttachmentEditSession({
+        const session: WallAttachmentInteractionSession = {
           objectId: attachment.id,
           wallId: attachment.wallId,
           mode: "move",
           originPointer: point,
           originObject: attachment,
           active: false,
-        });
+        };
+        attachmentEditSessionRef.current = session;
+        setAttachmentEditSession(session);
       },
       onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
-        const session = attachmentEditSession;
+        const session = attachmentEditSessionRef.current;
         if (!session || session.objectId !== attachment.id) return;
         event.stopPropagation();
 
@@ -506,12 +550,10 @@ export function SalaWallCanvas({
         );
         if (!constrained) return;
         if (!session.active) {
-          setAttachmentEditSession((current) =>
-            current?.objectId === session.objectId
-              ? { ...current, active: true }
-              : current,
-          );
           onWallAttachmentMoveStart?.();
+          const nextSession = { ...session, active: true };
+          attachmentEditSessionRef.current = nextSession;
+          setAttachmentEditSession(nextSession);
         }
         onUpdateWallAttachment?.(attachment.id, {
           positionRatio: constrained.positionRatio,
@@ -533,7 +575,6 @@ export function SalaWallCanvas({
       },
     }),
     [
-      attachmentEditSession,
       cancelAttachmentEditSession,
       coordinateScale,
       finishAttachmentEditSession,
@@ -654,6 +695,7 @@ export function SalaWallCanvas({
                 segment,
                 selected ? WALL_ACCENT_COLOR : SALA_WALL_STROKE_COLOR,
                 SALA_WALL_STROKE_WIDTH,
+                { architectural: true },
               )}
             </g>
           );

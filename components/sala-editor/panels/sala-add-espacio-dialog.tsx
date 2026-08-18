@@ -32,13 +32,6 @@ export function SalaAddEspacioDialog({
 
   useEffect(() => {
     if (!open) return;
-    setName("");
-    setTipo("sala");
-    setColor(getSalaEspacioTypeOption("sala").defaultColor);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };

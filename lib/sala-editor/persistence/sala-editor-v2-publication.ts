@@ -27,6 +27,10 @@ import {
   buildPublicationWriteLastOpContext,
   planPublisherWriteRemember,
 } from "@/lib/sala-editor/persistence/sala-editor-v2-publisher-write-context";
+import {
+  isLegacyOperationalTableCandidate,
+  type LegacyOperationalTableCandidate,
+} from "@/lib/sala-editor/linking/legacy-table-linking";
 
 export type SalaEditorV2PublicationSkippedItem = {
   id: string;
@@ -46,6 +50,13 @@ export type SalaEditorV2PublishedOperationalTableLink = {
   legacyTableIdBefore: string | null;
   legacyTableIdAfter: string;
   floorPlanId: string;
+  action: "create" | "reuse";
+};
+
+export type SalaEditorV2PublishedSpaceFloorPlanLink = {
+  spaceId: string;
+  legacyFloorPlanIdBefore: string | null;
+  legacyFloorPlanIdAfter: string;
   action: "create" | "reuse";
 };
 
@@ -147,10 +158,283 @@ export type SalaEditorV2PublicationResult = {
   decorativeAudit: SalaEditorV2PublicationDecorativeAuditItem[];
   unsafeFloorPlanTables: SalaEditorV2PublicationFloorPlanWarning[];
   newOperationalTableLinks: SalaEditorV2PublishedOperationalTableLink[];
+  newSpaceFloorPlanLinks: SalaEditorV2PublishedSpaceFloorPlanLink[];
 };
 
 const FIRESTORE_BATCH_LIMIT = 450;
 const SALA_EDITOR_DEV_DIAGNOSTICS = process.env.NODE_ENV !== "production";
+
+function stableIdToken(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+export function stableEditorV2FloorPlanId(
+  restaurantId: string,
+  spaceId: string,
+): string {
+  return `editor-v2-floor-${stableIdToken(restaurantId.trim())}-${stableIdToken(spaceId.trim())}`;
+}
+
+export type SalaEditorV2PublicationPreflightIssueCode =
+  | "duplicate_space_id"
+  | "shared_legacy_floor_plan"
+  | "stable_floor_plan_id_collision"
+  | "unresolved_content_space"
+  | "unsafe_floor_plan_ownership"
+  | "invalid_operational_legacy_table_link";
+
+export type SalaEditorV2PublicationPreflightIssue = {
+  code: SalaEditorV2PublicationPreflightIssueCode;
+  floorPlanId: string | null;
+  spaceIds: string[];
+  spaceNames: string[];
+  instanceIds?: string[];
+  legacyTableIds?: string[];
+  detail: string;
+};
+
+export type SalaEditorV2PublicationFloorPlanOwnership = {
+  floorPlanId: string;
+  exists: boolean;
+  restaurantId: string | null;
+};
+
+export type SalaEditorV2PublicationLegacyTableDocument =
+  LegacyOperationalTableCandidate;
+
+export type SalaEditorV2PublicationFloorPlanAssignment = {
+  spaceId: string;
+  spaceName: string;
+  floorPlanId: string;
+  source: "legacy" | "generated";
+};
+
+export type SalaEditorV2PublicationPreflightResult = {
+  assignments: SalaEditorV2PublicationFloorPlanAssignment[];
+};
+
+export class SalaEditorV2PublicationPreflightError extends Error {
+  readonly code = "SALA_EDITOR_V2_PUBLICATION_PREFLIGHT_FAILED" as const;
+  readonly issues: SalaEditorV2PublicationPreflightIssue[];
+
+  constructor(issues: SalaEditorV2PublicationPreflightIssue[]) {
+    const affectedNames = [
+      ...new Set(issues.flatMap((issue) => issue.spaceNames).filter(Boolean)),
+    ];
+    const affectedLabel =
+      affectedNames.length > 0
+        ? ` Espacios afectados: ${affectedNames.join(", ")}.`
+        : "";
+    const affectedInstances = [
+      ...new Set(issues.flatMap((issue) => issue.instanceIds ?? []).filter(Boolean)),
+    ];
+    const instanceLabel =
+      affectedInstances.length > 0
+        ? ` Instancias afectadas: ${affectedInstances.join(", ")}.`
+        : "";
+    const affectedLegacyTableIds = [
+      ...new Set(issues.flatMap((issue) => issue.legacyTableIds ?? []).filter(Boolean)),
+    ];
+    const legacyTableLabel =
+      affectedLegacyTableIds.length > 0
+        ? ` IDs legacy afectados: ${affectedLegacyTableIds.join(", ")}.`
+        : "";
+    super(
+      `Publicación bloqueada: el documento contiene enlaces no seguros.${affectedLabel}${instanceLabel}${legacyTableLabel} Corrige los enlaces indicados antes de publicar.`,
+    );
+    this.name = "SalaEditorV2PublicationPreflightError";
+    this.issues = issues;
+  }
+}
+
+function publicationContentSpaceReferences(
+  document: SalaEditorDocument,
+): Array<{ spaceId: string; label: string }> {
+  return [
+    ...document.operationalElementInstances.map((item) => ({
+      spaceId: item.spaceId,
+      label: item.name || item.id,
+    })),
+    ...document.zones.map((item) => ({
+      spaceId: item.espacioId,
+      label: item.name || item.id,
+    })),
+    ...document.walls.map((item) => ({ spaceId: item.espacioId, label: item.id })),
+    ...document.structuralElements.map((item) => ({
+      spaceId: item.espacioId,
+      label: item.id,
+    })),
+    ...document.landscapeElements.map((item) => ({
+      spaceId: item.espacioId,
+      label: item.id,
+    })),
+    ...document.surfaceObjects.map((item) => ({
+      spaceId: item.espacioId,
+      label: item.id,
+    })),
+  ];
+}
+
+export function preflightSalaEditorV2Publication(params: {
+  restaurantId: string;
+  document: SalaEditorDocument;
+  ownership?: SalaEditorV2PublicationFloorPlanOwnership[];
+  legacyTableDocuments?: readonly SalaEditorV2PublicationLegacyTableDocument[];
+}): SalaEditorV2PublicationPreflightResult {
+  const restaurantId = params.restaurantId.trim();
+  const issues: SalaEditorV2PublicationPreflightIssue[] = [];
+  const spacesById = new Map<string, SalaEditorDocument["espacios"]>();
+
+  for (const space of params.document.espacios) {
+    const peers = spacesById.get(space.id) ?? [];
+    peers.push(space);
+    spacesById.set(space.id, peers);
+  }
+
+  for (const [spaceId, spaces] of spacesById) {
+    if (spaces.length < 2) continue;
+    issues.push({
+      code: "duplicate_space_id",
+      floorPlanId: null,
+      spaceIds: [spaceId],
+      spaceNames: spaces.map((space) => space.name),
+      detail: `El identificador de espacio ${spaceId} está repetido.`,
+    });
+  }
+
+  const assignments = params.document.espacios.map((space) => {
+    const legacyFloorPlanId = stringOrEmpty(space.legacyFloorPlanId);
+    return {
+      spaceId: space.id,
+      spaceName: space.name.trim() || "Espacio sin nombre",
+      floorPlanId:
+        legacyFloorPlanId || stableEditorV2FloorPlanId(restaurantId, space.id),
+      source: legacyFloorPlanId ? ("legacy" as const) : ("generated" as const),
+    };
+  });
+
+  const assignmentsByFloorPlan = new Map<
+    string,
+    SalaEditorV2PublicationFloorPlanAssignment[]
+  >();
+  for (const assignment of assignments) {
+    const peers = assignmentsByFloorPlan.get(assignment.floorPlanId) ?? [];
+    peers.push(assignment);
+    assignmentsByFloorPlan.set(assignment.floorPlanId, peers);
+  }
+
+  for (const [floorPlanId, peers] of assignmentsByFloorPlan) {
+    if (peers.length < 2) continue;
+    const allLegacy = peers.every((peer) => peer.source === "legacy");
+    issues.push({
+      code: allLegacy
+        ? "shared_legacy_floor_plan"
+        : "stable_floor_plan_id_collision",
+      floorPlanId,
+      spaceIds: peers.map((peer) => peer.spaceId),
+      spaceNames: peers.map((peer) => peer.spaceName),
+      detail: allLegacy
+        ? `El plano ${floorPlanId} está enlazado por más de un espacio.`
+        : `El identificador estable ${floorPlanId} colisiona entre espacios distintos.`,
+    });
+  }
+
+  const assignmentBySpaceId = new Map(
+    assignments.map((assignment) => [assignment.spaceId, assignment]),
+  );
+  for (const reference of publicationContentSpaceReferences(params.document)) {
+    if (assignmentBySpaceId.has(reference.spaceId)) continue;
+    issues.push({
+      code: "unresolved_content_space",
+      floorPlanId: null,
+      spaceIds: [reference.spaceId],
+      spaceNames: [reference.spaceId || "Espacio desconocido"],
+      detail: `${reference.label} no pertenece a un espacio publicable; no puede usar el plano seleccionado como fallback.`,
+    });
+  }
+
+  if (params.ownership) {
+    const ownershipByFloorPlan = new Map(
+      params.ownership.map((entry) => [entry.floorPlanId, entry]),
+    );
+    for (const assignment of assignments) {
+      const ownership = ownershipByFloorPlan.get(assignment.floorPlanId);
+      const generatedMissingIsSafe =
+        assignment.source === "generated" && ownership?.exists === false;
+      const ownedByRestaurant =
+        ownership?.exists === true && ownership.restaurantId === restaurantId;
+      if (generatedMissingIsSafe || ownedByRestaurant) continue;
+      issues.push({
+        code: "unsafe_floor_plan_ownership",
+        floorPlanId: assignment.floorPlanId,
+        spaceIds: [assignment.spaceId],
+        spaceNames: [assignment.spaceName],
+        detail:
+          assignment.source === "legacy" && ownership?.exists === false
+            ? `El plano enlazado ${assignment.floorPlanId} no existe.`
+            : `No se pudo demostrar que el plano ${assignment.floorPlanId} pertenece al restaurante activo.`,
+      });
+    }
+  }
+
+  if (params.legacyTableDocuments) {
+    const legacyTablesById = new Map(
+      params.legacyTableDocuments.map((candidate) => [candidate.id, candidate]),
+    );
+    const spaceNamesById = new Map(
+      params.document.espacios.map((space) => [
+        space.id,
+        space.name.trim() || "Espacio sin nombre",
+      ]),
+    );
+    for (const instance of params.document.operationalElementInstances) {
+      if (instance.elementType !== "TABLE") continue;
+      const legacyTableId = readLegacyTableId(instance.metadata);
+      if (!legacyTableId) continue;
+      const candidate = legacyTablesById.get(legacyTableId);
+      if (
+        candidate &&
+        isLegacyOperationalTableCandidate(candidate, restaurantId)
+      ) {
+        continue;
+      }
+      issues.push({
+        code: "invalid_operational_legacy_table_link",
+        floorPlanId: null,
+        spaceIds: [instance.spaceId],
+        spaceNames: [spaceNamesById.get(instance.spaceId) ?? instance.spaceId],
+        instanceIds: [instance.id],
+        legacyTableIds: [legacyTableId],
+        detail: `La instancia ${instance.id} enlaza ${legacyTableId}, que no es una mesa operativa válida y activa del restaurante ${restaurantId}.`,
+      });
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new SalaEditorV2PublicationPreflightError(issues);
+  }
+
+  return { assignments };
+}
+
+export async function executeSalaEditorPublicationWritePhases(params: {
+  preflight: () => void;
+  commitFloorPlans: () => Promise<void>;
+  commitDecoratives: () => Promise<void>;
+  commitOperational: () => Promise<void>;
+  commitDeactivations: () => Promise<void>;
+}): Promise<void> {
+  params.preflight();
+  await params.commitFloorPlans();
+  await params.commitDecoratives();
+  await params.commitOperational();
+  await params.commitDeactivations();
+}
 
 type PublicationWrite = {
   ref: ReturnType<typeof doc>;
@@ -255,11 +539,6 @@ function rememberLastFirestoreOperation(
   };
 }
 
-function payloadKeysFromData(data: DocumentData | null | undefined): string[] {
-  if (!data) return [];
-  return Object.keys(data).sort();
-}
-
 function rememberLastFirestoreReadOperation(params: {
   operation: string;
   documentPath: string | null;
@@ -325,92 +604,26 @@ function stringOrEmpty(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function publicationLegacyTableDocument(
+  id: string,
+  data: Record<string, unknown>,
+): SalaEditorV2PublicationLegacyTableDocument {
+  return {
+    id,
+    restaurantId: stringOrEmpty(data.restaurantId),
+    type: data.type,
+    isActive: data.isActive,
+    editorV2ElementType: data.editorV2ElementType,
+    metadata: data.metadata,
+  };
+}
+
 function currentPublisherUid(): string | null {
   return auth.currentUser?.uid ?? null;
 }
 
 export function getLastSalaEditorV2FirestoreOperation(): SalaEditorV2LastFirestoreOperation | null {
   return lastSalaEditorV2FirestoreOperation;
-}
-
-function setLastSalaEditorV2FirestoreOperation(
-  operation: SalaEditorV2LastFirestoreOperation,
-): void {
-  lastSalaEditorV2FirestoreOperation = operation;
-}
-
-function writePayloadKeys(data: DocumentData | null | undefined): string[] {
-  return data ? Object.keys(data).sort() : [];
-}
-
-function rememberDocumentFirestoreOperation(params: {
-  operation: string;
-  ref: ReturnType<typeof doc>;
-  restaurantId: string;
-  data?: DocumentData;
-  existingRestaurantId?: string | null;
-}): void {
-  setLastSalaEditorV2FirestoreOperation({
-    operation: params.operation,
-    documentPath: params.ref.path,
-    collectionName: params.ref.parent.path,
-    restaurantId: params.restaurantId,
-    uid: currentPublisherUid(),
-    payloadRestaurantId: stringOrEmpty(params.data?.restaurantId) || null,
-    existingRestaurantId: params.existingRestaurantId ?? null,
-    payloadKeys: writePayloadKeys(params.data),
-  });
-}
-
-function rememberQueryFirestoreOperation(params: {
-  operation: string;
-  collectionName: string;
-  documentPath: string;
-  restaurantId: string;
-}): void {
-  setLastSalaEditorV2FirestoreOperation({
-    operation: params.operation,
-    documentPath: params.documentPath,
-    collectionName: params.collectionName,
-    restaurantId: params.restaurantId,
-    uid: currentPublisherUid(),
-    payloadRestaurantId: null,
-    existingRestaurantId: null,
-    payloadKeys: [],
-  });
-}
-
-function rememberBatchCommitFirestoreOperation(params: {
-  restaurantId: string;
-  rows: PublicationWriteDiagnostic[];
-}): void {
-  const collectionNames = [...new Set(params.rows.map((row) => row.collectionPath))];
-  setLastSalaEditorV2FirestoreOperation({
-    operation: "batch.commit",
-    documentPath:
-      params.rows.length === 1
-        ? params.rows[0]?.documentPath ?? "batch:0:documents"
-        : `batch:${params.rows.length}:documents`,
-    collectionName:
-      params.rows.length === 1 ? params.rows[0]?.collectionPath ?? "" : collectionNames.join(", "),
-    restaurantId: params.restaurantId,
-    uid: currentPublisherUid(),
-    payloadRestaurantId:
-      params.rows.length === 1 ? params.rows[0]?.payloadRestaurantId ?? null : null,
-    existingRestaurantId:
-      params.rows.length === 1 ? params.rows[0]?.existingRestaurantId ?? null : null,
-    payloadKeys: [...new Set(params.rows.flatMap((row) => Object.keys(row.payload)))].sort(),
-    writes: params.rows.map((row) => ({
-      operation: row.operation,
-      documentPath: row.documentPath,
-      collectionName: row.collectionPath,
-      payloadRestaurantId: row.payloadRestaurantId,
-      existingRestaurantId: row.existingRestaurantId,
-      payloadKeys: Array.isArray(row.payload.fieldKeys)
-        ? (row.payload.fieldKeys as string[])
-        : Object.keys(row.payload).sort(),
-    })),
-  });
 }
 
 function describeFirestoreError(error: unknown): Record<string, unknown> {
@@ -682,10 +895,6 @@ function readPublicationEditorV2ElementId(data: Record<string, unknown>): string
     stringOrEmpty(data.editorV2ElementId) ||
     stringOrEmpty(readPlainMetadata(data).editorV2ElementId);
   return editorV2ElementId || null;
-}
-
-function isProtectedOperationalPlanElementType(type: string): boolean {
-  return type === "table" || type === "sunbed" || type === "bed" || type === "custom";
 }
 
 function isLegacyTableStatusSafeToDeactivate(status: unknown): boolean {
@@ -1235,6 +1444,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       decorativeAudit: [],
       unsafeFloorPlanTables: [],
       newOperationalTableLinks: [],
+      newSpaceFloorPlanLinks: [],
     };
   }
 
@@ -1265,6 +1475,8 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     throw new Error("sala-editor-publication: document.restaurantId no coincide");
   }
 
+  preflightSalaEditorV2Publication({ restaurantId, document });
+
   const floorPlanWrites: PublicationWrite[] = [];
   const tableWrites: PublicationWrite[] = [];
   const zoneWrites: PublicationWrite[] = [];
@@ -1278,10 +1490,12 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   const decorativeAudit: SalaEditorV2PublicationDecorativeAuditItem[] = [];
   const unsafeFloorPlanTables: SalaEditorV2PublicationFloorPlanWarning[] = [];
   const newOperationalTableLinks: SalaEditorV2PublishedOperationalTableLink[] = [];
+  const newSpaceFloorPlanLinks: SalaEditorV2PublishedSpaceFloorPlanLink[] = [];
   const spacesById = new Map(document.espacios.map((space) => [space.id, space]));
   const safeFloorPlanIds = new Set<string>();
   const spacesByLegacyFloorPlanId = new Map<string, typeof document.espacios>();
   const safeFloorPlanIdBySpaceId = new Map<string, string>();
+  const floorPlanOwnership: SalaEditorV2PublicationFloorPlanOwnership[] = [];
   const replaceLegacyVisualMap = params.replaceLegacyVisualMap !== false;
   let decorativeLegacyFound = 0;
   let legacyTablesAudited = 0;
@@ -1297,6 +1511,64 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     spacesByLegacyFloorPlanId.set(floorPlanId, list);
   }
 
+  for (const space of document.espacios) {
+    if (stringOrEmpty(space.legacyFloorPlanId)) continue;
+
+    const floorPlanId = stableEditorV2FloorPlanId(restaurantId, space.id);
+    const ref = doc(db, "floorPlans", floorPlanId);
+    rememberLastFirestoreReadOperation({
+      operation: "getDoc",
+      documentPath: ref.path,
+      collectionName: "floorPlans",
+      restaurantId,
+    });
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+    const existingRestaurantId = existing
+      ? stringOrEmpty(existing.restaurantId) || null
+      : null;
+    floorPlanOwnership.push({
+      floorPlanId,
+      exists: snap.exists(),
+      restaurantId: existingRestaurantId,
+    });
+
+    const pixelsPerUnit = positiveFiniteNumber(space.base?.scale.pixelsPerUnit);
+    const widthUnits = positiveFiniteNumber(space.base?.dimensions.width);
+    const heightUnits = positiveFiniteNumber(space.base?.dimensions.height);
+    const payload: DocumentData = {
+      restaurantId,
+      name: space.name.trim() || "Espacio",
+      active: space.active !== false,
+      showInTpv: space.visible !== false,
+      sortOrder: space.sortOrder,
+      updatedAt: Date.now(),
+      editorV2SpaceId: space.id,
+      source: "editor-v2",
+      ...(!existing ? { createdAt: Date.now() } : {}),
+    };
+    if (pixelsPerUnit !== null && widthUnits !== null && heightUnits !== null) {
+      payload.width = Math.max(1, Math.round(widthUnits * pixelsPerUnit));
+      payload.height = Math.max(1, Math.round(heightUnits * pixelsPerUnit));
+    }
+
+    floorPlanWrites.push({
+      ref,
+      data: payload,
+      mode: "setMerge",
+      diagnosticLabel: existing ? "floorPlan:reuse-v2" : "floorPlan:create-v2",
+      existingRestaurantId,
+    });
+    safeFloorPlanIds.add(floorPlanId);
+    safeFloorPlanIdBySpaceId.set(space.id, floorPlanId);
+    newSpaceFloorPlanLinks.push({
+      spaceId: space.id,
+      legacyFloorPlanIdBefore: null,
+      legacyFloorPlanIdAfter: floorPlanId,
+      action: existing ? "reuse" : "create",
+    });
+  }
+
   for (const [floorPlanId, spaces] of spacesByLegacyFloorPlanId) {
     if (spaces.length !== 1) continue;
     const space = spaces[0]!;
@@ -1309,10 +1581,16 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       restaurantId,
     });
     const snap = await getDoc(ref);
-    if (!snap.exists()) continue;
-
-    const data = snap.data() as Record<string, unknown>;
-    if (stringOrEmpty(data.restaurantId) !== restaurantId) continue;
+    const data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+    const existingRestaurantId = data
+      ? stringOrEmpty(data.restaurantId) || null
+      : null;
+    floorPlanOwnership.push({
+      floorPlanId,
+      exists: snap.exists(),
+      restaurantId: existingRestaurantId,
+    });
+    if (!data || existingRestaurantId !== restaurantId) continue;
 
     safeFloorPlanIds.add(floorPlanId);
     safeFloorPlanIdBySpaceId.set(space.id, floorPlanId);
@@ -1337,22 +1615,22 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       data: payload,
       mode: "update",
       diagnosticLabel: "floorPlan:update",
-      existingRestaurantId: stringOrEmpty(data.restaurantId) || null,
+      existingRestaurantId,
     });
   }
 
+  preflightSalaEditorV2Publication({
+    restaurantId,
+    document,
+    ownership: floorPlanOwnership,
+  });
+
   const selectedSpaceId = stringOrEmpty(document.navigation.selectedEspacioId);
-  let selectedSafeFloorPlanId =
+  const selectedSafeFloorPlanId =
     selectedSpaceId !== "" ? safeFloorPlanIdBySpaceId.get(selectedSpaceId) ?? null : null;
 
   const resolveSafeFloorPlanIdForSpace = (spaceId: string): string | null => {
-    const direct = safeFloorPlanIdBySpaceId.get(spaceId);
-    if (direct) return direct;
-    if (selectedSafeFloorPlanId) return selectedSafeFloorPlanId;
-    if (safeFloorPlanIds.size === 1) {
-      return [...safeFloorPlanIds][0] ?? null;
-    }
-    return null;
+    return safeFloorPlanIdBySpaceId.get(spaceId) ?? null;
   };
 
   rememberLastFirestoreReadOperation({
@@ -1368,112 +1646,24 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     id: tableDoc.id,
     data: tableDoc.data() as Record<string, unknown>,
   }));
+  const legacyTableDocuments = queriedTableDocs.map((tableDoc) =>
+    publicationLegacyTableDocument(tableDoc.id, tableDoc.data),
+  );
   logPublisherTablesFirestoreAudit({
     restaurantId,
     docs: queriedTableDocs,
   });
+  preflightSalaEditorV2Publication({
+    restaurantId,
+    document,
+    ownership: floorPlanOwnership,
+    legacyTableDocuments,
+  });
 
-  let inferredSafeFloorPlanIdFromLinkedTables: string | null = null;
-  const floorPlanIdsByLinkedLegacyTable = new Map<string, string>();
-  for (const instance of document.operationalElementInstances) {
-    if (instance.elementType !== "TABLE") continue;
-    const legacyTableId = readLegacyTableId(instance.metadata);
-    if (!legacyTableId) continue;
-    const existing = queriedTableDocs.find((tableDoc) => tableDoc.id === legacyTableId);
-    if (!existing) continue;
-    const floorPlanId = stringOrEmpty(existing.data.floorPlanId);
-    if (!floorPlanId) continue;
-    floorPlanIdsByLinkedLegacyTable.set(legacyTableId, floorPlanId);
-  }
-
-  const linkedFloorPlanIds = new Set(floorPlanIdsByLinkedLegacyTable.values());
-  if (linkedFloorPlanIds.size === 1) {
-    inferredSafeFloorPlanIdFromLinkedTables = [...linkedFloorPlanIds][0]!;
-    if (!safeFloorPlanIds.has(inferredSafeFloorPlanIdFromLinkedTables)) {
-      const inferredFloorPlanId = inferredSafeFloorPlanIdFromLinkedTables;
-      safeFloorPlanIds.add(inferredFloorPlanId);
-      if (selectedSpaceId) {
-        safeFloorPlanIdBySpaceId.set(selectedSpaceId, inferredFloorPlanId);
-      } else if (document.espacios.length === 1) {
-        safeFloorPlanIdBySpaceId.set(document.espacios[0]!.id, inferredFloorPlanId);
-      }
-    }
-    selectedSafeFloorPlanId = selectedSafeFloorPlanId ?? inferredSafeFloorPlanIdFromLinkedTables;
-    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
-      console.info("[SalaEditorV2] Publisher floorPlan inferido desde mesas enlazadas", {
-        floorPlanId: inferredSafeFloorPlanIdFromLinkedTables,
-        linkedTables: floorPlanIdsByLinkedLegacyTable.size,
-      });
-    }
-  } else if (linkedFloorPlanIds.size > 1) {
-    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
-      console.warn("[SalaEditorV2] Publisher no infiere floorPlan: mesas enlazadas en varios planos", {
-        floorPlanIds: [...linkedFloorPlanIds],
-        linkedTables: floorPlanIdsByLinkedLegacyTable.size,
-      });
-    }
-  }
-
-  let finalDecorativeFallbackFloorPlanId: string | null = inferredSafeFloorPlanIdFromLinkedTables;
-  if (!finalDecorativeFallbackFloorPlanId) {
-    const activeOperationalFloorPlanIds = new Set<string>();
-    let activeOperationalTablesWithFloorPlan = 0;
-    for (const tableDoc of queriedTableDocs) {
-      const data = tableDoc.data;
-      if (data.isActive === false) continue;
-      const type = stringOrEmpty(data.type) || "table";
-      if (!isProtectedOperationalPlanElementType(type)) continue;
-      const floorPlanId = stringOrEmpty(data.floorPlanId);
-      if (!floorPlanId) continue;
-      activeOperationalTablesWithFloorPlan += 1;
-      activeOperationalFloorPlanIds.add(floorPlanId);
-    }
-
-    if (activeOperationalFloorPlanIds.size === 1) {
-      const candidateFloorPlanId = [...activeOperationalFloorPlanIds][0]!;
-      const floorPlanRef = doc(db, "floorPlans", candidateFloorPlanId);
-      rememberLastFirestoreReadOperation({
-        operation: "getDoc",
-        documentPath: floorPlanRef.path,
-        collectionName: "floorPlans",
-        restaurantId,
-      });
-      const floorPlanSnap = await getDoc(floorPlanRef);
-      if (floorPlanSnap.exists()) {
-        const floorPlanData = floorPlanSnap.data() as Record<string, unknown>;
-        if (stringOrEmpty(floorPlanData.restaurantId) === restaurantId) {
-          finalDecorativeFallbackFloorPlanId = candidateFloorPlanId;
-          safeFloorPlanIds.add(candidateFloorPlanId);
-          if (selectedSpaceId) {
-            safeFloorPlanIdBySpaceId.set(selectedSpaceId, candidateFloorPlanId);
-          } else if (document.espacios.length === 1) {
-            safeFloorPlanIdBySpaceId.set(document.espacios[0]!.id, candidateFloorPlanId);
-          }
-          selectedSafeFloorPlanId = selectedSafeFloorPlanId ?? candidateFloorPlanId;
-          if (SALA_EDITOR_DEV_DIAGNOSTICS) {
-            console.info("[SalaEditorV2] Publisher floorPlan inferido desde mesas activas", {
-              floorPlanId: candidateFloorPlanId,
-              activeOperationalTables: activeOperationalTablesWithFloorPlan,
-            });
-          }
-        }
-      }
-    } else if (activeOperationalFloorPlanIds.size > 1) {
-      if (SALA_EDITOR_DEV_DIAGNOSTICS) {
-        console.warn("[SalaEditorV2] Publisher no infiere floorPlan decorativo: varios planos activos", {
-          floorPlanIds: [...activeOperationalFloorPlanIds],
-        });
-      }
-    }
-  }
-
-  const resolveFallbackSafeFloorPlanId = (): string | null => {
-    if (selectedSafeFloorPlanId) return selectedSafeFloorPlanId;
-    if (inferredSafeFloorPlanIdFromLinkedTables) return inferredSafeFloorPlanIdFromLinkedTables;
-    if (finalDecorativeFallbackFloorPlanId) return finalDecorativeFallbackFloorPlanId;
-    if (safeFloorPlanIds.size === 1) return [...safeFloorPlanIds][0] ?? null;
-    return null;
-  };
+  // La selección de UI nunca participa en la resolución persistente. Cada
+  // contenido debe resolver exclusivamente el plano asignado a su espacio.
+  const inferredSafeFloorPlanIdFromLinkedTables: string | null = null;
+  const resolveFallbackSafeFloorPlanId = (): null => null;
 
   const resolveSafeFloorPlanIdForDecorative = (
     linkedSpace: SalaEditorDocument["espacios"][number] | undefined,
@@ -1488,7 +1678,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       }
     }
 
-    return resolveFallbackSafeFloorPlanId();
+    return null;
   };
 
   const expectedLegacyTableIds = new Set(
@@ -2354,13 +2544,24 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       }
 
       existing = snap.data() as Record<string, unknown>;
-      if (stringOrEmpty(existing.restaurantId) !== restaurantId) {
-        skippedTables.push({
-          id: instance.id,
-          name: instance.name,
-          reason: "restaurant_mismatch",
-        });
-        continue;
+      if (
+        !isLegacyOperationalTableCandidate(
+          publicationLegacyTableDocument(legacyTableId, existing),
+          restaurantId,
+        )
+      ) {
+        const spaceName = linkedSpace?.name.trim() || instance.spaceId;
+        throw new SalaEditorV2PublicationPreflightError([
+          {
+            code: "invalid_operational_legacy_table_link",
+            floorPlanId: resolvedFloorPlanId,
+            spaceIds: [instance.spaceId],
+            spaceNames: [spaceName],
+            instanceIds: [instance.id],
+            legacyTableIds: [legacyTableId],
+            detail: `La instancia ${instance.id} enlaza ${legacyTableId}, que dejó de ser una mesa operativa válida y activa antes de ejecutar la publicación.`,
+          },
+        ]);
       }
     }
 
@@ -2568,17 +2769,28 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     });
   }
 
-  await commitDecorativeWritesWithTrace(decorativeWrites, { restaurantId });
-  await commitUpdateWrites(
-    [
-      ...floorPlanWrites,
-      ...zoneWrites,
-      ...decorativeDeactivateWrites,
-      ...legacyTableDeactivateWrites,
-      ...tableWrites,
-    ],
-    { restaurantId },
-  );
+  await executeSalaEditorPublicationWritePhases({
+    preflight: () => {
+      preflightSalaEditorV2Publication({
+        restaurantId,
+        document,
+        ownership: floorPlanOwnership,
+        legacyTableDocuments,
+      });
+    },
+    // Materializa primero los planos que anclan el resto del mapa. Si una fase
+    // posterior falla, nunca se alcanza la desactivación destructiva final.
+    commitFloorPlans: () => commitUpdateWrites(floorPlanWrites, { restaurantId }),
+    commitDecoratives: () =>
+      commitDecorativeWritesWithTrace(decorativeWrites, { restaurantId }),
+    commitOperational: () =>
+      commitUpdateWrites([...zoneWrites, ...tableWrites], { restaurantId }),
+    commitDeactivations: () =>
+      commitUpdateWrites(
+        [...decorativeDeactivateWrites, ...legacyTableDeactivateWrites],
+        { restaurantId },
+      ),
+  });
 
   return {
     floorPlansUpdated: floorPlanWrites.length,
@@ -2598,5 +2810,6 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
     decorativeAudit,
     unsafeFloorPlanTables,
     newOperationalTableLinks,
+    newSpaceFloorPlanLinks,
   };
 }
