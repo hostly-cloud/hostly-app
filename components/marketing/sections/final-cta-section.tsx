@@ -16,6 +16,10 @@ export function FinalCtaSection() {
               <MarketingButton
                 href={marketingFinalCta.primaryCta.href}
                 className="border-white bg-white text-[color:var(--hostly-navy-deep)] hover:bg-[color:var(--hostly-ice-50)]"
+                data-marketing-event="generate_lead"
+                data-marketing-label={marketingFinalCta.primaryCta.label}
+                data-marketing-placement="final_cta"
+                data-meta-event="LeadIntent"
               >
                 {marketingFinalCta.primaryCta.label}
                 <ArrowRight className="size-4" />
@@ -25,6 +29,10 @@ export function FinalCtaSection() {
                 external
                 variant="secondary"
                 className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                data-marketing-event="contact_click"
+                data-marketing-label={marketingFinalCta.secondaryCta.label}
+                data-marketing-placement="final_cta"
+                data-meta-event="ContactIntent"
               >
                 {marketingFinalCta.secondaryCta.label}
               </MarketingButton>
