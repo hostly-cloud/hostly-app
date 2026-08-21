@@ -76,6 +76,43 @@ export function MarketingAnalytics() {
     window.fbq?.("track", "PageView");
   }, [consent, isConfigured, pathname]);
 
+  useEffect(() => {
+    if (!isConfigured || consent !== "granted") return;
+
+    const trackMarketingClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const anchor = target.closest<HTMLAnchorElement>("a[data-marketing-event]");
+      if (!anchor) return;
+
+      const eventName = anchor.dataset.marketingEvent;
+      if (!eventName) return;
+
+      const label = anchor.dataset.marketingLabel ?? anchor.textContent?.trim() ?? "";
+      const href = anchor.getAttribute("href") ?? "";
+      const placement = anchor.dataset.marketingPlacement ?? "unknown";
+
+      window.gtag?.("event", eventName, {
+        link_text: label,
+        link_url: href,
+        placement,
+      });
+
+      const metaEvent = anchor.dataset.metaEvent;
+      if (metaEvent) {
+        window.fbq?.("trackCustom", metaEvent, {
+          label,
+          destination: href,
+          placement,
+        });
+      }
+    };
+
+    document.addEventListener("click", trackMarketingClick);
+    return () => document.removeEventListener("click", trackMarketingClick);
+  }, [consent, isConfigured]);
+
   if (!hydrated || !isConfigured) return null;
 
   const chooseConsent = (value: Exclude<MarketingConsent, null>) => {
