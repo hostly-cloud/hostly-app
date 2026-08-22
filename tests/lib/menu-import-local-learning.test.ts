@@ -9,6 +9,7 @@ import {
 function signal(args: {
   draftId: string;
   itemId: string;
+  stationBefore?: "kitchen" | "bar" | "cocktail" | "none";
   stationAfter?: "kitchen" | "bar" | "cocktail" | "none";
   categoryAfter?: string;
 }): MenuImportLearningSignal {
@@ -18,7 +19,7 @@ function signal(args: {
     itemId: args.itemId,
     itemName: "Coca-Cola",
     userId: "user-a",
-    stationBefore: "kitchen",
+    stationBefore: args.stationBefore ?? "kitchen",
     stationAfter: args.stationAfter,
     categoryBefore: "Otros",
     categoryAfter: args.categoryAfter,
@@ -63,7 +64,12 @@ test("80 percent dominance is accepted but weaker evidence is not", () => {
       signal({ draftId: "d2", itemId: "i2", stationAfter: "bar" }),
       signal({ draftId: "d3", itemId: "i3", stationAfter: "bar" }),
       signal({ draftId: "d4", itemId: "i4", stationAfter: "bar" }),
-      signal({ draftId: "d5", itemId: "i5", stationAfter: "kitchen" }),
+      signal({
+        draftId: "d5",
+        itemId: "i5",
+        stationBefore: "bar",
+        stationAfter: "kitchen",
+      }),
     ],
     "Coca-Cola",
   );
@@ -75,7 +81,12 @@ test("80 percent dominance is accepted but weaker evidence is not", () => {
     [
       signal({ draftId: "x1", itemId: "i1", stationAfter: "bar" }),
       signal({ draftId: "x2", itemId: "i2", stationAfter: "bar" }),
-      signal({ draftId: "x3", itemId: "i3", stationAfter: "kitchen" }),
+      signal({
+        draftId: "x3",
+        itemId: "i3",
+        stationBefore: "bar",
+        stationAfter: "kitchen",
+      }),
     ],
     "Coca-Cola",
   );
