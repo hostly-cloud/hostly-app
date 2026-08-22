@@ -84,12 +84,22 @@ export type AiImportV2ResolvedFamilyReference = AiImportV2ResolvedReference & {
   type: ProductFamilyType;
 };
 
+export type AiImportV2LocalLearningEvidence = {
+  station?: ImportedMenuSuggestedStation;
+  stationSupport: number;
+  stationConfidence: number;
+  category?: string;
+  categorySupport: number;
+  categoryConfidence: number;
+};
+
 export type AiImportV2ResolvedOperationalTarget = {
   itemName: string;
   status: "matched" | "partial" | "review";
   reasons: string[];
   station?: AiImportV2ResolvedStationReference;
   productFamily?: AiImportV2ResolvedFamilyReference;
+  localLearning?: AiImportV2LocalLearningEvidence;
 };
 
 export type AiImportV2RestaurantContextResult = {
