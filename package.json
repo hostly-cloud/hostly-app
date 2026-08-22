@@ -20,7 +20,8 @@
     "test:tpv-release-effects-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-release-fx \"tsx --test tests/server/tpv-release-effects-emulator.test.ts\"",
     "eval:menu-import": "tsx scripts/eval-menu-import-corpus.ts",
     "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check",
-    "eval:menu-import:modern": "tsx scripts/eval-menu-import-modern.ts"
+    "eval:menu-import:modern": "tsx scripts/eval-menu-import-modern.ts",
+    "eval:catalog-images:live": "tsx scripts/eval-catalog-product-images-live.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
