@@ -40,6 +40,65 @@ export type ProductImageState = {
   imageEnrichment?: ProductImageEnrichment | null;
 };
 
+function isProductImageSource(value: unknown): value is ProductImageSource {
+  return (
+    typeof value === "string" &&
+    (PRODUCT_IMAGE_SOURCES as readonly string[]).includes(value)
+  );
+}
+
+function isProductImageReviewStatus(
+  value: unknown,
+): value is ProductImageReviewStatus {
+  return (
+    typeof value === "string" &&
+    (PRODUCT_IMAGE_REVIEW_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function readOptionalFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Reads Firestore metadata defensively. Malformed/partial metadata returns null,
+ * which makes an existing image behave like a protected legacy image.
+ */
+export function readProductImageEnrichment(
+  value: unknown,
+): ProductImageEnrichment | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (!isProductImageSource(raw.source)) return null;
+  if (!isProductImageReviewStatus(raw.reviewStatus)) return null;
+  if (typeof raw.locked !== "boolean") return null;
+
+  const confidenceRaw = readOptionalFiniteNumber(raw.confidence);
+  const confidence =
+    confidenceRaw == null ? undefined : Math.max(0, Math.min(1, confidenceRaw));
+  const provider = readOptionalString(raw.provider);
+  const externalReference = readOptionalString(raw.externalReference);
+  const generatedAt = readOptionalFiniteNumber(raw.generatedAt);
+  const reviewedAt = readOptionalFiniteNumber(raw.reviewedAt);
+  const reviewedBy = readOptionalString(raw.reviewedBy);
+
+  return {
+    source: raw.source,
+    reviewStatus: raw.reviewStatus,
+    locked: raw.locked,
+    ...(confidence != null ? { confidence } : {}),
+    ...(provider ? { provider } : {}),
+    ...(externalReference ? { externalReference } : {}),
+    ...(generatedAt != null ? { generatedAt } : {}),
+    ...(reviewedAt != null ? { reviewedAt } : {}),
+    ...(reviewedBy ? { reviewedBy } : {}),
+  };
+}
+
 export function buildManualProductImageEnrichment(args?: {
   reviewedAt?: number;
   reviewedBy?: string;
