@@ -1,5 +1,6 @@
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import type { ProductionStationDocument, ProductionStationType } from "@/lib/produccion/production-station-types";
+import type { MenuImportLearnedPreference } from "../menu-import-local-learning";
 import type {
   AiImportV2RestaurantContextResult,
   AiImportV2ValidatedItem,
@@ -51,6 +52,7 @@ export function resolveRestaurantOperationalContext(args: {
   items: AiImportV2ValidatedItem[];
   productionStations: ProductionStationDocument[];
   productFamilies: ProductFamilyDocument[];
+  learnedPreferences?: Map<string, MenuImportLearnedPreference>;
 }): AiImportV2RestaurantContextResult {
   const activeStations = args.productionStations.filter((station) => station.active);
   const activeFamilies = args.productFamilies.filter((family) => family.active);
@@ -62,6 +64,24 @@ export function resolveRestaurantOperationalContext(args: {
     const familyResolution = resolveUniqueFamily(item, activeFamilies);
     if (stationResolution.reason) reasons.push(stationResolution.reason);
     if (familyResolution.reason) reasons.push(familyResolution.reason);
+
+    const learned = args.learnedPreferences?.get(item.name);
+    if (
+      learned?.station &&
+      learned.station !== item.operationalSuggestion.suggestedStation
+    ) {
+      reasons.push(
+        `local_learning_station_conflict:${item.operationalSuggestion.suggestedStation}->${learned.station}`,
+      );
+    }
+    if (
+      learned?.category &&
+      learned.category.trim() &&
+      learned.category.trim().toLocaleLowerCase("es") !==
+        item.sectionName.trim().toLocaleLowerCase("es")
+    ) {
+      reasons.push("local_learning_category_review");
+    }
 
     const expectsStation = item.operationalSuggestion.suggestedStation !== "none";
     const stationResolved = !expectsStation || Boolean(stationResolution.station);
@@ -84,6 +104,18 @@ export function resolveRestaurantOperationalContext(args: {
         : {}),
       ...(familyResolution.family
         ? { productFamily: { id: familyResolution.family.id, name: familyResolution.family.name, type: familyResolution.family.type } }
+        : {}),
+      ...(learned
+        ? {
+            localLearning: {
+              ...(learned.station ? { station: learned.station } : {}),
+              stationSupport: learned.stationSupport,
+              stationConfidence: learned.stationConfidence,
+              ...(learned.category ? { category: learned.category } : {}),
+              categorySupport: learned.categorySupport,
+              categoryConfidence: learned.categoryConfidence,
+            },
+          }
         : {}),
     };
   });
