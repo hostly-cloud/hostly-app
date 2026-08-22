@@ -20,7 +20,7 @@ export type CatalogProductMatchContext = {
   barcode?: string | null;
 };
 
-type OpenFoodFactsRawCandidate = {
+export type OpenFoodFactsRawCandidate = {
   code: string;
   productName: string;
   brand: string | null;
@@ -88,12 +88,22 @@ const MATCH_STOP_WORDS = new Set([
   "lata",
   "can",
   "pack",
+  "ml",
+  "cl",
+  "l",
+  "g",
+  "kg",
 ]);
 
 function meaningfulTokens(value: string): string[] {
   return normalizeCatalogMatchText(value)
     .split(" ")
-    .filter((token) => token.length > 1 && !MATCH_STOP_WORDS.has(token));
+    .filter(
+      (token) =>
+        token.length > 1 &&
+        !/^\d+(?:\.\d+)?$/.test(token) &&
+        !MATCH_STOP_WORDS.has(token),
+    );
 }
 
 function unique<T>(values: T[]): T[] {
