@@ -12,4 +12,4 @@ process.env.HOSTLY_AI_IMPORT_V2_MODEL =
 if (!process.argv.includes("--shadow-v2")) process.argv.push("--shadow-v2");
 if (!process.argv.includes("--skip-baseline-check")) process.argv.push("--skip-baseline-check");
 
-await import("./eval-menu-import-corpus");
+void import("./eval-menu-import-corpus");
