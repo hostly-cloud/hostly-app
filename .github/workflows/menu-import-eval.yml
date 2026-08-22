@@ -6,6 +6,7 @@ on:
       - "lib/server/menu-imports/**"
       - "lib/menu-import-eval/**"
       - "scripts/eval-menu-import-corpus.ts"
+      - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "test-corpus/**"
       - "package.json"
       - "package-lock.json"
@@ -27,3 +28,6 @@ jobs:
 
       - name: Run menu import corpus eval
         run: npm run eval:menu-import
+
+      - name: Run restaurant context unit tests
+        run: npx tsx --test tests/lib/menu-import-ai-restaurant-context.test.ts
