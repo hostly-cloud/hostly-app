@@ -44,6 +44,8 @@ function resolvedState(): ProductImageReviewResolvedState {
     canGenerate: true,
     canApprove: true,
     canReject: true,
+    canSearchCatalog: true,
+    catalogProvenance: null,
     generationReason: null,
   };
 }
@@ -224,4 +226,5 @@ test("structured review errors preserve status and code", async () => {
   const body = await json(response);
   assert.equal(body.error, "PRODUCT_IMAGE_PROTECTED");
   assert.equal(body.details, "La imagen está protegida");
-});
+}
+);
