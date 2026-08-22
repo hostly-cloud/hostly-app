@@ -1,15 +1,20 @@
+import type { Firestore } from "firebase-admin/firestore";
 import type { ImportedMenuItem } from "@/lib/carta/imported-menu-types";
 import type { MenuImportMenuType } from "@/lib/firestore/menu-import-drafts";
 import { downloadMenuImportStorageFile } from "../download-storage-file";
+import { loadHostlyProductFamilies } from "../load-hostly-product-families";
+import { loadHostlyProductionStations } from "../load-hostly-production-stations";
 import type { OcrLayoutLine } from "../menu-import-ocr-layout-types";
 import { compareAiImportV2WithParser } from "./compare-ai-import-v2-with-parser";
 import { buildAiImportV2Prompt, summarizeOcrLayout } from "./build-ai-import-v2-prompt";
 import { extractWithAiImportV2 } from "./extract-with-ai-import-v2";
+import { resolveRestaurantOperationalContext } from "./resolve-restaurant-operational-context";
 import { validateAiImportV2Output } from "./validate-ai-import-v2-output";
 import {
   isAiImportV2ShadowEnabled,
   resolveAiImportV2ApiMode,
   resolveAiImportV2Model,
+  type AiImportV2RestaurantContextResult,
   type AiImportV2ShadowReport,
   type AiImportV2ShadowResult,
 } from "./types";
@@ -44,6 +49,7 @@ async function resolveImageDataUrl(args: {
 }
 
 export type RunAiImportV2ShadowParams = {
+  db?: Firestore;
   restaurantId: string;
   draftId: string;
   rawText: string;
@@ -54,6 +60,34 @@ export type RunAiImportV2ShadowParams = {
   originalFileName?: string;
   ocrLayoutLines?: OcrLayoutLine[];
 };
+
+async function buildRestaurantContext(
+  params: RunAiImportV2ShadowParams,
+  acceptedItems: NonNullable<AiImportV2ShadowResult["validation"]>["accepted"],
+): Promise<AiImportV2RestaurantContextResult | undefined> {
+  if (!params.db) return undefined;
+
+  try {
+    const [productFamilies, productionStations] = await Promise.all([
+      loadHostlyProductFamilies(params.db, params.restaurantId, { ensureDefaults: false }),
+      loadHostlyProductionStations(params.db, params.restaurantId),
+    ]);
+
+    return resolveRestaurantOperationalContext({
+      restaurantId: params.restaurantId,
+      items: acceptedItems,
+      productionStations,
+      productFamilies,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "RESTAURANT_CONTEXT_LOAD_FAILED";
+    console.warn("[Hostly][AI Import V2 Shadow] restaurant context unavailable", {
+      restaurantId: params.restaurantId,
+      error: message,
+    });
+    return undefined;
+  }
+}
 
 /**
  * Ejecuta IA Import V2 en shadow mode. Nunca lanza: errores -> report con error.
@@ -122,6 +156,7 @@ export async function runAiImportV2Shadow(
       v2Accepted: validation.accepted,
       v2RejectedCount: validation.rejected.length,
     });
+    const restaurantContext = await buildRestaurantContext(params, validation.accepted);
 
     const result: AiImportV2ShadowResult = {
       enabled: true,
@@ -132,6 +167,7 @@ export async function runAiImportV2Shadow(
       extraction,
       validation,
       comparison,
+      ...(restaurantContext ? { restaurantContext } : {}),
       tokenEstimate: {
         inputChars: params.rawText.length,
         layoutChars: layoutSummary?.length ?? 0,
@@ -183,6 +219,18 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
     avgV2Confidence: c.avgV2Confidence,
     operationalReviewCount,
     stationCounts,
+    restaurantContext: result.restaurantContext
+      ? {
+          productionStationsRead: result.restaurantContext.productionStationsRead,
+          activeProductionStations: result.restaurantContext.activeProductionStations,
+          productFamiliesRead: result.restaurantContext.productFamiliesRead,
+          activeProductFamilies: result.restaurantContext.activeProductFamilies,
+          fullyResolvedCount: result.restaurantContext.fullyResolvedCount,
+          partialCount: result.restaurantContext.partialCount,
+          reviewCount: result.restaurantContext.reviewCount,
+          warnings: result.restaurantContext.warnings,
+        }
+      : null,
     operationalSample: accepted.slice(0, 8).map((item) => ({
       name: item.name,
       categoryType: item.operationalSuggestion.categoryType,
@@ -191,6 +239,7 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
       confidence: item.operationalSuggestion.confidence,
       warnings: item.operationalWarnings,
     })),
+    resolvedTargetSample: result.restaurantContext?.targets.slice(0, 8),
     rejectedSample: result.validation?.rejected.slice(0, 4).map((r) => ({
       name: r.name,
       reasons: r.rejectionReasons,
