@@ -158,6 +158,14 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
   if (!result.comparison) return;
 
   const c = result.comparison;
+  const accepted = result.validation?.accepted ?? [];
+  const operationalReviewCount = accepted.filter((item) => item.operationalWarnings.length > 0).length;
+  const stationCounts = accepted.reduce<Record<string, number>>((acc, item) => {
+    const station = item.operationalSuggestion.suggestedStation;
+    acc[station] = (acc[station] ?? 0) + 1;
+    return acc;
+  }, {});
+
   console.info("[Hostly][AI Import V2 Shadow] comparison", {
     model: result.model,
     apiMode: result.apiMode,
@@ -173,6 +181,16 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
     parserVsV2Recall: c.parserVsV2Recall,
     parserVsV2Precision: c.parserVsV2Precision,
     avgV2Confidence: c.avgV2Confidence,
+    operationalReviewCount,
+    stationCounts,
+    operationalSample: accepted.slice(0, 8).map((item) => ({
+      name: item.name,
+      categoryType: item.operationalSuggestion.categoryType,
+      productFamilyType: item.operationalSuggestion.productFamilyType,
+      station: item.operationalSuggestion.suggestedStation,
+      confidence: item.operationalSuggestion.confidence,
+      warnings: item.operationalWarnings,
+    })),
     rejectedSample: result.validation?.rejected.slice(0, 4).map((r) => ({
       name: r.name,
       reasons: r.rejectionReasons,
