@@ -5,6 +5,11 @@ import { getHostlyFirestore } from "@/lib/firebase/admin";
 import { downloadMenuImportStorageFile } from "../download-storage-file";
 import { loadHostlyProductFamilies } from "../load-hostly-product-families";
 import { loadHostlyProductionStations } from "../load-hostly-production-stations";
+import {
+  inferMenuImportLearnedPreference,
+  loadRecentMenuImportLearningSignals,
+  type MenuImportLearnedPreference,
+} from "../menu-import-local-learning";
 import type { OcrLayoutLine } from "../menu-import-ocr-layout-types";
 import { compareAiImportV2WithParser } from "./compare-ai-import-v2-with-parser";
 import { buildAiImportV2Prompt, summarizeOcrLayout } from "./build-ai-import-v2-prompt";
@@ -70,16 +75,24 @@ async function buildRestaurantContext(
   if (!db) return undefined;
 
   try {
-    const [productFamilies, productionStations] = await Promise.all([
+    const [productFamilies, productionStations, learningSignals] = await Promise.all([
       loadHostlyProductFamilies(db, params.restaurantId, { ensureDefaults: false }),
       loadHostlyProductionStations(db, params.restaurantId),
+      loadRecentMenuImportLearningSignals(db, params.restaurantId),
     ]);
+
+    const learnedPreferences = new Map<string, MenuImportLearnedPreference>();
+    for (const item of acceptedItems) {
+      const preference = inferMenuImportLearnedPreference(learningSignals, item.name);
+      if (preference) learnedPreferences.set(item.name, preference);
+    }
 
     return resolveRestaurantOperationalContext({
       restaurantId: params.restaurantId,
       items: acceptedItems,
       productionStations,
       productFamilies,
+      learnedPreferences,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "RESTAURANT_CONTEXT_LOAD_FAILED";
@@ -203,6 +216,9 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
     acc[station] = (acc[station] ?? 0) + 1;
     return acc;
   }, {});
+  const learnedTargets = result.restaurantContext?.targets.filter(
+    (target) => target.localLearning,
+  ) ?? [];
 
   console.info("[Hostly][AI Import V2 Shadow] comparison", {
     model: result.model,
@@ -221,6 +237,10 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
     avgV2Confidence: c.avgV2Confidence,
     operationalReviewCount,
     stationCounts,
+    localLearningMatches: learnedTargets.length,
+    localLearningConflicts: learnedTargets.filter((target) =>
+      target.reasons.some((reason) => reason.startsWith("local_learning_")),
+    ).length,
     restaurantContext: result.restaurantContext
       ? {
           productionStationsRead: result.restaurantContext.productionStationsRead,
