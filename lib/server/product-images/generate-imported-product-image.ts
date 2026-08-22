@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import {
   buildPendingAutomaticProductImageEnrichment,
   canAutomaticallyReplaceProductImage,
@@ -9,13 +9,17 @@ import { getHostlyStorageBucket } from "@/lib/firebase/admin";
 
 const OPENAI_IMAGE_TIMEOUT_MS = 90_000;
 const MAX_GENERATED_IMAGE_BYTES = 8 * 1024 * 1024;
+const GENERATION_LOCK_MS = 3 * 60 * 1000;
 const IMAGE_PROVIDER = "openai";
+const DEFAULT_IMAGE_MODEL = "gpt-image-2-2026-04-21";
 
 export type ProductImageGenerationSkipReason =
   | "not_imported"
   | "not_food"
+  | "branded_or_beverage"
   | "invalid_product_name"
-  | "protected_existing_image";
+  | "protected_existing_image"
+  | "generation_in_progress";
 
 export type ProductImageGenerationEligibility =
   | {
@@ -26,7 +30,10 @@ export type ProductImageGenerationEligibility =
     }
   | {
       eligible: false;
-      reason: ProductImageGenerationSkipReason;
+      reason: Exclude<
+        ProductImageGenerationSkipReason,
+        "generation_in_progress"
+      >;
     };
 
 export type GenerateImportedProductImageResult =
@@ -56,9 +63,39 @@ export class GenerateImportedProductImageError extends Error {
   }
 }
 
+type ProductImageGenerationLock = {
+  requestId: string;
+  startedAt: number;
+  startedBy?: string;
+};
+
 function readString(data: Record<string, unknown>, key: string): string | undefined {
   const value = data[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeMatchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Esta primera fase no genera envases, etiquetas ni productos comerciales.
+ * Incluso si un ítem llega mal clasificado como plato, estas señales lo bloquean.
+ */
+export function looksLikeBrandedOrBeverageProduct(
+  name: string,
+  categoryName: string,
+): boolean {
+  const text = normalizeMatchText(`${categoryName} ${name}`);
+  return /\b(coca cola|fanta|sprite|pepsi|heineken|mahou|estrella damm|san miguel|corona|red bull|monster|aquarius|nestea|schweppes|tonica|cerveza|beer|vino|wine|cava|champagne|prosecco|whisky|whiskey|vodka|ron|rum|gin|ginebra|vermut|vermouth|licor|refresco|soda|agua mineral|zumo|juice|cafe|coffee|cocktail|coctel)\b/.test(
+    text,
+  );
 }
 
 function readImageState(data: Record<string, unknown>) {
@@ -69,10 +106,28 @@ function readImageState(data: Record<string, unknown>) {
   };
 }
 
+function readGenerationLock(value: unknown): ProductImageGenerationLock | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const requestId =
+    typeof raw.requestId === "string" ? raw.requestId.trim() : "";
+  const startedAt =
+    typeof raw.startedAt === "number" && Number.isFinite(raw.startedAt)
+      ? raw.startedAt
+      : null;
+  if (!requestId || startedAt == null) return null;
+  const startedBy =
+    typeof raw.startedBy === "string" && raw.startedBy.trim()
+      ? raw.startedBy.trim()
+      : undefined;
+  return { requestId, startedAt, ...(startedBy ? { startedBy } : {}) };
+}
+
 /**
  * Primera fase deliberadamente conservadora:
  * - solo productos nacidos de Menu Import;
  * - solo `tipoVenta: plato`;
+ * - excluye bebidas/marcas aunque hayan sido clasificadas incorrectamente;
  * - nunca sustituye imágenes manuales, aprobadas o legacy protegidas.
  */
 export function evaluateImportedProductImageEligibility(
@@ -91,17 +146,21 @@ export function evaluateImportedProductImageEligibility(
     return { eligible: false, reason: "invalid_product_name" };
   }
 
+  const categoryName = readString(data, "categoryName") ?? "Plato";
+  if (looksLikeBrandedOrBeverageProduct(name, categoryName)) {
+    return { eligible: false, reason: "branded_or_beverage" };
+  }
+
   if (!canAutomaticallyReplaceProductImage(readImageState(data))) {
     return { eligible: false, reason: "protected_existing_image" };
   }
 
+  const description = readString(data, "description");
   return {
     eligible: true,
     name: name.slice(0, 140),
-    categoryName: (readString(data, "categoryName") ?? "Plato").slice(0, 100),
-    ...(readString(data, "description")
-      ? { description: readString(data, "description")!.slice(0, 360) }
-      : {}),
+    categoryName: categoryName.slice(0, 100),
+    ...(description ? { description: description.slice(0, 360) } : {}),
   };
 }
 
@@ -141,7 +200,8 @@ async function generateImageWithOpenAi(prompt: string): Promise<{
     );
   }
 
-  const model = process.env.HOSTLY_OPENAI_IMAGE_MODEL?.trim() || "gpt-image-2";
+  const model =
+    process.env.HOSTLY_OPENAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), OPENAI_IMAGE_TIMEOUT_MS);
 
@@ -185,9 +245,8 @@ async function generateImageWithOpenAi(prompt: string): Promise<{
       );
     }
 
-    const base64 = (
-      body as { data?: Array<{ b64_json?: unknown }> }
-    )?.data?.[0]?.b64_json;
+    const base64 = (body as { data?: Array<{ b64_json?: unknown }> })?.data?.[0]
+      ?.b64_json;
     if (typeof base64 !== "string" || !base64.trim()) {
       throw new GenerateImportedProductImageError(
         "IMAGE_PROVIDER_EMPTY_RESPONSE",
@@ -247,7 +306,12 @@ async function deleteStoragePathSafely(
   path: string | undefined,
 ): Promise<void> {
   const trimmed = path?.trim();
-  if (!trimmed || !trimmed.startsWith(productImagePrefix(restaurantId, productId))) return;
+  if (
+    !trimmed ||
+    !trimmed.startsWith(productImagePrefix(restaurantId, productId))
+  ) {
+    return;
+  }
   const bucket = getHostlyStorageBucket();
   if (!bucket) return;
   try {
@@ -272,7 +336,10 @@ async function saveGeneratedImage(
   }
 
   const token = randomUUID();
-  const imagePath = `${productImagePrefix(restaurantId, productId)}ai/${Date.now()}-${randomUUID()}.webp`;
+  const imagePath = `${productImagePrefix(
+    restaurantId,
+    productId,
+  )}ai/${Date.now()}-${randomUUID()}.webp`;
   const file = bucket.file(imagePath);
 
   try {
@@ -296,9 +363,35 @@ async function saveGeneratedImage(
 
   const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(
     bucket.name,
-  )}/o/${encodeURIComponent(imagePath)}?alt=media&token=${encodeURIComponent(token)}`;
+  )}/o/${encodeURIComponent(imagePath)}?alt=media&token=${encodeURIComponent(
+    token,
+  )}`;
 
   return { imagePath, imageUrl };
+}
+
+async function releaseGenerationLockSafely(params: {
+  db: Firestore;
+  productRef: FirebaseFirestore.DocumentReference;
+  requestId: string;
+  userId: string;
+}): Promise<void> {
+  try {
+    await params.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(params.productRef);
+      if (!snap.exists) return;
+      const data = snap.data() as Record<string, unknown>;
+      const lock = readGenerationLock(data.imageGenerationInProgress);
+      if (!lock || lock.requestId !== params.requestId) return;
+      transaction.update(params.productRef, {
+        imageGenerationInProgress: FieldValue.delete(),
+        updatedAt: Date.now(),
+        updatedBy: params.userId,
+      });
+    });
+  } catch {
+    // A stale lock expires after GENERATION_LOCK_MS and never protects an image.
+  }
 }
 
 export async function generateImportedProductImage(params: {
@@ -311,7 +404,11 @@ export async function generateImportedProductImage(params: {
   const productId = assertSimpleId(params.productId, "productId");
   const userId = params.userId.trim();
   if (!userId) {
-    throw new GenerateImportedProductImageError("UNAUTHORIZED", "Usuario requerido", 401);
+    throw new GenerateImportedProductImageError(
+      "UNAUTHORIZED",
+      "Usuario requerido",
+      401,
+    );
   }
 
   const productRef = params.db
@@ -319,28 +416,63 @@ export async function generateImportedProductImage(params: {
     .doc(restaurantId)
     .collection("products")
     .doc(productId);
+  const requestId = randomUUID();
 
-  const initialSnap = await productRef.get();
-  if (!initialSnap.exists) {
-    throw new GenerateImportedProductImageError(
-      "PRODUCT_NOT_FOUND",
-      "Producto no encontrado",
-      404,
-    );
+  const acquisition = await params.db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(productRef);
+    if (!snap.exists) {
+      throw new GenerateImportedProductImageError(
+        "PRODUCT_NOT_FOUND",
+        "Producto no encontrado",
+        404,
+      );
+    }
+
+    const data = snap.data() as Record<string, unknown>;
+    const eligibility = evaluateImportedProductImageEligibility(data);
+    if (!eligibility.eligible) {
+      return { acquired: false as const, reason: eligibility.reason };
+    }
+
+    const now = Date.now();
+    const lock = readGenerationLock(data.imageGenerationInProgress);
+    if (lock && now - lock.startedAt < GENERATION_LOCK_MS) {
+      return {
+        acquired: false as const,
+        reason: "generation_in_progress" as const,
+      };
+    }
+
+    transaction.update(productRef, {
+      imageGenerationInProgress: {
+        requestId,
+        startedAt: now,
+        startedBy: userId,
+      },
+      updatedAt: now,
+      updatedBy: userId,
+    });
+
+    return { acquired: true as const, eligibility };
+  });
+
+  if (!acquisition.acquired) {
+    return { outcome: "skipped", productId, reason: acquisition.reason };
   }
 
-  const initialData = initialSnap.data() as Record<string, unknown>;
-  const initialEligibility = evaluateImportedProductImageEligibility(initialData);
-  if (!initialEligibility.eligible) {
-    return { outcome: "skipped", productId, reason: initialEligibility.reason };
-  }
+  let stored:
+    | {
+        imagePath: string;
+        imageUrl: string;
+      }
+    | undefined;
 
-  const prompt = buildImportedProductImagePrompt(initialEligibility);
-  const generated = await generateImageWithOpenAi(prompt);
-  const stored = await saveGeneratedImage(restaurantId, productId, generated.bytes);
-
-  let replacedImagePath: string | undefined;
   try {
+    const prompt = buildImportedProductImagePrompt(acquisition.eligibility);
+    const generated = await generateImageWithOpenAi(prompt);
+    stored = await saveGeneratedImage(restaurantId, productId, generated.bytes);
+
+    let replacedImagePath: string | undefined;
     const finalResult = await params.db.runTransaction(async (transaction) => {
       const snap = await transaction.get(productRef);
       if (!snap.exists) {
@@ -352,16 +484,29 @@ export async function generateImportedProductImage(params: {
       }
 
       const data = snap.data() as Record<string, unknown>;
+      const lock = readGenerationLock(data.imageGenerationInProgress);
+      if (!lock || lock.requestId !== requestId) {
+        return {
+          attached: false as const,
+          reason: "generation_in_progress" as const,
+        };
+      }
+
       const eligibility = evaluateImportedProductImageEligibility(data);
       if (!eligibility.eligible) {
+        transaction.update(productRef, {
+          imageGenerationInProgress: FieldValue.delete(),
+          updatedAt: Date.now(),
+          updatedBy: userId,
+        });
         return { attached: false as const, reason: eligibility.reason };
       }
 
       replacedImagePath = readString(data, "imagePath");
       const now = Date.now();
       transaction.update(productRef, {
-        imageUrl: stored.imageUrl,
-        imagePath: stored.imagePath,
+        imageUrl: stored!.imageUrl,
+        imagePath: stored!.imagePath,
         imageEnrichment: buildPendingAutomaticProductImageEnrichment({
           source: "ai_generated",
           confidence: 0.65,
@@ -369,6 +514,7 @@ export async function generateImportedProductImage(params: {
           externalReference: generated.model,
           generatedAt: now,
         }),
+        imageGenerationInProgress: FieldValue.delete(),
         updatedAt: now,
         updatedBy: userId,
       });
@@ -380,21 +526,33 @@ export async function generateImportedProductImage(params: {
       await deleteStoragePathSafely(restaurantId, productId, stored.imagePath);
       return { outcome: "skipped", productId, reason: finalResult.reason };
     }
+
+    if (replacedImagePath && replacedImagePath !== stored.imagePath) {
+      await deleteStoragePathSafely(
+        restaurantId,
+        productId,
+        replacedImagePath,
+      );
+    }
+
+    return {
+      outcome: "generated",
+      productId,
+      imageUrl: stored.imageUrl,
+      imagePath: stored.imagePath,
+      model: generated.model,
+      ...(replacedImagePath ? { replacedImagePath } : {}),
+    };
   } catch (error) {
-    await deleteStoragePathSafely(restaurantId, productId, stored.imagePath);
+    if (stored) {
+      await deleteStoragePathSafely(restaurantId, productId, stored.imagePath);
+    }
+    await releaseGenerationLockSafely({
+      db: params.db,
+      productRef,
+      requestId,
+      userId,
+    });
     throw error;
   }
-
-  if (replacedImagePath && replacedImagePath !== stored.imagePath) {
-    await deleteStoragePathSafely(restaurantId, productId, replacedImagePath);
-  }
-
-  return {
-    outcome: "generated",
-    productId,
-    imageUrl: stored.imageUrl,
-    imagePath: stored.imagePath,
-    model: generated.model,
-    ...(replacedImagePath ? { replacedImagePath } : {}),
-  };
 }
