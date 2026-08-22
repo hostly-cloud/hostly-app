@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import {
   ConfigBtnPrimary,
   ConfigBtnSecondary,
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
+import { ProductAiImageReviewPanel } from "@/components/productos/product-ai-image-review-panel";
 import { PRODUCT_IMAGE_ACCEPT } from "@/lib/firebase/product-image-contract";
 
 const DESCRIPTION_PREVIEW_MAX = 140;
@@ -109,6 +117,11 @@ export function ProductFormCommercialInfoModal({
 }: ProductFormCommercialInfoModalProps) {
   const localFileInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = imageFileInputRef ?? localFileInputRef;
+  const [aiResolvedImageUrl, setAiResolvedImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAiResolvedImageUrl(null);
+  }, [open, productName]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,9 +135,24 @@ export function ProductFormCommercialInfoModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, disabled, onClose]);
 
+  const handleAiImageUrlChange = useCallback((url: string | null) => {
+    setAiResolvedImageUrl(url);
+  }, []);
+
   if (!open) return null;
 
   const titleName = productName.trim() || "Producto";
+  const effectiveImagePreviewUrl = aiResolvedImageUrl ?? imagePreviewUrl;
+  const effectiveShowImagePreview = Boolean(
+    aiResolvedImageUrl || (showImagePreview && imagePreviewUrl),
+  );
+  const imageDraftMode = aiResolvedImageUrl
+    ? "synced"
+    : imagePreviewUrl?.startsWith("blob:")
+      ? "manual_pending"
+      : showImagePreview
+        ? "synced"
+        : "not_visible";
 
   return (
     <div
@@ -177,9 +205,9 @@ export function ProductFormCommercialInfoModal({
           {isCentralCatalog ? (
             <div className="hostly-product-commercial-modal__image-block">
               <span className="hostly-product-commercial-modal__label">{t("carta.fieldFoto")}</span>
-              {showImagePreview && imagePreviewUrl ? (
+              {effectiveShowImagePreview && effectiveImagePreviewUrl ? (
                 <img
-                  src={imagePreviewUrl}
+                  src={effectiveImagePreviewUrl}
                   alt=""
                   className="hostly-product-commercial-modal__image-preview"
                 />
@@ -197,6 +225,7 @@ export function ProductFormCommercialInfoModal({
                   disabled={disabled}
                   onChange={(e) => {
                     const selected = e.target.files?.[0] ?? null;
+                    setAiResolvedImageUrl(null);
                     void onImageFileChange(selected);
                   }}
                 />
@@ -205,17 +234,33 @@ export function ProductFormCommercialInfoModal({
                   disabled={disabled}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  {showImagePreview && imagePreviewUrl
+                  {effectiveShowImagePreview && effectiveImagePreviewUrl
                     ? t("carta.fieldFotoChange")
                     : t("carta.fieldFotoUpload")}
                 </ConfigBtnSecondary>
-                {showImagePreview && imagePreviewUrl ? (
-                  <ConfigBtnSecondary type="button" disabled={disabled} onClick={onRemoveImage}>
+                {effectiveShowImagePreview && effectiveImagePreviewUrl ? (
+                  <ConfigBtnSecondary
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      setAiResolvedImageUrl(null);
+                      onRemoveImage();
+                    }}
+                  >
                     {t("carta.fieldFotoRemove")}
                   </ConfigBtnSecondary>
                 ) : null}
               </div>
               <p className="hostly-product-commercial-modal__hint">{t("carta.fieldFotoUploadHint")}</p>
+
+              <ProductAiImageReviewPanel
+                open={open}
+                productName={productName}
+                fallbackImageUrl={effectiveImagePreviewUrl}
+                imageDraftMode={imageDraftMode}
+                disabled={disabled}
+                onImageUrlChange={handleAiImageUrlChange}
+              />
             </div>
           ) : (
             <div className="hostly-product-commercial-modal__field">
