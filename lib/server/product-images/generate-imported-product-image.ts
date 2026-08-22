@@ -93,7 +93,7 @@ export function looksLikeBrandedOrBeverageProduct(
   categoryName: string,
 ): boolean {
   const text = normalizeMatchText(`${categoryName} ${name}`);
-  return /\b(coca cola|fanta|sprite|pepsi|heineken|mahou|estrella damm|san miguel|corona|red bull|monster|aquarius|nestea|schweppes|tonica|cerveza|beer|vino|wine|cava|champagne|prosecco|whisky|whiskey|vodka|ron|rum|gin|ginebra|vermut|vermouth|licor|refresco|soda|agua mineral|zumo|juice|cafe|coffee|cocktail|coctel)\b/.test(
+  return /\b(coca cola|fanta|sprite|pepsi|heineken|mahou|estrella damm|san miguel|corona|red bull|monster|aquarius|nestea|schweppes|tonicas?|cervezas?|beers?|vinos?|wines?|rioja|ribera del duero|cavas?|champagnes?|proseccos?|whisk(?:y|ey)s?|vodkas?|rones?|rums?|gins?|ginebras?|vermuts?|vermouths?|licores?|refrescos?|sodas?|aguas? minerales?|zumos?|juices?|cafes?|coffees?|cocktails?|cocteles?)\b/.test(
     text,
   );
 }
