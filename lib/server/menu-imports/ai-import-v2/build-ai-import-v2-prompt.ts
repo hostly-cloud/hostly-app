@@ -28,6 +28,17 @@ export function buildAiImportV2Prompt(args: {
     "- description: texto secundario bajo el nombre (puede estar vacío).",
     "- confidence: 0.0–1.0 según claridad del emparejamiento nombre↔precio.",
     "",
+    "SUGERENCIAS OPERATIVAS (NO son verdad persistida; siempre revisables):",
+    "- operationalSuggestion.categoryType: food | drink | general.",
+    "- operationalSuggestion.productFamilyType: food | drink | other.",
+    "- operationalSuggestion.suggestedStation: kitchen | bar | cocktail | none.",
+    "- operationalSuggestion.confidence: 0.0–1.0 según claridad de la inferencia.",
+    "- Comida preparada normalmente → food + food + kitchen.",
+    "- Bebida servida desde barra → drink + drink + bar.",
+    "- Cóctel → drink + drink + cocktail.",
+    "- Si no hay evidencia semántica suficiente, usa general/other/none y confidence baja.",
+    "- No deduzcas alérgenos, ingredientes ni obligaciones legales en este bloque.",
+    "",
     `Tipo de carta indicado por el usuario: ${args.menuType}`,
     args.hasImage
       ? "Entrada multimodal: imagen de la carta + OCR de referencia. Prioriza lo visible en imagen; usa OCR para validar."
