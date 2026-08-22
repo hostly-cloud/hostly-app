@@ -8,6 +8,8 @@ import { extractWithAiImportV2 } from "./extract-with-ai-import-v2";
 import { validateAiImportV2Output } from "./validate-ai-import-v2-output";
 import {
   isAiImportV2ShadowEnabled,
+  resolveAiImportV2ApiMode,
+  resolveAiImportV2Model,
   type AiImportV2ShadowReport,
   type AiImportV2ShadowResult,
 } from "./types";
@@ -54,7 +56,7 @@ export type RunAiImportV2ShadowParams = {
 };
 
 /**
- * Ejecuta IA Import V2 en shadow mode. Nunca lanza: errores → report con error.
+ * Ejecuta IA Import V2 en shadow mode. Nunca lanza: errores -> report con error.
  * Sin flag HOSTLY_AI_IMPORT_V2_SHADOW=true devuelve null (cero impacto).
  */
 export async function runAiImportV2Shadow(
@@ -88,7 +90,8 @@ export async function runAiImportV2Shadow(
 
   const baseResult = (): AiImportV2ShadowResult => ({
     enabled: true,
-    model: process.env.HOSTLY_AI_IMPORT_V2_MODEL?.trim() || process.env.HOSTLY_OPENAI_MODEL?.trim() || "gpt-4o-mini",
+    model: resolveAiImportV2Model(),
+    apiMode: resolveAiImportV2ApiMode(),
     usedVision: Boolean(imageDataUrl),
     durationMs: Date.now() - started,
     extraction: null,
@@ -102,7 +105,7 @@ export async function runAiImportV2Shadow(
   });
 
   try {
-    const { extraction, model, usedVision } = await extractWithAiImportV2({
+    const { extraction, model, apiMode, usedVision } = await extractWithAiImportV2({
       rawText: params.rawText,
       parserItems: params.parserItems,
       menuType: params.menuType,
@@ -123,6 +126,7 @@ export async function runAiImportV2Shadow(
     const result: AiImportV2ShadowResult = {
       enabled: true,
       model,
+      apiMode,
       usedVision,
       durationMs: Date.now() - started,
       extraction,
@@ -141,7 +145,11 @@ export async function runAiImportV2Shadow(
     const message = e instanceof Error ? e.message : "AI_IMPORT_V2_SHADOW_FAILED";
     const result = baseResult();
     result.error = message;
-    console.warn("[Hostly][AI Import V2 Shadow] failed (non-blocking)", { error: message });
+    console.warn("[Hostly][AI Import V2 Shadow] failed (non-blocking)", {
+      error: message,
+      model: result.model,
+      apiMode: result.apiMode,
+    });
     return result;
   }
 }
@@ -152,6 +160,7 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
   const c = result.comparison;
   console.info("[Hostly][AI Import V2 Shadow] comparison", {
     model: result.model,
+    apiMode: result.apiMode,
     usedVision: result.usedVision,
     durationMs: result.durationMs,
     parserDetected: c.parserDetected,
@@ -171,20 +180,30 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
   });
 }
 
-/** Estimación orientativa de coste por análisis (USD). */
+type ModelPricing = { inputPerM: number; outputPerM: number };
+
+function resolveModelPricing(model: string): ModelPricing {
+  if (model.startsWith("gpt-5.6-luna")) return { inputPerM: 0.2, outputPerM: 1.2 };
+  if (model.startsWith("gpt-5.6-terra")) return { inputPerM: 2, outputPerM: 12 };
+  if (model === "gpt-5.6" || model.startsWith("gpt-5.6-sol")) {
+    return { inputPerM: 5, outputPerM: 30 };
+  }
+  return { inputPerM: 0.15, outputPerM: 0.6 };
+}
+
+/** Estimacion orientativa de coste por analisis (USD). */
 export function estimateAiImportV2CostUsd(args: {
   rawTextChars: number;
   hasImage: boolean;
   model?: string;
 }): { low: number; high: number; model: string } {
-  const model = args.model || process.env.HOSTLY_AI_IMPORT_V2_MODEL?.trim() || "gpt-4o-mini";
+  const model = args.model || resolveAiImportV2Model();
   const textTokens = Math.ceil(args.rawTextChars / 4) + 800;
   const imageTokens = args.hasImage ? 1200 : 0;
   const outputTokens = 1200;
-  const inputCostPerM = args.hasImage ? 0.15 : 0.15;
-  const outputCostPerM = 0.6;
-  const inputUsd = ((textTokens + imageTokens) / 1_000_000) * inputCostPerM;
-  const outputUsd = (outputTokens / 1_000_000) * outputCostPerM;
+  const pricing = resolveModelPricing(model);
+  const inputUsd = ((textTokens + imageTokens) / 1_000_000) * pricing.inputPerM;
+  const outputUsd = (outputTokens / 1_000_000) * pricing.outputPerM;
   const total = inputUsd + outputUsd;
   return { low: total * 0.8, high: total * 1.4, model };
 }
