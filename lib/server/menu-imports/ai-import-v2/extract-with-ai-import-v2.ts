@@ -6,7 +6,7 @@ import { resolveAiImportV2ApiMode, resolveAiImportV2Model } from "./types";
 
 const AI_TIMEOUT_MS = 45_000;
 const SYSTEM_INSTRUCTIONS =
-  "Extrae productos de carta en JSON estricto. No inventes nombres ni precios. Traducciones van en translations[], no como productos.";
+  "Extrae productos de carta en JSON estricto. No inventes nombres ni precios. Traducciones van en translations[], no como productos. Las sugerencias operativas son inferencias revisables: usa solo los enums permitidos y baja confidence si hay duda.";
 
 const AI_IMPORT_V2_JSON_SCHEMA = {
   name: "menu_import_v2_extraction",
@@ -40,6 +40,25 @@ const AI_IMPORT_V2_JSON_SCHEMA = {
                     type: "array",
                     items: { type: "string" },
                   },
+                  operationalSuggestion: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      categoryType: { type: "string", enum: ["food", "drink", "general"] },
+                      productFamilyType: { type: "string", enum: ["food", "drink", "other"] },
+                      suggestedStation: {
+                        type: "string",
+                        enum: ["kitchen", "bar", "cocktail", "none"],
+                      },
+                      confidence: { type: "number" },
+                    },
+                    required: [
+                      "categoryType",
+                      "productFamilyType",
+                      "suggestedStation",
+                      "confidence",
+                    ],
+                  },
                 },
                 required: [
                   "name",
@@ -48,6 +67,7 @@ const AI_IMPORT_V2_JSON_SCHEMA = {
                   "price",
                   "confidence",
                   "sourceEvidence",
+                  "operationalSuggestion",
                 ],
               },
             },
