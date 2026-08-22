@@ -1,8 +1,20 @@
-import type { ImportedMenuItem } from "@/lib/carta/imported-menu-types";
+import type { CartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import type {
+  ImportedMenuItem,
+  ImportedMenuSuggestedStation,
+} from "@/lib/carta/imported-menu-types";
+import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import type { MenuImportMenuType } from "@/lib/firestore/menu-import-drafts";
 import type { DetectedProduct } from "@/lib/menu-import-eval/types";
 
 export type AiImportV2ApiMode = "chat_completions" | "responses";
+
+export type AiImportV2OperationalSuggestion = {
+  categoryType: CartaCategoriaTipo;
+  productFamilyType: ProductFamilyType;
+  suggestedStation: ImportedMenuSuggestedStation;
+  confidence: number;
+};
 
 export type AiImportV2Item = {
   name: string;
@@ -11,6 +23,7 @@ export type AiImportV2Item = {
   price: number;
   confidence: number;
   sourceEvidence: string[];
+  operationalSuggestion: AiImportV2OperationalSuggestion;
 };
 
 export type AiImportV2Section = {
@@ -26,6 +39,7 @@ export type AiImportV2ValidatedItem = AiImportV2Item & {
   sectionName: string;
   validationStatus: "accepted" | "rejected";
   rejectionReasons: string[];
+  operationalWarnings: string[];
 };
 
 export type AiImportV2ValidationResult = {
