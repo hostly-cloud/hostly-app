@@ -1,0 +1,80 @@
+name: Catalog image live coverage
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Optional single corpus case id"
+        required: false
+        type: string
+      max_cases:
+        description: "Maximum number of cases; 0 runs the full corpus"
+        required: true
+        default: "0"
+        type: string
+      strict:
+        description: "Fail when assisted coverage thresholds are not met"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-image-live-coverage
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Validate evaluation model
+        run: npx tsx --test tests/lib/catalog-image-live-eval.test.ts
+
+      - name: Run live Open Food Facts coverage evaluation
+        env:
+          CASE_ID: ${{ inputs.case_id }}
+          MAX_CASES: ${{ inputs.max_cases }}
+          STRICT_MODE: ${{ inputs.strict }}
+          HOSTLY_OPENFOODFACTS_USER_AGENT: Hostly/1.0 (contact@hostlyapp.app)
+        run: |
+          args=(--output-dir artifacts/catalog-image-live-eval)
+
+          if [ -n "$CASE_ID" ]; then
+            args+=(--case "$CASE_ID")
+          elif [[ "$MAX_CASES" =~ ^[0-9]+$ ]] && [ "$MAX_CASES" -gt 0 ]; then
+            args+=(--max-cases "$MAX_CASES")
+          fi
+
+          if [ "$STRICT_MODE" = "true" ]; then
+            args+=(--strict)
+          fi
+
+          npm run eval:catalog-images:live -- "${args[@]}"
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-image-live-coverage-${{ github.run_number }}
+          path: artifacts/catalog-image-live-eval
+          if-no-files-found: warn
+          retention-days: 14
