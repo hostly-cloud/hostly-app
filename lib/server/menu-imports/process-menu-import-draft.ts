@@ -227,6 +227,10 @@ export async function processMenuImportDraft(params: {
       return {
         enabled: true as const,
         model: process.env.HOSTLY_AI_IMPORT_V2_MODEL?.trim() || "gpt-4o-mini",
+        apiMode:
+          process.env.HOSTLY_AI_IMPORT_V2_API?.trim() === "responses"
+            ? ("responses" as const)
+            : ("chat_completions" as const),
         usedVision: false,
         durationMs: 0,
         extraction: null,
