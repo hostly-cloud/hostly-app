@@ -1,3 +1,4 @@
+# Temporary PR-only workflow. Remove after the live artifact is captured.
 name: Catalog image live coverage - PR validation
 
 on:
