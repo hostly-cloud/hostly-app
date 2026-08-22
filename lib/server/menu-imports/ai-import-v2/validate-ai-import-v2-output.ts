@@ -1,9 +1,13 @@
+import { isCartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import { IMPORTED_MENU_STATION_OPTIONS } from "@/lib/carta/imported-menu-types";
+import { isProductFamilyType } from "@/lib/carta/product-family-types";
 import {
   isProductNameSupportedByOcr,
   normalizeForOcrMatch,
 } from "@/lib/server/menu-imports/validate-items-against-ocr";
 import type {
   AiImportV2Extraction,
+  AiImportV2OperationalSuggestion,
   AiImportV2ValidatedItem,
   AiImportV2ValidationResult,
 } from "./types";
@@ -13,6 +17,12 @@ const TRANSLATION_LINE_RE = /^\([^)]{4,}\)\s*$/;
 
 function roundPrice(price: number): number {
   return Math.round(price * 100) / 100;
+}
+
+function clampConfidence(raw: unknown, fallback = 0.5): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return fallback;
+  const normalized = raw > 1 ? raw / 100 : raw;
+  return Math.max(0, Math.min(1, normalized));
 }
 
 function priceVariants(price: number): string[] {
@@ -80,6 +90,33 @@ function looksLikeTranslationProduct(name: string): boolean {
   return false;
 }
 
+function buildOperationalWarnings(
+  suggestion: AiImportV2OperationalSuggestion,
+): string[] {
+  const warnings: string[] = [];
+
+  if (suggestion.categoryType === "food" && suggestion.productFamilyType !== "food") {
+    warnings.push("food_category_family_mismatch");
+  }
+  if (suggestion.categoryType === "drink" && suggestion.productFamilyType !== "drink") {
+    warnings.push("drink_category_family_mismatch");
+  }
+  if (suggestion.suggestedStation === "kitchen" && suggestion.categoryType === "drink") {
+    warnings.push("drink_routed_to_kitchen");
+  }
+  if (
+    (suggestion.suggestedStation === "bar" || suggestion.suggestedStation === "cocktail") &&
+    suggestion.categoryType === "food"
+  ) {
+    warnings.push("food_routed_to_bar");
+  }
+  if (suggestion.confidence < 0.55) {
+    warnings.push("low_operational_confidence");
+  }
+
+  return warnings;
+}
+
 function validateItem(
   item: AiImportV2ValidatedItem,
   rawText: string,
@@ -129,6 +166,7 @@ export function validateAiImportV2Output(
         sectionName: section.name,
         validationStatus: "accepted",
         rejectionReasons: [],
+        operationalWarnings: buildOperationalWarnings(item.operationalSuggestion),
       };
       const reasons = validateItem(validated, rawText, sectionNames);
       if (reasons.length > 0) {
@@ -145,7 +183,36 @@ export function validateAiImportV2Output(
     globalWarnings.push("Todos los items IA V2 rechazados por validación anti-invención");
   }
 
+  const operationalReviewCount = accepted.filter((item) => item.operationalWarnings.length > 0).length;
+  if (operationalReviewCount > 0) {
+    globalWarnings.push(
+      `${operationalReviewCount} item(s) requieren revisión de sugerencias operativas`,
+    );
+  }
+
   return { accepted, rejected, globalWarnings };
+}
+
+function parseOperationalSuggestion(raw: unknown): AiImportV2OperationalSuggestion | null {
+  if (!raw || typeof raw !== "object") return null;
+  const rec = raw as Record<string, unknown>;
+  if (!isCartaCategoriaTipo(rec.categoryType)) return null;
+  if (!isProductFamilyType(rec.productFamilyType)) return null;
+  if (
+    typeof rec.suggestedStation !== "string" ||
+    !IMPORTED_MENU_STATION_OPTIONS.includes(
+      rec.suggestedStation as (typeof IMPORTED_MENU_STATION_OPTIONS)[number],
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    categoryType: rec.categoryType,
+    productFamilyType: rec.productFamilyType,
+    suggestedStation: rec.suggestedStation as AiImportV2OperationalSuggestion["suggestedStation"],
+    confidence: clampConfidence(rec.confidence, 0.4),
+  };
 }
 
 export function parseAiImportV2Payload(raw: unknown): AiImportV2Extraction | null {
@@ -173,11 +240,7 @@ export function parseAiImportV2Payload(raw: unknown): AiImportV2Extraction | nul
                 : NaN;
           if (!itemName || !Number.isFinite(price)) return null;
 
-          const confidence =
-            typeof item.confidence === "number" && Number.isFinite(item.confidence)
-              ? Math.max(0, Math.min(1, item.confidence > 1 ? item.confidence / 100 : item.confidence))
-              : 0.5;
-
+          const confidence = clampConfidence(item.confidence);
           const description = typeof item.description === "string" ? item.description.trim() : "";
           const translations = Array.isArray(item.translations)
             ? item.translations
@@ -191,6 +254,8 @@ export function parseAiImportV2Payload(raw: unknown): AiImportV2Extraction | nul
                 .map((t) => t.trim())
                 .filter(Boolean)
             : [];
+          const operationalSuggestion = parseOperationalSuggestion(item.operationalSuggestion);
+          if (!operationalSuggestion) return null;
 
           return {
             name: itemName,
@@ -199,6 +264,7 @@ export function parseAiImportV2Payload(raw: unknown): AiImportV2Extraction | nul
             price,
             confidence,
             sourceEvidence,
+            operationalSuggestion,
           };
         })
         .filter((item): item is NonNullable<typeof item> => item != null);
