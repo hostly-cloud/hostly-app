@@ -7,6 +7,7 @@ on:
       - "lib/menu-import-eval/**"
       - "scripts/eval-menu-import-corpus.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
+      - "tests/lib/menu-import-local-learning.test.ts"
       - "test-corpus/**"
       - "package.json"
       - "package-lock.json"
@@ -34,3 +35,6 @@ jobs:
 
       - name: Run restaurant context unit tests
         run: npx tsx --test tests/lib/menu-import-ai-restaurant-context.test.ts
+
+      - name: Run local learning unit tests
+        run: npx tsx --test tests/lib/menu-import-local-learning.test.ts
