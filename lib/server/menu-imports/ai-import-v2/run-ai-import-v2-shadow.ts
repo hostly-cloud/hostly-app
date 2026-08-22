@@ -1,6 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { ImportedMenuItem } from "@/lib/carta/imported-menu-types";
 import type { MenuImportMenuType } from "@/lib/firestore/menu-import-drafts";
+import { getHostlyFirestore } from "@/lib/firebase/admin";
 import { downloadMenuImportStorageFile } from "../download-storage-file";
 import { loadHostlyProductFamilies } from "../load-hostly-product-families";
 import { loadHostlyProductionStations } from "../load-hostly-production-stations";
@@ -65,12 +66,13 @@ async function buildRestaurantContext(
   params: RunAiImportV2ShadowParams,
   acceptedItems: NonNullable<AiImportV2ShadowResult["validation"]>["accepted"],
 ): Promise<AiImportV2RestaurantContextResult | undefined> {
-  if (!params.db) return undefined;
+  const db = params.db ?? getHostlyFirestore();
+  if (!db) return undefined;
 
   try {
     const [productFamilies, productionStations] = await Promise.all([
-      loadHostlyProductFamilies(params.db, params.restaurantId, { ensureDefaults: false }),
-      loadHostlyProductionStations(params.db, params.restaurantId),
+      loadHostlyProductFamilies(db, params.restaurantId, { ensureDefaults: false }),
+      loadHostlyProductionStations(db, params.restaurantId),
     ]);
 
     return resolveRestaurantOperationalContext({
