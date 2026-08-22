@@ -8,11 +8,13 @@ on:
       - "lib/menu-import-eval/**"
       - "lib/carta/extract-menu-from-upload.ts"
       - "lib/carta/request-menu-import-*.ts"
+      - "lib/carta/product-image-enrichment.ts"
       - "lib/firestore/menu-import-drafts.ts"
       - "lib/storage/menu-import-files.ts"
       - "scripts/eval-menu-import-corpus.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
+      - "tests/lib/product-image-enrichment.test.ts"
       - "test-corpus/**"
       - "package.json"
       - "package-lock.json"
@@ -46,3 +48,6 @@ jobs:
 
       - name: Run local learning unit tests
         run: npx tsx --test tests/lib/menu-import-local-learning.test.ts
+
+      - name: Run product image enrichment unit tests
+        run: npx tsx --test tests/lib/product-image-enrichment.test.ts
