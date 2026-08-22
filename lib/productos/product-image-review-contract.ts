@@ -3,6 +3,18 @@ import type {
   ProductImageSource,
 } from "@/lib/carta/product-image-enrichment";
 
+export type ProductImageCatalogProvenance = {
+  externalReference: string | null;
+  sourceUrl: string | null;
+  imageSourceUrl: string | null;
+  license: string | null;
+  attribution: string | null;
+  matchedProductName: string | null;
+  matchedBrand: string | null;
+  matchedQuantity: string | null;
+  warnings: string[];
+};
+
 export type ProductImageReviewResolution =
   | { resolution: "not_found" }
   | { resolution: "ambiguous" }
@@ -24,6 +36,8 @@ export type ProductImageReviewResolvedState = {
   canGenerate: boolean;
   canApprove: boolean;
   canReject: boolean;
+  canSearchCatalog: boolean;
+  catalogProvenance: ProductImageCatalogProvenance | null;
   generationReason:
     | "not_imported"
     | "not_food"
