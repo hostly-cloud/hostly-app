@@ -3,8 +3,13 @@ name: Menu import eval
 on:
   pull_request:
     paths:
+      - "app/api/menu-imports/**"
       - "lib/server/menu-imports/**"
       - "lib/menu-import-eval/**"
+      - "lib/carta/extract-menu-from-upload.ts"
+      - "lib/carta/request-menu-import-*.ts"
+      - "lib/firestore/menu-import-drafts.ts"
+      - "lib/storage/menu-import-files.ts"
       - "scripts/eval-menu-import-corpus.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
