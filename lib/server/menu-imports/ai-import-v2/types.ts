@@ -2,6 +2,8 @@ import type { ImportedMenuItem } from "@/lib/carta/imported-menu-types";
 import type { MenuImportMenuType } from "@/lib/firestore/menu-import-drafts";
 import type { DetectedProduct } from "@/lib/menu-import-eval/types";
 
+export type AiImportV2ApiMode = "chat_completions" | "responses";
+
 export type AiImportV2Item = {
   name: string;
   description: string;
@@ -68,6 +70,7 @@ export type AiImportV2ShadowInput = {
 export type AiImportV2ShadowResult = {
   enabled: true;
   model: string;
+  apiMode: AiImportV2ApiMode;
   usedVision: boolean;
   durationMs: number;
   extraction: AiImportV2Extraction | null;
@@ -85,6 +88,12 @@ export type AiImportV2ShadowReport = AiImportV2ShadowResult;
 
 export function isAiImportV2ShadowEnabled(): boolean {
   return process.env.HOSTLY_AI_IMPORT_V2_SHADOW === "true";
+}
+
+export function resolveAiImportV2ApiMode(): AiImportV2ApiMode {
+  return process.env.HOSTLY_AI_IMPORT_V2_API?.trim() === "responses"
+    ? "responses"
+    : "chat_completions";
 }
 
 export function resolveAiImportV2Model(): string {
