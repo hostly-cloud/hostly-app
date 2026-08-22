@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ConfigBtnPrimary,
   ConfigBtnSecondary,
@@ -50,8 +44,6 @@ function friendlyError(error: unknown): string {
         return "La imagen actual está protegida y no se puede modificar desde esta revisión.";
       case "PRODUCT_IMAGE_REVIEW_STATE_INVALID":
         return "El estado de la imagen ha cambiado. Actualiza antes de continuar.";
-      case "GENERATION_CONFIRMATION_REQUIRED":
-        return "Debes confirmar expresamente la generación.";
       default:
         return error.message || error.code;
     }
@@ -76,42 +68,22 @@ function skippedGenerationMessage(reason: string): string {
   }
 }
 
-function toneStyle(
+function badgeTone(
   tone: "neutral" | "info" | "success" | "warning" | "danger",
 ) {
   if (tone === "success") {
-    return {
-      border: "1px solid rgba(34, 197, 94, 0.28)",
-      background: "rgba(240, 253, 244, 0.95)",
-      color: "#166534",
-    };
+    return { borderColor: "rgba(34,197,94,.3)", background: "#f0fdf4", color: "#166534" };
   }
   if (tone === "warning") {
-    return {
-      border: "1px solid rgba(245, 158, 11, 0.3)",
-      background: "rgba(255, 251, 235, 0.96)",
-      color: "#92400e",
-    };
+    return { borderColor: "rgba(245,158,11,.32)", background: "#fffbeb", color: "#92400e" };
   }
   if (tone === "danger") {
-    return {
-      border: "1px solid rgba(239, 68, 68, 0.25)",
-      background: "rgba(254, 242, 242, 0.96)",
-      color: "#991b1b",
-    };
+    return { borderColor: "rgba(239,68,68,.28)", background: "#fef2f2", color: "#991b1b" };
   }
   if (tone === "info") {
-    return {
-      border: "1px solid rgba(56, 189, 248, 0.28)",
-      background: "rgba(240, 249, 255, 0.96)",
-      color: "#075985",
-    };
+    return { borderColor: "rgba(56,189,248,.3)", background: "#f0f9ff", color: "#075985" };
   }
-  return {
-    border: "1px solid rgba(148, 163, 184, 0.24)",
-    background: "rgba(248, 250, 252, 0.9)",
-    color: "#475569",
-  };
+  return { borderColor: "rgba(148,163,184,.26)", background: "#f8fafc", color: "#475569" };
 }
 
 export function ProductAiImageReviewPanel({
@@ -124,22 +96,20 @@ export function ProductAiImageReviewPanel({
 }: ProductAiImageReviewPanelProps) {
   const [state, setState] = useState<ProductImageReviewResolution | null>(null);
   const [loading, setLoading] = useState(false);
-  const [busyAction, setBusyAction] = useState<ProductImageReviewUiAction | null>(
-    null,
-  );
+  const [busyAction, setBusyAction] = useState<ProductImageReviewUiAction | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
   const lastAiAppliedUrlRef = useRef<string | null>(null);
 
-  const refresh = useCallback(() => setRefreshToken((value) => value + 1), []);
+  const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
 
   useEffect(() => {
     lastAiAppliedUrlRef.current = null;
     setState(null);
+    setMessage(null);
     setError(null);
-    setNotice(null);
-  }, [productName, open]);
+  }, [open, productName]);
 
   useEffect(() => {
     const name = productName.trim();
@@ -150,17 +120,7 @@ export function ProductAiImageReviewPanel({
     setError(null);
     void fetchProductImageReviewState(name)
       .then((next) => {
-        if (cancelled) return;
-        setState(next);
-        if (next.resolution === "resolved" && next.imageUrl) {
-          if (
-            lastAiAppliedUrlRef.current === next.imageUrl ||
-            !fallbackImageUrl ||
-            fallbackImageUrl === next.imageUrl
-          ) {
-            onImageUrlChange(next.imageUrl);
-          }
-        }
+        if (!cancelled) setState(next);
       })
       .catch((cause) => {
         if (!cancelled) setError(friendlyError(cause));
@@ -172,17 +132,13 @@ export function ProductAiImageReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [
-    open,
-    productName,
-    refreshToken,
-    fallbackImageUrl,
-    onImageUrlChange,
-  ]);
+  }, [open, productName, refreshKey]);
 
   const resolved = state?.resolution === "resolved" ? state : null;
+  const fallbackIsLocalBlob = fallbackImageUrl?.startsWith("blob:") === true;
   const localImageDraftDirty = Boolean(
-    imageDraftMode === "manual_pending" ||
+    fallbackIsLocalBlob ||
+      imageDraftMode === "manual_pending" ||
       (imageDraftMode === "not_visible" &&
         resolved?.hasImage &&
         !lastAiAppliedUrlRef.current),
@@ -194,25 +150,28 @@ export function ProductAiImageReviewPanel({
 
   const runGeneration = useCallback(async () => {
     if (!resolved || disabled || busyAction) return;
-    const confirmed = window.confirm(
-      "Generar una imagen con IA puede tener coste. La imagen quedará pendiente de revisión. ¿Continuar?",
-    );
-    if (!confirmed) return;
+    if (
+      !window.confirm(
+        "Generar una imagen con IA puede tener coste. La imagen quedará pendiente de revisión. ¿Continuar?",
+      )
+    ) {
+      return;
+    }
 
     const action: ProductImageReviewUiAction = resolved.hasImage
       ? "regenerate"
       : "generate";
     setBusyAction(action);
+    setMessage(null);
     setError(null);
-    setNotice(null);
     try {
       const result = await generateProductImageForReview(resolved.productId);
       if (result.outcome === "generated") {
         lastAiAppliedUrlRef.current = result.imageUrl;
         onImageUrlChange(result.imageUrl);
-        setNotice("Imagen generada. Revísala antes de aprobarla.");
+        setMessage("Imagen generada. Revísala antes de aprobarla.");
       } else {
-        setNotice(skippedGenerationMessage(result.reason));
+        setMessage(skippedGenerationMessage(result.reason));
       }
       refresh();
     } catch (cause) {
@@ -226,8 +185,8 @@ export function ProductAiImageReviewPanel({
     async (action: ProductImageReviewAction) => {
       if (!resolved || disabled || busyAction) return;
       setBusyAction(action);
+      setMessage(null);
       setError(null);
-      setNotice(null);
       try {
         const next = await submitProductImageReview(resolved.productId, action);
         setState(next);
@@ -235,7 +194,7 @@ export function ProductAiImageReviewPanel({
           lastAiAppliedUrlRef.current = next.imageUrl;
           onImageUrlChange(next.imageUrl);
         }
-        setNotice(
+        setMessage(
           action === "approve"
             ? "Imagen aprobada y protegida."
             : "Imagen rechazada. Puedes generar otra alternativa.",
@@ -252,6 +211,8 @@ export function ProductAiImageReviewPanel({
 
   if (!open || !productName.trim()) return null;
 
+  const buttonDisabled = disabled || busyAction != null;
+
   return (
     <section
       aria-label="Imagen generada con IA"
@@ -261,67 +222,31 @@ export function ProductAiImageReviewPanel({
         gap: 10,
         padding: 12,
         borderRadius: 12,
-        border: "1px solid rgba(56, 189, 248, 0.22)",
-        background:
-          "linear-gradient(180deg, rgba(240,249,255,0.86), rgba(248,250,252,0.72))",
+        border: "1px solid rgba(56,189,248,.22)",
+        background: "linear-gradient(180deg,rgba(240,249,255,.9),rgba(248,250,252,.75))",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <h3
-            style={{
-              margin: 0,
-              color: "#0f172a",
-              fontSize: 13,
-              fontWeight: 780,
-              letterSpacing: "-0.015em",
-            }}
-          >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h3 style={{ margin: 0, color: "#0f172a", fontSize: 13, fontWeight: 780 }}>
             Imagen con IA
           </h3>
-          <p
-            style={{
-              margin: "3px 0 0",
-              color: "#64748b",
-              fontSize: 11,
-              lineHeight: 1.4,
-            }}
-          >
-            Generación individual, siempre bajo revisión humana.
+          <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 11 }}>
+            Generación individual y siempre bajo revisión humana.
           </p>
         </div>
-        {loading ? (
-          <span style={{ color: "#64748b", fontSize: 11 }} role="status">
-            Comprobando…
-          </span>
-        ) : null}
+        {loading ? <span style={{ color: "#64748b", fontSize: 11 }}>Comprobando…</span> : null}
       </div>
 
       {!loading && state?.resolution === "not_found" ? (
         <p style={{ margin: 0, color: "#64748b", fontSize: 11, lineHeight: 1.45 }}>
-          Guarda primero el producto para activar la generación y revisión de imágenes.
+          Guarda primero el producto para activar esta función.
         </p>
       ) : null}
 
       {!loading && state?.resolution === "ambiguous" ? (
-        <p
-          role="alert"
-          style={{
-            margin: 0,
-            color: "#92400e",
-            fontSize: 11,
-            lineHeight: 1.45,
-          }}
-        >
-          Hay varios productos con este mismo nombre. Hostly no elegirá uno automáticamente;
-          cambia el nombre o revisa el duplicado antes de generar.
+        <p role="alert" style={{ margin: 0, color: "#92400e", fontSize: 11, lineHeight: 1.45 }}>
+          Hay varios productos con este nombre. Hostly no elegirá uno automáticamente.
         </p>
       ) : null}
 
@@ -330,13 +255,10 @@ export function ProductAiImageReviewPanel({
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             <span
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                minHeight: 24,
-                padding: "3px 8px",
+                padding: "4px 8px",
                 borderRadius: 999,
-                border: "1px solid rgba(148, 163, 184, 0.22)",
-                background: "rgba(255,255,255,0.78)",
+                border: "1px solid rgba(148,163,184,.23)",
+                background: "rgba(255,255,255,.8)",
                 color: "#475569",
                 fontSize: 10,
                 fontWeight: 700,
@@ -346,14 +268,12 @@ export function ProductAiImageReviewPanel({
             </span>
             <span
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                minHeight: 24,
-                padding: "3px 8px",
+                padding: "4px 8px",
                 borderRadius: 999,
+                border: "1px solid",
                 fontSize: 10,
                 fontWeight: 700,
-                ...toneStyle(view.statusTone),
+                ...badgeTone(view.statusTone),
               }}
             >
               {view.statusLabel}
@@ -361,13 +281,10 @@ export function ProductAiImageReviewPanel({
             {resolved.confidence != null ? (
               <span
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  minHeight: 24,
-                  padding: "3px 8px",
+                  padding: "4px 8px",
                   borderRadius: 999,
-                  border: "1px solid rgba(148, 163, 184, 0.2)",
-                  background: "rgba(255,255,255,0.65)",
+                  border: "1px solid rgba(148,163,184,.2)",
+                  background: "rgba(255,255,255,.7)",
                   color: "#64748b",
                   fontSize: 10,
                   fontWeight: 650,
@@ -379,26 +296,21 @@ export function ProductAiImageReviewPanel({
           </div>
 
           {view.guidance ? (
-            <p
-              style={{ margin: 0, color: "#475569", fontSize: 11, lineHeight: 1.45 }}
-            >
+            <p style={{ margin: 0, color: "#475569", fontSize: 11, lineHeight: 1.45 }}>
               {view.guidance}
             </p>
           ) : null}
 
           {view.actions.length > 0 ? (
-            <div
-              style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}
-            >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {view.actions.map((action) => {
                 const busy = busyAction === action;
-                const globallyDisabled = disabled || busyAction != null;
                 if (action === "approve") {
                   return (
                     <ConfigBtnPrimary
                       key={action}
                       type="button"
-                      disabled={globallyDisabled}
+                      disabled={buttonDisabled}
                       onClick={() => void runReview("approve")}
                     >
                       {busy ? "Aprobando…" : "Aprobar imagen"}
@@ -410,19 +322,19 @@ export function ProductAiImageReviewPanel({
                     <button
                       key={action}
                       type="button"
-                      disabled={globallyDisabled}
+                      disabled={buttonDisabled}
                       onClick={() => void runReview("reject")}
                       style={{
                         minHeight: 34,
                         padding: "6px 11px",
                         borderRadius: 8,
-                        border: "1px solid rgba(239, 68, 68, 0.28)",
-                        background: "rgba(254, 242, 242, 0.92)",
+                        border: "1px solid rgba(239,68,68,.3)",
+                        background: "#fef2f2",
                         color: "#b91c1c",
                         fontSize: 11,
                         fontWeight: 700,
-                        cursor: globallyDisabled ? "not-allowed" : "pointer",
-                        opacity: globallyDisabled ? 0.55 : 1,
+                        opacity: buttonDisabled ? 0.55 : 1,
+                        cursor: buttonDisabled ? "not-allowed" : "pointer",
                       }}
                     >
                       {busy ? "Rechazando…" : "Rechazar"}
@@ -433,7 +345,7 @@ export function ProductAiImageReviewPanel({
                   <ConfigBtnSecondary
                     key={action}
                     type="button"
-                    disabled={globallyDisabled}
+                    disabled={buttonDisabled}
                     onClick={() => void runGeneration()}
                   >
                     {busy
@@ -449,22 +361,20 @@ export function ProductAiImageReviewPanel({
         </>
       ) : null}
 
-      {notice ? (
+      {message ? (
         <p
           role="status"
-          aria-live="polite"
           style={{
             margin: 0,
             padding: "7px 9px",
             borderRadius: 8,
-            background: "rgba(240, 253, 244, 0.92)",
-            border: "1px solid rgba(34, 197, 94, 0.24)",
+            border: "1px solid rgba(34,197,94,.25)",
+            background: "#f0fdf4",
             color: "#166534",
             fontSize: 11,
-            lineHeight: 1.4,
           }}
         >
-          {notice}
+          {message}
         </p>
       ) : null}
 
@@ -473,32 +383,22 @@ export function ProductAiImageReviewPanel({
           role="alert"
           style={{
             display: "flex",
-            alignItems: "center",
             justifyContent: "space-between",
             gap: 10,
             padding: "7px 9px",
             borderRadius: 8,
-            background: "rgba(254, 242, 242, 0.94)",
-            border: "1px solid rgba(239, 68, 68, 0.25)",
+            border: "1px solid rgba(239,68,68,.25)",
+            background: "#fef2f2",
             color: "#991b1b",
             fontSize: 11,
-            lineHeight: 1.4,
           }}
         >
           <span>{error}</span>
           <button
             type="button"
+            disabled={buttonDisabled}
             onClick={refresh}
-            disabled={disabled || busyAction != null}
-            style={{
-              flexShrink: 0,
-              border: 0,
-              background: "transparent",
-              color: "#991b1b",
-              font: "inherit",
-              fontWeight: 750,
-              cursor: "pointer",
-            }}
+            style={{ border: 0, background: "transparent", color: "inherit", fontWeight: 750 }}
           >
             Actualizar
           </button>
