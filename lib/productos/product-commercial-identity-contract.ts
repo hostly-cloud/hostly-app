@@ -3,6 +3,9 @@ export type ProductCommercialIdentity = {
   brand: string;
   quantity: string;
   barcode: string;
+  wineProducer: string;
+  wineAppellation: string;
+  wineVintage: string;
 };
 
 export type ProductCommercialIdentityInput = {
@@ -10,6 +13,9 @@ export type ProductCommercialIdentityInput = {
   brand: string;
   quantity: string;
   barcode: string;
+  wineProducer: string;
+  wineAppellation: string;
+  wineVintage: string;
 };
 
 export type ProductCommercialIdentityApiResponse =
