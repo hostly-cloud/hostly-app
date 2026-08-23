@@ -1,4 +1,9 @@
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import {
+  FieldValue,
+  type DocumentReference,
+  type DocumentSnapshot,
+  type Firestore,
+} from "firebase-admin/firestore";
 import type {
   ProductCommercialIdentity,
   ProductCommercialIdentityInput,
@@ -40,8 +45,7 @@ function readString(value: unknown): string {
 
 /**
  * GS1 check-digit validation for GTIN-8, UPC-A/GTIN-12, EAN-13/GTIN-13 and
- * GTIN-14. This intentionally validates structure, not whether GS1 allocated
- * the company prefix.
+ * GTIN-14. This validates structure, not whether GS1 allocated the prefix.
  */
 export function isValidGtin(value: string): boolean {
   if (!/^\d+$/.test(value) || !GTIN_LENGTHS.has(value.length)) return false;
@@ -191,12 +195,11 @@ export async function updateProductCommercialIdentity(params: {
       ? restaurantRef.collection(BARCODE_INDEX_COLLECTION).doc(nextBarcode)
       : null;
 
-    const refsToRead = new Map<string, typeof nextIndexRef>();
+    const refsToRead = new Map<string, DocumentReference>();
     if (previousIndexRef) refsToRead.set(previousIndexRef.path, previousIndexRef);
     if (nextIndexRef) refsToRead.set(nextIndexRef.path, nextIndexRef);
-    const indexSnaps = new Map<string, Awaited<ReturnType<typeof transaction.get>>>();
+    const indexSnaps = new Map<string, DocumentSnapshot>();
     for (const [path, ref] of refsToRead) {
-      if (!ref) continue;
       indexSnaps.set(path, await transaction.get(ref));
     }
 
@@ -219,8 +222,6 @@ export async function updateProductCommercialIdentity(params: {
       brand: input.brand || FieldValue.delete(),
       quantity: input.quantity || FieldValue.delete(),
       barcode: nextBarcode || FieldValue.delete(),
-      // Remove legacy aliases when the identity is deliberately rewritten so
-      // a stale alias cannot silently resurrect a cleared/changed barcode.
       ean: FieldValue.delete(),
       ean13: FieldValue.delete(),
       gtin: FieldValue.delete(),
@@ -237,10 +238,7 @@ export async function updateProductCommercialIdentity(params: {
       });
     }
 
-    if (
-      previousIndexRef &&
-      previousBarcode !== nextBarcode
-    ) {
+    if (previousIndexRef && previousBarcode !== nextBarcode) {
       const previousSnap = indexSnaps.get(previousIndexRef.path);
       const previousOwner = previousSnap?.exists
         ? barcodeIndexOwner(previousSnap.data() as Record<string, unknown>)
