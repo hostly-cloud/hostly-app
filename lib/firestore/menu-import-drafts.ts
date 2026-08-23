@@ -18,6 +18,11 @@ import {
   logMenuImportDraftSaveError,
 } from "@/lib/carta/menu-import-draft-save-diagnostics";
 import { sanitizeMenuImportDraftUpdatePatch } from "@/lib/carta/sanitize-menu-import-draft-payload";
+import {
+  normalizeMenuImportSourceFilesForWrite,
+  readMenuImportSourceFiles,
+  type MenuImportSourceFile,
+} from "@/lib/carta/menu-import-source-files";
 import { auth, db } from "@/lib/firebase/client";
 import type { MenuImportPublishLogEntry } from "@/lib/carta/publish-result-types";
 import type {
@@ -45,6 +50,7 @@ export type MenuImportDraftDocument = {
   sourceUrl?: string;
   storagePath?: string;
   originalFileName?: string;
+  sourceFiles?: MenuImportSourceFile[];
   menuType: MenuImportMenuType;
   status: MenuImportDraftStatus;
   sections: ImportedMenuSection[];
@@ -77,6 +83,7 @@ export type CreateMenuImportDraftInput = {
   sourceUrl?: string;
   originalFileName?: string;
   storagePath?: string;
+  sourceFiles?: MenuImportSourceFile[];
   status?: MenuImportDraftStatus;
   createdBy: string;
 };
@@ -87,6 +94,7 @@ export type UpdateMenuImportDraftInput = Partial<
     | "sourceUrl"
     | "storagePath"
     | "originalFileName"
+    | "sourceFiles"
   >
 > & {
   updatedBy: string;
@@ -343,6 +351,7 @@ export function parseMenuImportDraftDocument(
     storagePath: typeof data.storagePath === "string" ? data.storagePath : undefined,
     originalFileName:
       typeof data.originalFileName === "string" ? data.originalFileName : undefined,
+    sourceFiles: readMenuImportSourceFiles(data.sourceFiles),
     menuType: readMenuType(data.menuType),
     status: readStatus(data.status),
     sections,
@@ -407,7 +416,9 @@ export async function createMenuImportDraft(
     createdBy: uid,
     updatedBy: uid,
     ...(input.sourceUrl?.trim() ? { sourceUrl: input.sourceUrl.trim() } : {}),
-    // El path y el nombre se asignan juntos, una sola vez, después del upload.
+    ...(input.sourceFiles?.length
+      ? { sourceFiles: normalizeMenuImportSourceFilesForWrite(input.sourceFiles) }
+      : {}),
   };
 
   try {
@@ -448,6 +459,9 @@ export async function updateMenuImportDraft(
     if (input.sourceUrl !== undefined) patch.sourceUrl = input.sourceUrl;
     if (input.storagePath !== undefined) patch.storagePath = input.storagePath;
     if (input.originalFileName !== undefined) patch.originalFileName = input.originalFileName;
+    if (input.sourceFiles !== undefined) {
+      patch.sourceFiles = normalizeMenuImportSourceFilesForWrite(input.sourceFiles);
+    }
 
     const ref = draftDocRef(rid, did);
     const existing = await getDoc(ref);
