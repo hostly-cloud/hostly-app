@@ -29,10 +29,12 @@ on:
       - "lib/firestore/menu-import-drafts.ts"
       - "lib/storage/menu-import-files.ts"
       - "scripts/eval-menu-import-corpus.ts"
+      - "scripts/eval-menu-import-photo-corpus.ts"
       - "scripts/eval-catalog-product-images-live.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
       - "tests/lib/menu-import-photo-vision-recovery.test.ts"
+      - "tests/lib/menu-import-photo-vision-eval.test.ts"
       - "tests/lib/product-image-enrichment.test.ts"
       - "tests/lib/imported-product-image-generation.test.ts"
       - "tests/lib/product-image-review-state.test.ts"
@@ -51,6 +53,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/menu-import-eval.yml"
+      - ".github/workflows/menu-import-photo-vision-eval.yml"
       - ".github/workflows/catalog-image-live-eval.yml"
 
 jobs:
@@ -84,6 +87,12 @@ jobs:
 
       - name: Run photo vision recovery tests
         run: npx tsx --test tests/lib/menu-import-photo-vision-recovery.test.ts
+
+      - name: Run photo vision evaluation model tests
+        run: npx tsx --test tests/lib/menu-import-photo-vision-eval.test.ts
+
+      - name: Validate photo corpus runner
+        run: npm run eval:menu-import:photos
 
       - name: Run product image enrichment unit tests
         run: npx tsx --test tests/lib/product-image-enrichment.test.ts
