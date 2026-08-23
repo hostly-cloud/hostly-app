@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductBarcodeScanner } from "@/components/productos/product-barcode-scanner";
+import { ProductExactCatalogImageSuggestion } from "@/components/productos/product-exact-catalog-image-suggestion";
 import {
   fetchProductCommercialIdentity,
   saveProductCommercialIdentity,
@@ -13,16 +14,20 @@ export function ProductCommercialIdentityPanel({
   productName,
   disabled = false,
   inputClassName,
+  onExactImageAttached,
 }: {
   productId?: string | null;
   productName: string;
   disabled?: boolean;
   inputClassName: string;
+  onExactImageAttached?: (imageUrl: string) => void;
 }) {
   const [resolvedProductId, setResolvedProductId] = useState<string | null>(null);
   const [brand, setBrand] = useState("");
   const [quantity, setQuantity] = useState("");
   const [barcode, setBarcode] = useState("");
+  const [persistedBarcode, setPersistedBarcode] = useState("");
+  const [exactImageRefreshKey, setExactImageRefreshKey] = useState(0);
   const [initialKey, setInitialKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,6 +48,7 @@ export function ProductCommercialIdentityPanel({
       setBrand("");
       setQuantity("");
       setBarcode("");
+      setPersistedBarcode("");
       setInitialKey("");
       setError(null);
       return;
@@ -64,6 +70,7 @@ export function ProductCommercialIdentityPanel({
           setBrand("");
           setQuantity("");
           setBarcode("");
+          setPersistedBarcode("");
           setInitialKey("");
           return;
         }
@@ -75,11 +82,13 @@ export function ProductCommercialIdentityPanel({
       setBrand(identity.brand);
       setQuantity(identity.quantity);
       setBarcode(identity.barcode);
+      setPersistedBarcode(identity.barcode);
       setInitialKey(
         `${identity.brand.trim()}\n${identity.quantity.trim()}\n${identity.barcode.replace(/\D/g, "")}`,
       );
     } catch (cause) {
       setResolvedProductId(null);
+      setPersistedBarcode("");
       setError(
         cause instanceof Error
           ? cause.message
@@ -109,9 +118,11 @@ export function ProductCommercialIdentityPanel({
       setBrand(identity.brand);
       setQuantity(identity.quantity);
       setBarcode(identity.barcode);
+      setPersistedBarcode(identity.barcode);
       setInitialKey(
         `${identity.brand.trim()}\n${identity.quantity.trim()}\n${identity.barcode.replace(/\D/g, "")}`,
       );
+      setExactImageRefreshKey((value) => value + 1);
       setSaved(true);
     } catch (cause) {
       setError(
@@ -256,7 +267,7 @@ export function ProductCommercialIdentityPanel({
             className="hostly-product-commercial-modal__hint"
             role="status"
           >
-            Identidad guardada.
+            Identidad guardada. Buscando coincidencia exacta…
           </span>
         ) : null}
         {error ? (
@@ -268,6 +279,16 @@ export function ProductCommercialIdentityPanel({
           </span>
         ) : null}
       </div>
+
+      {resolvedProductId && persistedBarcode ? (
+        <ProductExactCatalogImageSuggestion
+          productId={resolvedProductId}
+          barcode={persistedBarcode}
+          disabled={disabled || loading || saving}
+          refreshKey={exactImageRefreshKey}
+          onAttached={onExactImageAttached}
+        />
+      ) : null}
     </section>
   );
 }
