@@ -13,7 +13,6 @@ function jsonError(status: number, error: string, details?: string) {
 
 export type ProcessRouteDependencies = AuthenticatedRestaurantDependencies & {
   processDraft?: typeof import("@/lib/server/menu-imports/process-menu-import-draft")["processMenuImportDraft"];
-  promotePhotoVision?: typeof import("@/lib/server/menu-imports/ai-import-v2/promote-photo-vision-items")["promoteValidatedPhotoVisionItems"];
 };
 
 export async function handleProcessMenuImportRequest(
@@ -51,41 +50,12 @@ export async function handleProcessMenuImportRequest(
       userId: authCtx.uid,
     });
 
-    let visionRecoveredCount = 0;
-    if (!result.alreadyProcessed && result.aiImportV2Shadow) {
-      try {
-        const promotePhotoVision =
-          dependencies?.promotePhotoVision ??
-          (
-            await import(
-              "@/lib/server/menu-imports/ai-import-v2/promote-photo-vision-items"
-            )
-          ).promoteValidatedPhotoVisionItems;
-        const promoted = await promotePhotoVision({
-          db: authCtx.db,
-          restaurantId: authCtx.restaurantId,
-          draftId,
-          userId: authCtx.uid,
-          report: result.aiImportV2Shadow,
-        });
-        visionRecoveredCount = promoted.recoveredCount;
-      } catch (promotionError) {
-        console.warn("[api/menu-imports/process] photo vision promotion skipped", {
-          error:
-            promotionError instanceof Error
-              ? promotionError.message
-              : "PHOTO_VISION_PROMOTION_FAILED",
-        });
-      }
-    }
-
     return NextResponse.json({
       ok: true,
       draftId: result.draftId,
       status: result.status,
       alreadyProcessed: result.alreadyProcessed,
-      itemCount: result.itemCount + visionRecoveredCount,
-      ...(visionRecoveredCount > 0 ? { visionRecoveredCount } : {}),
+      itemCount: result.itemCount,
       ...(result.operationalWarnings?.length
         ? { operationalWarnings: result.operationalWarnings }
         : {}),
