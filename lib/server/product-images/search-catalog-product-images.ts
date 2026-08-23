@@ -52,6 +52,13 @@ export function catalogMatchContextFromProduct(
     brand: readString(data, ["brand", "brands", "marca", "manufacturer"]),
     quantity: readString(data, ["quantity", "format", "formato", "size"]),
     barcode: readString(data, ["barcode", "ean", "ean13", "gtin"]),
+    wineProducer: readString(data, ["wineProducer", "winery", "bodega"]),
+    wineAppellation: readString(data, [
+      "wineAppellation",
+      "appellation",
+      "denominacionOrigen",
+    ]),
+    wineVintage: readString(data, ["wineVintage", "vintage", "anada"]),
   };
 }
 
