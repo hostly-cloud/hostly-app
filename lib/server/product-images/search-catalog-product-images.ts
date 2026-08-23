@@ -9,6 +9,13 @@ import {
   getOpenFoodFactsCandidateByExactBarcode,
   normalizeCatalogBarcode,
 } from "@/lib/server/product-images/open-food-facts-exact-product";
+import {
+  filterCatalogCandidatesByWineIdentity,
+  type WineCatalogIdentityContext,
+} from "@/lib/server/product-images/wine-catalog-identity";
+
+export type HostlyCatalogProductMatchContext = CatalogProductMatchContext &
+  WineCatalogIdentityContext;
 
 export class SearchCatalogProductImagesError extends Error {
   readonly code: string;
@@ -44,7 +51,7 @@ function readString(data: Record<string, unknown>, keys: string[]): string | nul
 
 export function catalogMatchContextFromProduct(
   data: Record<string, unknown>,
-): CatalogProductMatchContext {
+): HostlyCatalogProductMatchContext {
   return {
     name: readString(data, ["name", "nombre"]) ?? "",
     categoryName: readString(data, ["categoryName", "categoria"]),
@@ -60,6 +67,19 @@ export function catalogMatchContextFromProduct(
     ]),
     wineVintage: readString(data, ["wineVintage", "vintage", "anada"]),
   };
+}
+
+function applyIdentityFilters(
+  context: HostlyCatalogProductMatchContext,
+  candidates: CatalogProductImageSearchResult["candidates"],
+) {
+  return filterCatalogCandidatesByWineIdentity({
+    context,
+    candidates: filterCatalogCandidatesByExactIdentity({
+      context,
+      candidates,
+    }),
+  });
 }
 
 export async function searchCatalogProductImages(params: {
@@ -107,7 +127,7 @@ export async function searchCatalogProductImages(params: {
     });
     return {
       query: barcode,
-      candidates: exact ? [exact] : [],
+      candidates: applyIdentityFilters(context, exact ? [exact] : []),
       provider: "open_food_facts",
       attribution: "Open Food Facts contributors",
       license: "CC BY-SA 3.0",
@@ -122,9 +142,6 @@ export async function searchCatalogProductImages(params: {
 
   return {
     ...result,
-    candidates: filterCatalogCandidatesByExactIdentity({
-      context,
-      candidates: result.candidates,
-    }),
+    candidates: applyIdentityFilters(context, result.candidates),
   };
 }
