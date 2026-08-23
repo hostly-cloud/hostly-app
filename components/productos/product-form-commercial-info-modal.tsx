@@ -79,7 +79,7 @@ export function ProductFormCommercialInfoSummaryCard({
 
 export type ProductFormCommercialInfoModalProps = {
   open: boolean;
-  productId: string | null;
+  productId?: string | null;
   productName: string;
   isCentralCatalog: boolean;
   description: string;
@@ -100,7 +100,7 @@ export type ProductFormCommercialInfoModalProps = {
 
 export function ProductFormCommercialInfoModal({
   open,
-  productId,
+  productId = null,
   productName,
   isCentralCatalog,
   description,
@@ -122,9 +122,6 @@ export function ProductFormCommercialInfoModal({
   const fileInputRef = imageFileInputRef ?? localFileInputRef;
   const [aiResolvedImageUrl, setAiResolvedImageUrl] = useState<string | null>(null);
 
-  // The component stays mounted while the product drawer is open. Keep a
-  // server-persisted AI/catalog preview when this nested modal is closed and
-  // reopened; reset only when the edited product changes.
   useEffect(() => {
     setAiResolvedImageUrl(null);
   }, [productName]);
@@ -212,6 +209,7 @@ export function ProductFormCommercialInfoModal({
             <>
               <ProductCommercialIdentityPanel
                 productId={productId}
+                productName={productName}
                 disabled={disabled}
                 inputClassName={drawerInputClass}
               />
