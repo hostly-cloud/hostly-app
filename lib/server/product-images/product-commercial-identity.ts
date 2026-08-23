@@ -13,6 +13,7 @@ import { normalizeCatalogBarcode } from "@/lib/server/product-images/open-food-f
 
 const MAX_BRAND_LENGTH = 120;
 const MAX_QUANTITY_LENGTH = 60;
+const MAX_WINE_TEXT_LENGTH = 140;
 const BARCODE_INDEX_COLLECTION = "productBarcodeIndex";
 
 export { isValidGtin } from "@/lib/productos/gtin";
@@ -45,6 +46,16 @@ function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function assertMaxLength(value: string, max: number, code: string, label: string) {
+  if (value.length > max) {
+    throw new ProductCommercialIdentityError(
+      code,
+      `${label} no puede superar ${max} caracteres`,
+      400,
+    );
+  }
+}
+
 export function normalizeProductGtin(value: unknown): string {
   const raw = readString(value);
   if (!raw) return "";
@@ -59,33 +70,69 @@ export function normalizeProductGtin(value: unknown): string {
   return normalized;
 }
 
+function normalizeWineVintage(value: unknown): string {
+  const vintage = readString(value);
+  if (!vintage) return "";
+  if (!/^(?:19|20)\d{2}$/.test(vintage)) {
+    throw new ProductCommercialIdentityError(
+      "INVALID_WINE_VINTAGE",
+      "La añada debe ser un año válido de cuatro cifras",
+      400,
+    );
+  }
+  const year = Number(vintage);
+  const maxYear = new Date().getUTCFullYear() + 1;
+  if (year < 1900 || year > maxYear) {
+    throw new ProductCommercialIdentityError(
+      "INVALID_WINE_VINTAGE",
+      `La añada debe estar entre 1900 y ${maxYear}`,
+      400,
+    );
+  }
+  return vintage;
+}
+
 export function normalizeProductCommercialIdentityInput(input: {
   productId: string;
   brand?: unknown;
   quantity?: unknown;
   barcode?: unknown;
+  wineProducer?: unknown;
+  wineAppellation?: unknown;
+  wineVintage?: unknown;
 }): ProductCommercialIdentityInput {
   const productId = assertSimpleId(input.productId, "productId");
   const brand = readString(input.brand);
   const quantity = readString(input.quantity);
   const barcode = normalizeProductGtin(input.barcode);
+  const wineProducer = readString(input.wineProducer);
+  const wineAppellation = readString(input.wineAppellation);
+  const wineVintage = normalizeWineVintage(input.wineVintage);
 
-  if (brand.length > MAX_BRAND_LENGTH) {
-    throw new ProductCommercialIdentityError(
-      "PRODUCT_BRAND_TOO_LONG",
-      `La marca no puede superar ${MAX_BRAND_LENGTH} caracteres`,
-      400,
-    );
-  }
-  if (quantity.length > MAX_QUANTITY_LENGTH) {
-    throw new ProductCommercialIdentityError(
-      "PRODUCT_QUANTITY_TOO_LONG",
-      `El formato no puede superar ${MAX_QUANTITY_LENGTH} caracteres`,
-      400,
-    );
-  }
+  assertMaxLength(brand, MAX_BRAND_LENGTH, "PRODUCT_BRAND_TOO_LONG", "La marca");
+  assertMaxLength(quantity, MAX_QUANTITY_LENGTH, "PRODUCT_QUANTITY_TOO_LONG", "El formato");
+  assertMaxLength(
+    wineProducer,
+    MAX_WINE_TEXT_LENGTH,
+    "WINE_PRODUCER_TOO_LONG",
+    "La bodega / productor",
+  );
+  assertMaxLength(
+    wineAppellation,
+    MAX_WINE_TEXT_LENGTH,
+    "WINE_APPELLATION_TOO_LONG",
+    "La denominación de origen",
+  );
 
-  return { productId, brand, quantity, barcode };
+  return {
+    productId,
+    brand,
+    quantity,
+    barcode,
+    wineProducer,
+    wineAppellation,
+    wineVintage,
+  };
 }
 
 function readStoredBarcode(data: Record<string, unknown>): string {
@@ -114,6 +161,18 @@ function identityFromDocument(
       readString(data.formato) ||
       readString(data.size),
     barcode: readStoredBarcode(data),
+    wineProducer:
+      readString(data.wineProducer) ||
+      readString(data.winery) ||
+      readString(data.bodega),
+    wineAppellation:
+      readString(data.wineAppellation) ||
+      readString(data.appellation) ||
+      readString(data.denominacionOrigen),
+    wineVintage:
+      readString(data.wineVintage) ||
+      readString(data.vintage) ||
+      readString(data.anada),
   };
 }
 
@@ -206,6 +265,9 @@ export async function updateProductCommercialIdentity(params: {
       brand: input.brand || FieldValue.delete(),
       quantity: input.quantity || FieldValue.delete(),
       barcode: nextBarcode || FieldValue.delete(),
+      wineProducer: input.wineProducer || FieldValue.delete(),
+      wineAppellation: input.wineAppellation || FieldValue.delete(),
+      wineVintage: input.wineVintage || FieldValue.delete(),
       ean: FieldValue.delete(),
       ean13: FieldValue.delete(),
       gtin: FieldValue.delete(),
