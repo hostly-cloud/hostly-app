@@ -26,6 +26,7 @@ on:
       - "lib/menu-import-eval/**"
       - "lib/carta/extract-menu-from-upload.ts"
       - "lib/carta/merge-menu-import-batch-rows.ts"
+      - "lib/carta/menu-import-source-files.ts"
       - "lib/carta/request-menu-import-*.ts"
       - "lib/carta/product-image-enrichment.ts"
       - "lib/firestore/menu-import-drafts.ts"
@@ -36,6 +37,8 @@ on:
       - "scripts/eval-catalog-product-images-live.ts"
       - "tests/lib/gtin-index-audit.test.ts"
       - "tests/lib/menu-import-batch-merge.test.ts"
+      - "tests/lib/menu-import-multi-source.test.ts"
+      - "tests/lib/menu-import-multi-page-merge.test.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
       - "tests/lib/menu-import-photo-vision-recovery.test.ts"
@@ -92,6 +95,9 @@ jobs:
 
       - name: Run multi-page batch merge tests
         run: npx tsx --test tests/lib/menu-import-batch-merge.test.ts
+
+      - name: Run canonical multi-photo batch tests
+        run: npx tsx --test tests/lib/menu-import-multi-source.test.ts tests/lib/menu-import-multi-page-merge.test.ts
 
       - name: Run photo vision recovery tests
         run: npx tsx --test tests/lib/menu-import-photo-vision-recovery.test.ts
