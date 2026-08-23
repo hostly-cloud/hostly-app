@@ -212,6 +212,7 @@ export function ProductFormCommercialInfoModal({
                 productName={productName}
                 disabled={disabled}
                 inputClassName={drawerInputClass}
+                onExactImageAttached={handleAiImageUrlChange}
               />
 
               <div className="hostly-product-commercial-modal__image-block">
