@@ -22,20 +22,20 @@ test("normalizes commercial identity including wine evidence", () => {
   assert.deepEqual(
     normalizeProductCommercialIdentityInput({
       productId: " product-1 ",
-      brand: " Marqués de Riscal ",
+      brand: " Vega Sicilia ",
       quantity: " 75 cl ",
-      barcode: "8 410-8680 00017",
-      wineProducer: " Herederos del Marqués de Riscal ",
-      wineAppellation: " Rioja DOCa ",
+      barcode: "8 410-8694 50199",
+      wineProducer: " Tempos Vega Sicilia ",
+      wineAppellation: " Ribera del Duero ",
       wineVintage: " 2019 ",
     }),
     {
       productId: "product-1",
-      brand: "Marqués de Riscal",
+      brand: "Vega Sicilia",
       quantity: "75 cl",
-      barcode: "8410868000017",
-      wineProducer: "Herederos del Marqués de Riscal",
-      wineAppellation: "Rioja DOCa",
+      barcode: "8410869450199",
+      wineProducer: "Tempos Vega Sicilia",
+      wineAppellation: "Ribera del Duero",
       wineVintage: "2019",
     },
   );
