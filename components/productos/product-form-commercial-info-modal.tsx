@@ -121,9 +121,11 @@ export function ProductFormCommercialInfoModal({
   const localFileInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = imageFileInputRef ?? localFileInputRef;
   const [aiResolvedImageUrl, setAiResolvedImageUrl] = useState<string | null>(null);
+  const [imageReviewRevision, setImageReviewRevision] = useState(0);
 
   useEffect(() => {
     setAiResolvedImageUrl(null);
+    setImageReviewRevision(0);
   }, [productName]);
 
   useEffect(() => {
@@ -140,6 +142,11 @@ export function ProductFormCommercialInfoModal({
 
   const handleAiImageUrlChange = useCallback((url: string | null) => {
     setAiResolvedImageUrl(url);
+  }, []);
+
+  const handleExactImageAttached = useCallback((url: string) => {
+    setAiResolvedImageUrl(url);
+    setImageReviewRevision((value) => value + 1);
   }, []);
 
   if (!open) return null;
@@ -212,7 +219,7 @@ export function ProductFormCommercialInfoModal({
                 productName={productName}
                 disabled={disabled}
                 inputClassName={drawerInputClass}
-                onExactImageAttached={handleAiImageUrlChange}
+                onExactImageAttached={handleExactImageAttached}
               />
 
               <div className="hostly-product-commercial-modal__image-block">
@@ -266,6 +273,7 @@ export function ProductFormCommercialInfoModal({
                 <p className="hostly-product-commercial-modal__hint">{t("carta.fieldFotoUploadHint")}</p>
 
                 <ProductAiImageReviewPanel
+                  key={`${productName}:${imageReviewRevision}`}
                   open={open}
                   productName={productName}
                   fallbackImageUrl={effectiveImagePreviewUrl}
