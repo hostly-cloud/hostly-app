@@ -9,13 +9,16 @@ on:
       - "app/api/catalog/review-product-image/**"
       - "app/api/catalog/search-product-images/**"
       - "app/api/catalog/attach-product-image/**"
+      - "app/api/catalog/product-identity/**"
       - "components/productos/product-ai-image-review-panel.tsx"
       - "components/productos/product-form-commercial-info-modal.tsx"
+      - "components/productos/product-commercial-identity-panel.tsx"
       - "lib/server/menu-imports/**"
       - "lib/server/product-images/**"
       - "lib/productos/product-image-review-*.ts"
       - "lib/productos/catalog-product-image-*.ts"
       - "lib/productos/catalog-image-live-eval.ts"
+      - "lib/productos/product-commercial-identity-*.ts"
       - "lib/menu-import-eval/**"
       - "lib/carta/extract-menu-from-upload.ts"
       - "lib/carta/request-menu-import-*.ts"
@@ -32,6 +35,7 @@ on:
       - "tests/lib/catalog-product-image-matching.test.ts"
       - "tests/lib/catalog-product-image-provenance.test.ts"
       - "tests/lib/catalog-image-live-eval.test.ts"
+      - "tests/lib/product-commercial-identity.test.ts"
       - "tests/server/generate-imported-product-image-request.test.ts"
       - "tests/server/product-image-review-request.test.ts"
       - "tests/server/catalog-product-image-request.test.ts"
@@ -97,3 +101,6 @@ jobs:
 
       - name: Run catalog image live evaluation model tests
         run: npx tsx --test tests/lib/catalog-image-live-eval.test.ts
+
+      - name: Run product commercial identity tests
+        run: npx tsx --test tests/lib/product-commercial-identity.test.ts
