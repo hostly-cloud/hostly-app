@@ -39,6 +39,7 @@ on:
       - "tests/server/generate-imported-product-image-request.test.ts"
       - "tests/server/product-image-review-request.test.ts"
       - "tests/server/catalog-product-image-request.test.ts"
+      - "tests/server/product-commercial-identity-request.test.ts"
       - "test-corpus/**"
       - ".env.example"
       - "package.json"
@@ -104,3 +105,6 @@ jobs:
 
       - name: Run product commercial identity tests
         run: npx tsx --test tests/lib/product-commercial-identity.test.ts
+
+      - name: Run product commercial identity request tests
+        run: npx tsx --test tests/server/product-commercial-identity-request.test.ts
