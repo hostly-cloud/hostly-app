@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-contract";
+import { selectExactCatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-exact-suggestion";
 import {
   attachCatalogProductImageForReview,
   CatalogProductImageApiError,
@@ -57,9 +58,7 @@ export function ProductExactCatalogImageSuggestion({
     setMessage(null);
     try {
       const result = await searchCatalogProductImagesForReview(productId, "");
-      const exact = result.candidates.find(
-        (item) => item.externalReference === gtin,
-      ) ?? null;
+      const exact = selectExactCatalogProductImageCandidate(result.candidates, gtin);
       setCandidate(exact);
       if (!exact) {
         setMessage("No hemos encontrado todavía una imagen exacta para este EAN / GTIN.");
