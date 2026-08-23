@@ -6,21 +6,31 @@ import {
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import type { ProductImageReviewResolution } from "@/lib/productos/product-image-review-contract";
-import { resolveProductImageReviewState } from "@/lib/server/product-images/resolve-product-image-review-state";
+import {
+  resolveProductImageReviewState,
+  resolveProductImageReviewStateById,
+} from "@/lib/server/product-images/resolve-product-image-review-state";
 
 type Authenticate = (
   req: Request,
 ) => Promise<AuthenticatedRestaurantContext | NextResponse>;
 
-type ResolveState = (params: {
+type ResolveByName = (params: {
   db: AuthenticatedRestaurantContext["db"];
   restaurantId: string;
   productName: string;
 }) => Promise<ProductImageReviewResolution>;
 
+type ResolveById = (params: {
+  db: AuthenticatedRestaurantContext["db"];
+  restaurantId: string;
+  productId: string;
+}) => Promise<ProductImageReviewResolution>;
+
 export type ProductImageStateRequestDependencies = {
   authenticate?: Authenticate;
-  resolveState?: ResolveState;
+  resolveState?: ResolveByName;
+  resolveStateById?: ResolveById;
 };
 
 function jsonError(status: number, error: string, details?: string) {
@@ -53,13 +63,25 @@ export async function handleProductImageStateRequest(
     );
   }
 
+  const productId = url.searchParams.get("productId")?.trim() ?? "";
+  if (productId) {
+    const resolveById =
+      dependencies?.resolveStateById ?? resolveProductImageReviewStateById;
+    const state = await resolveById({
+      db: authCtx.db,
+      restaurantId: authCtx.restaurantId,
+      productId,
+    });
+    return NextResponse.json({ ok: true as const, state });
+  }
+
   const productName = url.searchParams.get("name")?.trim() ?? "";
-  if (!productName) return jsonError(400, "MISSING_PRODUCT_NAME");
+  if (!productName) return jsonError(400, "MISSING_PRODUCT_ID_OR_NAME");
   if (productName.length > 180) return jsonError(400, "PRODUCT_NAME_TOO_LONG");
 
-  const resolveState =
+  const resolveByName =
     dependencies?.resolveState ?? resolveProductImageReviewState;
-  const state = await resolveState({
+  const state = await resolveByName({
     db: authCtx.db,
     restaurantId: authCtx.restaurantId,
     productName,
