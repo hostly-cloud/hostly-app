@@ -34,7 +34,11 @@ import { isMenuImportDebugReportEnabled } from "@/lib/carta/menu-import-debug-re
 import type { MenuImportOperationalWarning } from "@/lib/carta/menu-import-operational-warnings-types";
 import { buildMenuImportOperationalWarningsForDraft } from "./build-menu-import-operational-warnings";
 import { runAiImportV2Shadow } from "./ai-import-v2/run-ai-import-v2-shadow";
-import type { AiImportV2ShadowReport } from "./ai-import-v2/types";
+import { mergePhotoVisionItems } from "./ai-import-v2/merge-photo-vision-items";
+import {
+  isAiImportV2PhotoRecoveryEnabled,
+  type AiImportV2ShadowReport,
+} from "./ai-import-v2/types";
 
 const ANALYZING_STALE_MS = 2 * 60 * 1000;
 
@@ -55,17 +59,11 @@ export type ProcessMenuImportDraftResult = {
   status: MenuImportDraftDocument["status"];
   alreadyProcessed: boolean;
   itemCount: number;
-  /** Solo desarrollo: trazabilidad OCR → parser → IA → validación. */
   debugReport?: MenuImportDebugReport;
-  /** Avisos operativos para la UI (no persistidos en Firestore). */
   operationalWarnings?: MenuImportOperationalWarning[];
-  /** Shadow IA V2 (no afecta draft; solo observación). */
   aiImportV2Shadow?: AiImportV2ShadowReport;
 };
 
-/**
- * Procesa un borrador: OCR → parser heurístico → enriquecimiento IA estructurado.
- */
 export async function processMenuImportDraft(params: {
   db: Firestore;
   restaurantId: string;
@@ -103,10 +101,7 @@ export async function processMenuImportDraft(params: {
   }
   if (draft.storagePath?.trim()) {
     try {
-      assertMenuImportStoragePathForDraft(draft.storagePath, {
-        restaurantId,
-        draftId,
-      });
+      assertMenuImportStoragePathForDraft(draft.storagePath, { restaurantId, draftId });
     } catch {
       throw new ProcessMenuImportDraftError(
         "STORAGE_PATH_SCOPE_MISMATCH",
@@ -123,11 +118,7 @@ export async function processMenuImportDraft(params: {
       sectionCount: draft.sections.length,
       rawTextLength: draft.rawText?.length ?? 0,
     });
-    trace.draftFinal({
-      status: draft.status,
-      itemCount: draft.items.length,
-      alreadyProcessed: true,
-    });
+    trace.draftFinal({ status: draft.status, itemCount: draft.items.length, alreadyProcessed: true });
     return {
       draftId,
       status: draft.status,
@@ -149,11 +140,7 @@ export async function processMenuImportDraft(params: {
 
   if (draft.sourceType === "qr_url") {
     if (!draft.sourceUrl?.trim()) {
-      throw new ProcessMenuImportDraftError(
-        "MISSING_SOURCE_URL",
-        "Falta URL del menú QR en el borrador",
-        400,
-      );
+      throw new ProcessMenuImportDraftError("MISSING_SOURCE_URL", "Falta URL del menú QR en el borrador", 400);
     }
   } else if (!draft.storagePath?.trim()) {
     throw new ProcessMenuImportDraftError(
@@ -273,7 +260,26 @@ export async function processMenuImportDraft(params: {
     currentStep = "ocr_validation";
     const wrapped = enriched.items.map((item) => ({ name: item.name, item }));
     const ocrValidated = filterItemsByOcrSource(wrapped, extracted.rawText);
-    const finalItems = ocrValidated.accepted.map((row) => row.item);
+    let finalItems = ocrValidated.accepted.map((row) => row.item);
+
+    const photoRecoveryEligible =
+      draft.sourceType === "image" &&
+      isAiImportV2PhotoRecoveryEnabled() &&
+      aiImportV2Shadow?.usedVision === true &&
+      Boolean(aiImportV2Shadow.validation?.accepted.length);
+
+    if (photoRecoveryEligible && aiImportV2Shadow?.validation) {
+      const merged = mergePhotoVisionItems({
+        existingItems: finalItems,
+        acceptedVisionItems: aiImportV2Shadow.validation.accepted,
+      });
+      if (merged.recoveredCount > 0) {
+        finalItems = merged.items;
+        parserWarnings.push(
+          `photo_vision_recovered:${merged.recoveredCount}`,
+        );
+      }
+    }
 
     trace.ocrValidation({
       ocrTextLength: ocrValidated.ocrTextLength,
@@ -390,11 +396,7 @@ export async function processMenuImportDraft(params: {
       updatedBy: userId,
     });
 
-    trace.draftFinal({
-      status: "ready",
-      itemCount: finalItems.length,
-      alreadyProcessed: false,
-    });
+    trace.draftFinal({ status: "ready", itemCount: finalItems.length, alreadyProcessed: false });
 
     return {
       draftId,
