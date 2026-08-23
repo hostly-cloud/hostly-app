@@ -22,15 +22,18 @@ on:
       - "lib/productos/catalog-image-live-eval.ts"
       - "lib/productos/product-commercial-identity-*.ts"
       - "lib/productos/gtin.ts"
+      - "lib/productos/gtin-index-audit.ts"
       - "lib/menu-import-eval/**"
       - "lib/carta/extract-menu-from-upload.ts"
       - "lib/carta/request-menu-import-*.ts"
       - "lib/carta/product-image-enrichment.ts"
       - "lib/firestore/menu-import-drafts.ts"
       - "lib/storage/menu-import-files.ts"
+      - "scripts/audit-product-gtin-index.ts"
       - "scripts/eval-menu-import-corpus.ts"
       - "scripts/eval-menu-import-photo-corpus.ts"
       - "scripts/eval-catalog-product-images-live.ts"
+      - "tests/lib/gtin-index-audit.test.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
       - "tests/lib/menu-import-photo-vision-recovery.test.ts"
@@ -93,6 +96,9 @@ jobs:
 
       - name: Validate photo corpus runner
         run: npm run eval:menu-import:photos
+
+      - name: Run GTIN index audit model tests
+        run: npx tsx --test tests/lib/gtin-index-audit.test.ts
 
       - name: Run product image enrichment unit tests
         run: npx tsx --test tests/lib/product-image-enrichment.test.ts
