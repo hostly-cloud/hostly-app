@@ -1,6 +1,7 @@
 import { mapAiMenuItemsToExtractedRows, type AiMenuDetectedItem } from "@/lib/carta/map-ai-menu-items-to-rows";
 import type { ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
 import { MAX_MENU_IMPORT_SOURCE_FILES } from "@/lib/carta/menu-import-source-files";
+import { readRegisteredMenuImportBatch } from "@/lib/carta/menu-import-client-batch";
 import { requestMenuImportProcess } from "@/lib/carta/request-menu-import-process";
 import {
   createMenuImportDraft,
@@ -93,12 +94,23 @@ async function readProcessedRows(params: {
 /**
  * Entrada canónica de archivo para onboarding y cualquier UI que necesite filas de revisión.
  * El análisis siempre pasa por Menu Import V2: draft tenant-safe → Storage → process → draft listo.
+ * Si la UI ha registrado varias páginas para este File principal, se enruta al motor batch canónico.
  */
 export async function extractMenuFromUpload(file: File): Promise<{
   rows: ExtractedMenuRow[];
   ocrTextLength?: number;
   draftId?: string;
 }> {
+  const registeredBatch = readRegisteredMenuImportBatch(file);
+  if (registeredBatch && registeredBatch.length > 1) {
+    const batch = await extractMenuFromUploads(registeredBatch);
+    return {
+      rows: batch.rows,
+      ocrTextLength: batch.ocrTextLength,
+      draftId: batch.draftIds[0],
+    };
+  }
+
   const user = auth.currentUser;
   if (!user) {
     throw new MenuImportExtractError("UNAUTHORIZED", "UNAUTHORIZED");
@@ -233,8 +245,8 @@ export async function extractMenuFromUploads(files: readonly File[]): Promise<{
     const result = await readProcessedRows({ restaurantId: rid, draftId });
     return {
       rows: result.rows,
-      pages: normalizedFiles.map((file, order) => ({
-        fileName: file.name,
+      pages: normalizedFiles.map((pageFile, order) => ({
+        fileName: pageFile.name,
         order,
         status: "processed" as const,
       })),
