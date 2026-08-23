@@ -418,6 +418,24 @@ export default function CartaImportPremiumLayoutBatch(
         style={{ display: "none" }}
         aria-hidden
       />
+      {batchError && batchFiles.length === 0 ? (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 8,
+            padding: "9px 11px",
+            borderRadius: 10,
+            border: "1px solid color-mix(in srgb, #b42318 26%, transparent)",
+            background: "color-mix(in srgb, #fef2f2 94%, transparent)",
+            color: "#b42318",
+            fontSize: 11,
+            lineHeight: 1.4,
+            fontWeight: 650,
+          }}
+        >
+          {batchError}
+        </div>
+      ) : null}
       {controls}
       <OriginalCartaImportPremiumLayout
         {...props}
