@@ -33,6 +33,13 @@ function readBarcodeDetector(): BarcodeDetectorConstructor | null {
   return candidate ?? null;
 }
 
+function hasCameraApi(): boolean {
+  const runtimeNavigator = navigator as unknown as {
+    mediaDevices?: { getUserMedia?: unknown };
+  };
+  return typeof runtimeNavigator.mediaDevices?.getUserMedia === "function";
+}
+
 export function ProductBarcodeScanner({
   disabled = false,
   onDetected,
@@ -62,11 +69,7 @@ export function ProductBarcodeScanner({
 
   useEffect(() => {
     setAvailable(
-      Boolean(
-        readBarcodeDetector() &&
-          navigator.mediaDevices?.getUserMedia &&
-          window.isSecureContext,
-      ),
+      Boolean(readBarcodeDetector() && hasCameraApi() && window.isSecureContext),
     );
     return stop;
   }, [stop]);
@@ -79,7 +82,7 @@ export function ProductBarcodeScanner({
 
   const start = useCallback(async () => {
     const Detector = readBarcodeDetector();
-    if (!Detector || !navigator.mediaDevices?.getUserMedia) return;
+    if (!Detector || !hasCameraApi()) return;
 
     setOpen(true);
     setStarting(true);
@@ -254,7 +257,10 @@ export function ProductBarcodeScanner({
               </p>
             ) : null}
             {error ? (
-              <p role="alert" className="hostly-carta-config-alert hostly-carta-config-alert--error">
+              <p
+                role="alert"
+                className="hostly-carta-config-alert hostly-carta-config-alert--error"
+              >
                 {error}
               </p>
             ) : null}
