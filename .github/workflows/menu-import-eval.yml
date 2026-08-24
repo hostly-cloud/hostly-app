@@ -40,6 +40,7 @@ on:
       - "tests/lib/menu-import-batch-selection.test.ts"
       - "tests/lib/menu-import-multi-source.test.ts"
       - "tests/lib/menu-import-multi-page-merge.test.ts"
+      - "tests/lib/menu-import-multi-page-photo-vision-recovery.test.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
       - "tests/lib/menu-import-photo-vision-recovery.test.ts"
@@ -99,7 +100,7 @@ jobs:
         run: npx tsx --test tests/lib/menu-import-multi-source.test.ts tests/lib/menu-import-multi-page-merge.test.ts tests/lib/menu-import-batch-selection.test.ts
 
       - name: Run photo vision recovery tests
-        run: npx tsx --test tests/lib/menu-import-photo-vision-recovery.test.ts
+        run: npx tsx --test tests/lib/menu-import-photo-vision-recovery.test.ts tests/lib/menu-import-multi-page-photo-vision-recovery.test.ts
 
       - name: Run photo vision evaluation model tests
         run: npx tsx --test tests/lib/menu-import-photo-vision-eval.test.ts
