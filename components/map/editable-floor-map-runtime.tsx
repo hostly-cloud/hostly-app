@@ -57,6 +57,10 @@ function isOperationalTpvFit(props: EditableFloorMapProps): boolean {
   );
 }
 
+/**
+ * Compatibilidad transparente con el mapa base.
+ * Solo el TPV operativo fuerza `content`; cualquier otro consumidor conserva sus props.
+ */
 export function EditableFloorMap(props: EditableFloorMapProps) {
   if (!isOperationalTpvFit(props)) {
     return <BaseEditableFloorMap {...props} />;
