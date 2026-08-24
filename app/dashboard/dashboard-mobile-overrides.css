@@ -1,0 +1,117 @@
+/* Dashboard home — responsive hardening for phone/PDA.
+ * Keep desktop composition untouched while removing fixed-height pressure on
+ * narrow viewports. The content follows normal document flow and can scroll
+ * inside the dashboard shell instead of stacking cards over the TPV launcher.
+ */
+@media (max-width: 767px) {
+  .hostly-dashboard-premium-shell {
+    display: block !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-center {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: min-content !important;
+    height: auto !important;
+    overflow: visible !important;
+    gap: 12px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-header,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-main,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-management,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-operation,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero-wrap {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-main {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero-wrap {
+    min-height: 0 !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
+    min-height: 156px !important;
+    height: auto !important;
+    padding: 18px !important;
+    border-radius: 20px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__icon {
+    width: 54px !important;
+    height: 54px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__copy {
+    gap: 5px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__label {
+    max-width: none !important;
+    font-size: clamp(34px, 11vw, 48px) !important;
+    line-height: 0.95 !important;
+    letter-spacing: -0.055em !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero__sub {
+    font-size: 14px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-operation,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-management {
+    padding: 12px !important;
+    overflow: visible !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-stations,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+    box-sizing: border-box;
+    min-width: 0 !important;
+    min-height: 54px !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station__copy,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station__label,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station__sub,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__label {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-station__label,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 359px) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-stations,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
+    min-height: 144px !important;
+    padding: 16px !important;
+  }
+}
