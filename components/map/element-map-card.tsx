@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { useTpvV2OperationalParity } from "@/lib/tpv/v2-operational-parity-context";
 
 import {
   ElementCard as LegacyElementCard,
@@ -16,7 +17,9 @@ export type {
 export const ElementCard = memo(function ElementCard(
   props: ElementMapCardProps,
 ) {
-  if (props.interactionOnly) {
+  const linkedToV2Operation = useTpvV2OperationalParity(props.tableId);
+
+  if (props.interactionOnly || linkedToV2Operation) {
     return (
       <TpvV2TableOperationController
         tableId={props.tableId}
