@@ -8,6 +8,7 @@ import {
   HOSTLY_MAP_JOIN_ABORTED,
   HOSTLY_MAP_JOIN_ARMED,
 } from "@/lib/map/join-pinch-bridge";
+import { registerTpvV2TableController } from "@/lib/tpv/v2-table-controller-registry";
 import type { ElementMapCardProps } from "./legacy-element-map-card";
 
 const HOSTLY_MAP_JOIN_DRAG_HOVER = "hostly-map-join-drag-hover";
@@ -39,7 +40,6 @@ export function TpvLegacyTableInteractionController({
   isMapGroupedPrimary = false,
   onRequestSeparateGroupedTables,
 }: ElementMapCardProps) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const separateMenuRef = useRef<HTMLDivElement | null>(null);
   const joinStateRef = useRef<JoinState | null>(null);
   const joinArmTimerRef = useRef<number | null>(null);
@@ -229,7 +229,7 @@ export function TpvLegacyTableInteractionController({
         event.clientX,
         event.clientY,
         tableId,
-        rootRef.current,
+        null,
       );
       document.dispatchEvent(
         new CustomEvent(HOSTLY_MAP_JOIN_DRAG_HOVER, {
@@ -278,7 +278,7 @@ export function TpvLegacyTableInteractionController({
         const last = lastPointerRef.current;
         const x = last?.x ?? event.clientX;
         const y = last?.y ?? event.clientY;
-        const targetId = getJoinTargetFromPoint(x, y, tableId, rootRef.current);
+        const targetId = getJoinTargetFromPoint(x, y, tableId, null);
         if (targetId) onMapTableJoinDrop?.(tableId, targetId);
       }
       lastPointerRef.current = null;
@@ -300,28 +300,23 @@ export function TpvLegacyTableInteractionController({
   }, [onTableClick, tableId]);
 
   useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-
-    const pointerDown = (event: PointerEvent) => onPointerDown(event);
-    const pointerMove = (event: PointerEvent) => onPointerMove(event);
-    const pointerUp = (event: PointerEvent) => finishPointer(event, false);
-    const pointerCancel = (event: PointerEvent) => finishPointer(event, true);
-    const click = () => onClick();
-
-    root.addEventListener("pointerdown", pointerDown);
-    root.addEventListener("pointermove", pointerMove);
-    root.addEventListener("pointerup", pointerUp);
-    root.addEventListener("pointercancel", pointerCancel);
-    root.addEventListener("click", click);
-    return () => {
-      root.removeEventListener("pointerdown", pointerDown);
-      root.removeEventListener("pointermove", pointerMove);
-      root.removeEventListener("pointerup", pointerUp);
-      root.removeEventListener("pointercancel", pointerCancel);
-      root.removeEventListener("click", click);
-    };
-  }, [finishPointer, onClick, onPointerDown, onPointerMove]);
+    return registerTpvV2TableController(tableId, {
+      joinEnabled: mapJoinDragEnabled && onMapTableJoinDrop != null,
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: (event) => finishPointer(event, false),
+      onPointerCancel: (event) => finishPointer(event, true),
+      onClick,
+    });
+  }, [
+    finishPointer,
+    mapJoinDragEnabled,
+    onClick,
+    onMapTableJoinDrop,
+    onPointerDown,
+    onPointerMove,
+    tableId,
+  ]);
 
   const preview =
     joinPreview && typeof document !== "undefined"
@@ -417,29 +412,6 @@ export function TpvLegacyTableInteractionController({
 
   return (
     <>
-      <div
-        ref={rootRef}
-        data-hostly-map-table={tableId}
-        data-hostly-map-table-id={tableId}
-        data-hostly-map-join-target={
-          mapJoinDragEnabled && onMapTableJoinDrop ? "1" : undefined
-        }
-        data-hostly-map-join={
-          mapJoinDragEnabled && onMapTableJoinDrop ? "1" : undefined
-        }
-        data-hostly-map-interaction-only="1"
-        data-hostly-map-controller-only="1"
-        aria-hidden="true"
-        tabIndex={-1}
-        style={{
-          position: "absolute",
-          width: 0,
-          height: 0,
-          overflow: "hidden",
-          opacity: 0,
-          pointerEvents: "none",
-        }}
-      />
       {preview}
       {separateMenuPortal}
     </>
