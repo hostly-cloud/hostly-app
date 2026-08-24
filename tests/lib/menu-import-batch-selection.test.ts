@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createMenuImportSingleFileList,
   dedupeMenuImportBatchFiles,
   moveMenuImportBatchFile,
   removeMenuImportBatchFile,
+  sameMenuImportBatchFiles,
   validateMenuImportBatchSelection,
   type MenuImportClientFileLike,
 } from "@/lib/carta/menu-import-client-batch";
@@ -46,6 +48,24 @@ test("deduplica una misma selección exacta sin eliminar páginas distintas", ()
   assert.equal(deduped.length, 2);
   assert.equal(deduped[0], first);
   assert.equal(deduped[1], different);
+});
+
+test("detecta si un lote normalizado mantiene exactamente el mismo orden", () => {
+  const first = image("1.jpg", { lastModified: 10 });
+  const second = image("2.jpg", { lastModified: 11 });
+  assert.equal(sameMenuImportBatchFiles([first, second], [first, second]), true);
+  assert.equal(sameMenuImportBatchFiles([first, second], [second, first]), false);
+  assert.equal(sameMenuImportBatchFiles([first], [first, second]), false);
+});
+
+test("crea un FileList mínimo de un archivo para sincronizar el primario sin DataTransfer", () => {
+  const first = image("primaria.jpg");
+  const list = createMenuImportSingleFileList(first);
+  assert.equal(list.length, 1);
+  assert.equal(list[0], first);
+  assert.equal(list.item(0), first);
+  assert.equal(list.item(1), null);
+  assert.deepEqual(Array.from(list), [first]);
 });
 
 test("reordena y elimina páginas conservando un orden determinista", () => {
