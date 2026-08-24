@@ -9,6 +9,7 @@ import {
   EditableFloorMap as LegacyEditableFloorMap,
   type EditableFloorMapProps,
 } from "./legacy-editable-floor-map";
+import { TpvV2ReadonlyViewport } from "./tpv-v2-readonly-viewport";
 
 export * from "./legacy-editable-floor-map";
 
@@ -69,10 +70,9 @@ function renderDetachedOperationalController(
 /**
  * Fachada de compatibilidad.
  *
- * El evaluador central distingue dos estados importantes:
- * - residual-content: el renderer legacy aun aporta contenido unico.
- * - viewport-only: toda la representacion/operacion esta cubierta por V2 y el
- *   legacy sobrevive unicamente por viewport/fit.
+ * - Si queda contenido legacy unico, conserva el renderer historico.
+ * - Si V2 cubre el 100% del contenido, deja de montar el mapa historico y usa
+ *   un viewport V2 nativo para la misma capa readonly.
  */
 export function EditableFloorMap(props: EditableFloorMapProps) {
   if (props.editable || !props.readonlyUnderlay) {
@@ -89,12 +89,6 @@ export function EditableFloorMap(props: EditableFloorMapProps) {
     elements: props.elements,
     zones: props.zones,
   });
-  const legacyRoleClassName = coverage.fullyCovered
-    ? "hostly-v2-legacy-viewport-only"
-    : "hostly-v2-legacy-residual-content";
-  const legacyClassName = [props.className, legacyRoleClassName]
-    .filter(Boolean)
-    .join(" ");
 
   return (
     <TpvV2OperationalParityProvider
@@ -105,12 +99,24 @@ export function EditableFloorMap(props: EditableFloorMapProps) {
           {renderDetachedOperationalController(props, element)}
         </Fragment>
       ))}
-      <LegacyEditableFloorMap
-        {...props}
-        className={legacyClassName}
-        elements={coverage.residualLegacyElements}
-        zones={coverage.residualLegacyZones}
-      />
+
+      {coverage.fullyCovered ? (
+        <TpvV2ReadonlyViewport
+          {...props}
+          className={[props.className, "hostly-v2-native-viewport"]
+            .filter(Boolean)
+            .join(" ")}
+        />
+      ) : (
+        <LegacyEditableFloorMap
+          {...props}
+          className={[props.className, "hostly-v2-legacy-residual-content"]
+            .filter(Boolean)
+            .join(" ")}
+          elements={coverage.residualLegacyElements}
+          zones={coverage.residualLegacyZones}
+        />
+      )}
     </TpvV2OperationalParityProvider>
   );
 }
