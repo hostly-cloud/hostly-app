@@ -16,6 +16,7 @@ import {
   listenOperationStations,
   updateOperationStation,
 } from "@/lib/firestore/operation-stations";
+import { syncProductionStationShadowFromOperationStation } from "@/lib/firestore/production-stations";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { migrateLegacyProductionStationsToOperationStations } from "@/lib/operacion/migrate-legacy-production-stations";
 import {
@@ -66,6 +67,21 @@ function formatStationError(error: unknown): string {
     return error.message;
   }
   return "No se pudo guardar la estación.";
+}
+
+async function syncLegacyStationShadow(
+  restaurantId: string,
+  station: Pick<OperationStationDocument, "id" | "name" | "type" | "active"> & {
+    color?: string;
+  },
+): Promise<void> {
+  try {
+    await syncProductionStationShadowFromOperationStation(restaurantId, station);
+  } catch (error) {
+    // La colección canónica ya se ha guardado. El shadow es solo compatibilidad
+    // temporal con Familias de menú y nunca debe revertir el cambio operativo.
+    console.error("syncProductionStationShadowFromOperationStation", error);
+  }
 }
 
 export default function ConfigEstacionesPage() {
@@ -149,8 +165,10 @@ export default function ConfigEstacionesPage() {
     setNotice(null);
 
     try {
+      let stationId: string;
       if (editing) {
-        await updateOperationStation(restaurantId, editing.id, {
+        stationId = editing.id;
+        await updateOperationStation(restaurantId, stationId, {
           name,
           type: draft.type,
           color: draft.color,
@@ -158,7 +176,7 @@ export default function ConfigEstacionesPage() {
           sortOrder: draft.sortOrder,
         });
       } else {
-        await createOperationStation(restaurantId, {
+        stationId = await createOperationStation(restaurantId, {
           name,
           type: draft.type,
           color: draft.color,
@@ -166,6 +184,15 @@ export default function ConfigEstacionesPage() {
           sortOrder: draft.sortOrder,
         });
       }
+
+      await syncLegacyStationShadow(restaurantId, {
+        id: stationId,
+        name,
+        type: draft.type,
+        color: draft.color,
+        active: draft.active,
+      });
+
       setPanelOpen(false);
       setNotice("Estación operativa guardada.");
       window.setTimeout(() => setNotice(null), 2800);
@@ -180,15 +207,23 @@ export default function ConfigEstacionesPage() {
     async (station: OperationStationDocument) => {
       if (!restaurantId) return;
       setError(null);
+      const nextActive = !station.active;
       try {
         if (station.active) {
           await disableOperationStation(restaurantId, station.id);
         } else {
           await enableOperationStation(restaurantId, station.id);
         }
+        await syncLegacyStationShadow(restaurantId, {
+          id: station.id,
+          name: station.name,
+          type: station.type,
+          color: station.color,
+          active: nextActive,
+        });
         if (editing?.id === station.id) {
-          setDraft((prev) => ({ ...prev, active: !station.active }));
-          setEditing({ ...station, active: !station.active });
+          setDraft((prev) => ({ ...prev, active: nextActive }));
+          setEditing({ ...station, active: nextActive });
         }
       } catch (e) {
         setError(formatStationError(e));
