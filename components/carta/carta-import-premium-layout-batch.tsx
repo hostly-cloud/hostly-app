@@ -9,11 +9,13 @@ import { useI18n } from "@/components/i18n-provider";
 import { MAX_MENU_IMPORT_SOURCE_FILES } from "@/lib/carta/menu-import-source-files";
 import {
   clearRegisteredMenuImportBatch,
+  createMenuImportSingleFileList,
   dedupeMenuImportBatchFiles,
   moveMenuImportBatchFile,
   readRegisteredMenuImportBatch,
   registerMenuImportBatch,
   removeMenuImportBatchFile,
+  sameMenuImportBatchFiles,
   validateMenuImportBatchSelection,
   type MenuImportBatchSelectionErrorCode,
 } from "@/lib/carta/menu-import-client-batch";
@@ -91,20 +93,29 @@ export default function CartaImportPremiumLayoutBatch(
   const notifyParentPrimary = useCallback(
     (primary: File) => {
       const input = replaceInputRef.current;
-      if (!input || typeof DataTransfer === "undefined") return;
-      const transfer = new DataTransfer();
-      transfer.items.add(primary);
-      input.files = transfer.files;
+      if (input && typeof DataTransfer !== "undefined") {
+        const transfer = new DataTransfer();
+        transfer.items.add(primary);
+        input.files = transfer.files;
+        props.onFileInputChange({
+          target: input,
+          currentTarget: input,
+        } as ChangeEvent<HTMLInputElement>);
+        return;
+      }
+
+      const files = createMenuImportSingleFileList(primary) as unknown as FileList;
+      const syntheticTarget = { files } as HTMLInputElement;
       props.onFileInputChange({
-        target: input,
-        currentTarget: input,
+        target: syntheticTarget,
+        currentTarget: syntheticTarget,
       } as ChangeEvent<HTMLInputElement>);
     },
     [props.onFileInputChange],
   );
 
   const applyBatch = useCallback(
-    (candidateFiles: readonly File[], options?: { notifyPrimary?: boolean }) => {
+    (candidateFiles: readonly File[]) => {
       const files = dedupeMenuImportBatchFiles(candidateFiles);
       const validation = validateMenuImportBatchSelection(files);
       if (!validation.ok) {
@@ -120,26 +131,21 @@ export default function CartaImportPremiumLayoutBatch(
         clearRegisteredMenuImportBatch(previousPrimary);
       }
       registerMenuImportBatch(nextPrimary, files);
-      if (options?.notifyPrimary && previousPrimary !== nextPrimary) {
-        notifyParentPrimary(nextPrimary);
-      }
       return true;
     },
-    [english, notifyParentPrimary, props.file],
+    [english, props.file],
   );
 
   const handleReplaceInput = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const selected = Array.from(event.currentTarget.files ?? []);
-      if (!applyBatch(selected)) {
+      if (selected.length === 0) return;
+      const normalized = dedupeMenuImportBatchFiles(selected);
+      if (!applyBatch(normalized)) {
         event.currentTarget.value = "";
         return;
       }
-      const primary = selected[0];
-      const normalized = dedupeMenuImportBatchFiles(selected);
-      if (primary && normalized.length > 0) {
-        registerMenuImportBatch(primary, normalized);
-      }
+      registerMenuImportBatch(normalized[0], normalized);
       props.onFileInputChange(event);
       event.currentTarget.value = "";
     },
@@ -149,11 +155,16 @@ export default function CartaImportPremiumLayoutBatch(
   const handleAppendInput = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const incoming = Array.from(event.currentTarget.files ?? []);
+      if (incoming.length === 0) return;
       const base = batchFiles.length > 0 ? batchFiles : props.file ? [props.file] : [];
       const merged = dedupeMenuImportBatchFiles([...base, ...incoming]);
-      if (applyBatch(merged, { notifyPrimary: base.length === 0 })) {
-        const primary = merged[0];
-        if (primary && !props.file) notifyParentPrimary(primary);
+      if (sameMenuImportBatchFiles(base, merged)) {
+        setBatchError(null);
+        event.currentTarget.value = "";
+        return;
+      }
+      if (applyBatch(merged)) {
+        notifyParentPrimary(merged[0]);
       }
       event.currentTarget.value = "";
     },
@@ -179,19 +190,19 @@ export default function CartaImportPremiumLayoutBatch(
         props.onDrop(event);
         return;
       }
-      if (!applyBatch(selected)) {
+      const normalized = dedupeMenuImportBatchFiles(selected);
+      if (!applyBatch(normalized)) {
         event.preventDefault();
         props.onDragLeave();
         return;
       }
-      const normalized = dedupeMenuImportBatchFiles(selected);
-      if (normalized[0]) registerMenuImportBatch(normalized[0], normalized);
+      registerMenuImportBatch(normalized[0], normalized);
       props.onDrop(event);
     },
     [applyBatch, props],
   );
 
-  const commitReorder = useCallback(
+  const commitBatchMutation = useCallback(
     (next: File[]) => {
       if (next.length === 0) return;
       const previousPrimary = props.file;
@@ -202,16 +213,17 @@ export default function CartaImportPremiumLayoutBatch(
         clearRegisteredMenuImportBatch(previousPrimary);
       }
       registerMenuImportBatch(nextPrimary, next);
-      if (previousPrimary !== nextPrimary) notifyParentPrimary(nextPrimary);
+      // Cualquier cambio de páginas invalida un análisis previo, aunque la página 1 no cambie.
+      notifyParentPrimary(nextPrimary);
     },
     [notifyParentPrimary, props.file],
   );
 
   const movePage = useCallback(
     (index: number, direction: -1 | 1) => {
-      commitReorder(moveMenuImportBatchFile(batchFiles, index, direction));
+      commitBatchMutation(moveMenuImportBatchFile(batchFiles, index, direction));
     },
-    [batchFiles, commitReorder],
+    [batchFiles, commitBatchMutation],
   );
 
   const removePage = useCallback(
@@ -224,9 +236,9 @@ export default function CartaImportPremiumLayoutBatch(
         props.onClearFile?.();
         return;
       }
-      commitReorder(next);
+      commitBatchMutation(next);
     },
-    [batchFiles, commitReorder, props],
+    [batchFiles, commitBatchMutation, props],
   );
 
   const handleClear = useCallback(() => {
@@ -386,7 +398,7 @@ export default function CartaImportPremiumLayoutBatch(
           })}
         </div>
         {batchError ? (
-          <p style={{ margin: 0, fontSize: 11, lineHeight: 1.4, color: "#b42318", fontWeight: 650 }}>
+          <p role="alert" style={{ margin: 0, fontSize: 11, lineHeight: 1.4, color: "#b42318", fontWeight: 650 }}>
             {batchError}
           </p>
         ) : null}
