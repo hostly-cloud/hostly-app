@@ -19,6 +19,7 @@
       }
     ],
     "paths": {
+      "@/components/map/EditableFloorMap": ["./components/map/editable-floor-map-runtime.tsx"],
       "@/*": ["./*"]
     }
   },
