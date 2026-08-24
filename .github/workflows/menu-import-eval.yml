@@ -35,12 +35,14 @@ on:
       - "scripts/audit-product-gtin-index.ts"
       - "scripts/eval-menu-import-corpus.ts"
       - "scripts/eval-menu-import-photo-corpus.ts"
+      - "scripts/eval-menu-import-multi-photo-corpus.ts"
       - "scripts/eval-catalog-product-images-live.ts"
       - "tests/lib/gtin-index-audit.test.ts"
       - "tests/lib/menu-import-batch-selection.test.ts"
       - "tests/lib/menu-import-multi-source.test.ts"
       - "tests/lib/menu-import-multi-page-merge.test.ts"
       - "tests/lib/menu-import-multi-page-photo-vision-recovery.test.ts"
+      - "tests/lib/menu-import-multi-photo-vision-eval.test.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
       - "tests/lib/menu-import-photo-vision-recovery.test.ts"
@@ -103,10 +105,10 @@ jobs:
         run: npx tsx --test tests/lib/menu-import-photo-vision-recovery.test.ts tests/lib/menu-import-multi-page-photo-vision-recovery.test.ts
 
       - name: Run photo vision evaluation model tests
-        run: npx tsx --test tests/lib/menu-import-photo-vision-eval.test.ts
+        run: npx tsx --test tests/lib/menu-import-photo-vision-eval.test.ts tests/lib/menu-import-multi-photo-vision-eval.test.ts
 
-      - name: Validate photo corpus runner
-        run: npm run eval:menu-import:photos
+      - name: Validate photo corpus runners
+        run: npm run eval:menu-import:photos && npm run eval:menu-import:multi-photos
 
       - name: Run GTIN index audit model tests
         run: npx tsx --test tests/lib/gtin-index-audit.test.ts
