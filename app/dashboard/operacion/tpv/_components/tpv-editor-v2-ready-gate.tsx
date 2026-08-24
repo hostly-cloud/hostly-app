@@ -21,7 +21,7 @@ const V2_RENDERER_MOUNT_TIMEOUT_MS = 10_000;
 const V2_RENDERER_SELECTOR = '[data-hostly-readonly-map-source="editor-v2"]';
 const V2_NATIVE_INTERACTION_VALUE = "native-v2";
 const V2_TABLE_CONTROLLER_SELECTOR =
-  '[data-hostly-v2-table-instance-id][data-hostly-v2-legacy-table-id]';
+  '[data-hostly-v2-table-instance-id][data-hostly-v2-table-id]';
 const LEGACY_VISIBLE_TABLE_SELECTOR =
   '[data-hostly-tpv-legacy-table-overlay="legacy-fallback-visible"]';
 
