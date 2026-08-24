@@ -1,5 +1,8 @@
 "use client";
 
+import type {
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import { getOperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
@@ -26,9 +29,73 @@ export type SalaEditorReadonlyOperationalLayerProps = {
   onLegacyTableClick?: (legacyTableId: string, instanceId: string) => void;
 };
 
+const LEGACY_INTERACTION_SELECTOR =
+  '[data-hostly-map-interaction-only="1"][data-hostly-map-table-id]';
+
 function readLegacyTableId(instance: OperationalElementInstance): string {
   const raw = instance.metadata.legacyTableId;
   return typeof raw === "string" ? raw.trim() : "";
+}
+
+function findLegacyInteractionElement(legacyTableId: string): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  const targetId = legacyTableId.trim();
+  if (!targetId) return null;
+
+  const candidates = document.querySelectorAll<HTMLElement>(
+    LEGACY_INTERACTION_SELECTOR,
+  );
+  for (const candidate of candidates) {
+    if (candidate.dataset.hostlyMapTableId?.trim() === targetId) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function forwardPointerEventToLegacyController(
+  legacyTableId: string,
+  event: ReactPointerEvent<HTMLButtonElement>,
+) {
+  const target = findLegacyInteractionElement(legacyTableId);
+  if (!target || typeof window === "undefined" || typeof window.PointerEvent !== "function") {
+    return;
+  }
+
+  const forwarded = new window.PointerEvent(event.type, {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    isPrimary: event.isPrimary,
+    width: event.width,
+    height: event.height,
+    pressure: event.pressure,
+    tangentialPressure: event.tangentialPressure,
+    tiltX: event.tiltX,
+    tiltY: event.tiltY,
+    twist: event.twist,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    screenX: event.screenX,
+    screenY: event.screenY,
+    button: event.button,
+    buttons: event.buttons,
+    ctrlKey: event.ctrlKey,
+    shiftKey: event.shiftKey,
+    altKey: event.altKey,
+    metaKey: event.metaKey,
+  });
+
+  const accepted = target.dispatchEvent(forwarded);
+  if (!accepted && event.cancelable) {
+    event.preventDefault();
+  }
+}
+
+function activateLegacyTableController(legacyTableId: string) {
+  findLegacyInteractionElement(legacyTableId)?.click();
 }
 
 function resolveReadonlyOperationalState(
@@ -81,9 +148,7 @@ export function SalaEditorReadonlyOperationalLayer({
           legacyTableId !== "" && selectedLegacyTableIdSet.has(legacyTableId);
         const accentColor = tableOperationalAccentColor(state);
         const isInteractiveTable =
-          instance.elementType === "TABLE" &&
-          legacyTableId !== "" &&
-          onLegacyTableClick != null;
+          instance.elementType === "TABLE" && legacyTableId !== "";
 
         return (
           <div
@@ -106,6 +171,9 @@ export function SalaEditorReadonlyOperationalLayer({
                 instance.elementType === "TABLE" ? instance.id : undefined
               }
               data-hostly-v2-legacy-table-id={legacyTableId || undefined}
+              data-hostly-map-table={isInteractiveTable ? legacyTableId : undefined}
+              data-hostly-map-table-id={isInteractiveTable ? legacyTableId : undefined}
+              data-hostly-map-join-target={isInteractiveTable ? "1" : undefined}
               style={{
                 width: geometry.width,
                 height: geometry.height,
@@ -125,9 +193,57 @@ export function SalaEditorReadonlyOperationalLayer({
                 }
                 tabIndex={isInteractiveTable ? 0 : -1}
                 disabled={!isInteractiveTable}
+                onPointerDown={
+                  isInteractiveTable
+                    ? (event) => {
+                        try {
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                        } catch {
+                          // Algunos navegadores no permiten captura en eventos sintéticos.
+                        }
+                        forwardPointerEventToLegacyController(legacyTableId, event);
+                      }
+                    : undefined
+                }
+                onPointerMove={
+                  isInteractiveTable
+                    ? (event) =>
+                        forwardPointerEventToLegacyController(legacyTableId, event)
+                    : undefined
+                }
+                onPointerUp={
+                  isInteractiveTable
+                    ? (event) => {
+                        forwardPointerEventToLegacyController(legacyTableId, event);
+                        try {
+                          event.currentTarget.releasePointerCapture(event.pointerId);
+                        } catch {
+                          // La captura puede haberse liberado por pointercancel.
+                        }
+                      }
+                    : undefined
+                }
+                onPointerCancel={
+                  isInteractiveTable
+                    ? (event) => {
+                        forwardPointerEventToLegacyController(legacyTableId, event);
+                        try {
+                          event.currentTarget.releasePointerCapture(event.pointerId);
+                        } catch {
+                          // La captura puede no existir.
+                        }
+                      }
+                    : undefined
+                }
                 onClick={
                   isInteractiveTable
-                    ? () => onLegacyTableClick(legacyTableId, instance.id)
+                    ? () => {
+                        if (onLegacyTableClick) {
+                          onLegacyTableClick(legacyTableId, instance.id);
+                          return;
+                        }
+                        activateLegacyTableController(legacyTableId);
+                      }
                     : undefined
                 }
                 className="hostly-sala-canvas-object__body"
@@ -139,6 +255,7 @@ export function SalaEditorReadonlyOperationalLayer({
                   background: "transparent",
                   cursor: isInteractiveTable ? "pointer" : "default",
                   pointerEvents: isInteractiveTable ? "auto" : "none",
+                  touchAction: isInteractiveTable ? "none" : undefined,
                 }}
               >
                 <SalaOperationalElementVisual
