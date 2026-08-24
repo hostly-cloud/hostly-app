@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  useEffect,
   useLayoutEffect,
+  useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
@@ -34,6 +36,14 @@ const LEGACY_INTERACTION_SELECTOR =
   '[data-hostly-map-interaction-only="1"][data-hostly-map-table-id]';
 const V2_TABLE_SELECTOR = "[data-hostly-v2-legacy-table-id]";
 const LEGACY_BRIDGE_STYLE_ID = "hostly-v2-legacy-interaction-bridge-style";
+const HOSTLY_MAP_JOIN_DRAG_HOVER = "hostly-map-join-drag-hover";
+const HOSTLY_MAP_JOIN_DRAG_END = "hostly-map-join-drag-end";
+
+type HostlyMapJoinDragHoverDetail = {
+  hoverTableId: string | null;
+  draggedTableId: string;
+  draggedClusterMain: string;
+};
 
 function readLegacyTableId(instance: OperationalElementInstance): string {
   const raw = instance.metadata.legacyTableId;
@@ -171,6 +181,7 @@ export function SalaEditorReadonlyOperationalLayer({
 }: SalaEditorReadonlyOperationalLayerProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
+  const [joinHoverTableId, setJoinHoverTableId] = useState<string | null>(null);
   const selectedLegacyTableIdSet = new Set(
     (selectedLegacyTableIds ?? [])
       .map((id) => String(id ?? "").trim())
@@ -201,6 +212,21 @@ export function SalaEditorReadonlyOperationalLayer({
     };
   }, []);
 
+  useEffect(() => {
+    const onJoinHover = (event: Event) => {
+      const detail = (event as CustomEvent<HostlyMapJoinDragHoverDetail>).detail;
+      setJoinHoverTableId(detail?.hoverTableId?.trim() || null);
+    };
+    const onJoinEnd = () => setJoinHoverTableId(null);
+
+    document.addEventListener(HOSTLY_MAP_JOIN_DRAG_HOVER, onJoinHover);
+    document.addEventListener(HOSTLY_MAP_JOIN_DRAG_END, onJoinEnd);
+    return () => {
+      document.removeEventListener(HOSTLY_MAP_JOIN_DRAG_HOVER, onJoinHover);
+      document.removeEventListener(HOSTLY_MAP_JOIN_DRAG_END, onJoinEnd);
+    };
+  }, []);
+
   return (
     <div className="hostly-sala-operational-layer is-readonly">
       {instances.map((instance) => {
@@ -222,6 +248,8 @@ export function SalaEditorReadonlyOperationalLayer({
         const legacyTableId = readLegacyTableId(instance);
         const isSelected =
           legacyTableId !== "" && selectedLegacyTableIdSet.has(legacyTableId);
+        const isJoinTarget =
+          legacyTableId !== "" && legacyTableId === joinHoverTableId;
         const accentColor = tableOperationalAccentColor(state);
         const isInteractiveTable =
           instance.elementType === "TABLE" && legacyTableId !== "";
@@ -247,6 +275,7 @@ export function SalaEditorReadonlyOperationalLayer({
                 instance.elementType === "TABLE" ? instance.id : undefined
               }
               data-hostly-v2-legacy-table-id={legacyTableId || undefined}
+              data-hostly-v2-join-target={isJoinTarget ? "1" : undefined}
               data-hostly-map-table={isInteractiveTable ? legacyTableId : undefined}
               data-hostly-map-table-id={isInteractiveTable ? legacyTableId : undefined}
               data-hostly-map-join-target={isInteractiveTable ? "1" : undefined}
@@ -260,6 +289,10 @@ export function SalaEditorReadonlyOperationalLayer({
                 transformOrigin: "center center",
                 zIndex: instance.elementType === "TABLE" ? 24 : 18,
                 pointerEvents: isInteractiveTable ? "auto" : "none",
+                outline: isJoinTarget ? "3px solid rgba(49, 95, 125, 0.42)" : undefined,
+                outlineOffset: isJoinTarget ? 4 : undefined,
+                borderRadius: isJoinTarget ? 14 : undefined,
+                transition: "outline-color 120ms ease, outline-offset 120ms ease",
               }}
             >
               <button
