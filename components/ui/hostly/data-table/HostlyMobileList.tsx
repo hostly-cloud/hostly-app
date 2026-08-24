@@ -1,8 +1,218 @@
 import type { ReactNode } from "react";
 import { hostlyCx } from "../hostly-cx";
 
-const escandallosMobileDensityStyles = `
+const hostlyMobileDensityStyles = `
+@media (max-width: 1024px) {
+  .hostly-productos-config-skin .hostly-productos-catalog-toolbar {
+    padding: 8px 10px !important;
+    gap: 8px !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-toolbar .hostly-config-canonical-search {
+    box-shadow: none !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-filterbar,
+  .hostly-productos-config-skin .hostly-productos-catalog-categorybar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-filterbar::-webkit-scrollbar,
+  .hostly-productos-config-skin .hostly-productos-catalog-categorybar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @media (max-width: 767px) {
+  .hostly-productos-config-skin .hostly-productos-catalog-toolbar {
+    padding: 6px 8px !important;
+    border-bottom-color: rgba(148, 163, 184, 0.16) !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-toolbar .hostly-section-header__stack {
+    display: none;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-toolbar > div:last-child {
+    width: 100%;
+    flex: 1 1 100%;
+    gap: 0 !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-toolbar .hostly-config-canonical-search {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex-basis: 100% !important;
+    min-height: 40px !important;
+    padding: 8px 12px !important;
+    border-radius: 12px !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-carta-food-drink-segment {
+    padding: 4px 8px !important;
+    overflow-x: auto;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    scrollbar-width: none;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-carta-food-drink-segment::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-carta-food-drink-segment button {
+    min-height: 34px !important;
+    padding: 5px 9px !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-filterbar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overscroll-behavior-x: contain;
+    padding: 4px 8px !important;
+    gap: 4px !important;
+    border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-filterbar > span:first-child {
+    display: none;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-filterbar button,
+  .hostly-productos-config-skin .hostly-productos-catalog-filterbar .hostly-productos-carta-filter-chip {
+    flex: 0 0 auto;
+    min-height: 34px !important;
+    padding: 5px 9px !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap;
+    border-radius: 10px !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-categorybar {
+    padding: 4px 8px !important;
+    gap: 4px !important;
+    border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-categorybar button {
+    min-height: 32px !important;
+    padding: 4px 9px !important;
+    border-radius: 9px !important;
+    font-size: 10.5px !important;
+    font-weight: 720 !important;
+    line-height: 1.1 !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-catalog-list {
+    min-height: 0;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-shell {
+    gap: 5px;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-group__head {
+    min-height: 30px;
+    padding: 5px 8px;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item {
+    padding: 9px 10px;
+    gap: 6px;
+    border-radius: 10px;
+    box-shadow: none;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__body {
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__main {
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__name {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 14px;
+    font-weight: 760;
+    line-height: 1.18;
+    letter-spacing: -0.012em;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__meta {
+    gap: 3px;
+    font-size: 10.5px;
+    line-height: 1.18;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-routing-recommendation-hint {
+    display: none !important;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__aside {
+    flex: 0 0 auto;
+    gap: 3px;
+    align-items: flex-end;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__price {
+    font-size: 13px;
+    font-weight: 760;
+    line-height: 1.1;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__badges {
+    gap: 3px;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item .hostly-status-badge,
+  .hostly-productos-config-skin .hostly-mobile-list-item .hostly-productos-carta-table-chip {
+    min-height: 19px;
+    padding: 2px 5px;
+    font-size: 9.5px;
+    line-height: 1.05;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__actions {
+    margin-top: 0;
+    padding-top: 5px;
+    border-top: 1px solid rgba(148, 163, 184, 0.11);
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__actions .hostly-row-actions {
+    width: 100%;
+    gap: 4px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__actions .hostly-row-actions__btn {
+    min-height: 34px;
+    padding: 5px 8px;
+    font-size: 10.5px;
+    line-height: 1.1;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__actions .hostly-row-actions__btn--icon {
+    width: 34px;
+    min-width: 34px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
   .hostly-data-table-viewport--escandallos .hostly-mobile-list-shell {
     gap: 6px;
   }
@@ -130,7 +340,7 @@ const escandallosMobileDensityStyles = `
 export function HostlyMobileList({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={hostlyCx("hostly-mobile-list-shell", className)}>
-      <style>{escandallosMobileDensityStyles}</style>
+      <style>{hostlyMobileDensityStyles}</style>
       {children}
     </div>
   );
