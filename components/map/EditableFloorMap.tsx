@@ -105,7 +105,7 @@ export function EditableFloorMap(props: EditableFloorMapProps) {
         hidden
         data-hostly-v2-coverage={coverage.fullyCovered ? "complete" : "incomplete"}
         data-hostly-v2-residual-elements={coverage.residualLegacyElements.length}
-        data-hostly-v2-residual-zones={coverage.residualLegacyZones.length}
+        data-hostly-v2-residual-zones={coverage.residualLegacyZones?.length ?? 0}
       />
 
       <TpvV2ReadonlyViewport
