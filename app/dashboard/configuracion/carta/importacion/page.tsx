@@ -155,6 +155,77 @@ const importMenuMobileStyles = `
   .hostly-import-mobile-skin .overflow-x-auto {
     -webkit-overflow-scrolling: touch;
   }
+
+  .hostly-import-mobile-skin .hostly-import-review-item {
+    padding: 8px 9px !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__row {
+    gap: 7px !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__select {
+    padding-top: 2px !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__main {
+    gap: 7px !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__name {
+    min-height: 26px !important;
+    font-size: 13px !important;
+    font-weight: 760 !important;
+    line-height: 1.15 !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__price {
+    width: 4.6rem !important;
+    min-height: 26px !important;
+    font-size: 13px !important;
+    font-weight: 760 !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__description {
+    font-size: 10.5px !important;
+    line-height: 1.25 !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__meta {
+    gap: 3px !important;
+    padding-top: 1px !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__meta > span {
+    font-size: 9.5px !important;
+    line-height: 1.15 !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__secondary {
+    gap: 7px !important;
+    padding-top: 2px !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__secondary > button,
+  .hostly-import-mobile-skin .hostly-import-review-item__secondary summary {
+    min-height: 30px !important;
+    font-size: 9.5px !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__details {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    padding-top: 4px !important;
+  }
+
+  .hostly-import-mobile-skin .hostly-import-review-item__details .hostly-input,
+  .hostly-import-mobile-skin .hostly-import-review-item__details .hostly-select {
+    min-height: 38px !important;
+    height: 38px !important;
+    font-size: 11px !important;
+  }
 }
 `;
 
