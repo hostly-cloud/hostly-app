@@ -181,6 +181,34 @@ const cartaMobileAuditStyles = `
     color: var(--hostly-ink-muted) !important;
   }
 
+  .hostly-carta-mobile-audit-shell .hostly-carta-category-form-grid__modifiers > div.hostly-carta-category-form-drawer__hint {
+    margin: 0 0 6px !important;
+    padding: 8px 9px !important;
+    border-radius: 9px !important;
+    background: var(--hostly-surface-page-soft) !important;
+  }
+
+  .hostly-carta-mobile-audit-shell .hostly-carta-category-form-grid__modifiers > div.hostly-carta-category-form-drawer__hint p {
+    margin-top: 3px !important;
+  }
+
+  .hostly-carta-mobile-audit-shell .hostly-carta-category-form-grid__modifiers > div.hostly-carta-category-form-drawer__hint p:first-child {
+    margin-top: 0 !important;
+  }
+
+  .hostly-carta-mobile-audit-shell .hostly-carta-category-form-grid__modifiers > div.hostly-carta-category-form-drawer__hint ul {
+    margin: 4px 0 6px !important;
+    padding-left: 16px !important;
+  }
+
+  .hostly-carta-mobile-audit-shell .hostly-carta-category-form-grid__modifiers > div.hostly-carta-category-form-drawer__hint button {
+    min-height: 38px !important;
+    padding: 6px 9px !important;
+    border-radius: 9px !important;
+    font-size: 10.5px !important;
+    box-shadow: none !important;
+  }
+
   .hostly-carta-mobile-audit-shell .hostly-carta-category-form-drawer__chips {
     display: flex !important;
     flex-wrap: nowrap !important;
