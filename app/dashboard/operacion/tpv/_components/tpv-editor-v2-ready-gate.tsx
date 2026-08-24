@@ -21,6 +21,7 @@ type GateStatus =
 const V2_RENDERER_MOUNT_TIMEOUT_MS = 10_000;
 const V2_RENDERER_SELECTOR = '[data-hostly-readonly-map-source="editor-v2"]';
 const V2_NATIVE_VIEWPORT_SELECTOR = '[data-hostly-v2-viewport="native"]';
+const V2_COVERAGE_SELECTOR = "[data-hostly-v2-coverage]";
 const V2_NATIVE_INTERACTION_VALUE = "native-v2";
 const V2_OPERATIONAL_CONTROLLER_SELECTOR =
   '[data-hostly-v2-operational-instance-id][data-hostly-v2-table-id]';
@@ -94,6 +95,14 @@ export function TpvEditorV2ReadyGate({
       const v2Map = host.querySelector<HTMLElement>(V2_RENDERER_SELECTOR);
       if (!v2Map) return false;
 
+      const coverage = host.querySelector<HTMLElement>(V2_COVERAGE_SELECTOR);
+      if (!coverage) return false;
+      if (coverage.getAttribute("data-hostly-v2-coverage") !== "complete") {
+        settled = true;
+        setStatus("parity-error");
+        return true;
+      }
+
       const nativeViewport = host.querySelector<HTMLElement>(
         V2_NATIVE_VIEWPORT_SELECTOR,
       );
@@ -138,6 +147,14 @@ export function TpvEditorV2ReadyGate({
     const timeoutId = window.setTimeout(() => {
       if (settled) return;
       observer.disconnect();
+      const coverage = host.querySelector<HTMLElement>(V2_COVERAGE_SELECTOR);
+      if (
+        coverage &&
+        coverage.getAttribute("data-hostly-v2-coverage") !== "complete"
+      ) {
+        setStatus("parity-error");
+        return;
+      }
       const v2Map = host.querySelector<HTMLElement>(V2_RENDERER_SELECTOR);
       const nativeViewport = host.querySelector<HTMLElement>(
         V2_NATIVE_VIEWPORT_SELECTOR,
@@ -205,7 +222,7 @@ export function TpvEditorV2ReadyGate({
           </p>
           <p className="mt-1 text-xs leading-5 text-slate-600">
             {isParityError
-              ? "Hay al menos una mesa operativa sin enlace válido a su instancia de Editor V2. El TPV ha bloqueado el mapa antiguo para evitar representar una distribución distinta."
+              ? "Editor V2 todavía no cubre todo el contenido del plano operativo. Hostly bloquea el TPV en vez de volver a montar el mapa antiguo; completa o migra los elementos pendientes en Editor V2."
               : isInteractionError
                 ? "Hostly ha bloqueado el mapa porque falta el controlador en memoria de algún elemento operativo V2 o el renderer no declaró interacción nativa."
                 : isViewportError
