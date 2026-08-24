@@ -3,6 +3,7 @@
 import {
   useEffect,
   useState,
+  useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
@@ -15,7 +16,8 @@ import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sa
 import { tableOperationalAccentColor } from "@/lib/map/table-operational-visual-tokens";
 import {
   getTpvV2TableController,
-  HOSTLY_V2_TABLE_CONTROLLER_REGISTRY_CHANGE,
+  getTpvV2TableControllerRegistryRevision,
+  subscribeTpvV2TableControllerRegistry,
 } from "@/lib/tpv/v2-table-controller-registry";
 
 export type SalaEditorReadonlyTpvOperationalState =
@@ -56,7 +58,6 @@ function forwardPointerToRegisteredController(
 ) {
   const controller = getTpvV2TableController(legacyTableId);
   if (!controller) return;
-
   const nativeEvent = event.nativeEvent;
   if (phase === "down") controller.onPointerDown(nativeEvent);
   else if (phase === "move") controller.onPointerMove(nativeEvent);
@@ -86,28 +87,17 @@ export function SalaEditorReadonlyOperationalLayer({
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const [joinHoverTableId, setJoinHoverTableId] = useState<string | null>(null);
-  const [, setControllerRegistryRevision] = useState(0);
+  useSyncExternalStore(
+    subscribeTpvV2TableControllerRegistry,
+    getTpvV2TableControllerRegistryRevision,
+    getTpvV2TableControllerRegistryRevision,
+  );
+
   const selectedLegacyTableIdSet = new Set(
     (selectedLegacyTableIds ?? [])
       .map((id) => String(id ?? "").trim())
       .filter(Boolean),
   );
-
-  useEffect(() => {
-    const onRegistryChange = () => {
-      setControllerRegistryRevision((revision) => revision + 1);
-    };
-    document.addEventListener(
-      HOSTLY_V2_TABLE_CONTROLLER_REGISTRY_CHANGE,
-      onRegistryChange,
-    );
-    return () => {
-      document.removeEventListener(
-        HOSTLY_V2_TABLE_CONTROLLER_REGISTRY_CHANGE,
-        onRegistryChange,
-      );
-    };
-  }, []);
 
   useEffect(() => {
     const onJoinHover = (event: Event) => {
@@ -159,10 +149,7 @@ export function SalaEditorReadonlyOperationalLayer({
           <div
             key={instance.id}
             className="absolute"
-            style={{
-              left: geometry.x,
-              top: geometry.y,
-            }}
+            style={{ left: geometry.x, top: geometry.y }}
           >
             <div
               className={[
@@ -192,7 +179,9 @@ export function SalaEditorReadonlyOperationalLayer({
                 transformOrigin: "center center",
                 zIndex: instance.elementType === "TABLE" ? 24 : 18,
                 pointerEvents: isInteractiveTable ? "auto" : "none",
-                outline: isJoinTarget ? "3px solid rgba(49, 95, 125, 0.42)" : undefined,
+                outline: isJoinTarget
+                  ? "3px solid rgba(49, 95, 125, 0.42)"
+                  : undefined,
                 outlineOffset: isJoinTarget ? 4 : undefined,
                 borderRadius: isJoinTarget ? 14 : undefined,
                 transition: "outline-color 120ms ease, outline-offset 120ms ease",
