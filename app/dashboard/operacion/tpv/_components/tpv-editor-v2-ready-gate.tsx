@@ -20,8 +20,8 @@ type GateStatus =
 const V2_RENDERER_MOUNT_TIMEOUT_MS = 10_000;
 const V2_RENDERER_SELECTOR = '[data-hostly-readonly-map-source="editor-v2"]';
 const V2_NATIVE_INTERACTION_VALUE = "native-v2";
-const V2_TABLE_CONTROLLER_SELECTOR =
-  '[data-hostly-v2-table-instance-id][data-hostly-v2-table-id]';
+const V2_OPERATIONAL_CONTROLLER_SELECTOR =
+  '[data-hostly-v2-operational-instance-id][data-hostly-v2-table-id]';
 const LEGACY_VISIBLE_TABLE_SELECTOR =
   '[data-hostly-tpv-legacy-table-overlay="legacy-fallback-visible"]';
 
@@ -36,10 +36,14 @@ function LoadingV2MapState() {
   );
 }
 
-function allV2TablesHaveMemoryController(v2Map: HTMLElement): boolean {
-  const tables = v2Map.querySelectorAll<HTMLElement>(V2_TABLE_CONTROLLER_SELECTOR);
-  for (const table of tables) {
-    if (table.getAttribute("data-hostly-v2-controller") !== "memory") {
+function allV2OperationalElementsHaveMemoryController(
+  v2Map: HTMLElement,
+): boolean {
+  const operationalElements = v2Map.querySelectorAll<HTMLElement>(
+    V2_OPERATIONAL_CONTROLLER_SELECTOR,
+  );
+  for (const element of operationalElements) {
+    if (element.getAttribute("data-hostly-v2-controller") !== "memory") {
       return false;
     }
   }
@@ -104,7 +108,7 @@ export function TpvEditorV2ReadyGate({
         return true;
       }
 
-      if (!allV2TablesHaveMemoryController(v2Map)) {
+      if (!allV2OperationalElementsHaveMemoryController(v2Map)) {
         return false;
       }
 
@@ -124,7 +128,7 @@ export function TpvEditorV2ReadyGate({
       if (settled) return;
       observer.disconnect();
       const v2Map = host.querySelector<HTMLElement>(V2_RENDERER_SELECTOR);
-      if (v2Map && !allV2TablesHaveMemoryController(v2Map)) {
+      if (v2Map && !allV2OperationalElementsHaveMemoryController(v2Map)) {
         setStatus("interaction-error");
         return;
       }
@@ -172,14 +176,14 @@ export function TpvEditorV2ReadyGate({
               : isParityError
                 ? "El plano del TPV no coincide al 100 % con Editor V2."
                 : isInteractionError
-                  ? "Las mesas del TPV todavía no están enlazadas al 100 % con sus controladores V2."
+                  ? "Los elementos operativos del TPV todavía no están enlazados al 100 % con sus controladores V2."
                   : "No se ha podido montar el plano del Editor V2 en el TPV."}
           </p>
           <p className="mt-1 text-xs leading-5 text-slate-600">
             {isParityError
               ? "Hay al menos una mesa operativa sin enlace válido a su instancia de Editor V2. El TPV ha bloqueado el mapa antiguo para evitar representar una distribución distinta."
               : isInteractionError
-                ? "Hostly ha bloqueado el mapa porque falta el controlador en memoria de alguna mesa V2 o el renderer no declaró interacción nativa."
+                ? "Hostly ha bloqueado el mapa porque falta el controlador en memoria de algún elemento operativo V2 o el renderer no declaró interacción nativa."
                 : "El TPV ya no usa el mapa antiguo como sustituto. Revisa el enlace del plano y su estado en Editor V2."}
           </p>
         </div>
