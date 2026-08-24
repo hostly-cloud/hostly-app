@@ -6,7 +6,7 @@ import {
   ElementCard as LegacyElementCard,
   type ElementMapCardProps,
 } from "./legacy-element-map-card";
-import { TpvLegacyTableInteractionController } from "./tpv-legacy-table-interaction-controller";
+import { TpvV2TableOperationAdapter } from "./tpv-v2-table-operation-adapter";
 
 export type {
   ElementMapCardProps,
@@ -17,7 +17,7 @@ export const ElementCard = memo(function ElementCard(
   props: ElementMapCardProps,
 ) {
   if (props.interactionOnly) {
-    return <TpvLegacyTableInteractionController {...props} />;
+    return <TpvV2TableOperationAdapter {...props} />;
   }
 
   return <LegacyElementCard {...props} />;
