@@ -1,0 +1,424 @@
+"use client";
+
+import { createPortal } from "react-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { getJoinTargetFromPoint } from "@/lib/map/join-hit-test";
+import {
+  HOSTLY_MAP_JOIN_ABORTED,
+  HOSTLY_MAP_JOIN_ARMED,
+} from "@/lib/map/join-pinch-bridge";
+import type { ElementMapCardProps } from "./legacy-element-map-card";
+
+const HOSTLY_MAP_JOIN_DRAG_HOVER = "hostly-map-join-drag-hover";
+const HOSTLY_MAP_JOIN_DRAG_END = "hostly-map-join-drag-end";
+const MAP_JOIN_ARM_MS = 420;
+const MAP_JOIN_ARM_CANCEL_PX_SQ = 14 * 14;
+const MAP_JOIN_DRAG_START_PX_SQ = 8 * 8;
+const LONG_PRESS_GROUP_MS = 1000;
+const LONG_PRESS_MOVE_PX_SQ = 64;
+
+type JoinState = {
+  pointerId: number;
+  originX: number;
+  originY: number;
+  mode: "arming" | "armed" | "dragging";
+};
+
+type Point = { x: number; y: number };
+
+export function TpvLegacyTableInteractionController({
+  table,
+  tableId,
+  onTableClick,
+  mapJoinDragEnabled = false,
+  onMapTableJoinDrop,
+  mapJoinClusterMainId,
+  mapTileWidth,
+  mapTileHeight,
+  isMapGroupedPrimary = false,
+  onRequestSeparateGroupedTables,
+}: ElementMapCardProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const joinStateRef = useRef<JoinState | null>(null);
+  const joinArmTimerRef = useRef<number | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressStartRef = useRef<Point | null>(null);
+  const lastPointerRef = useRef<Point | null>(null);
+  const suppressClickRef = useRef(false);
+  const [joinPreview, setJoinPreview] = useState<Point | null>(null);
+  const [separateMenu, setSeparateMenu] = useState<Point | null>(null);
+
+  const clearJoinArmTimer = useCallback(() => {
+    if (joinArmTimerRef.current != null) {
+      window.clearTimeout(joinArmTimerRef.current);
+      joinArmTimerRef.current = null;
+    }
+  }, []);
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current != null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const emitJoinDragEnd = useCallback(() => {
+    document.dispatchEvent(
+      new CustomEvent(HOSTLY_MAP_JOIN_DRAG_END, { bubbles: true }),
+    );
+  }, []);
+
+  const resetPointerSession = useCallback(() => {
+    clearJoinArmTimer();
+    clearLongPressTimer();
+    joinStateRef.current = null;
+    longPressStartRef.current = null;
+    lastPointerRef.current = null;
+    setJoinPreview(null);
+    emitJoinDragEnd();
+  }, [clearJoinArmTimer, clearLongPressTimer, emitJoinDragEnd]);
+
+  useEffect(() => resetPointerSession, [resetPointerSession]);
+
+  const emitJoinAborted = useCallback((pointerId: number, x: number, y: number) => {
+    document.dispatchEvent(
+      new CustomEvent(HOSTLY_MAP_JOIN_ABORTED, {
+        bubbles: true,
+        detail: { pointerId, clientX: x, clientY: y },
+      }),
+    );
+  }, []);
+
+  const emitJoinArmed = useCallback((pointerId: number) => {
+    document.dispatchEvent(
+      new CustomEvent(HOSTLY_MAP_JOIN_ARMED, {
+        bubbles: true,
+        detail: { pointerId },
+      }),
+    );
+  }, []);
+
+  const beginLongPress = useCallback(
+    (x: number, y: number) => {
+      clearLongPressTimer();
+      if (!isMapGroupedPrimary || !onRequestSeparateGroupedTables) return;
+      longPressStartRef.current = { x, y };
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressTimerRef.current = null;
+        longPressStartRef.current = null;
+        suppressClickRef.current = true;
+        setSeparateMenu({ x, y });
+      }, LONG_PRESS_GROUP_MS);
+    }, [
+      clearLongPressTimer,
+      isMapGroupedPrimary,
+      onRequestSeparateGroupedTables,
+    ],
+  );
+
+  const onPointerDown = useCallback(
+    (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      setSeparateMenu(null);
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      beginLongPress(event.clientX, event.clientY);
+
+      if (!mapJoinDragEnabled || !onMapTableJoinDrop) {
+        joinStateRef.current = null;
+        return;
+      }
+
+      clearJoinArmTimer();
+      const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
+      joinStateRef.current = {
+        pointerId: event.pointerId,
+        originX: event.clientX,
+        originY: event.clientY,
+        mode: touchLike ? "arming" : "armed",
+      };
+
+      if (!touchLike) {
+        emitJoinArmed(event.pointerId);
+        return;
+      }
+
+      const pointerId = event.pointerId;
+      joinArmTimerRef.current = window.setTimeout(() => {
+        joinArmTimerRef.current = null;
+        const state = joinStateRef.current;
+        if (!state || state.pointerId !== pointerId || state.mode !== "arming") return;
+        state.mode = "armed";
+        emitJoinArmed(pointerId);
+      }, MAP_JOIN_ARM_MS);
+    }, [
+      beginLongPress,
+      clearJoinArmTimer,
+      emitJoinArmed,
+      mapJoinDragEnabled,
+      onMapTableJoinDrop,
+    ],
+  );
+
+  const onPointerMove = useCallback(
+    (event: PointerEvent) => {
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+
+      const longPressStart = longPressStartRef.current;
+      if (longPressStart && longPressTimerRef.current != null) {
+        const dx = event.clientX - longPressStart.x;
+        const dy = event.clientY - longPressStart.y;
+        if (dx * dx + dy * dy > LONG_PRESS_MOVE_PX_SQ) {
+          clearLongPressTimer();
+          longPressStartRef.current = null;
+        }
+      }
+
+      const state = joinStateRef.current;
+      if (!state || state.pointerId !== event.pointerId) return;
+      const dx = event.clientX - state.originX;
+      const dy = event.clientY - state.originY;
+      const distanceSq = dx * dx + dy * dy;
+
+      if (state.mode === "arming") {
+        if (distanceSq > MAP_JOIN_ARM_CANCEL_PX_SQ) {
+          clearJoinArmTimer();
+          joinStateRef.current = null;
+          emitJoinAborted(event.pointerId, event.clientX, event.clientY);
+        }
+        return;
+      }
+
+      if (state.mode === "armed") {
+        if (distanceSq <= MAP_JOIN_DRAG_START_PX_SQ) return;
+        state.mode = "dragging";
+        clearLongPressTimer();
+        longPressStartRef.current = null;
+      }
+
+      if (state.mode !== "dragging" || !mapJoinDragEnabled || !onMapTableJoinDrop) {
+        return;
+      }
+
+      if (event.cancelable) event.preventDefault();
+      setJoinPreview({ x: event.clientX, y: event.clientY });
+
+      const hoverTableId = getJoinTargetFromPoint(
+        event.clientX,
+        event.clientY,
+        tableId,
+        rootRef.current,
+      );
+      document.dispatchEvent(
+        new CustomEvent(HOSTLY_MAP_JOIN_DRAG_HOVER, {
+          bubbles: true,
+          detail: {
+            hoverTableId,
+            draggedTableId: tableId,
+            draggedClusterMain: String(mapJoinClusterMainId ?? tableId).trim(),
+          },
+        }),
+      );
+    }, [
+      clearJoinArmTimer,
+      clearLongPressTimer,
+      emitJoinAborted,
+      mapJoinClusterMainId,
+      mapJoinDragEnabled,
+      onMapTableJoinDrop,
+      tableId,
+    ],
+  );
+
+  const finishPointer = useCallback(
+    (event: PointerEvent, cancelled: boolean) => {
+      clearJoinArmTimer();
+      clearLongPressTimer();
+      longPressStartRef.current = null;
+
+      const state = joinStateRef.current;
+      joinStateRef.current = null;
+      setJoinPreview(null);
+      emitJoinDragEnd();
+
+      if (!state || state.pointerId !== event.pointerId) {
+        lastPointerRef.current = null;
+        return;
+      }
+
+      if (cancelled) {
+        lastPointerRef.current = null;
+        return;
+      }
+
+      if (state.mode === "dragging") {
+        suppressClickRef.current = true;
+        const last = lastPointerRef.current;
+        const x = last?.x ?? event.clientX;
+        const y = last?.y ?? event.clientY;
+        const targetId = getJoinTargetFromPoint(x, y, tableId, rootRef.current);
+        if (targetId) onMapTableJoinDrop?.(tableId, targetId);
+      }
+      lastPointerRef.current = null;
+    }, [
+      clearJoinArmTimer,
+      clearLongPressTimer,
+      emitJoinDragEnd,
+      onMapTableJoinDrop,
+      tableId,
+    ],
+  );
+
+  const onClick = useCallback(() => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    onTableClick(tableId);
+  }, [onTableClick, tableId]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const pointerDown = (event: PointerEvent) => onPointerDown(event);
+    const pointerMove = (event: PointerEvent) => onPointerMove(event);
+    const pointerUp = (event: PointerEvent) => finishPointer(event, false);
+    const pointerCancel = (event: PointerEvent) => finishPointer(event, true);
+    const click = () => onClick();
+
+    root.addEventListener("pointerdown", pointerDown);
+    root.addEventListener("pointermove", pointerMove);
+    root.addEventListener("pointerup", pointerUp);
+    root.addEventListener("pointercancel", pointerCancel);
+    root.addEventListener("click", click);
+    return () => {
+      root.removeEventListener("pointerdown", pointerDown);
+      root.removeEventListener("pointermove", pointerMove);
+      root.removeEventListener("pointerup", pointerUp);
+      root.removeEventListener("pointercancel", pointerCancel);
+      root.removeEventListener("click", click);
+    };
+  }, [finishPointer, onClick, onPointerDown, onPointerMove]);
+
+  const preview =
+    joinPreview && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            aria-hidden
+            data-hostly-map-join-preview="1"
+            style={{
+              position: "fixed",
+              left: joinPreview.x,
+              top: joinPreview.y,
+              width: Math.max(42, Math.min(mapTileWidth, 120)),
+              height: Math.max(42, Math.min(mapTileHeight, 90)),
+              transform: "translate(-50%, -50%)",
+              borderRadius: 12,
+              border: "1px solid rgba(49, 95, 125, 0.28)",
+              background: "rgba(255,255,255,0.94)",
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.14)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 8,
+              fontSize: 12,
+              fontWeight: 750,
+              color: "#25495a",
+              pointerEvents: "none",
+              zIndex: 10100,
+            }}
+          >
+            {table.name || tableId}
+          </div>,
+          document.body,
+        )
+      : null;
+
+  const separateMenuPortal =
+    separateMenu &&
+    typeof document !== "undefined" &&
+    onRequestSeparateGroupedTables
+      ? createPortal(
+          <div
+            role="dialog"
+            aria-label="Mesa agrupada"
+            style={{
+              position: "fixed",
+              left: separateMenu.x,
+              top: separateMenu.y + 12,
+              transform: "translateX(-50%)",
+              zIndex: 10110,
+              minWidth: 190,
+              padding: 10,
+              borderRadius: 14,
+              border: "1px solid rgba(148, 163, 184, 0.38)",
+              background: "rgba(255,255,255,0.98)",
+              boxShadow: "0 12px 32px rgba(15, 23, 42, 0.16)",
+            }}
+          >
+            <div
+              style={{
+                marginBottom: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#475569",
+              }}
+            >
+              Grupo de mesas
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onRequestSeparateGroupedTables(tableId);
+                setSeparateMenu(null);
+              }}
+              style={{
+                width: "100%",
+                border: 0,
+                borderRadius: 10,
+                padding: "10px 12px",
+                background: "#1f2933",
+                color: "white",
+                fontSize: 13,
+                fontWeight: 750,
+                cursor: "pointer",
+              }}
+            >
+              Separar mesas
+            </button>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      <div
+        ref={rootRef}
+        data-hostly-map-table={tableId}
+        data-hostly-map-table-id={tableId}
+        data-hostly-map-join-target={
+          mapJoinDragEnabled && onMapTableJoinDrop ? "1" : undefined
+        }
+        data-hostly-map-join={
+          mapJoinDragEnabled && onMapTableJoinDrop ? "1" : undefined
+        }
+        data-hostly-map-interaction-only="1"
+        data-hostly-map-controller-only="1"
+        aria-hidden="true"
+        tabIndex={-1}
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          overflow: "hidden",
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+      />
+      {preview}
+      {separateMenuPortal}
+    </>
+  );
+}
