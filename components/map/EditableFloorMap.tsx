@@ -24,6 +24,7 @@ function readEditorV2ContractFromUnderlay(
   const contract = candidate as Partial<EditorTpvReadonlyVisualContract>;
   if (
     !Array.isArray(contract.surfaces) ||
+    !Array.isArray(contract.zones) ||
     !Array.isArray(contract.walls) ||
     !Array.isArray(contract.wallAttachments) ||
     !Array.isArray(contract.structuralElements) ||
@@ -40,9 +41,9 @@ function readEditorV2ContractFromUnderlay(
  *
  * - Editor y consumidores legacy siguen usando, byte a byte, la implementación
  *   histórica preservada en `legacy-editable-floor-map.tsx`.
- * - En readonly con underlay Editor V2, los decorativos legacy con paridad
+ * - En readonly con underlay Editor V2, decorativos y zonas legacy con paridad
  *   exacta se eliminan antes de entrar al renderer histórico.
- * - Cualquier decorativo sin paridad demostrada se conserva.
+ * - Cualquier objeto sin paridad demostrada se conserva.
  */
 export function EditableFloorMap(props: EditableFloorMapProps) {
   if (props.editable || !props.readonlyUnderlay) {
@@ -55,14 +56,27 @@ export function EditableFloorMap(props: EditableFloorMapProps) {
   }
 
   const nativeDecorativeIds = new Set(getEditorV2NativeDecorativeIds(contract));
-  if (nativeDecorativeIds.size === 0) {
-    return <LegacyEditableFloorMap {...props} />;
-  }
+  const filteredElements =
+    nativeDecorativeIds.size === 0
+      ? props.elements
+      : props.elements.filter(
+          (element) =>
+            !isLegacyDecorativeCoveredByEditorV2(element, nativeDecorativeIds),
+        );
 
-  const filteredElements = props.elements.filter(
-    (element) =>
-      !isLegacyDecorativeCoveredByEditorV2(element, nativeDecorativeIds),
+  const nativeZoneIds = new Set(
+    contract.zones.map((zone) => String(zone.id ?? "").trim()).filter(Boolean),
   );
+  const filteredZones =
+    props.zones == null || nativeZoneIds.size === 0
+      ? props.zones
+      : props.zones.filter((zone) => !nativeZoneIds.has(String(zone.id).trim()));
 
-  return <LegacyEditableFloorMap {...props} elements={filteredElements} />;
+  return (
+    <LegacyEditableFloorMap
+      {...props}
+      elements={filteredElements}
+      zones={filteredZones}
+    />
+  );
 }
