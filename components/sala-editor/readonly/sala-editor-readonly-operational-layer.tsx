@@ -32,9 +32,9 @@ export type SalaEditorReadonlyTpvOperationalState =
 export type SalaEditorReadonlyOperationalLayerProps = {
   instances: OperationalElementInstance[];
   stateByInstanceId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
-  stateByLegacyTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
-  selectedLegacyTableIds?: readonly string[];
-  onLegacyTableClick?: (legacyTableId: string, instanceId: string) => void;
+  stateByTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
+  selectedTableIds?: readonly string[];
+  onTableClick?: (tableId: string, instanceId: string) => void;
 };
 
 const HOSTLY_MAP_JOIN_DRAG_HOVER = "hostly-map-join-drag-hover";
@@ -46,17 +46,21 @@ type HostlyMapJoinDragHoverDetail = {
   draggedClusterMain: string;
 };
 
-function readLegacyTableId(instance: OperationalElementInstance): string {
+/**
+ * Compatibilidad de datos: Editor V2 conserva hoy el enlace a la mesa Firestore
+ * en metadata.legacyTableId. Desde este borde se trata simplemente como tableId.
+ */
+function readOperationalTableId(instance: OperationalElementInstance): string {
   const raw = instance.metadata.legacyTableId;
   return typeof raw === "string" ? raw.trim() : "";
 }
 
 function forwardPointerToRegisteredController(
-  legacyTableId: string,
+  tableId: string,
   event: ReactPointerEvent<HTMLButtonElement>,
   phase: "down" | "move" | "up" | "cancel",
 ) {
-  const controller = getTpvV2TableController(legacyTableId);
+  const controller = getTpvV2TableController(tableId);
   if (!controller) return;
   const nativeEvent = event.nativeEvent;
   if (phase === "down") controller.onPointerDown(nativeEvent);
@@ -68,21 +72,21 @@ function forwardPointerToRegisteredController(
 function resolveReadonlyOperationalState(
   instance: OperationalElementInstance,
   stateByInstanceId: Record<string, SalaEditorReadonlyTpvOperationalState> | undefined,
-  stateByLegacyTableId: Record<string, SalaEditorReadonlyTpvOperationalState> | undefined,
+  stateByTableId: Record<string, SalaEditorReadonlyTpvOperationalState> | undefined,
 ): SalaEditorReadonlyTpvOperationalState | null {
   const byInstance = stateByInstanceId?.[instance.id];
   if (byInstance) return byInstance;
-  const legacyTableId = readLegacyTableId(instance);
-  if (!legacyTableId) return null;
-  return stateByLegacyTableId?.[legacyTableId] ?? null;
+  const tableId = readOperationalTableId(instance);
+  if (!tableId) return null;
+  return stateByTableId?.[tableId] ?? null;
 }
 
 export function SalaEditorReadonlyOperationalLayer({
   instances,
   stateByInstanceId,
-  stateByLegacyTableId,
-  selectedLegacyTableIds,
-  onLegacyTableClick,
+  stateByTableId,
+  selectedTableIds,
+  onTableClick,
 }: SalaEditorReadonlyOperationalLayerProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
@@ -93,8 +97,8 @@ export function SalaEditorReadonlyOperationalLayer({
     getTpvV2TableControllerRegistryRevision,
   );
 
-  const selectedLegacyTableIdSet = new Set(
-    (selectedLegacyTableIds ?? [])
+  const selectedTableIdSet = new Set(
+    (selectedTableIds ?? [])
       .map((id) => String(id ?? "").trim())
       .filter(Boolean),
   );
@@ -130,18 +134,16 @@ export function SalaEditorReadonlyOperationalLayer({
         const state = resolveReadonlyOperationalState(
           instance,
           stateByInstanceId,
-          stateByLegacyTableId,
+          stateByTableId,
         );
-        const legacyTableId = readLegacyTableId(instance);
-        const isSelected =
-          legacyTableId !== "" && selectedLegacyTableIdSet.has(legacyTableId);
-        const isJoinTarget =
-          legacyTableId !== "" && legacyTableId === joinHoverTableId;
+        const tableId = readOperationalTableId(instance);
+        const isSelected = tableId !== "" && selectedTableIdSet.has(tableId);
+        const isJoinTarget = tableId !== "" && tableId === joinHoverTableId;
         const accentColor = tableOperationalAccentColor(state);
         const isInteractiveTable =
-          instance.elementType === "TABLE" && legacyTableId !== "";
+          instance.elementType === "TABLE" && tableId !== "";
         const controller = isInteractiveTable
-          ? getTpvV2TableController(legacyTableId)
+          ? getTpvV2TableController(tableId)
           : null;
         const joinEnabled = controller?.joinEnabled === true;
 
@@ -162,11 +164,11 @@ export function SalaEditorReadonlyOperationalLayer({
               data-hostly-v2-table-instance-id={
                 instance.elementType === "TABLE" ? instance.id : undefined
               }
-              data-hostly-v2-legacy-table-id={legacyTableId || undefined}
+              data-hostly-v2-table-id={tableId || undefined}
               data-hostly-v2-controller={controller ? "memory" : undefined}
               data-hostly-v2-join-target={isJoinTarget ? "1" : undefined}
-              data-hostly-map-table={isInteractiveTable ? legacyTableId : undefined}
-              data-hostly-map-table-id={isInteractiveTable ? legacyTableId : undefined}
+              data-hostly-map-table={isInteractiveTable ? tableId : undefined}
+              data-hostly-map-table-id={isInteractiveTable ? tableId : undefined}
               data-hostly-map-join-target={isInteractiveTable ? "1" : undefined}
               data-hostly-map-join={joinEnabled ? "1" : undefined}
               style={{
@@ -189,9 +191,7 @@ export function SalaEditorReadonlyOperationalLayer({
             >
               <button
                 type="button"
-                aria-label={
-                  isInteractiveTable ? `Abrir ${instance.name}` : undefined
-                }
+                aria-label={isInteractiveTable ? `Abrir ${instance.name}` : undefined}
                 tabIndex={isInteractiveTable ? 0 : -1}
                 disabled={!isInteractiveTable}
                 onPointerDown={
@@ -202,32 +202,20 @@ export function SalaEditorReadonlyOperationalLayer({
                         } catch {
                           // Algunos navegadores no permiten captura en todos los casos.
                         }
-                        forwardPointerToRegisteredController(
-                          legacyTableId,
-                          event,
-                          "down",
-                        );
+                        forwardPointerToRegisteredController(tableId, event, "down");
                       }
                     : undefined
                 }
                 onPointerMove={
                   isInteractiveTable
                     ? (event) =>
-                        forwardPointerToRegisteredController(
-                          legacyTableId,
-                          event,
-                          "move",
-                        )
+                        forwardPointerToRegisteredController(tableId, event, "move")
                     : undefined
                 }
                 onPointerUp={
                   isInteractiveTable
                     ? (event) => {
-                        forwardPointerToRegisteredController(
-                          legacyTableId,
-                          event,
-                          "up",
-                        );
+                        forwardPointerToRegisteredController(tableId, event, "up");
                         try {
                           event.currentTarget.releasePointerCapture(event.pointerId);
                         } catch {
@@ -239,11 +227,7 @@ export function SalaEditorReadonlyOperationalLayer({
                 onPointerCancel={
                   isInteractiveTable
                     ? (event) => {
-                        forwardPointerToRegisteredController(
-                          legacyTableId,
-                          event,
-                          "cancel",
-                        );
+                        forwardPointerToRegisteredController(tableId, event, "cancel");
                         try {
                           event.currentTarget.releasePointerCapture(event.pointerId);
                         } catch {
@@ -255,11 +239,11 @@ export function SalaEditorReadonlyOperationalLayer({
                 onClick={
                   isInteractiveTable
                     ? () => {
-                        if (onLegacyTableClick) {
-                          onLegacyTableClick(legacyTableId, instance.id);
+                        if (onTableClick) {
+                          onTableClick(tableId, instance.id);
                           return;
                         }
-                        getTpvV2TableController(legacyTableId)?.onClick();
+                        getTpvV2TableController(tableId)?.onClick();
                       }
                     : undefined
                 }
