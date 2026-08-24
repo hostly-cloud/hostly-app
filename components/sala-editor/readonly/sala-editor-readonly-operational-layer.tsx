@@ -1,7 +1,8 @@
 "use client";
 
-import type {
-  PointerEvent as ReactPointerEvent,
+import {
+  useLayoutEffect,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
@@ -31,6 +32,7 @@ export type SalaEditorReadonlyOperationalLayerProps = {
 
 const LEGACY_INTERACTION_SELECTOR =
   '[data-hostly-map-interaction-only="1"][data-hostly-map-table-id]';
+const LEGACY_BRIDGE_STYLE_ID = "hostly-v2-legacy-interaction-bridge-style";
 
 function readLegacyTableId(instance: OperationalElementInstance): string {
   const raw = instance.metadata.legacyTableId;
@@ -51,6 +53,25 @@ function findLegacyInteractionElement(legacyTableId: string): HTMLElement | null
     }
   }
   return null;
+}
+
+function neutralizeLegacyInteractionBridge() {
+  if (typeof document === "undefined") return;
+
+  let style = document.getElementById(LEGACY_BRIDGE_STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = LEGACY_BRIDGE_STYLE_ID;
+    style.textContent = `${LEGACY_INTERACTION_SELECTOR}, ${LEGACY_INTERACTION_SELECTOR} * { pointer-events: none !important; }`;
+    document.head.appendChild(style);
+  }
+
+  for (const bridge of document.querySelectorAll<HTMLElement>(
+    LEGACY_INTERACTION_SELECTOR,
+  )) {
+    bridge.tabIndex = -1;
+    bridge.setAttribute("aria-hidden", "true");
+  }
 }
 
 function forwardPointerEventToLegacyController(
@@ -124,6 +145,25 @@ export function SalaEditorReadonlyOperationalLayer({
       .map((id) => String(id ?? "").trim())
       .filter(Boolean),
   );
+
+  useLayoutEffect(() => {
+    neutralizeLegacyInteractionBridge();
+
+    const observer = new MutationObserver(() => {
+      neutralizeLegacyInteractionBridge();
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-hostly-map-interaction-only", "tabindex", "aria-hidden"],
+    });
+
+    return () => {
+      observer.disconnect();
+      document.getElementById(LEGACY_BRIDGE_STYLE_ID)?.remove();
+    };
+  }, []);
 
   return (
     <div className="hostly-sala-operational-layer is-readonly">
