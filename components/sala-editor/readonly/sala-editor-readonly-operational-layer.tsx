@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useLayoutEffect,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -14,6 +13,10 @@ import { resolveOperationalVisualVariant } from "@/lib/sala-editor/ose/operation
 import { useCanvasViewport } from "@/components/sala-editor/canvas/canvas-viewport-context";
 import { SalaOperationalElementVisual } from "@/components/sala-editor/panels/sala-operational-element-visual";
 import { tableOperationalAccentColor } from "@/lib/map/table-operational-visual-tokens";
+import {
+  getTpvV2TableController,
+  HOSTLY_V2_TABLE_CONTROLLER_REGISTRY_CHANGE,
+} from "@/lib/tpv/v2-table-controller-registry";
 
 export type SalaEditorReadonlyTpvOperationalState =
   | "libre"
@@ -32,10 +35,6 @@ export type SalaEditorReadonlyOperationalLayerProps = {
   onLegacyTableClick?: (legacyTableId: string, instanceId: string) => void;
 };
 
-const LEGACY_INTERACTION_SELECTOR =
-  '[data-hostly-map-interaction-only="1"][data-hostly-map-table-id]';
-const V2_TABLE_SELECTOR = "[data-hostly-v2-legacy-table-id]";
-const LEGACY_BRIDGE_STYLE_ID = "hostly-v2-legacy-interaction-bridge-style";
 const HOSTLY_MAP_JOIN_DRAG_HOVER = "hostly-map-join-drag-hover";
 const HOSTLY_MAP_JOIN_DRAG_END = "hostly-map-join-drag-end";
 
@@ -50,114 +49,19 @@ function readLegacyTableId(instance: OperationalElementInstance): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-function findLegacyInteractionElement(legacyTableId: string): HTMLElement | null {
-  if (typeof document === "undefined") return null;
-  const targetId = legacyTableId.trim();
-  if (!targetId) return null;
-
-  const candidates = document.querySelectorAll<HTMLElement>(
-    LEGACY_INTERACTION_SELECTOR,
-  );
-  for (const candidate of candidates) {
-    if (candidate.dataset.hostlyMapTableId?.trim() === targetId) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function findV2TableElement(legacyTableId: string): HTMLElement | null {
-  if (typeof document === "undefined") return null;
-  const targetId = legacyTableId.trim();
-  if (!targetId) return null;
-
-  for (const candidate of document.querySelectorAll<HTMLElement>(V2_TABLE_SELECTOR)) {
-    if (candidate.dataset.hostlyV2LegacyTableId?.trim() === targetId) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function neutralizeLegacyInteractionBridge() {
-  if (typeof document === "undefined") return;
-
-  let style = document.getElementById(LEGACY_BRIDGE_STYLE_ID) as HTMLStyleElement | null;
-  if (!style) {
-    style = document.createElement("style");
-    style.id = LEGACY_BRIDGE_STYLE_ID;
-    style.textContent = `${LEGACY_INTERACTION_SELECTOR}, ${LEGACY_INTERACTION_SELECTOR} * { pointer-events: none !important; }`;
-    document.head.appendChild(style);
-  }
-
-  for (const bridge of document.querySelectorAll<HTMLElement>(
-    LEGACY_INTERACTION_SELECTOR,
-  )) {
-    if (bridge.tabIndex !== -1) {
-      bridge.tabIndex = -1;
-    }
-    if (bridge.getAttribute("aria-hidden") !== "true") {
-      bridge.setAttribute("aria-hidden", "true");
-    }
-
-    const legacyTableId = bridge.dataset.hostlyMapTableId?.trim() ?? "";
-    const v2Table = legacyTableId ? findV2TableElement(legacyTableId) : null;
-    if (!v2Table) continue;
-
-    const joinEnabled = bridge.getAttribute("data-hostly-map-join") === "1";
-    if (joinEnabled) {
-      if (v2Table.getAttribute("data-hostly-map-join") !== "1") {
-        v2Table.setAttribute("data-hostly-map-join", "1");
-      }
-    } else if (v2Table.hasAttribute("data-hostly-map-join")) {
-      v2Table.removeAttribute("data-hostly-map-join");
-    }
-  }
-}
-
-function forwardPointerEventToLegacyController(
+function forwardPointerToRegisteredController(
   legacyTableId: string,
   event: ReactPointerEvent<HTMLButtonElement>,
+  phase: "down" | "move" | "up" | "cancel",
 ) {
-  const target = findLegacyInteractionElement(legacyTableId);
-  if (!target || typeof window === "undefined" || typeof window.PointerEvent !== "function") {
-    return;
-  }
+  const controller = getTpvV2TableController(legacyTableId);
+  if (!controller) return;
 
-  const forwarded = new window.PointerEvent(event.type, {
-    bubbles: true,
-    cancelable: true,
-    composed: true,
-    pointerId: event.pointerId,
-    pointerType: event.pointerType,
-    isPrimary: event.isPrimary,
-    width: event.width,
-    height: event.height,
-    pressure: event.pressure,
-    tangentialPressure: event.tangentialPressure,
-    tiltX: event.tiltX,
-    tiltY: event.tiltY,
-    twist: event.twist,
-    clientX: event.clientX,
-    clientY: event.clientY,
-    screenX: event.screenX,
-    screenY: event.screenY,
-    button: event.button,
-    buttons: event.buttons,
-    ctrlKey: event.ctrlKey,
-    shiftKey: event.shiftKey,
-    altKey: event.altKey,
-    metaKey: event.metaKey,
-  });
-
-  const accepted = target.dispatchEvent(forwarded);
-  if (!accepted && event.cancelable) {
-    event.preventDefault();
-  }
-}
-
-function activateLegacyTableController(legacyTableId: string) {
-  findLegacyInteractionElement(legacyTableId)?.click();
+  const nativeEvent = event.nativeEvent;
+  if (phase === "down") controller.onPointerDown(nativeEvent);
+  else if (phase === "move") controller.onPointerMove(nativeEvent);
+  else if (phase === "up") controller.onPointerUp(nativeEvent);
+  else controller.onPointerCancel(nativeEvent);
 }
 
 function resolveReadonlyOperationalState(
@@ -182,33 +86,26 @@ export function SalaEditorReadonlyOperationalLayer({
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
   const [joinHoverTableId, setJoinHoverTableId] = useState<string | null>(null);
+  const [, setControllerRegistryRevision] = useState(0);
   const selectedLegacyTableIdSet = new Set(
     (selectedLegacyTableIds ?? [])
       .map((id) => String(id ?? "").trim())
       .filter(Boolean),
   );
 
-  useLayoutEffect(() => {
-    neutralizeLegacyInteractionBridge();
-
-    const observer = new MutationObserver(() => {
-      neutralizeLegacyInteractionBridge();
-    });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: [
-        "data-hostly-map-interaction-only",
-        "data-hostly-map-join",
-        "tabindex",
-        "aria-hidden",
-      ],
-    });
-
+  useEffect(() => {
+    const onRegistryChange = () => {
+      setControllerRegistryRevision((revision) => revision + 1);
+    };
+    document.addEventListener(
+      HOSTLY_V2_TABLE_CONTROLLER_REGISTRY_CHANGE,
+      onRegistryChange,
+    );
     return () => {
-      observer.disconnect();
-      document.getElementById(LEGACY_BRIDGE_STYLE_ID)?.remove();
+      document.removeEventListener(
+        HOSTLY_V2_TABLE_CONTROLLER_REGISTRY_CHANGE,
+        onRegistryChange,
+      );
     };
   }, []);
 
@@ -253,6 +150,10 @@ export function SalaEditorReadonlyOperationalLayer({
         const accentColor = tableOperationalAccentColor(state);
         const isInteractiveTable =
           instance.elementType === "TABLE" && legacyTableId !== "";
+        const controller = isInteractiveTable
+          ? getTpvV2TableController(legacyTableId)
+          : null;
+        const joinEnabled = controller?.joinEnabled === true;
 
         return (
           <div
@@ -275,10 +176,12 @@ export function SalaEditorReadonlyOperationalLayer({
                 instance.elementType === "TABLE" ? instance.id : undefined
               }
               data-hostly-v2-legacy-table-id={legacyTableId || undefined}
+              data-hostly-v2-controller={controller ? "memory" : undefined}
               data-hostly-v2-join-target={isJoinTarget ? "1" : undefined}
               data-hostly-map-table={isInteractiveTable ? legacyTableId : undefined}
               data-hostly-map-table-id={isInteractiveTable ? legacyTableId : undefined}
               data-hostly-map-join-target={isInteractiveTable ? "1" : undefined}
+              data-hostly-map-join={joinEnabled ? "1" : undefined}
               style={{
                 width: geometry.width,
                 height: geometry.height,
@@ -308,26 +211,38 @@ export function SalaEditorReadonlyOperationalLayer({
                         try {
                           event.currentTarget.setPointerCapture(event.pointerId);
                         } catch {
-                          // Algunos navegadores no permiten captura en eventos sintéticos.
+                          // Algunos navegadores no permiten captura en todos los casos.
                         }
-                        forwardPointerEventToLegacyController(legacyTableId, event);
+                        forwardPointerToRegisteredController(
+                          legacyTableId,
+                          event,
+                          "down",
+                        );
                       }
                     : undefined
                 }
                 onPointerMove={
                   isInteractiveTable
                     ? (event) =>
-                        forwardPointerEventToLegacyController(legacyTableId, event)
+                        forwardPointerToRegisteredController(
+                          legacyTableId,
+                          event,
+                          "move",
+                        )
                     : undefined
                 }
                 onPointerUp={
                   isInteractiveTable
                     ? (event) => {
-                        forwardPointerEventToLegacyController(legacyTableId, event);
+                        forwardPointerToRegisteredController(
+                          legacyTableId,
+                          event,
+                          "up",
+                        );
                         try {
                           event.currentTarget.releasePointerCapture(event.pointerId);
                         } catch {
-                          // La captura puede haberse liberado por pointercancel.
+                          // La captura puede haberse liberado antes.
                         }
                       }
                     : undefined
@@ -335,7 +250,11 @@ export function SalaEditorReadonlyOperationalLayer({
                 onPointerCancel={
                   isInteractiveTable
                     ? (event) => {
-                        forwardPointerEventToLegacyController(legacyTableId, event);
+                        forwardPointerToRegisteredController(
+                          legacyTableId,
+                          event,
+                          "cancel",
+                        );
                         try {
                           event.currentTarget.releasePointerCapture(event.pointerId);
                         } catch {
@@ -351,7 +270,7 @@ export function SalaEditorReadonlyOperationalLayer({
                           onLegacyTableClick(legacyTableId, instance.id);
                           return;
                         }
-                        activateLegacyTableController(legacyTableId);
+                        getTpvV2TableController(legacyTableId)?.onClick();
                       }
                     : undefined
                 }
