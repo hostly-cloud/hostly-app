@@ -33,9 +33,15 @@ export type SalaEditorReadonlyMapProps = {
   mode?: SalaEditorReadonlyMapMode;
   coordinateScale?: number;
   operationalStateByInstanceId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
-  operationalStateByLegacyTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
-  operationalSelectedLegacyTableIds?: readonly string[];
+  operationalStateByTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
+  operationalSelectedTableIds?: readonly string[];
   operationalVisibleInstanceIds?: readonly string[];
+  onOperationalTableClick?: (tableId: string, instanceId: string) => void;
+  /** Compatibilidad temporal con consumidores anteriores a la API tableId. */
+  operationalStateByLegacyTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
+  /** Compatibilidad temporal con consumidores anteriores a la API tableId. */
+  operationalSelectedLegacyTableIds?: readonly string[];
+  /** Compatibilidad temporal con consumidores anteriores a la API tableId. */
   onOperationalLegacyTableClick?: (legacyTableId: string, instanceId: string) => void;
 };
 
@@ -60,9 +66,12 @@ export function SalaEditorReadonlyMap({
   mode = "standalone",
   coordinateScale = 1,
   operationalStateByInstanceId,
+  operationalStateByTableId,
+  operationalSelectedTableIds,
+  operationalVisibleInstanceIds,
+  onOperationalTableClick,
   operationalStateByLegacyTableId,
   operationalSelectedLegacyTableIds,
-  operationalVisibleInstanceIds,
   onOperationalLegacyTableClick,
 }: SalaEditorReadonlyMapProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -93,6 +102,12 @@ export function SalaEditorReadonlyMap({
             instance.elementType !== "TABLE" || visibleInstanceIdSet.has(instance.id),
         );
   const hasNativeTpvInteraction = operationalMode === "tpv";
+  const resolvedOperationalStateByTableId =
+    operationalStateByTableId ?? operationalStateByLegacyTableId;
+  const resolvedOperationalSelectedTableIds =
+    operationalSelectedTableIds ?? operationalSelectedLegacyTableIds;
+  const resolvedOnOperationalTableClick =
+    onOperationalTableClick ?? onOperationalLegacyTableClick;
 
   const layers = (
     <>
@@ -140,9 +155,9 @@ export function SalaEditorReadonlyMap({
         <SalaEditorReadonlyOperationalLayer
           instances={tpvOperationalInstances}
           stateByInstanceId={operationalStateByInstanceId}
-          stateByLegacyTableId={operationalStateByLegacyTableId}
-          selectedLegacyTableIds={operationalSelectedLegacyTableIds}
-          onLegacyTableClick={onOperationalLegacyTableClick}
+          stateByTableId={resolvedOperationalStateByTableId}
+          selectedTableIds={resolvedOperationalSelectedTableIds}
+          onTableClick={resolvedOnOperationalTableClick}
         />
       ) : null}
     </>
