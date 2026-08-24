@@ -17,7 +17,7 @@ import {
   type EditableFloorMapProps,
   type EditableFloorMapViewportControls,
   type PlanContentBounds,
-} from "./legacy-editable-floor-map";
+} from "./editable-floor-map-contract";
 
 const ZOOM_MIN = 0.45;
 const ZOOM_MAX = 1.35;
