@@ -47,8 +47,9 @@ type HostlyMapJoinDragHoverDetail = {
 };
 
 /**
- * Compatibilidad de datos: Editor V2 conserva hoy el enlace a la mesa Firestore
- * en metadata.legacyTableId. Desde este borde se trata simplemente como tableId.
+ * Compatibilidad de datos: Editor V2 conserva hoy el enlace al documento
+ * operativo Firestore en metadata.legacyTableId. Desde este borde se trata
+ * simplemente como tableId, independientemente del tipo visual del objeto.
  */
 function readOperationalTableId(instance: OperationalElementInstance): string {
   const raw = instance.metadata.legacyTableId;
@@ -140,9 +141,8 @@ export function SalaEditorReadonlyOperationalLayer({
         const isSelected = tableId !== "" && selectedTableIdSet.has(tableId);
         const isJoinTarget = tableId !== "" && tableId === joinHoverTableId;
         const accentColor = tableOperationalAccentColor(state);
-        const isInteractiveTable =
-          instance.elementType === "TABLE" && tableId !== "";
-        const controller = isInteractiveTable
+        const isLinkedOperationalElement = tableId !== "";
+        const controller = isLinkedOperationalElement
           ? getTpvV2TableController(tableId)
           : null;
         const joinEnabled = controller?.joinEnabled === true;
@@ -161,15 +161,18 @@ export function SalaEditorReadonlyOperationalLayer({
                 .filter(Boolean)
                 .join(" ")}
               data-hostly-tpv-operational-state={state ?? undefined}
+              data-hostly-v2-operational-instance-id={
+                isLinkedOperationalElement ? instance.id : undefined
+              }
               data-hostly-v2-table-instance-id={
                 instance.elementType === "TABLE" ? instance.id : undefined
               }
               data-hostly-v2-table-id={tableId || undefined}
               data-hostly-v2-controller={controller ? "memory" : undefined}
               data-hostly-v2-join-target={isJoinTarget ? "1" : undefined}
-              data-hostly-map-table={isInteractiveTable ? tableId : undefined}
-              data-hostly-map-table-id={isInteractiveTable ? tableId : undefined}
-              data-hostly-map-join-target={isInteractiveTable ? "1" : undefined}
+              data-hostly-map-table={isLinkedOperationalElement ? tableId : undefined}
+              data-hostly-map-table-id={isLinkedOperationalElement ? tableId : undefined}
+              data-hostly-map-join-target={isLinkedOperationalElement ? "1" : undefined}
               data-hostly-map-join={joinEnabled ? "1" : undefined}
               style={{
                 width: geometry.width,
@@ -180,7 +183,7 @@ export function SalaEditorReadonlyOperationalLayer({
                     : undefined,
                 transformOrigin: "center center",
                 zIndex: instance.elementType === "TABLE" ? 24 : 18,
-                pointerEvents: isInteractiveTable ? "auto" : "none",
+                pointerEvents: isLinkedOperationalElement ? "auto" : "none",
                 outline: isJoinTarget
                   ? "3px solid rgba(49, 95, 125, 0.42)"
                   : undefined,
@@ -191,11 +194,13 @@ export function SalaEditorReadonlyOperationalLayer({
             >
               <button
                 type="button"
-                aria-label={isInteractiveTable ? `Abrir ${instance.name}` : undefined}
-                tabIndex={isInteractiveTable ? 0 : -1}
-                disabled={!isInteractiveTable}
+                aria-label={
+                  isLinkedOperationalElement ? `Abrir ${instance.name}` : undefined
+                }
+                tabIndex={isLinkedOperationalElement ? 0 : -1}
+                disabled={!isLinkedOperationalElement}
                 onPointerDown={
-                  isInteractiveTable
+                  isLinkedOperationalElement
                     ? (event) => {
                         try {
                           event.currentTarget.setPointerCapture(event.pointerId);
@@ -207,13 +212,13 @@ export function SalaEditorReadonlyOperationalLayer({
                     : undefined
                 }
                 onPointerMove={
-                  isInteractiveTable
+                  isLinkedOperationalElement
                     ? (event) =>
                         forwardPointerToRegisteredController(tableId, event, "move")
                     : undefined
                 }
                 onPointerUp={
-                  isInteractiveTable
+                  isLinkedOperationalElement
                     ? (event) => {
                         forwardPointerToRegisteredController(tableId, event, "up");
                         try {
@@ -225,7 +230,7 @@ export function SalaEditorReadonlyOperationalLayer({
                     : undefined
                 }
                 onPointerCancel={
-                  isInteractiveTable
+                  isLinkedOperationalElement
                     ? (event) => {
                         forwardPointerToRegisteredController(tableId, event, "cancel");
                         try {
@@ -237,7 +242,7 @@ export function SalaEditorReadonlyOperationalLayer({
                     : undefined
                 }
                 onClick={
-                  isInteractiveTable
+                  isLinkedOperationalElement
                     ? () => {
                         if (onTableClick) {
                           onTableClick(tableId, instance.id);
@@ -254,9 +259,9 @@ export function SalaEditorReadonlyOperationalLayer({
                   padding: 0,
                   border: 0,
                   background: "transparent",
-                  cursor: isInteractiveTable ? "pointer" : "default",
-                  pointerEvents: isInteractiveTable ? "auto" : "none",
-                  touchAction: isInteractiveTable ? "none" : undefined,
+                  cursor: isLinkedOperationalElement ? "pointer" : "default",
+                  pointerEvents: isLinkedOperationalElement ? "auto" : "none",
+                  touchAction: isLinkedOperationalElement ? "none" : undefined,
                 }}
               >
                 <SalaOperationalElementVisual
