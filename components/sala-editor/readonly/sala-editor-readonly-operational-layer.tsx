@@ -23,6 +23,7 @@ export type SalaEditorReadonlyOperationalLayerProps = {
   stateByInstanceId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
   stateByLegacyTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
   selectedLegacyTableIds?: readonly string[];
+  onLegacyTableClick?: (legacyTableId: string, instanceId: string) => void;
 };
 
 function readLegacyTableId(instance: OperationalElementInstance): string {
@@ -47,6 +48,7 @@ export function SalaEditorReadonlyOperationalLayer({
   stateByInstanceId,
   stateByLegacyTableId,
   selectedLegacyTableIds,
+  onLegacyTableClick,
 }: SalaEditorReadonlyOperationalLayerProps) {
   const canvasViewport = useCanvasViewport();
   const coordinateScale = canvasViewport?.coordinateScale ?? 1;
@@ -57,7 +59,7 @@ export function SalaEditorReadonlyOperationalLayer({
   );
 
   return (
-    <div className="hostly-sala-operational-layer is-readonly" aria-hidden>
+    <div className="hostly-sala-operational-layer is-readonly">
       {instances.map((instance) => {
         const instanceCatalog = getOperationalElementCatalogItem(instance.elementType);
         const size = getOperationalInstanceCanvasSize(instance);
@@ -78,6 +80,10 @@ export function SalaEditorReadonlyOperationalLayer({
         const isSelected =
           legacyTableId !== "" && selectedLegacyTableIdSet.has(legacyTableId);
         const accentColor = tableOperationalAccentColor(state);
+        const isInteractiveTable =
+          instance.elementType === "TABLE" &&
+          legacyTableId !== "" &&
+          onLegacyTableClick != null;
 
         return (
           <div
@@ -96,20 +102,43 @@ export function SalaEditorReadonlyOperationalLayer({
                 .filter(Boolean)
                 .join(" ")}
               data-hostly-tpv-operational-state={state ?? undefined}
+              data-hostly-v2-table-instance-id={
+                instance.elementType === "TABLE" ? instance.id : undefined
+              }
+              data-hostly-v2-legacy-table-id={legacyTableId || undefined}
               style={{
                 width: geometry.width,
                 height: geometry.height,
-                transform: geometry.rotation !== 0 ? `rotate(${geometry.rotation}deg)` : undefined,
+                transform:
+                  geometry.rotation !== 0
+                    ? `rotate(${geometry.rotation}deg)`
+                    : undefined,
                 transformOrigin: "center center",
                 zIndex: instance.elementType === "TABLE" ? 24 : 18,
-                pointerEvents: "none",
+                pointerEvents: isInteractiveTable ? "auto" : "none",
               }}
             >
-              <div
+              <button
+                type="button"
+                aria-label={
+                  isInteractiveTable ? `Abrir ${instance.name}` : undefined
+                }
+                tabIndex={isInteractiveTable ? 0 : -1}
+                disabled={!isInteractiveTable}
+                onClick={
+                  isInteractiveTable
+                    ? () => onLegacyTableClick(legacyTableId, instance.id)
+                    : undefined
+                }
                 className="hostly-sala-canvas-object__body"
                 style={{
-                  cursor: "default",
-                  pointerEvents: "none",
+                  width: "100%",
+                  height: "100%",
+                  padding: 0,
+                  border: 0,
+                  background: "transparent",
+                  cursor: isInteractiveTable ? "pointer" : "default",
+                  pointerEvents: isInteractiveTable ? "auto" : "none",
                 }}
               >
                 <SalaOperationalElementVisual
@@ -120,7 +149,7 @@ export function SalaEditorReadonlyOperationalLayer({
                   seatCount={instance.capacity}
                   canvasSize={{ width: geometry.width, height: geometry.height }}
                 />
-              </div>
+              </button>
             </div>
           </div>
         );
