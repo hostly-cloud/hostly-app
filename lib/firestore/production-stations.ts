@@ -2,16 +2,19 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
   query,
+  setDoc,
   updateDoc,
   type Unsubscribe,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { normalizeProductName } from "@/lib/carta/duplicate-detection";
+import type { OperationStationType } from "@/lib/operacion/operation-station-types";
 import {
   isProductionStationType,
   normalizeProductionStationColor,
@@ -239,4 +242,55 @@ export async function setProductionStationActive(
     active,
     updatedAt: Date.now(),
   });
+}
+
+function operationTypeToProductionType(
+  type: OperationStationType,
+): ProductionStationType {
+  if (type === "kitchen") return "cocina";
+  if (type === "bar") return "barra";
+  if (type === "cocktail") return "cocteleria";
+  return "otro";
+}
+
+/**
+ * Sombra de compatibilidad mientras Familias de menú termina de migrar a
+ * `operationStations`. Mantiene el mismo id; la fuente canónica sigue siendo
+ * `operationStations` y este documento puede retirarse cuando no queden lectores legacy.
+ */
+export async function syncProductionStationShadowFromOperationStation(
+  restaurantId: string,
+  station: {
+    id: string;
+    name: string;
+    type: OperationStationType;
+    color?: string;
+    active: boolean;
+  },
+): Promise<void> {
+  const rid = restaurantId.trim();
+  const sid = station.id.trim();
+  if (!rid || !sid) return;
+  authUidOrThrow();
+  const ref = productionStationDocRef(rid, sid);
+  const current = await getDoc(ref);
+  const now = Date.now();
+  const createdAt = current.exists()
+    ? parseProductionStationDocument(sid, current.data(), rid)?.createdAt ?? now
+    : now;
+  await setDoc(
+    ref,
+    buildPayload(
+      rid,
+      {
+        name: station.name,
+        type: operationTypeToProductionType(station.type),
+        color: station.color,
+        active: station.active,
+      },
+      now,
+      createdAt,
+    ),
+    { merge: true },
+  );
 }
