@@ -5,13 +5,10 @@ import { getDefaultSizeForPlanElementType } from "@/lib/firestore/tables";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import { TpvV2OperationalParityProvider } from "@/lib/tpv/v2-operational-parity-context";
 import { evaluateTpvV2LegacyResidualCoverage } from "@/lib/tpv/v2-legacy-residual-coverage";
-import {
-  EditableFloorMap as LegacyEditableFloorMap,
-  type EditableFloorMapProps,
-} from "./legacy-editable-floor-map";
+import type { EditableFloorMapProps } from "./editable-floor-map-contract";
 import { TpvV2ReadonlyViewport } from "./tpv-v2-readonly-viewport";
 
-export * from "./legacy-editable-floor-map";
+export * from "./editable-floor-map-contract";
 
 function readEditorV2ContractFromUnderlay(
   readonlyUnderlay: ReactNode,
@@ -68,21 +65,25 @@ function renderDetachedOperationalController(
 }
 
 /**
- * Fachada de compatibilidad.
+ * Fachada TPV V2 fail-closed.
  *
- * Editor y consumidores sin contrato V2 siguen delegando al renderer historico.
- * Un TPV readonly con contrato V2 valido, en cambio, monta siempre el viewport
- * V2 nativo. La cobertura residual se expone como diagnostico fail-closed y ya
- * no provoca que el mapa historico vuelva a entrar en el arbol del TPV.
+ * El renderer editable historico ya no forma parte de este contrato. Cualquier
+ * consumidor que intente usar esta fachada en modo editable o sin un underlay
+ * canónico de Editor V2 recibe un marcador diagnostico sin UI legacy.
  */
 export function EditableFloorMap(props: EditableFloorMapProps) {
-  if (props.editable || !props.readonlyUnderlay) {
-    return <LegacyEditableFloorMap {...props} />;
-  }
+  const contract = props.readonlyUnderlay
+    ? readEditorV2ContractFromUnderlay(props.readonlyUnderlay)
+    : null;
 
-  const contract = readEditorV2ContractFromUnderlay(props.readonlyUnderlay);
-  if (!contract) {
-    return <LegacyEditableFloorMap {...props} />;
+  if (props.editable || !contract) {
+    return (
+      <div
+        hidden
+        data-hostly-v2-floor-map="blocked-non-v2-consumer"
+        data-hostly-v2-floor-map-editable={props.editable ? "true" : "false"}
+      />
+    );
   }
 
   const coverage = evaluateTpvV2LegacyResidualCoverage({
