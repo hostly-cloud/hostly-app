@@ -131,7 +131,14 @@ const hostlyMobileDensityStyles = `
     box-shadow: none;
   }
 
+  .hostly-productos-config-skin .hostly-mobile-list-item__leading {
+    align-self: flex-start;
+    padding-top: 1px;
+  }
+
   .hostly-productos-config-skin .hostly-mobile-list-item__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     align-items: flex-start;
   }
@@ -153,13 +160,30 @@ const hostlyMobileDensityStyles = `
   }
 
   .hostly-productos-config-skin .hostly-mobile-list-item__meta {
-    gap: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 2px;
+    column-gap: 3px;
     font-size: 10.5px;
     line-height: 1.18;
   }
 
   .hostly-productos-config-skin .hostly-productos-routing-recommendation-hint {
     display: none !important;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__meta:has(.hostly-data-table-microchip--routing-audit-ok) > .hostly-mobile-list-item__dot:last-of-type {
+    display: none;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-routing-audit-cell:has(.hostly-data-table-microchip--routing-audit-ok) {
+    display: none !important;
+  }
+
+  .hostly-productos-config-skin .hostly-productos-routing-audit-cell:not(:has(.hostly-data-table-microchip--routing-audit-ok)) {
+    align-items: flex-start !important;
+    max-width: 100%;
   }
 
   .hostly-productos-config-skin .hostly-mobile-list-item__aside {
@@ -170,8 +194,9 @@ const hostlyMobileDensityStyles = `
 
   .hostly-productos-config-skin .hostly-mobile-list-item__price {
     font-size: 13px;
-    font-weight: 760;
-    line-height: 1.1;
+    font-weight: 780;
+    line-height: 1.08;
+    letter-spacing: -0.012em;
   }
 
   .hostly-productos-config-skin .hostly-mobile-list-item__badges {
@@ -211,6 +236,20 @@ const hostlyMobileDensityStyles = `
     min-width: 34px;
     padding-left: 0;
     padding-right: 0;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__actions .hostly-row-actions > .hostly-row-actions__btn:nth-child(n + 2) {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__actions .hostly-row-actions__btn--danger {
+    opacity: 0.68;
+  }
+
+  .hostly-productos-config-skin .hostly-mobile-list-item__actions .hostly-row-actions__btn--danger:hover,
+  .hostly-productos-config-skin .hostly-mobile-list-item__actions .hostly-row-actions__btn--danger:focus-visible {
+    opacity: 1;
   }
 
   .hostly-data-table-viewport--escandallos .hostly-mobile-list-shell {
