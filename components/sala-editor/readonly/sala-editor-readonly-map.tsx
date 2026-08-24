@@ -36,6 +36,7 @@ export type SalaEditorReadonlyMapProps = {
   operationalStateByLegacyTableId?: Record<string, SalaEditorReadonlyTpvOperationalState>;
   operationalSelectedLegacyTableIds?: readonly string[];
   operationalVisibleInstanceIds?: readonly string[];
+  onOperationalLegacyTableClick?: (legacyTableId: string, instanceId: string) => void;
 };
 
 function resolveReadonlyFloorKind(kind: string): BaseFloorCatalogKind {
@@ -62,6 +63,7 @@ export function SalaEditorReadonlyMap({
   operationalStateByLegacyTableId,
   operationalSelectedLegacyTableIds,
   operationalVisibleInstanceIds,
+  onOperationalLegacyTableClick,
 }: SalaEditorReadonlyMapProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const base = normalizeSalaEspacioBase(contract.space.base);
@@ -90,6 +92,8 @@ export function SalaEditorReadonlyMap({
           (instance) =>
             instance.elementType !== "TABLE" || visibleInstanceIdSet.has(instance.id),
         );
+  const hasNativeTpvInteraction =
+    operationalMode === "tpv" && onOperationalLegacyTableClick != null;
 
   const layers = (
     <>
@@ -139,6 +143,7 @@ export function SalaEditorReadonlyMap({
           stateByInstanceId={operationalStateByInstanceId}
           stateByLegacyTableId={operationalStateByLegacyTableId}
           selectedLegacyTableIds={operationalSelectedLegacyTableIds}
+          onLegacyTableClick={onOperationalLegacyTableClick}
         />
       ) : null}
     </>
@@ -151,7 +156,10 @@ export function SalaEditorReadonlyMap({
         className={className}
         data-hostly-readonly-map-source="editor-v2"
         data-hostly-readonly-map-mode="logical-underlay"
-        aria-hidden
+        data-hostly-readonly-map-interaction={
+          hasNativeTpvInteraction ? "native-v2" : "readonly"
+        }
+        aria-hidden={hasNativeTpvInteraction ? undefined : true}
         style={{
           position: "absolute",
           left: 0,
@@ -160,7 +168,7 @@ export function SalaEditorReadonlyMap({
           height: logicalHeight,
           minWidth: logicalWidth,
           minHeight: logicalHeight,
-          pointerEvents: "none",
+          pointerEvents: hasNativeTpvInteraction ? "auto" : "none",
           overflow: "hidden",
           zIndex: 1,
           ...style,
@@ -183,12 +191,15 @@ export function SalaEditorReadonlyMap({
     <div
       className={className}
       data-hostly-readonly-map-source="editor-v2"
+      data-hostly-readonly-map-interaction={
+        hasNativeTpvInteraction ? "native-v2" : "readonly"
+      }
       style={{
         position: "relative",
         width: "100%",
         height: "100%",
         minHeight: 0,
-        pointerEvents: "none",
+        pointerEvents: hasNativeTpvInteraction ? "auto" : "none",
         ...style,
       }}
     >
@@ -197,10 +208,10 @@ export function SalaEditorReadonlyMap({
         restaurantId={contract.restaurantId}
         basePreview={base}
         floorBackground={floorEntry.background}
-        stageRole="img"
+        stageRole={hasNativeTpvInteraction ? "group" : "img"}
         stageAriaLabel={`Plano readonly de ${contract.space.name}`}
         stageStyle={{
-          pointerEvents: "none",
+          pointerEvents: hasNativeTpvInteraction ? "auto" : "none",
         }}
       >
         {layers}
