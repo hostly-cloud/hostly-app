@@ -25,20 +25,20 @@ export type {
   PlanContentBounds,
 } from "./EditableFloorMap";
 
+const TPV_OPERATIONAL_ZOOM_MAX = new Set([3.4, 3.8]);
+
 /**
  * El TPV operativo ya dispone de un viewport a pantalla completa. Su encuadre,
  * sin embargo, no debe depender del tamaño lógico completo del lienzo del Editor:
  * ese lienzo puede contener mucho espacio vacío alrededor de las mesas y hacer
  * que el restaurante aparezca pequeño aunque el mapa ocupe todo el dispositivo.
  *
- * Reconocemos únicamente la configuración de auto-fit específica del TPV
- * (readonly + superficie premium + padding mínimo + zoom operativo alto) y en
- * ese caso encajamos los elementos operativos recibidos en `viewportFitElements`.
- * El Editor y el resto de consumidores conservan literalmente su modo de fit.
+ * La firma se mantiene deliberadamente estricta para no alterar el Editor ni
+ * otros mapas readonly: premium, elementos operativos, sin zonas en el fit,
+ * padding 2px, zoom máximo TPV y offsets/multiplicador neutros.
  */
 function isOperationalTpvFit(props: EditableFloorMapProps): boolean {
   const fitZoomMax = props.viewportFitZoomMax;
-  const fitPadding = props.viewportFitPaddingPx;
 
   return (
     props.editable === false &&
@@ -49,11 +49,11 @@ function isOperationalTpvFit(props: EditableFloorMapProps): boolean {
     Array.isArray(props.viewportFitZones) &&
     props.viewportFitZones.length === 0 &&
     typeof fitZoomMax === "number" &&
-    Number.isFinite(fitZoomMax) &&
-    fitZoomMax >= 3 &&
-    typeof fitPadding === "number" &&
-    Number.isFinite(fitPadding) &&
-    fitPadding <= 4
+    TPV_OPERATIONAL_ZOOM_MAX.has(fitZoomMax) &&
+    props.viewportFitPaddingPx === 2 &&
+    (props.viewportFitOffsetX ?? 0) === 0 &&
+    (props.viewportFitOffsetY ?? 0) === 0 &&
+    (props.viewportFitZoomMultiplier ?? 1) === 1
   );
 }
 
