@@ -12,9 +12,11 @@ import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import {
   listOperationStations,
   listenOperationStations,
-  type OperationStationDocument,
 } from "@/lib/firestore/operation-stations";
-import type { OperationStationType } from "@/lib/operacion/operation-station-types";
+import type {
+  OperationStationDocument,
+  OperationStationType,
+} from "@/lib/operacion/operation-station-types";
 import {
   DEFAULT_PRODUCTION_STATION_COLOR,
   normalizeProductionStationColor,
