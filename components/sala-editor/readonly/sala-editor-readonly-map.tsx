@@ -92,8 +92,7 @@ export function SalaEditorReadonlyMap({
           (instance) =>
             instance.elementType !== "TABLE" || visibleInstanceIdSet.has(instance.id),
         );
-  const hasNativeTpvInteraction =
-    operationalMode === "tpv" && onOperationalLegacyTableClick != null;
+  const hasNativeTpvInteraction = operationalMode === "tpv";
 
   const layers = (
     <>
