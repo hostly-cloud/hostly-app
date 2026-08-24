@@ -1,6 +1,7 @@
 "use client";
 
-import { isValidElement, type ReactNode } from "react";
+import { Fragment, isValidElement, type ReactNode } from "react";
+import { getDefaultSizeForPlanElementType } from "@/lib/firestore/tables";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import {
   getEditorV2NativeDecorativeIds,
@@ -50,6 +51,36 @@ function getLinkedOperationalTableIds(
   return ids;
 }
 
+function renderDetachedOperationalController(
+  props: EditableFloorMapProps,
+  element: EditableFloorMapProps["elements"][number],
+): ReactNode {
+  if (!props.renderElement) return null;
+
+  const elementId = String(element.id ?? "").trim();
+  if (!elementId) return null;
+  const defaults = getDefaultSizeForPlanElementType(element.type);
+  const mapTileWidth =
+    typeof element.width === "number" && Number.isFinite(element.width)
+      ? element.width
+      : defaults.width;
+  const mapTileHeight =
+    typeof element.height === "number" && Number.isFinite(element.height)
+      ? element.height
+      : defaults.height;
+
+  return props.renderElement({
+    element,
+    elementId,
+    mapLayoutX:
+      typeof element.x === "number" && Number.isFinite(element.x) ? element.x : 0,
+    mapLayoutY:
+      typeof element.y === "number" && Number.isFinite(element.y) ? element.y : 0,
+    mapTileWidth,
+    mapTileHeight,
+  });
+}
+
 /**
  * Fachada de compatibilidad.
  *
@@ -57,8 +88,8 @@ function getLinkedOperationalTableIds(
  *   histórica preservada en `legacy-editable-floor-map.tsx`.
  * - En readonly con underlay Editor V2, decorativos y zonas legacy con paridad
  *   exacta se eliminan antes de entrar al renderer histórico.
- * - Los elementos operativos enlazados se anuncian por contexto para que sus
- *   `ElementCard` se conviertan en controladores V2 sin visual legacy.
+ * - Los elementos operativos enlazados montan sus controladores React fuera del
+ *   mapa histórico y tampoco entran en su bucle de elementos.
  * - Cualquier objeto sin paridad demostrada se conserva.
  */
 export function EditableFloorMap(props: EditableFloorMapProps) {
@@ -72,7 +103,7 @@ export function EditableFloorMap(props: EditableFloorMapProps) {
   }
 
   const nativeDecorativeIds = new Set(getEditorV2NativeDecorativeIds(contract));
-  const filteredElements =
+  const decorFilteredElements =
     nativeDecorativeIds.size === 0
       ? props.elements
       : props.elements.filter(
@@ -88,12 +119,23 @@ export function EditableFloorMap(props: EditableFloorMapProps) {
       ? props.zones
       : props.zones.filter((zone) => !nativeZoneIds.has(String(zone.id).trim()));
   const linkedOperationalIds = getLinkedOperationalTableIds(contract);
+  const linkedOperationalElements = decorFilteredElements.filter((element) =>
+    linkedOperationalIds.has(String(element.id ?? "").trim()),
+  );
+  const residualLegacyElements = decorFilteredElements.filter(
+    (element) => !linkedOperationalIds.has(String(element.id ?? "").trim()),
+  );
 
   return (
     <TpvV2OperationalParityProvider operationalIds={linkedOperationalIds}>
+      {linkedOperationalElements.map((element) => (
+        <Fragment key={`v2-controller-${element.id}`}>
+          {renderDetachedOperationalController(props, element)}
+        </Fragment>
+      ))}
       <LegacyEditableFloorMap
         {...props}
-        elements={filteredElements}
+        elements={residualLegacyElements}
         zones={filteredZones}
       />
     </TpvV2OperationalParityProvider>
