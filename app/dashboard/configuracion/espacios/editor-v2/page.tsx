@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { SalaEditorWorkspace } from "@/components/sala-editor/sala-editor-workspace";
 import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { seedSalaEditorV2DraftFromRoomsAssistant } from "@/lib/rooms-assistant/seed-sala-editor-v2-draft";
 
 export default function EditorSalaV2PreviewPage() {
   const {
@@ -15,6 +16,38 @@ export default function EditorSalaV2PreviewPage() {
     () => resolveAuthenticatedRestaurantId(profileReady, profileRestaurantId),
     [profileReady, profileRestaurantId],
   );
+  const [handoffReadyForRestaurantId, setHandoffReadyForRestaurantId] = useState<
+    string | null
+  >(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!profileReady || !restaurantId) return;
+
+    let cancelled = false;
+    setHandoffReadyForRestaurantId(null);
+    setHandoffError(null);
+
+    void seedSalaEditorV2DraftFromRoomsAssistant({
+      restaurantId,
+      updatedBy: user?.uid ?? null,
+    })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setHandoffError(
+          error instanceof Error
+            ? error.message
+            : "No se pudo preparar el borrador del asistente.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setHandoffReadyForRestaurantId(restaurantId);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profileReady, restaurantId, user?.uid]);
 
   if (!profileReady) {
     return (
@@ -34,8 +67,22 @@ export default function EditorSalaV2PreviewPage() {
     );
   }
 
+  if (handoffReadyForRestaurantId !== restaurantId) {
+    return (
+      <div className="hostly-sala-editor-page">
+        <div className="hostly-sala-editor-canvas-hint">Preparando Editor V2…</div>
+      </div>
+    );
+  }
+
   return (
     <div className="hostly-sala-editor-page">
+      {handoffError ? (
+        <div className="hostly-sala-editor-canvas-hint" role="status">
+          El asistente no pudo transferir su borrador. Editor V2 cargará el estado
+          guardado disponible.
+        </div>
+      ) : null}
       <SalaEditorWorkspace
         key={restaurantId}
         restaurantId={restaurantId}
