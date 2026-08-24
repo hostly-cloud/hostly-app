@@ -25,6 +25,156 @@ const hostlyMobileDensityStyles = `
 }
 
 @media (max-width: 767px) {
+  .hostly-productos-carta-header-inline-actions {
+    gap: 6px !important;
+    align-items: center !important;
+  }
+
+  .hostly-productos-carta-header-inline-actions__btn,
+  .hostly-productos-carta-header-inline-actions__more {
+    min-height: 36px !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    border-radius: 10px !important;
+  }
+
+  .hostly-productos-carta-header-inline-actions__more {
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--hostly-ink-muted) !important;
+  }
+
+  .hostly-productos-v3__advanced-panel {
+    padding: 7px 8px !important;
+    gap: 7px !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+  }
+
+  .hostly-productos-v3__advanced-tools-row,
+  .hostly-productos-v3__advanced-controls-row {
+    gap: 6px !important;
+  }
+
+  .hostly-productos-v3__advanced-tools-row {
+    align-items: stretch !important;
+  }
+
+  .hostly-productos-v3__advanced-tools {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hostly-productos-v3__advanced-tools::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hostly-productos-v3__advanced-tools > a,
+  .hostly-productos-v3__advanced-tools > button {
+    flex: 0 0 auto;
+    min-height: 34px !important;
+    padding: 5px 9px !important;
+    border-radius: 9px !important;
+    font-size: 10.5px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap;
+    box-shadow: none !important;
+  }
+
+  .hostly-productos-v3__advanced-panel .hostly-productos-carta-food-drink-segment--inline {
+    width: 100%;
+    padding: 0 !important;
+    border-bottom: 0 !important;
+  }
+
+  .hostly-productos-v3__advanced-controls-row {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start !important;
+  }
+
+  .hostly-productos-v3__advanced-group {
+    min-width: 0;
+    gap: 4px !important;
+  }
+
+  .hostly-productos-v3__advanced-label {
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+    letter-spacing: 0.05em !important;
+    color: var(--hostly-ink-faint) !important;
+  }
+
+  .hostly-productos-v3__advanced-chips {
+    gap: 4px !important;
+  }
+
+  .hostly-productos-v3__advanced-chips button {
+    min-height: 32px !important;
+    padding: 4px 8px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+  }
+
+  .hostly-productos-v3__advanced-group--kpis {
+    grid-column: 1 / -1;
+    padding-top: 2px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .hostly-productos-v3__kpi-grid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hostly-productos-v3__kpi-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hostly-productos-v3__kpi-card {
+    flex: 0 0 auto !important;
+    min-width: 82px !important;
+    min-height: 46px !important;
+    padding: 5px 7px !important;
+    border-radius: 9px !important;
+    box-shadow: none !important;
+  }
+
+  .hostly-productos-v3__kpi-card:not(.is-warn):not(.is-danger) {
+    opacity: 0.76;
+  }
+
+  .hostly-productos-v3__kpi-card.is-warn,
+  .hostly-productos-v3__kpi-card.is-danger,
+  .hostly-productos-v3__kpi-card.is-active {
+    opacity: 1;
+  }
+
+  .hostly-productos-v3__kpi-value {
+    font-size: 15px !important;
+    line-height: 1 !important;
+  }
+
+  .hostly-productos-v3__kpi-label {
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+  }
+
   .hostly-productos-config-skin .hostly-productos-catalog-toolbar {
     padding: 6px 8px !important;
     border-bottom-color: rgba(148, 163, 184, 0.16) !important;
