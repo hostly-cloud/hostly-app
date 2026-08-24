@@ -14,12 +14,16 @@ type GateStatus =
   | "ready"
   | "missing"
   | "error"
-  | "parity-error";
+  | "parity-error"
+  | "interaction-error";
 
 const V2_RENDERER_MOUNT_TIMEOUT_MS = 10_000;
 const V2_RENDERER_SELECTOR = '[data-hostly-readonly-map-source="editor-v2"]';
+const V2_NATIVE_INTERACTION_VALUE = "native-v2";
 const LEGACY_VISIBLE_TABLE_SELECTOR =
   '[data-hostly-tpv-legacy-table-overlay="legacy-fallback-visible"]';
+const LEGACY_INTERACTION_BRIDGE_SELECTOR =
+  '[data-hostly-map-interaction-only="1"]';
 
 function LoadingV2MapState() {
   return (
@@ -30,6 +34,17 @@ function LoadingV2MapState() {
       Cargando plano del Editor V2…
     </div>
   );
+}
+
+function hasPhysicallyInteractiveLegacyBridge(host: HTMLElement): boolean {
+  const bridges = host.querySelectorAll<HTMLElement>(
+    LEGACY_INTERACTION_BRIDGE_SELECTOR,
+  );
+  for (const bridge of bridges) {
+    if (bridge.tabIndex >= 0) return true;
+    if (window.getComputedStyle(bridge).pointerEvents !== "none") return true;
+  }
+  return false;
 }
 
 export function TpvEditorV2ReadyGate({
@@ -71,12 +86,30 @@ export function TpvEditorV2ReadyGate({
 
     let settled = false;
     const resolveV2MountState = () => {
-      const v2Map = host.querySelector(V2_RENDERER_SELECTOR);
+      const v2Map = host.querySelector<HTMLElement>(V2_RENDERER_SELECTOR);
       if (!v2Map) return false;
 
       const visibleLegacyTable = host.querySelector(LEGACY_VISIBLE_TABLE_SELECTOR);
+      if (visibleLegacyTable) {
+        settled = true;
+        setStatus("parity-error");
+        return true;
+      }
+
+      const usesNativeV2Interaction =
+        v2Map.getAttribute("data-hostly-readonly-map-interaction") ===
+        V2_NATIVE_INTERACTION_VALUE;
+      if (
+        !usesNativeV2Interaction ||
+        hasPhysicallyInteractiveLegacyBridge(host)
+      ) {
+        settled = true;
+        setStatus("interaction-error");
+        return true;
+      }
+
       settled = true;
-      setStatus(visibleLegacyTable ? "parity-error" : "ready");
+      setStatus("ready");
       return true;
     };
 
@@ -104,14 +137,26 @@ export function TpvEditorV2ReadyGate({
     return <LoadingV2MapState />;
   }
 
-  if (status === "missing" || status === "error" || status === "parity-error") {
+  if (
+    status === "missing" ||
+    status === "error" ||
+    status === "parity-error" ||
+    status === "interaction-error"
+  ) {
     const isMissing = status === "missing";
     const isParityError = status === "parity-error";
+    const isInteractionError = status === "interaction-error";
 
     return (
       <div
         data-hostly-tpv-map-gate={
-          isMissing ? "missing-v2" : isParityError ? "v2-parity-error" : "error-v2"
+          isMissing
+            ? "missing-v2"
+            : isParityError
+              ? "v2-parity-error"
+              : isInteractionError
+                ? "v2-interaction-error"
+                : "error-v2"
         }
         className="flex min-h-[320px] w-full items-center justify-center rounded-2xl border border-amber-200 bg-amber-50/70 px-6 text-center"
       >
@@ -121,12 +166,16 @@ export function TpvEditorV2ReadyGate({
               ? "Este restaurante todavía no tiene un plano disponible en Editor V2."
               : isParityError
                 ? "El plano del TPV no coincide al 100 % con Editor V2."
-                : "No se ha podido montar el plano del Editor V2 en el TPV."}
+                : isInteractionError
+                  ? "La interacción del TPV todavía no está controlada al 100 % por Editor V2."
+                  : "No se ha podido montar el plano del Editor V2 en el TPV."}
           </p>
           <p className="mt-1 text-xs leading-5 text-slate-600">
             {isParityError
               ? "Hay al menos una mesa operativa sin enlace válido a su instancia de Editor V2. El TPV ha bloqueado el mapa antiguo para evitar representar una distribución distinta."
-              : "El TPV ya no usa el mapa antiguo como sustituto. Revisa el enlace del plano y su estado en Editor V2."}
+              : isInteractionError
+                ? "Hostly ha bloqueado el mapa porque detectó una superficie legacy capaz de recibir foco o puntero, o porque el renderer V2 no declaró interacción nativa."
+                : "El TPV ya no usa el mapa antiguo como sustituto. Revisa el enlace del plano y su estado en Editor V2."}
           </p>
         </div>
       </div>
