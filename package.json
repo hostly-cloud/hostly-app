@@ -23,6 +23,7 @@
     "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check",
     "eval:menu-import:modern": "tsx scripts/eval-menu-import-modern.ts",
     "eval:menu-import:photos": "tsx scripts/eval-menu-import-photo-corpus.ts",
+    "eval:menu-import:multi-photos": "tsx scripts/eval-menu-import-multi-photo-corpus.ts",
     "eval:catalog-images:live": "tsx scripts/eval-catalog-product-images-live.ts"
   },
   "dependencies": {
