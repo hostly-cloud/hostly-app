@@ -1,8 +1,5 @@
 "use client";
 
-export const HOSTLY_V2_TABLE_CONTROLLER_REGISTRY_CHANGE =
-  "hostly-v2-table-controller-registry-change";
-
 export type TpvV2TableController = {
   joinEnabled: boolean;
   onPointerDown: (event: PointerEvent) => void;
@@ -13,16 +10,16 @@ export type TpvV2TableController = {
 };
 
 const controllers = new Map<string, TpvV2TableController>();
+const listeners = new Set<() => void>();
+let revision = 0;
 
 function normalizeTableId(tableId: string): string {
   return String(tableId ?? "").trim();
 }
 
 function emitRegistryChange() {
-  if (typeof document === "undefined") return;
-  document.dispatchEvent(
-    new CustomEvent(HOSTLY_V2_TABLE_CONTROLLER_REGISTRY_CHANGE),
-  );
+  revision += 1;
+  for (const listener of listeners) listener();
 }
 
 export function registerTpvV2TableController(
@@ -52,4 +49,15 @@ export function getTpvV2TableController(
 
 export function hasTpvV2TableController(tableId: string): boolean {
   return getTpvV2TableController(tableId) != null;
+}
+
+export function subscribeTpvV2TableControllerRegistry(
+  listener: () => void,
+): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function getTpvV2TableControllerRegistryRevision(): number {
+  return revision;
 }
