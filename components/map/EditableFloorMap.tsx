@@ -3,11 +3,8 @@
 import { Fragment, isValidElement, type ReactNode } from "react";
 import { getDefaultSizeForPlanElementType } from "@/lib/firestore/tables";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
-import {
-  getEditorV2NativeDecorativeIds,
-  isLegacyDecorativeCoveredByEditorV2,
-} from "@/lib/sala-editor/readonly/editor-v2-legacy-decorative-parity";
 import { TpvV2OperationalParityProvider } from "@/lib/tpv/v2-operational-parity-context";
+import { evaluateTpvV2LegacyResidualCoverage } from "@/lib/tpv/v2-legacy-residual-coverage";
 import {
   EditableFloorMap as LegacyEditableFloorMap,
   type EditableFloorMapProps,
@@ -37,18 +34,6 @@ function readEditorV2ContractFromUnderlay(
   }
 
   return candidate as EditorTpvReadonlyVisualContract;
-}
-
-function getLinkedOperationalTableIds(
-  contract: EditorTpvReadonlyVisualContract,
-): ReadonlySet<string> {
-  const ids = new Set<string>();
-  for (const instance of contract.operationalElementInstances) {
-    const raw = instance.metadata.legacyTableId;
-    const id = typeof raw === "string" ? raw.trim() : "";
-    if (id) ids.add(id);
-  }
-  return ids;
 }
 
 function renderDetachedOperationalController(
@@ -84,13 +69,10 @@ function renderDetachedOperationalController(
 /**
  * Fachada de compatibilidad.
  *
- * - Editor y consumidores legacy siguen usando, byte a byte, la implementación
- *   histórica preservada en `legacy-editable-floor-map.tsx`.
- * - En readonly con underlay Editor V2, decorativos y zonas legacy con paridad
- *   exacta se eliminan antes de entrar al renderer histórico.
- * - Los elementos operativos enlazados montan sus controladores React fuera del
- *   mapa histórico y tampoco entran en su bucle de elementos.
- * - Cualquier objeto sin paridad demostrada se conserva.
+ * El evaluador central distingue dos estados importantes:
+ * - residual-content: el renderer legacy aun aporta contenido unico.
+ * - viewport-only: toda la representacion/operacion esta cubierta por V2 y el
+ *   legacy sobrevive unicamente por viewport/fit.
  */
 export function EditableFloorMap(props: EditableFloorMapProps) {
   if (props.editable || !props.readonlyUnderlay) {
@@ -102,41 +84,32 @@ export function EditableFloorMap(props: EditableFloorMapProps) {
     return <LegacyEditableFloorMap {...props} />;
   }
 
-  const nativeDecorativeIds = new Set(getEditorV2NativeDecorativeIds(contract));
-  const decorFilteredElements =
-    nativeDecorativeIds.size === 0
-      ? props.elements
-      : props.elements.filter(
-          (element) =>
-            !isLegacyDecorativeCoveredByEditorV2(element, nativeDecorativeIds),
-        );
-
-  const nativeZoneIds = new Set(
-    contract.zones.map((zone) => String(zone.id ?? "").trim()).filter(Boolean),
-  );
-  const filteredZones =
-    props.zones == null || nativeZoneIds.size === 0
-      ? props.zones
-      : props.zones.filter((zone) => !nativeZoneIds.has(String(zone.id).trim()));
-  const linkedOperationalIds = getLinkedOperationalTableIds(contract);
-  const linkedOperationalElements = decorFilteredElements.filter((element) =>
-    linkedOperationalIds.has(String(element.id ?? "").trim()),
-  );
-  const residualLegacyElements = decorFilteredElements.filter(
-    (element) => !linkedOperationalIds.has(String(element.id ?? "").trim()),
-  );
+  const coverage = evaluateTpvV2LegacyResidualCoverage({
+    contract,
+    elements: props.elements,
+    zones: props.zones,
+  });
+  const legacyRoleClassName = coverage.fullyCovered
+    ? "hostly-v2-legacy-viewport-only"
+    : "hostly-v2-legacy-residual-content";
+  const legacyClassName = [props.className, legacyRoleClassName]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <TpvV2OperationalParityProvider operationalIds={linkedOperationalIds}>
-      {linkedOperationalElements.map((element) => (
+    <TpvV2OperationalParityProvider
+      operationalIds={coverage.linkedOperationalIds}
+    >
+      {coverage.linkedOperationalElements.map((element) => (
         <Fragment key={`v2-controller-${element.id}`}>
           {renderDetachedOperationalController(props, element)}
         </Fragment>
       ))}
       <LegacyEditableFloorMap
         {...props}
-        elements={residualLegacyElements}
-        zones={filteredZones}
+        className={legacyClassName}
+        elements={coverage.residualLegacyElements}
+        zones={coverage.residualLegacyZones}
       />
     </TpvV2OperationalParityProvider>
   );
