@@ -69,8 +69,12 @@ function neutralizeLegacyInteractionBridge() {
   for (const bridge of document.querySelectorAll<HTMLElement>(
     LEGACY_INTERACTION_SELECTOR,
   )) {
-    bridge.tabIndex = -1;
-    bridge.setAttribute("aria-hidden", "true");
+    if (bridge.tabIndex !== -1) {
+      bridge.tabIndex = -1;
+    }
+    if (bridge.getAttribute("aria-hidden") !== "true") {
+      bridge.setAttribute("aria-hidden", "true");
+    }
   }
 }
 
