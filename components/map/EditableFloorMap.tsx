@@ -70,9 +70,10 @@ function renderDetachedOperationalController(
 /**
  * Fachada de compatibilidad.
  *
- * - Si queda contenido legacy unico, conserva el renderer historico.
- * - Si V2 cubre el 100% del contenido, deja de montar el mapa historico y usa
- *   un viewport V2 nativo para la misma capa readonly.
+ * Editor y consumidores sin contrato V2 siguen delegando al renderer historico.
+ * Un TPV readonly con contrato V2 valido, en cambio, monta siempre el viewport
+ * V2 nativo. La cobertura residual se expone como diagnostico fail-closed y ya
+ * no provoca que el mapa historico vuelva a entrar en el arbol del TPV.
  */
 export function EditableFloorMap(props: EditableFloorMapProps) {
   if (props.editable || !props.readonlyUnderlay) {
@@ -100,23 +101,19 @@ export function EditableFloorMap(props: EditableFloorMapProps) {
         </Fragment>
       ))}
 
-      {coverage.fullyCovered ? (
-        <TpvV2ReadonlyViewport
-          {...props}
-          className={[props.className, "hostly-v2-native-viewport"]
-            .filter(Boolean)
-            .join(" ")}
-        />
-      ) : (
-        <LegacyEditableFloorMap
-          {...props}
-          className={[props.className, "hostly-v2-legacy-residual-content"]
-            .filter(Boolean)
-            .join(" ")}
-          elements={coverage.residualLegacyElements}
-          zones={coverage.residualLegacyZones}
-        />
-      )}
+      <span
+        hidden
+        data-hostly-v2-coverage={coverage.fullyCovered ? "complete" : "incomplete"}
+        data-hostly-v2-residual-elements={coverage.residualLegacyElements.length}
+        data-hostly-v2-residual-zones={coverage.residualLegacyZones.length}
+      />
+
+      <TpvV2ReadonlyViewport
+        {...props}
+        className={[props.className, "hostly-v2-native-viewport"]
+          .filter(Boolean)
+          .join(" ")}
+      />
     </TpvV2OperationalParityProvider>
   );
 }
