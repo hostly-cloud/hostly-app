@@ -1,27 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import ConfigMesasPage from "@/app/dashboard/config/mesas/page";
+import { useRouter } from "next/navigation";
 import RoomsAssistant from "./rooms-assistant";
 
-export default function ConfigEspaciosMesasPage() {
-  const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
+const EDITOR_V2_HREF = "/dashboard/configuracion/espacios/editor-v2";
 
-  if (!advancedEditorOpen) {
-    return (
-      <RoomsAssistant
-        onOpenAdvancedEditor={() => setAdvancedEditorOpen(true)}
-      />
-    );
-  }
+export default function ConfigEspaciosMesasPage() {
+  const router = useRouter();
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ConfigMesasPage
-        lockViewportFillParent
-        premiumSpatialEditor
-        configuracionMapEditorLayout
-      />
-    </div>
+    <RoomsAssistant
+      onOpenAdvancedEditor={() => router.push(EDITOR_V2_HREF)}
+    />
   );
 }
