@@ -32,6 +32,7 @@ export type SalaEditorReadonlyOperationalLayerProps = {
 
 const LEGACY_INTERACTION_SELECTOR =
   '[data-hostly-map-interaction-only="1"][data-hostly-map-table-id]';
+const V2_TABLE_SELECTOR = "[data-hostly-v2-legacy-table-id]";
 const LEGACY_BRIDGE_STYLE_ID = "hostly-v2-legacy-interaction-bridge-style";
 
 function readLegacyTableId(instance: OperationalElementInstance): string {
@@ -49,6 +50,19 @@ function findLegacyInteractionElement(legacyTableId: string): HTMLElement | null
   );
   for (const candidate of candidates) {
     if (candidate.dataset.hostlyMapTableId?.trim() === targetId) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function findV2TableElement(legacyTableId: string): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  const targetId = legacyTableId.trim();
+  if (!targetId) return null;
+
+  for (const candidate of document.querySelectorAll<HTMLElement>(V2_TABLE_SELECTOR)) {
+    if (candidate.dataset.hostlyV2LegacyTableId?.trim() === targetId) {
       return candidate;
     }
   }
@@ -74,6 +88,19 @@ function neutralizeLegacyInteractionBridge() {
     }
     if (bridge.getAttribute("aria-hidden") !== "true") {
       bridge.setAttribute("aria-hidden", "true");
+    }
+
+    const legacyTableId = bridge.dataset.hostlyMapTableId?.trim() ?? "";
+    const v2Table = legacyTableId ? findV2TableElement(legacyTableId) : null;
+    if (!v2Table) continue;
+
+    const joinEnabled = bridge.getAttribute("data-hostly-map-join") === "1";
+    if (joinEnabled) {
+      if (v2Table.getAttribute("data-hostly-map-join") !== "1") {
+        v2Table.setAttribute("data-hostly-map-join", "1");
+      }
+    } else if (v2Table.hasAttribute("data-hostly-map-join")) {
+      v2Table.removeAttribute("data-hostly-map-join");
     }
   }
 }
@@ -160,7 +187,12 @@ export function SalaEditorReadonlyOperationalLayer({
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["data-hostly-map-interaction-only", "tabindex", "aria-hidden"],
+      attributeFilter: [
+        "data-hostly-map-interaction-only",
+        "data-hostly-map-join",
+        "tabindex",
+        "aria-hidden",
+      ],
     });
 
     return () => {
