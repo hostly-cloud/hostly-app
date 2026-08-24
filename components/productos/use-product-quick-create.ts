@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveProductFamilyFromSelectValue } from "@/lib/carta/category-product-family";
 import { cartaCategoriasForProductSelectorList } from "@/lib/carta-categorias/filter-for-tipo-producto";
-import type { CartaCategoria } from "@/lib/carta-categorias/types";
+import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
 import { evaluateProductFormPreventiveValidation } from "@/lib/carta/product-form-preventive-validation";
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
@@ -36,6 +36,7 @@ export type ProductQuickCreateSubmitResult = {
 export type UseProductQuickCreateArgs = {
   restaurantId: string;
   cartaCategorias: readonly CartaCategoria[];
+  cartaFamilias: readonly CartaFamilia[];
   operationStations: readonly OperationStationDocument[];
   productFamilies: readonly ProductFamilyDocument[];
   modifierGroups: readonly ModifierGroupDocument[];
@@ -128,8 +129,19 @@ export function useProductQuickCreate(
   useEffect(() => () => clearSuccessFlash(), [clearSuccessFlash]);
 
   const inheritedDraft = useMemo(
-    () => resolveQuickCreateInheritedDraft(draft.categoriaCartaId, args.cartaCategorias),
-    [draft.categoriaCartaId, args.cartaCategorias],
+    () =>
+      resolveQuickCreateInheritedDraft(
+        draft.categoriaCartaId,
+        args.cartaCategorias,
+        args.cartaFamilias,
+        args.operationStations,
+      ),
+    [
+      draft.categoriaCartaId,
+      args.cartaCategorias,
+      args.cartaFamilias,
+      args.operationStations,
+    ],
   );
 
   const categoriasForForm = useMemo(
