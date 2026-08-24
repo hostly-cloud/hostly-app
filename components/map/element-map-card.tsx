@@ -6,7 +6,7 @@ import {
   ElementCard as LegacyElementCard,
   type ElementMapCardProps,
 } from "./legacy-element-map-card";
-import { TpvV2TableOperationAdapter } from "./tpv-v2-table-operation-adapter";
+import { TpvV2TableOperationController } from "./tpv-v2-table-operation-controller";
 
 export type {
   ElementMapCardProps,
@@ -17,7 +17,20 @@ export const ElementCard = memo(function ElementCard(
   props: ElementMapCardProps,
 ) {
   if (props.interactionOnly) {
-    return <TpvV2TableOperationAdapter {...props} />;
+    return (
+      <TpvV2TableOperationController
+        tableId={props.tableId}
+        tableLabel={props.table.name || props.tableId}
+        onOpenTable={props.onTableClick}
+        joinEnabled={props.mapJoinDragEnabled}
+        onJoinDrop={props.onMapTableJoinDrop}
+        joinClusterMainId={props.mapJoinClusterMainId}
+        previewWidth={props.mapTileWidth}
+        previewHeight={props.mapTileHeight}
+        groupedPrimary={props.isMapGroupedPrimary}
+        onSeparateGroup={props.onRequestSeparateGroupedTables}
+      />
+    );
   }
 
   return <LegacyElementCard {...props} />;
