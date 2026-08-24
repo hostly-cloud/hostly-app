@@ -225,6 +225,30 @@ export async function ensureDefaultOperationStations(
   return created;
 }
 
+/**
+ * Crea una estación canónica conservando un id conocido. Se usa solo para
+ * compatibilidad/migración de `productionStations`; no sobrescribe documentos.
+ */
+export async function ensureOperationStationWithId(
+  restaurantId: string,
+  stationId: string,
+  input: OperationStationInput,
+): Promise<boolean> {
+  const rid = restaurantId.trim();
+  const sid = stationId.trim();
+  if (!rid || !sid) return false;
+  if (!isOperationStationType(input.type)) throw new Error("INVALID_STATION_TYPE");
+  const name = input.name.trim();
+  if (!name) throw new Error("MISSING_STATION_NAME");
+  const ref = operationStationDocRef(rid, sid);
+  const current = await getDoc(ref);
+  if (current.exists()) return false;
+  const uid = authUidOrThrow();
+  const now = Date.now();
+  await setDoc(ref, buildStationPayload(rid, { ...input, name }, uid, now));
+  return true;
+}
+
 export function listenOperationStations(
   restaurantId: string,
   onData: (stations: OperationStationDocument[]) => void,
