@@ -24,8 +24,6 @@ const V2_TABLE_CONTROLLER_SELECTOR =
   '[data-hostly-v2-table-instance-id][data-hostly-v2-legacy-table-id]';
 const LEGACY_VISIBLE_TABLE_SELECTOR =
   '[data-hostly-tpv-legacy-table-overlay="legacy-fallback-visible"]';
-const LEGACY_INTERACTION_BRIDGE_SELECTOR =
-  '[data-hostly-map-interaction-only="1"]';
 
 function LoadingV2MapState() {
   return (
@@ -36,17 +34,6 @@ function LoadingV2MapState() {
       Cargando plano del Editor V2…
     </div>
   );
-}
-
-function hasPhysicallyInteractiveLegacyBridge(host: HTMLElement): boolean {
-  const bridges = host.querySelectorAll<HTMLElement>(
-    LEGACY_INTERACTION_BRIDGE_SELECTOR,
-  );
-  for (const bridge of bridges) {
-    if (bridge.tabIndex >= 0) return true;
-    if (window.getComputedStyle(bridge).pointerEvents !== "none") return true;
-  }
-  return false;
 }
 
 function allV2TablesHaveMemoryController(v2Map: HTMLElement): boolean {
@@ -111,10 +98,7 @@ export function TpvEditorV2ReadyGate({
       const usesNativeV2Interaction =
         v2Map.getAttribute("data-hostly-readonly-map-interaction") ===
         V2_NATIVE_INTERACTION_VALUE;
-      if (
-        !usesNativeV2Interaction ||
-        hasPhysicallyInteractiveLegacyBridge(host)
-      ) {
+      if (!usesNativeV2Interaction) {
         settled = true;
         setStatus("interaction-error");
         return true;
@@ -195,7 +179,7 @@ export function TpvEditorV2ReadyGate({
             {isParityError
               ? "Hay al menos una mesa operativa sin enlace válido a su instancia de Editor V2. El TPV ha bloqueado el mapa antiguo para evitar representar una distribución distinta."
               : isInteractionError
-                ? "Hostly ha bloqueado el mapa porque falta el controlador en memoria de alguna mesa V2, existe una superficie legacy interactiva o el renderer no declaró interacción nativa."
+                ? "Hostly ha bloqueado el mapa porque falta el controlador en memoria de alguna mesa V2 o el renderer no declaró interacción nativa."
                 : "El TPV ya no usa el mapa antiguo como sustituto. Revisa el enlace del plano y su estado en Editor V2."}
           </p>
         </div>
