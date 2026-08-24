@@ -17,6 +17,7 @@ import {
   updateOperationStation,
 } from "@/lib/firestore/operation-stations";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { migrateLegacyProductionStationsToOperationStations } from "@/lib/operacion/migrate-legacy-production-stations";
 import {
   DEFAULT_PRODUCTION_STATION_COLOR,
   PRODUCTION_STATION_COLOR_PRESETS,
@@ -82,6 +83,13 @@ export default function ConfigEstacionesPage() {
   const [editing, setEditing] = useState<OperationStationDocument | null>(null);
   const [draft, setDraft] = useState<StationFormDraft>(DEFAULT_DRAFT);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!authReady || !restaurantId) return;
+    void migrateLegacyProductionStationsToOperationStations(restaurantId).catch((migrationError) => {
+      console.error("migrateLegacyProductionStationsToOperationStations", migrationError);
+    });
+  }, [authReady, restaurantId]);
 
   useEffect(() => {
     if (!authReady || !restaurantId) {
