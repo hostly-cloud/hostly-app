@@ -1,3 +1,7 @@
+import {
+  isDecorativePlanElementType,
+  type Table,
+} from "@/lib/firestore/tables";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 
 /**
@@ -23,6 +27,26 @@ export function getEditorV2NativeDecorativeIds(
   return [...ids].sort();
 }
 
+/**
+ * Paridad conservadora: solo considera sustituible un decorativo legacy cuando
+ * su `editorV2ElementId` o, en documentos hidratados, su propio `id`, existe
+ * exactamente entre los objetos visuales del contrato V2 actual.
+ */
+export function isLegacyDecorativeCoveredByEditorV2(
+  element: Pick<Table, "id" | "type" | "editorV2ElementId">,
+  nativeDecorativeIds: ReadonlySet<string>,
+): boolean {
+  if (!isDecorativePlanElementType(element.type)) return false;
+
+  const editorV2ElementId = element.editorV2ElementId?.trim() ?? "";
+  if (editorV2ElementId && nativeDecorativeIds.has(editorV2ElementId)) {
+    return true;
+  }
+
+  const legacyId = element.id.trim();
+  return legacyId !== "" && nativeDecorativeIds.has(legacyId);
+}
+
 function cssAttributeString(value: string): string {
   return JSON.stringify(value);
 }
@@ -30,6 +54,7 @@ function cssAttributeString(value: string): string {
 /**
  * Suprime solo decorativos legacy cuyo ID coincide exactamente con un objeto
  * visual presente en el contrato V2. Si no hay paridad exacta, no se oculta.
+ * La fachada de EditableFloorMap aplica además `editorV2ElementId` antes del render.
  */
 export function buildEditorV2LegacyDecorativeSuppressionCss(
   contract: EditorTpvReadonlyVisualContract,
