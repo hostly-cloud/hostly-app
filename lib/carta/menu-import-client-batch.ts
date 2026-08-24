@@ -35,6 +35,38 @@ export function dedupeMenuImportBatchFiles<T extends MenuImportClientFileLike>(
   return out;
 }
 
+export function sameMenuImportBatchFiles(
+  left: readonly MenuImportClientFileLike[],
+  right: readonly MenuImportClientFileLike[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((file, index) => fileIdentity(file) === fileIdentity(right[index]));
+}
+
+export type MenuImportSingleFileList<T> = {
+  readonly 0: T;
+  readonly length: 1;
+  item(index: number): T | null;
+  [Symbol.iterator](): IterableIterator<T>;
+};
+
+/**
+ * FileList mínimo para sincronizaciones internas cuando el navegador no permite
+ * construir un DataTransfer (p. ej. algunos WebKit). No toca el input real.
+ */
+export function createMenuImportSingleFileList<T>(file: T): MenuImportSingleFileList<T> {
+  return {
+    0: file,
+    length: 1,
+    item(index: number) {
+      return index === 0 ? file : null;
+    },
+    *[Symbol.iterator]() {
+      yield file;
+    },
+  };
+}
+
 export function validateMenuImportBatchSelection(
   files: readonly MenuImportClientFileLike[],
 ): MenuImportBatchSelectionValidation {
