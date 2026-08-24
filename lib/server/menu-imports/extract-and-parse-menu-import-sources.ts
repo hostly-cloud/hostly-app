@@ -5,6 +5,7 @@ import { assertMenuImportStoragePathForDraft } from "./download-storage-file";
 import { extractMenuText, type ExtractMenuTextResult } from "./extract-menu-text";
 import { parseMenuText } from "./parse-menu-text";
 import { mergeMenuImportPageItems } from "./merge-menu-import-pages";
+import { recoverMultiPagePhotoVision } from "./ai-import-v2/recover-multi-page-photo-vision";
 
 export type ParsedMenuImportPage = {
   source: MenuImportSourceFile;
@@ -69,7 +70,7 @@ export async function extractAndParseMenuImportSources(params: {
     assertMenuImportStoragePathForDraft(source.storagePath, { restaurantId, draftId });
   }
 
-  const pages: ParsedMenuImportPage[] = [];
+  let pages: ParsedMenuImportPage[] = [];
 
   for (const source of sourceFiles) {
     const extraction = await extractMenuText({
@@ -108,6 +109,14 @@ export async function extractAndParseMenuImportSources(params: {
     };
   }
 
+  const visionRecovery = await recoverMultiPagePhotoVision({
+    restaurantId,
+    draftId,
+    menuType: draft.menuType,
+    pages,
+  });
+  pages = visionRecovery.pages;
+
   const merged = mergeMenuImportPageItems(
     pages.map((page, pageIndex) => ({ pageIndex, items: page.parsed.items })),
   );
@@ -121,6 +130,7 @@ export async function extractAndParseMenuImportSources(params: {
   if (merged.duplicateCount > 0) {
     extractionWarnings.push(`multi_page_duplicates_skipped:${merged.duplicateCount}`);
   }
+  extractionWarnings.push(...visionRecovery.warnings);
 
   return {
     sourceCount: pages.length,
