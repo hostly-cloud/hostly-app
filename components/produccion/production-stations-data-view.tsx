@@ -2,8 +2,10 @@
 
 import { ConfigCartaEditToggleActions } from "@/components/carta/config-carta-row-actions";
 import { HostlyStatusBadge } from "@/components/ui/hostly/data-table";
-import { formatProductionStationListSummary } from "@/lib/produccion/production-station-types";
-import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
+import {
+  OPERATION_STATION_TYPE_LABELS,
+  type OperationStationDocument,
+} from "@/lib/operacion/operation-station-types";
 
 function StationStatusBadge({ active }: { active: boolean }) {
   return (
@@ -14,10 +16,10 @@ function StationStatusBadge({ active }: { active: boolean }) {
 }
 
 export type ProductionStationsDataViewProps = {
-  items: ProductionStationDocument[];
+  items: OperationStationDocument[];
   loading: boolean;
-  onEdit: (item: ProductionStationDocument) => void;
-  onToggleActive: (item: ProductionStationDocument) => void;
+  onEdit: (item: OperationStationDocument) => void;
+  onToggleActive: (item: OperationStationDocument) => void;
   onCreateNew?: () => void;
 };
 
@@ -28,10 +30,51 @@ export function ProductionStationsDataView({
   onToggleActive,
   onCreateNew,
 }: ProductionStationsDataViewProps) {
+  const stationStyles = `
+    @media (max-width: 767px) {
+      .hostly-production-station-list-wrap {
+        min-width: 0;
+      }
+      .hostly-production-station-list {
+        display: grid;
+        gap: 5px;
+        margin: 0;
+        padding: 6px 8px 8px;
+      }
+      .hostly-production-station-card {
+        min-width: 0;
+        border-radius: 10px;
+        box-shadow: none;
+      }
+      .hostly-production-station-card__main {
+        min-width: 0;
+        padding: 9px 10px;
+      }
+      .hostly-production-station-card__name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 760;
+      }
+      .hostly-production-station-card__summary {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 9.5px;
+      }
+      .hostly-production-station-card__aside {
+        gap: 5px;
+        padding-right: 8px;
+      }
+    }
+  `;
+
   if (loading) {
     return (
       <div className="hostly-production-station-list-wrap">
         <div className="hostly-carta-config-list-loading">Cargando…</div>
+        <style>{stationStyles}</style>
       </div>
     );
   }
@@ -45,7 +88,8 @@ export function ProductionStationsDataView({
           </span>
           <p className="hostly-carta-config-empty__title">Sin estaciones todavía</p>
           <p className="hostly-carta-config-empty__body">
-            Crea estaciones como Cocina, Barra, Coctelería o Pizzería para organizar la producción.
+            Crea tantas estaciones como tenga el restaurante: Barra principal, Barra piscina, Cocina fría,
+            Pizza, Josper, Postres o Coctelería.
           </p>
           {onCreateNew ? (
             <div className="hostly-carta-config-empty__actions">
@@ -55,6 +99,7 @@ export function ProductionStationsDataView({
             </div>
           ) : null}
         </div>
+        <style>{stationStyles}</style>
       </div>
     );
   }
@@ -63,7 +108,10 @@ export function ProductionStationsDataView({
     <div className="hostly-production-station-list-wrap">
       <ul className="hostly-production-station-list" role="list">
         {items.map((station) => {
-          const summary = formatProductionStationListSummary(station);
+          const summary = [
+            OPERATION_STATION_TYPE_LABELS[station.type],
+            `Orden ${station.sortOrder}`,
+          ].join(" · ");
 
           return (
             <li key={station.id}>
@@ -76,7 +124,7 @@ export function ProductionStationsDataView({
                   <span className="hostly-production-station-card__title-row">
                     <span
                       className="hostly-production-station-card__swatch"
-                      style={{ backgroundColor: station.color }}
+                      style={{ backgroundColor: station.color ?? "#7eb8d4" }}
                       aria-hidden
                     />
                     <span className="hostly-production-station-card__name">{station.name}</span>
@@ -98,6 +146,7 @@ export function ProductionStationsDataView({
           );
         })}
       </ul>
+      <style>{stationStyles}</style>
     </div>
   );
 }

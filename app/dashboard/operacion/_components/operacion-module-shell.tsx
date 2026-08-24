@@ -175,9 +175,9 @@ export function OperacionModuleShell({
           }
           .hostly-operation-shell[data-operation-module="tpv"]
             .hostly-operation-topbar {
-            min-height: 26px !important;
-            padding: 2px 5px !important;
-            gap: 4px !important;
+            min-height: 44px !important;
+            padding: 2px 6px !important;
+            gap: 6px !important;
             border-bottom-color: rgba(148, 163, 184, 0.1) !important;
             background: rgba(247, 252, 255, 0.45) !important;
           }
@@ -185,10 +185,12 @@ export function OperacionModuleShell({
           .hostly-operation-shell[data-operation-module="tpv"]
             .hostly-operation-topbar
             .hostly-nav-aux {
-            min-height: 22px !important;
-            gap: 4px !important;
-            padding: 2px 6px !important;
-            border-radius: 8px !important;
+            flex: 0 1 auto !important;
+            min-width: 0 !important;
+            min-height: 40px !important;
+            gap: 5px !important;
+            padding: 5px 8px !important;
+            border-radius: 9px !important;
             border-color: rgba(148, 163, 184, 0.22) !important;
             background: rgba(255, 255, 255, 0.66) !important;
           }
@@ -197,21 +199,29 @@ export function OperacionModuleShell({
             .hostly-operation-topbar
             .hostly-nav-aux
             span:first-child {
-            width: 15px !important;
-            height: 15px !important;
-            border-radius: 5px !important;
+            width: 18px !important;
+            height: 18px !important;
+            flex: 0 0 18px !important;
+            border-radius: 6px !important;
           }
 
           .hostly-operation-shell[data-operation-module="tpv"]
             .hostly-operation-topbar
             .hostly-nav-aux
             span:last-child {
-            max-width: 44px !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
+            max-width: none !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
             white-space: nowrap !important;
             font-size: 10px !important;
             line-height: 1 !important;
+          }
+
+          .hostly-operation-shell[data-operation-module="tpv"]
+            .hostly-operation-topbar-end {
+            flex: 0 1 auto !important;
+            min-width: 0 !important;
+            max-width: calc(100% - 126px) !important;
           }
 
           .hostly-operation-shell[data-operation-module="tpv"]
@@ -223,15 +233,16 @@ export function OperacionModuleShell({
 
           .hostly-operation-shell[data-operation-module="tpv"]
             .hostly-tpv-active-operator-btn {
-            min-height: 44px !important;
-            min-width: 44px !important;
-            padding: 6px 10px !important;
-            font-size: 12px !important;
+            min-height: 40px !important;
+            min-width: 40px !important;
+            max-width: 100% !important;
+            padding: 5px 8px !important;
+            font-size: 11px !important;
           }
 
           .hostly-operation-shell[data-operation-module="tpv"]
             .hostly-tpv-active-operator-btn__name {
-            max-width: 96px !important;
+            max-width: min(96px, 24vw) !important;
           }
 
           .hostly-operation-shell[data-operation-module="reservas"]

@@ -12,6 +12,7 @@ import {
 import { requestCatalogMigrationPreview } from "@/lib/carta/request-catalog-migration-preview";
 import { requestCatalogMigrateLegacy } from "@/lib/carta/request-catalog-migrate-legacy";
 import type { OperationalCatalogSource } from "@/lib/carta/use-central-products-for-carta";
+import { ProductOperationStationMigrationPanel } from "@/components/productos/product-operation-station-migration-panel";
 
 type CatalogMigrationPreviewPanelProps = {
   restaurantId: string;
@@ -124,7 +125,14 @@ export function CatalogMigrationPreviewPanel({
     }
   }, [preview, restaurantId]);
 
-  if (catalogSource === "central") return null;
+  if (catalogSource === "central") {
+    return (
+      <ProductOperationStationMigrationPanel
+        restaurantId={restaurantId}
+        iceVisual={iceVisual}
+      />
+    );
+  }
 
   if (!showLegacyPanel && !showCompletedBanner) return null;
 
