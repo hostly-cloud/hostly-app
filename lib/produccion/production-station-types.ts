@@ -1,4 +1,4 @@
-/** Tipo de estación de producción (español; futuro enlace con KDS/impresoras). */
+/** Tipo de estación de producción (compatibilidad con el primer modelo de estaciones). */
 export type ProductionStationType = "cocina" | "barra" | "cocteleria" | "otro";
 
 export const PRODUCTION_STATION_TYPES: readonly ProductionStationType[] = [
@@ -15,7 +15,7 @@ export const PRODUCTION_STATION_TYPE_LABELS: Record<ProductionStationType, strin
   otro: "Otro",
 };
 
-/** Paleta simple para chips KDS / listados (uso futuro). */
+/** Paleta compartida por la configuración visual de estaciones. */
 export const PRODUCTION_STATION_COLOR_PRESETS: readonly {
   id: string;
   value: string;
@@ -34,7 +34,11 @@ export const PRODUCTION_STATION_COLOR_PRESETS: readonly {
 export const DEFAULT_PRODUCTION_STATION_COLOR =
   PRODUCTION_STATION_COLOR_PRESETS[0]!.value;
 
-/** `restaurants/{restaurantId}/productionStations/{stationId}` */
+/**
+ * Forma de compatibilidad usada por consumidores antiguos.
+ * La fuente operativa canónica es `operationStations`; `sortOrder` se conserva
+ * cuando el documento procede de esa colección.
+ */
 export type ProductionStationDocument = {
   id: string;
   restaurantId: string;
@@ -43,6 +47,7 @@ export type ProductionStationDocument = {
   type: ProductionStationType;
   color: string;
   active: boolean;
+  sortOrder?: number;
   createdAt: number;
   updatedAt: number;
 };
@@ -96,6 +101,15 @@ export function sortProductionStations(
 ): ProductionStationDocument[] {
   return stations.slice().sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1;
+    const aOrder =
+      typeof a.sortOrder === "number" && Number.isFinite(a.sortOrder)
+        ? a.sortOrder
+        : Number.MAX_SAFE_INTEGER;
+    const bOrder =
+      typeof b.sortOrder === "number" && Number.isFinite(b.sortOrder)
+        ? b.sortOrder
+        : Number.MAX_SAFE_INTEGER;
+    if (aOrder !== bOrder) return aOrder - bOrder;
     return a.name.localeCompare(b.name, "es", { sensitivity: "base" });
   });
 }
