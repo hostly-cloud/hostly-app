@@ -1,4 +1,4 @@
-import { listProductionStations } from "@/lib/firestore/production-stations";
+import { listLegacyProductionStationsForMigration } from "@/lib/firestore/production-stations";
 import {
   ensureOperationStationWithId,
   listOperationStations,
@@ -18,6 +18,7 @@ function mapLegacyType(type: ProductionStationType): OperationStationType {
  * Compatibilidad idempotente entre la primera configuración de estaciones
  * (`productionStations`) y la colección canónica `operationStations`.
  *
+ * - Lee explícitamente la colección legacy, no el adaptador canónico.
  * - No borra ni modifica documentos legacy.
  * - No duplica una estación si ya existe por nombre normalizado.
  * - Cuando una estación legacy es única, conserva su id para que referencias
@@ -30,7 +31,7 @@ export async function migrateLegacyProductionStationsToOperationStations(
   if (!rid) return 0;
 
   const [legacy, canonical] = await Promise.all([
-    listProductionStations(rid),
+    listLegacyProductionStationsForMigration(rid),
     listOperationStations(rid),
   ]);
   if (legacy.length === 0) return 0;
