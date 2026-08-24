@@ -40,6 +40,7 @@ export function TpvLegacyTableInteractionController({
   onRequestSeparateGroupedTables,
 }: ElementMapCardProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const separateMenuRef = useRef<HTMLDivElement | null>(null);
   const joinStateRef = useRef<JoinState | null>(null);
   const joinArmTimerRef = useRef<number | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
@@ -69,17 +70,38 @@ export function TpvLegacyTableInteractionController({
     );
   }, []);
 
-  const resetPointerSession = useCallback(() => {
-    clearJoinArmTimer();
-    clearLongPressTimer();
-    joinStateRef.current = null;
-    longPressStartRef.current = null;
-    lastPointerRef.current = null;
-    setJoinPreview(null);
-    emitJoinDragEnd();
+  useEffect(() => {
+    return () => {
+      clearJoinArmTimer();
+      clearLongPressTimer();
+      joinStateRef.current = null;
+      longPressStartRef.current = null;
+      lastPointerRef.current = null;
+      emitJoinDragEnd();
+    };
   }, [clearJoinArmTimer, clearLongPressTimer, emitJoinDragEnd]);
 
-  useEffect(() => resetPointerSession, [resetPointerSession]);
+  useEffect(() => {
+    if (!separateMenu) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && separateMenuRef.current?.contains(target)) {
+        return;
+      }
+      setSeparateMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSeparateMenu(null);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [separateMenu]);
 
   const emitJoinAborted = useCallback((pointerId: number, x: number, y: number) => {
     document.dispatchEvent(
@@ -341,6 +363,7 @@ export function TpvLegacyTableInteractionController({
     onRequestSeparateGroupedTables
       ? createPortal(
           <div
+            ref={separateMenuRef}
             role="dialog"
             aria-label="Mesa agrupada"
             style={{
