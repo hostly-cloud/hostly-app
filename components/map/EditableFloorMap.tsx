@@ -9,6 +9,7 @@ import type { EditableFloorMapProps } from "./editable-floor-map-contract";
 import { TpvV2ReadonlyViewport } from "./tpv-v2-readonly-viewport";
 
 export * from "./editable-floor-map-contract";
+export * from "./plan-element-base-visual-style";
 
 function readEditorV2ContractFromUnderlay(
   readonlyUnderlay: ReactNode,
