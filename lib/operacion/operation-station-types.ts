@@ -1,4 +1,4 @@
-/** Tipo canónico de estación (routing KDS legacy + futuro operationStationId). */
+/** Tipo canónico de estación para routing operativo y KDS. */
 export type OperationStationType =
   | "kitchen"
   | "bar"
@@ -34,6 +34,8 @@ export type OperationStationDocument = {
   type: OperationStationType;
   active: boolean;
   sortOrder: number;
+  /** Color visual opcional para filtros KDS y configuración. */
+  color?: string;
   printerChannel?: string;
   printerName?: string;
   createdAt: number;
@@ -47,6 +49,7 @@ export type OperationStationInput = {
   type: OperationStationType;
   active?: boolean;
   sortOrder?: number;
+  color?: string;
   printerChannel?: string;
   printerName?: string;
 };
