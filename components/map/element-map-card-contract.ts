@@ -1,0 +1,58 @@
+import type { Table, TableMapStatus } from "@/lib/firestore/tables";
+
+export type HostlyMapJoinDragHoverDetail = {
+  hoverTableId: string | null;
+  draggedTableId: string;
+  draggedClusterMain: string;
+};
+
+export type ElementMapCardProps = {
+  table: Table;
+  tableId: string;
+  busy: boolean;
+  tileVisual: "free" | "busy-short" | "busy-medium" | "busy-long";
+  durationLabel: string | null;
+  showProductCount: boolean;
+  activeLineCount: number;
+  badgeTier: "low" | "medium" | "high";
+  isCriticalTable: boolean;
+  ariaLabel: string | undefined;
+  mapLibreLabel: string;
+  onTableClick: (tableId: string) => void;
+  occupancyStart: number;
+  priority: number;
+  setNodeRef?: (el: HTMLDivElement | null) => void;
+  prefersReducedMotion?: boolean;
+  isUltraFastMode?: boolean;
+  mapLayoutX: number;
+  mapLayoutY: number;
+  mapTileWidth: number;
+  mapTileHeight: number;
+  mapRotation?: number;
+  interactionOnly?: boolean;
+  tableShape: "square" | "round";
+  seats: number;
+  tableMapStatus: TableMapStatus;
+  hasOpenOrder: boolean;
+  orderTotal?: number;
+  openedAt?: number;
+  mapNow?: number;
+  priorityLevel?: number;
+  inactiveMinutes?: number;
+  waiterShortLabel?: string | null;
+  billRequested?: boolean;
+  reservationBadge?: { label: string; subLabel?: string } | null;
+  reservationPressure?: { type: "upcoming" | "late"; time: string } | null;
+  readyToClose?: boolean;
+  pendingMarchPassHint?: string | null;
+  groupedBadgeText?: string | null;
+  mapJoinDragEnabled?: boolean;
+  onMapTableJoinDrop?: (draggedTableId: string, targetTableId: string) => void;
+  mapJoinClusterMainId?: string;
+  showVisualChairs?: boolean;
+  isMapGroupedPrimary?: boolean;
+  isMapGroupedSelectionElevated?: boolean;
+  onRequestSeparateGroupedTables?: (mainTableId: string) => void;
+  reservasLiveTone?: "booked" | "seated" | "completed" | "no_show" | null;
+  reservasLiveFollowUpHint?: string | null;
+};
