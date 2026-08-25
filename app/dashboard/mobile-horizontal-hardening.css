@@ -104,6 +104,22 @@
     min-height: var(--hostly-m-touch-target) !important;
   }
 
+  /* KDS + configuration navigation: these controls are frequently used during
+   * service/setup and must not keep the older 32/36/38px desktop density on phones. */
+  .hostly-kds-op-station-filter,
+  .hostly-config-context-selector__hub,
+  .hostly-config-context-selector__trigger,
+  .hostly-config-context-selector__item {
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
+  .hostly-config-context-selector__close {
+    width: var(--hostly-m-touch-target) !important;
+    min-width: var(--hostly-m-touch-target) !important;
+    height: var(--hostly-m-touch-target) !important;
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
   .carta-root[data-carta-mobile="true"] .carta-comanda-button {
     white-space: normal !important;
     overflow: visible !important;
