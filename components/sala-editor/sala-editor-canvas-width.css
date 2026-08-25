@@ -31,3 +31,91 @@
     grid-template-columns: minmax(128px, 140px) minmax(0, 1fr) minmax(118px, 134px) !important;
   }
 }
+
+/* Editor V2 — compact desktop chrome.
+ * Reduce visual chrome only for precise pointer devices; touch/tablet sizing remains
+ * governed by the existing 40/44px coarse-pointer rules. */
+@media (min-width: 768px) and (hover: hover) and (pointer: fine) {
+  .hostly-sala-editor-workbench__toolbar {
+    padding-block: 3px !important;
+    gap: 6px !important;
+  }
+
+  .hostly-sala-editor-workbench__toolbar-start,
+  .hostly-sala-editor-workbench__toolbar-meta {
+    gap: 4px !important;
+  }
+
+  .hostly-sala-editor-workbench__publish-btn,
+  .hostly-sala-editor-workbench__legacy-link,
+  .hostly-sala-editor-workbench__canvas-focus-btn {
+    min-height: 28px !important;
+    padding-block: 0 !important;
+  }
+
+  .hostly-sala-editor-phase-groups {
+    gap: 5px !important;
+    padding: 1px !important;
+  }
+
+  .hostly-sala-editor-phase-group {
+    padding: 4px 5px !important;
+    border-radius: 10px !important;
+  }
+
+  .hostly-sala-editor-phase-group__heading {
+    margin-bottom: 3px !important;
+  }
+
+  .hostly-sala-editor-phase-group.is-active .hostly-sala-editor-phase-group__button {
+    min-height: 32px !important;
+    padding-inline: 8px !important;
+  }
+
+  .hostly-sala-editor-phase-group__button {
+    min-height: 30px !important;
+    padding-block: 4px !important;
+  }
+
+  .hostly-sala-library__head {
+    gap: 7px !important;
+    padding: 2px 2px 7px !important;
+  }
+
+  .hostly-sala-library__heading-copy {
+    gap: 2px !important;
+  }
+
+  .hostly-sala-library__title {
+    font-size: 15px !important;
+  }
+
+  .hostly-sala-library__subtitle {
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+
+  .hostly-sala-library__search {
+    min-height: 34px !important;
+    grid-template-columns: 22px minmax(0, 1fr) !important;
+    gap: 4px !important;
+    padding-inline: 7px !important;
+    border-radius: 9px !important;
+  }
+
+  .hostly-sala-library__search-icon {
+    font-size: 13px !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hostly-sala-editor-phase-group.is-active {
+    min-width: 340px !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .hostly-sala-editor-phase-group.is-active {
+    min-width: 360px !important;
+  }
+}
