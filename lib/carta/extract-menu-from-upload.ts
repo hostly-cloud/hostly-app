@@ -1,7 +1,14 @@
 import { mapAiMenuItemsToExtractedRows, type AiMenuDetectedItem } from "@/lib/carta/map-ai-menu-items-to-rows";
 import type { ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
-import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { requestMenuImportProcess } from "@/lib/carta/request-menu-import-process";
+import {
+  createMenuImportDraft,
+  getMenuImportDraft,
+  updateMenuImportDraft,
+} from "@/lib/firestore/menu-import-drafts";
 import { auth } from "@/lib/firebase/client";
+import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { uploadMenuImportFile } from "@/lib/storage/menu-import-files";
 
 export class MenuImportNoProductsError extends Error {
   readonly code = "NO_PRODUCTS_DETECTED" as const;
@@ -22,73 +29,113 @@ export class MenuImportExtractError extends Error {
   }
 }
 
-type ImportMenuApiResponse = {
-  ok?: boolean;
-  items?: AiMenuDetectedItem[];
-  noProducts?: boolean;
-  code?: string;
-  error?: string;
-  details?: string;
-  ocrTextLength?: number;
-};
+function normalizedConfidence(raw: number | undefined): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  if (raw > 1) return Math.max(0, Math.min(1, raw / 100));
+  return Math.max(0, Math.min(1, raw));
+}
 
+function toOnboardingDetectedItems(
+  items: NonNullable<Awaited<ReturnType<typeof getMenuImportDraft>>>["items"],
+): AiMenuDetectedItem[] {
+  return items.map((item) => ({
+    nombre: item.name,
+    categoria: item.suggestedCategory?.trim() || item.sectionName?.trim() || "General",
+    descripcion: item.description,
+    precio: typeof item.price === "number" && Number.isFinite(item.price) ? item.price : null,
+    confianza: normalizedConfidence(item.aiConfidence ?? item.confidence),
+    needsReview: item.needsReview === true,
+    rawText: item.rawText,
+  }));
+}
+
+/**
+ * Entrada canónica de archivo para onboarding y cualquier UI que necesite filas de revisión.
+ * El análisis siempre pasa por Menu Import V2: draft tenant-safe → Storage → process → draft listo.
+ */
 export async function extractMenuFromUpload(file: File): Promise<{
   rows: ExtractedMenuRow[];
   ocrTextLength?: number;
+  draftId?: string;
 }> {
   const user = auth.currentUser;
   if (!user) {
     throw new MenuImportExtractError("UNAUTHORIZED", "UNAUTHORIZED");
   }
-  let token: string;
-  try {
-    token = await user.getIdToken();
-  } catch {
+
+  const rid = getBrowserRestauranteId().trim();
+  if (!rid) {
     throw new MenuImportExtractError(
-      "No se pudo validar la sesión. Vuelve a intentarlo.",
-      "AUTH_TOKEN_UNAVAILABLE",
+      "No se ha podido identificar el restaurante activo.",
+      "RESTAURANT_REQUIRED",
     );
   }
-  const formData = new FormData();
-  formData.append("file", file);
 
-  const res = await fetch("/api/ai/import-menu", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
-  });
-  const text = await res.text();
-  let json: ImportMenuApiResponse | null = null;
+  const sourceType = file.type === "application/pdf" ? "pdf" : "image";
+  let draftId = "";
+
   try {
-    json = text ? (JSON.parse(text) as ImportMenuApiResponse) : null;
-  } catch {
-    json = null;
-  }
+    draftId = await createMenuImportDraft(rid, {
+      sourceType,
+      menuType: "mixed",
+      status: "draft",
+      createdBy: user.uid,
+    });
 
-  if (json?.ok && json.noProducts) {
-    throw new MenuImportNoProductsError(
-      typeof json.details === "string" && json.details.trim()
-        ? json.details.trim()
-        : "NO_PRODUCTS_DETECTED",
+    const uploaded = await uploadMenuImportFile({
+      restaurantId: rid,
+      draftId,
+      file,
+      userId: user.uid,
+      sourceType,
+    });
+
+    await updateMenuImportDraft(rid, draftId, {
+      storagePath: uploaded.path,
+      originalFileName: uploaded.originalFileName,
+      updatedBy: user.uid,
+    });
+
+    const processed = await requestMenuImportProcess(draftId);
+    if (!processed.ok) {
+      if (processed.error === "NO_PRODUCTS_DETECTED") {
+        throw new MenuImportNoProductsError(processed.details?.trim() || "NO_PRODUCTS_DETECTED");
+      }
+      throw new MenuImportExtractError(
+        processed.details?.trim() || processed.error,
+        processed.error,
+      );
+    }
+
+    const draft = await getMenuImportDraft(rid, draftId);
+    if (!draft) {
+      throw new MenuImportExtractError(
+        "El análisis terminó pero no se pudo recuperar el borrador.",
+        "DRAFT_NOT_FOUND_AFTER_PROCESS",
+      );
+    }
+
+    if (draft.items.length === 0) {
+      throw new MenuImportNoProductsError("NO_PRODUCTS_DETECTED");
+    }
+
+    const rows = mapAiMenuItemsToExtractedRows(toOnboardingDetectedItems(draft.items), rid);
+    if (rows.length === 0) {
+      throw new MenuImportNoProductsError("NO_PRODUCTS_DETECTED");
+    }
+
+    return {
+      rows,
+      ocrTextLength: typeof draft.rawText === "string" ? draft.rawText.length : undefined,
+      draftId,
+    };
+  } catch (error) {
+    if (error instanceof MenuImportNoProductsError || error instanceof MenuImportExtractError) {
+      throw error;
+    }
+    throw new MenuImportExtractError(
+      error instanceof Error ? error.message : "AI_IMPORT_FAILED",
+      draftId ? "MENU_IMPORT_V2_FAILED" : "MENU_IMPORT_DRAFT_FAILED",
     );
   }
-
-  if (!res.ok || !json?.ok) {
-    const msg =
-      (typeof json?.details === "string" && json.details.trim()) ||
-      (typeof json?.error === "string" && json.error.trim()) ||
-      "AI_IMPORT_FAILED";
-    throw new MenuImportExtractError(msg, typeof json?.code === "string" ? json.code : json?.error ?? "AI_IMPORT_FAILED");
-  }
-
-  const items = Array.isArray(json.items) ? json.items : [];
-  if (items.length === 0) {
-    throw new MenuImportNoProductsError("NO_PRODUCTS_DETECTED");
-  }
-
-  const rid = getBrowserRestauranteId();
-  return {
-    rows: mapAiMenuItemsToExtractedRows(items, rid),
-    ocrTextLength: typeof json.ocrTextLength === "number" ? json.ocrTextLength : undefined,
-  };
 }
