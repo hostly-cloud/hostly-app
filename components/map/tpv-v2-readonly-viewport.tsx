@@ -100,6 +100,8 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const fitPaddingPx = viewportFitPaddingPx ?? VIEW_PADDING_PX;
   const fitZoomMax = viewportFitZoomMax ?? FIT_ZOOM_MAX;
+  const includeExplicitFitElementsInPlan =
+    viewportFitMode === "plan" && viewportFitElements !== undefined;
 
   const assignMapRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -119,13 +121,16 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     if (vw < 32 || vh < 32) return;
 
     const planBounds = getPlanSizeBounds(planSize);
-    const usePlanFit = viewportFitMode === "plan" && planBounds != null;
+    const usePlanFit =
+      viewportFitMode === "plan" &&
+      planBounds != null &&
+      !includeExplicitFitElementsInPlan;
     const bounds = usePlanFit
       ? planBounds
       : getPlanContentBounds(
           viewportFitElements ?? props.elements,
           viewportFitZones ?? props.zones,
-          null,
+          includeExplicitFitElementsInPlan ? planSize : null,
         );
 
     let nextZoom: number;
@@ -150,7 +155,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       }));
     }
 
-    if (mapLayoutEmphasis) {
+    if (mapLayoutEmphasis && !includeExplicitFitElementsInPlan) {
       const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
       nextZoom = clamp(nextZoom * 1.085, 0.06, cap);
     }
@@ -182,6 +187,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
   }, [
     fitPaddingPx,
     fitZoomMax,
+    includeExplicitFitElementsInPlan,
     mapLayoutEmphasis,
     planSize,
     props.elements,
