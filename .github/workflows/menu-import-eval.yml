@@ -10,6 +10,7 @@ on:
       - "app/api/catalog/search-product-images/**"
       - "app/api/catalog/attach-product-image/**"
       - "app/api/catalog/product-identity/**"
+      - "components/carta/carta-import-premium-layout-batch.tsx"
       - "components/productos/product-ai-image-review-panel.tsx"
       - "components/productos/product-form-commercial-info-modal.tsx"
       - "components/productos/product-commercial-identity-panel.tsx"
@@ -25,6 +26,7 @@ on:
       - "lib/productos/gtin-index-audit.ts"
       - "lib/menu-import-eval/**"
       - "lib/carta/extract-menu-from-upload.ts"
+      - "lib/carta/menu-import-client-batch.ts"
       - "lib/carta/menu-import-source-files.ts"
       - "lib/carta/request-menu-import-*.ts"
       - "lib/carta/product-image-enrichment.ts"
@@ -35,6 +37,7 @@ on:
       - "scripts/eval-menu-import-photo-corpus.ts"
       - "scripts/eval-catalog-product-images-live.ts"
       - "tests/lib/gtin-index-audit.test.ts"
+      - "tests/lib/menu-import-batch-selection.test.ts"
       - "tests/lib/menu-import-multi-source.test.ts"
       - "tests/lib/menu-import-multi-page-merge.test.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
@@ -58,6 +61,7 @@ on:
       - ".env.example"
       - "package.json"
       - "package-lock.json"
+      - "tsconfig.json"
       - ".github/workflows/menu-import-eval.yml"
       - ".github/workflows/menu-import-photo-vision-eval.yml"
       - ".github/workflows/catalog-image-live-eval.yml"
@@ -92,7 +96,7 @@ jobs:
         run: npx tsx --test tests/lib/menu-import-local-learning.test.ts
 
       - name: Run canonical multi-photo batch tests
-        run: npx tsx --test tests/lib/menu-import-multi-source.test.ts tests/lib/menu-import-multi-page-merge.test.ts
+        run: npx tsx --test tests/lib/menu-import-multi-source.test.ts tests/lib/menu-import-multi-page-merge.test.ts tests/lib/menu-import-batch-selection.test.ts
 
       - name: Run photo vision recovery tests
         run: npx tsx --test tests/lib/menu-import-photo-vision-recovery.test.ts
