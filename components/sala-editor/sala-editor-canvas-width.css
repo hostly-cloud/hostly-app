@@ -146,6 +146,21 @@
   }
 }
 
+/* The context bar is intentionally empty when nothing is selected. The base
+ * workbench still reserves 38px for it, so collapse only that empty state and
+ * give the height straight back to the canvas. */
+@media (min-width: 768px) {
+  .hostly-sala-context-action-bar.is-empty {
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom-width: 0 !important;
+    overflow: hidden !important;
+  }
+}
+
 @media (min-width: 1024px) {
   .hostly-sala-editor-phase-group.is-active {
     min-width: 340px !important;
