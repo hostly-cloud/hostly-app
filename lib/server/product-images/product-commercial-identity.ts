@@ -8,12 +8,14 @@ import type {
   ProductCommercialIdentity,
   ProductCommercialIdentityInput,
 } from "@/lib/productos/product-commercial-identity-contract";
+import { isValidGtin, normalizeValidGtin } from "@/lib/productos/gtin";
 import { normalizeCatalogBarcode } from "@/lib/server/product-images/open-food-facts-exact-product";
 
 const MAX_BRAND_LENGTH = 120;
 const MAX_QUANTITY_LENGTH = 60;
-const GTIN_LENGTHS = new Set([8, 12, 13, 14]);
 const BARCODE_INDEX_COLLECTION = "productBarcodeIndex";
+
+export { isValidGtin } from "@/lib/productos/gtin";
 
 export class ProductCommercialIdentityError extends Error {
   readonly code: string;
@@ -43,29 +45,11 @@ function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/**
- * GS1 check-digit validation for GTIN-8, UPC-A/GTIN-12, EAN-13/GTIN-13 and
- * GTIN-14. This validates structure, not whether GS1 allocated the prefix.
- */
-export function isValidGtin(value: string): boolean {
-  if (!/^\d+$/.test(value) || !GTIN_LENGTHS.has(value.length)) return false;
-  const data = value.slice(0, -1);
-  const checkDigit = Number(value.at(-1));
-  let sum = 0;
-  let weight = 3;
-  for (let index = data.length - 1; index >= 0; index -= 1) {
-    sum += Number(data[index]) * weight;
-    weight = weight === 3 ? 1 : 3;
-  }
-  const expected = (10 - (sum % 10)) % 10;
-  return checkDigit === expected;
-}
-
 export function normalizeProductGtin(value: unknown): string {
   const raw = readString(value);
   if (!raw) return "";
-  const normalized = normalizeCatalogBarcode(raw);
-  if (!normalized || !isValidGtin(normalized)) {
+  const normalized = normalizeValidGtin(raw);
+  if (!normalized) {
     throw new ProductCommercialIdentityError(
       "INVALID_PRODUCT_GTIN",
       "EAN / GTIN no válido: revisa la longitud y el dígito de control",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ProductBarcodeScanner } from "@/components/productos/product-barcode-scanner";
 import {
   fetchProductCommercialIdentity,
   saveProductCommercialIdentity,
@@ -198,25 +199,36 @@ export function ProductCommercialIdentityPanel({
             disabled={disabled || loading || saving}
           />
         </label>
-        <label className="hostly-carta-config-form-field">
+        <div className="hostly-carta-config-form-field">
           <span className="hostly-carta-config-form-label">EAN / GTIN</span>
-          <input
-            className={inputClassName}
-            value={barcode}
-            inputMode="numeric"
-            autoComplete="off"
-            onChange={(event) => {
-              setBarcode(event.target.value);
-              setSaved(false);
-            }}
-            placeholder="Ej. 5449000131805"
-            disabled={disabled || loading || saving}
-          />
-        </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              className={inputClassName}
+              value={barcode}
+              inputMode="numeric"
+              autoComplete="off"
+              onChange={(event) => {
+                setBarcode(event.target.value);
+                setSaved(false);
+              }}
+              placeholder="Ej. 5449000131805"
+              disabled={disabled || loading || saving}
+              style={{ minWidth: 0, flex: "1 1 auto" }}
+            />
+            <ProductBarcodeScanner
+              disabled={disabled || loading || saving}
+              onDetected={(gtin) => {
+                setBarcode(gtin);
+                setSaved(false);
+                setError(null);
+              }}
+            />
+          </div>
+        </div>
       </div>
       <p className="hostly-product-commercial-modal__hint">
         Si existe EAN / GTIN, Hostly lo prioriza sobre el nombre al buscar una
-        imagen real.
+        imagen real. En navegadores compatibles puedes escanearlo con la cámara.
       </p>
       <div
         style={{
