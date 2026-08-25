@@ -13,6 +13,7 @@ import "@/components/sala-editor/sala-editor-consolidation.css";
 import "@/components/sala-editor/sala-editor-phase-focus.css";
 import "@/components/sala-editor/sala-editor-library-catalog.css";
 import "@/components/sala-editor/sala-editor-workbench-premium.css";
+import "@/components/sala-editor/sala-editor-canvas-width.css";
 import "@/components/sala-editor/sala-editor-canvas-focus.css";
 
 export type SalaEditorShellProps = {
