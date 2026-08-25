@@ -38,6 +38,7 @@ on:
       - "tests/lib/catalog-product-image-matching.test.ts"
       - "tests/lib/catalog-product-image-provenance.test.ts"
       - "tests/lib/catalog-product-image-exact-suggestion.test.ts"
+      - "tests/lib/wine-catalog-identity.test.ts"
       - "tests/lib/catalog-image-live-eval.test.ts"
       - "tests/lib/product-commercial-identity.test.ts"
       - "tests/server/generate-imported-product-image-request.test.ts"
@@ -103,6 +104,9 @@ jobs:
 
       - name: Run exact GTIN image suggestion tests
         run: npx tsx --test tests/lib/catalog-product-image-exact-suggestion.test.ts
+
+      - name: Run strict wine identity tests
+        run: npx tsx --test tests/lib/wine-catalog-identity.test.ts
 
       - name: Run catalog product image request tests
         run: npx tsx --test tests/server/catalog-product-image-request.test.ts

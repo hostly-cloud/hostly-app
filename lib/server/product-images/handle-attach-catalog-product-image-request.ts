@@ -7,7 +7,10 @@ import {
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import type { CatalogProductImageAttachResult } from "@/lib/productos/catalog-product-image-contract";
 import { attachCatalogProductImage } from "@/lib/server/product-images/attach-catalog-product-image";
+import { getOpenFoodFactsCandidateByCode } from "@/lib/server/product-images/open-food-facts-catalog";
 import { normalizeCatalogBarcode } from "@/lib/server/product-images/open-food-facts-exact-product";
+import { catalogMatchContextFromProduct } from "@/lib/server/product-images/search-catalog-product-images";
+import { assessWineCatalogIdentity } from "@/lib/server/product-images/wine-catalog-identity";
 
 type Authenticate = (
   req: Request,
@@ -44,7 +47,7 @@ function readStoredBarcode(data: Record<string, unknown>): string | null {
   return null;
 }
 
-async function assertCatalogReferenceMatchesStoredBarcode(params: {
+async function assertCatalogReferenceMatchesStoredIdentity(params: {
   db: AuthenticatedRestaurantContext["db"];
   restaurantId: string;
   productId: string;
@@ -61,7 +64,8 @@ async function assertCatalogReferenceMatchesStoredBarcode(params: {
     .get();
   if (!snap.exists) return jsonError(404, "PRODUCT_NOT_FOUND");
 
-  const stored = readStoredBarcode(snap.data() as Record<string, unknown>);
+  const data = snap.data() as Record<string, unknown>;
+  const stored = readStoredBarcode(data);
   if (stored && stored !== selected) {
     return jsonError(
       409,
@@ -69,6 +73,26 @@ async function assertCatalogReferenceMatchesStoredBarcode(params: {
       "La referencia seleccionada no coincide con el código de barras guardado en Hostly",
     );
   }
+
+  const context = catalogMatchContextFromProduct(data);
+  const hasWineIdentity = Boolean(
+    context.wineProducer || context.wineAppellation || context.wineVintage,
+  );
+  if (!hasWineIdentity) return null;
+
+  const candidate = await getOpenFoodFactsCandidateByCode({
+    code: selected,
+    context,
+  });
+  const wineAssessment = assessWineCatalogIdentity({ context, candidate });
+  if (!wineAssessment.accepted) {
+    return jsonError(
+      409,
+      "CATALOG_WINE_IDENTITY_MISMATCH",
+      "La referencia no confirma la bodega, denominación o añada guardadas en Hostly",
+    );
+  }
+
   return null;
 }
 
@@ -130,7 +154,7 @@ export async function handleAttachCatalogProductImageRequest(
   }
 
   if (!dependencies?.attachCatalog) {
-    const identityError = await assertCatalogReferenceMatchesStoredBarcode({
+    const identityError = await assertCatalogReferenceMatchesStoredIdentity({
       db: authCtx.db,
       restaurantId: authCtx.restaurantId,
       productId,

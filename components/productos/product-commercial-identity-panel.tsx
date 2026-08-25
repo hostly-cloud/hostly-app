@@ -9,6 +9,24 @@ import {
 } from "@/lib/productos/product-commercial-identity-api";
 import { fetchProductImageReviewState } from "@/lib/productos/product-image-review-api";
 
+function identityKey(values: {
+  brand: string;
+  quantity: string;
+  barcode: string;
+  wineProducer: string;
+  wineAppellation: string;
+  wineVintage: string;
+}) {
+  return [
+    values.brand.trim(),
+    values.quantity.trim(),
+    values.barcode.replace(/\D/g, ""),
+    values.wineProducer.trim(),
+    values.wineAppellation.trim(),
+    values.wineVintage.trim(),
+  ].join("\n");
+}
+
 export function ProductCommercialIdentityPanel({
   productId,
   productName,
@@ -26,6 +44,9 @@ export function ProductCommercialIdentityPanel({
   const [brand, setBrand] = useState("");
   const [quantity, setQuantity] = useState("");
   const [barcode, setBarcode] = useState("");
+  const [wineProducer, setWineProducer] = useState("");
+  const [wineAppellation, setWineAppellation] = useState("");
+  const [wineVintage, setWineVintage] = useState("");
   const [persistedBarcode, setPersistedBarcode] = useState("");
   const [exactImageRefreshKey, setExactImageRefreshKey] = useState(0);
   const [initialKey, setInitialKey] = useState("");
@@ -35,21 +56,36 @@ export function ProductCommercialIdentityPanel({
   const [saved, setSaved] = useState(false);
 
   const currentKey = useMemo(
-    () => `${brand.trim()}\n${quantity.trim()}\n${barcode.replace(/\D/g, "")}`,
-    [brand, quantity, barcode],
+    () =>
+      identityKey({
+        brand,
+        quantity,
+        barcode,
+        wineProducer,
+        wineAppellation,
+        wineVintage,
+      }),
+    [brand, quantity, barcode, wineProducer, wineAppellation, wineVintage],
   );
   const dirty = Boolean(resolvedProductId) && currentKey !== initialKey;
+
+  const clear = useCallback(() => {
+    setResolvedProductId(null);
+    setBrand("");
+    setQuantity("");
+    setBarcode("");
+    setWineProducer("");
+    setWineAppellation("");
+    setWineVintage("");
+    setPersistedBarcode("");
+    setInitialKey("");
+  }, []);
 
   const load = useCallback(async () => {
     const explicitId = productId?.trim() || "";
     const name = productName.trim();
     if (!explicitId && !name) {
-      setResolvedProductId(null);
-      setBrand("");
-      setQuantity("");
-      setBarcode("");
-      setPersistedBarcode("");
-      setInitialKey("");
+      clear();
       setError(null);
       return;
     }
@@ -66,12 +102,7 @@ export function ProductCommercialIdentityPanel({
           );
         }
         if (state.resolution !== "resolved") {
-          setResolvedProductId(null);
-          setBrand("");
-          setQuantity("");
-          setBarcode("");
-          setPersistedBarcode("");
-          setInitialKey("");
+          clear();
           return;
         }
         id = state.productId;
@@ -82,13 +113,13 @@ export function ProductCommercialIdentityPanel({
       setBrand(identity.brand);
       setQuantity(identity.quantity);
       setBarcode(identity.barcode);
+      setWineProducer(identity.wineProducer);
+      setWineAppellation(identity.wineAppellation);
+      setWineVintage(identity.wineVintage);
       setPersistedBarcode(identity.barcode);
-      setInitialKey(
-        `${identity.brand.trim()}\n${identity.quantity.trim()}\n${identity.barcode.replace(/\D/g, "")}`,
-      );
+      setInitialKey(identityKey(identity));
     } catch (cause) {
-      setResolvedProductId(null);
-      setPersistedBarcode("");
+      clear();
       setError(
         cause instanceof Error
           ? cause.message
@@ -97,7 +128,7 @@ export function ProductCommercialIdentityPanel({
     } finally {
       setLoading(false);
     }
-  }, [productId, productName]);
+  }, [clear, productId, productName]);
 
   useEffect(() => {
     void load();
@@ -114,14 +145,18 @@ export function ProductCommercialIdentityPanel({
         brand,
         quantity,
         barcode,
+        wineProducer,
+        wineAppellation,
+        wineVintage,
       });
       setBrand(identity.brand);
       setQuantity(identity.quantity);
       setBarcode(identity.barcode);
+      setWineProducer(identity.wineProducer);
+      setWineAppellation(identity.wineAppellation);
+      setWineVintage(identity.wineVintage);
       setPersistedBarcode(identity.barcode);
-      setInitialKey(
-        `${identity.brand.trim()}\n${identity.quantity.trim()}\n${identity.barcode.replace(/\D/g, "")}`,
-      );
+      setInitialKey(identityKey(identity));
       setExactImageRefreshKey((value) => value + 1);
       setSaved(true);
     } catch (cause) {
@@ -133,7 +168,17 @@ export function ProductCommercialIdentityPanel({
     } finally {
       setSaving(false);
     }
-  }, [barcode, brand, dirty, quantity, resolvedProductId, saving]);
+  }, [
+    barcode,
+    brand,
+    dirty,
+    quantity,
+    resolvedProductId,
+    saving,
+    wineAppellation,
+    wineProducer,
+    wineVintage,
+  ]);
 
   if (!resolvedProductId && !loading) {
     return (
@@ -237,6 +282,77 @@ export function ProductCommercialIdentityPanel({
           </div>
         </div>
       </div>
+
+      <details
+        style={{
+          marginTop: 4,
+          border: "1px solid rgba(148,163,184,.2)",
+          borderRadius: 10,
+          padding: "8px 10px",
+        }}
+      >
+        <summary
+          style={{ cursor: "pointer", fontSize: 11, fontWeight: 720, color: "#334155" }}
+        >
+          Datos de vino · opcional
+        </summary>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: 10,
+            marginTop: 10,
+          }}
+        >
+          <label className="hostly-carta-config-form-field">
+            <span className="hostly-carta-config-form-label">Bodega / productor</span>
+            <input
+              className={inputClassName}
+              value={wineProducer}
+              maxLength={140}
+              onChange={(event) => {
+                setWineProducer(event.target.value);
+                setSaved(false);
+              }}
+              placeholder="Ej. Marqués de Riscal"
+              disabled={disabled || loading || saving}
+            />
+          </label>
+          <label className="hostly-carta-config-form-field">
+            <span className="hostly-carta-config-form-label">Denominación</span>
+            <input
+              className={inputClassName}
+              value={wineAppellation}
+              maxLength={140}
+              onChange={(event) => {
+                setWineAppellation(event.target.value);
+                setSaved(false);
+              }}
+              placeholder="Ej. Rioja DOCa"
+              disabled={disabled || loading || saving}
+            />
+          </label>
+          <label className="hostly-carta-config-form-field">
+            <span className="hostly-carta-config-form-label">Añada</span>
+            <input
+              className={inputClassName}
+              value={wineVintage}
+              inputMode="numeric"
+              maxLength={4}
+              onChange={(event) => {
+                setWineVintage(event.target.value.replace(/\D/g, "").slice(0, 4));
+                setSaved(false);
+              }}
+              placeholder="Ej. 2019"
+              disabled={disabled || loading || saving}
+            />
+          </label>
+        </div>
+        <p className="hostly-product-commercial-modal__hint" style={{ marginBottom: 0 }}>
+          Si los completas, Hostly exigirá evidencia de bodega, denominación y añada antes de ofrecer una coincidencia por texto.
+        </p>
+      </details>
+
       <p className="hostly-product-commercial-modal__hint">
         Si existe EAN / GTIN, Hostly lo prioriza sobre el nombre al buscar una
         imagen real. En navegadores compatibles puedes escanearlo con la cámara.

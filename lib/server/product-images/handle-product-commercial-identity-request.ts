@@ -110,6 +110,9 @@ export async function handleUpdateProductCommercialIdentityRequest(
     brand: body.brand,
     quantity: body.quantity,
     barcode: body.barcode,
+    wineProducer: body.wineProducer,
+    wineAppellation: body.wineAppellation,
+    wineVintage: body.wineVintage,
   });
   const updateIdentity =
     dependencies?.updateIdentity ?? updateProductCommercialIdentity;

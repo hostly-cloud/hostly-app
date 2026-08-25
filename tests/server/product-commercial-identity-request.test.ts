@@ -6,6 +6,7 @@ import {
   handleGetProductCommercialIdentityRequest,
   handleUpdateProductCommercialIdentityRequest,
 } from "@/lib/server/product-images/handle-product-commercial-identity-request";
+import type { ProductCommercialIdentity } from "@/lib/productos/product-commercial-identity-contract";
 
 function authContext(
   overrides: Partial<AuthenticatedRestaurantContext> = {},
@@ -19,6 +20,21 @@ function authContext(
     canManageUsers: true,
     db: {} as Firestore,
     ...overrides,
+  };
+}
+
+function identity(
+  patch: Partial<ProductCommercialIdentity> = {},
+): ProductCommercialIdentity {
+  return {
+    productId: "p1",
+    brand: "",
+    quantity: "",
+    barcode: "",
+    wineProducer: "",
+    wineAppellation: "",
+    wineVintage: "",
+    ...patch,
   };
 }
 
@@ -48,7 +64,7 @@ test("commercial identity GET rejects browser tenant", async () => {
       authenticate: async () => authContext(),
       readIdentity: async () => {
         called = true;
-        return { productId: "p1", brand: "", quantity: "", barcode: "" };
+        return identity();
       },
     },
   );
@@ -62,12 +78,7 @@ test("commercial identity requires settings.manage", async () => {
     new Request("http://localhost/api/catalog/product-identity?productId=p1"),
     {
       authenticate: async () => authContext({ role: "manager" }),
-      readIdentity: async () => ({
-        productId: "p1",
-        brand: "",
-        quantity: "",
-        barcode: "",
-      }),
+      readIdentity: async () => identity(),
     },
   );
   assert.equal(response.status, 403);
@@ -85,12 +96,15 @@ test("commercial identity GET receives server-resolved tenant only", async () =>
           restaurantId: params.restaurantId,
           productId: params.productId,
         };
-        return {
+        return identity({
           productId: params.productId,
-          brand: "Coca-Cola",
-          quantity: "33 cl",
-          barcode: "5449000131805",
-        };
+          brand: "Vega Sicilia",
+          quantity: "75 cl",
+          barcode: "8410869450199",
+          wineProducer: "Tempos Vega Sicilia",
+          wineAppellation: "Ribera del Duero",
+          wineVintage: "2019",
+        });
       },
     },
   );
@@ -115,12 +129,12 @@ test("commercial identity POST rejects browser tenant before write", async () =>
       authenticate: async () => authContext(),
       updateIdentity: async () => {
         called = true;
-        return {
+        return identity({
           productId: "product-1",
           brand: "Coca-Cola",
           quantity: "33 cl",
           barcode: "5449000131805",
-        };
+        });
       },
     },
   );
@@ -129,21 +143,27 @@ test("commercial identity POST rejects browser tenant before write", async () =>
   assert.equal(called, false);
 });
 
-test("commercial identity POST normalizes input and passes authenticated user", async () => {
+test("commercial identity POST normalizes wine input and passes authenticated user", async () => {
   let received:
     | {
         restaurantId: string;
         userId: string;
         productId: string;
         barcode: string;
+        wineProducer: string;
+        wineAppellation: string;
+        wineVintage: string;
       }
     | null = null;
   const response = await handleUpdateProductCommercialIdentityRequest(
     postRequest({
       productId: " product-1 ",
-      brand: " Coca-Cola ",
-      quantity: " 33 cl ",
-      barcode: "5 449-0001 31805",
+      brand: " Vega Sicilia ",
+      quantity: " 75 cl ",
+      barcode: "8 410-8694 50199",
+      wineProducer: " Tempos Vega Sicilia ",
+      wineAppellation: " Ribera del Duero ",
+      wineVintage: " 2019 ",
     }),
     {
       authenticate: async () => authContext(),
@@ -153,6 +173,9 @@ test("commercial identity POST normalizes input and passes authenticated user", 
           userId: params.userId,
           productId: params.input.productId,
           barcode: params.input.barcode,
+          wineProducer: params.input.wineProducer,
+          wineAppellation: params.input.wineAppellation,
+          wineVintage: params.input.wineVintage,
         };
         return params.input;
       },
@@ -163,6 +186,9 @@ test("commercial identity POST normalizes input and passes authenticated user", 
     restaurantId: "restaurant-server",
     userId: "owner-1",
     productId: "product-1",
-    barcode: "5449000131805",
+    barcode: "8410869450199",
+    wineProducer: "Tempos Vega Sicilia",
+    wineAppellation: "Ribera del Duero",
+    wineVintage: "2019",
   });
 });
