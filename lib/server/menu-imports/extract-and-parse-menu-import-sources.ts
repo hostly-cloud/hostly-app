@@ -1,9 +1,17 @@
 import type { MenuImportDraftDocument } from "@/lib/firestore/menu-import-drafts";
+import type { MenuImportSourceFile } from "@/lib/carta/menu-import-source-files";
 import { resolveMenuImportSourceFiles } from "@/lib/carta/menu-import-source-files";
 import { assertMenuImportStoragePathForDraft } from "./download-storage-file";
 import { extractMenuText, type ExtractMenuTextResult } from "./extract-menu-text";
 import { parseMenuText } from "./parse-menu-text";
 import { mergeMenuImportPageItems } from "./merge-menu-import-pages";
+import { recoverMultiPagePhotoVision } from "./ai-import-v2/recover-multi-page-photo-vision";
+
+export type ParsedMenuImportPage = {
+  source: MenuImportSourceFile;
+  extraction: ExtractMenuTextResult;
+  parsed: ReturnType<typeof parseMenuText>;
+};
 
 export type ParsedMenuImportSources = {
   sourceCount: number;
@@ -15,6 +23,7 @@ export type ParsedMenuImportSources = {
   primaryExtraction?: ExtractMenuTextResult;
   primaryStoragePath?: string;
   primaryOriginalFileName?: string;
+  pages?: ParsedMenuImportPage[];
   multiSource: boolean;
 };
 
@@ -61,10 +70,7 @@ export async function extractAndParseMenuImportSources(params: {
     assertMenuImportStoragePathForDraft(source.storagePath, { restaurantId, draftId });
   }
 
-  const pages: Array<{
-    extraction: ExtractMenuTextResult;
-    parsed: ReturnType<typeof parseMenuText>;
-  }> = [];
+  let pages: ParsedMenuImportPage[] = [];
 
   for (const source of sourceFiles) {
     const extraction = await extractMenuText({
@@ -82,7 +88,7 @@ export async function extractAndParseMenuImportSources(params: {
       ocrPageWidth: extraction.ocrPageWidth,
       ocrPageHeight: extraction.ocrPageHeight,
     });
-    pages.push({ extraction, parsed });
+    pages.push({ source, extraction, parsed });
   }
 
   if (pages.length === 1) {
@@ -98,9 +104,18 @@ export async function extractAndParseMenuImportSources(params: {
       primaryExtraction: page.extraction,
       primaryStoragePath: source.storagePath,
       primaryOriginalFileName: source.originalFileName,
+      pages,
       multiSource: false,
     };
   }
+
+  const visionRecovery = await recoverMultiPagePhotoVision({
+    restaurantId,
+    draftId,
+    menuType: draft.menuType,
+    pages,
+  });
+  pages = visionRecovery.pages;
 
   const merged = mergeMenuImportPageItems(
     pages.map((page, pageIndex) => ({ pageIndex, items: page.parsed.items })),
@@ -115,6 +130,7 @@ export async function extractAndParseMenuImportSources(params: {
   if (merged.duplicateCount > 0) {
     extractionWarnings.push(`multi_page_duplicates_skipped:${merged.duplicateCount}`);
   }
+  extractionWarnings.push(...visionRecovery.warnings);
 
   return {
     sourceCount: pages.length,
@@ -124,6 +140,7 @@ export async function extractAndParseMenuImportSources(params: {
       page.parsed.warnings.map((warning) => `página ${pageIndex + 1}: ${warning}`),
     ),
     items: merged.items,
+    pages,
     multiSource: true,
   };
 }
