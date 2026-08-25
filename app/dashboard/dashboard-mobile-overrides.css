@@ -159,8 +159,10 @@
 
   .hostly-dashboard-premium-shell .hostly-dashboard-command-station__label,
   .hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item__label {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal !important;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.1;
   }
 }
 
