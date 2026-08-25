@@ -1,0 +1,49 @@
+/* Shared mobile/PDA horizontal-overflow hardening.
+ * Keep intentional horizontal rails scrollable, but make ordinary mobile
+ * list content and action rows shrink/wrap inside the viewport.
+ */
+@media (max-width: 767px) {
+  .hostly-touch-root,
+  .hostly-module-shell--mobile,
+  .hostly-module-content--mobile,
+  .hostly-mobile-list-shell,
+  .hostly-mobile-list-group,
+  .hostly-mobile-list-group__items,
+  .hostly-mobile-list-item,
+  .hostly-mobile-list-item__body,
+  .hostly-mobile-list-item__main,
+  .hostly-mobile-list-item__title,
+  .hostly-mobile-list-item__meta,
+  .hostly-mobile-list-item__extra,
+  .hostly-mobile-list-item__actions {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .hostly-mobile-list-shell,
+  .hostly-mobile-list-group,
+  .hostly-mobile-list-group__items,
+  .hostly-mobile-list-item {
+    overflow-x: clip;
+  }
+
+  .hostly-mobile-list-item__actions .hostly-row-actions {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .hostly-mobile-list-item__actions .hostly-row-actions__btn {
+    max-width: 100%;
+  }
+
+  .hostly-mobile-list-item__actions .hostly-row-actions__btn--text {
+    white-space: normal;
+  }
+
+  .hostly-mobile-list-item__actions .hostly-row-actions__btn--icon {
+    flex: 0 0 auto;
+  }
+}
