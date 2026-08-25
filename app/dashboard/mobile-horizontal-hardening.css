@@ -129,6 +129,19 @@
     min-height: var(--hostly-m-touch-target) !important;
   }
 
+  /* The whole inventory hub shares the same route rail. Some legacy Mermas /
+   * Recepciones controls still request 30-36px inline heights; on phones the
+   * shared touch contract wins without changing desktop density. */
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) input[type="search"],
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) input[type="text"],
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) input[type="number"],
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) input[type="date"],
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) select,
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) button.hostly-button-primary,
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) button.hostly-button-secondary {
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
   .carta-root[data-carta-mobile="true"] .carta-comanda-button {
     white-space: normal !important;
     overflow: visible !important;
