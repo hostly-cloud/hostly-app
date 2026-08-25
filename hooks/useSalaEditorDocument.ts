@@ -80,6 +80,10 @@ export type UseSalaEditorDocumentOptions = {
   getDocumentSnapshot?: () => SalaEditorDocument;
 };
 
+type SalaEspacioUpdatePatch = Partial<SalaEspacioDraft> & {
+  __delete?: boolean;
+};
+
 /**
  * Estado local del documento del editor de sala.
  * La persistencia de borrador vive fuera del hook para no mezclar UI/OSE con Firestore.
@@ -1332,12 +1336,85 @@ export function useSalaEditorDocument({
   }, [historyApi]);
 
   const updateEspacio = useCallback(
-    (espacioId: string, patch: Partial<SalaEspacioDraft>) => {
+    (espacioId: string, patch: SalaEspacioUpdatePatch) => {
+      if (patch.__delete === true) {
+        let previousDocument: SalaEditorDocument | null = null;
+        let nextDocument: SalaEditorDocument | null = null;
+
+        historyApi?.flushScheduledCommits(() => document);
+        setDocument((prev) => {
+          if (!prev.espacios.some((espacio) => espacio.id === espacioId)) return prev;
+
+          previousDocument = prev;
+          const removedWallIds = new Set(
+            prev.walls
+              .filter((wall) => wall.espacioId === espacioId)
+              .map((wall) => wall.id),
+          );
+          const espacios = prev.espacios.filter((espacio) => espacio.id !== espacioId);
+          const deletingSelected = prev.navigation.selectedEspacioId === espacioId;
+          const fallbackEspacioId = espacios[0]?.id ?? null;
+          const navigation = deletingSelected
+            ? {
+                ...prev.navigation,
+                selectedEspacioId: fallbackEspacioId,
+                ...(fallbackEspacioId ? {} : { phase: "espacios" as const }),
+              }
+            : prev.navigation;
+
+          nextDocument = {
+            ...prev,
+            espacios,
+            walls: prev.walls.filter((wall) => wall.espacioId !== espacioId),
+            wallAttachments: prev.wallAttachments.filter(
+              (attachment) => !removedWallIds.has(attachment.wallId),
+            ),
+            surfaceObjects: prev.surfaceObjects.filter(
+              (surface) => surface.espacioId !== espacioId,
+            ),
+            zones: prev.zones.filter((zone) => zone.espacioId !== espacioId),
+            structuralElements: prev.structuralElements.filter(
+              (element) => element.espacioId !== espacioId,
+            ),
+            landscapeElements: prev.landscapeElements.filter(
+              (element) => element.espacioId !== espacioId,
+            ),
+            operationalElements: prev.operationalElements.filter(
+              (element) => element.espacioId !== espacioId,
+            ),
+            operationalElementInstances: prev.operationalElementInstances.filter(
+              (instance) => instance.spaceId !== espacioId,
+            ),
+            navigation,
+            updatedAt: Date.now(),
+          };
+          return nextDocument;
+        });
+
+        if (previousDocument && nextDocument) {
+          historyApi?.recordCommit("espacio.update", previousDocument, nextDocument);
+          setActiveTool(null);
+          setActiveOperationalElement(null);
+          setActiveSurfaceMaterial(null);
+          setActiveZoneType(null);
+          setActiveLandscapeKind(null);
+          setSelectedSurfaceObjectId(null);
+          setSelectedZoneId(null);
+          setSelectedLandscapeElementId(null);
+          setSelectedStructuralElementId(null);
+          setSelectedOperationalElementInstanceId(null);
+          setSelectedWallAttachmentId(null);
+        }
+        return;
+      }
+
+      const { __delete: _delete, ...safePatch } = patch;
+      void _delete;
       setDocument((prev) => {
         const next = {
           ...prev,
           espacios: prev.espacios.map((espacio) =>
-            espacio.id === espacioId ? { ...espacio, ...patch } : espacio,
+            espacio.id === espacioId ? { ...espacio, ...safePatch } : espacio,
           ),
           updatedAt: Date.now(),
         };
@@ -1347,7 +1424,7 @@ export function useSalaEditorDocument({
         return next;
       });
     },
-    [getDocumentSnapshot, historyApi],
+    [document, getDocumentSnapshot, historyApi],
   );
 
   const updateEspacioBase = useCallback(
