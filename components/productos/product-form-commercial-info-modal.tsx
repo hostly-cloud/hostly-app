@@ -13,6 +13,7 @@ import {
   ConfigBtnSecondary,
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
 import { ProductAiImageReviewPanel } from "@/components/productos/product-ai-image-review-panel";
+import { ProductCommercialIdentityPanel } from "@/components/productos/product-commercial-identity-panel";
 import { PRODUCT_IMAGE_ACCEPT } from "@/lib/firebase/product-image-contract";
 
 const DESCRIPTION_PREVIEW_MAX = 140;
@@ -296,6 +297,7 @@ export function ProductFormCommercialInfoSummaryCard({
 
 export type ProductFormCommercialInfoModalProps = {
   open: boolean;
+  productId?: string | null;
   productName: string;
   isCentralCatalog: boolean;
   description: string;
@@ -316,6 +318,7 @@ export type ProductFormCommercialInfoModalProps = {
 
 export function ProductFormCommercialInfoModal({
   open,
+  productId = null,
   productName,
   isCentralCatalog,
   description,
@@ -337,9 +340,6 @@ export function ProductFormCommercialInfoModal({
   const fileInputRef = imageFileInputRef ?? localFileInputRef;
   const [aiResolvedImageUrl, setAiResolvedImageUrl] = useState<string | null>(null);
 
-  // The component stays mounted while the product drawer is open. Keep a
-  // server-persisted AI/catalog preview when this nested modal is closed and
-  // reopened; reset only when the edited product changes.
   useEffect(() => {
     setAiResolvedImageUrl(null);
   }, [productName]);
@@ -425,65 +425,74 @@ export function ProductFormCommercialInfoModal({
           </div>
 
           {isCentralCatalog ? (
-            <div className="hostly-product-commercial-modal__image-block">
-              <span className="hostly-product-commercial-modal__label">{t("carta.fieldFoto")}</span>
-              {effectiveShowImagePreview && effectiveImagePreviewUrl ? (
-                <img
-                  src={effectiveImagePreviewUrl}
-                  alt=""
-                  className="hostly-product-commercial-modal__image-preview"
-                />
-              ) : (
-                <div className="hostly-product-commercial-modal__image-placeholder" aria-hidden>
-                  {t("carta.fieldFotoEmpty")}
-                </div>
-              )}
-              <div className="hostly-product-commercial-modal__image-actions">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={PRODUCT_IMAGE_ACCEPT}
-                  className="hostly-product-commercial-modal__file-input"
-                  disabled={disabled}
-                  onChange={(e) => {
-                    const selected = e.target.files?.[0] ?? null;
-                    setAiResolvedImageUrl(null);
-                    void onImageFileChange(selected);
-                  }}
-                />
-                <ConfigBtnSecondary
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {effectiveShowImagePreview && effectiveImagePreviewUrl
-                    ? t("carta.fieldFotoChange")
-                    : t("carta.fieldFotoUpload")}
-                </ConfigBtnSecondary>
+            <>
+              <ProductCommercialIdentityPanel
+                productId={productId}
+                productName={productName}
+                disabled={disabled}
+                inputClassName={drawerInputClass}
+              />
+
+              <div className="hostly-product-commercial-modal__image-block">
+                <span className="hostly-product-commercial-modal__label">{t("carta.fieldFoto")}</span>
                 {effectiveShowImagePreview && effectiveImagePreviewUrl ? (
+                  <img
+                    src={effectiveImagePreviewUrl}
+                    alt=""
+                    className="hostly-product-commercial-modal__image-preview"
+                  />
+                ) : (
+                  <div className="hostly-product-commercial-modal__image-placeholder" aria-hidden>
+                    {t("carta.fieldFotoEmpty")}
+                  </div>
+                )}
+                <div className="hostly-product-commercial-modal__image-actions">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={PRODUCT_IMAGE_ACCEPT}
+                    className="hostly-product-commercial-modal__file-input"
+                    disabled={disabled}
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0] ?? null;
+                      setAiResolvedImageUrl(null);
+                      void onImageFileChange(selected);
+                    }}
+                  />
                   <ConfigBtnSecondary
                     type="button"
                     disabled={disabled}
-                    onClick={() => {
-                      setAiResolvedImageUrl(null);
-                      onRemoveImage();
-                    }}
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    {t("carta.fieldFotoRemove")}
+                    {effectiveShowImagePreview && effectiveImagePreviewUrl
+                      ? t("carta.fieldFotoChange")
+                      : t("carta.fieldFotoUpload")}
                   </ConfigBtnSecondary>
-                ) : null}
-              </div>
-              <p className="hostly-product-commercial-modal__hint">{t("carta.fieldFotoUploadHint")}</p>
+                  {effectiveShowImagePreview && effectiveImagePreviewUrl ? (
+                    <ConfigBtnSecondary
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setAiResolvedImageUrl(null);
+                        onRemoveImage();
+                      }}
+                    >
+                      {t("carta.fieldFotoRemove")}
+                    </ConfigBtnSecondary>
+                  ) : null}
+                </div>
+                <p className="hostly-product-commercial-modal__hint">{t("carta.fieldFotoUploadHint")}</p>
 
-              <ProductAiImageReviewPanel
-                open={open}
-                productName={productName}
-                fallbackImageUrl={effectiveImagePreviewUrl}
-                imageDraftMode={imageDraftMode}
-                disabled={disabled}
-                onImageUrlChange={handleAiImageUrlChange}
-              />
-            </div>
+                <ProductAiImageReviewPanel
+                  open={open}
+                  productName={productName}
+                  fallbackImageUrl={effectiveImagePreviewUrl}
+                  imageDraftMode={imageDraftMode}
+                  disabled={disabled}
+                  onImageUrlChange={handleAiImageUrlChange}
+                />
+              </div>
+            </>
           ) : (
             <div className="hostly-product-commercial-modal__field">
               <label
