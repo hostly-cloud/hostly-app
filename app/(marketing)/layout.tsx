@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MarketingAnalytics } from "@/components/marketing/marketing-analytics";
 import "@/components/marketing/marketing.css";
 
 export const metadata: Metadata = {
@@ -36,5 +37,10 @@ export const metadata: Metadata = {
 };
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      {children}
+      <MarketingAnalytics />
+    </>
+  );
 }

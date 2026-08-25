@@ -23,11 +23,23 @@ export function HeroSection() {
             <p className="marketing-subhead marketing-rise marketing-rise-delay-2 mt-5">{marketingHero.subcopy}</p>
 
             <div className="marketing-rise marketing-rise-delay-3 mt-8 flex flex-wrap gap-3">
-              <MarketingButton href={marketingHero.primaryCta.href}>
+              <MarketingButton
+                href={marketingHero.primaryCta.href}
+                data-marketing-event="generate_lead"
+                data-marketing-label={marketingHero.primaryCta.label}
+                data-marketing-placement="hero"
+                data-meta-event="LeadIntent"
+              >
                 {marketingHero.primaryCta.label}
                 <ArrowRight className="size-4" />
               </MarketingButton>
-              <MarketingButton href={marketingHero.secondaryCta.href} variant="secondary">
+              <MarketingButton
+                href={marketingHero.secondaryCta.href}
+                variant="secondary"
+                data-marketing-event="view_product"
+                data-marketing-label={marketingHero.secondaryCta.label}
+                data-marketing-placement="hero"
+              >
                 {marketingHero.secondaryCta.label}
               </MarketingButton>
             </div>
