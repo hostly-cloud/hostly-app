@@ -1,17 +1,16 @@
 /* Dashboard home — responsive hardening for phone/PDA.
  * Keep desktop composition untouched while removing fixed-height pressure on
- * narrow viewports. The content follows normal document flow and can scroll
- * inside the dashboard shell instead of stacking cards over the TPV launcher.
+ * narrow viewports. On mobile the document owns vertical scroll, so returning
+ * from fixed-height operational routes (TPV/KDS) cannot strand the dashboard
+ * inside a stale nested scroll container.
  */
 @media (max-width: 767px) {
   .hostly-dashboard-premium-shell {
     display: block !important;
     min-height: 0 !important;
-    height: 100% !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior-y: contain;
-    -webkit-overflow-scrolling: touch;
+    height: auto !important;
+    overflow: visible !important;
+    touch-action: pan-y;
     padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 
