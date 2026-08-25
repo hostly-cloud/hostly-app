@@ -6,6 +6,11 @@ import {
   type AuthenticatedRestaurantDependencies,
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
+import {
+  buildMenuImportLearningSignal,
+  persistMenuImportLearningSignals,
+  type MenuImportLearningSignal,
+} from "./menu-import-local-learning";
 
 type ReviewStation = "kitchen" | "bar" | "cocktail" | "none";
 
@@ -41,6 +46,15 @@ const REVIEW_PATCH_KEYS = new Set([
 
 function invalidPatch(): never {
   throw new MenuImportReviewUpdateError("INVALID_REVIEW_PATCH", 400);
+}
+
+function isReviewStation(value: unknown): value is ReviewStation {
+  return (
+    value === "kitchen" ||
+    value === "bar" ||
+    value === "cocktail" ||
+    value === "none"
+  );
 }
 
 function parseReviewPatches(raw: unknown): MenuImportReviewItemPatch[] {
@@ -104,12 +118,7 @@ function parseReviewPatches(raw: unknown): MenuImportReviewItemPatch[] {
       patch.suggestedCategory = record.suggestedCategory.trim();
     }
     if ("suggestedStation" in record) {
-      if (
-        record.suggestedStation !== "kitchen" &&
-        record.suggestedStation !== "bar" &&
-        record.suggestedStation !== "cocktail" &&
-        record.suggestedStation !== "none"
-      ) {
+      if (!isReviewStation(record.suggestedStation)) {
         return invalidPatch();
       }
       patch.suggestedStation = record.suggestedStation;
@@ -172,7 +181,7 @@ export async function updateMenuImportReview(input: {
     .doc(input.draftId);
   const patchesById = new Map(input.patches.map((patch) => [patch.id, patch]));
 
-  await input.db.runTransaction(async (transaction) => {
+  const learningSignals = await input.db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) {
       throw new MenuImportReviewUpdateError("DRAFT_NOT_FOUND", 404);
@@ -223,6 +232,7 @@ export async function updateMenuImportReview(input: {
       return { ...section, items };
     });
 
+    const signals: MenuImportLearningSignal[] = [];
     const topLevelIds = new Set<string>();
     const items = data.items.map((itemValue) => {
       const item = itemRecord(itemValue);
@@ -235,6 +245,26 @@ export async function updateMenuImportReview(input: {
       }
       topLevelIds.add(id);
       const patch = patchesById.get(id);
+      if (patch) {
+        const signal = buildMenuImportLearningSignal({
+          restaurantId: input.restaurantId,
+          draftId: input.draftId,
+          itemId: id,
+          itemName:
+            patch.name ?? (typeof item.name === "string" ? item.name : ""),
+          userId: input.userId,
+          stationBefore: isReviewStation(item.suggestedStation)
+            ? item.suggestedStation
+            : undefined,
+          stationAfter: patch.suggestedStation,
+          categoryBefore:
+            typeof item.suggestedCategory === "string"
+              ? item.suggestedCategory
+              : undefined,
+          categoryAfter: patch.suggestedCategory,
+        });
+        if (signal) signals.push(signal);
+      }
       return patch ? applyReviewPatch(item, patch) : item;
     });
     if (
@@ -257,7 +287,24 @@ export async function updateMenuImportReview(input: {
       updatedBy: input.userId,
       serverSavedAt: FieldValue.serverTimestamp(),
     });
+
+    return signals;
   });
+
+  if (learningSignals.length > 0) {
+    await persistMenuImportLearningSignals({
+      db: input.db,
+      restaurantId: input.restaurantId,
+      signals: learningSignals,
+    }).catch((error) => {
+      console.warn("[Hostly][MenuImport Learning] signal persistence failed", {
+        restaurantId: input.restaurantId,
+        draftId: input.draftId,
+        signalCount: learningSignals.length,
+        error: error instanceof Error ? error.message : "LEARNING_SIGNAL_WRITE_FAILED",
+      });
+    });
+  }
 }
 
 export type UpdateMenuImportReviewDependencies =

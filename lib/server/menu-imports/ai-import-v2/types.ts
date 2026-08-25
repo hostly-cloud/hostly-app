@@ -1,6 +1,21 @@
-import type { ImportedMenuItem } from "@/lib/carta/imported-menu-types";
+import type { CartaCategoriaTipo } from "@/lib/carta-categorias/types";
+import type {
+  ImportedMenuItem,
+  ImportedMenuSuggestedStation,
+} from "@/lib/carta/imported-menu-types";
+import type { ProductFamilyType } from "@/lib/carta/product-family-types";
 import type { MenuImportMenuType } from "@/lib/firestore/menu-import-drafts";
+import type { ProductionStationType } from "@/lib/produccion/production-station-types";
 import type { DetectedProduct } from "@/lib/menu-import-eval/types";
+
+export type AiImportV2ApiMode = "chat_completions" | "responses";
+
+export type AiImportV2OperationalSuggestion = {
+  categoryType: CartaCategoriaTipo;
+  productFamilyType: ProductFamilyType;
+  suggestedStation: ImportedMenuSuggestedStation;
+  confidence: number;
+};
 
 export type AiImportV2Item = {
   name: string;
@@ -9,6 +24,7 @@ export type AiImportV2Item = {
   price: number;
   confidence: number;
   sourceEvidence: string[];
+  operationalSuggestion: AiImportV2OperationalSuggestion;
 };
 
 export type AiImportV2Section = {
@@ -24,6 +40,7 @@ export type AiImportV2ValidatedItem = AiImportV2Item & {
   sectionName: string;
   validationStatus: "accepted" | "rejected";
   rejectionReasons: string[];
+  operationalWarnings: string[];
 };
 
 export type AiImportV2ValidationResult = {
@@ -54,6 +71,50 @@ export type AiImportV2Comparison = {
   parserVsV2Precision: number | null;
 };
 
+export type AiImportV2ResolvedReference = {
+  id: string;
+  name: string;
+};
+
+export type AiImportV2ResolvedStationReference = AiImportV2ResolvedReference & {
+  type: ProductionStationType;
+};
+
+export type AiImportV2ResolvedFamilyReference = AiImportV2ResolvedReference & {
+  type: ProductFamilyType;
+};
+
+export type AiImportV2LocalLearningEvidence = {
+  station?: ImportedMenuSuggestedStation;
+  stationSupport: number;
+  stationConfidence: number;
+  category?: string;
+  categorySupport: number;
+  categoryConfidence: number;
+};
+
+export type AiImportV2ResolvedOperationalTarget = {
+  itemName: string;
+  status: "matched" | "partial" | "review";
+  reasons: string[];
+  station?: AiImportV2ResolvedStationReference;
+  productFamily?: AiImportV2ResolvedFamilyReference;
+  localLearning?: AiImportV2LocalLearningEvidence;
+};
+
+export type AiImportV2RestaurantContextResult = {
+  restaurantId: string;
+  productionStationsRead: number;
+  activeProductionStations: number;
+  productFamiliesRead: number;
+  activeProductFamilies: number;
+  fullyResolvedCount: number;
+  partialCount: number;
+  reviewCount: number;
+  targets: AiImportV2ResolvedOperationalTarget[];
+  warnings: string[];
+};
+
 export type AiImportV2ShadowInput = {
   rawText: string;
   parserItems: ImportedMenuItem[];
@@ -68,11 +129,13 @@ export type AiImportV2ShadowInput = {
 export type AiImportV2ShadowResult = {
   enabled: true;
   model: string;
+  apiMode: AiImportV2ApiMode;
   usedVision: boolean;
   durationMs: number;
   extraction: AiImportV2Extraction | null;
   validation: AiImportV2ValidationResult | null;
   comparison: AiImportV2Comparison | null;
+  restaurantContext?: AiImportV2RestaurantContextResult;
   error?: string;
   tokenEstimate?: {
     inputChars: number;
@@ -85,6 +148,12 @@ export type AiImportV2ShadowReport = AiImportV2ShadowResult;
 
 export function isAiImportV2ShadowEnabled(): boolean {
   return process.env.HOSTLY_AI_IMPORT_V2_SHADOW === "true";
+}
+
+export function resolveAiImportV2ApiMode(): AiImportV2ApiMode {
+  return process.env.HOSTLY_AI_IMPORT_V2_API?.trim() === "responses"
+    ? "responses"
+    : "chat_completions";
 }
 
 export function resolveAiImportV2Model(): string {

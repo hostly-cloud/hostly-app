@@ -1,13 +1,26 @@
+import type { Firestore } from "firebase-admin/firestore";
 import type { ImportedMenuItem } from "@/lib/carta/imported-menu-types";
 import type { MenuImportMenuType } from "@/lib/firestore/menu-import-drafts";
+import { getHostlyFirestore } from "@/lib/firebase/admin";
 import { downloadMenuImportStorageFile } from "../download-storage-file";
+import { loadHostlyProductFamilies } from "../load-hostly-product-families";
+import { loadHostlyProductionStations } from "../load-hostly-production-stations";
+import {
+  inferMenuImportLearnedPreference,
+  loadRecentMenuImportLearningSignals,
+  type MenuImportLearnedPreference,
+} from "../menu-import-local-learning";
 import type { OcrLayoutLine } from "../menu-import-ocr-layout-types";
 import { compareAiImportV2WithParser } from "./compare-ai-import-v2-with-parser";
 import { buildAiImportV2Prompt, summarizeOcrLayout } from "./build-ai-import-v2-prompt";
 import { extractWithAiImportV2 } from "./extract-with-ai-import-v2";
+import { resolveRestaurantOperationalContext } from "./resolve-restaurant-operational-context";
 import { validateAiImportV2Output } from "./validate-ai-import-v2-output";
 import {
   isAiImportV2ShadowEnabled,
+  resolveAiImportV2ApiMode,
+  resolveAiImportV2Model,
+  type AiImportV2RestaurantContextResult,
   type AiImportV2ShadowReport,
   type AiImportV2ShadowResult,
 } from "./types";
@@ -42,6 +55,7 @@ async function resolveImageDataUrl(args: {
 }
 
 export type RunAiImportV2ShadowParams = {
+  db?: Firestore;
   restaurantId: string;
   draftId: string;
   rawText: string;
@@ -53,8 +67,45 @@ export type RunAiImportV2ShadowParams = {
   ocrLayoutLines?: OcrLayoutLine[];
 };
 
+async function buildRestaurantContext(
+  params: RunAiImportV2ShadowParams,
+  acceptedItems: NonNullable<AiImportV2ShadowResult["validation"]>["accepted"],
+): Promise<AiImportV2RestaurantContextResult | undefined> {
+  const db = params.db ?? getHostlyFirestore();
+  if (!db) return undefined;
+
+  try {
+    const [productFamilies, productionStations, learningSignals] = await Promise.all([
+      loadHostlyProductFamilies(db, params.restaurantId, { ensureDefaults: false }),
+      loadHostlyProductionStations(db, params.restaurantId),
+      loadRecentMenuImportLearningSignals(db, params.restaurantId),
+    ]);
+
+    const learnedPreferences = new Map<string, MenuImportLearnedPreference>();
+    for (const item of acceptedItems) {
+      const preference = inferMenuImportLearnedPreference(learningSignals, item.name);
+      if (preference) learnedPreferences.set(item.name, preference);
+    }
+
+    return resolveRestaurantOperationalContext({
+      restaurantId: params.restaurantId,
+      items: acceptedItems,
+      productionStations,
+      productFamilies,
+      learnedPreferences,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "RESTAURANT_CONTEXT_LOAD_FAILED";
+    console.warn("[Hostly][AI Import V2 Shadow] restaurant context unavailable", {
+      restaurantId: params.restaurantId,
+      error: message,
+    });
+    return undefined;
+  }
+}
+
 /**
- * Ejecuta IA Import V2 en shadow mode. Nunca lanza: errores → report con error.
+ * Ejecuta IA Import V2 en shadow mode. Nunca lanza: errores -> report con error.
  * Sin flag HOSTLY_AI_IMPORT_V2_SHADOW=true devuelve null (cero impacto).
  */
 export async function runAiImportV2Shadow(
@@ -88,7 +139,8 @@ export async function runAiImportV2Shadow(
 
   const baseResult = (): AiImportV2ShadowResult => ({
     enabled: true,
-    model: process.env.HOSTLY_AI_IMPORT_V2_MODEL?.trim() || process.env.HOSTLY_OPENAI_MODEL?.trim() || "gpt-4o-mini",
+    model: resolveAiImportV2Model(),
+    apiMode: resolveAiImportV2ApiMode(),
     usedVision: Boolean(imageDataUrl),
     durationMs: Date.now() - started,
     extraction: null,
@@ -102,7 +154,7 @@ export async function runAiImportV2Shadow(
   });
 
   try {
-    const { extraction, model, usedVision } = await extractWithAiImportV2({
+    const { extraction, model, apiMode, usedVision } = await extractWithAiImportV2({
       rawText: params.rawText,
       parserItems: params.parserItems,
       menuType: params.menuType,
@@ -119,15 +171,18 @@ export async function runAiImportV2Shadow(
       v2Accepted: validation.accepted,
       v2RejectedCount: validation.rejected.length,
     });
+    const restaurantContext = await buildRestaurantContext(params, validation.accepted);
 
     const result: AiImportV2ShadowResult = {
       enabled: true,
       model,
+      apiMode,
       usedVision,
       durationMs: Date.now() - started,
       extraction,
       validation,
       comparison,
+      ...(restaurantContext ? { restaurantContext } : {}),
       tokenEstimate: {
         inputChars: params.rawText.length,
         layoutChars: layoutSummary?.length ?? 0,
@@ -141,7 +196,11 @@ export async function runAiImportV2Shadow(
     const message = e instanceof Error ? e.message : "AI_IMPORT_V2_SHADOW_FAILED";
     const result = baseResult();
     result.error = message;
-    console.warn("[Hostly][AI Import V2 Shadow] failed (non-blocking)", { error: message });
+    console.warn("[Hostly][AI Import V2 Shadow] failed (non-blocking)", {
+      error: message,
+      model: result.model,
+      apiMode: result.apiMode,
+    });
     return result;
   }
 }
@@ -150,8 +209,20 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
   if (!result.comparison) return;
 
   const c = result.comparison;
+  const accepted = result.validation?.accepted ?? [];
+  const operationalReviewCount = accepted.filter((item) => item.operationalWarnings.length > 0).length;
+  const stationCounts = accepted.reduce<Record<string, number>>((acc, item) => {
+    const station = item.operationalSuggestion.suggestedStation;
+    acc[station] = (acc[station] ?? 0) + 1;
+    return acc;
+  }, {});
+  const learnedTargets = result.restaurantContext?.targets.filter(
+    (target) => target.localLearning,
+  ) ?? [];
+
   console.info("[Hostly][AI Import V2 Shadow] comparison", {
     model: result.model,
+    apiMode: result.apiMode,
     usedVision: result.usedVision,
     durationMs: result.durationMs,
     parserDetected: c.parserDetected,
@@ -164,6 +235,33 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
     parserVsV2Recall: c.parserVsV2Recall,
     parserVsV2Precision: c.parserVsV2Precision,
     avgV2Confidence: c.avgV2Confidence,
+    operationalReviewCount,
+    stationCounts,
+    localLearningMatches: learnedTargets.length,
+    localLearningConflicts: learnedTargets.filter((target) =>
+      target.reasons.some((reason) => reason.startsWith("local_learning_")),
+    ).length,
+    restaurantContext: result.restaurantContext
+      ? {
+          productionStationsRead: result.restaurantContext.productionStationsRead,
+          activeProductionStations: result.restaurantContext.activeProductionStations,
+          productFamiliesRead: result.restaurantContext.productFamiliesRead,
+          activeProductFamilies: result.restaurantContext.activeProductFamilies,
+          fullyResolvedCount: result.restaurantContext.fullyResolvedCount,
+          partialCount: result.restaurantContext.partialCount,
+          reviewCount: result.restaurantContext.reviewCount,
+          warnings: result.restaurantContext.warnings,
+        }
+      : null,
+    operationalSample: accepted.slice(0, 8).map((item) => ({
+      name: item.name,
+      categoryType: item.operationalSuggestion.categoryType,
+      productFamilyType: item.operationalSuggestion.productFamilyType,
+      station: item.operationalSuggestion.suggestedStation,
+      confidence: item.operationalSuggestion.confidence,
+      warnings: item.operationalWarnings,
+    })),
+    resolvedTargetSample: result.restaurantContext?.targets.slice(0, 8),
     rejectedSample: result.validation?.rejected.slice(0, 4).map((r) => ({
       name: r.name,
       reasons: r.rejectionReasons,
@@ -171,20 +269,30 @@ function logShadowComparison(result: AiImportV2ShadowResult): void {
   });
 }
 
-/** Estimación orientativa de coste por análisis (USD). */
+type ModelPricing = { inputPerM: number; outputPerM: number };
+
+function resolveModelPricing(model: string): ModelPricing {
+  if (model.startsWith("gpt-5.6-luna")) return { inputPerM: 0.2, outputPerM: 1.2 };
+  if (model.startsWith("gpt-5.6-terra")) return { inputPerM: 2, outputPerM: 12 };
+  if (model === "gpt-5.6" || model.startsWith("gpt-5.6-sol")) {
+    return { inputPerM: 5, outputPerM: 30 };
+  }
+  return { inputPerM: 0.15, outputPerM: 0.6 };
+}
+
+/** Estimacion orientativa de coste por analisis (USD). */
 export function estimateAiImportV2CostUsd(args: {
   rawTextChars: number;
   hasImage: boolean;
   model?: string;
 }): { low: number; high: number; model: string } {
-  const model = args.model || process.env.HOSTLY_AI_IMPORT_V2_MODEL?.trim() || "gpt-4o-mini";
+  const model = args.model || resolveAiImportV2Model();
   const textTokens = Math.ceil(args.rawTextChars / 4) + 800;
   const imageTokens = args.hasImage ? 1200 : 0;
   const outputTokens = 1200;
-  const inputCostPerM = args.hasImage ? 0.15 : 0.15;
-  const outputCostPerM = 0.6;
-  const inputUsd = ((textTokens + imageTokens) / 1_000_000) * inputCostPerM;
-  const outputUsd = (outputTokens / 1_000_000) * outputCostPerM;
+  const pricing = resolveModelPricing(model);
+  const inputUsd = ((textTokens + imageTokens) / 1_000_000) * pricing.inputPerM;
+  const outputUsd = (outputTokens / 1_000_000) * pricing.outputPerM;
   const total = inputUsd + outputUsd;
   return { low: total * 0.8, high: total * 1.4, model };
 }
