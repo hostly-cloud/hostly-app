@@ -15,6 +15,7 @@ on:
       - "lib/server/product-images/**"
       - "lib/productos/product-image-review-*.ts"
       - "lib/productos/catalog-product-image-*.ts"
+      - "lib/productos/catalog-image-live-eval.ts"
       - "lib/menu-import-eval/**"
       - "lib/carta/extract-menu-from-upload.ts"
       - "lib/carta/request-menu-import-*.ts"
@@ -22,6 +23,7 @@ on:
       - "lib/firestore/menu-import-drafts.ts"
       - "lib/storage/menu-import-files.ts"
       - "scripts/eval-menu-import-corpus.ts"
+      - "scripts/eval-catalog-product-images-live.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
       - "tests/lib/product-image-enrichment.test.ts"
@@ -29,6 +31,7 @@ on:
       - "tests/lib/product-image-review-state.test.ts"
       - "tests/lib/catalog-product-image-matching.test.ts"
       - "tests/lib/catalog-product-image-provenance.test.ts"
+      - "tests/lib/catalog-image-live-eval.test.ts"
       - "tests/server/generate-imported-product-image-request.test.ts"
       - "tests/server/product-image-review-request.test.ts"
       - "tests/server/catalog-product-image-request.test.ts"
@@ -37,6 +40,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/menu-import-eval.yml"
+      - ".github/workflows/catalog-image-live-eval.yml"
 
 jobs:
   eval:
@@ -90,3 +94,6 @@ jobs:
 
       - name: Run catalog product image request tests
         run: npx tsx --test tests/server/catalog-product-image-request.test.ts
+
+      - name: Run catalog image live evaluation model tests
+        run: npx tsx --test tests/lib/catalog-image-live-eval.test.ts

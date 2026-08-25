@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "description": "Representative Spanish hospitality products for an on-demand Open Food Facts coverage evaluation. Results are advisory and never authorize automatic image selection.",
+  "minimumDelayMs": 6500,
+  "cases": [
+    {
+      "id": "coca-cola-zero-330",
+      "segment": "soft_drink",
+      "query": "Coca-Cola Zero 33 cl",
+      "context": {
+        "name": "Coca-Cola Zero 33 cl",
+        "categoryName": "Refrescos",
+        "brand": "Coca-Cola",
+        "quantity": "33 cl",
+        "barcode": "5449000131805"
+      },
+      "expectation": {
+        "brandTokens": ["Coca-Cola", "Zero"],
+        "quantity": "330 ml",
+        "barcode": "5449000131805"
+      }
+    },
+    {
+      "id": "fanta-naranja-330",
+      "segment": "soft_drink",
+      "query": "Fanta Naranja 33 cl",
+      "context": {
+        "name": "Fanta Naranja 33 cl",
+        "categoryName": "Refrescos",
+        "brand": "Fanta",
+        "quantity": "33 cl"
+      },
+      "expectation": {
+        "brandTokens": ["Fanta", "Naranja"],
+        "quantity": "330 ml"
+      }
+    },
+    {
+      "id": "aquarius-limon-500",
+      "segment": "soft_drink",
+      "query": "Aquarius Limón 50 cl",
+      "context": {
+        "name": "Aquarius Limón 50 cl",
+        "categoryName": "Refrescos",
+        "brand": "Aquarius",
+        "quantity": "50 cl"
+      },
+      "expectation": {
+        "brandTokens": ["Aquarius", "Limón"],
+        "quantity": "500 ml"
+      }
+    },
+    {
+      "id": "red-bull-250",
+      "segment": "energy_drink",
+      "query": "Red Bull 250 ml",
+      "context": {
+        "name": "Red Bull 250 ml",
+        "categoryName": "Bebidas energéticas",
+        "brand": "Red Bull",
+        "quantity": "250 ml"
+      },
+      "expectation": {
+        "brandTokens": ["Red Bull"],
+        "quantity": "250 ml"
+      }
+    },
+    {
+      "id": "estrella-damm-330",
+      "segment": "beer",
+      "query": "Estrella Damm 33 cl",
+      "context": {
+        "name": "Estrella Damm 33 cl",
+        "categoryName": "Cervezas",
+        "brand": "Estrella Damm",
+        "quantity": "33 cl"
+      },
+      "expectation": {
+        "brandTokens": ["Estrella Damm"],
+        "quantity": "330 ml"
+      }
+    },
+    {
+      "id": "heineken-330",
+      "segment": "beer",
+      "query": "Heineken 33 cl",
+      "context": {
+        "name": "Heineken 33 cl",
+        "categoryName": "Cervezas",
+        "brand": "Heineken",
+        "quantity": "33 cl"
+      },
+      "expectation": {
+        "brandTokens": ["Heineken"],
+        "quantity": "330 ml"
+      }
+    },
+    {
+      "id": "solan-de-cabras-1500",
+      "segment": "water",
+      "query": "Solán de Cabras 1,5 l",
+      "context": {
+        "name": "Solán de Cabras 1,5 l",
+        "categoryName": "Aguas",
+        "brand": "Solán de Cabras",
+        "quantity": "1,5 l"
+      },
+      "expectation": {
+        "brandTokens": ["Solán de Cabras"],
+        "quantity": "1500 ml"
+      }
+    },
+    {
+      "id": "san-pellegrino-750",
+      "segment": "water",
+      "query": "S.Pellegrino 75 cl",
+      "context": {
+        "name": "S.Pellegrino 75 cl",
+        "categoryName": "Aguas con gas",
+        "brand": "S.Pellegrino",
+        "quantity": "75 cl"
+      },
+      "expectation": {
+        "brandTokens": ["Pellegrino"],
+        "quantity": "750 ml"
+      }
+    },
+    {
+      "id": "marques-riscal-reserva-2019",
+      "segment": "wine",
+      "query": "Marqués de Riscal Reserva 2019 75 cl",
+      "context": {
+        "name": "Marqués de Riscal Reserva 2019",
+        "categoryName": "Vinos tintos",
+        "brand": "Marqués de Riscal",
+        "quantity": "75 cl",
+        "description": "Rioja Reserva 2019"
+      },
+      "expectation": {
+        "brandTokens": ["Marqués de Riscal", "Reserva"],
+        "quantity": "750 ml",
+        "vintage": "2019"
+      }
+    },
+    {
+      "id": "ramon-bilbao-crianza-2020",
+      "segment": "wine",
+      "query": "Ramón Bilbao Crianza 2020 75 cl",
+      "context": {
+        "name": "Ramón Bilbao Crianza 2020",
+        "categoryName": "Vinos tintos",
+        "brand": "Ramón Bilbao",
+        "quantity": "75 cl",
+        "description": "Rioja Crianza 2020"
+      },
+      "expectation": {
+        "brandTokens": ["Ramón Bilbao", "Crianza"],
+        "quantity": "750 ml",
+        "vintage": "2020"
+      }
+    },
+    {
+      "id": "freixenet-cordon-negro-750",
+      "segment": "sparkling_wine",
+      "query": "Freixenet Cordón Negro Brut 75 cl",
+      "context": {
+        "name": "Freixenet Cordón Negro Brut",
+        "categoryName": "Cavas y espumosos",
+        "brand": "Freixenet",
+        "quantity": "75 cl"
+      },
+      "expectation": {
+        "brandTokens": ["Freixenet", "Cordón Negro"],
+        "quantity": "750 ml"
+      }
+    },
+    {
+      "id": "anna-codorniu-blanc-blancs-750",
+      "segment": "sparkling_wine",
+      "query": "Anna de Codorníu Blanc de Blancs 75 cl",
+      "context": {
+        "name": "Anna de Codorníu Blanc de Blancs",
+        "categoryName": "Cavas y espumosos",
+        "brand": "Codorníu",
+        "quantity": "75 cl"
+      },
+      "expectation": {
+        "brandTokens": ["Anna", "Codorníu", "Blanc de Blancs"],
+        "quantity": "750 ml"
+      }
+    }
+  ]
+}
