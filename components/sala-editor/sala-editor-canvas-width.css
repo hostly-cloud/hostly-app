@@ -106,6 +106,44 @@
   .hostly-sala-library__search-icon {
     font-size: 13px !important;
   }
+
+  /* The premium catalog cards had grown to 118px/72px and only exposed a few
+   * tools at once. On desktop, keep the same preview-first hierarchy with a
+   * denser card so the toolbox behaves like a workbench rather than a gallery. */
+  .hostly-sala-library__item-btn {
+    min-height: 92px !important;
+    grid-template-columns: minmax(0, 1fr) 20px !important;
+    grid-template-rows: 52px auto !important;
+    gap: 6px !important;
+    padding: 7px !important;
+  }
+
+  .hostly-sala-library__item-preview {
+    height: 52px !important;
+    border-radius: 10px !important;
+  }
+
+  .hostly-sala-library__item-preview > * {
+    width: 44px !important;
+    height: 44px !important;
+    max-width: 44px !important;
+    max-height: 44px !important;
+  }
+
+  .hostly-sala-library__item-copy {
+    gap: 2px !important;
+  }
+
+  .hostly-sala-library__item-label {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+
+  .hostly-sala-library__item-state {
+    width: 18px !important;
+    height: 18px !important;
+    font-size: 10px !important;
+  }
 }
 
 @media (min-width: 1024px) {
