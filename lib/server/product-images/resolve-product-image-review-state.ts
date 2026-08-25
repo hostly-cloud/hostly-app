@@ -14,6 +14,18 @@ import { evaluateImportedProductImageEligibility } from "@/lib/server/product-im
 const GENERATION_LOCK_MS = 3 * 60 * 1000;
 const CATALOG_ATTACH_LOCK_MS = 2 * 60 * 1000;
 
+export class ResolveProductImageReviewStateError extends Error {
+  readonly code: string;
+  readonly httpStatus: number;
+
+  constructor(code: string, message: string, httpStatus: number) {
+    super(message);
+    this.name = "ResolveProductImageReviewStateError";
+    this.code = code;
+    this.httpStatus = httpStatus;
+  }
+}
+
 function readString(data: Record<string, unknown>, key: string): string | null {
   const value = data[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -120,6 +132,39 @@ export function buildProductImageReviewStateFromDocument(
   };
 }
 
+function assertSimpleProductId(value: string): string {
+  const productId = value.trim();
+  if (!productId || productId.includes("/") || productId.includes("..")) {
+    throw new ResolveProductImageReviewStateError(
+      "INVALID_PRODUCT_ID",
+      "productId inválido",
+      400,
+    );
+  }
+  return productId;
+}
+
+export async function resolveProductImageReviewStateById(params: {
+  db: Firestore;
+  restaurantId: string;
+  productId: string;
+}): Promise<ProductImageReviewResolution> {
+  const restaurantId = params.restaurantId.trim();
+  if (!restaurantId) return { resolution: "not_found" };
+  const productId = assertSimpleProductId(params.productId);
+  const snap = await params.db
+    .collection("restaurants")
+    .doc(restaurantId)
+    .collection("products")
+    .doc(productId)
+    .get();
+  if (!snap.exists) return { resolution: "not_found" };
+  return buildProductImageReviewStateFromDocument(
+    snap.id,
+    snap.data() as Record<string, unknown>,
+  );
+}
+
 async function queryUniqueProduct(
   db: Firestore,
   restaurantId: string,
@@ -144,11 +189,7 @@ async function queryUniqueProduct(
   );
 }
 
-/**
- * Resolves a product only inside the authenticated restaurant. The UI currently
- * opens the commercial modal with the product name, so a duplicate name is
- * deliberately treated as ambiguous instead of guessing a product id.
- */
+/** Name fallback retained for unsaved/legacy callers. Saved products should use id. */
 export async function resolveProductImageReviewState(params: {
   db: Firestore;
   restaurantId: string;

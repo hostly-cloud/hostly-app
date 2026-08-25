@@ -344,7 +344,7 @@ export function ProductFormCommercialInfoModal({
   useEffect(() => {
     setAiResolvedImageUrl(null);
     setImageReviewRevision(0);
-  }, [productName]);
+  }, [productId, productName]);
 
   useEffect(() => {
     if (!open) return;
@@ -492,8 +492,9 @@ export function ProductFormCommercialInfoModal({
                 <p className="hostly-product-commercial-modal__hint">{t("carta.fieldFotoUploadHint")}</p>
 
                 <ProductAiImageReviewPanel
-                  key={`${productName}:${imageReviewRevision}`}
+                  key={`${productId ?? "new"}:${productName}:${imageReviewRevision}`}
                   open={open}
+                  productId={productId}
                   productName={productName}
                   fallbackImageUrl={effectiveImagePreviewUrl}
                   imageDraftMode={imageDraftMode}

@@ -18,6 +18,7 @@ import type {
 import {
   ProductImageReviewApiError,
   fetchProductImageReviewState,
+  fetchProductImageReviewStateById,
   generateProductImageForReview,
   submitProductImageReview,
 } from "@/lib/productos/product-image-review-api";
@@ -28,6 +29,7 @@ import {
 
 export type ProductAiImageReviewPanelProps = {
   open: boolean;
+  productId?: string | null;
   productName: string;
   fallbackImageUrl: string | null;
   imageDraftMode: "synced" | "manual_pending" | "not_visible";
@@ -221,6 +223,7 @@ function CandidateCard({
 
 export function ProductAiImageReviewPanel({
   open,
+  productId = null,
   productName,
   fallbackImageUrl,
   imageDraftMode,
@@ -252,16 +255,20 @@ export function ProductAiImageReviewPanel({
     setCatalogSearched(false);
     setCatalogSearching(false);
     setCatalogAttachingReference(null);
-  }, [open, productName]);
+  }, [open, productId, productName]);
 
   useEffect(() => {
+    const id = productId?.trim() ?? "";
     const name = productName.trim();
-    if (!open || !name) return;
+    if (!open || (!id && !name)) return;
 
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void fetchProductImageReviewState(name)
+    const request = id
+      ? fetchProductImageReviewStateById(id)
+      : fetchProductImageReviewState(name);
+    void request
       .then((next) => {
         if (!cancelled) setState(next);
       })
@@ -275,7 +282,7 @@ export function ProductAiImageReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [open, productName, refreshKey]);
+  }, [open, productId, productName, refreshKey]);
 
   const resolved = state?.resolution === "resolved" ? state : null;
   const fallbackIsLocalBlob = fallbackImageUrl?.startsWith("blob:") === true;
@@ -414,7 +421,7 @@ export function ProductAiImageReviewPanel({
     [resolved, localImageDraftDirty, disabled, catalogAttachingReference, onImageUrlChange, refresh],
   );
 
-  if (!open || !productName.trim()) return null;
+  if (!open || (!productId?.trim() && !productName.trim())) return null;
 
   const buttonDisabled =
     disabled || busyAction != null || catalogSearching || catalogAttachingReference != null;

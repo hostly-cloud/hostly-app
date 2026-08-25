@@ -69,12 +69,12 @@ test("image state rejects restaurantId supplied by the browser", async () => {
   let resolved = false;
   const response = await handleProductImageStateRequest(
     new Request(
-      "http://localhost/api/catalog/product-image-state?name=Lubina&restaurantId=attacker",
+      "http://localhost/api/catalog/product-image-state?productId=product-1&restaurantId=attacker",
       { headers: { authorization: "Bearer test-token" } },
     ),
     {
       authenticate: async () => authContext(),
-      resolveState: async () => {
+      resolveStateById: async () => {
         resolved = true;
         return { resolution: "not_found" };
       },
@@ -88,12 +88,12 @@ test("image state rejects restaurantId supplied by the browser", async () => {
 
 test("image state is limited to settings.manage", async () => {
   const response = await handleProductImageStateRequest(
-    new Request("http://localhost/api/catalog/product-image-state?name=Lubina", {
+    new Request("http://localhost/api/catalog/product-image-state?productId=product-1", {
       headers: { authorization: "Bearer test-token" },
     }),
     {
       authenticate: async () => authContext({ role: "manager" }),
-      resolveState: async () => resolvedState(),
+      resolveStateById: async () => resolvedState(),
     },
   );
 
@@ -101,7 +101,39 @@ test("image state is limited to settings.manage", async () => {
   assert.equal((await json(response)).error, "SETTINGS_MANAGE_REQUIRED");
 });
 
-test("image state resolver receives only the server tenant and product name", async () => {
+test("image state prefers product id and receives only the server tenant", async () => {
+  let byNameCalled = false;
+  let received: { restaurantId: string; productId: string } | undefined;
+  const response = await handleProductImageStateRequest(
+    new Request(
+      "http://localhost/api/catalog/product-image-state?productId=product-1&name=Duplicado",
+      { headers: { authorization: "Bearer test-token" } },
+    ),
+    {
+      authenticate: async () => authContext(),
+      resolveStateById: async (params) => {
+        received = {
+          restaurantId: params.restaurantId,
+          productId: params.productId,
+        };
+        return resolvedState();
+      },
+      resolveState: async () => {
+        byNameCalled = true;
+        return { resolution: "ambiguous" };
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(received, {
+    restaurantId: "restaurant-server",
+    productId: "product-1",
+  });
+  assert.equal(byNameCalled, false);
+});
+
+test("image state keeps name fallback for legacy callers", async () => {
   let received: { restaurantId: string; productName: string } | undefined;
   const response = await handleProductImageStateRequest(
     new Request(
@@ -226,5 +258,4 @@ test("structured review errors preserve status and code", async () => {
   const body = await json(response);
   assert.equal(body.error, "PRODUCT_IMAGE_PROTECTED");
   assert.equal(body.details, "La imagen está protegida");
-}
-);
+});

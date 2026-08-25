@@ -44,12 +44,8 @@ function throwApiError(
   throw new ProductImageReviewApiError(code, message, response.status);
 }
 
-export async function fetchProductImageReviewState(
-  productName: string,
-): Promise<ProductImageReviewResolution> {
-  const response = await authenticatedApiFetch(
-    `/api/catalog/product-image-state?name=${encodeURIComponent(productName.trim())}`,
-  );
+async function fetchState(url: string): Promise<ProductImageReviewResolution> {
+  const response = await authenticatedApiFetch(url);
   const body = await readJson<ProductImageReviewApiResponse>(response);
   if (!response.ok || !body?.ok) {
     throwApiError(
@@ -59,6 +55,22 @@ export async function fetchProductImageReviewState(
     );
   }
   return body.state;
+}
+
+export async function fetchProductImageReviewState(
+  productName: string,
+): Promise<ProductImageReviewResolution> {
+  return fetchState(
+    `/api/catalog/product-image-state?name=${encodeURIComponent(productName.trim())}`,
+  );
+}
+
+export async function fetchProductImageReviewStateById(
+  productId: string,
+): Promise<ProductImageReviewResolution> {
+  return fetchState(
+    `/api/catalog/product-image-state?productId=${encodeURIComponent(productId.trim())}`,
+  );
 }
 
 export type GenerateProductImageClientResult =
