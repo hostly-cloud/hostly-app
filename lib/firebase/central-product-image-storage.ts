@@ -1,6 +1,14 @@
 import { FirebaseError } from "firebase/app";
+import { doc, runTransaction, updateDoc } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { auth, storage } from "@/lib/firebase/client";
+import {
+  buildManualProductImageEnrichment,
+  buildPendingAutomaticProductImageEnrichment,
+  canAutomaticallyReplaceProductImage,
+  readProductImageEnrichment,
+  type ProductImageSource,
+} from "@/lib/carta/product-image-enrichment";
+import { auth, db, storage } from "@/lib/firebase/client";
 import {
   MAX_PRODUCT_IMAGE_BYTES,
   validateProductImageFile,
@@ -53,6 +61,22 @@ function sanitizeFileName(originalName: string): string {
   return base.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
 }
 
+function centralProductRef(restaurantId: string, productId: string) {
+  return doc(db, "restaurants", restaurantId, "products", productId);
+}
+
+function readStoredImagePath(data: Record<string, unknown>): string | undefined {
+  return typeof data.imagePath === "string" && data.imagePath.trim()
+    ? data.imagePath.trim()
+    : undefined;
+}
+
+function readStoredImageUrl(data: Record<string, unknown>): string | undefined {
+  return typeof data.imageUrl === "string" && data.imageUrl.trim()
+    ? data.imageUrl.trim()
+    : undefined;
+}
+
 /** Catálogo central: `restaurants/{restaurantId}/products/{productId}/{file}`. */
 export function buildCentralProductImagePath(
   restaurantId: string,
@@ -65,7 +89,7 @@ export function buildCentralProductImagePath(
   return `restaurants/${rid}/products/${pid}/${Date.now()}-${safeName}`;
 }
 
-export async function uploadCentralProductImage(
+async function uploadCentralProductImageFile(
   restaurantId: string,
   productId: string,
   file: File,
@@ -105,6 +129,137 @@ export async function uploadCentralProductImage(
   } catch (e) {
     throw storageErr("uploadCentralProductImage", e);
   }
+}
+
+/**
+ * Vía manual actual. Además de subir el archivo, registra procedencia manual,
+ * aprobación y bloqueo para que ningún enriquecimiento automático pueda pisarlo.
+ */
+export async function uploadCentralProductImage(
+  restaurantId: string,
+  productId: string,
+  file: File,
+): Promise<{ path: string; url: string }> {
+  const rid = assertRestaurantId(restaurantId);
+  const pid = assertProductId(productId);
+  const au = auth.currentUser;
+  if (!au) throw new Error("[Storage/auth] No hay usuario autenticado");
+
+  const up = await uploadCentralProductImageFile(rid, pid, file);
+  try {
+    const now = Date.now();
+    await updateDoc(centralProductRef(rid, pid), {
+      imageUrl: up.url,
+      imagePath: up.path,
+      imageEnrichment: buildManualProductImageEnrichment({
+        reviewedAt: now,
+        reviewedBy: au.uid,
+      }),
+      updatedAt: now,
+      updatedBy: au.uid,
+    });
+    return up;
+  } catch (e) {
+    await deleteCentralProductImageAtPath(up.path);
+    throw e;
+  }
+}
+
+export type AutomaticCentralProductImageInput = {
+  source: Exclude<ProductImageSource, "manual">;
+  confidence?: number;
+  provider?: string;
+  externalReference?: string;
+};
+
+export type AutomaticCentralProductImageResult =
+  | { attached: true; path: string; url: string; replacedImagePath?: string }
+  | { attached: false; reason: "protected_existing_image" };
+
+/**
+ * Única vía admitida para imágenes automáticas.
+ *
+ * El archivo se sube primero y la decisión final de reemplazo se toma dentro de
+ * una transacción Firestore. Si mientras tanto un usuario sube o aprueba una
+ * foto, la transacción observa ese estado y descarta la automática.
+ */
+export async function uploadAndAttachAutomaticCentralProductImage(
+  restaurantId: string,
+  productId: string,
+  file: File,
+  input: AutomaticCentralProductImageInput,
+): Promise<AutomaticCentralProductImageResult> {
+  const rid = assertRestaurantId(restaurantId);
+  const pid = assertProductId(productId);
+  const au = auth.currentUser;
+  if (!au) throw new Error("[Storage/auth] No hay usuario autenticado");
+
+  const productRef = centralProductRef(rid, pid);
+
+  const initialSnap = await runTransaction(db, async (transaction) =>
+    transaction.get(productRef),
+  );
+  if (!initialSnap.exists()) throw new Error("PRODUCT_NOT_FOUND");
+  const initialData = initialSnap.data() as Record<string, unknown>;
+  if (
+    !canAutomaticallyReplaceProductImage({
+      imageUrl: readStoredImageUrl(initialData),
+      imagePath: readStoredImagePath(initialData),
+      imageEnrichment: readProductImageEnrichment(initialData.imageEnrichment),
+    })
+  ) {
+    return { attached: false, reason: "protected_existing_image" };
+  }
+
+  const up = await uploadCentralProductImageFile(rid, pid, file);
+  let replacedImagePath: string | undefined;
+  try {
+    const attached = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(productRef);
+      if (!snap.exists()) throw new Error("PRODUCT_NOT_FOUND");
+      const data = snap.data() as Record<string, unknown>;
+      const currentImagePath = readStoredImagePath(data);
+      const allowed = canAutomaticallyReplaceProductImage({
+        imageUrl: readStoredImageUrl(data),
+        imagePath: currentImagePath,
+        imageEnrichment: readProductImageEnrichment(data.imageEnrichment),
+      });
+      if (!allowed) return false;
+
+      const now = Date.now();
+      transaction.update(productRef, {
+        imageUrl: up.url,
+        imagePath: up.path,
+        imageEnrichment: buildPendingAutomaticProductImageEnrichment({
+          ...input,
+          generatedAt: now,
+        }),
+        updatedAt: now,
+        updatedBy: au.uid,
+      });
+      replacedImagePath = currentImagePath;
+      return true;
+    });
+
+    if (!attached) {
+      await deleteCentralProductImageAtPath(up.path);
+      return { attached: false, reason: "protected_existing_image" };
+    }
+  } catch (e) {
+    await deleteCentralProductImageAtPath(up.path);
+    throw e;
+  }
+
+  if (replacedImagePath && replacedImagePath !== up.path) {
+    await deleteCentralProductImageAtPath(replacedImagePath);
+  }
+
+  return {
+    attached: true,
+    path: up.path,
+    url: up.url,
+    ...(replacedImagePath ? { replacedImagePath } : {}),
+  };
 }
 
 export async function deleteCentralProductImageAtPath(

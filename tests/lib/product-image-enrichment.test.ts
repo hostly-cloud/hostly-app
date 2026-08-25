@@ -5,6 +5,7 @@ import {
   buildManualProductImageEnrichment,
   buildPendingAutomaticProductImageEnrichment,
   canAutomaticallyReplaceProductImage,
+  readProductImageEnrichment,
   rejectProductImageEnrichment,
 } from "@/lib/carta/product-image-enrichment";
 
@@ -94,5 +95,41 @@ test("rejected automatic image remains replaceable", () => {
       imageEnrichment: rejected,
     }),
     true,
+  );
+});
+
+test("stored metadata is read defensively and confidence is clamped", () => {
+  assert.deepEqual(
+    readProductImageEnrichment({
+      source: "catalog_exact",
+      reviewStatus: "pending",
+      locked: false,
+      confidence: 3,
+      provider: " catalog ",
+      externalReference: " sku-123 ",
+    }),
+    {
+      source: "catalog_exact",
+      reviewStatus: "pending",
+      locked: false,
+      confidence: 1,
+      provider: "catalog",
+      externalReference: "sku-123",
+    },
+  );
+});
+
+test("malformed stored metadata is treated as legacy protection", () => {
+  const metadata = readProductImageEnrichment({
+    source: "manual",
+    reviewStatus: "approved",
+  });
+  assert.equal(metadata, null);
+  assert.equal(
+    canAutomaticallyReplaceProductImage({
+      imageUrl: "https://example.test/unknown.jpg",
+      imageEnrichment: metadata,
+    }),
+    false,
   );
 });
