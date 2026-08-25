@@ -150,6 +150,10 @@ export function isAiImportV2ShadowEnabled(): boolean {
   return process.env.HOSTLY_AI_IMPORT_V2_SHADOW === "true";
 }
 
+export function isAiImportV2PhotoRecoveryEnabled(): boolean {
+  return process.env.HOSTLY_AI_IMPORT_V2_PHOTO_RECOVERY === "true";
+}
+
 export function resolveAiImportV2ApiMode(): AiImportV2ApiMode {
   return process.env.HOSTLY_AI_IMPORT_V2_API?.trim() === "responses"
     ? "responses"

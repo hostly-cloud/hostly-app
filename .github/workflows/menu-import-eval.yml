@@ -32,6 +32,7 @@ on:
       - "scripts/eval-catalog-product-images-live.ts"
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
+      - "tests/lib/menu-import-photo-vision-recovery.test.ts"
       - "tests/lib/product-image-enrichment.test.ts"
       - "tests/lib/imported-product-image-generation.test.ts"
       - "tests/lib/product-image-review-state.test.ts"
@@ -80,6 +81,9 @@ jobs:
 
       - name: Run local learning unit tests
         run: npx tsx --test tests/lib/menu-import-local-learning.test.ts
+
+      - name: Run photo vision recovery tests
+        run: npx tsx --test tests/lib/menu-import-photo-vision-recovery.test.ts
 
       - name: Run product image enrichment unit tests
         run: npx tsx --test tests/lib/product-image-enrichment.test.ts
