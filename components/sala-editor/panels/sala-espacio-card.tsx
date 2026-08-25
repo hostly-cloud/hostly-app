@@ -24,6 +24,10 @@ export type SalaEspacioDragHandleProps = {
   disabled?: boolean;
 };
 
+type SalaEspacioCardMutation = Partial<SalaEspacioDraft> & {
+  __delete?: boolean;
+};
+
 export type SalaEspacioCardProps = {
   espacio: SalaEspacio;
   espacios: SalaEspacio[];
@@ -32,7 +36,7 @@ export type SalaEspacioCardProps = {
   dragHandleProps?: SalaEspacioDragHandleProps;
   elementCount: number;
   onSelect: () => void;
-  onUpdateEspacio?: (patch: Partial<SalaEspacioDraft>) => void;
+  onUpdateEspacio?: (patch: SalaEspacioCardMutation) => void;
   onDuplicateEspacio?: () => void;
 };
 
@@ -214,6 +218,20 @@ export function SalaEspacioCard({
     [closeMenu, onDuplicateEspacio],
   );
 
+  const handleDelete = useCallback(
+    (event: MouseEvent) => {
+      event.stopPropagation();
+      if (!selected || !onUpdateEspacio) return;
+      closeMenu();
+      const confirmed = window.confirm(
+        `¿Eliminar "${espacio.name}"?\n\nTambién se eliminarán de este mapa sus mesas, zonas, muros y demás elementos.`,
+      );
+      if (!confirmed) return;
+      onUpdateEspacio({ __delete: true });
+    },
+    [closeMenu, espacio.name, onUpdateEspacio, selected],
+  );
+
   const dragHandle = dragHandleProps
     ? {
         attributes: dragHandleProps.attributes,
@@ -338,6 +356,11 @@ export function SalaEspacioCard({
             {onDuplicateEspacio ? (
               <button type="button" role="menuitem" className="hostly-sala-editor-layer__menu-item" onClick={handleDuplicate}>
                 Duplicar espacio
+              </button>
+            ) : null}
+            {selected ? (
+              <button type="button" role="menuitem" className="hostly-sala-editor-layer__menu-item" onClick={handleDelete}>
+                Eliminar espacio
               </button>
             ) : null}
           </div>
