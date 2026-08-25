@@ -1,7 +1,7 @@
 import { type PlanElementType, type Table } from "@/lib/firestore/tables";
 
 /** Margen del auto-fit TPV (px totales restados del viewport). */
-export const TPV_OPERATIONAL_FIT_PADDING_PX = 2;
+export const TPV_OPERATIONAL_FIT_PADDING_PX = 24;
 
 /** Tope de zoom del auto-fit TPV (evita techo artificial bajo). */
 export const TPV_OPERATIONAL_FIT_ZOOM_MAX_DESKTOP = 3.4;

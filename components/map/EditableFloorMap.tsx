@@ -1153,6 +1153,8 @@ export function EditableFloorMap({
 
   const fitPaddingPx = viewportFitPaddingPx ?? VIEW_PADDING_PX;
   const fitZoomMax = viewportFitZoomMax ?? FIT_ZOOM_MAX;
+  const includeExplicitFitElementsInPlan =
+    viewportFitMode === "plan" && viewportFitElements !== undefined;
 
   const applyFitToViewport = useCallback(() => {
     if (!editorPlanSurface) return;
@@ -1162,10 +1164,17 @@ export function EditableFloorMap({
     const vh = root.clientHeight;
     if (vw < 32 || vh < 32) return;
     const planBounds = getPlanSizeBounds(planSize);
-    const usePlanFit = viewportFitMode === "plan" && planBounds != null;
+    const usePlanFit =
+      viewportFitMode === "plan" &&
+      planBounds != null &&
+      !includeExplicitFitElementsInPlan;
     const bounds = usePlanFit
       ? planBounds
-      : getPlanContentBounds(mapFitElementsRef.current, mapFitZonesRef.current, null);
+      : getPlanContentBounds(
+          mapFitElementsRef.current,
+          mapFitZonesRef.current,
+          includeExplicitFitElementsInPlan ? planSize : null,
+        );
     let z: number;
     let p: { x: number; y: number };
     if (usePlanFit) {
@@ -1189,7 +1198,7 @@ export function EditableFloorMap({
         fitZoomMax,
         align: viewportFitAlign,
       }));
-      if (mapLayoutEmphasis) {
+      if (mapLayoutEmphasis && !includeExplicitFitElementsInPlan) {
         const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
         z = clamp(z * 1.085, 0.06, cap);
       }
@@ -1222,6 +1231,7 @@ export function EditableFloorMap({
     editorPlanSurface,
     fitPaddingPx,
     fitZoomMax,
+    includeExplicitFitElementsInPlan,
     mapLayoutEmphasis,
     planSize,
     viewportFitAlign,
