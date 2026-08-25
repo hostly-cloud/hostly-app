@@ -4,6 +4,11 @@ import {
   searchOpenFoodFactsCatalog,
   type CatalogProductMatchContext,
 } from "@/lib/server/product-images/open-food-facts-catalog";
+import {
+  filterCatalogCandidatesByExactIdentity,
+  getOpenFoodFactsCandidateByExactBarcode,
+  normalizeCatalogBarcode,
+} from "@/lib/server/product-images/open-food-facts-exact-product";
 
 export class SearchCatalogProductImagesError extends Error {
   readonly code: string;
@@ -86,9 +91,33 @@ export async function searchCatalogProductImages(params: {
     );
   }
 
-  return searchOpenFoodFactsCatalog({
+  const barcode = normalizeCatalogBarcode(context.barcode);
+  if (barcode) {
+    const exact = await getOpenFoodFactsCandidateByExactBarcode({
+      barcode,
+      context,
+      fetchImpl: params.fetchImpl,
+    });
+    return {
+      query: barcode,
+      candidates: exact ? [exact] : [],
+      provider: "open_food_facts",
+      attribution: "Open Food Facts contributors",
+      license: "CC BY-SA 3.0",
+    };
+  }
+
+  const result = await searchOpenFoodFactsCatalog({
     query: query || context.name,
     context,
     fetchImpl: params.fetchImpl,
   });
+
+  return {
+    ...result,
+    candidates: filterCatalogCandidatesByExactIdentity({
+      context,
+      candidates: result.candidates,
+    }),
+  };
 }

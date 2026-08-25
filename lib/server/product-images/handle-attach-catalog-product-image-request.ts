@@ -7,6 +7,7 @@ import {
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import type { CatalogProductImageAttachResult } from "@/lib/productos/catalog-product-image-contract";
 import { attachCatalogProductImage } from "@/lib/server/product-images/attach-catalog-product-image";
+import { normalizeCatalogBarcode } from "@/lib/server/product-images/open-food-facts-exact-product";
 
 type Authenticate = (
   req: Request,
@@ -30,6 +31,45 @@ function jsonError(status: number, error: string, details?: string) {
     { ok: false as const, error, details: details ?? null },
     { status },
   );
+}
+
+function readStoredBarcode(data: Record<string, unknown>): string | null {
+  for (const key of ["barcode", "ean", "ean13", "gtin"]) {
+    const value = data[key];
+    if (typeof value === "string") {
+      const normalized = normalizeCatalogBarcode(value);
+      if (normalized) return normalized;
+    }
+  }
+  return null;
+}
+
+async function assertCatalogReferenceMatchesStoredBarcode(params: {
+  db: AuthenticatedRestaurantContext["db"];
+  restaurantId: string;
+  productId: string;
+  externalReference: string;
+}): Promise<NextResponse | null> {
+  const selected = normalizeCatalogBarcode(params.externalReference);
+  if (!selected) return jsonError(400, "INVALID_CATALOG_REFERENCE");
+
+  const snap = await params.db
+    .collection("restaurants")
+    .doc(params.restaurantId)
+    .collection("products")
+    .doc(params.productId)
+    .get();
+  if (!snap.exists) return jsonError(404, "PRODUCT_NOT_FOUND");
+
+  const stored = readStoredBarcode(snap.data() as Record<string, unknown>);
+  if (stored && stored !== selected) {
+    return jsonError(
+      409,
+      "CATALOG_BARCODE_MISMATCH",
+      "La referencia seleccionada no coincide con el código de barras guardado en Hostly",
+    );
+  }
+  return null;
 }
 
 export async function handleAttachCatalogProductImageRequest(
@@ -87,6 +127,16 @@ export async function handleAttachCatalogProductImageRequest(
       "CATALOG_SELECTION_CONFIRMATION_REQUIRED",
       "Envía confirmSelection: true después de que el usuario elija el candidato",
     );
+  }
+
+  if (!dependencies?.attachCatalog) {
+    const identityError = await assertCatalogReferenceMatchesStoredBarcode({
+      db: authCtx.db,
+      restaurantId: authCtx.restaurantId,
+      productId,
+      externalReference,
+    });
+    if (identityError) return identityError;
   }
 
   const attachCatalog =
