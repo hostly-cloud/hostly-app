@@ -11,6 +11,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useI18n } from "@/components/i18n-provider";
 import { HostlySection, HostlySectionHeader, HostlySurface } from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
+import "./dashboard-mobile-overrides.css";
 
 /**
  * Todo el área /dashboard sigue reglas TPV táctil (data-hostly-touch → globals.css).

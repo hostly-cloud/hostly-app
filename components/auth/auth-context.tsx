@@ -86,20 +86,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("NO_RESTAURANT_ASSIGNED");
         }
 
-        let rn = ctx.restaurantName;
-        if (rn == null || rn.trim() === "") {
-          try {
-            rn = await loadRestaurantNameById(rid);
-          } catch (nameErr) {
-            if (process.env.NODE_ENV === "development") {
-              console.warn("[AUTH] loadRestaurantNameById failed", nameErr);
-            }
-            rn = null;
+        // El documento del restaurante es la fuente de verdad del nombre visible.
+        // El perfil de usuario conserva restaurantName como compatibilidad/fallback,
+        // pero no debe poder enmascarar un nombre más reciente del restaurante.
+        let rn: string | null = null;
+        try {
+          rn = await loadRestaurantNameById(rid);
+        } catch (nameErr) {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("[AUTH] loadRestaurantNameById failed", nameErr);
           }
         }
 
         if (isStale()) {
           return;
+        }
+
+        if (rn == null || rn.trim() === "") {
+          const profileRestaurantName = ctx.restaurantName?.trim() ?? "";
+          rn = profileRestaurantName || null;
+        } else {
+          rn = rn.trim();
         }
 
         setRestaurantId(rid);
