@@ -5,6 +5,28 @@
  * inside a stale nested scroll container.
  */
 @media (max-width: 767px) {
+  /* ModulePageShell can briefly retain its desktop lockViewport inline styles
+   * during client-side route transitions. The dashboard must never inherit that
+   * fixed-height contract on phones: explicitly reopen both the outer shell and
+   * its page container so the document remains the single vertical scroll owner. */
+  .hostly-module-shell:has(.hostly-dashboard-premium-shell) {
+    min-height: 100dvh !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .hostly-module-shell:has(.hostly-dashboard-premium-shell) > .hostly-container,
+  .hostly-module-shell:has(.hostly-dashboard-premium-shell) > .hostly-container-wide {
+    flex: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
   .hostly-dashboard-premium-shell {
     display: block !important;
     min-height: 0 !important;
