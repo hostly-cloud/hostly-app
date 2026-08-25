@@ -13,188 +13,6 @@ import type { ProductQuickCreateInheritedDraft } from "@/lib/productos/product-c
 const drawerInputClass =
   "hostly-input hostly-carta-config-field-input hostly-product-quick-create-v3__input";
 
-const quickCreateMobileStyles = `
-@media (max-width: 767px) {
-  .hostly-product-quick-create-v3-backdrop {
-    align-items: flex-end !important;
-    padding: 0 !important;
-    background: rgba(15, 39, 68, 0.28) !important;
-  }
-
-  .hostly-product-quick-create-v3 {
-    width: 100vw !important;
-    max-width: none !important;
-    max-height: min(86dvh, 620px) !important;
-    border-radius: 18px 18px 0 0 !important;
-    border-left: 0 !important;
-    border-right: 0 !important;
-    border-bottom: 0 !important;
-    box-shadow: 0 -14px 36px rgba(15, 23, 42, 0.12) !important;
-  }
-
-  .hostly-product-quick-create-v3__header {
-    min-height: 48px !important;
-    padding: 8px 10px 6px !important;
-    border-bottom-color: rgba(148, 163, 184, 0.12) !important;
-    background: rgba(255, 255, 255, 0.98) !important;
-  }
-
-  .hostly-product-quick-create-v3__header-main {
-    gap: 6px !important;
-    min-width: 0;
-  }
-
-  .hostly-product-quick-create-v3__title {
-    font-size: 17px !important;
-    line-height: 1.15 !important;
-    letter-spacing: -0.02em !important;
-  }
-
-  .hostly-product-quick-create-v3__flash {
-    min-height: 22px !important;
-    padding: 3px 6px !important;
-    border-radius: 7px !important;
-    font-size: 9.5px !important;
-    line-height: 1.1 !important;
-  }
-
-  .hostly-product-quick-create-v3__close {
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
-    border-radius: 9px !important;
-    font-size: 22px !important;
-    line-height: 1 !important;
-    color: var(--hostly-ink-muted) !important;
-  }
-
-  .hostly-product-quick-create-v3__form {
-    min-height: 0 !important;
-    overflow: auto !important;
-    -webkit-overflow-scrolling: touch;
-    background: var(--hostly-surface-page-soft) !important;
-  }
-
-  .hostly-product-quick-create-v3__fields {
-    flex: 0 0 auto !important;
-    gap: 8px !important;
-    padding: 9px 10px 8px !important;
-    overflow: visible !important;
-  }
-
-  .hostly-product-quick-create-v3__field {
-    gap: 4px !important;
-  }
-
-  .hostly-product-quick-create-v3__label {
-    font-size: 10px !important;
-    line-height: 1.1 !important;
-    color: var(--hostly-ink-muted) !important;
-  }
-
-  .hostly-product-quick-create-v3__label--hero {
-    font-size: 10.5px !important;
-    color: var(--hostly-ink-strong) !important;
-  }
-
-  .hostly-product-quick-create-v3__input,
-  .hostly-product-quick-create-v3__category-select {
-    min-height: 42px !important;
-    padding: 8px 10px !important;
-    border-radius: 10px !important;
-    font-size: 13px !important;
-    line-height: 1.2 !important;
-    background: #ffffff !important;
-    box-shadow: none !important;
-  }
-
-  .hostly-product-quick-create-v3__input--hero {
-    min-height: 46px !important;
-    padding: 9px 11px !important;
-    font-size: 15px !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.012em !important;
-  }
-
-  .hostly-product-quick-create-v3__input--price {
-    font-size: 14px !important;
-    font-weight: 720 !important;
-  }
-
-  .hostly-product-quick-create-v3__category-row {
-    gap: 5px !important;
-  }
-
-  .hostly-product-quick-create-v3__category-add {
-    width: 42px !important;
-    min-width: 42px !important;
-    height: 42px !important;
-    min-height: 42px !important;
-    border-radius: 10px !important;
-    font-size: 18px !important;
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-
-  .hostly-product-quick-create-v3__error {
-    padding: 7px 9px !important;
-    border-radius: 9px !important;
-    font-size: 10px !important;
-    line-height: 1.25 !important;
-  }
-
-  .hostly-product-quick-create-v3__footer {
-    gap: 6px !important;
-    padding: 8px 10px max(8px, env(safe-area-inset-bottom)) !important;
-    border-top-color: rgba(148, 163, 184, 0.12) !important;
-    background: rgba(255, 255, 255, 0.98) !important;
-    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.035) !important;
-  }
-
-  .hostly-product-quick-create-v3__actions {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) !important;
-    gap: 6px !important;
-  }
-
-  .hostly-product-quick-create-v3__actions > button {
-    min-height: 44px !important;
-    padding: 7px 9px !important;
-    border-radius: 11px !important;
-    font-size: 11px !important;
-    line-height: 1.12 !important;
-  }
-
-  .hostly-product-quick-create-v3__save {
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-
-  .hostly-product-quick-create-v3__more-options {
-    align-self: center !important;
-    min-height: 34px !important;
-    padding: 5px 9px !important;
-    border: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    color: var(--hostly-ink-muted) !important;
-    font-size: 10.5px !important;
-    font-weight: 650 !important;
-    line-height: 1.1 !important;
-  }
-
-  .hostly-productos-bulk-course-modal-backdrop:has(#hostly-product-quick-create-discard-title) {
-    padding: 12px !important;
-  }
-
-  .hostly-productos-bulk-course-modal:has(#hostly-product-quick-create-discard-title) {
-    width: min(100%, 360px) !important;
-    padding: 14px !important;
-    border-radius: 12px !important;
-  }
-}
-`;
-
 function ProductQuickCreateDiscardConfirm({
   open,
   saving,
@@ -433,7 +251,6 @@ export function ProductQuickCreateDrawer({
 
   return (
     <>
-    <style>{quickCreateMobileStyles}</style>
     <div
       className={`hostly-product-quick-create-v3-backdrop${addCategoryOpen ? " hostly-product-quick-create-v3-backdrop--blocked" : ""}${discardConfirmOpen ? " hostly-product-quick-create-v3-backdrop--blocked" : ""}`}
       role="dialog"
@@ -562,7 +379,7 @@ export function ProductQuickCreateDrawer({
                 disabled={isSubmitting || !quickCreate.canSubmit}
                 aria-busy={closeButtonBusy || undefined}
               >
-                {closeButtonBusy ? "Guardando…" : "Guardar"}
+                {closeButtonBusy ? "Guardando…" : "Guardar y cerrar"}
               </ConfigBtnPrimary>
               <ConfigBtnSecondary
                 type="button"

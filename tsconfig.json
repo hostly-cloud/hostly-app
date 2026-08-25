@@ -22,7 +22,6 @@
       "@/components/carta/carta-import-premium-layout": [
         "./components/carta/carta-import-premium-layout-batch.tsx"
       ],
-      "@/components/map/EditableFloorMap": ["./components/map/editable-floor-map-runtime.tsx"],
       "@/*": ["./*"]
     }
   },

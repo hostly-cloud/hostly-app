@@ -26,74 +26,6 @@ import { GripVertical } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CartaFamilia } from "@/lib/carta-categorias/types";
 
-const familiasReorderMobileStyles = `
-@media (max-width: 767px) {
-  .hostly-carta-familias-sortable-root .hostly-carta-category-drag-handle {
-    width: 42px !important;
-    height: 42px !important;
-    min-width: 42px !important;
-    flex: 0 0 42px !important;
-    border-radius: 10px !important;
-    border-color: rgba(49, 95, 125, 0.16) !important;
-    background: var(--hostly-surface-page-soft) !important;
-    color: var(--hostly-accent) !important;
-    box-shadow: none !important;
-    touch-action: none;
-  }
-
-  .hostly-carta-familias-sortable-root .hostly-carta-category-drag-handle:active {
-    background: var(--hostly-accent-soft) !important;
-    transform: scale(0.97);
-  }
-
-  .hostly-carta-familia-sortable-mobile {
-    position: relative;
-    border-radius: 10px;
-    transition:
-      opacity 140ms ease,
-      transform 170ms cubic-bezier(0.2, 0, 0, 1),
-      background-color 140ms ease;
-  }
-
-  .hostly-carta-familia-sortable-mobile.is-sortable-dragging {
-    opacity: 0.3 !important;
-    background: var(--hostly-surface-page-soft) !important;
-  }
-
-  .hostly-carta-familia-sortable-mobile.is-sortable-over::before {
-    content: "";
-    position: absolute;
-    z-index: 3;
-    left: 8px;
-    right: 8px;
-    top: -3px;
-    height: 3px;
-    border-radius: 999px;
-    background: var(--hostly-accent);
-    box-shadow: 0 0 0 2px rgba(49, 95, 125, 0.09);
-    pointer-events: none;
-  }
-
-  .hostly-carta-familias-sortable-root.is-sortable-active
-    .hostly-carta-familia-sortable-mobile:not(.is-sortable-dragging) {
-    opacity: 0.78;
-  }
-
-  .hostly-carta-familia-drag-overlay {
-    width: calc(100vw - 20px) !important;
-    max-width: calc(100vw - 20px) !important;
-    pointer-events: none;
-  }
-
-  .hostly-carta-familia-drag-preview {
-    min-height: 52px !important;
-    padding: 6px 8px !important;
-    border-radius: 11px !important;
-    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16) !important;
-  }
-}
-`;
-
 export function useFamiliasCartaMobileLayout(): boolean {
   const [mobile, setMobile] = useState(false);
 
@@ -114,7 +46,7 @@ type SortableDragProps = {
   listeners: SyntheticListenerMap | undefined;
 };
 
-/** Patrón Hostly: mantener pulsado en el asa táctil / arrastrar con ratón → soltar → un write. */
+/** Patrón Hostly: mantener pulsado (touch) / arrastrar (ratón) → soltar → un write al final. */
 const HOSTLY_SORTABLE_POINTER = { distance: 6 } as const;
 const HOSTLY_SORTABLE_TOUCH = { delay: 220, tolerance: 8 } as const;
 
@@ -122,6 +54,7 @@ type FamiliasCartaSortableContextValue = {
   localItems: CartaFamilia[];
   disabled?: boolean;
   dragHandleLabel: string;
+  touchRowDrag: boolean;
 };
 
 const FamiliasCartaSortableContext = createContext<FamiliasCartaSortableContextValue | null>(null);
@@ -166,25 +99,33 @@ export function FamiliasCartaDragHandle({
 }
 
 export function FamiliasCartaSortableDragHandle() {
-  const { disabled, dragHandleLabel } = useFamiliasCartaSortableContext();
-  return <SortableDragHandleSlot disabled={disabled} label={dragHandleLabel} />;
+  const { disabled, dragHandleLabel, touchRowDrag } = useFamiliasCartaSortableContext();
+  return (
+    <SortableDragHandleSlot
+      disabled={disabled}
+      label={dragHandleLabel}
+      visualOnly={touchRowDrag}
+    />
+  );
 }
 
 function SortableDragHandleSlot({
   disabled,
   label,
+  visualOnly,
 }: {
   disabled?: boolean;
   label: string;
+  visualOnly?: boolean;
 }) {
   const { setActivatorNodeRef, attributes, listeners } = useSortableItemDrag();
   return (
     <FamiliasCartaDragHandle
       disabled={disabled}
       label={label}
-      setActivatorNodeRef={setActivatorNodeRef}
-      attributes={attributes}
-      listeners={listeners}
+      setActivatorNodeRef={visualOnly ? undefined : setActivatorNodeRef}
+      attributes={visualOnly ? undefined : attributes}
+      listeners={visualOnly ? undefined : listeners}
     />
   );
 }
@@ -211,6 +152,9 @@ function SortableItemShell({ id, disabled, className, onClick, children }: Sorta
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id, disabled });
   const { active, over } = useDndContext();
+  const { touchRowDrag } = useFamiliasCartaSortableContext();
+  const isMobileShell = Boolean(className?.includes("hostly-carta-familia-sortable-mobile"));
+  const rowTouchDrag = touchRowDrag && isMobileShell && !disabled;
   const isInsertTarget = !isDragging && over?.id === id && active?.id !== id;
 
   const style = {
@@ -233,10 +177,12 @@ function SortableItemShell({ id, disabled, className, onClick, children }: Sorta
           className,
           isDragging && "is-sortable-dragging",
           isInsertTarget && "is-sortable-over",
+          rowTouchDrag && isDragging && "is-sortable-active-touch",
         ]
           .filter(Boolean)
           .join(" ")}
         onClick={onClick}
+        {...(rowTouchDrag && listeners ? listeners : {})}
       >
         {children}
       </div>
@@ -339,13 +285,12 @@ export function FamiliasCartaSortableRoot({
   }
 
   const contextValue = useMemo(
-    () => ({ localItems, disabled, dragHandleLabel }),
-    [localItems, disabled, dragHandleLabel],
+    () => ({ localItems, disabled, dragHandleLabel, touchRowDrag: isMobile }),
+    [localItems, disabled, dragHandleLabel, isMobile],
   );
 
   return (
     <FamiliasCartaSortableContext.Provider value={contextValue}>
-      <style>{familiasReorderMobileStyles}</style>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

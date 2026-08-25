@@ -1,0 +1,347 @@
+"use client";
+
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
+import type { FloorPlanCanvasSize } from "@/lib/firestore/floorPlans";
+import {
+  fitBoundsToViewport,
+  getPlanContentBounds,
+  type EditableFloorMapProps,
+  type EditableFloorMapViewportControls,
+  type PlanContentBounds,
+} from "./editable-floor-map-contract";
+
+const ZOOM_MIN = 0.45;
+const ZOOM_MAX = 1.35;
+const FIT_ZOOM_MAX = 1.05;
+const VIEW_PADDING_PX = 80;
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function getPlanSizeBounds(
+  planSize?: FloorPlanCanvasSize | null,
+): PlanContentBounds | null {
+  if (
+    !planSize ||
+    typeof planSize.width !== "number" ||
+    !Number.isFinite(planSize.width) ||
+    planSize.width <= 0 ||
+    typeof planSize.height !== "number" ||
+    !Number.isFinite(planSize.height) ||
+    planSize.height <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    minX: 0,
+    minY: 0,
+    maxX: planSize.width,
+    maxY: planSize.height,
+    width: planSize.width,
+    height: planSize.height,
+    centerX: planSize.width / 2,
+    centerY: planSize.height / 2,
+  };
+}
+
+function isInteractivePointerTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      "button,a,input,textarea,select,[role='button'],[data-hostly-map-table],[data-hostly-v2-operational-instance-id]",
+    ),
+  );
+}
+
+export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
+  const {
+    readonlyUnderlay,
+    planSize,
+    viewportFitElements,
+    viewportFitZones,
+    viewportFitMode = "plan",
+    viewportFitZoomMax,
+    viewportFitAlign = "center",
+    viewportFitOffsetX = 0,
+    viewportFitOffsetY = 0,
+    viewportFitZoomMultiplier = 1,
+    viewportFitPaddingPx,
+    mapLayoutEmphasis = false,
+    mapAutoFitKey,
+    mapAutoFitNonce,
+    mapRef,
+    onWheel,
+    className,
+    viewportControlsRef,
+    hideInlineZoomControls,
+  } = props;
+
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const fitPaddingPx = viewportFitPaddingPx ?? VIEW_PADDING_PX;
+  const fitZoomMax = viewportFitZoomMax ?? FIT_ZOOM_MAX;
+
+  const assignMapRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      rootRef.current = node;
+      if (!mapRef) return;
+      if (typeof mapRef === "function") mapRef(node);
+      else mapRef.current = node;
+    },
+    [mapRef],
+  );
+
+  const applyFitToViewport = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const vw = root.clientWidth;
+    const vh = root.clientHeight;
+    if (vw < 32 || vh < 32) return;
+
+    const planBounds = getPlanSizeBounds(planSize);
+    const usePlanFit = viewportFitMode === "plan" && planBounds != null;
+    const bounds = usePlanFit
+      ? planBounds
+      : getPlanContentBounds(
+          viewportFitElements ?? props.elements,
+          viewportFitZones ?? props.zones,
+          null,
+        );
+
+    let nextZoom: number;
+    let nextPan: { x: number; y: number };
+
+    if (usePlanFit) {
+      const availableWidth = Math.max(32, vw - fitPaddingPx);
+      const availableHeight = Math.max(32, vh - fitPaddingPx);
+      const rawScale = Math.min(
+        availableWidth / bounds.width,
+        availableHeight / bounds.height,
+      );
+      nextZoom = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 0.06;
+      nextPan = {
+        x: (vw - bounds.width * nextZoom) / 2,
+        y: (vh - bounds.height * nextZoom) / 2,
+      };
+    } else {
+      ({ zoom: nextZoom, pan: nextPan } = fitBoundsToViewport(bounds, vw, vh, {
+        paddingPx: fitPaddingPx,
+        maxZoom: Math.max(ZOOM_MAX, fitZoomMax),
+      }));
+    }
+
+    if (mapLayoutEmphasis) {
+      const cap = Math.min(Math.max(ZOOM_MAX, fitZoomMax), fitZoomMax);
+      nextZoom = clamp(nextZoom * 1.085, 0.06, cap);
+    }
+    if (
+      viewportFitZoomMultiplier !== 1 &&
+      Number.isFinite(viewportFitZoomMultiplier) &&
+      viewportFitZoomMultiplier > 0
+    ) {
+      nextZoom = clamp(
+        nextZoom * viewportFitZoomMultiplier,
+        0.06,
+        Math.max(ZOOM_MAX, fitZoomMax),
+      );
+    }
+
+    if (!usePlanFit && viewportFitAlign === "start") {
+      const inset = fitPaddingPx / 2;
+      nextPan = {
+        x: inset - bounds.minX * nextZoom,
+        y: inset - bounds.minY * nextZoom,
+      };
+    }
+
+    setZoom(nextZoom);
+    setPan({
+      x: nextPan.x + viewportFitOffsetX,
+      y: nextPan.y + viewportFitOffsetY,
+    });
+  }, [
+    fitPaddingPx,
+    fitZoomMax,
+    mapLayoutEmphasis,
+    planSize,
+    props.elements,
+    props.zones,
+    viewportFitAlign,
+    viewportFitElements,
+    viewportFitMode,
+    viewportFitOffsetX,
+    viewportFitOffsetY,
+    viewportFitZones,
+    viewportFitZoomMultiplier,
+  ]);
+
+  const applyNaturalZoomCentered = useCallback(() => {
+    const root = rootRef.current;
+    const bounds = getPlanSizeBounds(planSize);
+    if (!root || !bounds) return;
+    setZoom(1);
+    setPan({
+      x: root.clientWidth / 2 - bounds.centerX,
+      y: root.clientHeight / 2 - bounds.centerY,
+    });
+  }, [planSize]);
+
+  useImperativeHandle<EditableFloorMapViewportControls | null, EditableFloorMapViewportControls | null>(
+    viewportControlsRef,
+    () => ({
+      zoomIn: () => setZoom((value) => clamp(value * 1.12, ZOOM_MIN, ZOOM_MAX)),
+      zoomOut: () => setZoom((value) => clamp(value / 1.12, ZOOM_MIN, ZOOM_MAX)),
+      resetNaturalZoom: applyNaturalZoomCentered,
+      fitToViewport: applyFitToViewport,
+    }),
+    [applyFitToViewport, applyNaturalZoomCentered],
+  );
+
+  useLayoutEffect(() => {
+    applyFitToViewport();
+  }, [applyFitToViewport, mapAutoFitKey, mapAutoFitNonce]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => applyFitToViewport());
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [applyFitToViewport]);
+
+  const handleWheel = useCallback(
+    (event: ReactWheelEvent<HTMLDivElement>) => {
+      onWheel?.(event);
+      if (event.defaultPrevented || event.ctrlKey) return;
+      event.preventDefault();
+      const root = rootRef.current;
+      if (!root) return;
+      const rect = root.getBoundingClientRect();
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
+      const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+      const nextZoom = clamp(zoom * factor, ZOOM_MIN, ZOOM_MAX);
+      if (nextZoom === zoom) return;
+      const mapX = (screenX - pan.x) / zoom;
+      const mapY = (screenY - pan.y) / zoom;
+      setZoom(nextZoom);
+      setPan({
+        x: screenX - mapX * nextZoom,
+        y: screenY - mapY * nextZoom,
+      });
+    },
+    [onWheel, pan.x, pan.y, zoom],
+  );
+
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0 || isInteractivePointerTarget(event.target)) return;
+      dragRef.current = {
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        startX: pan.x,
+        startY: pan.y,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [pan.x, pan.y],
+  );
+
+  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setPan({
+      x: drag.startX + event.clientX - drag.clientX,
+      y: drag.startY + event.clientY - drag.clientY,
+    });
+  }, []);
+
+  const handlePointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  return (
+    <div
+      ref={assignMapRef}
+      className={className}
+      data-hostly-v2-viewport="native"
+      onWheel={handleWheel}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+        touchAction: "none",
+      }}
+    >
+      <div
+        data-hostly-v2-viewport-transform="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: "0 0",
+          willChange: "transform",
+        }}
+      >
+        {readonlyUnderlay}
+      </div>
+
+      {!hideInlineZoomControls ? (
+        <div
+          style={{
+            position: "absolute",
+            right: 10,
+            bottom: 10,
+            zIndex: 60,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            border: "1px solid rgba(148,163,184,0.24)",
+            borderRadius: 10,
+            background: "rgba(255,255,255,0.9)",
+            padding: 4,
+            boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <button type="button" aria-label="Alejar plano" onClick={() => setZoom((value) => clamp(value / 1.12, ZOOM_MIN, ZOOM_MAX))}>−</button>
+          <button type="button" aria-label="Zoom natural" onClick={applyNaturalZoomCentered}>{Math.round(zoom * 100)}%</button>
+          <button type="button" aria-label="Acercar plano" onClick={() => setZoom((value) => clamp(value * 1.12, ZOOM_MIN, ZOOM_MAX))}>+</button>
+          <button type="button" aria-label="Centrar plano" onClick={applyFitToViewport}>Centrar</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}

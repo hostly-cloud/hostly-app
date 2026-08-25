@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveProductFamilyFromSelectValue } from "@/lib/carta/category-product-family";
-import { fetchCartaFamilias } from "@/lib/carta-categorias/api-client";
-import { CARTA_CATEGORIAS_CHANGED_EVENT } from "@/lib/carta-categorias/local-store";
 import { cartaCategoriasForProductSelectorList } from "@/lib/carta-categorias/filter-for-tipo-producto";
-import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
+import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import { evaluateProductFormPreventiveValidation } from "@/lib/carta/product-form-preventive-validation";
 import { productFormSkipsMenuCourse } from "@/lib/carta/product-form-menu-course";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
@@ -38,14 +36,12 @@ export type ProductQuickCreateSubmitResult = {
 export type UseProductQuickCreateArgs = {
   restaurantId: string;
   cartaCategorias: readonly CartaCategoria[];
-  /** Opcional durante la transición: si el padre no las pasa, el hook las resuelve por tenant. */
-  cartaFamilias?: readonly CartaFamilia[];
   operationStations: readonly OperationStationDocument[];
   productFamilies: readonly ProductFamilyDocument[];
   modifierGroups: readonly ModifierGroupDocument[];
   inventoryProducts: readonly ProductDocument[];
   messages: ProductFormSubmitMessages;
-  /** Catálogo central activo; alta rápida solo persiste en central. */
+  /** Catálogo central activo; alta rápida solo persiste en central en fases posteriores. */
   isCentralCatalog: boolean;
 };
 
@@ -100,7 +96,6 @@ export function useProductQuickCreate(
   const [baselineDraft, setBaselineDraft] = useState<ProductQuickCreateDraft>(
     createEmptyProductQuickCreateDraft,
   );
-  const [resolvedCartaFamilias, setResolvedCartaFamilias] = useState<CartaFamilia[]>([]);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const [saving, setSaving] = useState(false);
@@ -132,50 +127,9 @@ export function useProductQuickCreate(
 
   useEffect(() => () => clearSuccessFlash(), [clearSuccessFlash]);
 
-  useEffect(() => {
-    if (args.cartaFamilias) {
-      setResolvedCartaFamilias([]);
-      return;
-    }
-    const rid = args.restaurantId.trim();
-    if (!rid) {
-      setResolvedCartaFamilias([]);
-      return;
-    }
-    let cancelled = false;
-    const refresh = () => {
-      void fetchCartaFamilias(rid)
-        .then((familias) => {
-          if (!cancelled) setResolvedCartaFamilias(familias);
-        })
-        .catch(() => {
-          if (!cancelled) setResolvedCartaFamilias([]);
-        });
-    };
-    refresh();
-    window.addEventListener(CARTA_CATEGORIAS_CHANGED_EVENT, refresh);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(CARTA_CATEGORIAS_CHANGED_EVENT, refresh);
-    };
-  }, [args.cartaFamilias, args.restaurantId]);
-
-  const cartaFamiliasForInheritance = args.cartaFamilias ?? resolvedCartaFamilias;
-
   const inheritedDraft = useMemo(
-    () =>
-      resolveQuickCreateInheritedDraft(
-        draft.categoriaCartaId,
-        args.cartaCategorias,
-        cartaFamiliasForInheritance,
-        args.operationStations,
-      ),
-    [
-      draft.categoriaCartaId,
-      args.cartaCategorias,
-      cartaFamiliasForInheritance,
-      args.operationStations,
-    ],
+    () => resolveQuickCreateInheritedDraft(draft.categoriaCartaId, args.cartaCategorias),
+    [draft.categoriaCartaId, args.cartaCategorias],
   );
 
   const categoriasForForm = useMemo(

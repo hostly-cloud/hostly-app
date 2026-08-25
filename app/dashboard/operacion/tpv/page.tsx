@@ -7,6 +7,7 @@ import { ActiveOperatorProvider } from "@/components/tpv/active-operator-context
 import { ActiveOperatorGate } from "@/components/tpv/active-operator-gate";
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
+import { TpvEditorV2ReadyGate } from "./_components/tpv-editor-v2-ready-gate";
 
 export default function OperacionTpvPage() {
   const { restaurantId } = useAuth();
@@ -54,12 +55,14 @@ export default function OperacionTpvPage() {
     <ActiveOperatorProvider restaurantId={restaurantIdTrimmed}>
       <OperacionModuleShell title="TPV" hideTopBar={hideShellTopBar}>
         <ActiveOperatorGate>
-          <CartaPageContent
-            embeddedInOperacion
-            tablesReadyToClose={tablesReadyToClose}
-            groupedTablesMapHandlers={groupedTablesMapHandlers}
-            onEmbeddedOperacionChromeChange={handleEmbeddedOperacionChromeChange}
-          />
+          <TpvEditorV2ReadyGate restaurantId={restaurantIdTrimmed}>
+            <CartaPageContent
+              embeddedInOperacion
+              tablesReadyToClose={tablesReadyToClose}
+              groupedTablesMapHandlers={groupedTablesMapHandlers}
+              onEmbeddedOperacionChromeChange={handleEmbeddedOperacionChromeChange}
+            />
+          </TpvEditorV2ReadyGate>
         </ActiveOperatorGate>
       </OperacionModuleShell>
     </ActiveOperatorProvider>

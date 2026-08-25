@@ -94,7 +94,6 @@ export default function ModulePageShell({
   const effectiveLockViewport = Boolean(lockViewport && (!isMobile || lockViewportFillParent));
   const laptopFit = Boolean(effectiveLockViewport && fitLaptopViewport && compactLayout && operationalFocus);
   const lockFill = Boolean(effectiveLockViewport && lockViewportFillParent);
-  const mobileScrollOwner = effectiveLockViewport && lockFill ? "internal" : "page";
   const pad =
     mapEditorDenseChrome && laptopFit && stretchContentWidth
       ? "clamp(0px, 0.12vw, 3px)"
@@ -275,7 +274,6 @@ export default function ModulePageShell({
       ]
         .filter(Boolean)
         .join(" ")}
-      data-hostly-mobile-scroll-owner={isMobile ? mobileScrollOwner : undefined}
       style={{
         boxSizing: "border-box",
         background:
@@ -426,22 +424,6 @@ export default function ModulePageShell({
       >
         {children}
       </HostlyPageContainer>
-      <style>{`
-        @media (max-width: 767px) {
-          .hostly-module-shell--mobile[data-hostly-mobile-scroll-owner="page"] .hostly-data-table-viewport {
-            flex: none;
-            min-height: auto;
-            overflow: visible;
-          }
-
-          .hostly-module-shell--mobile[data-hostly-mobile-scroll-owner="page"] .hostly-mobile-list-shell {
-            flex: none;
-            min-height: auto;
-            overflow: visible;
-            touch-action: pan-y;
-          }
-        }
-      `}</style>
     </main>
   );
 }

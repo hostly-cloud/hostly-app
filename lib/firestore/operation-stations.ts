@@ -46,12 +46,6 @@ function readOptionalTrimmed(value: unknown): string | undefined {
   return t || undefined;
 }
 
-function readOptionalHexColor(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const t = value.trim();
-  return /^#[0-9a-fA-F]{6}$/.test(t) ? t.toLowerCase() : undefined;
-}
-
 export function parseOperationStationDocument(
   stationId: string,
   raw: unknown,
@@ -85,7 +79,6 @@ export function parseOperationStationDocument(
     typeof data.sortOrder === "number" && Number.isFinite(data.sortOrder)
       ? Math.floor(data.sortOrder)
       : 0;
-  const color = readOptionalHexColor(data.color);
 
   return {
     id: stationId,
@@ -95,7 +88,6 @@ export function parseOperationStationDocument(
     type,
     active: data.active !== false,
     sortOrder,
-    ...(color ? { color } : {}),
     ...(readOptionalTrimmed(data.printerChannel)
       ? { printerChannel: readOptionalTrimmed(data.printerChannel) }
       : {}),
@@ -131,6 +123,7 @@ export function isDuplicateOperationStationName(
   });
 }
 
+/** Lectura puntual (p. ej. creación de printJobs); sin listener. */
 export async function listOperationStations(
   restaurantId: string,
 ): Promise<OperationStationDocument[]> {
@@ -172,7 +165,6 @@ function buildStationPayload(
   const normalizedName = normalizeOperationStationName(name);
   const printerChannel = readOptionalTrimmed(input.printerChannel);
   const printerName = readOptionalTrimmed(input.printerName);
-  const color = readOptionalHexColor(input.color);
   return {
     restaurantId: restaurantId.trim(),
     name,
@@ -183,7 +175,6 @@ function buildStationPayload(
       typeof input.sortOrder === "number" && Number.isFinite(input.sortOrder)
         ? Math.floor(input.sortOrder)
         : 0,
-    ...(color ? { color } : {}),
     ...(printerChannel ? { printerChannel } : {}),
     ...(printerName ? { printerName } : {}),
     createdAt: createdAt ?? now,
@@ -193,6 +184,9 @@ function buildStationPayload(
   };
 }
 
+/**
+ * Crea Cocina / Barra / Coctelería si faltan (ids fijos, idempotente).
+ */
 export async function ensureDefaultOperationStations(
   restaurantId: string,
 ): Promise<number> {
@@ -223,30 +217,6 @@ export async function ensureDefaultOperationStations(
     created += 1;
   }
   return created;
-}
-
-/**
- * Crea una estación canónica conservando un id conocido. Se usa solo para
- * compatibilidad/migración de `productionStations`; no sobrescribe documentos.
- */
-export async function ensureOperationStationWithId(
-  restaurantId: string,
-  stationId: string,
-  input: OperationStationInput,
-): Promise<boolean> {
-  const rid = restaurantId.trim();
-  const sid = stationId.trim();
-  if (!rid || !sid) return false;
-  if (!isOperationStationType(input.type)) throw new Error("INVALID_STATION_TYPE");
-  const name = input.name.trim();
-  if (!name) throw new Error("MISSING_STATION_NAME");
-  const ref = operationStationDocRef(rid, sid);
-  const current = await getDoc(ref);
-  if (current.exists()) return false;
-  const uid = authUidOrThrow();
-  const now = Date.now();
-  await setDoc(ref, buildStationPayload(rid, { ...input, name }, uid, now));
-  return true;
 }
 
 export function listenOperationStations(
@@ -363,10 +333,6 @@ export async function updateOperationStation(
     updatedAt: now,
     updatedBy: uid,
   };
-  if (input.color !== undefined) {
-    const color = readOptionalHexColor(input.color);
-    patch.color = color ? color : deleteField();
-  }
   if (input.printerChannel !== undefined) {
     const ch = readOptionalTrimmed(input.printerChannel);
     patch.printerChannel = ch ? ch : deleteField();

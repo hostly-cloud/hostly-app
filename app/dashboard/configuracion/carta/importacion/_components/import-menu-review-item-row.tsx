@@ -137,16 +137,16 @@ export function ImportMenuReviewItemRow({
     <HostlySurface
       variant="flat"
       className={hostlyCx(
-        "hostly-import-review-item border-[var(--hostly-line)] px-3 py-2.5 transition-colors sm:px-3.5",
+        "border-[var(--hostly-line)] px-3 py-2.5 transition-colors sm:px-3.5",
         item.selectedForPublish && !publishState.locked && "border-sky-200/70 bg-sky-50/25",
         publishState.primaryLabel === "Publicado" && "border-emerald-200/70 bg-emerald-50/25",
         publishState.primaryLabel === "Omitido" && "border-amber-200/70 bg-amber-50/20",
         publishState.primaryLabel === "Error" && "border-rose-200/70 bg-rose-50/25",
       )}
     >
-      <div className="hostly-import-review-item__row flex items-start gap-2.5">
+      <div className="flex items-start gap-2.5">
         <label
-          className="hostly-import-review-item__select flex shrink-0 cursor-pointer items-center pt-0.5"
+          className="flex shrink-0 cursor-pointer items-center pt-0.5"
           title={publishState.locked ? "Ya publicado" : "Incluir al publicar"}
         >
           <input
@@ -159,13 +159,13 @@ export function ImportMenuReviewItemRow({
         </label>
 
         <div className="min-w-0 flex-1 space-y-1">
-          <div className="hostly-import-review-item__main flex items-start justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
             <input
               type="text"
               value={item.name}
               onChange={(e) => onChange({ name: e.target.value })}
               className={hostlyCx(
-                "hostly-import-review-item__name min-w-0 flex-1 border-0 bg-transparent p-0 text-sm font-semibold leading-snug text-[var(--hostly-navy-deep)]",
+                "min-w-0 flex-1 border-0 bg-transparent p-0 text-sm font-semibold leading-snug text-[var(--hostly-navy-deep)]",
                 "placeholder:text-[var(--hostly-ink-soft)] focus:outline-none focus:ring-0",
                 "border-b border-transparent focus:border-[var(--hostly-line-strong)]",
               )}
@@ -181,7 +181,7 @@ export function ImportMenuReviewItemRow({
                 onChange({ price: v === "" ? undefined : Number(v) });
               }}
               className={hostlyCx(
-                "hostly-import-review-item__price w-[5rem] shrink-0 border-0 bg-transparent p-0 text-right text-sm font-semibold tabular-nums text-[var(--hostly-navy-deep)]",
+                "w-[5rem] shrink-0 border-0 bg-transparent p-0 text-right text-sm font-semibold tabular-nums text-[var(--hostly-navy-deep)]",
                 "focus:outline-none focus:ring-0 border-b border-transparent focus:border-[var(--hostly-line-strong)]",
               )}
               placeholder="—"
@@ -191,12 +191,12 @@ export function ImportMenuReviewItemRow({
           </div>
 
           {item.description?.trim() ? (
-            <p className="hostly-import-review-item__description text-xs leading-snug text-[var(--hostly-ink-muted)] line-clamp-2">
+            <p className="text-xs leading-snug text-[var(--hostly-ink-muted)] line-clamp-2">
               {item.description.trim()}
             </p>
           ) : null}
 
-          <div className="hostly-import-review-item__meta flex flex-wrap items-center gap-1.5 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             <span className="text-[11px] text-[var(--hostly-ink-soft)]">{metaSectionLabel(item)}</span>
             <span className="text-[10px] text-[var(--hostly-ink-soft)]">·</span>
             <span className="text-[11px] text-[var(--hostly-ink-soft)]">
@@ -243,7 +243,7 @@ export function ImportMenuReviewItemRow({
             ) : null}
           </div>
 
-          <div className="hostly-import-review-item__secondary flex flex-wrap items-center gap-2 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
             <button
               type="button"
               className="text-[10px] font-medium text-[var(--hostly-ink-soft)] underline-offset-2 hover:text-[var(--hostly-navy-deep)] hover:underline"
@@ -264,7 +264,7 @@ export function ImportMenuReviewItemRow({
           </div>
 
           {editingDetails ? (
-            <div className="hostly-import-review-item__details grid gap-2 pt-1 sm:grid-cols-2">
+            <div className="grid gap-2 pt-1 sm:grid-cols-2">
               <div>
                 <label className="mb-0.5 block text-[10px] text-[var(--hostly-ink-soft)]">Categoría</label>
                 <input

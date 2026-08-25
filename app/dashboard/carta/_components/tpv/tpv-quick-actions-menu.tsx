@@ -39,15 +39,8 @@ export function TpvQuickActionsMenu({
 
   if (!open || !anchor || typeof document === "undefined") return null;
 
-  const viewportGutter = 8;
-  const panelWidth = Math.min(248, Math.max(196, window.innerWidth - viewportGutter * 2));
-  const left = Math.max(
-    viewportGutter,
-    Math.min(
-      anchor.x - panelWidth * 0.5,
-      window.innerWidth - panelWidth - viewportGutter,
-    ),
-  );
+  const panelWidth = 196;
+  const left = Math.max(8, Math.min(anchor.x - panelWidth * 0.5, window.innerWidth - panelWidth - 8));
   const top = Math.max(8, Math.min(anchor.y - 12, window.innerHeight - 280));
 
   return createPortal(

@@ -92,21 +92,6 @@ function workerItemMeta(job: PrintJobDocument): Pick<
   };
 }
 
-function hasJobPrinterSnapshot(job: PrintJobDocument): boolean {
-  return Boolean(job.printerName?.trim() || job.channel?.trim());
-}
-
-function hasActiveOperationStationPrinter(
-  job: PrintJobDocument,
-  operationStationsById: ReadonlyMap<string, OperationStationDocument>,
-): boolean {
-  const operationStationId = job.operationStationId?.trim();
-  if (!operationStationId) return false;
-  const station = operationStationsById.get(operationStationId);
-  if (!station || station.active === false) return false;
-  return Boolean(station.printerName?.trim() || station.printerChannel?.trim());
-}
-
 function planJobAction(
   job: PrintJobDocument,
   config: PrinterConfigDocument,
@@ -124,32 +109,19 @@ function planJobAction(
   }
 
   const stationCfg = config.stations[job.station];
-  const hasSpecificTarget =
-    hasJobPrinterSnapshot(job) ||
-    hasActiveOperationStationPrinter(job, operationStationsById);
-
-  // `stationCfg.enabled` pasa a significar "fallback de tipo activo". Un
-  // snapshot del trabajo o un destino de la estación concreta no debe quedar
-  // bloqueado por el interruptor legacy Cocina/Barra/Coctelería.
-  if (!stationCfg?.enabled && !hasSpecificTarget) {
+  if (!stationCfg?.enabled) {
     return { kind: "omit", reason: "station_disabled" };
   }
 
-  const target = resolvePrintJobPrinterTarget({
-    legacyStation: job.station,
-    legacyStationCfg: stationCfg,
-    operationStationId: job.operationStationId,
-    operationStationName: job.operationStationName,
-    operationStationsById,
-    jobPrinterName: job.printerName,
-    jobChannel: job.channel,
-    skipInactiveOperationStationPrinter: true,
-  });
+  const channel =
+    stationCfg.channel?.trim() || job.channel?.trim() || "";
+  const printerName =
+    stationCfg.printerName?.trim() || job.printerName?.trim() || "";
 
-  if (!target.hasPrinterTarget) {
+  if (!channel && !printerName) {
     return {
       kind: "fail",
-      message: `Falta canal o nombre de impresora para ${target.destinationLabel}`,
+      message: "Falta canal o nombre de impresora en la configuración",
     };
   }
 
@@ -221,8 +193,8 @@ async function commitFailed(
 }
 
 /**
- * Worker simulado: consume jobs `pending`, respeta `nextRetryAt` y routing por
- * estación. Sin hardware; prepara el mismo contrato que un conector real.
+ * Worker simulado: consume jobs `pending`, respeta `nextRetryAt` y config de estación.
+ * Sin hardware; prepara el mismo contrato que un conector real.
  */
 export async function processPendingPrintJobs(
   params: ProcessPendingPrintJobsParams,
@@ -320,7 +292,7 @@ export async function processPendingPrintJobs(
             jobId,
             outcome: "skipped",
             reason: "concurrent_or_state_changed",
-            copies: job.copies,
+            copies: plan.copies,
             ...workerItemMeta(job),
           });
         }

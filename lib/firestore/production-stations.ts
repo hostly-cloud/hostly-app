@@ -1,24 +1,19 @@
 import {
+  addDoc,
   collection,
   doc,
-  getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
-  setDoc,
+  updateDoc,
+  type Unsubscribe,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
+import { normalizeProductName } from "@/lib/carta/duplicate-detection";
 import {
-  listOperationStations,
-  listenOperationStations,
-} from "@/lib/firestore/operation-stations";
-import type {
-  OperationStationDocument,
-  OperationStationType,
-} from "@/lib/operacion/operation-station-types";
-import {
-  DEFAULT_PRODUCTION_STATION_COLOR,
+  isProductionStationType,
   normalizeProductionStationColor,
   normalizeProductionStationName,
   sortProductionStations,
@@ -27,10 +22,6 @@ import {
   type ProductionStationType,
 } from "@/lib/produccion/production-station-types";
 
-/**
- * Colección legacy mantenida únicamente para migración/espejo temporal.
- * Los lectores funcionales de Hostly deben consumir `operationStations`.
- */
 export function productionStationsCollectionRef(restaurantId: string) {
   const rid = restaurantId.trim();
   return collection(db, "restaurants", rid, "productionStations");
@@ -60,14 +51,7 @@ export function parseProductionStationDocument(
   const name = typeof data.name === "string" ? data.name.trim() : "";
   if (!name) return null;
   const type = data.type;
-  if (
-    type !== "cocina" &&
-    type !== "barra" &&
-    type !== "cocteleria" &&
-    type !== "otro"
-  ) {
-    return null;
-  }
+  if (!isProductionStationType(type)) return null;
   const createdAt =
     typeof data.createdAt === "number" && Number.isFinite(data.createdAt)
       ? data.createdAt
@@ -76,10 +60,6 @@ export function parseProductionStationDocument(
     typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt)
       ? data.updatedAt
       : createdAt;
-  const sortOrder =
-    typeof data.sortOrder === "number" && Number.isFinite(data.sortOrder)
-      ? Math.floor(data.sortOrder)
-      : undefined;
 
   return {
     id: stationId,
@@ -92,143 +72,49 @@ export function parseProductionStationDocument(
     type,
     color: normalizeProductionStationColor(data.color),
     active: data.active !== false,
-    ...(sortOrder != null ? { sortOrder } : {}),
     createdAt,
     updatedAt,
   };
 }
 
-function operationTypeToProductionType(
-  type: OperationStationType,
-): ProductionStationType {
-  if (type === "kitchen") return "cocina";
-  if (type === "bar") return "barra";
-  if (type === "cocktail") return "cocteleria";
-  return "otro";
+export function isDuplicateProductionStationName(
+  stations: ProductionStationDocument[],
+  name: string,
+  excludeId?: string,
+): boolean {
+  const norm = normalizeProductionStationName(name);
+  if (!norm) return false;
+  const alt = normalizeProductName(name);
+  return stations.some((s) => {
+    if (excludeId && s.id === excludeId) return false;
+    return (
+      s.normalizedName === norm ||
+      normalizeProductionStationName(s.name) === norm ||
+      normalizeProductName(s.name) === alt
+    );
+  });
 }
 
-function productionTypeToOperationType(
-  type: ProductionStationType,
-): OperationStationType {
-  if (type === "cocina") return "kitchen";
-  if (type === "barra") return "bar";
-  if (type === "cocteleria") return "cocktail";
-  return "custom";
-}
-
-/** Adaptador de lectura: operación canónica -> forma legacy que todavía usa Carta/Familias. */
-export function productionStationFromOperationStation(
-  station: OperationStationDocument,
-): ProductionStationDocument {
+function buildPayload(
+  restaurantId: string,
+  input: ProductionStationInput,
+  now: number,
+  createdAt?: number,
+): Record<string, unknown> {
+  const name = input.name.trim();
   return {
-    id: station.id,
-    restaurantId: station.restaurantId,
-    name: station.name,
-    normalizedName: station.normalizedName,
-    type: operationTypeToProductionType(station.type),
-    color: normalizeProductionStationColor(
-      station.color ?? DEFAULT_PRODUCTION_STATION_COLOR,
-    ),
-    active: station.active,
-    sortOrder: station.sortOrder,
-    createdAt: station.createdAt,
-    updatedAt: station.updatedAt,
+    restaurantId: restaurantId.trim(),
+    name,
+    normalizedName: normalizeProductionStationName(name),
+    type: input.type,
+    color: normalizeProductionStationColor(input.color),
+    active: input.active !== false,
+    createdAt: createdAt ?? now,
+    updatedAt: now,
   };
 }
 
-/**
- * Fuente funcional única: lee `operationStations` y adapta la forma para
- * consumidores legacy. La colección `productionStations` ya no se consulta aquí.
- */
 export async function listProductionStations(
-  restaurantId: string,
-): Promise<ProductionStationDocument[]> {
-  if (!isAuthReady()) return [];
-  const canonical = await listOperationStations(restaurantId);
-  return sortProductionStations(canonical.map(productionStationFromOperationStation));
-}
-
-export function listenProductionStations(
-  restaurantId: string,
-  onData: (stations: ProductionStationDocument[]) => void,
-  onListenError?: (error: unknown) => void,
-): () => void {
-  const rid = restaurantId.trim();
-  if (!rid || !isAuthReady()) {
-    onData([]);
-    return () => {};
-  }
-  return listenOperationStations(
-    rid,
-    (stations) =>
-      onData(
-        sortProductionStations(
-          stations.map(productionStationFromOperationStation),
-        ),
-      ),
-    onListenError,
-  );
-}
-
-/**
- * Escrituras legacy conservadas para compatibilidad excepcional.
- * Se redirigen al modelo canónico mediante dynamic import para evitar ciclos.
- */
-export async function createProductionStation(
-  restaurantId: string,
-  input: ProductionStationInput,
-): Promise<ProductionStationDocument> {
-  const rid = restaurantId.trim();
-  if (!rid) throw new Error("MISSING_RESTAURANT_ID");
-  authUidOrThrow();
-  const { createOperationStation, listOperationStations } = await import(
-    "@/lib/firestore/operation-stations"
-  );
-  const id = await createOperationStation(rid, {
-    name: input.name,
-    type: productionTypeToOperationType(input.type),
-    color: input.color,
-    active: input.active,
-  });
-  const created = (await listOperationStations(rid)).find((s) => s.id === id);
-  if (!created) throw new Error("CREATE_FAILED");
-  return productionStationFromOperationStation(created);
-}
-
-export async function updateProductionStation(
-  restaurantId: string,
-  stationId: string,
-  input: Partial<ProductionStationInput>,
-): Promise<void> {
-  const { updateOperationStation } = await import(
-    "@/lib/firestore/operation-stations"
-  );
-  await updateOperationStation(restaurantId, stationId, {
-    ...(input.name !== undefined ? { name: input.name } : {}),
-    ...(input.type !== undefined
-      ? { type: productionTypeToOperationType(input.type) }
-      : {}),
-    ...(input.color !== undefined ? { color: input.color } : {}),
-    ...(input.active !== undefined ? { active: input.active } : {}),
-  });
-}
-
-export async function setProductionStationActive(
-  restaurantId: string,
-  stationId: string,
-  active: boolean,
-): Promise<void> {
-  const { updateOperationStation } = await import(
-    "@/lib/firestore/operation-stations"
-  );
-  await updateOperationStation(restaurantId, stationId, { active });
-}
-
-/**
- * Lectura explícita de documentos legacy para la migración inicial.
- * No usar en UI ni routing operativo.
- */
-export async function listLegacyProductionStationsForMigration(
   restaurantId: string,
 ): Promise<ProductionStationDocument[]> {
   if (!isAuthReady()) return [];
@@ -244,46 +130,113 @@ export async function listLegacyProductionStationsForMigration(
   return sortProductionStations(list);
 }
 
-/**
- * Sombra temporal para documentos legacy aún referenciados fuera del routing.
- * No es fuente de lectura funcional.
- */
-export async function syncProductionStationShadowFromOperationStation(
+export function listenProductionStations(
   restaurantId: string,
-  station: {
-    id: string;
-    name: string;
-    type: OperationStationType;
-    color?: string;
-    active: boolean;
-    sortOrder?: number;
-  },
+  onData: (stations: ProductionStationDocument[]) => void,
+  onListenError?: (error: unknown) => void,
+): Unsubscribe {
+  const rid = restaurantId.trim();
+  if (!rid || !isAuthReady()) {
+    onData([]);
+    return () => {};
+  }
+
+  const q = query(productionStationsCollectionRef(rid), orderBy("name", "asc"));
+
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list: ProductionStationDocument[] = [];
+      snap.forEach((docSnap) => {
+        const parsed = parseProductionStationDocument(docSnap.id, docSnap.data(), rid);
+        if (parsed) list.push(parsed);
+      });
+      onData(sortProductionStations(list));
+    },
+    (err) => {
+      console.error("listenProductionStations", err);
+      onListenError?.(err);
+    },
+  );
+}
+
+export async function createProductionStation(
+  restaurantId: string,
+  input: ProductionStationInput,
+): Promise<ProductionStationDocument> {
+  const rid = restaurantId.trim();
+  if (!rid) throw new Error("MISSING_RESTAURANT_ID");
+  authUidOrThrow();
+  const name = input.name.trim();
+  if (!name) throw new Error("MISSING_NAME");
+  if (!isProductionStationType(input.type)) throw new Error("INVALID_TYPE");
+
+  const existing = await listProductionStations(rid);
+  if (isDuplicateProductionStationName(existing, name)) {
+    throw new Error("DUPLICATE_STATION_NAME");
+  }
+
+  const now = Date.now();
+  const ref = await addDoc(
+    productionStationsCollectionRef(rid),
+    buildPayload(rid, input, now),
+  );
+  const parsed = parseProductionStationDocument(
+    ref.id,
+    buildPayload(rid, input, now),
+    rid,
+  );
+  if (!parsed) throw new Error("CREATE_FAILED");
+  return parsed;
+}
+
+export async function updateProductionStation(
+  restaurantId: string,
+  stationId: string,
+  input: Partial<ProductionStationInput>,
 ): Promise<void> {
   const rid = restaurantId.trim();
-  const sid = station.id.trim();
-  if (!rid || !sid) return;
+  const sid = stationId.trim();
+  if (!rid || !sid) throw new Error("MISSING_ID");
   authUidOrThrow();
-  const ref = productionStationDocRef(rid, sid);
-  const current = await getDoc(ref);
+
+  const existing = await listProductionStations(rid);
+  const cur = existing.find((s) => s.id === sid);
+  if (!cur) throw new Error("NOT_FOUND");
+
+  const nextName = input.name != null ? input.name.trim() : cur.name;
+  if (!nextName) throw new Error("MISSING_NAME");
+  const nextType: ProductionStationType = input.type ?? cur.type;
+  if (!isProductionStationType(nextType)) throw new Error("INVALID_TYPE");
+
+  if (isDuplicateProductionStationName(existing, nextName, sid)) {
+    throw new Error("DUPLICATE_STATION_NAME");
+  }
+
   const now = Date.now();
-  const createdAt = current.exists()
-    ? parseProductionStationDocument(sid, current.data(), rid)?.createdAt ?? now
-    : now;
-  await setDoc(
-    ref,
-    {
-      restaurantId: rid,
-      name: station.name.trim(),
-      normalizedName: normalizeProductionStationName(station.name),
-      type: operationTypeToProductionType(station.type),
-      color: normalizeProductionStationColor(station.color),
-      active: station.active,
-      ...(typeof station.sortOrder === "number" && Number.isFinite(station.sortOrder)
-        ? { sortOrder: Math.floor(station.sortOrder) }
-        : {}),
-      createdAt,
-      updatedAt: now,
-    },
-    { merge: true },
-  );
+  const patch: Record<string, unknown> = {
+    name: nextName,
+    normalizedName: normalizeProductionStationName(nextName),
+    type: nextType,
+    color: normalizeProductionStationColor(input.color ?? cur.color),
+    active: input.active != null ? Boolean(input.active) : cur.active,
+    updatedAt: now,
+  };
+
+  await updateDoc(productionStationDocRef(rid, sid), patch);
+}
+
+export async function setProductionStationActive(
+  restaurantId: string,
+  stationId: string,
+  active: boolean,
+): Promise<void> {
+  const rid = restaurantId.trim();
+  const sid = stationId.trim();
+  if (!rid || !sid) throw new Error("MISSING_ID");
+  authUidOrThrow();
+  await updateDoc(productionStationDocRef(rid, sid), {
+    active,
+    updatedAt: Date.now(),
+  });
 }
