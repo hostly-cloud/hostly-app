@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "description": "Corpus manual autorizado para evaluar recuperación visual de Menu Import V2 en lotes de varias fotos. No incluir imágenes de terceros sin autorización.",
+  "batches": [
+    {
+      "id": "batch-frontal-continuacion",
+      "pages": [
+        { "id": "page-1", "image": "cases/batch-frontal-continuacion/page-1.jpg", "expected": "cases/batch-frontal-continuacion/page-1.expected.json" },
+        { "id": "page-2", "image": "cases/batch-frontal-continuacion/page-2.jpg", "expected": "cases/batch-frontal-continuacion/page-2.expected.json" }
+      ]
+    },
+    {
+      "id": "batch-inclinado-solape",
+      "pages": [
+        { "id": "page-1", "image": "cases/batch-inclinado-solape/page-1.jpg", "expected": "cases/batch-inclinado-solape/page-1.expected.json" },
+        { "id": "page-2", "image": "cases/batch-inclinado-solape/page-2.jpg", "expected": "cases/batch-inclinado-solape/page-2.expected.json" }
+      ]
+    },
+    {
+      "id": "batch-columnas",
+      "pages": [
+        { "id": "page-1", "image": "cases/batch-columnas/page-1.jpg", "expected": "cases/batch-columnas/page-1.expected.json" },
+        { "id": "page-2", "image": "cases/batch-columnas/page-2.jpg", "expected": "cases/batch-columnas/page-2.expected.json" }
+      ]
+    },
+    {
+      "id": "batch-poca-luz",
+      "pages": [
+        { "id": "page-1", "image": "cases/batch-poca-luz/page-1.jpg", "expected": "cases/batch-poca-luz/page-1.expected.json" },
+        { "id": "page-2", "image": "cases/batch-poca-luz/page-2.jpg", "expected": "cases/batch-poca-luz/page-2.expected.json" }
+      ]
+    },
+    {
+      "id": "batch-vinos-variantes",
+      "pages": [
+        { "id": "page-1", "image": "cases/batch-vinos-variantes/page-1.jpg", "expected": "cases/batch-vinos-variantes/page-1.expected.json" },
+        { "id": "page-2", "image": "cases/batch-vinos-variantes/page-2.jpg", "expected": "cases/batch-vinos-variantes/page-2.expected.json" }
+      ]
+    }
+  ]
+}
