@@ -1,0 +1,156 @@
+/* Shared mobile/PDA horizontal-overflow hardening.
+ * Keep intentional horizontal rails scrollable, but make ordinary mobile
+ * list content and action rows shrink/wrap inside the viewport.
+ */
+@media (max-width: 767px) {
+  .hostly-touch-root,
+  .hostly-module-shell--mobile,
+  .hostly-module-content--mobile,
+  .hostly-mobile-list-shell,
+  .hostly-mobile-list-group,
+  .hostly-mobile-list-group__items,
+  .hostly-mobile-list-item,
+  .hostly-mobile-list-item__body,
+  .hostly-mobile-list-item__main,
+  .hostly-mobile-list-item__title,
+  .hostly-mobile-list-item__meta,
+  .hostly-mobile-list-item__extra,
+  .hostly-mobile-list-item__actions {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .hostly-mobile-list-shell,
+  .hostly-mobile-list-group,
+  .hostly-mobile-list-group__items,
+  .hostly-mobile-list-item {
+    overflow-x: clip;
+  }
+
+  .hostly-mobile-list-item__actions .hostly-row-actions {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .hostly-mobile-list-item__actions .hostly-row-actions__btn {
+    max-width: 100%;
+  }
+
+  .hostly-mobile-list-item__actions .hostly-row-actions__btn--text {
+    white-space: normal;
+  }
+
+  .hostly-mobile-list-item__actions .hostly-row-actions__btn--icon {
+    flex: 0 0 auto;
+  }
+
+  .hostly-module-shell--mobile .hostly-module-header-actions__primary .hostly-button-primary,
+  .hostly-module-shell--mobile .hostly-module-header-actions__primary .hostly-button-secondary,
+  .hostly-mobile-list-item__actions .hostly-row-actions__btn--text {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
+    text-align: center;
+  }
+
+  .hostly-recipe-editor__toolbar-controls {
+    align-items: stretch;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .hostly-recipe-editor__search {
+    flex: 1 0 100%;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .hostly-recipe-editor__tier-filters {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+
+  .hostly-recipe-editor__tier-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hostly-recipe-editor__tier-filters > * {
+    flex: 0 0 auto;
+  }
+
+  .hostly-operation-shell[data-operation-module="reservas"] .hostly-button-primary,
+  .hostly-operation-shell[data-operation-module="reservas"] .hostly-button-secondary {
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
+  .hostly-kds-op-station-filter,
+  .hostly-config-context-selector__hub,
+  .hostly-config-context-selector__trigger,
+  .hostly-config-context-selector__item {
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
+  .hostly-config-context-selector__close {
+    width: var(--hostly-m-touch-target) !important;
+    min-width: var(--hostly-m-touch-target) !important;
+    height: var(--hostly-m-touch-target) !important;
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
+  .hostly-inventario-route-tabs .hostly-mobile-operational-tab.hostly-tab--inventory-hub,
+  .hostly-mobile-operational-layout .hostly-inventario-route-tabs .hostly-mobile-operational-tab.hostly-tab--inventory-hub,
+  .hostly-mobile-operational-layout [data-hostly-touch] .hostly-inventario-route-tabs .hostly-mobile-operational-tab.hostly-tab--inventory-hub,
+  .hostly-stock-filter-panel button.hostly-stock-filter-chip {
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) input[type="search"],
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) input[type="text"],
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) input[type="number"],
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) input[type="date"],
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) select,
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) button.hostly-button-primary,
+  main.hostly-module-shell--mobile:has(.hostly-inventario-route-tabs) button.hostly-button-secondary {
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
+  .carta-root[data-carta-mobile="true"] .carta-comanda-button {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere;
+    line-height: 1.08 !important;
+    text-align: center;
+  }
+
+  .hostly-tpv-quick-actions-menu-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+
+  .hostly-tpv-quick-actions-menu-item {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+    text-align: left;
+  }
+}
