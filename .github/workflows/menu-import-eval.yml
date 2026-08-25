@@ -14,6 +14,7 @@ on:
       - "components/productos/product-form-commercial-info-modal.tsx"
       - "components/productos/product-commercial-identity-panel.tsx"
       - "components/productos/product-barcode-scanner.tsx"
+      - "components/productos/product-exact-catalog-image-suggestion.tsx"
       - "lib/server/menu-imports/**"
       - "lib/server/product-images/**"
       - "lib/productos/product-image-review-*.ts"
@@ -36,6 +37,7 @@ on:
       - "tests/lib/product-image-review-state.test.ts"
       - "tests/lib/catalog-product-image-matching.test.ts"
       - "tests/lib/catalog-product-image-provenance.test.ts"
+      - "tests/lib/catalog-product-image-exact-suggestion.test.ts"
       - "tests/lib/catalog-image-live-eval.test.ts"
       - "tests/lib/product-commercial-identity.test.ts"
       - "tests/server/generate-imported-product-image-request.test.ts"
@@ -98,6 +100,9 @@ jobs:
 
       - name: Run catalog product image provenance tests
         run: npx tsx --test tests/lib/catalog-product-image-provenance.test.ts
+
+      - name: Run exact GTIN image suggestion tests
+        run: npx tsx --test tests/lib/catalog-product-image-exact-suggestion.test.ts
 
       - name: Run catalog product image request tests
         run: npx tsx --test tests/server/catalog-product-image-request.test.ts
