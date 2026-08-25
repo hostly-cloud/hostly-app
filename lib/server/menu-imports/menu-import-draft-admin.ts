@@ -8,6 +8,7 @@ import {
 } from "@/lib/firestore/menu-import-drafts";
 import type { MenuImportPublishLogEntry } from "@/lib/carta/publish-result-types";
 import { sanitizeMenuImportDraftUpdatePatch } from "@/lib/carta/sanitize-menu-import-draft-payload";
+import { readMenuImportSourceFiles } from "@/lib/carta/menu-import-source-files";
 import type {
   ImportedMenuItem,
   ImportedMenuSection,
@@ -197,6 +198,7 @@ export function parseMenuImportDraftAdmin(
     sourceUrl: typeof data.sourceUrl === "string" ? data.sourceUrl : undefined,
     storagePath: typeof data.storagePath === "string" ? data.storagePath : undefined,
     originalFileName: typeof data.originalFileName === "string" ? data.originalFileName : undefined,
+    sourceFiles: readMenuImportSourceFiles(data.sourceFiles),
     menuType: readMenuType(data.menuType),
     status: readStatus(data.status),
     sections,

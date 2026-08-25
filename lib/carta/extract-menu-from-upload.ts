@@ -1,5 +1,6 @@
 import { mapAiMenuItemsToExtractedRows, type AiMenuDetectedItem } from "@/lib/carta/map-ai-menu-items-to-rows";
 import type { ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
+import { MAX_MENU_IMPORT_SOURCE_FILES } from "@/lib/carta/menu-import-source-files";
 import { requestMenuImportProcess } from "@/lib/carta/request-menu-import-process";
 import {
   createMenuImportDraft,
@@ -8,7 +9,10 @@ import {
 } from "@/lib/firestore/menu-import-drafts";
 import { auth } from "@/lib/firebase/client";
 import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
-import { uploadMenuImportFile } from "@/lib/storage/menu-import-files";
+import {
+  uploadMenuImportFile,
+  uploadMenuImportFiles,
+} from "@/lib/storage/menu-import-files";
 
 export class MenuImportNoProductsError extends Error {
   readonly code = "NO_PRODUCTS_DETECTED" as const;
@@ -47,6 +51,43 @@ function toOnboardingDetectedItems(
     needsReview: item.needsReview === true,
     rawText: item.rawText,
   }));
+}
+
+async function readProcessedRows(params: {
+  restaurantId: string;
+  draftId: string;
+}): Promise<{ rows: ExtractedMenuRow[]; ocrTextLength?: number }> {
+  const processed = await requestMenuImportProcess(params.draftId);
+  if (!processed.ok) {
+    if (processed.error === "NO_PRODUCTS_DETECTED") {
+      throw new MenuImportNoProductsError(processed.details?.trim() || "NO_PRODUCTS_DETECTED");
+    }
+    throw new MenuImportExtractError(
+      processed.details?.trim() || processed.error,
+      processed.error,
+    );
+  }
+
+  const draft = await getMenuImportDraft(params.restaurantId, params.draftId);
+  if (!draft) {
+    throw new MenuImportExtractError(
+      "El análisis terminó pero no se pudo recuperar el borrador.",
+      "DRAFT_NOT_FOUND_AFTER_PROCESS",
+    );
+  }
+  if (draft.items.length === 0) {
+    throw new MenuImportNoProductsError("NO_PRODUCTS_DETECTED");
+  }
+
+  const rows = mapAiMenuItemsToExtractedRows(toOnboardingDetectedItems(draft.items), params.restaurantId);
+  if (rows.length === 0) {
+    throw new MenuImportNoProductsError("NO_PRODUCTS_DETECTED");
+  }
+
+  return {
+    rows,
+    ocrTextLength: typeof draft.rawText === "string" ? draft.rawText.length : undefined,
+  };
 }
 
 /**
@@ -96,39 +137,8 @@ export async function extractMenuFromUpload(file: File): Promise<{
       updatedBy: user.uid,
     });
 
-    const processed = await requestMenuImportProcess(draftId);
-    if (!processed.ok) {
-      if (processed.error === "NO_PRODUCTS_DETECTED") {
-        throw new MenuImportNoProductsError(processed.details?.trim() || "NO_PRODUCTS_DETECTED");
-      }
-      throw new MenuImportExtractError(
-        processed.details?.trim() || processed.error,
-        processed.error,
-      );
-    }
-
-    const draft = await getMenuImportDraft(rid, draftId);
-    if (!draft) {
-      throw new MenuImportExtractError(
-        "El análisis terminó pero no se pudo recuperar el borrador.",
-        "DRAFT_NOT_FOUND_AFTER_PROCESS",
-      );
-    }
-
-    if (draft.items.length === 0) {
-      throw new MenuImportNoProductsError("NO_PRODUCTS_DETECTED");
-    }
-
-    const rows = mapAiMenuItemsToExtractedRows(toOnboardingDetectedItems(draft.items), rid);
-    if (rows.length === 0) {
-      throw new MenuImportNoProductsError("NO_PRODUCTS_DETECTED");
-    }
-
-    return {
-      rows,
-      ocrTextLength: typeof draft.rawText === "string" ? draft.rawText.length : undefined,
-      draftId,
-    };
+    const result = await readProcessedRows({ restaurantId: rid, draftId });
+    return { ...result, draftId };
   } catch (error) {
     if (error instanceof MenuImportNoProductsError || error instanceof MenuImportExtractError) {
       throw error;
@@ -136,6 +146,108 @@ export async function extractMenuFromUpload(file: File): Promise<{
     throw new MenuImportExtractError(
       error instanceof Error ? error.message : "AI_IMPORT_FAILED",
       draftId ? "MENU_IMPORT_V2_FAILED" : "MENU_IMPORT_DRAFT_FAILED",
+    );
+  }
+}
+
+export type MenuImportBatchPageResult = {
+  fileName: string;
+  order: number;
+  status: "processed";
+};
+
+/**
+ * Importación multipágina canónica.
+ *
+ * Varias fotos se almacenan como fuentes ordenadas dentro de UN único draft. El servidor
+ * extrae y parsea cada página por separado, deduplica nombre+precio y guarda un único resultado
+ * revisable. Esto mantiene historial, reintentos y publicación en una sola unidad transaccional.
+ *
+ * Un PDF ya es multipágina por sí mismo, por lo que solo se admite como archivo único.
+ */
+export async function extractMenuFromUploads(files: readonly File[]): Promise<{
+  rows: ExtractedMenuRow[];
+  pages: MenuImportBatchPageResult[];
+  draftIds: string[];
+  ocrTextLength: number;
+}> {
+  const normalizedFiles = files.filter((file) => file instanceof File && file.size > 0);
+  if (normalizedFiles.length === 0) {
+    throw new MenuImportExtractError("Selecciona al menos un archivo.", "MENU_IMPORT_FILES_REQUIRED");
+  }
+  if (normalizedFiles.length > MAX_MENU_IMPORT_SOURCE_FILES) {
+    throw new MenuImportExtractError(
+      `Puedes importar un máximo de ${MAX_MENU_IMPORT_SOURCE_FILES} páginas por lote.`,
+      "MENU_IMPORT_BATCH_TOO_LARGE",
+    );
+  }
+  if (normalizedFiles.length === 1) {
+    const single = await extractMenuFromUpload(normalizedFiles[0]);
+    return {
+      rows: single.rows,
+      pages: [{ fileName: normalizedFiles[0].name, order: 0, status: "processed" }],
+      draftIds: single.draftId ? [single.draftId] : [],
+      ocrTextLength: single.ocrTextLength ?? 0,
+    };
+  }
+  if (normalizedFiles.some((file) => file.type === "application/pdf")) {
+    throw new MenuImportExtractError(
+      "Para importar varias páginas selecciona imágenes. Los PDF se importan como un único archivo multipágina.",
+      "MENU_IMPORT_BATCH_PDF_MIXED",
+    );
+  }
+
+  const user = auth.currentUser;
+  if (!user) {
+    throw new MenuImportExtractError("UNAUTHORIZED", "UNAUTHORIZED");
+  }
+  const rid = getBrowserRestauranteId().trim();
+  if (!rid) {
+    throw new MenuImportExtractError(
+      "No se ha podido identificar el restaurante activo.",
+      "RESTAURANT_REQUIRED",
+    );
+  }
+
+  let draftId = "";
+  try {
+    draftId = await createMenuImportDraft(rid, {
+      sourceType: "image",
+      menuType: "mixed",
+      status: "draft",
+      createdBy: user.uid,
+    });
+
+    const uploaded = await uploadMenuImportFiles({
+      restaurantId: rid,
+      draftId,
+      files: [...normalizedFiles],
+      userId: user.uid,
+    });
+
+    await updateMenuImportDraft(rid, draftId, {
+      sourceFiles: uploaded.sources,
+      updatedBy: user.uid,
+    });
+
+    const result = await readProcessedRows({ restaurantId: rid, draftId });
+    return {
+      rows: result.rows,
+      pages: normalizedFiles.map((file, order) => ({
+        fileName: file.name,
+        order,
+        status: "processed" as const,
+      })),
+      draftIds: [draftId],
+      ocrTextLength: result.ocrTextLength ?? 0,
+    };
+  } catch (error) {
+    if (error instanceof MenuImportNoProductsError || error instanceof MenuImportExtractError) {
+      throw error;
+    }
+    throw new MenuImportExtractError(
+      error instanceof Error ? error.message : "AI_IMPORT_FAILED",
+      draftId ? "MENU_IMPORT_V2_BATCH_FAILED" : "MENU_IMPORT_DRAFT_FAILED",
     );
   }
 }

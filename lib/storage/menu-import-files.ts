@@ -1,6 +1,10 @@
 import { FirebaseError } from "firebase/app";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, storage } from "@/lib/firebase/client";
+import {
+  MAX_MENU_IMPORT_SOURCE_FILES,
+  type MenuImportSourceFile,
+} from "@/lib/carta/menu-import-source-files";
 
 export const MAX_MENU_IMPORT_FILE_BYTES = 12 * 1024 * 1024;
 const UPLOAD_TIMEOUT_MS = 120_000;
@@ -107,11 +111,56 @@ export function buildMenuImportStoragePath(
   return `restaurants/${rid}/menu-imports/${did}/${safeName}`;
 }
 
+export function buildMenuImportBatchStoragePath(
+  restaurantId: string,
+  draftId: string,
+  order: number,
+  originalFileName: string,
+): string {
+  const rid = assertRestaurantId(restaurantId);
+  const did = assertDraftId(draftId);
+  const safeName = sanitizeFileName(originalFileName);
+  const safeOrder = Math.max(0, Math.floor(order));
+  const prefix = String(safeOrder + 1).padStart(3, "0");
+  return `restaurants/${rid}/menu-imports/${did}/pages/${prefix}-${safeName}`;
+}
+
 export type UploadMenuImportFileResult = {
   path: string;
   downloadUrl: string;
   originalFileName: string;
 };
+
+async function uploadToPath(input: {
+  path: string;
+  file: File;
+  sourceType: "image" | "pdf";
+}): Promise<UploadMenuImportFileResult> {
+  const storageRef = ref(storage, input.path);
+  const originalFileName = sanitizeFileName(input.file.name);
+  const contentType =
+    input.file.type && input.file.type.trim() !== ""
+      ? input.file.type
+      : input.sourceType === "pdf"
+        ? "application/pdf"
+        : "image/jpeg";
+
+  try {
+    await withTimeout(
+      uploadBytes(storageRef, input.file, { contentType }),
+      UPLOAD_TIMEOUT_MS,
+      "uploadBytes",
+    );
+    const downloadUrl = await withTimeout(
+      getDownloadURL(storageRef),
+      UPLOAD_TIMEOUT_MS,
+      "getDownloadURL",
+    );
+    return { path: input.path, downloadUrl, originalFileName };
+  } catch (e) {
+    throw storageErr("uploadMenuImportFile", e);
+  }
+}
 
 export async function uploadMenuImportFile(input: {
   restaurantId: string;
@@ -131,30 +180,54 @@ export async function uploadMenuImportFile(input: {
     throw storageErr("getIdToken", e);
   }
 
-  const originalFileName = sanitizeFileName(input.file.name);
-  const path = buildMenuImportStoragePath(rid, did, originalFileName);
-  const storageRef = ref(storage, path);
+  return uploadToPath({
+    path: buildMenuImportStoragePath(rid, did, input.file.name),
+    file: input.file,
+    sourceType: input.sourceType,
+  });
+}
 
-  const contentType =
-    input.file.type && input.file.type.trim() !== ""
-      ? input.file.type
-      : input.sourceType === "pdf"
-        ? "application/pdf"
-        : "image/jpeg";
+export async function uploadMenuImportFiles(input: {
+  restaurantId: string;
+  draftId: string;
+  files: File[];
+  userId: string;
+}): Promise<{ sources: MenuImportSourceFile[]; downloadUrls: string[] }> {
+  const rid = assertRestaurantId(input.restaurantId);
+  const did = assertDraftId(input.draftId);
+  assertAuthUser(input.userId);
+  if (input.files.length < 1) {
+    throw new Error("Selecciona al menos una imagen de la carta");
+  }
+  if (input.files.length > MAX_MENU_IMPORT_SOURCE_FILES) {
+    throw new Error(`Puedes subir hasta ${MAX_MENU_IMPORT_SOURCE_FILES} imágenes por importación`);
+  }
+
+  for (const file of input.files) validateMenuImportFile(file, "image");
 
   try {
-    await withTimeout(
-      uploadBytes(storageRef, input.file, { contentType }),
-      UPLOAD_TIMEOUT_MS,
-      "uploadBytes",
-    );
-    const downloadUrl = await withTimeout(
-      getDownloadURL(storageRef),
-      UPLOAD_TIMEOUT_MS,
-      "getDownloadURL",
-    );
-    return { path, downloadUrl, originalFileName };
+    await auth.currentUser!.getIdToken(true);
   } catch (e) {
-    throw storageErr("uploadMenuImportFile", e);
+    throw storageErr("getIdToken", e);
   }
+
+  const sources: MenuImportSourceFile[] = [];
+  const downloadUrls: string[] = [];
+  for (let index = 0; index < input.files.length; index += 1) {
+    const file = input.files[index];
+    const result = await uploadToPath({
+      path: buildMenuImportBatchStoragePath(rid, did, index, file.name),
+      file,
+      sourceType: "image",
+    });
+    sources.push({
+      storagePath: result.path,
+      originalFileName: result.originalFileName,
+      sourceType: "image",
+      order: index,
+    });
+    downloadUrls.push(result.downloadUrl);
+  }
+
+  return { sources, downloadUrls };
 }

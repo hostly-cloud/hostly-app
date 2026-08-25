@@ -1,12 +1,9 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import type { MenuImportDraftDocument } from "@/lib/firestore/menu-import-drafts";
-import {
-  assertMenuImportStoragePathForDraft,
-  truncateRawTextForStorage,
-} from "./download-storage-file";
+import { truncateRawTextForStorage } from "./download-storage-file";
 import { enrichMenuItemsWithAI } from "./enrich-menu-items-with-ai";
-import { extractMenuText } from "./extract-menu-text";
+import { extractAndParseMenuImportSources } from "./extract-and-parse-menu-import-sources";
 import {
   MenuImportPipelineTracer,
   type MenuImportPipelineStep,
@@ -24,7 +21,6 @@ import {
 import {
   groupParsedItemsIntoSections,
   normalizeMenuImportOcrText,
-  parseMenuText,
 } from "./parse-menu-text";
 import {
   buildMenuImportDebugReport,
@@ -39,6 +35,7 @@ import {
   isAiImportV2PhotoRecoveryEnabled,
   type AiImportV2ShadowReport,
 } from "./ai-import-v2/types";
+import { resolveMenuImportSourceFiles } from "@/lib/carta/menu-import-source-files";
 
 const ANALYZING_STALE_MS = 2 * 60 * 1000;
 
@@ -81,16 +78,21 @@ export async function processMenuImportDraft(params: {
     throw new ProcessMenuImportDraftError("DRAFT_NOT_FOUND", "Borrador no encontrado", 404);
   }
 
+  const sourceFiles = resolveMenuImportSourceFiles(draft);
   const trace = new MenuImportPipelineTracer({
     draftId,
     restaurantId,
-    fileName: draft.originalFileName ?? null,
+    fileName:
+      sourceFiles.length > 1
+        ? `${sourceFiles.length} archivos`
+        : sourceFiles[0]?.originalFileName ?? draft.originalFileName ?? null,
     sourceType: draft.sourceType,
   });
 
   trace.step("draft_loaded", {
     status: draft.status,
     storagePath: draft.storagePath ?? null,
+    sourceFiles: sourceFiles.length,
     sourceUrl: draft.sourceUrl ?? null,
     existingItems: draft.items.length,
     existingSections: draft.sections.length,
@@ -98,17 +100,6 @@ export async function processMenuImportDraft(params: {
 
   if (draft.restaurantId !== restaurantId.trim()) {
     throw new ProcessMenuImportDraftError("TENANT_MISMATCH", "Borrador fuera del tenant", 403);
-  }
-  if (draft.storagePath?.trim()) {
-    try {
-      assertMenuImportStoragePathForDraft(draft.storagePath, { restaurantId, draftId });
-    } catch {
-      throw new ProcessMenuImportDraftError(
-        "STORAGE_PATH_SCOPE_MISMATCH",
-        "El archivo no pertenece a este borrador",
-        403,
-      );
-    }
   }
 
   if (draft.status === "ready" || draft.status === "published") {
@@ -142,7 +133,7 @@ export async function processMenuImportDraft(params: {
     if (!draft.sourceUrl?.trim()) {
       throw new ProcessMenuImportDraftError("MISSING_SOURCE_URL", "Falta URL del menú QR en el borrador", 400);
     }
-  } else if (!draft.storagePath?.trim()) {
+  } else if (sourceFiles.length === 0) {
     throw new ProcessMenuImportDraftError(
       "MISSING_STORAGE_PATH",
       "Falta archivo subido en Storage para este borrador",
@@ -162,34 +153,30 @@ export async function processMenuImportDraft(params: {
 
   try {
     trace.step("ocr_extract_start", {
-      storagePath: draft.storagePath ?? null,
+      storagePath: sourceFiles.length === 1 ? sourceFiles[0].storagePath : null,
+      sourceFiles: sourceFiles.length,
       sourceUrl: draft.sourceUrl ?? null,
     });
 
     currentStep = "ocr_raw";
-    const extracted = await extractMenuText({
+    const parsedSources = await extractAndParseMenuImportSources({
       restaurantId,
       draftId,
-      sourceType: draft.sourceType,
-      menuType: draft.menuType,
-      storagePath: draft.storagePath,
-      sourceUrl: draft.sourceUrl,
-      originalFileName: draft.originalFileName,
+      draft,
     });
-    trace.ocrRaw(extracted.rawText, extracted.warnings);
+    const extracted = parsedSources.primaryExtraction;
+    trace.ocrRaw(parsedSources.rawText, parsedSources.extractionWarnings);
 
     currentStep = "ocr_cleaned";
-    const cleanedText = normalizeMenuImportOcrText(extracted.rawText);
+    const cleanedText = normalizeMenuImportOcrText(parsedSources.rawText);
     trace.ocrCleaned(cleanedText);
 
     currentStep = "parser";
-    const parsed = parseMenuText(extracted.rawText, {
-      sourceType: draft.sourceType,
-      menuType: draft.menuType,
-      ocrLayoutLines: extracted.ocrLayoutLines,
-      ocrPageWidth: extracted.ocrPageWidth,
-      ocrPageHeight: extracted.ocrPageHeight,
-    });
+    const parsed = {
+      items: parsedSources.items,
+      warnings: parsedSources.parserWarnings,
+      diagnostics: parsedSources.diagnostics,
+    };
     trace.parser(parsed.items, parsed.warnings);
     if (parsed.diagnostics && isMenuImportDebugReportEnabled()) {
       trace.step("parser", {
@@ -198,16 +185,17 @@ export async function processMenuImportDraft(params: {
       });
     }
 
+    const shadowSourceType = parsedSources.multiSource ? "image" : draft.sourceType;
     const aiImportV2Shadow = await runAiImportV2Shadow({
       restaurantId,
       draftId,
-      rawText: extracted.rawText,
+      rawText: parsedSources.rawText,
       parserItems: parsed.items,
       menuType: draft.menuType,
-      sourceType: draft.sourceType,
-      storagePath: draft.storagePath,
-      originalFileName: draft.originalFileName,
-      ocrLayoutLines: extracted.ocrLayoutLines,
+      sourceType: shadowSourceType,
+      storagePath: parsedSources.multiSource ? undefined : parsedSources.primaryStoragePath ?? draft.storagePath,
+      originalFileName: parsedSources.multiSource ? undefined : parsedSources.primaryOriginalFileName ?? draft.originalFileName,
+      ocrLayoutLines: parsedSources.multiSource ? undefined : extracted?.ocrLayoutLines,
     }).catch((shadowErr) => {
       const message = shadowErr instanceof Error ? shadowErr.message : "AI_IMPORT_V2_SHADOW_FAILED";
       console.warn("[Hostly][AI Import V2 Shadow] outer catch (non-blocking)", { error: message });
@@ -238,12 +226,15 @@ export async function processMenuImportDraft(params: {
       });
     }
 
-    const parserWarnings = [...extracted.warnings, ...parsed.warnings];
+    const parserWarnings = [
+      ...parsedSources.extractionWarnings,
+      ...parsed.warnings,
+    ];
     const knownCategories = await loadHostlyCategoryNames(db, restaurantId);
 
     currentStep = "ai_enrichment";
     const enriched = await enrichMenuItemsWithAI({
-      rawText: extracted.rawText,
+      rawText: parsedSources.rawText,
       items: parsed.items,
       menuType: draft.menuType,
       knownCategories,
@@ -259,10 +250,11 @@ export async function processMenuImportDraft(params: {
 
     currentStep = "ocr_validation";
     const wrapped = enriched.items.map((item) => ({ name: item.name, item }));
-    const ocrValidated = filterItemsByOcrSource(wrapped, extracted.rawText);
+    const ocrValidated = filterItemsByOcrSource(wrapped, parsedSources.rawText);
     let finalItems = ocrValidated.accepted.map((row) => row.item);
 
     const photoRecoveryEligible =
+      !parsedSources.multiSource &&
       draft.sourceType === "image" &&
       isAiImportV2PhotoRecoveryEnabled() &&
       aiImportV2Shadow?.usedVision === true &&
@@ -275,9 +267,7 @@ export async function processMenuImportDraft(params: {
       });
       if (merged.recoveredCount > 0) {
         finalItems = merged.items;
-        parserWarnings.push(
-          `photo_vision_recovered:${merged.recoveredCount}`,
-        );
+        parserWarnings.push(`photo_vision_recovered:${merged.recoveredCount}`);
       }
     }
 
@@ -285,7 +275,7 @@ export async function processMenuImportDraft(params: {
       ocrTextLength: ocrValidated.ocrTextLength,
       accepted: finalItems,
       rejected: ocrValidated.rejected.map((row) => {
-        const decision = explainOcrValidationDecision(row.name, extracted.rawText);
+        const decision = explainOcrValidationDecision(row.name, parsedSources.rawText);
         return { name: row.name, reason: decision.reason };
       }),
     });
@@ -304,11 +294,16 @@ export async function processMenuImportDraft(params: {
 
     const debugReport = isMenuImportDebugReportEnabled()
       ? buildMenuImportDebugReport({
-          fileName: draft.originalFileName ?? null,
+          fileName:
+            parsedSources.multiSource
+              ? `${parsedSources.sourceCount} fotos`
+              : parsedSources.primaryOriginalFileName ?? draft.originalFileName ?? null,
           sourceType: draft.sourceType,
-          inputMetadata: extracted.inputMetadata,
-          ocrLayoutExtractionMeta: extracted.ocrLayoutExtractionMeta,
-          rawOcrText: extracted.rawText,
+          inputMetadata: parsedSources.multiSource ? undefined : extracted?.inputMetadata,
+          ocrLayoutExtractionMeta: parsedSources.multiSource
+            ? undefined
+            : extracted?.ocrLayoutExtractionMeta,
+          rawOcrText: parsedSources.rawText,
           cleanedOcrText: cleanedText,
           parserWarnings,
           aiWarnings: enriched.aiWarnings,
@@ -317,7 +312,7 @@ export async function processMenuImportDraft(params: {
           enrichedItems: enriched.items,
           ocrValidationAccepted: finalItems,
           ocrValidationRejected: ocrValidated.rejected,
-          rawOcrTextForValidation: extracted.rawText,
+          rawOcrTextForValidation: parsedSources.rawText,
           aiImportV2Shadow,
         })
       : undefined;
@@ -353,7 +348,7 @@ export async function processMenuImportDraft(params: {
     }
 
     const sections = groupParsedItemsIntoSections(finalItems);
-    const { text: rawTextStored, truncated } = truncateRawTextForStorage(extracted.rawText);
+    const { text: rawTextStored, truncated } = truncateRawTextForStorage(parsedSources.rawText);
 
     if (truncated) {
       parserWarnings.push("rawText truncado por límite de almacenamiento");
@@ -369,10 +364,10 @@ export async function processMenuImportDraft(params: {
       restaurantId,
       draftId,
       sourceType: draft.sourceType,
-      storagePath: draft.storagePath,
-      ocrMethod: extracted.inputMetadata?.ocrMethod,
+      storagePath: parsedSources.multiSource ? undefined : parsedSources.primaryStoragePath ?? draft.storagePath,
+      ocrMethod: parsedSources.multiSource ? undefined : extracted?.inputMetadata?.ocrMethod,
       parserWarnings,
-      rawTextLength: extracted.rawText.length,
+      rawTextLength: parsedSources.rawText.length,
       items: finalItems,
       parseDiagnostics: parsed.diagnostics,
     });
