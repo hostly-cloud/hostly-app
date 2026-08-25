@@ -1,0 +1,33 @@
+/* Editor V2 — canvas-first width correction.
+ * Keeps the premium workbench styling, but prevents the toolbox from reclaiming
+ * excessive horizontal space on desktop/tablet. No editor behavior is changed. */
+
+@media (min-width: 1280px) {
+  .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(144px, 156px) minmax(0, 1fr) !important;
+  }
+
+  .hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(144px, 156px) minmax(0, 1fr) minmax(128px, 144px) !important;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(136px, 148px) minmax(0, 1fr) !important;
+  }
+
+  .hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(136px, 148px) minmax(0, 1fr) minmax(124px, 140px) !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(128px, 140px) minmax(0, 1fr) !important;
+  }
+
+  .hostly-sala-editor-workbench--inspector-open .hostly-sala-editor-workbench__body {
+    grid-template-columns: minmax(128px, 140px) minmax(0, 1fr) minmax(118px, 134px) !important;
+  }
+}
