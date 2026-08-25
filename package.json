@@ -17,10 +17,11 @@
     "test:tpv-table-order-lock": "tsx --test tests/server/tpv-table-order-lock.test.ts",
     "test:tpv-table-order-lock-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-table-lock \"tsx --test tests/server/tpv-table-order-lock-emulator.test.ts\"",
     "test:tpv-release-effects": "tsx --test tests/carta/release-effects-exactly-once.test.ts",
-    "test:tpv-release-effects-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-release-fx \"tsx --test tests/server/tpv-release-effects-emulator.test.ts\"",
+    "test:tpv-release-effects-server": "firebase emulators:exec --only firestore --project demo-hostly-tpv-release-fx \"tsx --test tests/carta/release-effects-exactly-once.test.ts\"",
     "eval:menu-import": "tsx scripts/eval-menu-import-corpus.ts",
     "eval:menu-import:v2": "tsx scripts/eval-menu-import-corpus.ts --shadow-v2 --skip-baseline-check",
     "eval:menu-import:modern": "tsx scripts/eval-menu-import-modern.ts",
+    "eval:menu-import:photos": "tsx scripts/eval-menu-import-photo-corpus.ts",
     "eval:catalog-images:live": "tsx scripts/eval-catalog-product-images-live.ts"
   },
   "dependencies": {

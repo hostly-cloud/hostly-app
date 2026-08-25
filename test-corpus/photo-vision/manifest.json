@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "description": "Corpus manual para evaluar recuperación visual de Menu Import V2 con fotografías autorizadas.",
+  "cases": [
+    {
+      "id": "frontal-clara",
+      "scenario": "frontal",
+      "image": "cases/frontal-clara/menu.jpg",
+      "expected": "cases/frontal-clara/expected.json"
+    },
+    {
+      "id": "foto-inclinada",
+      "scenario": "inclined",
+      "image": "cases/foto-inclinada/menu.jpg",
+      "expected": "cases/foto-inclinada/expected.json"
+    },
+    {
+      "id": "dos-columnas",
+      "scenario": "columns",
+      "image": "cases/dos-columnas/menu.jpg",
+      "expected": "cases/dos-columnas/expected.json"
+    },
+    {
+      "id": "poca-luz",
+      "scenario": "low_light",
+      "image": "cases/poca-luz/menu.jpg",
+      "expected": "cases/poca-luz/expected.json"
+    },
+    {
+      "id": "carta-vinos",
+      "scenario": "wine",
+      "image": "cases/carta-vinos/menu.jpg",
+      "expected": "cases/carta-vinos/expected.json"
+    }
+  ]
+}
