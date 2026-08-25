@@ -144,6 +144,29 @@
     height: 18px !important;
     font-size: 10px !important;
   }
+
+  /* Only expose actions that are usable today. Disabled future placeholders
+   * add chrome but no capability, so keep them in code and out of the desktop UI. */
+  .hostly-sala-context-action-bar__action:disabled {
+    display: none !important;
+  }
+
+  .hostly-sala-context-action-bar.is-active {
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    padding-block: 2px !important;
+  }
+
+  .hostly-sala-context-action-bar__icon {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .hostly-sala-context-action-bar__action {
+    min-height: 28px !important;
+    padding-inline: 8px !important;
+  }
 }
 
 /* The context bar is intentionally empty when nothing is selected. The base
