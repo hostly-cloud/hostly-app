@@ -61,6 +61,42 @@
     text-align: center;
   }
 
+  /* Escandallos: keep filters compact so controls do not dominate each product.
+   * Search owns one row; margin tiers become an intentional horizontal rail. */
+  .hostly-recipe-editor__toolbar-controls {
+    align-items: stretch;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .hostly-recipe-editor__search {
+    flex: 1 0 100%;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .hostly-recipe-editor__tier-filters {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+
+  .hostly-recipe-editor__tier-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hostly-recipe-editor__tier-filters > * {
+    flex: 0 0 auto;
+  }
+
   .carta-root[data-carta-mobile="true"] .carta-comanda-button {
     white-space: normal !important;
     overflow: visible !important;
