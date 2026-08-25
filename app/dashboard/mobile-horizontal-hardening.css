@@ -97,6 +97,13 @@
     flex: 0 0 auto;
   }
 
+  /* Reservations: operational actions should meet the shared 44px touch target
+   * even where compact Tailwind utilities request a shorter 36/40px button. */
+  .hostly-operation-shell[data-operation-module="reservas"] .hostly-button-primary,
+  .hostly-operation-shell[data-operation-module="reservas"] .hostly-button-secondary {
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
   .carta-root[data-carta-mobile="true"] .carta-comanda-button {
     white-space: normal !important;
     overflow: visible !important;
