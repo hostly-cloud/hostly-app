@@ -195,3 +195,119 @@
     min-width: 360px !important;
   }
 }
+
+/* Editor V2 — landscape clarity.
+ * The canvas already uses scalable SVG artwork and proportional resize handles for
+ * palms, olives and round planters. Keep that behavior and improve recognition at
+ * normal (unselected) opacity so landscaping reads clearly without competing with tables. */
+.hostly-sala-landscape-element:not(.is-selected):not(.is-dragging):not(.is-resizing) {
+  opacity: 0.9 !important;
+  filter: saturate(0.9) contrast(0.99) !important;
+}
+
+.hostly-sala-landscape-art--rect-planter,
+.hostly-sala-landscape-art--round-planter {
+  filter: drop-shadow(1.5px 2.2px 1.4px rgba(56, 44, 34, 0.2));
+}
+
+.hostly-sala-landscape-art__planter-shell {
+  fill: #8d7157 !important;
+  stroke: rgba(78, 59, 43, 0.78) !important;
+  stroke-width: 1.2 !important;
+}
+
+.hostly-sala-landscape-art__planter-rim {
+  fill: #b19a7d !important;
+  stroke: rgba(250, 239, 220, 0.58) !important;
+  stroke-width: 1 !important;
+}
+
+.hostly-sala-landscape-art__soil {
+  fill: #44372e !important;
+  stroke: rgba(42, 31, 24, 0.56) !important;
+}
+
+.hostly-sala-landscape-art__planter-leaves {
+  fill: #5f8057 !important;
+  stroke: rgba(53, 78, 50, 0.38) !important;
+}
+
+.hostly-sala-landscape-art__planter-leaves .is-light {
+  fill: #92aa75 !important;
+}
+
+.hostly-sala-landscape-art__planter-leaves .is-dark {
+  fill: #436844 !important;
+}
+
+.hostly-sala-landscape-art__flowers > g > ellipse {
+  fill: #c95650 !important;
+  stroke: rgba(113, 44, 40, 0.46) !important;
+}
+
+.hostly-sala-landscape-art__flowers > .is-white > ellipse {
+  fill: #fffaf0 !important;
+  stroke: rgba(137, 124, 99, 0.46) !important;
+}
+
+.hostly-sala-landscape-art__flowers > g:nth-child(3) > ellipse {
+  fill: #d78577 !important;
+}
+
+.hostly-sala-landscape-art__flowers > g > circle {
+  fill: #e1b94f !important;
+}
+
+.hostly-sala-landscape-art--palm {
+  filter: drop-shadow(1.6px 2.2px 1.2px rgba(37, 55, 38, 0.2));
+}
+
+.hostly-sala-landscape-art--palm .hostly-sala-landscape-art__palm-fronds path {
+  fill: #5f8250 !important;
+  stroke: rgba(43, 73, 43, 0.5) !important;
+}
+
+.hostly-sala-landscape-art--palm .hostly-sala-landscape-art__palm-fronds path:nth-child(2),
+.hostly-sala-landscape-art--palm .hostly-sala-landscape-art__palm-fronds path:nth-child(5) {
+  fill: #82a065 !important;
+}
+
+.hostly-sala-landscape-art--palm .hostly-sala-landscape-art__palm-fronds path:nth-child(3),
+.hostly-sala-landscape-art--palm .hostly-sala-landscape-art__palm-fronds path:nth-child(7) {
+  fill: #416c46 !important;
+}
+
+.hostly-sala-landscape-art--palm .hostly-sala-landscape-art__palm-veins {
+  stroke: rgba(235, 239, 194, 0.56) !important;
+}
+
+.hostly-sala-landscape-art--olive {
+  filter: drop-shadow(1.6px 2.2px 1.3px rgba(47, 56, 45, 0.19));
+}
+
+.hostly-sala-landscape-art--olive .hostly-sala-landscape-art__olive-branches {
+  stroke: rgba(105, 76, 52, 0.8) !important;
+}
+
+.hostly-sala-landscape-art--olive .hostly-sala-landscape-art__olive-clusters > g {
+  fill: #7b8e70 !important;
+  stroke: rgba(61, 78, 58, 0.4) !important;
+}
+
+.hostly-sala-landscape-art--olive .hostly-sala-landscape-art__olive-clusters > g:nth-child(2),
+.hostly-sala-landscape-art--olive .hostly-sala-landscape-art__olive-clusters > g:nth-child(5) {
+  fill: #a2ad8c !important;
+}
+
+.hostly-sala-landscape-art--olive .hostly-sala-landscape-art__olive-clusters > g:nth-child(3),
+.hostly-sala-landscape-art--olive .hostly-sala-landscape-art__olive-clusters > g:nth-child(6) {
+  fill: #5d755d !important;
+}
+
+.hostly-sala-landscape-element.is-selected .hostly-sala-landscape-art,
+.hostly-sala-landscape-element.is-dragging .hostly-sala-landscape-art,
+.hostly-sala-landscape-element.is-resizing .hostly-sala-landscape-art {
+  filter:
+    drop-shadow(1.6px 2.2px 1.2px rgba(38, 48, 43, 0.18))
+    drop-shadow(0 0 4px rgba(49, 95, 125, 0.3));
+}
