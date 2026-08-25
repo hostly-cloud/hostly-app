@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - "app/api/menu-imports/**"
+      - "app/api/catalog/generate-product-image/**"
       - "lib/server/menu-imports/**"
+      - "lib/server/product-images/**"
       - "lib/menu-import-eval/**"
       - "lib/carta/extract-menu-from-upload.ts"
       - "lib/carta/request-menu-import-*.ts"
@@ -15,6 +17,8 @@ on:
       - "tests/lib/menu-import-ai-restaurant-context.test.ts"
       - "tests/lib/menu-import-local-learning.test.ts"
       - "tests/lib/product-image-enrichment.test.ts"
+      - "tests/lib/imported-product-image-generation.test.ts"
+      - "tests/server/generate-imported-product-image-request.test.ts"
       - "test-corpus/**"
       - "package.json"
       - "package-lock.json"
@@ -51,3 +55,9 @@ jobs:
 
       - name: Run product image enrichment unit tests
         run: npx tsx --test tests/lib/product-image-enrichment.test.ts
+
+      - name: Run imported product image generation unit tests
+        run: npx tsx --test tests/lib/imported-product-image-generation.test.ts
+
+      - name: Run product image generation request tests
+        run: npx tsx --test tests/server/generate-imported-product-image-request.test.ts
