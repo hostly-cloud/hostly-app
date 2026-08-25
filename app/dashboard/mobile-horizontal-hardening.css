@@ -46,4 +46,42 @@
   .hostly-mobile-list-item__actions .hostly-row-actions__btn--icon {
     flex: 0 0 auto;
   }
+
+  /* Important actions must remain readable rather than ellipsized on phones. */
+  .hostly-module-shell--mobile .hostly-module-header-actions__primary .hostly-button-primary,
+  .hostly-module-shell--mobile .hostly-module-header-actions__primary .hostly-button-secondary,
+  .hostly-mobile-list-item__actions .hostly-row-actions__btn--text {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
+    text-align: center;
+  }
+
+  .carta-root[data-carta-mobile="true"] .carta-comanda-button {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere;
+    line-height: 1.08 !important;
+    text-align: center;
+  }
+
+  .hostly-tpv-quick-actions-menu-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+
+  .hostly-tpv-quick-actions-menu-item {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+    text-align: left;
+  }
 }
