@@ -21,6 +21,10 @@ export type ProductImageReviewStatus =
  * `locked` is the hard guard used by automatic enrichment. A manually uploaded
  * or explicitly approved image is locked and must never be replaced by a
  * background enrichment job.
+ *
+ * Catalog matches keep their original source, attribution and licence beside
+ * the copied image. This is intentionally aggregate provenance; it does not
+ * expose tenant history or reviewer activity to the browser.
  */
 export type ProductImageEnrichment = {
   source: ProductImageSource;
@@ -30,8 +34,17 @@ export type ProductImageEnrichment = {
   provider?: string;
   externalReference?: string;
   generatedAt?: number;
+  matchedAt?: number;
   reviewedAt?: number;
   reviewedBy?: string;
+  sourceUrl?: string;
+  imageSourceUrl?: string;
+  license?: string;
+  attribution?: string;
+  matchedProductName?: string;
+  matchedBrand?: string;
+  matchedQuantity?: string;
+  matchWarnings?: string[];
 };
 
 export type ProductImageState = {
@@ -64,6 +77,16 @@ function readOptionalFiniteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function readOptionalStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const normalized = value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  return normalized.length > 0 ? [...new Set(normalized)] : undefined;
+}
+
 /**
  * Reads Firestore metadata defensively. Malformed/partial metadata returns null,
  * which makes an existing image behave like a protected legacy image.
@@ -83,8 +106,17 @@ export function readProductImageEnrichment(
   const provider = readOptionalString(raw.provider);
   const externalReference = readOptionalString(raw.externalReference);
   const generatedAt = readOptionalFiniteNumber(raw.generatedAt);
+  const matchedAt = readOptionalFiniteNumber(raw.matchedAt);
   const reviewedAt = readOptionalFiniteNumber(raw.reviewedAt);
   const reviewedBy = readOptionalString(raw.reviewedBy);
+  const sourceUrl = readOptionalString(raw.sourceUrl);
+  const imageSourceUrl = readOptionalString(raw.imageSourceUrl);
+  const license = readOptionalString(raw.license);
+  const attribution = readOptionalString(raw.attribution);
+  const matchedProductName = readOptionalString(raw.matchedProductName);
+  const matchedBrand = readOptionalString(raw.matchedBrand);
+  const matchedQuantity = readOptionalString(raw.matchedQuantity);
+  const matchWarnings = readOptionalStringArray(raw.matchWarnings);
 
   return {
     source: raw.source,
@@ -94,8 +126,17 @@ export function readProductImageEnrichment(
     ...(provider ? { provider } : {}),
     ...(externalReference ? { externalReference } : {}),
     ...(generatedAt != null ? { generatedAt } : {}),
+    ...(matchedAt != null ? { matchedAt } : {}),
     ...(reviewedAt != null ? { reviewedAt } : {}),
     ...(reviewedBy ? { reviewedBy } : {}),
+    ...(sourceUrl ? { sourceUrl } : {}),
+    ...(imageSourceUrl ? { imageSourceUrl } : {}),
+    ...(license ? { license } : {}),
+    ...(attribution ? { attribution } : {}),
+    ...(matchedProductName ? { matchedProductName } : {}),
+    ...(matchedBrand ? { matchedBrand } : {}),
+    ...(matchedQuantity ? { matchedQuantity } : {}),
+    ...(matchWarnings ? { matchWarnings } : {}),
   };
 }
 
@@ -120,11 +161,21 @@ export function buildPendingAutomaticProductImageEnrichment(args: {
   provider?: string;
   externalReference?: string;
   generatedAt?: number;
+  matchedAt?: number;
+  sourceUrl?: string;
+  imageSourceUrl?: string;
+  license?: string;
+  attribution?: string;
+  matchedProductName?: string;
+  matchedBrand?: string;
+  matchedQuantity?: string;
+  matchWarnings?: string[];
 }): ProductImageEnrichment {
   const confidence =
     typeof args.confidence === "number" && Number.isFinite(args.confidence)
       ? Math.max(0, Math.min(1, args.confidence))
       : undefined;
+  const matchWarnings = readOptionalStringArray(args.matchWarnings);
 
   return {
     source: args.source,
@@ -136,6 +187,25 @@ export function buildPendingAutomaticProductImageEnrichment(args: {
       ? { externalReference: args.externalReference.trim() }
       : {}),
     ...(args.generatedAt != null ? { generatedAt: args.generatedAt } : {}),
+    ...(args.matchedAt != null ? { matchedAt: args.matchedAt } : {}),
+    ...(args.sourceUrl?.trim() ? { sourceUrl: args.sourceUrl.trim() } : {}),
+    ...(args.imageSourceUrl?.trim()
+      ? { imageSourceUrl: args.imageSourceUrl.trim() }
+      : {}),
+    ...(args.license?.trim() ? { license: args.license.trim() } : {}),
+    ...(args.attribution?.trim()
+      ? { attribution: args.attribution.trim() }
+      : {}),
+    ...(args.matchedProductName?.trim()
+      ? { matchedProductName: args.matchedProductName.trim() }
+      : {}),
+    ...(args.matchedBrand?.trim()
+      ? { matchedBrand: args.matchedBrand.trim() }
+      : {}),
+    ...(args.matchedQuantity?.trim()
+      ? { matchedQuantity: args.matchedQuantity.trim() }
+      : {}),
+    ...(matchWarnings ? { matchWarnings } : {}),
   };
 }
 

@@ -5,6 +5,12 @@ import {
   ConfigBtnPrimary,
   ConfigBtnSecondary,
 } from "@/app/dashboard/configuracion/_components/config-carta-workbench";
+import type { CatalogProductImageCandidate } from "@/lib/productos/catalog-product-image-contract";
+import {
+  attachCatalogProductImageForReview,
+  CatalogProductImageApiError,
+  searchCatalogProductImagesForReview,
+} from "@/lib/productos/catalog-product-image-api";
 import type {
   ProductImageReviewAction,
   ProductImageReviewResolution,
@@ -30,6 +36,28 @@ export type ProductAiImageReviewPanelProps = {
 };
 
 function friendlyError(error: unknown): string {
+  if (error instanceof CatalogProductImageApiError) {
+    switch (error.code) {
+      case "CATALOG_PROVIDER_RATE_LIMITED":
+        return "El catálogo ha limitado temporalmente las búsquedas. Inténtalo de nuevo más tarde.";
+      case "CATALOG_PROVIDER_TIMEOUT":
+      case "CATALOG_IMAGE_DOWNLOAD_TIMEOUT":
+        return "El catálogo ha tardado demasiado en responder.";
+      case "CATALOG_PROVIDER_FAILED":
+      case "CATALOG_PROVIDER_INVALID_RESPONSE":
+        return "No se ha podido consultar el catálogo real.";
+      case "CATALOG_CANDIDATE_NOT_FOUND":
+        return "El candidato seleccionado ya no está disponible.";
+      case "CATALOG_CANDIDATE_MISMATCH":
+        return "La coincidencia ya no es suficientemente segura para este producto.";
+      case "CATALOG_IMAGE_ATTACH_IN_PROGRESS":
+        return "Ya se está adjuntando una imagen de catálogo para este producto.";
+      case "PRODUCT_IMAGE_PROTECTED":
+        return "La imagen actual está protegida y no se puede sustituir.";
+      default:
+        return error.message || error.code;
+    }
+  }
   if (error instanceof ProductImageReviewApiError) {
     switch (error.code) {
       case "IMAGE_GENERATION_NOT_CONFIGURED":
@@ -86,6 +114,111 @@ function badgeTone(
   return { borderColor: "rgba(148,163,184,.26)", background: "#f8fafc", color: "#475569" };
 }
 
+function CandidateCard({
+  candidate,
+  disabled,
+  attaching,
+  onAttach,
+}: {
+  candidate: CatalogProductImageCandidate;
+  disabled: boolean;
+  attaching: boolean;
+  onAttach: () => void;
+}) {
+  const detail = [candidate.brand, candidate.quantity].filter(Boolean).join(" · ");
+  return (
+    <article
+      style={{
+        display: "grid",
+        gridTemplateColumns: "88px minmax(0,1fr)",
+        gap: 10,
+        padding: 10,
+        borderRadius: 10,
+        border: "1px solid rgba(148,163,184,.24)",
+        background: "rgba(255,255,255,.88)",
+      }}
+    >
+      <img
+        src={candidate.thumbnailUrl}
+        alt={candidate.productName}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        style={{
+          width: 88,
+          height: 88,
+          borderRadius: 8,
+          objectFit: "contain",
+          background: "#fff",
+          border: "1px solid rgba(148,163,184,.18)",
+        }}
+      />
+      <div style={{ display: "flex", minWidth: 0, flexDirection: "column", gap: 6 }}>
+        <div style={{ minWidth: 0 }}>
+          <p
+            style={{
+              margin: 0,
+              color: "#0f172a",
+              fontSize: 12,
+              fontWeight: 760,
+              lineHeight: 1.3,
+            }}
+          >
+            {candidate.productName}
+          </p>
+          {detail ? (
+            <p style={{ margin: "2px 0 0", color: "#64748b", fontSize: 10 }}>
+              {detail}
+            </p>
+          ) : null}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          <span
+            style={{
+              padding: "2px 6px",
+              borderRadius: 999,
+              border: "1px solid rgba(56,189,248,.25)",
+              background: candidate.matchLevel === "strong" ? "#ecfdf5" : "#fff7ed",
+              color: candidate.matchLevel === "strong" ? "#166534" : "#9a3412",
+              fontSize: 9,
+              fontWeight: 750,
+            }}
+          >
+            {candidate.matchLevel === "strong" ? "Coincidencia sólida" : "Revisar coincidencia"}
+          </span>
+          <span style={{ color: "#64748b", fontSize: 9, fontWeight: 650 }}>
+            {Math.round(candidate.confidence * 100)} %
+          </span>
+        </div>
+        {candidate.warnings.length > 0 ? (
+          <ul style={{ margin: 0, paddingLeft: 16, color: "#92400e", fontSize: 9, lineHeight: 1.35 }}>
+            {candidate.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        ) : null}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onAttach}
+            className="hostly-button-secondary hostly-button-compact"
+          >
+            {attaching ? "Adjuntando…" : "Usar esta imagen"}
+          </button>
+          <a
+            href={candidate.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: "#0369a1", fontSize: 9, fontWeight: 650 }}
+          >
+            Ver ficha original
+          </a>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function ProductAiImageReviewPanel({
   open,
   productName,
@@ -100,15 +233,25 @@ export function ProductAiImageReviewPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const lastAiAppliedUrlRef = useRef<string | null>(null);
+  const [catalogQuery, setCatalogQuery] = useState(productName);
+  const [catalogCandidates, setCatalogCandidates] = useState<CatalogProductImageCandidate[]>([]);
+  const [catalogSearched, setCatalogSearched] = useState(false);
+  const [catalogSearching, setCatalogSearching] = useState(false);
+  const [catalogAttachingReference, setCatalogAttachingReference] = useState<string | null>(null);
+  const lastAutomaticAppliedUrlRef = useRef<string | null>(null);
 
   const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
 
   useEffect(() => {
-    lastAiAppliedUrlRef.current = null;
+    lastAutomaticAppliedUrlRef.current = null;
     setState(null);
     setMessage(null);
     setError(null);
+    setCatalogQuery(productName);
+    setCatalogCandidates([]);
+    setCatalogSearched(false);
+    setCatalogSearching(false);
+    setCatalogAttachingReference(null);
   }, [open, productName]);
 
   useEffect(() => {
@@ -141,7 +284,7 @@ export function ProductAiImageReviewPanel({
       imageDraftMode === "manual_pending" ||
       (imageDraftMode === "not_visible" &&
         resolved?.hasImage &&
-        !lastAiAppliedUrlRef.current),
+        !lastAutomaticAppliedUrlRef.current),
   );
   const view = useMemo(
     () => (resolved ? buildProductImageReviewView(resolved, localImageDraftDirty) : null),
@@ -149,7 +292,7 @@ export function ProductAiImageReviewPanel({
   );
 
   const runGeneration = useCallback(async () => {
-    if (!resolved || disabled || busyAction) return;
+    if (!resolved || disabled || busyAction || catalogAttachingReference) return;
     if (
       !window.confirm(
         "Generar una imagen con IA puede tener coste. La imagen quedará pendiente de revisión. ¿Continuar?",
@@ -167,7 +310,7 @@ export function ProductAiImageReviewPanel({
     try {
       const result = await generateProductImageForReview(resolved.productId);
       if (result.outcome === "generated") {
-        lastAiAppliedUrlRef.current = result.imageUrl;
+        lastAutomaticAppliedUrlRef.current = result.imageUrl;
         onImageUrlChange(result.imageUrl);
         setMessage("Imagen generada. Revísala antes de aprobarla.");
       } else {
@@ -179,11 +322,11 @@ export function ProductAiImageReviewPanel({
     } finally {
       setBusyAction(null);
     }
-  }, [resolved, disabled, busyAction, onImageUrlChange, refresh]);
+  }, [resolved, disabled, busyAction, catalogAttachingReference, onImageUrlChange, refresh]);
 
   const runReview = useCallback(
     async (action: ProductImageReviewAction) => {
-      if (!resolved || disabled || busyAction) return;
+      if (!resolved || disabled || busyAction || catalogAttachingReference) return;
       setBusyAction(action);
       setMessage(null);
       setError(null);
@@ -191,13 +334,13 @@ export function ProductAiImageReviewPanel({
         const next = await submitProductImageReview(resolved.productId, action);
         setState(next);
         if (next.imageUrl) {
-          lastAiAppliedUrlRef.current = next.imageUrl;
+          lastAutomaticAppliedUrlRef.current = next.imageUrl;
           onImageUrlChange(next.imageUrl);
         }
         setMessage(
           action === "approve"
             ? "Imagen aprobada y protegida."
-            : "Imagen rechazada. Puedes generar otra alternativa.",
+            : "Imagen rechazada. Puedes buscar o generar otra alternativa.",
         );
       } catch (cause) {
         setError(friendlyError(cause));
@@ -206,16 +349,82 @@ export function ProductAiImageReviewPanel({
         setBusyAction(null);
       }
     },
-    [resolved, disabled, busyAction, onImageUrlChange, refresh],
+    [resolved, disabled, busyAction, catalogAttachingReference, onImageUrlChange, refresh],
+  );
+
+  const runCatalogSearch = useCallback(async () => {
+    if (!resolved || !resolved.canSearchCatalog || localImageDraftDirty) return;
+    const query = catalogQuery.trim();
+    if (query.length < 2) {
+      setError("Escribe al menos dos caracteres para buscar.");
+      return;
+    }
+    setCatalogSearching(true);
+    setCatalogSearched(true);
+    setCatalogCandidates([]);
+    setMessage(null);
+    setError(null);
+    try {
+      const result = await searchCatalogProductImagesForReview(
+        resolved.productId,
+        query,
+      );
+      setCatalogCandidates(result.candidates);
+      if (result.candidates.length === 0) {
+        setMessage("No hay una coincidencia suficientemente fiable. Hostly no asignará una imagen al azar.");
+      }
+    } catch (cause) {
+      setError(friendlyError(cause));
+    } finally {
+      setCatalogSearching(false);
+    }
+  }, [resolved, localImageDraftDirty, catalogQuery]);
+
+  const runCatalogAttach = useCallback(
+    async (candidate: CatalogProductImageCandidate) => {
+      if (!resolved || localImageDraftDirty || disabled || catalogAttachingReference) return;
+      if (
+        !window.confirm(
+          `Usar la imagen de “${candidate.productName}”. Quedará pendiente de aprobación. ¿Continuar?`,
+        )
+      ) {
+        return;
+      }
+      setCatalogAttachingReference(candidate.externalReference);
+      setMessage(null);
+      setError(null);
+      try {
+        const result = await attachCatalogProductImageForReview(
+          resolved.productId,
+          candidate.externalReference,
+        );
+        lastAutomaticAppliedUrlRef.current = result.imageUrl;
+        onImageUrlChange(result.imageUrl);
+        setCatalogCandidates([]);
+        setCatalogSearched(false);
+        setMessage("Imagen real adjuntada. Comprueba la marca, formato y añada antes de aprobarla.");
+        refresh();
+      } catch (cause) {
+        setError(friendlyError(cause));
+        refresh();
+      } finally {
+        setCatalogAttachingReference(null);
+      }
+    },
+    [resolved, localImageDraftDirty, disabled, catalogAttachingReference, onImageUrlChange, refresh],
   );
 
   if (!open || !productName.trim()) return null;
 
-  const buttonDisabled = disabled || busyAction != null;
+  const buttonDisabled =
+    disabled || busyAction != null || catalogSearching || catalogAttachingReference != null;
+  const showCatalogSearch = Boolean(
+    resolved?.canSearchCatalog && !localImageDraftDirty,
+  );
 
   return (
     <section
-      aria-label="Imagen generada con IA"
+      aria-label="Imagen inteligente del producto"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -229,10 +438,10 @@ export function ProductAiImageReviewPanel({
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h3 style={{ margin: 0, color: "#0f172a", fontSize: 13, fontWeight: 780 }}>
-            Imagen con IA
+            Imagen del producto
           </h3>
           <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 11 }}>
-            Generación individual y siempre bajo revisión humana.
+            IA para platos genéricos; catálogo real para marcas, formatos y vinos.
           </p>
         </div>
         {loading ? <span style={{ color: "#64748b", fontSize: 11 }}>Comprobando…</span> : null}
@@ -301,6 +510,55 @@ export function ProductAiImageReviewPanel({
             </p>
           ) : null}
 
+          {resolved.catalogProvenance ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                padding: "8px 9px",
+                borderRadius: 8,
+                border: "1px solid rgba(148,163,184,.22)",
+                background: "rgba(255,255,255,.72)",
+                color: "#475569",
+                fontSize: 10,
+                lineHeight: 1.4,
+              }}
+            >
+              <strong style={{ color: "#0f172a" }}>
+                {resolved.catalogProvenance.matchedProductName ?? "Coincidencia de catálogo"}
+              </strong>
+              <span>
+                {[resolved.catalogProvenance.matchedBrand, resolved.catalogProvenance.matchedQuantity]
+                  .filter(Boolean)
+                  .join(" · ") || "Formato no indicado"}
+              </span>
+              <span>
+                {resolved.catalogProvenance.attribution ?? "Fuente externa"}
+                {resolved.catalogProvenance.license
+                  ? ` · ${resolved.catalogProvenance.license}`
+                  : ""}
+              </span>
+              {resolved.catalogProvenance.sourceUrl ? (
+                <a
+                  href={resolved.catalogProvenance.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "#0369a1", fontWeight: 650 }}
+                >
+                  Abrir ficha de origen
+                </a>
+              ) : null}
+              {resolved.catalogProvenance.warnings.length > 0 ? (
+                <ul style={{ margin: 0, paddingLeft: 16, color: "#92400e" }}>
+                  {resolved.catalogProvenance.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+
           {view.actions.length > 0 ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {view.actions.map((action) => {
@@ -356,6 +614,69 @@ export function ProductAiImageReviewPanel({
                   </ConfigBtnSecondary>
                 );
               })}
+            </div>
+          ) : null}
+
+          {showCatalogSearch ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                paddingTop: 10,
+                borderTop: "1px solid rgba(148,163,184,.2)",
+              }}
+            >
+              <div>
+                <h4 style={{ margin: 0, color: "#0f172a", fontSize: 12, fontWeight: 760 }}>
+                  Buscar imagen real de catálogo
+                </h4>
+                <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 10, lineHeight: 1.4 }}>
+                  Escribe nombre, marca, formato o código de barras. La búsqueda solo se ejecuta al pulsar el botón.
+                </p>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                <input
+                  type="search"
+                  value={catalogQuery}
+                  maxLength={160}
+                  disabled={buttonDisabled}
+                  onChange={(event) => setCatalogQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void runCatalogSearch();
+                    }
+                  }}
+                  aria-label="Buscar producto en catálogo real"
+                  placeholder="Ej. Coca-Cola Zero 33 cl o vino + añada"
+                  className="hostly-input"
+                  style={{ flex: "1 1 230px", minWidth: 0 }}
+                />
+                <ConfigBtnSecondary
+                  type="button"
+                  disabled={buttonDisabled || catalogQuery.trim().length < 2}
+                  onClick={() => void runCatalogSearch()}
+                >
+                  {catalogSearching ? "Buscando…" : "Buscar catálogo"}
+                </ConfigBtnSecondary>
+              </div>
+              {catalogSearched && !catalogSearching && catalogCandidates.length > 0 ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {catalogCandidates.map((candidate) => (
+                    <CandidateCard
+                      key={candidate.externalReference}
+                      candidate={candidate}
+                      disabled={buttonDisabled}
+                      attaching={catalogAttachingReference === candidate.externalReference}
+                      onAttach={() => void runCatalogAttach(candidate)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <p style={{ margin: 0, color: "#64748b", fontSize: 9, lineHeight: 1.4 }}>
+                Datos e imágenes: Open Food Facts contributors · CC BY-SA 3.0. Hostly copia la imagen seleccionada y conserva su procedencia.
+              </p>
             </div>
           ) : null}
         </>

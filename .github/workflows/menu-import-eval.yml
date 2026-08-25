@@ -7,11 +7,14 @@ on:
       - "app/api/catalog/generate-product-image/**"
       - "app/api/catalog/product-image-state/**"
       - "app/api/catalog/review-product-image/**"
+      - "app/api/catalog/search-product-images/**"
+      - "app/api/catalog/attach-product-image/**"
       - "components/productos/product-ai-image-review-panel.tsx"
       - "components/productos/product-form-commercial-info-modal.tsx"
       - "lib/server/menu-imports/**"
       - "lib/server/product-images/**"
       - "lib/productos/product-image-review-*.ts"
+      - "lib/productos/catalog-product-image-*.ts"
       - "lib/menu-import-eval/**"
       - "lib/carta/extract-menu-from-upload.ts"
       - "lib/carta/request-menu-import-*.ts"
@@ -24,9 +27,13 @@ on:
       - "tests/lib/product-image-enrichment.test.ts"
       - "tests/lib/imported-product-image-generation.test.ts"
       - "tests/lib/product-image-review-state.test.ts"
+      - "tests/lib/catalog-product-image-matching.test.ts"
+      - "tests/lib/catalog-product-image-provenance.test.ts"
       - "tests/server/generate-imported-product-image-request.test.ts"
       - "tests/server/product-image-review-request.test.ts"
+      - "tests/server/catalog-product-image-request.test.ts"
       - "test-corpus/**"
+      - ".env.example"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/menu-import-eval.yml"
@@ -74,3 +81,12 @@ jobs:
 
       - name: Run product image review request tests
         run: npx tsx --test tests/server/product-image-review-request.test.ts
+
+      - name: Run catalog product image matching tests
+        run: npx tsx --test tests/lib/catalog-product-image-matching.test.ts
+
+      - name: Run catalog product image provenance tests
+        run: npx tsx --test tests/lib/catalog-product-image-provenance.test.ts
+
+      - name: Run catalog product image request tests
+        run: npx tsx --test tests/server/catalog-product-image-request.test.ts

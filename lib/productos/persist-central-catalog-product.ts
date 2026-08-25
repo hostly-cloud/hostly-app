@@ -1,3 +1,4 @@
+import { doc, getDoc } from "firebase/firestore";
 import {
   buildRecipeSourceFromDraftRows,
   normalizeProductRecipe,
@@ -5,6 +6,7 @@ import {
 } from "@/lib/recipes/product-recipe-helpers";
 import type { InventoryProductLookup } from "@/lib/recipes/product-recipe-types";
 import type { RecipeIngredientDraftRow } from "@/components/productos/product-recipe-editor-section";
+import { db } from "@/lib/firebase/client";
 import {
   clearCentralProductImage,
   createCentralProduct,
@@ -37,6 +39,19 @@ export type PersistCentralCatalogProductResult =
       recipe: ReturnType<typeof normalizeProductRecipe>["recipe"];
     }
   | { ok: false; error: string };
+
+async function readLatestCentralProductImagePath(
+  restaurantId: string,
+  productId: string,
+): Promise<string | undefined> {
+  const snap = await getDoc(
+    doc(db, "restaurants", restaurantId, "products", productId),
+  );
+  if (!snap.exists()) return undefined;
+  const data = snap.data() as Record<string, unknown>;
+  const path = data.imagePath;
+  return typeof path === "string" && path.trim() ? path.trim() : undefined;
+}
 
 /**
  * Persistencia central compartida (create/update + receta + imagen opcional).
@@ -97,7 +112,14 @@ export async function persistCentralCatalogProduct(
     );
 
     const image = args.image;
-    const prevImagePath = image?.existingPath;
+    const changesImage = Boolean(
+      image && (image.pendingFile || (image.remove && !image.pendingFile)),
+    );
+    const prevImagePath =
+      changesImage && args.editingId?.trim()
+        ? await readLatestCentralProductImagePath(restauranteId, savedProductId)
+        : image?.existingPath;
+
     if (image?.remove && !image.pendingFile) {
       await clearCentralProductImage(restauranteId, savedProductId, prevImagePath);
     } else if (image?.pendingFile) {

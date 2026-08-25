@@ -1,20 +1,25 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { normalizeProductName } from "@/lib/carta/duplicate-detection";
-import { readProductImageEnrichment } from "@/lib/carta/product-image-enrichment";
+import {
+  canAutomaticallyReplaceProductImage,
+  readProductImageEnrichment,
+} from "@/lib/carta/product-image-enrichment";
 import type {
+  ProductImageCatalogProvenance,
   ProductImageReviewResolution,
   ProductImageReviewResolvedState,
 } from "@/lib/productos/product-image-review-contract";
 import { evaluateImportedProductImageEligibility } from "@/lib/server/product-images/generate-imported-product-image";
 
 const GENERATION_LOCK_MS = 3 * 60 * 1000;
+const CATALOG_ATTACH_LOCK_MS = 2 * 60 * 1000;
 
 function readString(data: Record<string, unknown>, key: string): string | null {
   const value = data[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function hasActiveGenerationLock(value: unknown, now: number): boolean {
+function hasActiveLock(value: unknown, now: number, ttlMs: number): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const raw = value as Record<string, unknown>;
   const requestId = typeof raw.requestId === "string" ? raw.requestId.trim() : "";
@@ -26,8 +31,25 @@ function hasActiveGenerationLock(value: unknown, now: number): boolean {
     requestId &&
       startedAt != null &&
       now >= startedAt &&
-      now - startedAt < GENERATION_LOCK_MS,
+      now - startedAt < ttlMs,
   );
+}
+
+function catalogProvenanceFromEnrichment(
+  enrichment: ReturnType<typeof readProductImageEnrichment>,
+): ProductImageCatalogProvenance | null {
+  if (!enrichment || enrichment.source !== "catalog_exact") return null;
+  return {
+    externalReference: enrichment.externalReference ?? null,
+    sourceUrl: enrichment.sourceUrl ?? null,
+    imageSourceUrl: enrichment.imageSourceUrl ?? null,
+    license: enrichment.license ?? null,
+    attribution: enrichment.attribution ?? null,
+    matchedProductName: enrichment.matchedProductName ?? null,
+    matchedBrand: enrichment.matchedBrand ?? null,
+    matchedQuantity: enrichment.matchedQuantity ?? null,
+    warnings: enrichment.matchWarnings ?? [],
+  };
 }
 
 export function buildProductImageReviewStateFromDocument(
@@ -39,9 +61,15 @@ export function buildProductImageReviewStateFromDocument(
   const imagePath = readString(data, "imagePath");
   const hasImage = Boolean(imageUrl || imagePath);
   const enrichment = readProductImageEnrichment(data.imageEnrichment);
-  const generationInProgress = hasActiveGenerationLock(
+  const generationInProgress = hasActiveLock(
     data.imageGenerationInProgress,
     now,
+    GENERATION_LOCK_MS,
+  );
+  const catalogAttachInProgress = hasActiveLock(
+    data.catalogImageAttachInProgress,
+    now,
+    CATALOG_ATTACH_LOCK_MS,
   );
   const eligibility = evaluateImportedProductImageEligibility(data);
 
@@ -56,12 +84,18 @@ export function buildProductImageReviewStateFromDocument(
       enrichment.locked === false,
   );
 
+  const imageState = { imageUrl, imagePath, imageEnrichment: enrichment };
+  const canSearchCatalog =
+    !generationInProgress &&
+    !catalogAttachInProgress &&
+    canAutomaticallyReplaceProductImage(imageState);
   const canGenerate = eligibility.eligible && !generationInProgress;
-  const generationReason = generationInProgress && eligibility.eligible
-    ? "generation_in_progress"
-    : eligibility.eligible
-      ? null
-      : eligibility.reason;
+  const generationReason =
+    generationInProgress && eligibility.eligible
+      ? "generation_in_progress"
+      : eligibility.eligible
+        ? null
+        : eligibility.reason;
 
   return {
     resolution: "resolved",
@@ -80,6 +114,8 @@ export function buildProductImageReviewStateFromDocument(
     canGenerate,
     canApprove: canReviewAutomatic,
     canReject: canReviewAutomatic,
+    canSearchCatalog,
+    catalogProvenance: catalogProvenanceFromEnrichment(enrichment),
     generationReason,
   };
 }

@@ -337,9 +337,12 @@ export function ProductFormCommercialInfoModal({
   const fileInputRef = imageFileInputRef ?? localFileInputRef;
   const [aiResolvedImageUrl, setAiResolvedImageUrl] = useState<string | null>(null);
 
+  // The component stays mounted while the product drawer is open. Keep a
+  // server-persisted AI/catalog preview when this nested modal is closed and
+  // reopened; reset only when the edited product changes.
   useEffect(() => {
     setAiResolvedImageUrl(null);
-  }, [open, productName]);
+  }, [productName]);
 
   useEffect(() => {
     if (!open) return;
