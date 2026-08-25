@@ -120,6 +120,15 @@
     min-height: var(--hostly-m-touch-target) !important;
   }
 
+  /* Inventario / compras / recepciones: keep the dense horizontal navigation
+   * and filter rails, but make each interactive pill large enough for phone/PDA use. */
+  .hostly-inventario-route-tabs .hostly-mobile-operational-tab.hostly-tab--inventory-hub,
+  .hostly-mobile-operational-layout .hostly-inventario-route-tabs .hostly-mobile-operational-tab.hostly-tab--inventory-hub,
+  .hostly-mobile-operational-layout [data-hostly-touch] .hostly-inventario-route-tabs .hostly-mobile-operational-tab.hostly-tab--inventory-hub,
+  .hostly-stock-filter-panel button.hostly-stock-filter-chip {
+    min-height: var(--hostly-m-touch-target) !important;
+  }
+
   .carta-root[data-carta-mobile="true"] .carta-comanda-button {
     white-space: normal !important;
     overflow: visible !important;
