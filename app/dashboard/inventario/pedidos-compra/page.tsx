@@ -189,10 +189,7 @@ export default function PedidosCompraPage() {
           if (line.productId !== productId) return line;
           const parsed = Number(rawValue.replace(",", "."));
           const qty = Number.isFinite(parsed) ? parsed : 0;
-          const receiveQuantity = Math.min(
-            Math.max(0, qty),
-            line.remainingQuantity,
-          );
+          const receiveQuantity = Math.min(Math.max(0, qty), line.remainingQuantity);
           return { ...line, receiveQuantity };
         }),
       );
@@ -210,10 +207,7 @@ export default function PedidosCompraPage() {
 
     const linesToReceive = receiptLines
       .filter((line) => line.receiveQuantity > 0)
-      .map((line) => ({
-        productId: line.productId,
-        quantity: line.receiveQuantity,
-      }));
+      .map((line) => ({ productId: line.productId, quantity: line.receiveQuantity }));
 
     if (linesToReceive.length === 0) {
       setFeedback("Indica al menos una cantidad a recibir.");
@@ -265,10 +259,19 @@ export default function PedidosCompraPage() {
       headerBelow={<InventarioRouteTabs />}
     >
       <div className="hostly-mobile-op-page-stack">
-        <HostlySectionHeader
-          title="Recepción de pedidos"
-          description="Recibe total o parcialmente un pedido. El stock solo se actualiza mediante movimientos purchase_receipt en el ledger central."
-        />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+          <HostlySectionHeader
+            title="Recepción de pedidos"
+            description="Recibe total o parcialmente un pedido. El stock solo se actualiza mediante movimientos purchase_receipt en el ledger central."
+          />
+          <Link
+            href="/dashboard/inventario/pedidos-compra/nuevo"
+            style={{ ...primaryButtonStyle, display: "inline-flex", textDecoration: "none" }}
+            prefetch
+          >
+            + Nuevo pedido
+          </Link>
+        </div>
 
         {loadError ? (
           <div className="hostly-panel p-4" style={{ color: "var(--hostly-ink-muted)", fontSize: 13 }}>
@@ -289,9 +292,13 @@ export default function PedidosCompraPage() {
           {pendingOrders.length === 0 ? (
             <HostlyOperationalEmptyState
               title="Sin pedidos pendientes"
-              text="Cuando conviertas un borrador en pedido, aparecerá aquí para recibirlo total o parcialmente."
+              text="Crea un pedido manual o convierte una compra sugerida. Aparecerá aquí para recibirlo total o parcialmente."
               primaryAction={{
-                label: "Crear borrador de pedido",
+                label: "Crear pedido manual",
+                href: "/dashboard/inventario/pedidos-compra/nuevo",
+              }}
+              secondaryAction={{
+                label: "Ver compras sugeridas",
                 href: "/dashboard/inventario/compras-inteligentes",
               }}
               hints={[
@@ -307,52 +314,23 @@ export default function PedidosCompraPage() {
                   (line) => getPurchaseOrderLineRemainingQuantity(line) > 0,
                 ).length;
                 return (
-                  <div
-                    key={order.id}
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 8,
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.18)",
-                    }}
-                  >
+                  <div key={order.id} style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(148, 163, 184, 0.18)" }}>
                     <div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 8,
-                          alignItems: "center",
-                        }}
-                      >
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--hostly-ink-strong)" }}>
                           {order.lines.length} líneas · total {formatEur(order.totalEstimatedCost)}
                         </span>
-                        <span style={statusPillStyle(order.status)}>
-                          {purchaseOrderStatusLabel(order.status)}
-                        </span>
+                        <span style={statusPillStyle(order.status)}>{purchaseOrderStatusLabel(order.status)}</span>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--hostly-ink-muted)", marginTop: 4 }}>
                         {formatDraftDate(order.updatedAt)} · {pendingLines} producto(s) pendiente(s)
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <Link
-                        href={purchaseOrderDetailHref(order.id)}
-                        style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex" }}
-                        prefetch
-                      >
+                      <Link href={purchaseOrderDetailHref(order.id)} style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex" }} prefetch>
                         Ver detalle
                       </Link>
-                      <button
-                        type="button"
-                        style={primaryButtonStyle}
-                        onClick={() => handleOpenReceive(order)}
-                      >
+                      <button type="button" style={primaryButtonStyle} onClick={() => handleOpenReceive(order)}>
                         Recibir
                       </button>
                     </div>
@@ -365,41 +343,19 @@ export default function PedidosCompraPage() {
 
         {completedOrders.length > 0 ? (
           <div className="hostly-panel p-3" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>
-              Histórico reciente
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>Histórico reciente</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {completedOrders.slice(0, 8).map((order) => (
-                <div
-                  key={order.id}
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 8,
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 10px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(148, 163, 184, 0.12)",
-                  }}
-                >
+                <div key={order.id} style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(148, 163, 184, 0.12)" }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--hostly-ink-strong)" }}>
                       {order.lines.length} líneas · {formatEur(order.totalEstimatedCost)}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--hostly-ink-muted)" }}>
-                      {formatDraftDate(order.updatedAt)}
-                    </div>
+                    <div style={{ fontSize: 12, color: "var(--hostly-ink-muted)" }}>{formatDraftDate(order.updatedAt)}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={statusPillStyle(order.status)}>
-                      {purchaseOrderStatusLabel(order.status)}
-                    </span>
-                    <Link
-                      href={purchaseOrderDetailHref(order.id)}
-                      style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex" }}
-                      prefetch
-                    >
+                    <span style={statusPillStyle(order.status)}>{purchaseOrderStatusLabel(order.status)}</span>
+                    <Link href={purchaseOrderDetailHref(order.id)} style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex" }} prefetch>
                       Ver detalle
                     </Link>
                   </div>
@@ -411,142 +367,41 @@ export default function PedidosCompraPage() {
       </div>
 
       {receivingOrder ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Recibir pedido de compra"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 60,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            background: "rgba(2, 6, 23, 0.62)",
-            backdropFilter: "blur(6px)",
-          }}
-          onMouseDown={(e) => {
-            if (e.currentTarget === e.target && !isSubmittingReceipt) {
-              handleCloseReceive();
-            }
-          }}
-        >
-          <div
-            className="hostly-panel"
-            style={{
-              width: "min(640px, 100%)",
-              maxHeight: "min(85vh, 760px)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              padding: 16,
-              overflow: "hidden",
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
+        <div role="dialog" aria-modal="true" aria-label="Recibir pedido de compra" style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(2, 6, 23, 0.62)", backdropFilter: "blur(6px)" }} onMouseDown={(e) => { if (e.currentTarget === e.target && !isSubmittingReceipt) handleCloseReceive(); }}>
+          <div className="hostly-panel" style={{ width: "min(640px, 100%)", maxHeight: "min(85vh, 760px)", display: "flex", flexDirection: "column", gap: 12, padding: 16, overflow: "hidden" }} onMouseDown={(e) => e.stopPropagation()}>
             {receiptSuccess ? (
               <>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>
-                  Recepción confirmada
-                </div>
-                <p style={{ margin: 0, fontSize: 13, color: "var(--hostly-ink-muted)" }}>
-                  {receiptSuccess} El stock se ha actualizado mediante movimientos en el ledger central.
-                </p>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <button type="button" style={primaryButtonStyle} onClick={handleCloseReceive}>
-                    Cerrar
-                  </button>
-                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>Recepción confirmada</div>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--hostly-ink-muted)" }}>{receiptSuccess} El stock se ha actualizado mediante movimientos en el ledger central.</p>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><button type="button" style={primaryButtonStyle} onClick={handleCloseReceive}>Cerrar</button></div>
               </>
             ) : (
               <>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>
-                  Recibir pedido
-                </div>
-                <p style={{ margin: 0, fontSize: 13, color: "var(--hostly-ink-muted)" }}>
-                  Indica las cantidades a recibir. Puedes hacer recepciones parciales.
-                </p>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "var(--hostly-ink-strong)" }}>Recibir pedido</div>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--hostly-ink-muted)" }}>Indica las cantidades a recibir. Puedes hacer recepciones parciales.</p>
                 <div style={{ overflow: "auto", minHeight: 0, flex: 1 }}>
                   <table className="hostly-inv-native-table">
-                    <thead>
-                      <tr>
-                        <th>Producto</th>
-                        <th className="hostly-inv-th-num">Pedido</th>
-                        <th className="hostly-inv-th-num">Recibido</th>
-                        <th className="hostly-inv-th-num">Pendiente</th>
-                        <th className="hostly-inv-th-num">A recibir</th>
-                      </tr>
-                    </thead>
+                    <thead><tr><th>Producto</th><th className="hostly-inv-th-num">Pedido</th><th className="hostly-inv-th-num">Recibido</th><th className="hostly-inv-th-num">Pendiente</th><th className="hostly-inv-th-num">A recibir</th></tr></thead>
                     <tbody>
                       {receiptLines.map((line) => (
                         <tr key={line.productId}>
                           <td className="hostly-inv-td-primary">{line.productName}</td>
+                          <td className="hostly-inv-td-amount">{formatQty(line.orderedQuantity)} {displayUnit(line.unit)}</td>
+                          <td className="hostly-inv-td-muted">{formatQty(line.receivedQuantity)} {displayUnit(line.unit)}</td>
+                          <td className="hostly-inv-td-muted">{formatQty(line.remainingQuantity)} {displayUnit(line.unit)}</td>
                           <td className="hostly-inv-td-amount">
-                            {formatQty(line.orderedQuantity)} {displayUnit(line.unit)}
-                          </td>
-                          <td className="hostly-inv-td-muted">
-                            {formatQty(line.receivedQuantity)} {displayUnit(line.unit)}
-                          </td>
-                          <td className="hostly-inv-td-muted">
-                            {formatQty(line.remainingQuantity)} {displayUnit(line.unit)}
-                          </td>
-                          <td className="hostly-inv-td-amount">
-                            <input
-                              type="number"
-                              min={0}
-                              max={line.remainingQuantity}
-                              step="any"
-                              value={line.receiveQuantity}
-                              onChange={(e) =>
-                                handleReceiveQuantityChange(line.productId, e.target.value)
-                              }
-                              aria-label={`Cantidad a recibir de ${line.productName}`}
-                              style={{
-                                width: 88,
-                                padding: "6px 8px",
-                                borderRadius: 8,
-                                border: "1px solid rgba(148, 163, 184, 0.28)",
-                                fontSize: 13,
-                                fontWeight: 600,
-                                textAlign: "right",
-                              }}
-                            />
-                            <span
-                              style={{
-                                marginLeft: 4,
-                                fontSize: 11,
-                                color: "var(--hostly-ink-muted)",
-                              }}
-                            >
-                              {displayUnit(line.unit)}
-                            </span>
+                            <input type="number" min={0} max={line.remainingQuantity} step="any" value={line.receiveQuantity} onChange={(e) => handleReceiveQuantityChange(line.productId, e.target.value)} aria-label={`Cantidad a recibir de ${line.productName}`} style={{ width: 88, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(148, 163, 184, 0.28)", fontSize: 13, fontWeight: 600, textAlign: "right" }} />
+                            <span style={{ marginLeft: 4, fontSize: 11, color: "var(--hostly-ink-muted)" }}>{displayUnit(line.unit)}</span>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <div style={{ fontSize: 12, color: "var(--hostly-ink-muted)" }}>
-                  Total a recibir: {formatQty(receiptTotalQuantity)} unidades
-                </div>
+                <div style={{ fontSize: 12, color: "var(--hostly-ink-muted)" }}>Total a recibir: {formatQty(receiptTotalQuantity)} unidades</div>
                 <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
-                  <button
-                    type="button"
-                    style={actionButtonStyle}
-                    onClick={handleCloseReceive}
-                    disabled={isSubmittingReceipt}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    style={primaryButtonStyle}
-                    onClick={() => void handleConfirmReceipt()}
-                    disabled={isSubmittingReceipt || receiptTotalQuantity <= 0}
-                  >
-                    {isSubmittingReceipt ? "Registrando…" : "Confirmar recepción"}
-                  </button>
+                  <button type="button" style={actionButtonStyle} onClick={handleCloseReceive} disabled={isSubmittingReceipt}>Cancelar</button>
+                  <button type="button" style={primaryButtonStyle} onClick={() => void handleConfirmReceipt()} disabled={isSubmittingReceipt || receiptTotalQuantity <= 0}>{isSubmittingReceipt ? "Registrando…" : "Confirmar recepción"}</button>
                 </div>
               </>
             )}
