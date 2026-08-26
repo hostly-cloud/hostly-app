@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   limit,
@@ -16,9 +17,12 @@ import { normalizePurchaseDraftDocument } from "@/lib/inventory/purchase-draft-t
 import {
   buildPurchaseOrderWritePayloadFromDraft,
   canMarkPurchaseOrderAsOrdered,
+  computePurchaseOrderTotalEstimatedCost,
   normalizePurchaseOrderDocument,
+  sanitizePurchaseOrderLines,
   PurchaseOrderFromDraftError,
   type PurchaseOrderDocument,
+  type PurchaseOrderLine,
 } from "@/lib/purchases/purchase-order-types";
 
 export type { PurchaseOrderDocument };
@@ -155,6 +159,38 @@ export function listenPurchaseOrderById(
       onData(null);
     },
   );
+}
+
+export async function createManualPurchaseOrder(params: {
+  restaurantId: string;
+  supplierName?: string | null;
+  notes?: string | null;
+  lines: PurchaseOrderLine[];
+}): Promise<{ purchaseOrderId: string }> {
+  const rid = params.restaurantId.trim();
+  if (!rid || !isAuthReady()) {
+    throw new Error("createManualPurchaseOrder: auth_or_restaurant_unavailable");
+  }
+  const lines = sanitizePurchaseOrderLines(params.lines);
+  if (lines.length === 0) {
+    throw new Error("createManualPurchaseOrder: empty_lines");
+  }
+  const uid = authUidOrUndefined();
+  const supplierName = params.supplierName?.trim().slice(0, 160) || null;
+  const notes = params.notes?.trim().slice(0, 500) || null;
+  const ref = await addDoc(purchaseOrdersCollectionRef(rid), {
+    restaurantId: rid,
+    status: "draft",
+    source: "manual",
+    ...(supplierName ? { supplierName } : {}),
+    lines,
+    totalEstimatedCost: computePurchaseOrderTotalEstimatedCost(lines),
+    ...(notes ? { notes } : {}),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    ...(uid ? { createdBy: uid, updatedBy: uid } : {}),
+  });
+  return { purchaseOrderId: ref.id };
 }
 
 export async function createPurchaseOrderFromDraft(params: {
