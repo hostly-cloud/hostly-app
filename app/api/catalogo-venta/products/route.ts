@@ -57,6 +57,10 @@ export async function PATCH(req: Request) {
       }
     | null;
   if (!body) return badRequest("INVALID_JSON");
+  if ("restauranteId" in body && body.restauranteId != null) {
+    return badRequest("RESTAURANT_ID_NOT_ALLOWED");
+  }
+
   const restauranteId = authContext.restaurantId;
   const id = (body.id ?? "").trim();
   if (!id) return badRequest("MISSING_ID");
@@ -83,7 +87,9 @@ export async function PATCH(req: Request) {
   }
   if ("gruposModificadoresIds" in patch) {
     safe.gruposModificadoresIds = Array.isArray(patch.gruposModificadoresIds)
-      ? (patch.gruposModificadoresIds as unknown[]).filter((x) => typeof x === "string" && x.trim()).map((x) => String(x))
+      ? (patch.gruposModificadoresIds as unknown[])
+          .filter((x) => typeof x === "string" && x.trim())
+          .map((x) => String(x))
       : [];
   }
 
@@ -99,7 +105,11 @@ export async function PATCH(req: Request) {
     const c = patch.categoria.trim();
     if (c) safe.categoria = c;
   }
-  if ("precioVenta" in patch && typeof patch.precioVenta === "number" && Number.isFinite(patch.precioVenta)) {
+  if (
+    "precioVenta" in patch &&
+    typeof patch.precioVenta === "number" &&
+    Number.isFinite(patch.precioVenta)
+  ) {
     safe.precioVenta = Math.max(0, patch.precioVenta);
   }
 
