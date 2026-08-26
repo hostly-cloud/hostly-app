@@ -11,7 +11,6 @@ export type InventarioHubTabId =
   | "nueva-compra"
   | "facturas-proveedor"
   | "aliases-proveedor"
-  | "recepciones"
   | "mermas";
 
 const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] = [
@@ -41,7 +40,6 @@ const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] =
     label: "Aliases OCR",
     href: "/dashboard/inventario/aliases-proveedor",
   },
-  { id: "recepciones", label: "Recepciones", href: "/dashboard/recepciones" },
   { id: "mermas", label: "Mermas", href: "/dashboard/mermas" },
 ] as const;
 
@@ -57,7 +55,9 @@ function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null 
   if (pathname === "/dashboard/inventario/pedidos-compra/nuevo") return "nueva-compra";
   if (
     pathname === "/dashboard/inventario/pedidos-compra" ||
-    pathname.startsWith("/dashboard/inventario/pedidos-compra/")
+    pathname.startsWith("/dashboard/inventario/pedidos-compra/") ||
+    pathname === "/dashboard/recepciones" ||
+    pathname.startsWith("/dashboard/recepciones/")
   ) {
     return "pedidos-compra";
   }
@@ -72,9 +72,6 @@ function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null 
     pathname.startsWith("/dashboard/inventario/aliases-proveedor/")
   ) {
     return "aliases-proveedor";
-  }
-  if (pathname === "/dashboard/recepciones" || pathname.startsWith("/dashboard/recepciones/")) {
-    return "recepciones";
   }
   if (pathname === "/dashboard/mermas" || pathname.startsWith("/dashboard/mermas/")) return "mermas";
   return null;
