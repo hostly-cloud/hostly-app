@@ -119,6 +119,11 @@ export async function loadTpvPublishedMapRuntime(
   return runtime;
 }
 
+export function hasCachedTpvPublishedMapRuntime(restaurantId: string): boolean {
+  const rid = normalizeId(restaurantId);
+  return Boolean(rid && runtimeByRestaurantId.has(rid));
+}
+
 export function clearTpvPublishedMapRuntime(restaurantId: string): void {
   const rid = normalizeId(restaurantId);
   if (rid) runtimeByRestaurantId.delete(rid);
