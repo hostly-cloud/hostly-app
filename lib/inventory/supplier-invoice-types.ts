@@ -231,6 +231,9 @@ export class SupplierInvoiceError extends Error {
     | "invoice_invalid"
     | "already_recorded"
     | "empty_lines"
+    | "linked_order_not_found"
+    | "linked_order_invalid"
+    | "linked_order_line_mismatch"
     | "cost_apply_failed";
 
   constructor(code: SupplierInvoiceError["code"], message?: string) {
