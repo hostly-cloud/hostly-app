@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { hostlySegmentTabClassName } from "@/components/ui/hostly";
 
-/** Tabs del hub Inventario → rutas reales (`/dashboard/...`). */
 export type InventarioHubTabId =
   | "stock"
   | "compras-inteligentes"
   | "pedidos-compra"
+  | "nueva-compra"
   | "facturas-proveedor"
   | "aliases-proveedor"
   | "recepciones"
@@ -25,6 +25,11 @@ const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] =
     id: "pedidos-compra",
     label: "Pedidos compra",
     href: "/dashboard/inventario/pedidos-compra",
+  },
+  {
+    id: "nueva-compra",
+    label: "Nueva compra",
+    href: "/dashboard/inventario/pedidos-compra/nuevo",
   },
   {
     id: "facturas-proveedor",
@@ -49,6 +54,7 @@ function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null 
   ) {
     return "compras-inteligentes";
   }
+  if (pathname === "/dashboard/inventario/pedidos-compra/nuevo") return "nueva-compra";
   if (
     pathname === "/dashboard/inventario/pedidos-compra" ||
     pathname.startsWith("/dashboard/inventario/pedidos-compra/")
@@ -75,8 +81,7 @@ function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null 
 }
 
 function tabActive(pathname: string | null, id: InventarioHubTabId): boolean {
-  const p = pathname ?? "";
-  return pathnameToInventarioTabId(p) === id;
+  return pathnameToInventarioTabId(pathname ?? "") === id;
 }
 
 export function InventarioRouteTabs({ className }: { className?: string }) {
