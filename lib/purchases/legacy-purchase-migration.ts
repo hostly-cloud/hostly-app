@@ -3,12 +3,12 @@ import { auth, db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { purchaseOrdersCollectionRef } from "@/lib/firestore/purchase-orders";
 import {
-  COMPRAS_LOCAL_STORAGE_KEY,
-  loadCompras,
-  parseCantidadRecibida,
-  type CompraLineItemLocal,
-  type CompraLocal,
-} from "@/lib/compras-local";
+  LEGACY_PURCHASE_STORAGE_KEY,
+  parseLegacyPurchaseQuantity,
+  readLegacyPurchasesFromRaw,
+  type LegacyPurchase,
+  type LegacyPurchaseLine,
+} from "@/lib/purchases/legacy-purchase-reader";
 import {
   computePurchaseOrderTotalEstimatedCost,
   sanitizePurchaseOrderLines,
@@ -26,12 +26,9 @@ export type LegacyPurchaseMigrationResult = {
   archivedOnly: number;
 };
 
-function lineFromLegacy(
-  item: CompraLineItemLocal,
-  fallbackSupplier: string,
-): PurchaseOrderLine | null {
+function lineFromLegacy(item: LegacyPurchaseLine, fallbackSupplier: string): PurchaseOrderLine | null {
   const productId = item.producto_stock_id?.trim() ?? "";
-  const quantity = parseCantidadRecibida(item.cantidad ?? item.cantidad_pedida);
+  const quantity = parseLegacyPurchaseQuantity(item.cantidad ?? item.cantidad_pedida);
   const productName =
     item.producto_stock_nombre?.trim() || item.nombre?.trim() || item.producto?.trim() || "";
   if (!productId || !productName || quantity == null || quantity <= 0) return null;
@@ -51,7 +48,7 @@ function lineFromLegacy(
   };
 }
 
-function linesFromLegacy(compra: CompraLocal): PurchaseOrderLine[] {
+function linesFromLegacy(compra: LegacyPurchase): PurchaseOrderLine[] {
   const supplier = compra.supplierDisplayName?.trim() || compra.proveedor.trim();
   const multi = (compra.items ?? [])
     .map((item) => lineFromLegacy(item, supplier))
@@ -60,7 +57,7 @@ function linesFromLegacy(compra: CompraLocal): PurchaseOrderLine[] {
 
   const productId = compra.producto_stock_id?.trim() ?? "";
   const productName = compra.producto_stock_nombre?.trim() ?? "";
-  const quantity = parseCantidadRecibida(compra.cantidad_recibida);
+  const quantity = parseLegacyPurchaseQuantity(compra.cantidad_recibida);
   if (!productId || !productName || quantity == null || quantity <= 0) return [];
   const unitCost =
     typeof compra.precio_unitario === "number" && Number.isFinite(compra.precio_unitario)
@@ -82,7 +79,7 @@ function linesFromLegacy(compra: CompraLocal): PurchaseOrderLine[] {
   ]);
 }
 
-function statusFromLegacy(compra: CompraLocal): PurchaseOrderStatus {
+function statusFromLegacy(compra: LegacyPurchase): PurchaseOrderStatus {
   if (compra.estado === "cancelado") return "cancelled";
   if (compra.estado === "recibido") return "received";
   return "draft";
@@ -107,13 +104,13 @@ export async function migrateLegacyPurchasesFromBrowser(
     throw new Error("legacy_purchase_migration: browser_required");
   }
 
-  const raw = window.localStorage.getItem(COMPRAS_LOCAL_STORAGE_KEY);
+  const raw = window.localStorage.getItem(LEGACY_PURCHASE_STORAGE_KEY);
   if (!raw) return { found: 0, imported: 0, alreadyImported: 0, archivedOnly: 0 };
 
   // Preserve the exact original payload before any write or cleanup.
   window.localStorage.setItem(archiveKey(rid), raw);
 
-  const legacy = loadCompras().filter((compra) => !LEGACY_SEED_IDS.has(compra.id));
+  const legacy = readLegacyPurchasesFromRaw(raw).filter((compra) => !LEGACY_SEED_IDS.has(compra.id));
   let imported = 0;
   let alreadyImported = 0;
   let archivedOnly = 0;
@@ -139,10 +136,7 @@ export async function migrateLegacyPurchasesFromBrowser(
       receivedQuantity: status === "received" ? line.quantity : 0,
     }));
     const supplierName = compra.supplierDisplayName?.trim() || compra.proveedor.trim();
-    const notes = [
-      compra.notas?.trim(),
-      `Migrado desde Compras legacy · fecha ${compra.fecha}`,
-    ]
+    const notes = [compra.notas?.trim(), `Migrado desde Compras legacy · fecha ${compra.fecha}`]
       .filter(Boolean)
       .join(" · ")
       .slice(0, 500);
@@ -173,12 +167,7 @@ export async function migrateLegacyPurchasesFromBrowser(
 
   // The exact source remains in the restaurant-scoped archive key. Removing the active
   // key prevents the retired module from becoming a second source of truth.
-  window.localStorage.removeItem(COMPRAS_LOCAL_STORAGE_KEY);
+  window.localStorage.removeItem(LEGACY_PURCHASE_STORAGE_KEY);
 
-  return {
-    found: legacy.length,
-    imported,
-    alreadyImported,
-    archivedOnly,
-  };
+  return { found: legacy.length, imported, alreadyImported, archivedOnly };
 }
