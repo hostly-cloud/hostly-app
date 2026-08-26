@@ -11,12 +11,10 @@ export type InventarioHubTabId =
   | "pedidos-compra"
   | "facturas-proveedor"
   | "aliases-proveedor"
-  | "compras"
   | "recepciones"
   | "mermas";
 
 const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] = [
-  /** Stock inventario Firestore central (lista + inspector). */
   { id: "stock", label: "Stock", href: "/dashboard/inventario" },
   {
     id: "compras-inteligentes",
@@ -38,7 +36,6 @@ const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] =
     label: "Aliases OCR",
     href: "/dashboard/inventario/aliases-proveedor",
   },
-  { id: "compras", label: "Compras", href: "/dashboard/compras" },
   { id: "recepciones", label: "Recepciones", href: "/dashboard/recepciones" },
   { id: "mermas", label: "Mermas", href: "/dashboard/mermas" },
 ] as const;
@@ -70,7 +67,6 @@ function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null 
   ) {
     return "aliases-proveedor";
   }
-  if (pathname === "/dashboard/compras" || pathname.startsWith("/dashboard/compras/")) return "compras";
   if (pathname === "/dashboard/recepciones" || pathname.startsWith("/dashboard/recepciones/")) {
     return "recepciones";
   }
@@ -83,10 +79,6 @@ function tabActive(pathname: string | null, id: InventarioHubTabId): boolean {
   return pathnameToInventarioTabId(p) === id;
 }
 
-/**
- * Tabs de navegación del hub Inventario.
- * Mobile: pills horizontales compactas con scroll limpio (Hostly Mobile Operational Layout).
- */
 export function InventarioRouteTabs({ className }: { className?: string }) {
   const pathname = usePathname();
 
