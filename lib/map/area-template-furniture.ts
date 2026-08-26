@@ -184,7 +184,7 @@ export function getAreaTemplateFurniture(
       const gap = snap(Math.max(90, zw * 0.16));
       const count = Math.min(4, Math.max(2, Math.floor((zw - pad * 2) / (bw + gap * 0.65))));
       const totalW = count * bw + (count - 1) * (gap - bw * 0.35);
-      let x0 = snap(zx + (zw - totalW) / 2);
+      const x0 = snap(zx + (zw - totalW) / 2);
       const pieces: AreaTemplateFurniturePiece[] = [];
       for (let i = 0; i < count; i++) {
         pieces.push({

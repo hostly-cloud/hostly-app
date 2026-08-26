@@ -39,7 +39,7 @@ export function reconcileMermaStock(
   stock: StockProducto[],
 ): { stock: StockProducto[]; merma: MermaLocal; error?: string } {
   const backup = cloneStock(stock);
-  let s = cloneStock(stock);
+  const s = cloneStock(stock);
 
   if (previous?.stock_aplicado) {
     const idPrev = previous.producto_stock_id?.trim();

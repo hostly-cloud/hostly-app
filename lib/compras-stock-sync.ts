@@ -43,7 +43,7 @@ export function reconcileCompraStock(
   stock: StockProducto[],
 ): { stock: StockProducto[]; compra: CompraLocal } {
   const s = cloneStock(stock);
-  let c = { ...next };
+  const c = { ...next };
 
   if (previous && compraSumaStockContabilizada(previous)) {
     const idPrev = pid(previous);
