@@ -13,6 +13,7 @@ import {
 import { auth, db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { dbgAddDoc, dbgRunTransaction } from "@/lib/firestore/instrumentedWrites";
+import { purchaseOrderDocRef } from "@/lib/firestore/purchase-orders";
 import {
   buildActivityMetadata,
   createActivityLog,
@@ -29,6 +30,7 @@ import {
   type SupplierInvoiceDocument,
   type SupplierInvoiceLineInput,
 } from "@/lib/inventory/supplier-invoice-types";
+import { normalizePurchaseOrderDocument } from "@/lib/purchases/purchase-order-types";
 
 export type { SupplierInvoiceDocument };
 export { SupplierInvoiceError };
@@ -110,11 +112,7 @@ export function listenSupplierInvoices(
   const mapSnapshot = (snap: { docs: Array<{ id: string; data: () => unknown }> }) => {
     const items: SupplierInvoiceDocument[] = [];
     for (const docSnap of snap.docs) {
-      const parsed = normalizeSupplierInvoiceDocument(
-        docSnap.id,
-        docSnap.data(),
-        rid,
-      );
+      const parsed = normalizeSupplierInvoiceDocument(docSnap.id, docSnap.data(), rid);
       if (parsed) items.push(parsed);
     }
     emitSorted(items);
@@ -177,6 +175,33 @@ export type CreateSupplierInvoiceParams = {
   notes?: string | null;
 };
 
+async function validateLinkedPurchaseOrder(params: {
+  restaurantId: string;
+  purchaseOrderId: string;
+  invoiceLines: SupplierInvoiceDocument["lines"];
+}) {
+  const orderSnap = await getDoc(
+    purchaseOrderDocRef(params.restaurantId, params.purchaseOrderId),
+  );
+  if (!orderSnap.exists()) {
+    throw new SupplierInvoiceError("linked_order_not_found");
+  }
+
+  const order = normalizePurchaseOrderDocument(
+    orderSnap.id,
+    orderSnap.data(),
+    params.restaurantId,
+  );
+  if (!order) {
+    throw new SupplierInvoiceError("linked_order_invalid");
+  }
+
+  const orderedProductIds = new Set(order.lines.map((line) => line.productId));
+  if (params.invoiceLines.some((line) => !orderedProductIds.has(line.productId))) {
+    throw new SupplierInvoiceError("linked_order_line_mismatch");
+  }
+}
+
 export async function createSupplierInvoice(
   params: CreateSupplierInvoiceParams,
 ): Promise<{ invoiceId: string }> {
@@ -190,6 +215,15 @@ export async function createSupplierInvoice(
     throw new SupplierInvoiceError("empty_lines");
   }
 
+  const purchaseOrderId = params.purchaseOrderId?.trim() || null;
+  if (purchaseOrderId) {
+    await validateLinkedPurchaseOrder({
+      restaurantId: rid,
+      purchaseOrderId,
+      invoiceLines: lines,
+    });
+  }
+
   const totals = computeSupplierInvoiceTotals(lines);
   const uid = authUidOrUndefined();
 
@@ -198,9 +232,7 @@ export async function createSupplierInvoice(
     {
       restaurantId: rid,
       status: "draft",
-      ...(params.purchaseOrderId?.trim()
-        ? { purchaseOrderId: params.purchaseOrderId.trim() }
-        : {}),
+      ...(purchaseOrderId ? { purchaseOrderId } : {}),
       ...(params.supplierName?.trim()
         ? { supplierName: params.supplierName.trim().slice(0, 160) }
         : {}),
