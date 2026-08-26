@@ -5,7 +5,7 @@
 
 import { applyReceivedCompraStockAction, type ApplyReceivedCompraStockActionResult } from "@/app/actions/compras-stock";
 import type { CompraLocal } from "@/lib/compras-local";
-import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
+import { auth } from "@/lib/firebase/client";
 import { loadStock, saveStock } from "@/lib/stock-local";
 
 type FirestoreApplyOk = Extract<ApplyReceivedCompraStockActionResult, { productUpdates: unknown }>;
@@ -26,10 +26,15 @@ export async function syncReceivedCompraToFirestoreIfConfigured(compra: CompraLo
   }
 
   try {
+    const user = auth.currentUser;
+    if (!user) {
+      return { status: "error", code: "UNAUTHORIZED" };
+    }
+
+    const idToken = await user.getIdToken();
     const res = await applyReceivedCompraStockAction({
-      restauranteId: getBrowserRestauranteId(),
+      idToken,
       compra,
-      usuarioId: null,
     });
 
     if (!res.ok) {
