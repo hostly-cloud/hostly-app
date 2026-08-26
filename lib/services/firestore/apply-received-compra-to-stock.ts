@@ -10,7 +10,7 @@ import type { FirestoreCompra, FirestoreCompraItem } from "@/lib/hostly/firestor
 export type ApplyReceivedCompraInput = {
   restauranteId: string;
   compraId: string;
-  /** Datos enviados por el cliente para crear o actualizar la compra antes de aplicar. */
+  /** Datos validados para crear o actualizar la compra antes de aplicar. */
   upsert: Omit<FirestoreCompra, "updatedAt" | "createdAt">;
   usuarioId?: string | null;
 };
@@ -123,18 +123,10 @@ export async function applyReceivedCompraToStock(db: Firestore, input: ApplyRece
       (i) => i.productoId?.trim() && typeof i.cantidad === "number" && Number.isFinite(i.cantidad) && i.cantidad > 0,
     );
 
+    // Una recepción sin líneas aplicables nunca debe quedar marcada como aplicada.
+    // Se conserva la compra para poder corregirla y reintentar posteriormente.
     if (validLines.length === 0) {
-      tx.update(compraRef, {
-        aplicadoStock: true,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return {
-        ok: true,
-        alreadyApplied: false,
-        aplicadoStock: true,
-        productUpdates: [],
-        skippedProductIds: [],
-      };
+      return { ok: false, code: "NO_VALID_ITEMS" };
     }
 
     const skippedProductIds: string[] = [];
@@ -159,10 +151,13 @@ export async function applyReceivedCompraToStock(db: Firestore, input: ApplyRece
       rows.push({ item, ref: pref, data });
     }
 
-    if (rows.length === 0) {
+    // Semántica all-or-nothing: si una sola línea no puede resolverse dentro del
+    // tenant, no se toca ningún stock ni se marca la compra como aplicada. Así la
+    // recepción puede corregirse y reintentarse sin perder líneas parcialmente.
+    if (skippedProductIds.length > 0) {
       return {
         ok: false,
-        code: "ALL_PRODUCTS_MISSING",
+        code: "PRODUCTS_MISSING",
         skippedProductIds,
       };
     }
@@ -198,7 +193,7 @@ export async function applyReceivedCompraToStock(db: Firestore, input: ApplyRece
       alreadyApplied: false,
       aplicadoStock: true,
       productUpdates,
-      skippedProductIds,
+      skippedProductIds: [],
     };
   });
 }
