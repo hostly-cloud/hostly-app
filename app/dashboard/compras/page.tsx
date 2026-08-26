@@ -14,6 +14,7 @@ export default function ComprasPage() {
   const { restaurantId, ready, profileReady } = useAuth();
   const startedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     if (!ready || !profileReady || startedRef.current) return;
@@ -32,7 +33,7 @@ export default function ComprasPage() {
         );
         startedRef.current = false;
       });
-  }, [profileReady, ready, restaurantId, router]);
+  }, [profileReady, ready, restaurantId, retryNonce, router]);
 
   return (
     <ModulePageShell
@@ -57,7 +58,7 @@ export default function ComprasPage() {
                 onClick={() => {
                   setError(null);
                   startedRef.current = false;
-                  router.refresh();
+                  setRetryNonce((value) => value + 1);
                 }}
                 className="hostly-button hostly-button--primary"
               >
