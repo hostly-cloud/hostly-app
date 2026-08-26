@@ -14,6 +14,7 @@ import { isFirebaseConfigured } from "@/lib/firebase/client";
 import "./dashboard-mobile-overrides.css";
 import "./mobile-horizontal-hardening.css";
 import "./dashboard-visual-overrides.css";
+import "./dashboard-visual-overrides-v2.css";
 
 /**
  * Todo el área /dashboard sigue reglas TPV táctil (data-hostly-touch → globals.css).
