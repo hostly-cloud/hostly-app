@@ -1,8 +1,10 @@
 /**
- * Persistencia local del módulo Mermas. Independiente de Compras.
+ * Puente transitorio de solo lectura para recuperar mermas guardadas por
+ * versiones antiguas de Hostly en localStorage.
+ *
+ * No contiene ninguna API de escritura y nunca modifica stock. Cuando ya no
+ * sea necesario recuperar instalaciones antiguas, este archivo debe borrarse.
  */
-
-import type { UnidadStock } from "@/lib/stock-local";
 
 export const MERMAS_LOCAL_STORAGE_KEY = "hostly.mermas.registros.v1";
 
@@ -15,54 +17,59 @@ export const MERMA_MOTIVOS = [
 ] as const;
 
 export type MermaMotivo = (typeof MERMA_MOTIVOS)[number];
+export type LegacyMermaUnit = "kg" | "g" | "l" | "ml" | "uds";
 
 export type MermaLocal = {
   id: string;
   fecha: string;
   producto_stock_id: string;
   producto_stock_nombre: string;
-  unidad: UnidadStock;
+  unidad: LegacyMermaUnit;
   cantidad: number;
   motivo: MermaMotivo;
   notas?: string;
   stock_aplicado: boolean;
 };
 
-const SEED: MermaLocal[] = [];
+function isValidMotivo(value: unknown): value is MermaMotivo {
+  return (
+    typeof value === "string" &&
+    (MERMA_MOTIVOS as readonly string[]).includes(value)
+  );
+}
 
-function newId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+function parseUnidad(value: unknown): LegacyMermaUnit {
+  if (
+    value === "kg" ||
+    value === "g" ||
+    value === "l" ||
+    value === "ml" ||
+    value === "uds"
+  ) {
+    return value;
   }
-  return `mrm-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function isValidMotivo(v: unknown): v is MermaMotivo {
-  return typeof v === "string" && (MERMA_MOTIVOS as readonly string[]).includes(v);
-}
-
-function parseUnidad(v: unknown): UnidadStock {
-  if (v === "kg" || v === "g" || v === "l" || v === "ml" || v === "uds") return v;
   return "uds";
 }
 
-function parseCantidad(v: unknown): number {
-  if (typeof v === "number" && Number.isFinite(v) && v >= 0) return v;
-  if (typeof v === "string") {
-    const t = v.trim().replace(",", ".");
-    if (t === "") return 0;
-    const n = Number(t);
-    if (Number.isFinite(n) && n >= 0) return n;
+function parseCantidad(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().replace(",", ".");
+    if (!normalized) return 0;
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
   return 0;
 }
 
 export function formatFechaMerma(isoDate: string): string {
-  const t = isoDate.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return isoDate;
+  const value = isoDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return isoDate;
   try {
-    const [y, m, d] = t.split("-").map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString("es-ES", {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString("es-ES", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -72,60 +79,55 @@ export function formatFechaMerma(isoDate: string): string {
   }
 }
 
-export function newMermaId(): string {
-  return newId();
-}
-
+/**
+ * Lee únicamente registros históricos. Nunca crea seeds, escribe localStorage
+ * ni altera inventario. Los IDs ausentes se descartan en vez de inventarlos.
+ */
 export function loadMermas(): MermaLocal[] {
-  if (typeof window === "undefined") return [...SEED];
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(MERMAS_LOCAL_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(MERMAS_LOCAL_STORAGE_KEY, JSON.stringify(SEED));
-      return [...SEED];
-    }
+    if (!raw) return [];
+
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [...SEED];
-    const out: MermaLocal[] = [];
+    if (!Array.isArray(parsed)) return [];
+
+    const records: MermaLocal[] = [];
     for (const row of parsed) {
       if (!row || typeof row !== "object") continue;
-      const r = row as Record<string, unknown>;
-      const id = typeof r.id === "string" ? r.id : newId();
-      const fecha = typeof r.fecha === "string" ? r.fecha : "";
-      const producto_stock_id = typeof r.producto_stock_id === "string" ? r.producto_stock_id : "";
-      const producto_stock_nombre =
-        typeof r.producto_stock_nombre === "string" ? r.producto_stock_nombre : "";
-      const unidad = parseUnidad(r.unidad);
-      const cantidad = parseCantidad(r.cantidad);
-      const motivo: MermaMotivo = isValidMotivo(r.motivo) ? r.motivo : "otro";
-      const notasRaw = r.notas;
-      const notas =
-        typeof notasRaw === "string" && notasRaw.trim() ? notasRaw.trim() : undefined;
-      const stock_aplicado = r.stock_aplicado === true;
-      if (!fecha.trim() || !producto_stock_id.trim()) continue;
-      out.push({
+      const value = row as Record<string, unknown>;
+      const id = typeof value.id === "string" ? value.id.trim() : "";
+      const fecha = typeof value.fecha === "string" ? value.fecha.trim() : "";
+      const productId =
+        typeof value.producto_stock_id === "string"
+          ? value.producto_stock_id.trim()
+          : "";
+      if (!id || !fecha || !productId) continue;
+
+      const productName =
+        typeof value.producto_stock_nombre === "string"
+          ? value.producto_stock_nombre.trim()
+          : "";
+      const notes =
+        typeof value.notas === "string" && value.notas.trim()
+          ? value.notas.trim()
+          : undefined;
+
+      records.push({
         id,
-        fecha: fecha.trim(),
-        producto_stock_id: producto_stock_id.trim(),
-        producto_stock_nombre: producto_stock_nombre.trim() || "Producto",
-        unidad,
-        cantidad,
-        motivo,
-        notas,
-        stock_aplicado,
+        fecha,
+        producto_stock_id: productId,
+        producto_stock_nombre: productName || "Producto",
+        unidad: parseUnidad(value.unidad),
+        cantidad: parseCantidad(value.cantidad),
+        motivo: isValidMotivo(value.motivo) ? value.motivo : "otro",
+        notas: notes,
+        stock_aplicado: value.stock_aplicado === true,
       });
     }
-    return out;
-  } catch {
-    return [...SEED];
-  }
-}
 
-export function saveMermas(items: MermaLocal[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(MERMAS_LOCAL_STORAGE_KEY, JSON.stringify(items));
+    return records;
   } catch {
-    // noop
+    return [];
   }
 }
