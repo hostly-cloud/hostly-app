@@ -4,6 +4,10 @@ import { isAuthErrorResponse } from "@/lib/server/auth/require-authenticated-res
 import { requireLegacyRestaurantApi } from "@/lib/server/auth/require-legacy-restaurant-api";
 
 export async function GET(req: Request) {
+  if (process.env.NODE_ENV === "production") {
+    return new NextResponse(null, { status: 404 });
+  }
+
   const authContext = await requireLegacyRestaurantApi(
     req,
     "settings.manage",
@@ -34,4 +38,3 @@ export async function GET(req: Request) {
     );
   }
 }
-
