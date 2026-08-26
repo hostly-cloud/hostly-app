@@ -1,9 +1,13 @@
 "use server";
 
 import type { CompraLocal } from "@/lib/compras-local";
-import { getHostlyFirestore, isFirestoreConfigured } from "@/lib/firebase/admin";
+import { isFirestoreConfigured } from "@/lib/firebase/admin";
 import { compraLocalToFirestoreUpsert } from "@/lib/hostly/compra-firestore-mapper";
-import { assertServerRestauranteAllowed } from "@/lib/hostly/restaurant-scope";
+import {
+  isAuthErrorResponse,
+  requireAuthenticatedRestaurant,
+} from "@/lib/server/auth/require-authenticated-restaurant";
+import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import { applyReceivedCompraToStock } from "@/lib/services/firestore/apply-received-compra-to-stock";
 
 export type ApplyReceivedCompraStockActionResult =
@@ -17,36 +21,53 @@ export type ApplyReceivedCompraStockActionResult =
     }
   | { ok: false; code: string; skippedProductIds?: string[] };
 
+async function authErrorCode(response: Response): Promise<string> {
+  const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  return typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error.trim()
+    : "UNAUTHORIZED";
+}
+
 /**
  * Sincroniza una compra recibida con Firestore y aplica cantidades a `productos` + `movimientosStock`.
- * Sin credenciales Firebase configuradas devuelve `local_only` (la UI sigue solo con localStorage).
+ * El tenant y el usuario se resuelven exclusivamente desde el ID token Firebase verificado en servidor.
+ * Sin credenciales Firebase Admin configuradas devuelve `local_only` (la UI sigue solo con localStorage).
  */
 export async function applyReceivedCompraStockAction(params: {
-  restauranteId: string;
+  idToken: string;
   compra: CompraLocal;
-  usuarioId?: string | null;
 }): Promise<ApplyReceivedCompraStockActionResult> {
   if (!isFirestoreConfigured()) {
     return { ok: true, mode: "local_only" };
   }
 
-  try {
-    assertServerRestauranteAllowed(params.restauranteId);
-  } catch {
-    return { ok: false, code: "RESTAURANTE_NOT_ALLOWED" };
+  const idToken = typeof params.idToken === "string" ? params.idToken.trim() : "";
+  if (!idToken) {
+    return { ok: false, code: "UNAUTHORIZED" };
   }
 
-  const db = getHostlyFirestore();
-  if (!db) {
-    return { ok: true, mode: "local_only" };
+  const authContext = await requireAuthenticatedRestaurant(
+    new Request("http://hostly.internal/actions/compras-stock", {
+      headers: { authorization: `Bearer ${idToken}` },
+    }),
+  );
+  if (isAuthErrorResponse(authContext)) {
+    return { ok: false, code: await authErrorCode(authContext) };
   }
 
-  const upsert = compraLocalToFirestoreUpsert(params.compra, params.restauranteId);
-  const result = await applyReceivedCompraToStock(db, {
-    restauranteId: params.restauranteId,
+  if (
+    !serverRoleHasCapability(authContext.role, "purchases.manage") ||
+    !serverRoleHasCapability(authContext.role, "inventory.edit")
+  ) {
+    return { ok: false, code: "PURCHASES_INVENTORY_PERMISSION_REQUIRED" };
+  }
+
+  const upsert = compraLocalToFirestoreUpsert(params.compra, authContext.restaurantId);
+  const result = await applyReceivedCompraToStock(authContext.db, {
+    restauranteId: authContext.restaurantId,
     compraId: params.compra.id,
     upsert,
-    usuarioId: params.usuarioId ?? null,
+    usuarioId: authContext.uid,
   });
 
   if (!result.ok) {
