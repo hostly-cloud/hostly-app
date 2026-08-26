@@ -13,6 +13,7 @@ import { HostlySection, HostlySectionHeader, HostlySurface } from "@/components/
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import "./dashboard-mobile-overrides.css";
 import "./mobile-horizontal-hardening.css";
+import "./dashboard-visual-overrides.css";
 
 /**
  * Todo el área /dashboard sigue reglas TPV táctil (data-hostly-touch → globals.css).

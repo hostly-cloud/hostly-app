@@ -1,0 +1,328 @@
+/* Dashboard visual pass — operational home without desktop/tablet scroll.
+ *
+ * The dashboard is a service launcher, not a long-form page. On non-phone
+ * viewports the complete hierarchy must remain visible at once:
+ *   1) TPV + Cocina/Barra/Coctelería/Reservas
+ *   2) Productos/Configuración/Análisis directly underneath
+ *
+ * Phone/PDA keeps the existing natural-scroll contract from
+ * dashboard-mobile-overrides.css because eight generous touch targets cannot
+ * be made reliably accessible in a single portrait viewport.
+ */
+
+@media (min-width: 768px) {
+  .hostly-module-shell:has(.hostly-dashboard-premium-shell) > .hostly-container,
+  .hostly-module-shell:has(.hostly-dashboard-premium-shell) > .hostly-container-wide,
+  .hostly-module-shell:has(.hostly-dashboard-premium-shell) .hostly-module-content--dashboard {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .hostly-dashboard-premium-shell {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .hostly-dashboard-command-center {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    overflow: hidden;
+  }
+
+  /* Compact service-ready header: remove the conversational/question-style
+   * hero copy and keep one useful operational message. */
+  .hostly-dashboard-command-header {
+    min-height: 0;
+    padding: 8px 12px;
+    gap: 10px;
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.035);
+  }
+
+  .hostly-dashboard-command-brand {
+    gap: 10px;
+  }
+
+  .hostly-dashboard-brand-mark {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .hostly-dashboard-command-eyebrow {
+    margin: 0 0 3px;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+  }
+
+  .hostly-dashboard-command-title {
+    margin: 0;
+    font-size: 0;
+    line-height: 1;
+    letter-spacing: normal;
+  }
+
+  .hostly-dashboard-command-title::after {
+    content: "Todo listo para empezar el servicio.";
+    display: block;
+    font-size: clamp(18px, 2.25vw, 26px);
+    font-weight: 800;
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    color: var(--hostly-ink-strong);
+  }
+
+  .hostly-dashboard-command-subtitle {
+    display: none;
+  }
+
+  /* Primary operation row: TPV on the left, four service stations on the
+   * right. This entire row owns the remaining flexible height. */
+  .hostly-dashboard-command-main {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+    gap: 8px;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .hostly-dashboard-command-hero-wrap {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .hostly-dashboard-command-hero {
+    height: 100%;
+    min-height: 0;
+    gap: 12px;
+    padding: clamp(16px, 2.2vw, 24px);
+    border-radius: 22px;
+  }
+
+  .hostly-dashboard-command-hero__icon {
+    width: clamp(44px, 5vw, 58px);
+    height: clamp(44px, 5vw, 58px);
+    border-radius: 18px;
+  }
+
+  .hostly-dashboard-command-hero__copy {
+    gap: 4px;
+  }
+
+  .hostly-dashboard-command-hero__label {
+    max-width: none;
+    font-size: clamp(38px, 5.2vw, 62px);
+    line-height: 0.92;
+    letter-spacing: -0.06em;
+  }
+
+  .hostly-dashboard-command-hero__sub {
+    font-size: clamp(12px, 1.35vw, 15px);
+    line-height: 1.15;
+  }
+
+  .hostly-dashboard-command-operation {
+    height: 100%;
+    min-height: 0;
+    gap: 7px;
+    padding: 9px;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .hostly-dashboard-command-section-title {
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0.13em;
+  }
+
+  .hostly-dashboard-command-stations {
+    min-height: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .hostly-dashboard-command-station {
+    min-height: 0;
+    height: 100%;
+    gap: 6px;
+    padding: 10px 11px;
+    border-radius: 16px;
+  }
+
+  .hostly-dashboard-command-station__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 12px;
+  }
+
+  .hostly-dashboard-command-station__icon .hostly-op-launcher-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .hostly-dashboard-command-station__copy {
+    min-width: 0;
+  }
+
+  .hostly-dashboard-command-station__label {
+    display: block;
+    font-size: clamp(13px, 1.25vw, 16px);
+    line-height: 1.02;
+  }
+
+  .hostly-dashboard-command-station__sub {
+    display: block;
+    margin-top: 2px;
+    font-size: clamp(9px, 0.9vw, 11px);
+    line-height: 1.12;
+    color: var(--hostly-ink-muted);
+  }
+
+  /* Management is always a separate lower row: never layered over operational
+   * actions. */
+  .hostly-dashboard-command-management {
+    min-height: 0;
+    gap: 5px;
+    padding: 7px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .hostly-dashboard-command-dock {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .hostly-dashboard-command-dock-item {
+    min-height: 40px;
+    padding: 5px 9px;
+    gap: 7px;
+    border-radius: 13px;
+  }
+
+  .hostly-dashboard-command-dock-item__icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 10px;
+  }
+
+  .hostly-dashboard-command-dock-item__label {
+    font-size: 12px;
+  }
+}
+
+/* Laptop/TPV horizontal hardening. The browser chrome on common 1366x768
+ * devices leaves considerably less than 768 CSS px of useful height. */
+@media (min-width: 768px) and (max-height: 760px) {
+  .hostly-dashboard-command-center {
+    gap: 6px;
+  }
+
+  .hostly-dashboard-command-header {
+    padding: 6px 10px;
+    border-radius: 15px;
+  }
+
+  .hostly-dashboard-brand-mark {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .hostly-dashboard-command-eyebrow {
+    margin-bottom: 2px;
+    font-size: 8px;
+  }
+
+  .hostly-dashboard-command-title::after {
+    font-size: clamp(16px, 1.9vw, 21px);
+  }
+
+  .hostly-dashboard-command-main {
+    gap: 6px;
+  }
+
+  .hostly-dashboard-command-hero {
+    padding: 14px 18px;
+    border-radius: 18px;
+  }
+
+  .hostly-dashboard-command-hero__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 15px;
+  }
+
+  .hostly-dashboard-command-hero__label {
+    font-size: clamp(34px, 4.35vw, 50px);
+  }
+
+  .hostly-dashboard-command-hero__sub {
+    font-size: 12px;
+  }
+
+  .hostly-dashboard-command-operation {
+    gap: 5px;
+    padding: 7px;
+    border-radius: 17px;
+  }
+
+  .hostly-dashboard-command-stations {
+    gap: 5px;
+  }
+
+  .hostly-dashboard-command-station {
+    padding: 7px 9px;
+    gap: 4px;
+    border-radius: 14px;
+  }
+
+  .hostly-dashboard-command-station__icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+  }
+
+  .hostly-dashboard-command-station__icon .hostly-op-launcher-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .hostly-dashboard-command-station__label {
+    font-size: 13px;
+  }
+
+  .hostly-dashboard-command-station__sub {
+    font-size: 9px;
+  }
+
+  .hostly-dashboard-command-management {
+    gap: 4px;
+    padding: 6px;
+    border-radius: 14px;
+  }
+
+  .hostly-dashboard-command-dock-item {
+    min-height: 36px;
+    padding: 4px 8px;
+  }
+
+  .hostly-dashboard-command-dock-item__icon {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 960px) {
+  .hostly-dashboard-command-main {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+
+  .hostly-dashboard-command-station__sub {
+    display: none;
+  }
+}
