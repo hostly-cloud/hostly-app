@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
 import Script from "next/script";
 import { Providers } from "@/components/providers";
 import { SelectedTableProvider } from "@/context/SelectedTableContext";
@@ -7,11 +7,6 @@ import "./globals.css";
 import "@/styles/hostly-visual-navigation.css";
 import "@/styles/hostly-dashboard-v4.css";
 import "@/components/sala-editor/panels/sala-operational-element-visual.shared.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 const metadataBase = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://hostly.app");
 
@@ -71,7 +66,7 @@ export default function RootLayout({
     <html
       lang="es"
       suppressHydrationWarning
-      className={`${geistSans.variable} h-full antialiased`}
+      className={`${GeistSans.variable} h-full antialiased`}
     >
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
