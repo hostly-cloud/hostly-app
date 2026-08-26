@@ -13,9 +13,7 @@ import {
 import { auth, db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { dbgRunTransaction, dbgUpdateDoc } from "@/lib/firestore/instrumentedWrites";
-import {
-  purchaseOrderDocRef,
-} from "@/lib/firestore/purchase-orders";
+import { purchaseOrderDocRef } from "@/lib/firestore/purchase-orders";
 import {
   applyCreatedStockMovements,
   createStockMovementsForPurchaseReceipt,
@@ -140,11 +138,7 @@ export function listenPurchaseReceiptsForOrder(
   const mapSnapshot = (snap: { docs: Array<{ id: string; data: () => unknown }> }) => {
     const items: PurchaseReceiptDocument[] = [];
     for (const docSnap of snap.docs) {
-      const parsed = normalizePurchaseReceiptDocument(
-        docSnap.id,
-        docSnap.data(),
-        rid,
-      );
+      const parsed = normalizePurchaseReceiptDocument(docSnap.id, docSnap.data(), rid);
       if (parsed && parsed.purchaseOrderId === orderId) items.push(parsed);
     }
     emitSorted(items);
@@ -153,11 +147,7 @@ export function listenPurchaseReceiptsForOrder(
   const attachFallback = () => {
     fallbackActive = true;
     options?.onFallback?.();
-    const fallbackQuery = query(
-      col,
-      where("purchaseOrderId", "==", orderId),
-      limit(lim),
-    );
+    const fallbackQuery = query(col, where("purchaseOrderId", "==", orderId), limit(lim));
     innerUnsub = onSnapshot(
       fallbackQuery,
       (snap) => mapSnapshot(snap),
@@ -246,11 +236,7 @@ export async function createPurchaseReceiptFromOrder(
         throw new PurchaseReceiptFromOrderError("order_not_found");
       }
 
-      const order = normalizePurchaseOrderDocument(
-        purchaseOrderId,
-        orderSnap.data(),
-        rid,
-      );
+      const order = normalizePurchaseOrderDocument(purchaseOrderId, orderSnap.data(), rid);
       if (!order) {
         throw new PurchaseReceiptFromOrderError("order_invalid");
       }
@@ -279,9 +265,7 @@ export async function createPurchaseReceiptFromOrder(
         ...(uid ? { createdBy: uid } : {}),
         lines: receiptLines,
         totalReceivedQuantity,
-        ...(params.notes?.trim()
-          ? { notes: params.notes.trim().slice(0, 500) }
-          : {}),
+        ...(params.notes?.trim() ? { notes: params.notes.trim().slice(0, 500) } : {}),
       });
 
       transaction.update(orderRef, {
@@ -317,10 +301,20 @@ export async function createPurchaseReceiptFromOrder(
     userId: uid,
   });
 
-  const applyResult = await applyCreatedStockMovements({
+  let applyResult = await applyCreatedStockMovements({
     restaurantId: rid,
     movementIds: movementResult.movementIds,
   });
+
+  // El ledger es idempotente (`applied === true` se omite), por lo que un segundo intento
+  // es seguro y recupera fallos transitorios sin duplicar stock. Si persiste un error real
+  // (producto inexistente, unidad incompatible, etc.), queda reflejado en `failed`.
+  if (applyResult.failed > 0) {
+    applyResult = await applyCreatedStockMovements({
+      restaurantId: rid,
+      movementIds: movementResult.movementIds,
+    });
+  }
 
   const applySummary = {
     applied: applyResult.applied,
@@ -358,6 +352,7 @@ export async function createPurchaseReceiptFromOrder(
       lineCount: txResult.receiptLines.length,
       totalReceivedQuantity: computePurchaseReceiptTotalQuantity(txResult.receiptLines),
       movementCount: movementResult.movementIds.length,
+      stockApplyFailed: applySummary.failed,
       route: "purchases",
     }),
   });
