@@ -36,10 +36,7 @@ export default function ComprasPage() {
   }, [profileReady, ready, restaurantId, retryNonce, router]);
 
   return (
-    <ModulePageShell
-      title="Compras"
-      description="Actualizando Compras al flujo canónico de pedidos y recepciones."
-    >
+    <ModulePageShell title="Compras">
       <div
         style={{
           maxWidth: 720,
