@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   doc,
   limit,
@@ -11,7 +10,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
-import { dbgRunTransaction } from "@/lib/firestore/instrumentedWrites";
+import { dbgAddDoc, dbgRunTransaction } from "@/lib/firestore/instrumentedWrites";
 import { purchaseDraftDocRef } from "@/lib/firestore/purchase-drafts";
 import { normalizePurchaseDraftDocument } from "@/lib/inventory/purchase-draft-types";
 import {
@@ -178,18 +177,26 @@ export async function createManualPurchaseOrder(params: {
   const uid = authUidOrUndefined();
   const supplierName = params.supplierName?.trim().slice(0, 160) || null;
   const notes = params.notes?.trim().slice(0, 500) || null;
-  const ref = await addDoc(purchaseOrdersCollectionRef(rid), {
-    restaurantId: rid,
-    status: "draft",
-    source: "manual",
-    ...(supplierName ? { supplierName } : {}),
-    lines,
-    totalEstimatedCost: computePurchaseOrderTotalEstimatedCost(lines),
-    ...(notes ? { notes } : {}),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    ...(uid ? { createdBy: uid, updatedBy: uid } : {}),
-  });
+  const ref = await dbgAddDoc(
+    purchaseOrdersCollectionRef(rid),
+    {
+      restaurantId: rid,
+      status: "draft",
+      source: "manual",
+      ...(supplierName ? { supplierName } : {}),
+      lines,
+      totalEstimatedCost: computePurchaseOrderTotalEstimatedCost(lines),
+      ...(notes ? { notes } : {}),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      ...(uid ? { createdBy: uid, updatedBy: uid } : {}),
+    },
+    {
+      label: "purchaseOrders:createManual",
+      collection: "purchaseOrders",
+      restaurantId: rid,
+    },
+  );
   return { purchaseOrderId: ref.id };
 }
 
