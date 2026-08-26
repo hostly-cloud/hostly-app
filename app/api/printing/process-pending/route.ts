@@ -3,6 +3,7 @@ import {
   isAuthErrorResponse,
   requireAuthenticatedRestaurant,
 } from "@/lib/server/auth/require-authenticated-restaurant";
+import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import { processPendingPrintJobs } from "@/lib/server/printing/process-print-jobs";
 
 function jsonError(status: number, error: string, details?: string) {
@@ -12,11 +13,27 @@ function jsonError(status: number, error: string, details?: string) {
   );
 }
 
+function canProcessPendingPrintJobs(role: string): boolean {
+  return (
+    serverRoleHasCapability(role, "tpv.sell") ||
+    serverRoleHasCapability(role, "kds.manage") ||
+    serverRoleHasCapability(role, "settings.manage")
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const authCtx = await requireAuthenticatedRestaurant(req);
     if (isAuthErrorResponse(authCtx)) {
       return authCtx;
+    }
+
+    if (!canProcessPendingPrintJobs(authCtx.role)) {
+      return jsonError(
+        403,
+        "PRINTING_PROCESS_REQUIRED",
+        "No tienes permiso para procesar trabajos de impresión",
+      );
     }
 
     const body = (await req.json().catch(() => null)) as {
