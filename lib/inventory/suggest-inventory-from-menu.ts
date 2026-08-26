@@ -1,4 +1,4 @@
-import type { UnidadStock } from "@/lib/stock-local";
+import type { InventoryUnit } from "@/lib/inventory/inventory-units";
 
 export type MenuInventorySourceItem = {
   name: string;
@@ -9,7 +9,7 @@ export type MenuInventorySourceItem = {
 export type InventoryMenuSuggestion = {
   id: string;
   nombre: string;
-  unidad: UnidadStock;
+  unidad: InventoryUnit;
   stock_actual: number;
   stock_minimo: number;
   categoria?: string;
@@ -21,7 +21,7 @@ export type InventoryMenuSuggestion = {
 type IngredientDef = {
   aliases: string[];
   nombre: string;
-  unidad: UnidadStock;
+  unidad: InventoryUnit;
   categoria?: string;
 };
 
@@ -67,7 +67,7 @@ const INGREDIENTS: IngredientDef[] = [
 
 const ONBOARDING_BASE_STOCK: Array<{
   nombre: string;
-  unidad: UnidadStock;
+  unidad: InventoryUnit;
   stock_actual: number;
   stock_minimo: number;
   categoria?: string;
@@ -82,106 +82,17 @@ const ONBOARDING_BASE_STOCK: Array<{
   { nombre: "Pasta", unidad: "kg", stock_actual: 5, stock_minimo: 2, categoria: "dry" },
 ];
 
-/** Generic dish/descriptor words — not inventory products on their own. */
 export const MENU_INVENTORY_STOP_WORDS = new Set([
-  "marinado",
-  "marinada",
-  "ensalada",
-  "plato",
-  "racion",
-  "ración",
-  "casero",
-  "casera",
-  "especial",
-  "salsa",
-  "fresco",
-  "fresca",
-  "baby",
-  "gratinado",
-  "gratinada",
-  "carpaccio",
-  "tartar",
-  "variacion",
-  "variación",
-  "bruschetta",
-  "crostini",
-  "tartare",
-  "tataki",
-  "ceviche",
-  "tempura",
-  "rebozado",
-  "rebozada",
-  "crujiente",
-  "tradicional",
-  "casolana",
-  "chef",
-  "del",
-  "dia",
-  "día",
-  "casa",
-  "mini",
-  "medio",
-  "media",
-  "doble",
-  "porcion",
-  "porción",
-  "entrante",
-  "principal",
-  "postre",
-  "menu",
-  "menú",
-  "mix",
-  "combo",
-  "sugerencia",
-  "recomendacion",
-  "recomendación",
-  "artesano",
-  "artesana",
-  "suprema",
-  "supremo",
-  "clasico",
-  "clásico",
-  "clasica",
-  "clásica",
-  "light",
-  "vegano",
-  "vegana",
-  "vegetariano",
-  "vegetariana",
-  "sin",
-  "gluten",
-  "lactosa",
-  "opcion",
-  "opción",
-  "nuestra",
-  "nuestro",
-  "nuestras",
-  "nuestros",
-  "con",
-  "de",
-  "del",
-  "la",
-  "el",
-  "los",
-  "las",
-  "y",
-  "e",
-  "a",
-  "en",
-  "al",
-  "un",
-  "una",
-  "unos",
-  "unas",
-  "para",
-  "sobre",
-  "base",
-  "estilo",
-  "tipo",
-  "version",
-  "versión",
-  "producto",
-  "crema",
+  "marinado", "marinada", "ensalada", "plato", "racion", "ración", "casero", "casera", "especial",
+  "salsa", "fresco", "fresca", "baby", "gratinado", "gratinada", "carpaccio", "tartar", "variacion",
+  "variación", "bruschetta", "crostini", "tartare", "tataki", "ceviche", "tempura", "rebozado", "rebozada",
+  "crujiente", "tradicional", "casolana", "chef", "del", "dia", "día", "casa", "mini", "medio", "media",
+  "doble", "porcion", "porción", "entrante", "principal", "postre", "menu", "menú", "mix", "combo", "sugerencia",
+  "recomendacion", "recomendación", "artesano", "artesana", "suprema", "supremo", "clasico", "clásico", "clasica",
+  "clásica", "light", "vegano", "vegana", "vegetariano", "vegetariana", "sin", "gluten", "lactosa", "opcion",
+  "opción", "nuestra", "nuestro", "nuestras", "nuestros", "con", "de", "la", "el", "los", "las", "y", "e",
+  "a", "en", "al", "un", "una", "unos", "unas", "para", "sobre", "base", "estilo", "tipo", "version",
+  "versión", "producto", "crema",
 ]);
 
 const CONTEXTUAL_DISH_RULES: Array<{ pattern: RegExp; def: IngredientDef; confidence: number }> = [
@@ -192,30 +103,12 @@ const CONTEXTUAL_DISH_RULES: Array<{ pattern: RegExp; def: IngredientDef; confid
 
 const ALIAS_TO_DEF = new Map<string, IngredientDef>();
 for (const def of INGREDIENTS) {
-  for (const alias of def.aliases) {
-    ALIAS_TO_DEF.set(normalizeInventoryToken(alias), def);
-  }
+  for (const alias of def.aliases) ALIAS_TO_DEF.set(normalizeInventoryToken(alias), def);
 }
-
 const SORTED_ALIASES = [...ALIAS_TO_DEF.entries()].sort((a, b) => b[0].length - a[0].length);
 
 export function normalizeInventoryToken(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function titleCaseIngredient(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function dishSearchText(item: MenuInventorySourceItem): string {
@@ -223,70 +116,46 @@ function dishSearchText(item: MenuInventorySourceItem): string {
 }
 
 function extractCandidateTokens(dishName: string): string[] {
-  const cleaned = dishName
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/\s+[–—-]\s+.*/g, " ")
-    .trim();
-
-  const segments = cleaned.split(/[,;/|]+/);
+  const cleaned = dishName.replace(/\([^)]*\)/g, " ").replace(/\s+[–—-]\s+.*/g, " ").trim();
   const tokens = new Set<string>();
-
-  for (const segment of segments) {
-    const normalizedSegment = segment
-      .replace(/\s+(?:con|de|del|la|el|los|las|y|e|&|\+|a|en|al)\s+/gi, ",")
-      .replace(/\s+/g, " ")
-      .trim();
-
+  for (const segment of cleaned.split(/[,;/|]+/)) {
+    const normalizedSegment = segment.replace(/\s+(?:con|de|del|la|el|los|las|y|e|&|\+|a|en|al)\s+/gi, ",").replace(/\s+/g, " ").trim();
     for (const part of normalizedSegment.split(",")) {
       const trimmed = part.trim();
       if (!trimmed) continue;
       tokens.add(trimmed);
       const words = trimmed.split(/\s+/).filter(Boolean);
-      if (words.length >= 2) {
-        tokens.add(words.slice(-2).join(" "));
-      }
-      for (const word of words) {
-        if (word.length >= 3) tokens.add(word);
-      }
+      if (words.length >= 2) tokens.add(words.slice(-2).join(" "));
+      for (const word of words) if (word.length >= 3) tokens.add(word);
     }
   }
-
   return [...tokens];
 }
 
 function isStopWord(token: string): boolean {
   const n = normalizeInventoryToken(token);
-  if (!n) return true;
-  if (MENU_INVENTORY_STOP_WORDS.has(n)) return true;
-  if (/^\d+$/.test(n)) return true;
-  return n.length < 3;
+  return !n || MENU_INVENTORY_STOP_WORDS.has(n) || /^\d+$/.test(n) || n.length < 3;
 }
 
 function matchIngredientFromToken(token: string): IngredientDef | null {
   const n = normalizeInventoryToken(token);
-  if (!n || isStopWord(n)) return null;
-  return ALIAS_TO_DEF.get(n) ?? null;
+  return !n || isStopWord(n) ? null : ALIAS_TO_DEF.get(n) ?? null;
 }
 
 function matchIngredientsInDishName(dishName: string): Array<{ def: IngredientDef; confidence: number }> {
   const normalizedDish = normalizeInventoryToken(dishName);
   if (!normalizedDish) return [];
-
   const found = new Map<string, { def: IngredientDef; confidence: number }>();
-
   for (const [alias, def] of SORTED_ALIASES) {
-    if (alias.length < 4) continue;
-    if (!normalizedDish.includes(alias)) continue;
+    if (alias.length < 4 || !normalizedDish.includes(alias)) continue;
     const key = normalizeInventoryToken(def.nombre);
     if (!found.has(key)) found.set(key, { def, confidence: alias.length >= 6 ? 0.88 : 0.8 });
   }
-
   for (const rule of CONTEXTUAL_DISH_RULES) {
     if (!rule.pattern.test(dishName)) continue;
     const key = normalizeInventoryToken(rule.def.nombre);
     if (!found.has(key)) found.set(key, { def: rule.def, confidence: rule.confidence });
   }
-
   return [...found.values()];
 }
 
@@ -294,78 +163,55 @@ function suggestionKey(def: IngredientDef): string {
   return normalizeInventoryToken(def.nombre);
 }
 
-export type SuggestInventoryFromMenuOptions = {
-  existingProductNames?: string[];
-};
+export type SuggestInventoryFromMenuOptions = { existingProductNames?: string[] };
 
 export function hasMenuInventorySources(items: MenuInventorySourceItem[]): boolean {
   return items.some((item) => dishSearchText(item).length > 0);
 }
 
-export function suggestInventoryFromMenu(
-  menuItems: MenuInventorySourceItem[],
-  options: SuggestInventoryFromMenuOptions = {},
-): InventoryMenuSuggestion[] {
-  const existing = new Set((options.existingProductNames ?? []).map((n) => normalizeInventoryToken(n)).filter(Boolean));
+export function suggestInventoryFromMenu(menuItems: MenuInventorySourceItem[], options: SuggestInventoryFromMenuOptions = {}): InventoryMenuSuggestion[] {
+  const existing = new Set((options.existingProductNames ?? []).map(normalizeInventoryToken).filter(Boolean));
   const merged = new Map<string, InventoryMenuSuggestion>();
-
   for (const item of menuItems) {
     const dish = dishSearchText(item);
     if (!dish) continue;
-
     const defs = new Map<string, { def: IngredientDef; confidence: number }>();
     for (const token of extractCandidateTokens(dish)) {
       const def = matchIngredientFromToken(token);
       if (def) defs.set(suggestionKey(def), { def, confidence: 0.74 });
     }
     for (const hit of matchIngredientsInDishName(dish)) {
-      const prev = defs.get(suggestionKey(hit.def));
-      if (!prev || hit.confidence > prev.confidence) {
-        defs.set(suggestionKey(hit.def), hit);
-      }
+      const key = suggestionKey(hit.def);
+      const previous = defs.get(key);
+      if (!previous || hit.confidence > previous.confidence) defs.set(key, hit);
     }
-
     for (const { def, confidence } of defs.values()) {
       const key = suggestionKey(def);
       if (existing.has(key)) continue;
-
-      const prev = merged.get(key);
-      if (prev) {
-        if (!prev.matchedFrom.includes(item.name)) prev.matchedFrom.push(item.name);
-        prev.confidence = Math.max(prev.confidence ?? 0, confidence);
-        continue;
-      }
-
+      const previous = merged.get(key);
+      const matchedFrom = previous ? [...new Set([...previous.matchedFrom, item.name])].slice(0, 4) : [item.name];
       merged.set(key, {
-        id: `menu-sug-${key.replace(/\s+/g, "-")}`,
-        nombre: titleCaseIngredient(def.nombre),
+        id: `menu-${key.replace(/\s+/g, "-")}`,
+        nombre: def.nombre,
         unidad: def.unidad,
         stock_actual: 0,
-        stock_minimo: 0,
+        stock_minimo: def.unidad === "uds" ? 10 : def.unidad === "g" || def.unidad === "ml" ? 500 : 2,
         categoria: def.categoria,
         source: "menu",
-        confidence,
-        matchedFrom: [item.name],
+        confidence: Math.max(previous?.confidence ?? 0, confidence),
+        matchedFrom,
       });
     }
   }
-
-  return [...merged.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { sensitivity: "base" }));
+  return [...merged.values()].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0) || a.nombre.localeCompare(b.nombre, "es"));
 }
 
-export function suggestOnboardingBaseInventory(
-  existingProductNames: string[] = [],
-): InventoryMenuSuggestion[] {
-  const existing = new Set(existingProductNames.map((n) => normalizeInventoryToken(n)).filter(Boolean));
-  return ONBOARDING_BASE_STOCK.filter((item) => !existing.has(normalizeInventoryToken(item.nombre))).map((item) => ({
-    id: `base-sug-${normalizeInventoryToken(item.nombre).replace(/\s+/g, "-")}`,
-    nombre: item.nombre,
-    unidad: item.unidad,
-    stock_actual: item.stock_actual,
-    stock_minimo: item.stock_minimo,
-    categoria: item.categoria,
+export function getOnboardingBaseInventory(existingProductNames: string[] = []): InventoryMenuSuggestion[] {
+  const existing = new Set(existingProductNames.map(normalizeInventoryToken).filter(Boolean));
+  return ONBOARDING_BASE_STOCK.filter((row) => !existing.has(normalizeInventoryToken(row.nombre))).map((row) => ({
+    id: `base-${normalizeInventoryToken(row.nombre).replace(/\s+/g, "-")}`,
+    ...row,
     source: "base" as const,
-    confidence: 0.5,
-    matchedFrom: ["inventario base"],
+    matchedFrom: [],
   }));
 }
