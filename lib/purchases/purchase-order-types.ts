@@ -1,7 +1,6 @@
 import type { PurchaseRiskLevel } from "@/lib/inventory/purchase-intelligence";
 import {
   readPurchaseDraftTimestampMs,
-  sanitizePurchaseDraftLines,
   type PurchaseDraftDocument,
 } from "@/lib/inventory/purchase-draft-types";
 import type { SuggestedPurchaseDraftLine } from "@/lib/inventory/suggested-purchase-draft";
@@ -9,7 +8,6 @@ import {
   normalizeInventoryUnitAlias,
   roundInventoryQuantity,
 } from "@/lib/inventory/unit-conversions";
-import { Timestamp } from "firebase/firestore";
 
 export type PurchaseOrderStatus =
   | "draft"
@@ -17,7 +15,7 @@ export type PurchaseOrderStatus =
   | "partially_received"
   | "received"
   | "cancelled";
-export type PurchaseOrderSource = "purchase_draft";
+export type PurchaseOrderSource = "purchase_draft" | "manual";
 
 export type PurchaseOrderLine = {
   productId: string;
@@ -38,7 +36,7 @@ export type PurchaseOrderDocument = {
   restaurantId: string;
   status: PurchaseOrderStatus;
   source: PurchaseOrderSource;
-  purchaseDraftId: string;
+  purchaseDraftId?: string;
   supplierName?: string | null;
   createdAt: number;
   updatedAt: number;
@@ -237,11 +235,10 @@ export function normalizePurchaseOrderDocument(
     : "draft";
 
   const sourceRaw = typeof data.source === "string" ? data.source.trim() : "";
-  const source: PurchaseOrderSource =
-    sourceRaw === "purchase_draft" ? "purchase_draft" : "purchase_draft";
+  const source: PurchaseOrderSource = sourceRaw === "manual" ? "manual" : "purchase_draft";
 
-  const purchaseDraftId = readTrimmedString(data.purchaseDraftId, 128);
-  if (!purchaseDraftId) return null;
+  const purchaseDraftId = readTrimmedString(data.purchaseDraftId, 128) ?? undefined;
+  if (source === "purchase_draft" && !purchaseDraftId) return null;
 
   const createdAt = readPurchaseDraftTimestampMs(data.createdAt);
   const updatedAt = readPurchaseDraftTimestampMs(data.updatedAt);
@@ -259,7 +256,7 @@ export function normalizePurchaseOrderDocument(
     restaurantId: rid,
     status,
     source,
-    purchaseDraftId,
+    ...(purchaseDraftId ? { purchaseDraftId } : {}),
     supplierName: readTrimmedString(data.supplierName, MAX_NAME_LENGTH),
     createdAt,
     updatedAt: updatedAt ?? createdAt,

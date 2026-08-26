@@ -4,19 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { hostlySegmentTabClassName } from "@/components/ui/hostly";
 
-/** Tabs del hub Inventario → rutas reales (`/dashboard/...`). */
 export type InventarioHubTabId =
   | "stock"
   | "compras-inteligentes"
   | "pedidos-compra"
+  | "nueva-compra"
   | "facturas-proveedor"
   | "aliases-proveedor"
-  | "compras"
   | "recepciones"
   | "mermas";
 
 const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] = [
-  /** Stock inventario Firestore central (lista + inspector). */
   { id: "stock", label: "Stock", href: "/dashboard/inventario" },
   {
     id: "compras-inteligentes",
@@ -29,6 +27,11 @@ const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] =
     href: "/dashboard/inventario/pedidos-compra",
   },
   {
+    id: "nueva-compra",
+    label: "Nueva compra",
+    href: "/dashboard/inventario/pedidos-compra/nuevo",
+  },
+  {
     id: "facturas-proveedor",
     label: "Facturas",
     href: "/dashboard/inventario/facturas-proveedor",
@@ -38,7 +41,6 @@ const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] =
     label: "Aliases OCR",
     href: "/dashboard/inventario/aliases-proveedor",
   },
-  { id: "compras", label: "Compras", href: "/dashboard/compras" },
   { id: "recepciones", label: "Recepciones", href: "/dashboard/recepciones" },
   { id: "mermas", label: "Mermas", href: "/dashboard/mermas" },
 ] as const;
@@ -52,6 +54,7 @@ function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null 
   ) {
     return "compras-inteligentes";
   }
+  if (pathname === "/dashboard/inventario/pedidos-compra/nuevo") return "nueva-compra";
   if (
     pathname === "/dashboard/inventario/pedidos-compra" ||
     pathname.startsWith("/dashboard/inventario/pedidos-compra/")
@@ -70,7 +73,6 @@ function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null 
   ) {
     return "aliases-proveedor";
   }
-  if (pathname === "/dashboard/compras" || pathname.startsWith("/dashboard/compras/")) return "compras";
   if (pathname === "/dashboard/recepciones" || pathname.startsWith("/dashboard/recepciones/")) {
     return "recepciones";
   }
@@ -79,14 +81,9 @@ function pathnameToInventarioTabId(pathname: string): InventarioHubTabId | null 
 }
 
 function tabActive(pathname: string | null, id: InventarioHubTabId): boolean {
-  const p = pathname ?? "";
-  return pathnameToInventarioTabId(p) === id;
+  return pathnameToInventarioTabId(pathname ?? "") === id;
 }
 
-/**
- * Tabs de navegación del hub Inventario.
- * Mobile: pills horizontales compactas con scroll limpio (Hostly Mobile Operational Layout).
- */
 export function InventarioRouteTabs({ className }: { className?: string }) {
   const pathname = usePathname();
 
