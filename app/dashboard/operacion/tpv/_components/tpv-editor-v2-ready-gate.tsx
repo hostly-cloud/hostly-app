@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
+import { loadTpvPublishedMapRuntime } from "@/lib/tpv/published-map-runtime";
 
 type TpvEditorV2ReadyGateProps = {
   restaurantId: string | null;
@@ -34,7 +34,7 @@ function LoadingV2MapState() {
       data-hostly-tpv-map-gate-loading
       className="flex min-h-[320px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-sm text-slate-500"
     >
-      Cargando plano del Editor V2…
+      Cargando plano operativo publicado…
     </div>
   );
 }
@@ -70,10 +70,10 @@ export function TpvEditorV2ReadyGate({
     let cancelled = false;
     setStatus("loading");
 
-    void loadSalaEditorDraft(rid)
-      .then((draft) => {
+    void loadTpvPublishedMapRuntime(rid)
+      .then((runtime) => {
         if (cancelled) return;
-        setStatus(draft?.document ? "mounting" : "missing");
+        setStatus(runtime.contractCount > 0 ? "mounting" : "missing");
       })
       .catch(() => {
         if (cancelled) return;
@@ -197,37 +197,37 @@ export function TpvEditorV2ReadyGate({
       <div
         data-hostly-tpv-map-gate={
           isMissing
-            ? "missing-v2"
+            ? "missing-published-map"
             : isParityError
               ? "v2-parity-error"
               : isInteractionError
                 ? "v2-interaction-error"
                 : isViewportError
                   ? "v2-viewport-error"
-                  : "error-v2"
+                  : "error-published-map"
         }
         className="flex min-h-[320px] w-full items-center justify-center rounded-2xl border border-amber-200 bg-amber-50/70 px-6 text-center"
       >
         <div className="max-w-xl">
           <p className="text-sm font-semibold text-slate-900">
             {isMissing
-              ? "Este restaurante todavía no tiene un plano disponible en Editor V2."
+              ? "Este restaurante todavía no tiene un plano operativo publicado disponible."
               : isParityError
-                ? "El plano del TPV no coincide al 100 % con Editor V2."
+                ? "El plano publicado del TPV no tiene cobertura V2 completa."
                 : isInteractionError
                   ? "Los elementos operativos del TPV todavía no están enlazados al 100 % con sus controladores V2."
                   : isViewportError
                     ? "El TPV todavía no está usando el viewport nativo del Editor V2."
-                    : "No se ha podido montar el plano del Editor V2 en el TPV."}
+                    : "No se ha podido montar el plano operativo publicado en el TPV."}
           </p>
           <p className="mt-1 text-xs leading-5 text-slate-600">
             {isParityError
-              ? "Editor V2 todavía no cubre todo el contenido del plano operativo. Hostly bloquea el TPV en vez de volver a montar el mapa antiguo; completa o migra los elementos pendientes en Editor V2."
+              ? "Hostly ha detectado residuos fuera del contrato publicado y bloquea el TPV en vez de recuperar un renderer antiguo. Revisa la publicación del Editor V2."
               : isInteractionError
                 ? "Hostly ha bloqueado el mapa porque falta el controlador en memoria de algún elemento operativo V2 o el renderer no declaró interacción nativa."
                 : isViewportError
-                  ? "Hostly ha bloqueado la visualización porque el Editor V2 sigue montado dentro de un viewport histórico. El TPV solo se revela cuando renderer, interacción y viewport son V2 nativos."
-                  : "El TPV ya no usa el mapa antiguo como sustituto. Revisa el enlace del plano y su estado en Editor V2."}
+                  ? "Hostly ha bloqueado la visualización porque el mapa publicado sigue montado fuera del viewport V2 nativo."
+                  : "El TPV usa exclusivamente la proyección publicada de floorPlans, tables y zones; el borrador del editor no es una fuente operativa."}
           </p>
         </div>
       </div>
