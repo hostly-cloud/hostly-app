@@ -57,10 +57,6 @@ function readPayloadRestaurantId(props: EditableFloorMapProps): string | null {
     const rid = normalizeId(element.restaurantId);
     if (rid) ids.add(rid);
   }
-  for (const zone of props.zones ?? []) {
-    const rid = normalizeId(zone.restaurantId);
-    if (rid) ids.add(rid);
-  }
   return ids.size === 1 ? [...ids][0]! : null;
 }
 
