@@ -1,7 +1,7 @@
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { ProductDocument } from "@/lib/firestore/products";
-import type { PlatoCarta } from "@/lib/platos-local";
 
-/** Conteo de productos por `categoriaCartaId` (legacy localStorage). */
+/** Conteo de productos por `categoriaCartaId` en una proyección de catálogo. */
 export function countProductsByCategoryIdFromPlatos(
   platos: readonly PlatoCarta[],
 ): Map<string, number> {
