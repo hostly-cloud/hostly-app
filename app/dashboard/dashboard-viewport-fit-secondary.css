@@ -1,0 +1,167 @@
+/* Hostly viewport fit — secondary management screens. */
+
+/* Inventario: toolbar fija; lista e inspector absorben el alto y su propio scroll. */
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-workbench {
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 7px; overflow: hidden;
+}
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-toolbar,
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-error,
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-warning { flex: 0 0 auto; }
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-split {
+  flex: 1 1 0; min-height: 0; align-items: stretch;
+}
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-list-panel,
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-panel-shell {
+  min-height: 0; height: 100%; max-height: none;
+}
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-list-panel {
+  display: flex; flex-direction: column;
+}
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-search-wrap,
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-stock-filter-panel { flex: 0 0 auto; }
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-list,
+.hostly-module-shell:has(.hostly-inventory-workbench) .hostly-inventory-config-body--compact {
+  flex: 1 1 0; min-height: 0; max-height: none; overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
+}
+
+/* Analisis: tabs visibles; solo el informe seleccionado desplaza. */
+.hostly-module-shell:has(.hostly-analytics-stack) .hostly-analytics-stack {
+  flex: 1 1 0; min-height: 0; overflow: hidden; gap: 7px;
+}
+.hostly-module-shell:has(.hostly-analytics-stack) .hostly-analytics-stack > :first-child { flex: 0 0 auto; }
+.hostly-analysis-tab-viewport {
+  flex: 1 1 0; min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
+}
+
+/* Mesas: contexto compacto + grid tactil. */
+.hostly-mesas-viewport { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; gap: 7px; }
+.hostly-mesas-toolbar {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; border: 1px solid var(--hostly-table-divider-soft); border-radius: 14px;
+  background: rgba(255,255,255,.84); box-shadow: var(--hostly-shadow-hairline);
+}
+.hostly-mesas-toolbar__eyebrow,.hostly-mesas-toolbar__title,.hostly-mesas-toolbar__hint { margin: 0; }
+.hostly-mesas-toolbar__eyebrow { color: var(--hostly-ink-muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.hostly-mesas-toolbar__title { margin-top: 1px; color: var(--hostly-ink-strong); font-size: 15px; font-weight: 850; }
+.hostly-mesas-toolbar__hint { color: var(--hostly-ink-muted); font-size: 11px; font-weight: 650; }
+.hostly-mesas-viewport .hostly-mesas-grid {
+  flex: 1 1 0; min-height: 0; align-content: start; overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; padding: 1px 2px 8px;
+}
+.hostly-mesas-viewport .hostly-mesa-card {
+  appearance: none; width: 100%; min-height: 96px; font: inherit; text-align: left; cursor: pointer; touch-action: manipulation;
+}
+.hostly-mesas-viewport .hostly-mesa-card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--hostly-accent) 46%, transparent); outline-offset: 2px;
+}
+
+/* Empleados: listado claro y responsive, sin tabla legacy. */
+.hostly-employees-page {
+  flex: 1 1 0; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px;
+  overflow: hidden; color: var(--hostly-ink);
+}
+.hostly-employees-toolbar {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--hostly-table-divider-soft); border-radius: 15px;
+  background: rgba(255,255,255,.88); box-shadow: var(--hostly-shadow-hairline);
+}
+.hostly-employees-eyebrow,.hostly-employees-title,.hostly-employees-subtitle { margin: 0; }
+.hostly-employees-eyebrow { color: var(--hostly-ink-muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.hostly-employees-title { margin-top: 1px; color: var(--hostly-ink-strong); font-size: clamp(17px,2vw,21px); font-weight: 850; line-height: 1.1; }
+.hostly-employees-subtitle { margin-top: 3px; color: var(--hostly-ink-muted); font-size: 11px; font-weight: 600; line-height: 1.3; }
+.hostly-employees-count {
+  display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; flex: 0 0 42px;
+  border: 1px solid var(--hostly-table-divider-soft); border-radius: 12px; background: var(--hostly-ice-50);
+  color: var(--hostly-navy-deep); font-size: 17px; font-weight: 900;
+}
+.hostly-employees-state {
+  display: flex; align-items: center; justify-content: center; min-height: 120px; padding: 18px;
+  border: 1px solid var(--hostly-table-divider-soft); border-radius: 15px; background: rgba(255,255,255,.84);
+  color: var(--hostly-ink-muted); text-align: center; font-size: 13px; font-weight: 700;
+}
+.hostly-employees-state--warning { background: var(--hostly-warning-soft); color: var(--hostly-navy-deep); }
+.hostly-employees-list-shell {
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--hostly-table-divider-soft); border-radius: 15px; background: rgba(255,255,255,.9);
+  box-shadow: var(--hostly-shadow-card);
+}
+.hostly-employees-list-head,.hostly-employees-row {
+  display: grid; grid-template-columns: minmax(150px,1.05fr) minmax(190px,1.25fr) minmax(170px,.8fr) minmax(112px,auto);
+  gap: 12px; align-items: center;
+}
+.hostly-employees-list-head {
+  flex: 0 0 auto; padding: 8px 12px; border-bottom: 1px solid var(--hostly-table-divider-soft);
+  background: var(--hostly-ice-50); color: var(--hostly-ink-muted); font-size: 9px; font-weight: 850;
+  letter-spacing: .07em; text-transform: uppercase;
+}
+.hostly-employees-list {
+  flex: 1 1 0; min-height: 0; overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
+}
+.hostly-employees-row { min-height: 62px; padding: 8px 12px; border-bottom: 1px solid var(--hostly-table-divider-faint); }
+.hostly-employees-row:last-child { border-bottom: 0; }
+.hostly-employees-person { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.hostly-employees-avatar {
+  display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: 0 0 36px;
+  border: 1px solid var(--hostly-table-divider-soft); border-radius: 11px; background: var(--hostly-ice-100);
+  color: var(--hostly-navy-deep); font-size: 14px; font-weight: 900;
+}
+.hostly-employees-name,.hostly-employees-email,.hostly-employees-mobile-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hostly-employees-name { display: block; color: var(--hostly-ink-strong); font-size: 13px; line-height: 1.2; }
+.hostly-employees-email,.hostly-employees-mobile-email { color: var(--hostly-ink-muted); font-size: 12px; font-weight: 600; }
+.hostly-employees-mobile-email,.hostly-employees-mobile-label { display: none; }
+.hostly-employees-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.hostly-employees-badge {
+  display: inline-flex; align-items: center; min-height: 18px; padding: 1px 6px; border-radius: 999px;
+  background: var(--hostly-info-soft); color: var(--hostly-navy-deep); font-size: 9px; font-weight: 800;
+}
+.hostly-employees-badge--muted { background: var(--hostly-ice-100); color: var(--hostly-ink-muted); }
+.hostly-employees-badge--warning { background: var(--hostly-warning-soft); }
+.hostly-employees-role-select,.hostly-employees-access-btn {
+  width: 100%; min-height: 40px; border: 1px solid var(--hostly-line-strong); border-radius: 10px;
+  background: #fff; color: var(--hostly-ink); font: inherit; font-size: 12px; font-weight: 700;
+}
+.hostly-employees-role-select { padding: 6px 9px; }
+.hostly-employees-access-btn { min-width: 104px; padding: 6px 11px; cursor: pointer; touch-action: manipulation; }
+.hostly-employees-access-btn[data-state="enable"] { background: var(--hostly-success-soft); }
+.hostly-employees-access-btn:disabled,.hostly-employees-role-select:disabled { opacity: .52; cursor: not-allowed; }
+.hostly-employees-action-cell { display: flex; justify-content: flex-end; }
+
+@media (max-width: 767px) {
+  .hostly-module-shell--mobile:has(.hostly-inventory-workbench),
+  .hostly-module-shell--mobile:has(.hostly-mesas-viewport),
+  .hostly-module-shell--mobile:has(.hostly-analytics-stack) {
+    height: 100dvh !important; max-height: 100dvh !important; min-height: 100dvh !important;
+    overflow: hidden !important; display: flex !important; flex-direction: column !important;
+  }
+  .hostly-module-shell--mobile:has(.hostly-inventory-workbench) > .hostly-module-content--mobile,
+  .hostly-module-shell--mobile:has(.hostly-mesas-viewport) > .hostly-module-content--mobile,
+  .hostly-module-shell--mobile:has(.hostly-analytics-stack) > .hostly-module-content--mobile {
+    flex: 1 1 0 !important; min-height: 0 !important; overflow: hidden !important;
+  }
+  .hostly-mesas-toolbar__hint,.hostly-employees-subtitle,.hostly-employees-list-head,.hostly-employees-email { display: none; }
+  .hostly-mesas-viewport .hostly-mesas-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+  .hostly-mesas-viewport .hostly-mesa-card { min-height: 88px; }
+  .hostly-employees-page { gap: 6px; }
+  .hostly-employees-toolbar { padding: 8px 9px; }
+  .hostly-employees-count { width: 40px; height: 40px; flex-basis: 40px; }
+  .hostly-employees-row { grid-template-columns: minmax(0,1fr); gap: 8px; padding: 10px; }
+  .hostly-employees-mobile-email,.hostly-employees-mobile-label { display: block; }
+  .hostly-employees-mobile-email { margin-top: 2px; max-width: calc(100vw - 100px); font-size: 11px; }
+  .hostly-employees-mobile-label {
+    margin-bottom: 4px; color: var(--hostly-ink-muted); font-size: 9px; font-weight: 800;
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  .hostly-employees-action-cell { display: block; }
+  .hostly-employees-role-select,.hostly-employees-access-btn { min-height: 44px; }
+}
+
+@media (pointer: coarse) {
+  .hostly-inventory-toolbar button,.hostly-inventory-product-row,
+  .hostly-inventory-config-body--compact .hostly-inventory-field-input,.hostly-inventory-compact-footer-save,
+  .hostly-employees-role-select,.hostly-employees-access-btn {
+    min-height: 44px !important; max-height: none !important;
+  }
+}

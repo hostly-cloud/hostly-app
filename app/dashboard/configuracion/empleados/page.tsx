@@ -4,7 +4,7 @@ import EmpleadosDashboardPage from "@/app/dashboard/empleados/page";
 
 export default function ConfigEmpleadosPage() {
   return (
-    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col overflow-auto">
+    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col overflow-hidden">
       <EmpleadosDashboardPage embedInConfig />
     </div>
   );

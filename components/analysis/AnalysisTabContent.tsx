@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { ComensalesAnalyticsSectionProps } from "@/components/analysis/ComensalesAnalyticsSection";
 import { ComensalesAnalyticsSection } from "@/components/analysis/ComensalesAnalyticsSection";
 import type { HorasAnalyticsSectionProps } from "@/components/analysis/HorasAnalyticsSection";
@@ -28,21 +29,19 @@ export function AnalysisTabContent({
   productosSectionProps,
   rentabilidadSectionProps,
 }: AnalysisTabContentProps) {
+  let content: ReactNode;
+
   if (tab === "comensales") {
-    return <ComensalesAnalyticsSection {...comensalesSectionProps} />;
+    content = <ComensalesAnalyticsSection {...comensalesSectionProps} />;
+  } else if (tab === "ventas") {
+    content = <VentasAnalyticsSection {...ventasSectionProps} />;
+  } else if (tab === "rentabilidad") {
+    content = <RentabilidadAnalyticsSection {...rentabilidadSectionProps} />;
+  } else if (tab === "horas") {
+    content = <HorasAnalyticsSection {...horasSectionProps} />;
+  } else {
+    content = <ProductosAnalyticsSection {...productosSectionProps} />;
   }
 
-  if (tab === "ventas") {
-    return <VentasAnalyticsSection {...ventasSectionProps} />;
-  }
-
-  if (tab === "rentabilidad") {
-    return <RentabilidadAnalyticsSection {...rentabilidadSectionProps} />;
-  }
-
-  if (tab === "horas") {
-    return <HorasAnalyticsSection {...horasSectionProps} />;
-  }
-
-  return <ProductosAnalyticsSection {...productosSectionProps} />;
+  return <div className="hostly-analysis-tab-viewport">{content}</div>;
 }
