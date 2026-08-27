@@ -1,4 +1,5 @@
-import { loadPlatos, savePlatos, type PlatoCarta } from "@/lib/platos-local";
+import { loadPlatos, savePlatos } from "@/lib/carta/legacy-platos-storage";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { CartaCategoria } from "./types";
 
 /** Tras borrar categoría: quita vínculo y nombre de categoría en productos locales. */

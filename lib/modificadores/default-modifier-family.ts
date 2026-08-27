@@ -5,7 +5,7 @@
 
 import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import { inferFamilyFromCategory } from "@/lib/catalog/familyAutoAssign";
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 
 async function getAuthenticatedApiFetch() {
   const { authenticatedApiFetch } = await import("@/lib/auth/authenticated-api-fetch");

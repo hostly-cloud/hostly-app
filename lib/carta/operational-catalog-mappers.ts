@@ -8,7 +8,7 @@ import {
   inferTipoVentaFromCartaText,
   parseTipoVentaLoose,
   type PlatoCarta,
-} from "@/lib/platos-local";
+} from "@/lib/carta/product-sale-contract";
 import type { Product } from "@/types/product";
 
 /** Misma regla que gestión de productos / TPV: visible en carta si activo y en carta. */
