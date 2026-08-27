@@ -4,7 +4,7 @@
 
 import { ensureEscandalloRowsForPlatos } from "@/lib/platos-escandallo-bridge";
 import { getBrowserRestauranteId } from "@/lib/hostly/restaurant-scope";
-import { loadPlatos, savePlatos } from "@/lib/platos-local";
+import { loadPlatos, savePlatos } from "@/lib/carta/legacy-platos-storage";
 
 const ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY = "hostly.escandallos.coste_total_override.v1";
 
