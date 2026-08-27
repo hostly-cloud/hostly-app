@@ -2,10 +2,10 @@ import { findPotentialDuplicates } from "@/lib/carta/duplicate-detection";
 import type { ExtractedMenuRow } from "@/lib/carta/mock-menu-photo-import";
 import {
   inferTipoVentaFromCartaText,
-  loadPlatos,
   parseTipoVentaLoose,
   type TipoProductoVenta,
-} from "@/lib/platos-local";
+} from "@/lib/carta/product-sale-contract";
+import { loadPlatos } from "@/lib/carta/legacy-platos-storage";
 
 export type AiMenuDetectedItem = {
   nombre: string;
