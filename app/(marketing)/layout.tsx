@@ -4,16 +4,30 @@ import "@/components/marketing/marketing.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://hostlyapp.app"),
-  title: "Hostly — TPV SaaS para hostelería real",
+  title: "Hostly — Software TPV para restaurantes y hostelería",
   description:
-    "Hostly conecta TPV táctil, mesas, comandas, carta, reservas y pagos para que restaurantes, bares y terrazas trabajen más rápido durante el servicio.",
+    "Hostly conecta TPV, mesas, cocina, barra, reservas, carta, productos y pagos en una plataforma diseñada para restaurantes y servicio real.",
+  keywords: [
+    "TPV hostelería",
+    "TPV restaurante",
+    "software para restaurantes",
+    "programa para restaurantes",
+    "KDS restaurante",
+    "gestión de comandas",
+    "gestión de mesas",
+    "reservas restaurante",
+  ],
   alternates: {
     canonical: "/",
   },
+  robots: {
+    index: true,
+    follow: true,
+  },
   openGraph: {
-    title: "Hostly — TPV SaaS para hostelería real",
+    title: "Hostly — El restaurante entero, bajo control",
     description:
-      "Opera sala, cocina y caja con menos fricción: TPV táctil, mesas, comandas, carta, reservas y pagos en una sola plataforma.",
+      "TPV, cocina, barra, reservas, carta, productos y pagos conectados para trabajar al ritmo de un servicio real.",
     url: "https://hostlyapp.app",
     siteName: "Hostly",
     type: "website",
@@ -23,15 +37,15 @@ export const metadata: Metadata = {
         url: "/branding/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "Hostly",
+        alt: "Hostly — software para restaurantes",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Hostly — TPV SaaS para hostelería real",
+    title: "Hostly — El restaurante entero, bajo control",
     description:
-      "TPV táctil, mesas, comandas, carta, reservas y pagos para hostelería real.",
+      "TPV, cocina, barra, reservas, productos, analítica e IA para hostelería real.",
     images: ["/branding/og-image.svg"],
   },
 };
