@@ -43,7 +43,7 @@ export type MarketingAiFeature = {
   badge?: string;
 };
 
-export const demoMailHref = "mailto:hola@hostlyapp.app?subject=Solicitar%20demo%20Hostly";
+export const demoMailHref = "mailto:hola@hostlyapp.app?subject=Quiero%20ver%20Hostly%20en%20accion";
 
 export const marketingNav: MarketingNavItem[] = [
   { label: "Producto", href: "#producto" },
@@ -53,15 +53,15 @@ export const marketingNav: MarketingNavItem[] = [
 ];
 
 export const marketingHero = {
-  eyebrow: "TPV SaaS para hostelería real",
-  headline: "Opera sala, cocina y caja con menos fricción.",
+  eyebrow: "Hostly · Software para restaurantes",
+  headline: "El restaurante entero, bajo control.",
   subcopy:
-    "Hostly conecta TPV táctil, mesas, comandas, carta, reservas y pagos para que tu equipo trabaje rápido durante el servicio.",
-  primaryCta: { label: "Solicitar demo", href: demoMailHref },
-  secondaryCta: { label: "Ver producto", href: "#producto" },
+    "TPV, cocina, barra, reservas, carta, productos y pagos conectados en una plataforma diseñada para trabajar al ritmo de un servicio real.",
+  primaryCta: { label: "Ver Hostly en acción", href: demoMailHref },
+  secondaryCta: { label: "Explorar el producto", href: "#producto" },
   trustLine:
-    "Diseñado para restaurantes, bares, terrazas, beach clubs y negocios con servicio en mesa.",
-  proofPoints: ["TPV táctil", "Sala + cocina/barra", "Carta, reservas y pagos"],
+    "Menos clics. Menos esperas. Más servicio.",
+  proofPoints: ["TPV", "Cocina", "Barra", "Reservas", "Productos", "Analítica", "IA"],
 };
 
 export const marketingKeyBenefits: MarketingCard[] = [
@@ -95,7 +95,7 @@ export const marketingProductIntro = {
   eyebrow: "Producto",
   title: "Todo lo que ocurre durante el servicio, en una sola operación.",
   description:
-    "Hostly empieza por el núcleo diario del restaurante: vender, enviar comandas, mover mesas, coordinar cocina y cobrar con confianza.",
+    "Hostly no te obliga a adaptar tu restaurante al software. Conecta las herramientas que tu equipo necesita para vender, coordinar sala, preparar comandas y cobrar sin perder contexto.",
 };
 
 export const marketingProductModules: MarketingCard[] = [
@@ -173,10 +173,10 @@ export const marketingFlow = {
 };
 
 export const marketingAi = {
-  eyebrow: "IA prudente",
-  title: "IA útil, sin prometer magia.",
+  eyebrow: "IA aplicada",
+  title: "IA donde ahorra trabajo de verdad.",
   description:
-    "Hostly incorpora IA donde reduce trabajo real: importar una carta desde una foto, ordenar productos y ayudar a revisar información antes de publicarla. Las automatizaciones avanzadas llegarán solo cuando aporten control, no ruido.",
+    "Hostly incorpora IA para reducir tareas reales: importar una carta desde una foto, ordenar información y ayudar a revisar datos antes de publicarlos, manteniendo siempre el control en el restaurante.",
   features: [
     {
       icon: UtensilsCrossed,
@@ -239,10 +239,10 @@ export const marketingBusinessTypes = {
 };
 
 export const marketingDifferentiators = {
-  eyebrow: "Diferenciadores",
-  title: "Profesional por dentro. Fácil de usar en pleno servicio.",
+  eyebrow: "Por qué Hostly",
+  title: "Hostly trabaja como trabaja tu restaurante.",
   description:
-    "Hostly no intenta impresionar con complejidad: busca que el restaurante gane claridad, velocidad y control desde el primer uso.",
+    "No queremos añadir complejidad al servicio. Queremos quitarla: menos pasos, información más clara y las acciones importantes siempre a mano.",
   items: [
     {
       icon: Timer,
@@ -268,17 +268,17 @@ export const marketingDifferentiators = {
 };
 
 export const marketingProductShowcase = {
-  eyebrow: "Mockups de producto",
-  title: "Una experiencia pensada para tablet, móvil y escritorio.",
+  eyebrow: "Hostly en acción",
+  title: "No te lo contamos. Te enseñamos cómo se trabaja.",
   description:
-    "La web pública debe enseñar producto: TPV táctil, plano de mesas, comandas y KDS trabajando como una misma operación.",
+    "TPV táctil, plano de mesas, comandas y KDS trabajando como una misma operación en tablet, móvil y escritorio.",
 };
 
 export const marketingFinalCta = {
-  title: "Empieza con un TPV que tu equipo entiende.",
+  title: "Tu próximo servicio puede ser más sencillo.",
   description:
-    "Monta tu restaurante, organiza mesas, conecta carta y empieza a operar con más claridad desde el primer servicio.",
-  primaryCta: { label: "Solicitar demo", href: demoMailHref },
+    "Descubre Hostly y comprueba cómo una operación conectada puede reducir pasos, errores y tiempo perdido durante el servicio.",
+  primaryCta: { label: "Ver Hostly en acción", href: demoMailHref },
   secondaryCta: { label: "Escribir a hola@hostlyapp.app", href: "mailto:hola@hostlyapp.app" },
 };
 
@@ -288,7 +288,7 @@ export const marketingFooter = {
     { label: "Mesas y plano", href: "#producto" },
     { label: "Cocina / KDS", href: "#producto" },
     { label: "Carta y productos", href: "#producto" },
-    { label: "IA prudente", href: "#ia" },
+    { label: "IA", href: "#ia" },
   ],
   company: [
     { label: "Flujo operativo", href: "#flujo" },
@@ -296,5 +296,5 @@ export const marketingFooter = {
     { label: "Contacto", href: "mailto:hola@hostlyapp.app" },
   ],
   contactEmail: "hola@hostlyapp.app",
-  copyright: "© Hostly. TPV SaaS para hostelería real.",
+  copyright: "© Hostly. Software para restaurantes diseñado para el servicio real.",
 };
