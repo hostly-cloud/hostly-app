@@ -11,20 +11,14 @@
 export {
   TIPOS_PRODUCTO_VENTA,
   inferTipoVentaFromCartaText,
-  isTipoProductoVenta,
   parseTipoVentaLoose,
   type PlatoCarta,
-  type ProductoVenta,
   type TipoProductoVenta,
 } from "@/lib/carta/product-sale-contract";
 
 export {
   PLATOS_CHANGED_EVENT,
-  PLATOS_LOCAL_STORAGE_KEY,
   createPlatoDraft,
   loadPlatos,
-  newPlatoId,
   savePlatos,
-  setPlatoEscandalloId,
-  syncPlatoPrecioFromEscandalloSave,
 } from "@/lib/carta/legacy-platos-storage";
