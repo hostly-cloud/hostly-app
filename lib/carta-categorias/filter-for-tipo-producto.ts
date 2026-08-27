@@ -1,4 +1,4 @@
-import type { TipoProductoVenta } from "@/lib/platos-local";
+import type { TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 import type { CartaCategoria } from "./types";
 import { CARTA_MENU_FAMILIA_FILTER_UNASSIGNED } from "./types";
 
