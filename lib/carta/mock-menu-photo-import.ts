@@ -1,4 +1,4 @@
-import type { TipoProductoVenta } from "@/lib/platos-local";
+import type { TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 
 export type ExtractedMenuRow = {
   tempId: string;
