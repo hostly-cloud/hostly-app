@@ -1,0 +1,423 @@
+/*
+ * Hostly viewport fit system.
+ *
+ * Presentation-only rules: keep the page shell inside the available viewport,
+ * preserve comfortable touch targets, and move scrolling to the actual list /
+ * table / form region instead of the full document whenever the screen can fit.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Configuracion: the context selector owns the top chrome, the module fills   */
+/* the remaining space. Long forms still scroll, but inside the content pane. */
+/* -------------------------------------------------------------------------- */
+
+[data-hostly-config-shell]:not(.hostly-config-shell--hub) {
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+[data-hostly-config-shell]:not(.hostly-config-shell--hub) [data-hostly-config-workspace],
+[data-hostly-config-shell]:not(.hostly-config-shell--hub) [data-hostly-config-content] {
+  min-height: 0;
+}
+
+[data-hostly-config-shell]:not(.hostly-config-shell--hub)
+  [data-hostly-config-content]
+  > .hostly-module-shell {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+[data-hostly-config-shell]:not(.hostly-config-shell--hub)
+  [data-hostly-config-content]
+  > .hostly-module-shell
+  > .hostly-module-content--dashboard,
+[data-hostly-config-shell]:not(.hostly-config-shell--hub)
+  [data-hostly-config-content]
+  > .hostly-module-shell
+  > .hostly-module-content--mobile {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* List workbenches: one scroll owner only -- the list itself. */
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--categorias)
+  > .hostly-module-content--dashboard,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--categorias)
+  > .hostly-module-content--mobile,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+  > .hostly-module-content--dashboard,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+  > .hostly-module-content--mobile,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  > .hostly-module-content--dashboard,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  > .hostly-module-content--mobile {
+  overflow: hidden !important;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--categorias)
+  .hostly-carta-config-stack,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+  .hostly-carta-config-stack,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  .hostly-carta-config-stack {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  gap: 7px;
+  padding-bottom: 2px;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--categorias)
+  .hostly-carta-config-stack
+  > *,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+  .hostly-carta-config-stack
+  > *,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  .hostly-carta-config-stack
+  > * {
+  flex-shrink: 0;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--categorias)
+  .hostly-carta-config-card:has(.hostly-data-table-viewport),
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+  .hostly-carta-config-card:has(.hostly-carta-familia-list-wrap),
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  .hostly-carta-config-card:has(.hostly-data-table-viewport--escandallos) {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--categorias)
+  .hostly-data-table-viewport--embedded,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  .hostly-data-table-viewport--embedded {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+  .hostly-carta-familia-list-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px 7px 8px;
+}
+
+/* Compact chrome, not touch targets. */
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--categorias)
+  .hostly-carta-concept-collapsible__trigger,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+  .hostly-carta-concept-collapsible__trigger {
+  min-height: 36px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--categorias)
+  .hostly-carta-config-actions-row,
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+  .hostly-carta-config-actions-row {
+  gap: 7px;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  .hostly-carta-config-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  .hostly-carta-config-kpi-pill {
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+[data-hostly-config-shell]
+  main.hostly-module-shell:has(.hostly-data-table--escandallos)
+  .hostly-carta-config-alert {
+  padding: 6px 9px;
+  line-height: 1.25;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reservas: fixed chrome + one flexible reservation list.                    */
+/* -------------------------------------------------------------------------- */
+
+.hostly-operation-shell[data-operation-module="reservas"] .hostly-mobile-content {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-content
+  > .hostly-mobile-stack {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+  padding-bottom: 0 !important;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-content
+  > .hostly-mobile-stack
+  > header,
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-content
+  > .hostly-mobile-stack
+  > section:not(:last-of-type) {
+  flex: 0 0 auto;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-content
+  > .hostly-mobile-stack
+  > section:last-of-type {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"] .hostly-mobile-kpi-grid {
+  gap: 5px;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"] .hostly-mobile-kpi {
+  min-height: 50px;
+  padding: 6px 8px;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"] .hostly-mobile-kpi__label {
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"] .hostly-mobile-kpi__value {
+  margin-top: 2px;
+  font-size: clamp(18px, 2.2vw, 22px);
+  line-height: 1;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-section:has(.hostly-mobile-filter-bar),
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-section:has(.hostly-mobile-kpi-grid) {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+/* Creating a reservation becomes the active workspace instead of stacking a */
+/* long form on top of the list. The form already owns its internal scroll.   */
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-stack:has(form)
+  > section:has(.hostly-mobile-filter-bar),
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-stack:has(form)
+  > section:has(.hostly-mobile-kpi-grid),
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-stack:has(form)
+  > section:has(.hostly-mobile-pill),
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-stack:has(form)
+  > section:has(> button.hostly-button-primary),
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-stack:has(form)
+  > section:last-of-type {
+  display: none !important;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-stack:has(form)
+  > section:has(form) {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 5px !important;
+  padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.hostly-operation-shell[data-operation-module="reservas"]
+  .hostly-mobile-stack:has(form)
+  > section:has(form)
+  > .hostly-mobile-card {
+  height: 100%;
+  max-height: none !important;
+  min-height: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Responsive density.                                                        */
+/* -------------------------------------------------------------------------- */
+
+@media (min-width: 768px) {
+  .hostly-operation-shell[data-operation-module="reservas"]
+    .hostly-mobile-kpi-grid--cols-4 {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1023px) {
+  [data-hostly-config-shell]
+    main.hostly-module-shell:has(.hostly-data-table--escandallos)
+    .hostly-carta-config-kpi-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  [data-hostly-config-shell]:not(.hostly-config-shell--hub) {
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  [data-hostly-config-shell]:not(.hostly-config-shell--hub)
+    [data-hostly-config-content]
+    > .hostly-module-shell {
+    padding-top: 6px !important;
+  }
+
+  [data-hostly-config-shell]
+    main.hostly-module-shell--mobile:has(.hostly-data-table--categorias)
+    .hostly-data-table-viewport,
+  [data-hostly-config-shell]
+    main.hostly-module-shell--mobile:has(.hostly-data-table--escandallos)
+    .hostly-data-table-viewport {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+
+  [data-hostly-config-shell]
+    main.hostly-module-shell--mobile:has(.hostly-data-table--categorias)
+    .hostly-mobile-list-shell,
+  [data-hostly-config-shell]
+    main.hostly-module-shell--mobile:has(.hostly-data-table--escandallos)
+    .hostly-mobile-list-shell {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
+  [data-hostly-config-shell]
+    main.hostly-module-shell:has(.hostly-data-table--escandallos)
+    .hostly-carta-config-kpi-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .hostly-operation-shell[data-operation-module="reservas"] .hostly-mobile-header {
+    padding-top: 6px;
+    padding-bottom: 5px;
+  }
+
+  .hostly-operation-shell[data-operation-module="reservas"]
+    .hostly-mobile-header-actions
+    .hostly-button-primary,
+  .hostly-operation-shell[data-operation-module="reservas"]
+    .hostly-mobile-section:last-of-type
+    .hostly-button-primary,
+  .hostly-operation-shell[data-operation-module="reservas"]
+    .hostly-mobile-section:last-of-type
+    .hostly-button-secondary,
+  .hostly-operation-shell[data-operation-module="reservas"] .hostly-input,
+  .hostly-operation-shell[data-operation-module="reservas"] .hostly-select {
+    min-height: 44px !important;
+  }
+
+  [data-hostly-config-shell]
+    main.hostly-module-shell:has(.hostly-data-table--categorias)
+    button,
+  [data-hostly-config-shell]
+    main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+    button {
+    min-height: 44px;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 768px) {
+  [data-hostly-config-shell]
+    main.hostly-module-shell:has(.hostly-data-table--categorias)
+    .hostly-carta-config-stack,
+  [data-hostly-config-shell]
+    main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
+    .hostly-carta-config-stack,
+  [data-hostly-config-shell]
+    main.hostly-module-shell:has(.hostly-data-table--escandallos)
+    .hostly-carta-config-stack {
+    gap: 4px;
+  }
+
+  [data-hostly-config-shell]
+    main.hostly-module-shell:has(.hostly-data-table--escandallos)
+    .hostly-carta-config-kpi-pill {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .hostly-operation-shell[data-operation-module="reservas"] .hostly-mobile-kpi {
+    min-height: 44px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+}
