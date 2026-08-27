@@ -13,7 +13,8 @@ import { listenCentralProducts, type ProductDocument } from "@/lib/firestore/pro
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { isAuthReady } from "@/lib/firebase/is-auth-ready";
 import { useAuth } from "@/components/auth/auth-context";
-import { loadPlatos, PLATOS_CHANGED_EVENT, type PlatoCarta } from "@/lib/platos-local";
+import { loadPlatos, PLATOS_CHANGED_EVENT } from "@/lib/carta/legacy-platos-storage";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { Product } from "@/types/product";
 
 export type OperationalCatalogSource =
