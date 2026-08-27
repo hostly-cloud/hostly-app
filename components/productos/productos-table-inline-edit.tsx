@@ -15,7 +15,7 @@ import {
   type RefObject,
 } from "react";
 import type { TranslateFn } from "@/lib/i18n";
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import { getPublicationFlags } from "@/components/productos/productos-table-cells";
 import type {
   ProductTableInlinePersistResult,
