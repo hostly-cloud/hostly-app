@@ -1,12 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useAuth } from "@/components/auth/auth-context";
-import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import { useI18n } from "@/components/i18n-provider";
-import ModulePageShell from "@/components/module-page-shell";
 import { inventoryHubShellLayout } from "@/components/inventario/inventory-hub-shell-layout";
 import { InventarioRouteTabs } from "@/components/inventario/inventario-route-tabs";
+import ModulePageShell from "@/components/module-page-shell";
 import {
   HostlyAlert,
   HostlyButton,
@@ -21,17 +27,16 @@ import {
   HostlySurface,
   HostlyTextarea,
 } from "@/components/ui/hostly";
+import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import {
   listenProductsForInventory,
   type ProductDocument,
 } from "@/lib/firestore/products";
 import {
-  MERMA_MOTIVOS,
-  formatFechaMerma,
-  loadMermas,
-  type MermaLocal,
-  type MermaMotivo,
-} from "@/lib/mermas-local";
+  WASTE_REASONS,
+  formatWasteDate,
+  type WasteReason,
+} from "@/lib/inventory/waste-contract";
 
 type WasteRecord = {
   id: string;
@@ -39,7 +44,7 @@ type WasteRecord = {
   productName: string;
   quantity: number;
   unit: string;
-  reason: MermaMotivo;
+  reason: WasteReason;
   notes: string | null;
   occurredOn: string;
   stockBefore: number;
@@ -56,18 +61,6 @@ type InventoryProduct = {
   costPerUnit: number;
 };
 
-type DisplayWaste = {
-  id: string;
-  productId: string;
-  productName: string;
-  quantity: number;
-  unit: string;
-  reason: MermaMotivo;
-  notes: string | null;
-  occurredOn: string;
-  source: "canonical" | "legacy";
-};
-
 function todayIso(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -78,10 +71,10 @@ function parsePositiveNumber(value: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function reasonLabel(reason: MermaMotivo): string {
+function reasonLabel(reason: WasteReason): string {
   return reason
     .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
 
@@ -97,34 +90,6 @@ function mapProduct(product: ProductDocument): InventoryProduct | null {
     costPerUnit: Number.isFinite(product.inventory.costPerUnit)
       ? product.inventory.costPerUnit
       : 0,
-  };
-}
-
-function legacyToDisplay(item: MermaLocal): DisplayWaste {
-  return {
-    id: `legacy-${item.id}`,
-    productId: item.producto_stock_id,
-    productName: item.producto_stock_nombre || item.producto_stock_id,
-    quantity: item.cantidad,
-    unit: item.unidad === "uds" ? "ud" : item.unidad,
-    reason: item.motivo,
-    notes: item.notas ?? null,
-    occurredOn: item.fecha,
-    source: "legacy",
-  };
-}
-
-function canonicalToDisplay(item: WasteRecord): DisplayWaste {
-  return {
-    id: item.id,
-    productId: item.productId,
-    productName: item.productName,
-    quantity: item.quantity,
-    unit: item.unit,
-    reason: item.reason,
-    notes: item.notes,
-    occurredOn: item.occurredOn,
-    source: "canonical",
   };
 }
 
@@ -154,7 +119,6 @@ export default function CanonicalMermasSection() {
 
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [canonical, setCanonical] = useState<WasteRecord[]>([]);
-  const [legacy, setLegacy] = useState<MermaLocal[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -162,7 +126,7 @@ export default function CanonicalMermasSection() {
   const [formOpen, setFormOpen] = useState(false);
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [reason, setReason] = useState<MermaMotivo>("otro");
+  const [reason, setReason] = useState<WasteReason>("otro");
   const [notes, setNotes] = useState("");
   const [occurredOn, setOccurredOn] = useState(todayIso());
   const [search, setSearch] = useState("");
@@ -185,15 +149,12 @@ export default function CanonicalMermasSection() {
   }, [canViewInventory, user]);
 
   useEffect(() => {
-    setLegacy(loadMermas());
-  }, []);
-
-  useEffect(() => {
     if (!ready || !profileReady) return;
     if (!restaurantId || !canViewInventory) {
       setLoading(false);
       return;
     }
+
     setLoading(true);
     setLoadError(null);
     const unsubscribe = listenProductsForInventory(
@@ -207,9 +168,11 @@ export default function CanonicalMermasSection() {
       },
       () => setLoadError("No se pudo cargar el inventario central."),
     );
+
     void loadCanonical()
       .catch(() => setLoadError("No se pudo cargar el historial de mermas."))
       .finally(() => setLoading(false));
+
     return unsubscribe;
   }, [canViewInventory, loadCanonical, profileReady, ready, restaurantId]);
 
@@ -218,30 +181,37 @@ export default function CanonicalMermasSection() {
     [productId, products],
   );
 
-  const displayItems = useMemo<DisplayWaste[]>(() => {
-    const items = [
-      ...canonical.map(canonicalToDisplay),
-      ...legacy.map(legacyToDisplay),
-    ];
+  const displayItems = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("es");
-    return items
+    return canonical
       .filter((item) => {
         if (!query) return true;
-        return [item.productName, item.productId, item.reason, item.notes ?? "", item.occurredOn]
+        return [
+          item.productName,
+          item.productId,
+          item.reason,
+          item.notes ?? "",
+          item.occurredOn,
+        ]
           .join(" ")
           .toLocaleLowerCase("es")
           .includes(query);
       })
       .sort((a, b) => {
-        if (a.occurredOn !== b.occurredOn) return b.occurredOn.localeCompare(a.occurredOn);
+        if (a.occurredOn !== b.occurredOn) {
+          return b.occurredOn.localeCompare(a.occurredOn);
+        }
         return b.id.localeCompare(a.id);
       });
-  }, [canonical, legacy, search]);
+  }, [canonical, search]);
 
   const lostCost = useMemo(() => {
-    const costByProduct = new Map(products.map((product) => [product.id, product.costPerUnit]));
+    const costByProduct = new Map(
+      products.map((product) => [product.id, product.costPerUnit]),
+    );
     return canonical.reduce(
-      (sum, item) => sum + item.quantity * (costByProduct.get(item.productId) ?? 0),
+      (sum, item) =>
+        sum + item.quantity * (costByProduct.get(item.productId) ?? 0),
       0,
     );
   }, [canonical, products]);
@@ -249,13 +219,16 @@ export default function CanonicalMermasSection() {
   const topProduct = useMemo(() => {
     const totals = new Map<string, number>();
     for (const item of canonical) {
-      totals.set(item.productName, (totals.get(item.productName) ?? 0) + item.quantity);
+      totals.set(
+        item.productName,
+        (totals.get(item.productName) ?? 0) + item.quantity,
+      );
     }
     return [...totals.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
   }, [canonical]);
 
   const topReason = useMemo(() => {
-    const totals = new Map<MermaMotivo, number>();
+    const totals = new Map<WasteReason, number>();
     for (const item of canonical) {
       totals.set(item.reason, (totals.get(item.reason) ?? 0) + 1);
     }
@@ -275,6 +248,7 @@ export default function CanonicalMermasSection() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!user || !canEditInventory) return;
+
     setFormError(null);
     const parsedQuantity = parsePositiveNumber(quantity);
     if (!productId) {
@@ -323,13 +297,17 @@ export default function CanonicalMermasSection() {
       resetForm();
       setFormOpen(false);
     } catch (error) {
-      setFormError(apiErrorMessage(error instanceof Error ? error.message : "WASTE_CREATE_FAILED"));
+      setFormError(
+        apiErrorMessage(
+          error instanceof Error ? error.message : "WASTE_CREATE_FAILED",
+        ),
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  const shell = (children: React.ReactNode) => (
+  const shell = (children: ReactNode) => (
     <ModulePageShell
       {...inventoryHubShellLayout}
       title={t("mermas.title")}
@@ -360,11 +338,6 @@ export default function CanonicalMermasSection() {
     <div style={{ height: "100%", minHeight: 0, overflow: "auto", paddingBottom: 12 }}>
       <HostlySection stack="sm">
         {loadError ? <HostlyAlert tone="danger">{loadError}</HostlyAlert> : null}
-        {legacy.length > 0 ? (
-          <HostlyAlert tone="info" title="Histórico local conservado">
-            Hay {legacy.length} registro{legacy.length === 1 ? "" : "s"} anterior{legacy.length === 1 ? "" : "es"}. Se muestran en solo lectura y no vuelven a modificar stock.
-          </HostlyAlert>
-        ) : null}
 
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <HostlyKpiCard
@@ -402,7 +375,7 @@ export default function CanonicalMermasSection() {
               <HostlyButton
                 variant={formOpen ? "ghost" : "primary"}
                 onClick={() => {
-                  setFormOpen((value) => !value);
+                  setFormOpen((value: boolean) => !value);
                   setFormError(null);
                 }}
               >
@@ -426,9 +399,14 @@ export default function CanonicalMermasSection() {
                     ))}
                   </HostlySelect>
                 </HostlyField>
+
                 <HostlyField
                   label="Cantidad"
-                  hint={selectedProduct ? `Disponible: ${selectedProduct.currentStock} ${selectedProduct.unit}` : undefined}
+                  hint={
+                    selectedProduct
+                      ? `Disponible: ${selectedProduct.currentStock} ${selectedProduct.unit}`
+                      : undefined
+                  }
                 >
                   <HostlyInput
                     inputMode="decimal"
@@ -438,17 +416,21 @@ export default function CanonicalMermasSection() {
                     placeholder="0"
                   />
                 </HostlyField>
+
                 <HostlyField label="Motivo">
                   <HostlySelect
                     value={reason}
-                    onChange={(event) => setReason(event.target.value as MermaMotivo)}
+                    onChange={(event) => setReason(event.target.value as WasteReason)}
                     disabled={saving}
                   >
-                    {MERMA_MOTIVOS.map((value) => (
-                      <option key={value} value={value}>{reasonLabel(value)}</option>
+                    {WASTE_REASONS.map((value: WasteReason) => (
+                      <option key={value} value={value}>
+                        {reasonLabel(value)}
+                      </option>
                     ))}
                   </HostlySelect>
                 </HostlyField>
+
                 <HostlyField label="Fecha">
                   <HostlyInput
                     type="date"
@@ -457,11 +439,17 @@ export default function CanonicalMermasSection() {
                     disabled={saving}
                   />
                 </HostlyField>
+
                 <div className="flex items-end">
-                  <HostlyButton type="submit" variant="primary" disabled={saving || products.length === 0}>
+                  <HostlyButton
+                    type="submit"
+                    variant="primary"
+                    disabled={saving || products.length === 0}
+                  >
                     {saving ? "Guardando…" : "Registrar"}
                   </HostlyButton>
                 </div>
+
                 <div className="md:col-span-2 lg:col-span-5">
                   <HostlyField label="Notas">
                     <HostlyTextarea
@@ -473,7 +461,11 @@ export default function CanonicalMermasSection() {
                       placeholder="Opcional"
                     />
                   </HostlyField>
-                  {formError ? <HostlyAlert tone="danger" className="mt-2">{formError}</HostlyAlert> : null}
+                  {formError ? (
+                    <HostlyAlert tone="danger" className="mt-2">
+                      {formError}
+                    </HostlyAlert>
+                  ) : null}
                 </div>
               </form>
             ) : null}
@@ -487,7 +479,7 @@ export default function CanonicalMermasSection() {
         <HostlySurface variant="flat" style={{ padding: 12 }}>
           <HostlySectionHeader
             title="Historial"
-            description="Los registros canónicos son auditables; los anteriores se conservan como archivo local de solo lectura."
+            description="Historial canónico, centralizado y auditable del restaurante."
           >
             <HostlyInput
               value={search}
@@ -505,7 +497,7 @@ export default function CanonicalMermasSection() {
             />
           ) : (
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse text-sm">
+              <table className="w-full min-w-[680px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-[var(--hostly-line)] text-left text-[var(--hostly-ink-muted)]">
                     <th className="px-2 py-2 font-semibold">Fecha</th>
@@ -518,15 +510,24 @@ export default function CanonicalMermasSection() {
                 </thead>
                 <tbody>
                   {displayItems.map((item) => (
-                    <tr key={item.id} className="border-b border-[var(--hostly-table-divider-soft)] last:border-0">
-                      <td className="px-2 py-2 tabular-nums">{formatFechaMerma(item.occurredOn)}</td>
+                    <tr
+                      key={item.id}
+                      className="border-b border-[var(--hostly-table-divider-soft)] last:border-0"
+                    >
+                      <td className="px-2 py-2 tabular-nums">
+                        {formatWasteDate(item.occurredOn)}
+                      </td>
                       <td className="px-2 py-2 font-medium">{item.productName}</td>
-                      <td className="px-2 py-2 tabular-nums">{item.quantity} {item.unit}</td>
+                      <td className="px-2 py-2 tabular-nums">
+                        {item.quantity} {item.unit}
+                      </td>
                       <td className="px-2 py-2">{reasonLabel(item.reason)}</td>
-                      <td className="px-2 py-2 text-[var(--hostly-ink-muted)]">{item.notes || "—"}</td>
+                      <td className="px-2 py-2 text-[var(--hostly-ink-muted)]">
+                        {item.notes || "—"}
+                      </td>
                       <td className="px-2 py-2">
-                        <span className={item.source === "canonical" ? "hostly-status-pill hostly-status-pill--success" : "hostly-status-pill"}>
-                          {item.source === "canonical" ? "Canónico" : "Histórico local"}
+                        <span className="hostly-status-pill hostly-status-pill--success">
+                          Canónico
                         </span>
                       </td>
                     </tr>
