@@ -25,7 +25,7 @@ import {
   type EscandalloCatalogSource,
 } from "@/lib/platos-escandallo-bridge";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
-import { syncPlatoPrecioFromEscandalloSave } from "@/lib/platos-local";
+import { syncPlatoPrecioFromEscandalloSave } from "@/lib/carta/legacy-platos-storage";
 import {
   buildEscandalloRecipeEditHref,
   escandalloRecipeEditNavModeFromCatalogSource,

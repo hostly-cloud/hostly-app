@@ -1,7 +1,7 @@
 import type { DocumentReference, Firestore } from "firebase-admin/firestore";
 import { normalizeProductName } from "@/lib/carta/duplicate-detection";
 import { mapStationToPreparationArea } from "@/lib/carta/map-station-to-preparation-area";
-import { inferTipoVentaFromCartaText } from "@/lib/platos-local";
+import { inferTipoVentaFromCartaText } from "@/lib/carta/product-sale-contract";
 import {
   maxSortOrderInCategory,
   readProductSortOrder,
