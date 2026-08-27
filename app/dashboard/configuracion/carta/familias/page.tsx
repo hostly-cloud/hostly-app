@@ -43,7 +43,7 @@ import {
 } from "@/lib/carta/catalog-category-counts";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
-import { loadPlatos } from "@/lib/platos-local";
+import { loadPlatos } from "@/lib/carta/legacy-platos-storage";
 import { CartaCatalogConceptCollapsible } from "@/components/carta/carta-catalog-concept-collapsible";
 import { FamiliasCartaDataView } from "@/components/carta/familias-carta-data-view";
 
