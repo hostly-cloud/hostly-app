@@ -30,7 +30,6 @@ import type { ProductProfitabilityResult } from "./product-profitability-utils";
 import {
   formatMoney2,
   getDraftForItem,
-  marginHealthCategory,
   resolveEscandalloRowEconomics,
   type EscandalloDraftById,
   type EscandalloListRow,
@@ -76,6 +75,8 @@ export type EscandallosCartaDataViewProps = {
   recipeLinkTitle?: string;
   onUpdateDraft: (id: string | number, field: "coste_total" | "precio_venta", value: string) => void;
   onSave: (id: string | number) => void;
+  /** Oculta la acción Guardar cuando coste/venta proceden del catálogo canónico. */
+  showSaveAction?: boolean;
   emptyTitle?: string;
   emptyBody?: string;
   emptyCtaHref?: string;
@@ -98,6 +99,7 @@ export function EscandallosCartaDataView({
   recipeLinkTitle = "Editar escandallo en la ficha del producto",
   onUpdateDraft,
   onSave,
+  showSaveAction = true,
   emptyTitle = "Sin escandallos vinculados",
   emptyBody = "Vincula productos activos con escandallo desde Productos o crea recetas en el catálogo.",
   emptyCtaHref = "/dashboard/configuracion/carta/productos",
@@ -304,17 +306,19 @@ export function EscandallosCartaDataView({
                           <IconRecipe />
                         </HostlyRowActionButton>
                       )}
-                      <HostlyRowActionButton
-                        variant="text"
-                        tone="success"
-                        disabled={busy}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!busy) onSave(item.id);
-                        }}
-                      >
-                        {busy ? "…" : "Guardar"}
-                      </HostlyRowActionButton>
+                      {showSaveAction ? (
+                        <HostlyRowActionButton
+                          variant="text"
+                          tone="success"
+                          disabled={busy}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!busy) onSave(item.id);
+                          }}
+                        >
+                          {busy ? "…" : "Guardar"}
+                        </HostlyRowActionButton>
+                      ) : null}
                     </HostlyRowActions>
                   </HostlyDataCell>
                 </HostlyDataRow>
@@ -370,9 +374,11 @@ export function EscandallosCartaDataView({
               }
               actions={
                 <div className="hostly-recipe-editor__mobile-actions">
-                  <ConfigBtnPrimary type="button" disabled={busy} onClick={() => onSave(item.id)}>
-                    {busy ? "Guardando…" : "Guardar"}
-                  </ConfigBtnPrimary>
+                  {showSaveAction ? (
+                    <ConfigBtnPrimary type="button" disabled={busy} onClick={() => onSave(item.id)}>
+                      {busy ? "Guardando…" : "Guardar"}
+                    </ConfigBtnPrimary>
+                  ) : null}
                   <button
                     type="button"
                     className="hostly-button-secondary hostly-button-compact"
@@ -407,36 +413,36 @@ export function EscandallosCartaDataView({
                   </div>
                 </div>
               ) : (
-              <div className="hostly-recipe-editor__mobile-fields">
-                <label className="hostly-carta-config-form-field">
-                  <span className="hostly-carta-config-form-label">Coste</span>
-                  <div className="hostly-recipe-editor__inline-money">
-                    <input
-                      type="number"
-                      step="0.01"
-                      inputMode="decimal"
-                      className={inputClass}
-                      value={draft.coste_total}
-                      onChange={(e) => onUpdateDraft(item.id, "coste_total", e.target.value)}
-                    />
-                    <span className="hostly-recipe-editor__money-suffix">€</span>
-                  </div>
-                </label>
-                <label className="hostly-carta-config-form-field">
-                  <span className="hostly-carta-config-form-label">Venta</span>
-                  <div className="hostly-recipe-editor__inline-money">
-                    <input
-                      type="number"
-                      step="0.01"
-                      inputMode="decimal"
-                      className={inputClass}
-                      value={draft.precio_venta}
-                      onChange={(e) => onUpdateDraft(item.id, "precio_venta", e.target.value)}
-                    />
-                    <span className="hostly-recipe-editor__money-suffix">€</span>
-                  </div>
-                </label>
-              </div>
+                <div className="hostly-recipe-editor__mobile-fields">
+                  <label className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">Coste</span>
+                    <div className="hostly-recipe-editor__inline-money">
+                      <input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        className={inputClass}
+                        value={draft.coste_total}
+                        onChange={(e) => onUpdateDraft(item.id, "coste_total", e.target.value)}
+                      />
+                      <span className="hostly-recipe-editor__money-suffix">€</span>
+                    </div>
+                  </label>
+                  <label className="hostly-carta-config-form-field">
+                    <span className="hostly-carta-config-form-label">Venta</span>
+                    <div className="hostly-recipe-editor__inline-money">
+                      <input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        className={inputClass}
+                        value={draft.precio_venta}
+                        onChange={(e) => onUpdateDraft(item.id, "precio_venta", e.target.value)}
+                      />
+                      <span className="hostly-recipe-editor__money-suffix">€</span>
+                    </div>
+                  </label>
+                </div>
               )}
             </HostlyMobileListItem>
           );
