@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { inferTipoVentaFromCartaText, parseTipoVentaLoose, type TipoProductoVenta } from "@/lib/platos-local";
+import { inferTipoVentaFromCartaText, parseTipoVentaLoose, type TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 import {
   MAX_MENU_IMPORT_OCR_BYTES,
   MIN_PDF_TEXT_CHARS,
