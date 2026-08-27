@@ -20,7 +20,7 @@ import { deriveLegacyStationFromOperationStation } from "@/lib/operacion/product
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
 import type { ResolveEffectiveProductionStationFamilyInput } from "@/lib/produccion/resolve-effective-production-station";
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { Product } from "@/types/product";
 
 /** Estado de coherencia operativa del catálogo (solo lectura; no altera routing runtime). */
