@@ -9,7 +9,7 @@ import {
   type ProductCompositionType,
 } from "@/lib/carta/product-composition-type";
 import { buildProductFamilyPatchFromCategoryId } from "@/lib/carta/product-category-family-resolver";
-import type { TipoProductoVenta } from "@/lib/platos-local";
+import type { TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 import { defaultOperationStationSelectForTipoVenta } from "@/lib/productos/product-central-draft";
 
 export type ProductCategoryInheritancePatch = {
