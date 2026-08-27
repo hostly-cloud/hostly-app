@@ -6,7 +6,7 @@ import {
 } from "@/lib/firestore/products";
 import type { ProductDocument } from "@/lib/firestore/products";
 import { db } from "@/lib/firebase/client";
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 
 function normalizeText(s: string): string {
   return s
