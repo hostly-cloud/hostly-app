@@ -19,7 +19,7 @@ import {
 } from "@/lib/firestore/products";
 import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { useAuth } from "@/components/auth/auth-context";
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 
 function normCatKey(s: string): string {
   return s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
