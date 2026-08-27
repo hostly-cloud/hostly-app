@@ -1,9 +1,9 @@
 import { comparePlatoCarta } from "@/lib/carta/product-sort-order";
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { CartaCategoria } from "./types";
 
 export type CartaGroupedSection = {
-  /** Firestore/local id, or "__uncat" or "__orphan_inactive" or "text:…" */
+  /** Category id, or "__uncat" / "__orphan_inactive" / "text:…". */
   sectionKey: string;
   label: string;
   sortOrder: number;
