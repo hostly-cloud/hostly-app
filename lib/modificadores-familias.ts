@@ -11,7 +11,7 @@
  * - Firestore: ver estructura recomendada en la respuesta del agente.
  */
 
-import type { ProductoVenta } from "@/lib/platos-local";
+import type { ProductoVenta } from "@/lib/carta/product-sale-contract";
 
 export const HOSTLY_MODIFIERS_STORAGE_KEY = "hostly.modifiers.v1";
 export const HOSTLY_MODIFIERS_CHANGED_EVENT = "hostly-modifiers-changed";
