@@ -1,6 +1,7 @@
 "use client";
 
-import { loadPlatos, savePlatos, type PlatoCarta } from "@/lib/platos-local";
+import { loadPlatos, savePlatos } from "@/lib/carta/legacy-platos-storage";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import { createCartaCategoriaApi, fetchCartaCategorias } from "./api-client";
 import type { CartaCategoria } from "./types";
 
