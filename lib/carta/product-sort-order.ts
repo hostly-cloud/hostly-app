@@ -1,5 +1,5 @@
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { ProductDocument } from "@/lib/firestore/products";
-import type { PlatoCarta } from "@/lib/platos-local";
 import type { Product } from "@/types/product";
 
 /** Productos sin `sortOrder` explícito van después de los que sí lo tienen. */
