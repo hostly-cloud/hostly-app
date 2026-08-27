@@ -28,7 +28,7 @@ import {
   fetchEscandalloMergedRowsForRestaurant,
   type EscandalloCatalogSource,
 } from "@/lib/platos-escandallo-bridge";
-import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
+import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
 import { syncPlatoPrecioFromEscandalloSave } from "@/lib/platos-local";
 import {
   buildEscandalloRecipeEditHref,
@@ -48,13 +48,14 @@ function formatMoneyUpTo2OrDash(value: number | null | undefined): string {
 }
 
 export default function ConfigCartaEscandallosPage() {
-  const { restaurantId: profileRestaurantId } = useAuth();
+  const { profileReady, restaurantId: profileRestaurantId } = useAuth();
   const restauranteId = useMemo(
-    () => resolveOperationalRestaurantId(profileRestaurantId),
-    [profileRestaurantId],
+    () => resolveAuthenticatedRestaurantId(profileReady, profileRestaurantId) ?? "",
+    [profileReady, profileRestaurantId],
   );
   const operationalCatalog = useCentralProductsForCarta(restauranteId, {
     scope: "management",
+    requireAuthenticatedTenant: true,
   });
   const centralDocs = useMemo(() => {
     if (operationalCatalog.source !== "central") return null;
