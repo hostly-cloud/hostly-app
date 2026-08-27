@@ -1,9 +1,9 @@
-import type { ProductKind } from "@/lib/carta/product-kind-options";
 import type { ProductFamilyType } from "@/lib/carta/product-family-types";
+import type { ProductKind } from "@/lib/carta/product-kind-options";
+import { parseTipoVentaLoose, type PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { ProductDocument } from "@/lib/firestore/products";
 import type { OperationStationType } from "@/lib/operacion/operation-station-types";
 import { isOperationStationType } from "@/lib/operacion/operation-station-types";
-import { parseTipoVentaLoose, type PlatoCarta } from "@/lib/platos-local";
 
 /** Filtro compacto Bebidas / Comida (sin UI pesada). */
 export type ProductServiceGroup = "all" | "drinks" | "food" | "unknown";
