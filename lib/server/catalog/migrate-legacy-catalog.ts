@@ -11,7 +11,10 @@ import type {
   CatalogMigrationSkippedItem,
   CatalogMigrationToCreateItem,
 } from "@/lib/carta/catalog-migration-preview-types";
-import { inferTipoVentaFromCartaText, parseTipoVentaLoose } from "@/lib/platos-local";
+import {
+  inferTipoVentaFromCartaText,
+  parseTipoVentaLoose,
+} from "@/lib/carta/product-sale-contract";
 import { categoryMatchKey } from "@/lib/server/menu-imports/normalize-category-name";
 import type { Firestore } from "firebase-admin/firestore";
 import {
