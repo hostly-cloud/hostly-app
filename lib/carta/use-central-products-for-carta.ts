@@ -28,7 +28,8 @@ export type UseCentralProductsForCartaOptions = {
   scope?: CentralCatalogScope;
   /**
    * No suscribir a `restaurants/{id}/products` hasta auth + perfil + restaurantId del perfil.
-   * Evita listeners con fallback localStorage/"default" que disparan permission-denied.
+   * Con este contrato activo, Firestore es autoritativo incluso cuando el snapshot está vacío
+   * o el listener falla: nunca se reactiva un catálogo localStorage de otro contexto.
    */
   requireAuthenticatedTenant?: boolean;
 };
@@ -102,8 +103,10 @@ function mapToResult(
 }
 
 /**
- * Fase 9A: escucha `restaurants/{restaurantId}/products` como fuente primaria;
- * localStorage (`hostly.platos.v1`) solo si el central está vacío o falla el listener.
+ * Firestore `restaurants/{restaurantId}/products` es la fuente primaria.
+ * El fallback local solo se conserva para consumidores legacy que no exigen tenant autenticado.
+ * Para `requireAuthenticatedTenant`, un catálogo central vacío sigue siendo un catálogo central
+ * válido y los fallos de disponibilidad se cierran sin reutilizar localStorage.
  */
 export function useCentralProductsForCarta(
   restaurantId: string | null | undefined,
@@ -156,13 +159,26 @@ export function useCentralProductsForCarta(
   const applyCentralDocs = useCallback(
     (docs: ProductDocument[]) => {
       if (!rid) {
+        if (requireAuthenticatedTenant) {
+          setCentralProductDocuments([]);
+          setCentralProductDocumentsAll([]);
+          setPlatos([]);
+          setProducts([]);
+          setSource(null);
+          setUsingLegacyFallback(false);
+          setCatalogDevWarning(null);
+          setLoading(false);
+          return;
+        }
         applyCatalog([], "legacy_local");
         return;
       }
-      if (docs.length > 0) {
-        const filtered = filterCentralForScope(docs, scope);
-        setCentralProductDocuments(filtered);
-        setCentralProductDocumentsAll(docs);
+
+      const filtered = filterCentralForScope(docs, scope);
+      setCentralProductDocuments(filtered);
+      setCentralProductDocumentsAll(docs);
+
+      if (docs.length > 0 || requireAuthenticatedTenant) {
         const platosList = centralProductsToPlatos(
           filtered,
           rid,
@@ -171,12 +187,19 @@ export function useCentralProductsForCarta(
         applyCatalog(platosList, "central");
         return;
       }
-      setCentralProductDocuments([]);
-      setCentralProductDocumentsAll([]);
+
       applyCatalog(loadLegacyPlatos(rid, scope), "legacy_local");
     },
-    [applyCatalog, rid, scope],
+    [applyCatalog, requireAuthenticatedTenant, rid, scope],
   );
+
+  const failClosedAuthenticatedCatalog = useCallback(() => {
+    centralDocsRef.current = [];
+    hasCentralSnapshotRef.current = false;
+    setCentralProductDocuments([]);
+    setCentralProductDocumentsAll([]);
+    applyCatalog([], "central");
+  }, [applyCatalog]);
 
   useEffect(() => {
     if (!rid) {
@@ -224,7 +247,7 @@ export function useCentralProductsForCarta(
     if (!authReady) return;
     if (!isAuthReady() || !isFirebaseConfigured) {
       if (requireAuthenticatedTenant) {
-        setLoading(false);
+        failClosedAuthenticatedCatalog();
         return;
       }
       applyCatalog(loadLegacyPlatos(rid, scope), "legacy_local");
@@ -252,7 +275,7 @@ export function useCentralProductsForCarta(
         if (!rid) return;
         listenFailedRef.current = true;
         if (requireAuthenticatedTenant) {
-          setLoading(false);
+          failClosedAuthenticatedCatalog();
           return;
         }
         applyCatalog(loadLegacyPlatos(rid, scope), "legacy_fallback");
@@ -267,8 +290,10 @@ export function useCentralProductsForCarta(
     applyCentralDocs,
     authReady,
     awaitingProfileTenant,
+    failClosedAuthenticatedCatalog,
     requireAuthenticatedTenant,
     rid,
+    scope,
   ]);
 
   useEffect(() => {
@@ -277,7 +302,14 @@ export function useCentralProductsForCarta(
   }, [applyCentralDocs, rid, scope]);
 
   useEffect(() => {
-    if (!rid || source === "central" || source === null) return;
+    if (
+      requireAuthenticatedTenant ||
+      !rid ||
+      source === "central" ||
+      source === null
+    ) {
+      return;
+    }
     if (typeof window === "undefined") return;
 
     const onLegacyChange = () => {
@@ -285,7 +317,7 @@ export function useCentralProductsForCarta(
     };
     window.addEventListener(PLATOS_CHANGED_EVENT, onLegacyChange);
     return () => window.removeEventListener(PLATOS_CHANGED_EVENT, onLegacyChange);
-  }, [applyCatalog, rid, scope, source]);
+  }, [applyCatalog, requireAuthenticatedTenant, rid, scope, source]);
 
   return useMemo(() => {
     const productDocumentsById = new Map<string, ProductDocument>();
