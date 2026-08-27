@@ -3,8 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
 import { useMesas } from "@/hooks/useMesas";
-import { updateMesa } from "@/lib/firestore/mesas";
-import type { Mesa } from "@/types/mesa";
 import ModulePageShell from "@/components/module-page-shell";
 import { HostlyLoadingState } from "@/components/ui/hostly";
 
@@ -13,41 +11,57 @@ export default function MesasPage() {
   const { restaurantId, ready } = useAuth();
   const { mesas, loading } = useMesas(restaurantId);
 
-  const handleToggleMesa = async (mesa: Mesa) => {
-    const nextStatus = mesa.status === "free" ? "occupied" : "free";
-
-    try {
-      await updateMesa(mesa.id, {
-        status: nextStatus,
-      });
-    } catch (err) {
-      console.error("Error updating mesa", err);
-    }
-  };
-
   if (!ready || loading) {
     return (
-      <ModulePageShell title="Mesas" subtitle="Estado de sala" maxWidth={1180} compactLayout>
+      <ModulePageShell
+        title="Mesas"
+        subtitle="Estado de sala"
+        maxWidth={1180}
+        compactLayout
+        operationalFocus
+        denseWorkbench
+        lockViewport
+      >
         <HostlyLoadingState embedded label="Cargando mesas…" />
       </ModulePageShell>
     );
   }
 
   return (
-    <ModulePageShell title="Mesas" subtitle="Estado de sala" maxWidth={1180} compactLayout>
-      <div className="hostly-mesas-grid">
-        {mesas.map((mesa) => (
-          <div
-            className={`hostly-mesa-card hostly-mesa-card--${mesa.status}`}
-            key={mesa.id}
-            onClick={() => router.push(`/dashboard/mesas/${mesa.id}`)}
-          >
-            <div className="hostly-mesa-card__name">{mesa.name}</div>
-            <div className="hostly-mesa-card__meta">{mesa.zone}</div>
-            <div className="hostly-mesa-card__meta">{mesa.capacity} pax</div>
+    <ModulePageShell
+      title="Mesas"
+      subtitle="Estado de sala"
+      maxWidth={1180}
+      compactLayout
+      operationalFocus
+      denseWorkbench
+      lockViewport
+    >
+      <section className="hostly-mesas-viewport" aria-label="Mesas del restaurante">
+        <div className="hostly-mesas-toolbar">
+          <div>
+            <p className="hostly-mesas-toolbar__eyebrow">Sala</p>
+            <p className="hostly-mesas-toolbar__title">{mesas.length} mesas</p>
           </div>
-        ))}
-      </div>
+          <p className="hostly-mesas-toolbar__hint">Pulsa una mesa para abrir su detalle.</p>
+        </div>
+        <div className="hostly-mesas-grid" role="list">
+          {mesas.map((mesa) => (
+            <button
+              type="button"
+              role="listitem"
+              className={`hostly-mesa-card hostly-mesa-card--${mesa.status}`}
+              key={mesa.id}
+              onClick={() => router.push(`/dashboard/mesas/${mesa.id}`)}
+              aria-label={`${mesa.name}, ${mesa.zone}, ${mesa.capacity} personas`}
+            >
+              <span className="hostly-mesa-card__name">{mesa.name}</span>
+              <span className="hostly-mesa-card__meta">{mesa.zone}</span>
+              <span className="hostly-mesa-card__meta">{mesa.capacity} pax</span>
+            </button>
+          ))}
+        </div>
+      </section>
     </ModulePageShell>
   );
 }
