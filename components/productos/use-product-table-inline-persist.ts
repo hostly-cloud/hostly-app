@@ -11,7 +11,7 @@ import {
   validateInlineProductName,
   validateInlineProductPrice,
 } from "@/lib/productos/product-inline-field-validation";
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import { getPublicationFlags } from "@/components/productos/productos-table-cells";
 
 export type ProductTableInlinePersistMessages = {
