@@ -6,7 +6,7 @@ import {
   countLegacyPlatosForRestaurant,
   hasActiveLegacyPlatosStorage,
 } from "@/lib/carta/archive-legacy-platos-local-storage";
-import { PLATOS_CHANGED_EVENT } from "@/lib/platos-local";
+import { PLATOS_CHANGED_EVENT } from "@/lib/carta/legacy-platos-storage";
 import type { OperationalCatalogSource } from "@/lib/carta/use-central-products-for-carta";
 
 type LegacyPlatosArchivePanelProps = {
