@@ -50,7 +50,7 @@ function formatMoneyUpTo2OrDash(value: number | null | undefined): string {
 export default function ConfigCartaEscandallosPage() {
   const { profileReady, restaurantId: profileRestaurantId } = useAuth();
   const restauranteId = useMemo(
-    () => resolveAuthenticatedRestaurantId(profileReady, profileRestaurantId),
+    () => resolveAuthenticatedRestaurantId(profileReady, profileRestaurantId) ?? "",
     [profileReady, profileRestaurantId],
   );
   const operationalCatalog = useCentralProductsForCarta(restauranteId, {
