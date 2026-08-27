@@ -41,7 +41,7 @@ import {
 } from "@/lib/carta/product-composition-type";
 import { readProductSortOrder } from "@/lib/carta/product-sort-order";
 import { normalizeModifierGroupIds } from "@/lib/modifiers/modifier-group-ids";
-import type { TipoProductoVenta } from "@/lib/platos-local";
+import type { TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 
 export type CentralOperationalProductInput = {
   name: string;
