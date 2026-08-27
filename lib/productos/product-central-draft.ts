@@ -9,6 +9,7 @@ import {
   normalizeProductCompositionType,
   type ProductCompositionType,
 } from "@/lib/carta/product-composition-type";
+import type { TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 import type { CartaCategoria } from "@/lib/carta-categorias/types";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import type { CentralOperationalProductInput } from "@/lib/firestore/products";
@@ -18,7 +19,6 @@ import {
   resolveOperationStationFromSelectValue,
 } from "@/lib/operacion/product-operation-station";
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
-import type { TipoProductoVenta } from "@/lib/platos-local";
 
 export function defaultOperationStationSelectForTipoVenta(
   tipo: TipoProductoVenta,

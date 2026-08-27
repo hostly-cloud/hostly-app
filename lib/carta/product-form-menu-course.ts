@@ -1,10 +1,10 @@
 import { normalizeOperationalStationSelection } from "@/lib/carta/operational-station-options";
+import type { TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import {
   isLegacyOperationStationSelectValue,
   resolveOperationStationFromSelectValue,
 } from "@/lib/operacion/product-operation-station";
-import type { TipoProductoVenta } from "@/lib/platos-local";
 
 function isBarOrCocktailStationType(type: OperationStationDocument["type"]): boolean {
   return type === "bar" || type === "cocktail";

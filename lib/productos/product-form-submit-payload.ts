@@ -6,6 +6,7 @@ import {
 } from "@/lib/carta/product-form-preventive-validation";
 import type { ProductCompositionType } from "@/lib/carta/product-composition-type";
 import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
+import type { TipoProductoVenta } from "@/lib/carta/product-sale-contract";
 import type { CentralOperationalProductInput } from "@/lib/firestore/products";
 import { sanitizeModifierGroupIdsForSave } from "@/lib/modifiers/effective-product-modifiers";
 import type { ModifierGroupDocument } from "@/lib/modifiers/modifier-types";
@@ -14,7 +15,6 @@ import {
   buildCentralInputFromDraft,
   parseProductPrecio,
 } from "@/lib/productos/product-central-draft";
-import type { TipoProductoVenta } from "@/lib/platos-local";
 
 export type ProductFormCoreDraft = {
   nombre: string;
