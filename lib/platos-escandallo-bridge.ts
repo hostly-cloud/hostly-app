@@ -9,12 +9,12 @@
 
 import { countLegacyPlatosForRestaurant } from "@/lib/carta/legacy-platos-client";
 import type { OperationalCatalogSource } from "@/lib/carta/use-central-products-for-carta";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import {
   fetchCentralProductsOnce,
   type ProductDocument,
 } from "@/lib/firestore/products";
 import { estimateRecipeCostTotal } from "@/lib/recipes/product-recipe-helpers";
-import type { PlatoCarta } from "@/lib/platos-local";
 
 /** Key histórica conservada únicamente para herramientas explícitas de recuperación/migración. */
 const ESCANDALLOS_COSTE_OVERRIDE_STORAGE_KEY = "hostly.escandallos.coste_total_override.v1";
