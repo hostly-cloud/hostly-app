@@ -1,4 +1,4 @@
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 
 export type DuplicateReason = "normalized_exact" | "name_similar" | "category_price";
 
@@ -91,10 +91,8 @@ export function findPotentialDuplicates(args: {
       score = Math.max(score, 0.78);
     }
 
-    // Umbral final: si no hay reasons, no es candidato.
     if (reasons.length === 0) continue;
 
-    // Para categoría+precio, exige mínimo de similitud de nombre (si no es exact match).
     if (reasons.includes("category_price") && !reasons.includes("normalized_exact")) {
       const sim = diceCoefficient(pName, candidateName);
       if (sim < 0.72) continue;
@@ -107,4 +105,3 @@ export function findPotentialDuplicates(args: {
   out.sort((a, b) => b.score - a.score);
   return out.slice(0, maxResults);
 }
-
