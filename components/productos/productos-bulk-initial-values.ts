@@ -1,9 +1,9 @@
 import { CATEGORY_PRODUCT_FAMILY_NONE } from "@/lib/carta/category-product-family";
 import { productCatalogCourseSelectValue } from "@/lib/carta/menu-course";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { BulkCatalogKdsDestination } from "@/lib/firestore/central-catalog-write";
 import type { ProductDocument } from "@/lib/firestore/products";
 import { resolveKdsDestination } from "@/lib/kds/kds-destination";
-import type { PlatoCarta } from "@/lib/platos-local";
 
 /** Valor sentinel del `<select>` cuando la selección tiene valores distintos. */
 export const BULK_SELECT_MIXED_VALUE = "__mixed__";
@@ -35,8 +35,7 @@ function readCategorySelectValue(
   plato: PlatoCarta,
   doc: ProductDocument | undefined,
 ): string {
-  const id = doc?.categoryId?.trim() || plato.categoriaCartaId?.trim() || "";
-  return id;
+  return doc?.categoryId?.trim() || plato.categoriaCartaId?.trim() || "";
 }
 
 function readFamilySelectValue(
