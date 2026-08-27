@@ -1,6 +1,7 @@
 "use client";
 
-import { loadPlatos, type PlatoCarta } from "@/lib/platos-local";
+import { loadPlatos } from "@/lib/carta/legacy-platos-storage";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { CatalogMigrationLegacyPlatoInput } from "@/lib/carta/catalog-migration-preview-types";
 
 /** Límite de platos legacy enviados al preview (evita payloads enormes). */

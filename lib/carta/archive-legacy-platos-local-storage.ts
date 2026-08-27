@@ -1,6 +1,10 @@
 "use client";
 
-import { loadPlatos, PLATOS_CHANGED_EVENT, PLATOS_LOCAL_STORAGE_KEY } from "@/lib/platos-local";
+import {
+  loadPlatos,
+  PLATOS_CHANGED_EVENT,
+  PLATOS_LOCAL_STORAGE_KEY,
+} from "@/lib/carta/legacy-platos-storage";
 
 export const LEGACY_PLATOS_ARCHIVE_META_KEY = "hostly.platos.v1.archiveMeta";
 
