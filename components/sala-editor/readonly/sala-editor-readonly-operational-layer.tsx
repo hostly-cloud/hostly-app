@@ -138,13 +138,11 @@ export function SalaEditorReadonlyOperationalLayer({
           stateByTableId,
         );
         const tableId = readOperationalTableId(instance);
-        const isSelected = tableId !== "" && selectedTableIdSet.has(tableId);
-        const isJoinTarget = tableId !== "" && tableId === joinHoverTableId;
+        const controller = tableId !== "" ? getTpvV2TableController(tableId) : null;
+        const isLinkedOperationalElement = tableId !== "" && controller != null;
+        const isSelected = isLinkedOperationalElement && selectedTableIdSet.has(tableId);
+        const isJoinTarget = isLinkedOperationalElement && tableId === joinHoverTableId;
         const accentColor = tableOperationalAccentColor(state);
-        const isLinkedOperationalElement = tableId !== "";
-        const controller = isLinkedOperationalElement
-          ? getTpvV2TableController(tableId)
-          : null;
         const joinEnabled = controller?.joinEnabled === true;
 
         return (
@@ -167,7 +165,7 @@ export function SalaEditorReadonlyOperationalLayer({
               data-hostly-v2-table-instance-id={
                 instance.elementType === "TABLE" ? instance.id : undefined
               }
-              data-hostly-v2-table-id={tableId || undefined}
+              data-hostly-v2-table-id={isLinkedOperationalElement ? tableId : undefined}
               data-hostly-v2-controller={controller ? "memory" : undefined}
               data-hostly-v2-join-target={isJoinTarget ? "1" : undefined}
               data-hostly-map-table={isLinkedOperationalElement ? tableId : undefined}
@@ -248,7 +246,7 @@ export function SalaEditorReadonlyOperationalLayer({
                           onTableClick(tableId, instance.id);
                           return;
                         }
-                        getTpvV2TableController(tableId)?.onClick();
+                        controller.onClick();
                       }
                     : undefined
                 }
