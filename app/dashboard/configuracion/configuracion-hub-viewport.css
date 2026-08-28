@@ -1,0 +1,38 @@
+@media (min-width: 768px) {
+  .hostly-module-shell:has(.hostly-config-hub) {
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hostly-module-shell:has(.hostly-config-hub) .hostly-module-content--dashboard {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hostly-config-hub {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
+  .hostly-config-hub__domains {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding-bottom: clamp(8px, 1.4vw, 16px);
+  }
+
+  .hostly-config-hub__grid {
+    align-content: start;
+  }
+}
