@@ -1,5 +1,4 @@
-import type { Table } from "@/lib/firestore/tables";
-import { isDecorativePlanElementType } from "@/lib/firestore/tables";
+import type { Table, PlanElementType } from "@/lib/firestore/tables";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 
 export type TpvV2LegacyResidualCoverage<TZone extends { id: string }> = {
@@ -9,6 +8,19 @@ export type TpvV2LegacyResidualCoverage<TZone extends { id: string }> = {
   residualLegacyZones: TZone[] | undefined;
   fullyCovered: boolean;
 };
+
+const LEGACY_DECORATIVE_TYPES: ReadonlySet<PlanElementType> = new Set([
+  "wall",
+  "bar",
+  "column",
+  "pool",
+  "door",
+  "planter",
+]);
+
+function isLegacyDecorativeType(type: PlanElementType): boolean {
+  return LEGACY_DECORATIVE_TYPES.has(type);
+}
 
 function linkedOperationalIdsFromContract(
   contract: EditorTpvReadonlyVisualContract,
@@ -29,6 +41,10 @@ function linkedOperationalIdsFromContract(
  * Editor V2 and must never be validated against, hidden by, or reconstructed
  * from the historical floor-plan projection. Legacy rows are retained here only
  * as operational controllers while the table identity migration is completed.
+ *
+ * Important: this module deliberately avoids runtime imports from the Firestore
+ * table repository. The TPV V2 renderer is client-side infrastructure and must
+ * remain free of Firebase initialization/circular module side effects.
  */
 export function evaluateTpvV2LegacyResidualCoverage<
   TZone extends { id: string },
@@ -42,7 +58,7 @@ export function evaluateTpvV2LegacyResidualCoverage<
   const residualLegacyElements: Table[] = [];
 
   for (const element of params.elements) {
-    if (isDecorativePlanElementType(element.type)) {
+    if (isLegacyDecorativeType(element.type)) {
       continue;
     }
 
