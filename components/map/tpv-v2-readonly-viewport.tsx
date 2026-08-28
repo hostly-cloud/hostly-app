@@ -15,6 +15,10 @@ import {
 } from "react";
 import type { FloorPlanCanvasSize } from "@/lib/firestore/floorPlans";
 import {
+  HOSTLY_MAP_JOIN_ARMED,
+  type HostlyMapJoinArmedDetail,
+} from "@/lib/map/join-pinch-bridge";
+import {
   fitBoundsToViewport,
   getPlanContentBounds,
   type EditableFloorMapProps,
@@ -24,6 +28,7 @@ import {
 
 const ZOOM_MIN = 0.45;
 const ZOOM_MAX = 1.35;
+const PINCH_ZOOM_MAX = 2.5;
 const FIT_ZOOM_MAX = 1.05;
 const VIEW_PADDING_PX = 80;
 
@@ -113,6 +118,14 @@ function isInteractivePointerTarget(target: EventTarget | null): boolean {
   );
 }
 
+type TrackedPointer = { clientX: number; clientY: number };
+type PinchSession = {
+  startZoom: number;
+  startDistance: number;
+  anchorMapX: number;
+  anchorMapY: number;
+};
+
 export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
   const {
     readonlyUnderlay,
@@ -144,12 +157,36 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     startX: number;
     startY: number;
   } | null>(null);
+  const pointersRef = useRef<Map<number, TrackedPointer>>(new Map());
+  const pinchRef = useRef<PinchSession | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const zoomRef = useRef(zoom);
+  const panRef = useRef(pan);
   const fitPaddingPx = viewportFitPaddingPx ?? VIEW_PADDING_PX;
   const fitZoomMax = viewportFitZoomMax ?? FIT_ZOOM_MAX;
   const readonlyV2PlanSize = getReadonlyV2PlanSize(readonlyUnderlay);
   const hasReadonlyV2PlanSize = readonlyV2PlanSize != null;
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
+
+  useEffect(() => {
+    const onJoinArmed = (event: Event) => {
+      const detail = (event as CustomEvent<HostlyMapJoinArmedDetail>).detail;
+      if (!detail) return;
+      pointersRef.current.delete(detail.pointerId);
+      if (pointersRef.current.size < 2) pinchRef.current = null;
+      if (dragRef.current?.pointerId === detail.pointerId) dragRef.current = null;
+    };
+    document.addEventListener(HOSTLY_MAP_JOIN_ARMED, onJoinArmed);
+    return () => document.removeEventListener(HOSTLY_MAP_JOIN_ARMED, onJoinArmed);
+  }, []);
 
   // Editor V2 is the visual and geometric source of truth. Once a native V2
   // contract is mounted, legacy table/zone coordinates must not participate in
@@ -303,6 +340,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
 
   const handleWheel = useCallback(
     (event: ReactWheelEvent<HTMLDivElement>) => {
+      event.stopPropagation();
       onWheel?.(event);
       if (event.defaultPrevented || event.ctrlKey) return;
       event.preventDefault();
@@ -325,36 +363,110 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     [onWheel, pan.x, pan.y, zoom],
   );
 
+  const beginPinchIfReady = useCallback(() => {
+    const root = rootRef.current;
+    if (!root || pointersRef.current.size !== 2) return false;
+    const points = Array.from(pointersRef.current.values());
+    const a = points[0]!;
+    const b = points[1]!;
+    const distance = Math.max(1, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY));
+    const rect = root.getBoundingClientRect();
+    const midX = (a.clientX + b.clientX) / 2 - rect.left;
+    const midY = (a.clientY + b.clientY) / 2 - rect.top;
+    const currentZoom = zoomRef.current;
+    const currentPan = panRef.current;
+    pinchRef.current = {
+      startZoom: currentZoom,
+      startDistance: distance,
+      anchorMapX: (midX - currentPan.x) / currentZoom,
+      anchorMapY: (midY - currentPan.y) / currentZoom,
+    };
+    dragRef.current = null;
+    return true;
+  }, []);
+
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0 || isInteractivePointerTarget(event.target)) return;
+      if (event.button !== 0) return;
+      event.stopPropagation();
+
+      const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
+      if (touchLike) {
+        pointersRef.current.set(event.pointerId, {
+          clientX: event.clientX,
+          clientY: event.clientY,
+        });
+        if (beginPinchIfReady()) return;
+      }
+
+      if (isInteractivePointerTarget(event.target) || pointersRef.current.size > 1) return;
       dragRef.current = {
         pointerId: event.pointerId,
         clientX: event.clientX,
         clientY: event.clientY,
-        startX: pan.x,
-        startY: pan.y,
+        startX: panRef.current.x,
+        startY: panRef.current.y,
       };
       event.currentTarget.setPointerCapture(event.pointerId);
     },
-    [pan.x, pan.y],
+    [beginPinchIfReady],
   );
 
   const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+    }
+
+    const pinch = pinchRef.current;
+    if (pinch && pointersRef.current.size === 2) {
+      const root = rootRef.current;
+      if (!root) return;
+      const points = Array.from(pointersRef.current.values());
+      const a = points[0]!;
+      const b = points[1]!;
+      const distance = Math.max(1, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY));
+      const ratio = distance / pinch.startDistance;
+      const nextZoom = clamp(pinch.startZoom * ratio, ZOOM_MIN, PINCH_ZOOM_MAX);
+      const rect = root.getBoundingClientRect();
+      const midX = (a.clientX + b.clientX) / 2 - rect.left;
+      const midY = (a.clientY + b.clientY) / 2 - rect.top;
+      const nextPan = {
+        x: midX - pinch.anchorMapX * nextZoom,
+        y: midY - pinch.anchorMapY * nextZoom,
+      };
+      zoomRef.current = nextZoom;
+      panRef.current = nextPan;
+      setZoom(nextZoom);
+      setPan(nextPan);
+      if (event.cancelable) event.preventDefault();
+      return;
+    }
+
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setPan({
+    const nextPan = {
       x: drag.startX + event.clientX - drag.clientX,
       y: drag.startY + event.clientY - drag.clientY,
-    });
+    };
+    panRef.current = nextPan;
+    setPan(nextPan);
   }, []);
 
   const handlePointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    pointersRef.current.delete(event.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    dragRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (drag?.pointerId === event.pointerId) {
+      dragRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
     }
   }, []);
 
@@ -364,6 +476,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       className={className}
       data-hostly-v2-viewport="native"
       data-hostly-v2-fit-source={hasReadonlyV2PlanSize ? "editor-v2-plan" : "legacy-fallback"}
+      data-hostly-v2-gesture-owner="native"
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
