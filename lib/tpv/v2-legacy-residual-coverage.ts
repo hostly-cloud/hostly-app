@@ -1,9 +1,5 @@
-import type { Table } from "@/lib/firestore/tables";
+import type { Table, PlanElementType } from "@/lib/firestore/tables";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
-import {
-  getEditorV2NativeDecorativeIds,
-  isLegacyDecorativeCoveredByEditorV2,
-} from "@/lib/sala-editor/readonly/editor-v2-legacy-decorative-parity";
 
 export type TpvV2LegacyResidualCoverage<TZone extends { id: string }> = {
   linkedOperationalIds: ReadonlySet<string>;
@@ -12,6 +8,19 @@ export type TpvV2LegacyResidualCoverage<TZone extends { id: string }> = {
   residualLegacyZones: TZone[] | undefined;
   fullyCovered: boolean;
 };
+
+const LEGACY_DECORATIVE_TYPES: ReadonlySet<PlanElementType> = new Set([
+  "wall",
+  "bar",
+  "column",
+  "pool",
+  "door",
+  "planter",
+]);
+
+function isLegacyDecorativeType(type: PlanElementType): boolean {
+  return LEGACY_DECORATIVE_TYPES.has(type);
+}
 
 function linkedOperationalIdsFromContract(
   contract: EditorTpvReadonlyVisualContract,
@@ -26,10 +35,14 @@ function linkedOperationalIdsFromContract(
 }
 
 /**
- * Evalua de forma conservadora cuanto contenido historico sigue siendo necesario
- * despues de aplicar paridad exacta Editor V2.
+ * Evalua solo la compatibilidad operativa que todavia necesita el TPV.
  *
- * Nunca considera cubierto un objeto por nombre, tipo aproximado o posicion.
+ * Editor V2 es la unica fuente visual/geometrica. Por tanto, decorativos y zonas
+ * legacy nunca bloquean readiness ni participan en la paridad visual. Los IDs
+ * legacy se conservan temporalmente unicamente para enlazar controladores de mesa.
+ *
+ * Este modulo usa solo imports type-only desde Firestore para evitar inicializacion
+ * Firebase/ciclos en el runtime cliente del renderer V2.
  */
 export function evaluateTpvV2LegacyResidualCoverage<
   TZone extends { id: string },
@@ -38,24 +51,12 @@ export function evaluateTpvV2LegacyResidualCoverage<
   elements: Table[];
   zones?: TZone[];
 }): TpvV2LegacyResidualCoverage<TZone> {
-  const nativeDecorativeIds = new Set(
-    getEditorV2NativeDecorativeIds(params.contract),
-  );
   const linkedOperationalIds = linkedOperationalIdsFromContract(params.contract);
-  const nativeZoneIds = new Set(
-    params.contract.zones
-      .map((zone) => String(zone.id ?? "").trim())
-      .filter(Boolean),
-  );
-
   const linkedOperationalElements: Table[] = [];
   const residualLegacyElements: Table[] = [];
 
   for (const element of params.elements) {
-    if (
-      nativeDecorativeIds.size > 0 &&
-      isLegacyDecorativeCoveredByEditorV2(element, nativeDecorativeIds)
-    ) {
+    if (isLegacyDecorativeType(element.type)) {
       continue;
     }
 
@@ -68,22 +69,14 @@ export function evaluateTpvV2LegacyResidualCoverage<
     residualLegacyElements.push(element);
   }
 
-  const residualLegacyZones =
-    params.zones == null
-      ? undefined
-      : nativeZoneIds.size === 0
-        ? params.zones
-        : params.zones.filter(
-            (zone) => !nativeZoneIds.has(String(zone.id ?? "").trim()),
-          );
+  // Las zonas legacy ya no forman parte del contrato visual del TPV V2.
+  const residualLegacyZones = params.zones == null ? undefined : [];
 
   return {
     linkedOperationalIds,
     linkedOperationalElements,
     residualLegacyElements,
     residualLegacyZones,
-    fullyCovered:
-      residualLegacyElements.length === 0 &&
-      (residualLegacyZones?.length ?? 0) === 0,
+    fullyCovered: residualLegacyElements.length === 0,
   };
 }
