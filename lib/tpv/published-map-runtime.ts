@@ -19,7 +19,11 @@ export type TpvPublishedMapRuntime = {
 
 type MatchPublishedContractInput = {
   elements: readonly Table[];
-  zones?: readonly { id: string; restaurantId?: string }[];
+  zones?: readonly {
+    id: string;
+    restaurantId?: string;
+    floorPlanId?: string;
+  }[];
 };
 
 const runtimeByRestaurantId = new Map<string, TpvPublishedMapRuntime>();
@@ -142,6 +146,23 @@ function readSingleTenantId(input: MatchPublishedContractInput): string | null {
   return ids.size === 1 ? [...ids][0]! : null;
 }
 
+function readExplicitFloorPlanId(
+  input: MatchPublishedContractInput,
+): { kind: "none" | "single" | "ambiguous"; floorPlanId: string | null } {
+  const ids = new Set<string>();
+  for (const element of input.elements) {
+    const floorPlanId = normalizeId(element.floorPlanId);
+    if (floorPlanId) ids.add(floorPlanId);
+  }
+  for (const zone of input.zones ?? []) {
+    const floorPlanId = normalizeId(zone.floorPlanId);
+    if (floorPlanId) ids.add(floorPlanId);
+  }
+  if (ids.size === 0) return { kind: "none", floorPlanId: null };
+  if (ids.size > 1) return { kind: "ambiguous", floorPlanId: null };
+  return { kind: "single", floorPlanId: [...ids][0]! };
+}
+
 function contractCoveredIds(
   contract: EditorTpvReadonlyVisualContract,
 ): ReadonlySet<string> {
@@ -154,8 +175,14 @@ function contractCoveredIds(
 }
 
 /**
- * Matches the selected TPV payload to exactly one published floor plan by IDs.
- * It never guesses by display name, type or position. Ambiguity fails closed.
+ * Resolves the selected TPV payload to one published floor plan.
+ *
+ * Preferred path: use the explicit floorPlanId already carried by the filtered
+ * TPV rows. This avoids hiding the entire V2 map because of a legacy/decorative
+ * residual that is not part of the published coverage.
+ *
+ * Compatibility path: when old data has no floorPlanId, keep the historical
+ * exact ID-coverage matcher. Mixed explicit floorPlanIds still fail closed.
  */
 export function matchCachedTpvPublishedReadonlyContract(
   input: MatchPublishedContractInput,
@@ -164,6 +191,13 @@ export function matchCachedTpvPublishedReadonlyContract(
   if (!restaurantId) return null;
   const runtime = runtimeByRestaurantId.get(restaurantId);
   if (!runtime) return null;
+
+  const explicitPlan = readExplicitFloorPlanId(input);
+  if (explicitPlan.kind === "ambiguous") return null;
+  if (explicitPlan.kind === "single" && explicitPlan.floorPlanId) {
+    const contract = runtime.contractsByFloorPlanId.get(explicitPlan.floorPlanId) ?? null;
+    return contract?.restaurantId === restaurantId ? contract : null;
+  }
 
   const elementIds = input.elements
     .map((element) => normalizeId(element.id))
