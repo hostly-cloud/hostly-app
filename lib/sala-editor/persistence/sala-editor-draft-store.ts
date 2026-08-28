@@ -204,26 +204,36 @@ async function loadPublishedAsDraftCompatibility(
 ): Promise<SalaEditorDraftDocument | null> {
   if (!shouldPreferPublishedSnapshotForRuntime()) return null;
 
-  const published = await loadSalaEditorPublished(restaurantId);
-  if (!published) return null;
+  try {
+    const published = await loadSalaEditorPublished(restaurantId);
+    if (!published) return null;
 
-  if (SALA_EDITOR_DEV_DIAGNOSTICS) {
-    console.info("[SalaEditorV2] TPV usando snapshot published", {
-      restaurantId,
-      publishedAt: published.publishedAt,
-      snapshotVersion: published.snapshotVersion,
-    });
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.info("[SalaEditorV2] TPV usando snapshot published", {
+        restaurantId,
+        publishedAt: published.publishedAt,
+        snapshotVersion: published.snapshotVersion,
+      });
+    }
+
+    return {
+      id: SALA_EDITOR_DRAFT_DOC_ID,
+      restaurantId: published.restaurantId,
+      state: SALA_EDITOR_DRAFT_DOC_ID,
+      schemaVersion: published.schemaVersion,
+      document: published.document,
+      updatedAt: published.publishedAt,
+      ...(published.publishedBy ? { updatedBy: published.publishedBy } : {}),
+    };
+  } catch (error) {
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.warn("[SalaEditorV2] TPV no pudo cargar published; usando draft", {
+        restaurantId,
+        error,
+      });
+    }
+    return null;
   }
-
-  return {
-    id: SALA_EDITOR_DRAFT_DOC_ID,
-    restaurantId: published.restaurantId,
-    state: SALA_EDITOR_DRAFT_DOC_ID,
-    schemaVersion: published.schemaVersion,
-    document: published.document,
-    updatedAt: published.publishedAt,
-    ...(published.publishedBy ? { updatedBy: published.publishedBy } : {}),
-  };
 }
 
 export async function loadSalaEditorDraft(
