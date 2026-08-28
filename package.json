@@ -42,6 +42,11 @@
     "react-dom": "19.2.4",
     "recharts": "^3.8.1"
   },
+  "overrides": {
+    "jwks-rsa": {
+      "jose": "4.15.9"
+    }
+  },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
     "@tailwindcss/postcss": "^4",
