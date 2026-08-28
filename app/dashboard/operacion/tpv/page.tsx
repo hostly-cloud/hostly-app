@@ -8,6 +8,7 @@ import { ActiveOperatorGate } from "@/components/tpv/active-operator-gate";
 import { useTableGroups } from "@/hooks/useTableGroups";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
 import { TpvEditorV2ReadyGate } from "./_components/tpv-editor-v2-ready-gate";
+import "./tpv-map-modern.css";
 
 export default function OperacionTpvPage() {
   const { restaurantId } = useAuth();
