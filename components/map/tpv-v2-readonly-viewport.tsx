@@ -148,9 +148,17 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const fitPaddingPx = viewportFitPaddingPx ?? VIEW_PADDING_PX;
   const fitZoomMax = viewportFitZoomMax ?? FIT_ZOOM_MAX;
-  const includeExplicitFitElementsInPlan =
-    viewportFitMode === "plan" && viewportFitElements !== undefined;
   const readonlyV2PlanSize = getReadonlyV2PlanSize(readonlyUnderlay);
+  const hasReadonlyV2PlanSize = readonlyV2PlanSize != null;
+
+  // Editor V2 is the visual and geometric source of truth. Once a native V2
+  // contract is mounted, legacy table/zone coordinates must not participate in
+  // camera fitting. Their only remaining role is operational identity/control.
+  const includeExplicitFitElementsInPlan =
+    viewportFitMode === "plan" &&
+    viewportFitElements !== undefined &&
+    !hasReadonlyV2PlanSize;
+
   const effectivePlanWidth = readonlyV2PlanSize?.width ?? planSize?.width ?? null;
   const effectivePlanHeight = readonlyV2PlanSize?.height ?? planSize?.height ?? null;
   const effectivePlanSize = useMemo<FloorPlanCanvasSize | null>(
@@ -355,6 +363,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       ref={assignMapRef}
       className={className}
       data-hostly-v2-viewport="native"
+      data-hostly-v2-fit-source={hasReadonlyV2PlanSize ? "editor-v2-plan" : "legacy-fallback"}
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

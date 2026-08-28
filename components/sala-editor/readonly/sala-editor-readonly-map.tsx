@@ -2,7 +2,6 @@
 
 import { useRef, type CSSProperties } from "react";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
-import { buildEditorV2LegacyDecorativeSuppressionCss } from "@/lib/sala-editor/readonly/editor-v2-legacy-decorative-parity";
 import {
   getBaseFloorCatalogEntry,
   type BaseFloorCatalogKind,
@@ -83,6 +82,7 @@ export function SalaEditorReadonlyMap({
   const logicalWidth = base.dimensions.width * base.scale.pixelsPerUnit * safeCoordinateScale;
   const logicalHeight =
     base.dimensions.height * base.scale.pixelsPerUnit * safeCoordinateScale;
+  const displayGridSize = Math.max(4, base.grid.size * safeCoordinateScale);
   const operationalInstances =
     operationalMode === "none" || operationalMode === "tpv"
       ? []
@@ -109,10 +109,14 @@ export function SalaEditorReadonlyMap({
     operationalSelectedTableIds ?? operationalSelectedLegacyTableIds;
   const resolvedOnOperationalTableClick =
     onOperationalTableClick ?? onOperationalLegacyTableClick;
-  const legacyDecorativeSuppressionCss =
-    mode === "logical-underlay" && operationalMode === "tpv"
-      ? buildEditorV2LegacyDecorativeSuppressionCss(contract)
-      : "";
+  const totalLayerItems =
+    contract.surfaces.length +
+    contract.zones.length +
+    contract.walls.length +
+    contract.wallAttachments.length +
+    contract.structuralElements.length +
+    contract.landscapeElements.length +
+    contract.operationalElementInstances.length;
 
   const layers = (
     <>
@@ -178,9 +182,9 @@ export function SalaEditorReadonlyMap({
         data-hostly-readonly-map-interaction={
           hasNativeTpvInteraction ? "native-v2" : "readonly"
         }
-        data-hostly-v2-decorative-suppression={
-          legacyDecorativeSuppressionCss ? "exact-id" : undefined
-        }
+        data-hostly-v2-logical-width={Math.round(logicalWidth)}
+        data-hostly-v2-logical-height={Math.round(logicalHeight)}
+        data-hostly-v2-layer-items={totalLayerItems}
         aria-hidden={hasNativeTpvInteraction ? undefined : true}
         style={{
           position: "absolute",
@@ -193,14 +197,11 @@ export function SalaEditorReadonlyMap({
           pointerEvents: hasNativeTpvInteraction ? "auto" : "none",
           overflow: "hidden",
           zIndex: 1,
+          background: floorEntry.background,
+          boxShadow: "inset 0 0 0 1px rgba(100, 130, 150, 0.16)",
           ...style,
         }}
       >
-        {legacyDecorativeSuppressionCss ? (
-          <style data-hostly-v2-legacy-decorative-suppression>
-            {legacyDecorativeSuppressionCss}
-          </style>
-        ) : null}
         <CanvasViewportProvider
           stageRef={stageRef}
           scale={1}
@@ -208,6 +209,21 @@ export function SalaEditorReadonlyMap({
           logicalPixelsPerUnit={base.scale.pixelsPerUnit}
           coordinateScale={safeCoordinateScale}
         >
+          {base.grid.visible !== false ? (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 0,
+                pointerEvents: "none",
+                backgroundImage:
+                  "radial-gradient(circle, rgba(75, 105, 125, 0.13) 1px, transparent 1.25px)",
+                backgroundSize: `${displayGridSize}px ${displayGridSize}px`,
+                backgroundPosition: `${displayGridSize / 2}px ${displayGridSize / 2}px`,
+              }}
+            />
+          ) : null}
           {layers}
         </CanvasViewportProvider>
       </div>
