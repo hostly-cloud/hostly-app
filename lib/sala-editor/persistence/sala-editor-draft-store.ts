@@ -9,6 +9,7 @@ import { auth, db, firebaseEnvDebug, isFirebaseConfigured } from "@/lib/firebase
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import { SALA_EDITOR_DOCUMENT_VERSION } from "@/lib/sala-editor/types/editor-document";
 import { normalizeSalaEditorDocument } from "@/lib/sala-editor/normalize/normalize-sala-editor-document";
+import { loadSalaEditorPublished } from "@/lib/sala-editor/persistence/sala-editor-published-store";
 
 export const SALA_EDITOR_MAPS_COLLECTION = "salaEditorMaps" as const;
 export const SALA_EDITOR_DRAFT_DOC_ID = "draft" as const;
@@ -193,12 +194,49 @@ function parseDraftDocument(
   };
 }
 
+function shouldPreferPublishedSnapshotForRuntime(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.pathname.startsWith("/dashboard/operacion/tpv");
+}
+
+async function loadPublishedAsDraftCompatibility(
+  restaurantId: string,
+): Promise<SalaEditorDraftDocument | null> {
+  if (!shouldPreferPublishedSnapshotForRuntime()) return null;
+
+  const published = await loadSalaEditorPublished(restaurantId);
+  if (!published) return null;
+
+  if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+    console.info("[SalaEditorV2] TPV usando snapshot published", {
+      restaurantId,
+      publishedAt: published.publishedAt,
+      snapshotVersion: published.snapshotVersion,
+    });
+  }
+
+  return {
+    id: SALA_EDITOR_DRAFT_DOC_ID,
+    restaurantId: published.restaurantId,
+    state: SALA_EDITOR_DRAFT_DOC_ID,
+    schemaVersion: published.schemaVersion,
+    document: published.document,
+    updatedAt: published.publishedAt,
+    ...(published.publishedBy ? { updatedBy: published.publishedBy } : {}),
+  };
+}
+
 export async function loadSalaEditorDraft(
   restaurantId: string,
 ): Promise<SalaEditorDraftDocument | null> {
   if (!isFirebaseConfigured) return null;
 
   const rid = assertRestaurantId(restaurantId);
+  const publishedRuntimeDocument = await loadPublishedAsDraftCompatibility(rid);
+  if (publishedRuntimeDocument) {
+    return publishedRuntimeDocument;
+  }
+
   const snap = await getDoc(draftDocRef(rid));
   if (!snap.exists()) return null;
 
