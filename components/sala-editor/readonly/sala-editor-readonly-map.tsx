@@ -2,6 +2,7 @@
 
 import { useRef, type CSSProperties } from "react";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
+import { buildEditorV2LegacyDecorativeSuppressionCss } from "@/lib/sala-editor/readonly/editor-v2-legacy-decorative-parity";
 import {
   getBaseFloorCatalogEntry,
   type BaseFloorCatalogKind,
@@ -108,6 +109,10 @@ export function SalaEditorReadonlyMap({
     operationalSelectedTableIds ?? operationalSelectedLegacyTableIds;
   const resolvedOnOperationalTableClick =
     onOperationalTableClick ?? onOperationalLegacyTableClick;
+  const legacyDecorativeSuppressionCss =
+    mode === "logical-underlay" && operationalMode === "tpv"
+      ? buildEditorV2LegacyDecorativeSuppressionCss(contract)
+      : "";
 
   const layers = (
     <>
@@ -173,6 +178,9 @@ export function SalaEditorReadonlyMap({
         data-hostly-readonly-map-interaction={
           hasNativeTpvInteraction ? "native-v2" : "readonly"
         }
+        data-hostly-v2-decorative-suppression={
+          legacyDecorativeSuppressionCss ? "exact-id" : undefined
+        }
         aria-hidden={hasNativeTpvInteraction ? undefined : true}
         style={{
           position: "absolute",
@@ -188,6 +196,11 @@ export function SalaEditorReadonlyMap({
           ...style,
         }}
       >
+        {legacyDecorativeSuppressionCss ? (
+          <style data-hostly-v2-legacy-decorative-suppression>
+            {legacyDecorativeSuppressionCss}
+          </style>
+        ) : null}
         <CanvasViewportProvider
           stageRef={stageRef}
           scale={1}
