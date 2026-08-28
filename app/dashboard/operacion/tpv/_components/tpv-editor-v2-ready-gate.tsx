@@ -16,7 +16,8 @@ type GateStatus =
   | "error"
   | "parity-error"
   | "interaction-error"
-  | "viewport-error";
+  | "viewport-error"
+  | "visual-error";
 
 const V2_RENDERER_MOUNT_TIMEOUT_MS = 10_000;
 const V2_RENDERER_SELECTOR = '[data-hostly-readonly-map-source="editor-v2"]';
@@ -51,6 +52,25 @@ function allV2OperationalElementsHaveMemoryController(
     }
   }
   return true;
+}
+
+function hasRenderableV2Stage(v2Map: HTMLElement): boolean {
+  const logicalWidth = Number(v2Map.getAttribute("data-hostly-v2-logical-width"));
+  const logicalHeight = Number(v2Map.getAttribute("data-hostly-v2-logical-height"));
+  const layerItems = Number(v2Map.getAttribute("data-hostly-v2-layer-items"));
+  if (
+    !Number.isFinite(logicalWidth) ||
+    logicalWidth <= 0 ||
+    !Number.isFinite(logicalHeight) ||
+    logicalHeight <= 0 ||
+    !Number.isFinite(layerItems) ||
+    layerItems <= 0
+  ) {
+    return false;
+  }
+
+  const rect = v2Map.getBoundingClientRect();
+  return rect.width > 1 && rect.height > 1;
 }
 
 export function TpvEditorV2ReadyGate({
@@ -132,6 +152,12 @@ export function TpvEditorV2ReadyGate({
         return false;
       }
 
+      if (!hasRenderableV2Stage(v2Map)) {
+        settled = true;
+        setStatus("visual-error");
+        return true;
+      }
+
       settled = true;
       setStatus("ready");
       return true;
@@ -167,6 +193,10 @@ export function TpvEditorV2ReadyGate({
         setStatus("interaction-error");
         return;
       }
+      if (v2Map && !hasRenderableV2Stage(v2Map)) {
+        setStatus("visual-error");
+        return;
+      }
       setStatus("error");
     }, V2_RENDERER_MOUNT_TIMEOUT_MS);
 
@@ -186,12 +216,14 @@ export function TpvEditorV2ReadyGate({
     status === "error" ||
     status === "parity-error" ||
     status === "interaction-error" ||
-    status === "viewport-error"
+    status === "viewport-error" ||
+    status === "visual-error"
   ) {
     const isMissing = status === "missing";
     const isParityError = status === "parity-error";
     const isInteractionError = status === "interaction-error";
     const isViewportError = status === "viewport-error";
+    const isVisualError = status === "visual-error";
 
     return (
       <div
@@ -204,7 +236,9 @@ export function TpvEditorV2ReadyGate({
                 ? "v2-interaction-error"
                 : isViewportError
                   ? "v2-viewport-error"
-                  : "error-v2"
+                  : isVisualError
+                    ? "v2-visual-error"
+                    : "error-v2"
         }
         className="flex min-h-[320px] w-full items-center justify-center rounded-2xl border border-amber-200 bg-amber-50/70 px-6 text-center"
       >
@@ -218,7 +252,9 @@ export function TpvEditorV2ReadyGate({
                   ? "Los elementos operativos del TPV todavía no están enlazados al 100 % con sus controladores V2."
                   : isViewportError
                     ? "El TPV todavía no está usando el viewport nativo del Editor V2."
-                    : "No se ha podido montar el plano del Editor V2 en el TPV."}
+                    : isVisualError
+                      ? "El plano V2 se ha cargado, pero su escenario visual no tiene dimensiones o contenido renderizable."
+                      : "No se ha podido montar el plano del Editor V2 en el TPV."}
           </p>
           <p className="mt-1 text-xs leading-5 text-slate-600">
             {isParityError
@@ -227,7 +263,9 @@ export function TpvEditorV2ReadyGate({
                 ? "Hostly ha bloqueado el mapa porque falta el controlador en memoria de algún elemento operativo V2 o el renderer no declaró interacción nativa."
                 : isViewportError
                   ? "Hostly ha bloqueado la visualización porque el Editor V2 sigue montado dentro de un viewport histórico. El TPV solo se revela cuando renderer, interacción y viewport son V2 nativos."
-                  : "El TPV ya no usa el mapa antiguo como sustituto. Revisa el enlace del plano y su estado en Editor V2."}
+                  : isVisualError
+                    ? "Hostly ya no considera correcto un renderer V2 vacío o de tamaño cero. Revisa las dimensiones y las capas del espacio seleccionado."
+                    : "El TPV ya no usa el mapa antiguo como sustituto. Revisa el enlace del plano y su estado en Editor V2."}
           </p>
         </div>
       </div>
