@@ -96,7 +96,7 @@ export function SalaEditorReadonlyMap({
       ? new Set(operationalVisibleInstanceIds.map((id) => String(id).trim()).filter(Boolean))
       : null;
   const tpvOperationalInstances =
-    visibleInstanceIdSet == null
+    visibleInstanceIdSet == null || visibleInstanceIdSet.size === 0
       ? contract.operationalElementInstances
       : contract.operationalElementInstances.filter(
           (instance) =>
