@@ -20,7 +20,7 @@ import {
 } from "@/lib/productos/product-operational-routing-audit";
 import type { CartaCategoria, CartaFamilia } from "@/lib/carta-categorias/types";
 import type { ProductionStationDocument } from "@/lib/produccion/production-station-types";
-import type { PlatoCarta } from "@/lib/platos-local";
+import type { PlatoCarta } from "@/lib/carta/product-sale-contract";
 import type { TranslateFn } from "@/lib/i18n";
 
 export type ProductEditFocus = "routing" | "recipe";
