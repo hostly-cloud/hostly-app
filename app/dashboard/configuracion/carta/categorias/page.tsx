@@ -58,7 +58,7 @@ import type { ProductFamilyDocument } from "@/lib/carta/product-family-types";
 import { countProductsByCategoryIdFromCentral, countProductsByCategoryIdFromPlatos } from "@/lib/carta/catalog-category-counts";
 import { useCentralProductsForCarta } from "@/lib/carta/use-central-products-for-carta";
 import { LegacyCatalogPendingNotice } from "@/components/carta/legacy-catalog-pending-notice";
-import { loadPlatos, PLATOS_CHANGED_EVENT } from "@/lib/platos-local";
+import { loadPlatos, PLATOS_CHANGED_EVENT } from "@/lib/carta/legacy-platos-storage";
 import { CartaCatalogConceptCollapsible } from "@/components/carta/carta-catalog-concept-collapsible";
 import { CategoriasCartaDataView } from "@/components/carta/categorias-carta-data-view";
 
