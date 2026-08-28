@@ -14,6 +14,9 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import type { FloorPlanCanvasSize } from "@/lib/firestore/floorPlans";
+import { getOperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
+import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
+import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import {
   HOSTLY_MAP_JOIN_ARMED,
   type HostlyMapJoinArmedDetail,
@@ -64,24 +67,24 @@ function getPlanSizeBounds(
   };
 }
 
-function getReadonlyV2PlanSize(
-  readonlyUnderlay: ReactNode,
-): FloorPlanCanvasSize | null {
+type ReadonlyV2Geometry = {
+  planSize: FloorPlanCanvasSize;
+  operationalBounds: PlanContentBounds | null;
+};
+
+function getReadonlyV2Geometry(readonlyUnderlay: ReactNode): ReadonlyV2Geometry | null {
   if (!isValidElement(readonlyUnderlay)) return null;
 
   const props = readonlyUnderlay.props as {
-    contract?: {
-      space?: {
-        base?: {
-          dimensions?: { width?: unknown; height?: unknown };
-          scale?: { pixelsPerUnit?: unknown };
-        };
-      };
-    };
+    contract?: unknown;
     coordinateScale?: unknown;
   };
-  const dimensions = props.contract?.space?.base?.dimensions;
-  const scale = props.contract?.space?.base?.scale?.pixelsPerUnit;
+  const candidate = props.contract;
+  if (typeof candidate !== "object" || candidate === null) return null;
+
+  const contract = candidate as EditorTpvReadonlyVisualContract;
+  const dimensions = contract.space?.base?.dimensions;
+  const pixelsPerUnit = contract.space?.base?.scale?.pixelsPerUnit;
   const coordinateScale =
     typeof props.coordinateScale === "number" &&
     Number.isFinite(props.coordinateScale) &&
@@ -96,17 +99,85 @@ function getReadonlyV2PlanSize(
     typeof dimensions?.height !== "number" ||
     !Number.isFinite(dimensions.height) ||
     dimensions.height <= 0 ||
-    typeof scale !== "number" ||
-    !Number.isFinite(scale) ||
-    scale <= 0
+    typeof pixelsPerUnit !== "number" ||
+    !Number.isFinite(pixelsPerUnit) ||
+    pixelsPerUnit <= 0
   ) {
     return null;
   }
 
-  return {
-    width: dimensions.width * scale * coordinateScale,
-    height: dimensions.height * scale * coordinateScale,
+  const planSize = {
+    width: dimensions.width * pixelsPerUnit * coordinateScale,
+    height: dimensions.height * pixelsPerUnit * coordinateScale,
   };
+
+  const allInstances = Array.isArray(contract.operationalElementInstances)
+    ? contract.operationalElementInstances
+    : [];
+  const tableInstances = allInstances.filter(
+    (instance) => instance.elementType === "TABLE",
+  );
+  const fitInstances = tableInstances.length > 0 ? tableInstances : allInstances;
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let projectedCount = 0;
+
+  for (const instance of fitInstances) {
+    const size = getOperationalInstanceCanvasSize(instance);
+    const geometry = projectOperationalElement(instance, {
+      coordinateScale,
+      size,
+    });
+    if (
+      !Number.isFinite(geometry.x) ||
+      !Number.isFinite(geometry.y) ||
+      !Number.isFinite(geometry.width) ||
+      geometry.width <= 0 ||
+      !Number.isFinite(geometry.height) ||
+      geometry.height <= 0
+    ) {
+      continue;
+    }
+
+    const radians = (geometry.rotation * Math.PI) / 180;
+    const absCos = Math.abs(Math.cos(radians));
+    const absSin = Math.abs(Math.sin(radians));
+    const rotatedWidth = geometry.width * absCos + geometry.height * absSin;
+    const rotatedHeight = geometry.width * absSin + geometry.height * absCos;
+    const centerX = geometry.x + geometry.width / 2;
+    const centerY = geometry.y + geometry.height / 2;
+
+    minX = Math.min(minX, centerX - rotatedWidth / 2);
+    minY = Math.min(minY, centerY - rotatedHeight / 2);
+    maxX = Math.max(maxX, centerX + rotatedWidth / 2);
+    maxY = Math.max(maxY, centerY + rotatedHeight / 2);
+    projectedCount += 1;
+  }
+
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const operationalBounds =
+    projectedCount > 0 &&
+    Number.isFinite(width) &&
+    width > 0 &&
+    Number.isFinite(height) &&
+    height > 0
+      ? {
+          minX,
+          minY,
+          maxX,
+          maxY,
+          width,
+          height,
+          centerX: minX + width / 2,
+          centerY: minY + height / 2,
+        }
+      : null;
+
+  return { planSize, operationalBounds };
 }
 
 function isInteractivePointerTarget(target: EventTarget | null): boolean {
@@ -165,8 +236,55 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
   const panRef = useRef(pan);
   const fitPaddingPx = viewportFitPaddingPx ?? VIEW_PADDING_PX;
   const fitZoomMax = viewportFitZoomMax ?? FIT_ZOOM_MAX;
-  const readonlyV2PlanSize = getReadonlyV2PlanSize(readonlyUnderlay);
-  const hasReadonlyV2PlanSize = readonlyV2PlanSize != null;
+
+  const rawReadonlyV2Geometry = getReadonlyV2Geometry(readonlyUnderlay);
+  const readonlyV2PlanWidth = rawReadonlyV2Geometry?.planSize.width ?? null;
+  const readonlyV2PlanHeight = rawReadonlyV2Geometry?.planSize.height ?? null;
+  const rawOperationalBounds = rawReadonlyV2Geometry?.operationalBounds ?? null;
+  const operationalMinX = rawOperationalBounds?.minX ?? null;
+  const operationalMinY = rawOperationalBounds?.minY ?? null;
+  const operationalMaxX = rawOperationalBounds?.maxX ?? null;
+  const operationalMaxY = rawOperationalBounds?.maxY ?? null;
+  const operationalWidth = rawOperationalBounds?.width ?? null;
+  const operationalHeight = rawOperationalBounds?.height ?? null;
+  const operationalCenterX = rawOperationalBounds?.centerX ?? null;
+  const operationalCenterY = rawOperationalBounds?.centerY ?? null;
+
+  const readonlyV2OperationalBounds = useMemo<PlanContentBounds | null>(
+    () =>
+      operationalMinX != null &&
+      operationalMinY != null &&
+      operationalMaxX != null &&
+      operationalMaxY != null &&
+      operationalWidth != null &&
+      operationalHeight != null &&
+      operationalCenterX != null &&
+      operationalCenterY != null
+        ? {
+            minX: operationalMinX,
+            minY: operationalMinY,
+            maxX: operationalMaxX,
+            maxY: operationalMaxY,
+            width: operationalWidth,
+            height: operationalHeight,
+            centerX: operationalCenterX,
+            centerY: operationalCenterY,
+          }
+        : null,
+    [
+      operationalCenterX,
+      operationalCenterY,
+      operationalHeight,
+      operationalMaxX,
+      operationalMaxY,
+      operationalMinX,
+      operationalMinY,
+      operationalWidth,
+    ],
+  );
+
+  const hasReadonlyV2PlanSize =
+    readonlyV2PlanWidth != null && readonlyV2PlanHeight != null;
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -196,8 +314,8 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     viewportFitElements !== undefined &&
     !hasReadonlyV2PlanSize;
 
-  const effectivePlanWidth = readonlyV2PlanSize?.width ?? planSize?.width ?? null;
-  const effectivePlanHeight = readonlyV2PlanSize?.height ?? planSize?.height ?? null;
+  const effectivePlanWidth = readonlyV2PlanWidth ?? planSize?.width ?? null;
+  const effectivePlanHeight = readonlyV2PlanHeight ?? planSize?.height ?? null;
   const effectivePlanSize = useMemo<FloorPlanCanvasSize | null>(
     () =>
       effectivePlanWidth != null && effectivePlanHeight != null
@@ -205,6 +323,12 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
         : null,
     [effectivePlanHeight, effectivePlanWidth],
   );
+
+  const fitSource = readonlyV2OperationalBounds
+    ? "editor-v2-operational-content"
+    : hasReadonlyV2PlanSize
+      ? "editor-v2-plan"
+      : "legacy-fallback";
 
   const assignMapRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -224,17 +348,21 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     if (vw < 32 || vh < 32) return;
 
     const planBounds = getPlanSizeBounds(effectivePlanSize);
+    const useOperationalV2Fit = readonlyV2OperationalBounds != null;
     const usePlanFit =
+      !useOperationalV2Fit &&
       viewportFitMode === "plan" &&
-      planBounds != null &&
-      !includeExplicitFitElementsInPlan;
-    const bounds = usePlanFit
-      ? planBounds
-      : getPlanContentBounds(
-          viewportFitElements ?? props.elements,
-          viewportFitZones ?? props.zones,
-          includeExplicitFitElementsInPlan ? effectivePlanSize : null,
-        );
+      hasReadonlyV2PlanSize &&
+      planBounds != null;
+    const bounds = useOperationalV2Fit
+      ? readonlyV2OperationalBounds
+      : usePlanFit
+        ? planBounds
+        : getPlanContentBounds(
+            viewportFitElements ?? props.elements,
+            viewportFitZones ?? props.zones,
+            includeExplicitFitElementsInPlan ? effectivePlanSize : null,
+          );
 
     let nextZoom: number;
     let nextPan: { x: number; y: number };
@@ -248,8 +376,8 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       );
       nextZoom = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 0.06;
       nextPan = {
-        x: (vw - bounds.width * nextZoom) / 2,
-        y: (vh - bounds.height * nextZoom) / 2,
+        x: (vw - bounds.width * nextZoom) / 2 - bounds.minX * nextZoom,
+        y: (vh - bounds.height * nextZoom) / 2 - bounds.minY * nextZoom,
       };
     } else {
       ({ zoom: nextZoom, pan: nextPan } = fitBoundsToViewport(bounds, vw, vh, {
@@ -274,7 +402,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       );
     }
 
-    if (!usePlanFit && viewportFitAlign === "start") {
+    if (!useOperationalV2Fit && !usePlanFit && viewportFitAlign === "start") {
       const inset = fitPaddingPx / 2;
       nextPan = {
         x: inset - bounds.minX * nextZoom,
@@ -291,10 +419,12 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     effectivePlanSize,
     fitPaddingPx,
     fitZoomMax,
+    hasReadonlyV2PlanSize,
     includeExplicitFitElementsInPlan,
     mapLayoutEmphasis,
     props.elements,
     props.zones,
+    readonlyV2OperationalBounds,
     viewportFitAlign,
     viewportFitElements,
     viewportFitMode,
@@ -306,14 +436,14 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
 
   const applyNaturalZoomCentered = useCallback(() => {
     const root = rootRef.current;
-    const bounds = getPlanSizeBounds(effectivePlanSize);
+    const bounds = readonlyV2OperationalBounds ?? getPlanSizeBounds(effectivePlanSize);
     if (!root || !bounds) return;
     setZoom(1);
     setPan({
       x: root.clientWidth / 2 - bounds.centerX,
       y: root.clientHeight / 2 - bounds.centerY,
     });
-  }, [effectivePlanSize]);
+  }, [effectivePlanSize, readonlyV2OperationalBounds]);
 
   useImperativeHandle<EditableFloorMapViewportControls | null, EditableFloorMapViewportControls | null>(
     viewportControlsRef,
@@ -475,7 +605,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       ref={assignMapRef}
       className={className}
       data-hostly-v2-viewport="native"
-      data-hostly-v2-fit-source={hasReadonlyV2PlanSize ? "editor-v2-plan" : "legacy-fallback"}
+      data-hostly-v2-fit-source={fitSource}
       data-hostly-v2-gesture-owner="native"
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}
