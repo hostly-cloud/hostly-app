@@ -1,5 +1,9 @@
-import type { Table, PlanElementType } from "@/lib/firestore/tables";
+import type { Table } from "@/lib/firestore/tables";
 import type { EditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
+import {
+  getEditorV2NativeDecorativeIds,
+  isLegacyDecorativeCoveredByEditorV2,
+} from "@/lib/sala-editor/readonly/editor-v2-legacy-decorative-parity";
 
 export type TpvV2LegacyResidualCoverage<TZone extends { id: string }> = {
   linkedOperationalIds: ReadonlySet<string>;
@@ -8,19 +12,6 @@ export type TpvV2LegacyResidualCoverage<TZone extends { id: string }> = {
   residualLegacyZones: TZone[] | undefined;
   fullyCovered: boolean;
 };
-
-const LEGACY_DECORATIVE_TYPES: ReadonlySet<PlanElementType> = new Set([
-  "wall",
-  "bar",
-  "column",
-  "pool",
-  "door",
-  "planter",
-]);
-
-function isLegacyDecorativeType(type: PlanElementType): boolean {
-  return LEGACY_DECORATIVE_TYPES.has(type);
-}
 
 function linkedOperationalIdsFromContract(
   contract: EditorTpvReadonlyVisualContract,
@@ -35,16 +26,10 @@ function linkedOperationalIdsFromContract(
 }
 
 /**
- * TPV V2 readiness only cares about operational identity parity.
+ * Evalua de forma conservadora cuanto contenido historico sigue siendo necesario
+ * despues de aplicar paridad exacta Editor V2.
  *
- * Geometry, zones, walls, surfaces and decorative content belong exclusively to
- * Editor V2 and must never be validated against, hidden by, or reconstructed
- * from the historical floor-plan projection. Legacy rows are retained here only
- * as operational controllers while the table identity migration is completed.
- *
- * Important: this module deliberately avoids runtime imports from the Firestore
- * table repository. The TPV V2 renderer is client-side infrastructure and must
- * remain free of Firebase initialization/circular module side effects.
+ * Nunca considera cubierto un objeto por nombre, tipo aproximado o posicion.
  */
 export function evaluateTpvV2LegacyResidualCoverage<
   TZone extends { id: string },
@@ -53,12 +38,24 @@ export function evaluateTpvV2LegacyResidualCoverage<
   elements: Table[];
   zones?: TZone[];
 }): TpvV2LegacyResidualCoverage<TZone> {
+  const nativeDecorativeIds = new Set(
+    getEditorV2NativeDecorativeIds(params.contract),
+  );
   const linkedOperationalIds = linkedOperationalIdsFromContract(params.contract);
+  const nativeZoneIds = new Set(
+    params.contract.zones
+      .map((zone) => String(zone.id ?? "").trim())
+      .filter(Boolean),
+  );
+
   const linkedOperationalElements: Table[] = [];
   const residualLegacyElements: Table[] = [];
 
   for (const element of params.elements) {
-    if (isLegacyDecorativeType(element.type)) {
+    if (
+      nativeDecorativeIds.size > 0 &&
+      isLegacyDecorativeCoveredByEditorV2(element, nativeDecorativeIds)
+    ) {
       continue;
     }
 
@@ -71,15 +68,22 @@ export function evaluateTpvV2LegacyResidualCoverage<
     residualLegacyElements.push(element);
   }
 
-  // Zones are visual geometry owned by Editor V2. Historical zone rows no
-  // longer participate in V2 renderer readiness or parity decisions.
-  const residualLegacyZones = params.zones == null ? undefined : [];
+  const residualLegacyZones =
+    params.zones == null
+      ? undefined
+      : nativeZoneIds.size === 0
+        ? params.zones
+        : params.zones.filter(
+            (zone) => !nativeZoneIds.has(String(zone.id ?? "").trim()),
+          );
 
   return {
     linkedOperationalIds,
     linkedOperationalElements,
     residualLegacyElements,
     residualLegacyZones,
-    fullyCovered: residualLegacyElements.length === 0,
+    fullyCovered:
+      residualLegacyElements.length === 0 &&
+      (residualLegacyZones?.length ?? 0) === 0,
   };
 }
