@@ -5,12 +5,54 @@ import {
 } from "@/lib/server/auth/require-authenticated-restaurant";
 import { serverRoleHasCapability } from "@/lib/server/auth/profile-role";
 import {
+  SALA_EDITOR_MAPS_COLLECTION,
+  SALA_EDITOR_PUBLISHED_DOC_ID,
   parseSalaEditorDocumentForPublished,
+  parseSalaEditorPublishedDocument,
 } from "@/lib/sala-editor/persistence/sala-editor-published-contract";
 import { saveSalaEditorPublishedWithAdmin } from "@/lib/server/sala-editor/save-published-snapshot";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export async function GET(req: Request) {
+  const authCtx = await requireAuthenticatedRestaurant(req);
+  if (isAuthErrorResponse(authCtx)) return authCtx;
+
+  const snapshot = await authCtx.db
+    .collection("restaurants")
+    .doc(authCtx.restaurantId)
+    .collection(SALA_EDITOR_MAPS_COLLECTION)
+    .doc(SALA_EDITOR_PUBLISHED_DOC_ID)
+    .get();
+
+  if (!snapshot.exists) {
+    return NextResponse.json(
+      { ok: false, error: "PUBLISHED_NOT_FOUND" },
+      { status: 404 },
+    );
+  }
+
+  try {
+    const published = parseSalaEditorPublishedDocument(
+      snapshot.data(),
+      authCtx.restaurantId,
+    );
+    return NextResponse.json({ ok: true, published });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "INVALID_PUBLISHED_SNAPSHOT",
+        details:
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : "El snapshot publicado no cumple el contrato V2.",
+      },
+      { status: 409 },
+    );
+  }
 }
 
 export async function POST(req: Request) {
