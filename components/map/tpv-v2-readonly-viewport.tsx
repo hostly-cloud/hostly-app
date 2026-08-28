@@ -6,6 +6,7 @@ import {
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -150,7 +151,15 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
   const includeExplicitFitElementsInPlan =
     viewportFitMode === "plan" && viewportFitElements !== undefined;
   const readonlyV2PlanSize = getReadonlyV2PlanSize(readonlyUnderlay);
-  const effectivePlanSize = readonlyV2PlanSize ?? planSize;
+  const effectivePlanWidth = readonlyV2PlanSize?.width ?? planSize?.width ?? null;
+  const effectivePlanHeight = readonlyV2PlanSize?.height ?? planSize?.height ?? null;
+  const effectivePlanSize = useMemo<FloorPlanCanvasSize | null>(
+    () =>
+      effectivePlanWidth != null && effectivePlanHeight != null
+        ? { width: effectivePlanWidth, height: effectivePlanHeight }
+        : null,
+    [effectivePlanHeight, effectivePlanWidth],
+  );
 
   const assignMapRef = useCallback(
     (node: HTMLDivElement | null) => {
