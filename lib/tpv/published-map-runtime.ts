@@ -1,6 +1,6 @@
 import type { FloorPlan } from "@/lib/firestore/floorPlans";
 import { getFloorPlans } from "@/lib/firestore/floorPlans";
-import type { Table } from "@/lib/firestore/tables";
+import type { PlanElementType, Table } from "@/lib/firestore/tables";
 import { getTables } from "@/lib/firestore/tables";
 import type { Zone as FirestoreZone } from "@/lib/firestore/zones";
 import { getZones } from "@/lib/firestore/zones";
@@ -9,7 +9,6 @@ import {
   buildEditorTpvReadonlyVisualContract,
   type EditorTpvReadonlyVisualContract,
 } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
-import { getEditorV2NativeDecorativeIds } from "@/lib/sala-editor/readonly/editor-v2-legacy-decorative-parity";
 
 export type TpvPublishedMapRuntime = {
   restaurantId: string;
@@ -26,10 +25,23 @@ type MatchPublishedContractInput = {
   }[];
 };
 
+const LEGACY_DECORATIVE_TYPES: ReadonlySet<PlanElementType> = new Set([
+  "wall",
+  "bar",
+  "column",
+  "pool",
+  "door",
+  "planter",
+]);
+
 const runtimeByRestaurantId = new Map<string, TpvPublishedMapRuntime>();
 
 function normalizeId(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function isLegacyDecorativeType(type: PlanElementType): boolean {
+  return LEGACY_DECORATIVE_TYPES.has(type);
 }
 
 function assertTenantRows(
@@ -96,9 +108,10 @@ function buildPublishedRuntime(params: {
 }
 
 /**
- * Loads the TPV readonly map exclusively from the operational projection that
- * Editor V2 publishes to floorPlans/tables/zones. Nothing is read from the
- * editor draft store and nothing is persisted by this adapter.
+ * Compatibility adapter for the historical operational projection.
+ *
+ * New TPV V2 runtime reads the native published snapshot first. This adapter is
+ * retained only for older callers/data while that migration is completed.
  */
 export async function loadTpvPublishedMapRuntime(
   restaurantId: string,
@@ -163,10 +176,10 @@ function readExplicitFloorPlanId(
   return { kind: "single", floorPlanId: [...ids][0]! };
 }
 
-function contractCoveredIds(
+function contractCoveredOperationalIds(
   contract: EditorTpvReadonlyVisualContract,
 ): ReadonlySet<string> {
-  const ids = new Set<string>(getEditorV2NativeDecorativeIds(contract));
+  const ids = new Set<string>();
   for (const instance of contract.operationalElementInstances) {
     const tableId = normalizeId(instance.metadata.legacyTableId);
     if (tableId) ids.add(tableId);
@@ -175,14 +188,11 @@ function contractCoveredIds(
 }
 
 /**
- * Resolves the selected TPV payload to one published floor plan.
+ * Resolves the selected TPV payload to one historical projected floor plan.
  *
- * Preferred path: use the explicit floorPlanId already carried by the filtered
- * TPV rows. This avoids hiding the entire V2 map because of a legacy/decorative
- * residual that is not part of the published coverage.
- *
- * Compatibility path: when old data has no floorPlanId, keep the historical
- * exact ID-coverage matcher. Mixed explicit floorPlanIds still fail closed.
+ * Preferred path: use explicit floorPlanId. Compatibility data without that ID
+ * falls back to exact operational table coverage only. Decorative geometry is
+ * intentionally ignored because Editor V2 is the sole visual source of truth.
  */
 export function matchCachedTpvPublishedReadonlyContract(
   input: MatchPublishedContractInput,
@@ -199,24 +209,20 @@ export function matchCachedTpvPublishedReadonlyContract(
     return contract?.restaurantId === restaurantId ? contract : null;
   }
 
-  const elementIds = input.elements
+  const operationalElementIds = input.elements
+    .filter((element) => !isLegacyDecorativeType(element.type))
     .map((element) => normalizeId(element.id))
     .filter(Boolean);
-  const zoneIds = (input.zones ?? [])
-    .map((zone) => normalizeId(zone.id))
-    .filter(Boolean);
 
-  if (elementIds.length === 0 && zoneIds.length === 0) return null;
+  if (operationalElementIds.length === 0) return null;
 
   const matches: EditorTpvReadonlyVisualContract[] = [];
   for (const contract of runtime.contractsByFloorPlanId.values()) {
-    const coveredElementIds = contractCoveredIds(contract);
-    const coveredZoneIds = new Set(
-      contract.zones.map((zone) => normalizeId(zone.id)).filter(Boolean),
+    const coveredOperationalIds = contractCoveredOperationalIds(contract);
+    const coversOperationalElements = operationalElementIds.every((id) =>
+      coveredOperationalIds.has(id),
     );
-    const coversElements = elementIds.every((id) => coveredElementIds.has(id));
-    const coversZones = zoneIds.every((id) => coveredZoneIds.has(id));
-    if (coversElements && coversZones) matches.push(contract);
+    if (coversOperationalElements) matches.push(contract);
   }
 
   return matches.length === 1 ? matches[0]! : null;
