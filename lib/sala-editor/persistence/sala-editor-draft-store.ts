@@ -204,7 +204,19 @@ async function loadPublishedAsDraftCompatibility(
 ): Promise<SalaEditorDraftDocument | null> {
   if (!shouldPreferPublishedSnapshotForRuntime()) return null;
 
-  const published = await loadSalaEditorPublished(restaurantId);
+  let published: Awaited<ReturnType<typeof loadSalaEditorPublished>>;
+  try {
+    published = await loadSalaEditorPublished(restaurantId);
+  } catch (error) {
+    if (SALA_EDITOR_DEV_DIAGNOSTICS) {
+      console.warn(
+        "[SalaEditorV2] snapshot published no disponible; TPV usa draft",
+        { restaurantId, error },
+      );
+    }
+    return null;
+  }
+
   if (!published) return null;
 
   if (SALA_EDITOR_DEV_DIAGNOSTICS) {
