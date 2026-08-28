@@ -244,7 +244,7 @@ export function fitBoundsToViewport(
 ): { zoom: number; pan: { x: number; y: number } } {
   const paddingPx = options.paddingPx ?? VIEW_PADDING_PX;
   const maxZoom = options.maxZoom ?? ZOOM_MAX;
-  const fitZoomMax = options.fitZoomMax ?? FIT_ZOOM_MAX;
+  const fitZoomMax = options.fitZoomMax ?? options.maxZoom ?? FIT_ZOOM_MAX;
   const align = options.align ?? "center";
 
   const vw = Math.max(1, viewportWidth);
