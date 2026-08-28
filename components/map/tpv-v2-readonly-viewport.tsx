@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  isValidElement,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -8,6 +9,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import type { FloorPlanCanvasSize } from "@/lib/firestore/floorPlans";
@@ -53,6 +55,51 @@ function getPlanSizeBounds(
     height: planSize.height,
     centerX: planSize.width / 2,
     centerY: planSize.height / 2,
+  };
+}
+
+function getReadonlyV2PlanSize(
+  readonlyUnderlay: ReactNode,
+): FloorPlanCanvasSize | null {
+  if (!isValidElement(readonlyUnderlay)) return null;
+
+  const props = readonlyUnderlay.props as {
+    contract?: {
+      space?: {
+        base?: {
+          dimensions?: { width?: unknown; height?: unknown };
+          scale?: { pixelsPerUnit?: unknown };
+        };
+      };
+    };
+    coordinateScale?: unknown;
+  };
+  const dimensions = props.contract?.space?.base?.dimensions;
+  const scale = props.contract?.space?.base?.scale?.pixelsPerUnit;
+  const coordinateScale =
+    typeof props.coordinateScale === "number" &&
+    Number.isFinite(props.coordinateScale) &&
+    props.coordinateScale > 0
+      ? props.coordinateScale
+      : 1;
+
+  if (
+    typeof dimensions?.width !== "number" ||
+    !Number.isFinite(dimensions.width) ||
+    dimensions.width <= 0 ||
+    typeof dimensions?.height !== "number" ||
+    !Number.isFinite(dimensions.height) ||
+    dimensions.height <= 0 ||
+    typeof scale !== "number" ||
+    !Number.isFinite(scale) ||
+    scale <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    width: dimensions.width * scale * coordinateScale,
+    height: dimensions.height * scale * coordinateScale,
   };
 }
 
@@ -102,6 +149,8 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
   const fitZoomMax = viewportFitZoomMax ?? FIT_ZOOM_MAX;
   const includeExplicitFitElementsInPlan =
     viewportFitMode === "plan" && viewportFitElements !== undefined;
+  const readonlyV2PlanSize = getReadonlyV2PlanSize(readonlyUnderlay);
+  const effectivePlanSize = readonlyV2PlanSize ?? planSize;
 
   const assignMapRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -120,7 +169,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     const vh = root.clientHeight;
     if (vw < 32 || vh < 32) return;
 
-    const planBounds = getPlanSizeBounds(planSize);
+    const planBounds = getPlanSizeBounds(effectivePlanSize);
     const usePlanFit =
       viewportFitMode === "plan" &&
       planBounds != null &&
@@ -130,7 +179,7 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       : getPlanContentBounds(
           viewportFitElements ?? props.elements,
           viewportFitZones ?? props.zones,
-          includeExplicitFitElementsInPlan ? planSize : null,
+          includeExplicitFitElementsInPlan ? effectivePlanSize : null,
         );
 
     let nextZoom: number;
@@ -185,11 +234,11 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       y: nextPan.y + viewportFitOffsetY,
     });
   }, [
+    effectivePlanSize,
     fitPaddingPx,
     fitZoomMax,
     includeExplicitFitElementsInPlan,
     mapLayoutEmphasis,
-    planSize,
     props.elements,
     props.zones,
     viewportFitAlign,
@@ -203,14 +252,14 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
 
   const applyNaturalZoomCentered = useCallback(() => {
     const root = rootRef.current;
-    const bounds = getPlanSizeBounds(planSize);
+    const bounds = getPlanSizeBounds(effectivePlanSize);
     if (!root || !bounds) return;
     setZoom(1);
     setPan({
       x: root.clientWidth / 2 - bounds.centerX,
       y: root.clientHeight / 2 - bounds.centerY,
     });
-  }, [planSize]);
+  }, [effectivePlanSize]);
 
   useImperativeHandle<EditableFloorMapViewportControls | null, EditableFloorMapViewportControls | null>(
     viewportControlsRef,
