@@ -55,7 +55,7 @@ import {
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
 import { buildOperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
-import { nextOperationalElementInstanceName } from "@/lib/sala-editor/ose/operational-element-naming";
+import { suggestOperationalElementInstanceName } from "@/lib/sala-editor/ose/operational-element-naming";
 import { withOperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import type { OperationalVisualVariant } from "@/lib/sala-editor/ose/operational-visual-variant";
 import {
@@ -793,15 +793,22 @@ export function useSalaEditorDocument({
       );
       if (!source) return prev;
 
+      const sourceSpaceName =
+        prev.espacios.find((space) => space.id === source.spaceId)?.name ?? "";
+      const nameSuggestion = suggestOperationalElementInstanceName(
+        prev.operationalElementInstances,
+        source.spaceId,
+        source.elementType,
+        sourceSpaceName,
+      );
+      const duplicateMetadata = cloneMetadataWithoutOperationalRuntimeLinks(
+        source.metadata,
+      );
       const duplicate = buildOperationalElementInstance({
         spaceId: source.spaceId,
         zoneId: source.zoneId,
         elementType: source.elementType,
-        name: nextOperationalElementInstanceName(
-          prev.operationalElementInstances,
-          source.spaceId,
-          source.elementType,
-        ),
+        name: nameSuggestion.name,
         position: {
           x: source.position.x + 24,
           y: source.position.y + 24,
@@ -810,7 +817,12 @@ export function useSalaEditorDocument({
         capacity: source.capacity,
         visible: source.visible,
         enabled: source.enabled,
-        metadata: cloneMetadataWithoutOperationalRuntimeLinks(source.metadata),
+        metadata: {
+          ...duplicateMetadata,
+          ...(nameSuggestion.correctedFrom
+            ? { hostlyAutoCorrectedFrom: nameSuggestion.correctedFrom }
+            : {}),
+        },
         state: source.state,
       });
 
@@ -879,10 +891,11 @@ export function useSalaEditorDocument({
       );
       if (!catalogItem) return;
 
-      const name = nextOperationalElementInstanceName(
+      const nameSuggestion = suggestOperationalElementInstanceName(
         document.operationalElementInstances,
         selectedEspacio.id,
         activeOperationalElementType,
+        selectedEspacio.name,
       );
 
       const defaultSize = getDefaultOperationalInstanceCanvasSize(
@@ -900,10 +913,15 @@ export function useSalaEditorDocument({
       const instance = buildOperationalElementInstance({
         spaceId: selectedEspacio.id,
         elementType: activeOperationalElementType,
-        name,
+        name: nameSuggestion.name,
         position,
         capacity: catalogItem.defaultCapacity,
-        metadata,
+        metadata: {
+          ...metadata,
+          ...(nameSuggestion.correctedFrom
+            ? { hostlyAutoCorrectedFrom: nameSuggestion.correctedFrom }
+            : {}),
+        },
       });
 
       addOperationalElement(instance);
