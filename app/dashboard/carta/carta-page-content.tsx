@@ -2322,6 +2322,16 @@ export function CartaPageContent({
         String(selectedTpvFloorPlanId ?? "").trim(),
     );
     if (!selectedSpace) return [];
+    const normalizeTableIdentityName = (value: unknown) =>
+      String(value ?? "").trim().toLocaleLowerCase("es");
+    const tableDocumentsByName = new Map<string, Table[]>();
+    for (const table of tablesList) {
+      const key = normalizeTableIdentityName(table.name);
+      if (!key) continue;
+      const peers = tableDocumentsByName.get(key) ?? [];
+      peers.push(table);
+      tableDocumentsByName.set(key, peers);
+    }
     return salaEditorOperationalMap.document.operationalElementInstances
         .filter(
           (instance) =>
@@ -2329,10 +2339,17 @@ export function CartaPageContent({
             instance.spaceId === selectedSpace.id,
         )
         .flatMap((instance) => {
-          const legacyTableId =
+          let legacyTableId =
             typeof instance.metadata.legacyTableId === "string"
               ? instance.metadata.legacyTableId.trim()
               : "";
+          if (!legacyTableId) {
+            const sameNameDocuments =
+              tableDocumentsByName.get(normalizeTableIdentityName(instance.name)) ?? [];
+            if (sameNameDocuments.length === 1) {
+              legacyTableId = String(sameNameDocuments[0].id ?? "").trim();
+            }
+          }
           if (!legacyTableId) return [];
           return [{
             id: legacyTableId,
@@ -2350,7 +2367,7 @@ export function CartaPageContent({
             isActive: true,
           }];
         });
-  }, [restaurantId, salaEditorOperationalMap, selectedTpvFloorPlanId]);
+  }, [restaurantId, salaEditorOperationalMap, selectedTpvFloorPlanId, tablesList]);
   const publishedV2TableIdsForSelectedPlan = useMemo(
     () => new Set(publishedV2TablesForSelectedPlan.map((table) => table.id)),
     [publishedV2TablesForSelectedPlan],
