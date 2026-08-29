@@ -516,6 +516,11 @@ export function ConfiguracionHubPageContent() {
                 >
                   {card.status}
                 </span>
+                {card.href ? (
+                  <span className="hostly-config-hub-card__arrow" aria-hidden>
+                    <IconArrow />
+                  </span>
+                ) : null}
                 </>
               );
               return card.href ? (
@@ -555,6 +560,20 @@ function IconSearch({ size = 20 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
       <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
       <path d="M20 20l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconArrow({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 12h14M14 7l5 5-5 5"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
