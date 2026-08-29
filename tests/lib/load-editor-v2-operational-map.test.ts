@@ -1,15 +1,24 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { loadTpvEditorV2OperationalMap } from "@/lib/tpv/load-editor-v2-operational-map";
+import {
+  loadTpvEditorV2OperationalMap,
+  restorePublishedOperationalIdentityLinks,
+} from "@/lib/tpv/load-editor-v2-operational-map";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 
 const publishedDocument = {
   id: "published-map",
+  espacios: [],
+  operationalElementInstances: [],
 } as unknown as SalaEditorDocument;
-const draftDocument = { id: "draft-map" } as unknown as SalaEditorDocument;
+const draftDocument = {
+  id: "draft-map",
+  espacios: [],
+  operationalElementInstances: [],
+} as unknown as SalaEditorDocument;
 
 describe("loadTpvEditorV2OperationalMap", () => {
-  it("usa siempre el snapshot publicado y no consulta el borrador", async () => {
+  it("usa siempre la geometría publicada", async () => {
     let draftReads = 0;
     const result = await loadTpvEditorV2OperationalMap("restaurant-1", {
       loadPublished: async () =>
@@ -37,7 +46,7 @@ describe("loadTpvEditorV2OperationalMap", () => {
 
     assert.equal(result?.source, "published");
     assert.equal(result?.document, publishedDocument);
-    assert.equal(draftReads, 0);
+    assert.equal(draftReads, 1);
   });
 
   it("solo usa el borrador como migración si nunca se publicó un plano", async () => {
@@ -53,5 +62,38 @@ describe("loadTpvEditorV2OperationalMap", () => {
 
     assert.equal(result?.source, "draft-migration");
     assert.equal(result?.document, draftDocument);
+  });
+
+  it("restaura solo el enlace operativo perdido sin importar geometría draft", () => {
+    const published = {
+      espacios: [],
+      operationalElementInstances: [
+        {
+          id: "mesa-2",
+          position: { x: 120, y: 240 },
+          metadata: {},
+        },
+      ],
+    } as unknown as SalaEditorDocument;
+    const draft = {
+      espacios: [],
+      operationalElementInstances: [
+        {
+          id: "mesa-2",
+          position: { x: 999, y: 999 },
+          metadata: { legacyTableId: "legacy-mesa-2" },
+        },
+      ],
+    } as unknown as SalaEditorDocument;
+
+    const repaired = restorePublishedOperationalIdentityLinks(published, draft);
+    assert.deepEqual(repaired.operationalElementInstances[0]?.position, {
+      x: 120,
+      y: 240,
+    });
+    assert.equal(
+      repaired.operationalElementInstances[0]?.metadata.legacyTableId,
+      "legacy-mesa-2",
+    );
   });
 });
