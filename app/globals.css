@@ -19619,3 +19619,26 @@ main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline
     min-height: var(--hostly-m-touch-target) !important;
   }
 }
+/* Historial de comandas */
+.hostly-order-history { display: grid; gap: 16px; }
+.hostly-order-history__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.hostly-order-history__card { display: grid; gap: 14px; padding: 16px; }
+.hostly-order-history__card-header,
+.hostly-order-history__summary,
+.hostly-order-history__item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hostly-order-history__card-header > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.hostly-order-history__card-header > div:first-child > strong { color: var(--hostly-text); font-size: 15px; }
+.hostly-order-history__card-header > div:first-child > span,
+.hostly-order-history__no-items,
+.hostly-order-history__empty span { color: var(--hostly-muted); font-size: 13px; }
+.hostly-order-history__summary { flex: 0 0 auto; }
+.hostly-order-history__summary > strong { min-width: 72px; color: var(--hostly-text); text-align: right; }
+.hostly-order-history__items { display: grid; gap: 2px; padding-top: 10px; border-top: 1px solid var(--hostly-line); }
+.hostly-order-history__item { min-height: 32px; color: var(--hostly-text-secondary, #475569); font-size: 13px; }
+.hostly-order-history__item > strong { color: var(--hostly-text); font-size: 12px; }
+.hostly-order-history__empty { display: grid; gap: 4px; justify-items: center; padding: 40px 20px; text-align: center; }
+@media (max-width: 760px) {
+  .hostly-order-history__list { grid-template-columns: minmax(0, 1fr); }
+  .hostly-order-history__card-header { align-items: flex-start; }
+  .hostly-order-history__summary { flex-direction: column-reverse; align-items: flex-end; gap: 6px; }
+}
