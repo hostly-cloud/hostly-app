@@ -13,6 +13,16 @@ export type TpvEditorV2OperationalMap = {
   sourceDraftUpdatedAt: number | null;
 };
 
+type OperationalMapLoaders = {
+  loadPublished: typeof loadSalaEditorPublished;
+  loadDraft: typeof loadSalaEditorDraft;
+};
+
+const defaultOperationalMapLoaders: OperationalMapLoaders = {
+  loadPublished: loadSalaEditorPublished,
+  loadDraft: loadSalaEditorDraft,
+};
+
 /**
  * Temporary migration loader for the TPV Editor V2 map.
  *
@@ -24,8 +34,9 @@ export type TpvEditorV2OperationalMap = {
  */
 export async function loadTpvEditorV2OperationalMap(
   restaurantId: string,
+  loaders: OperationalMapLoaders = defaultOperationalMapLoaders,
 ): Promise<TpvEditorV2OperationalMap | null> {
-  const published = await loadSalaEditorPublished(restaurantId);
+  const published = await loaders.loadPublished(restaurantId);
   if (published) {
     return {
       source: "published",
@@ -35,7 +46,7 @@ export async function loadTpvEditorV2OperationalMap(
     };
   }
 
-  const draft = await loadSalaEditorDraft(restaurantId);
+  const draft = await loaders.loadDraft(restaurantId);
   if (!draft) return null;
 
   return {

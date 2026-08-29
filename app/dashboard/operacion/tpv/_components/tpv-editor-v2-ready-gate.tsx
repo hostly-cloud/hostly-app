@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
+import { loadTpvEditorV2OperationalMap } from "@/lib/tpv/load-editor-v2-operational-map";
 
 type TpvEditorV2ReadyGateProps = {
   restaurantId: string | null;
@@ -102,10 +102,10 @@ export function TpvEditorV2ReadyGate({
     let cancelled = false;
     setStatus("loading");
 
-    void loadSalaEditorDraft(rid)
-      .then((draft) => {
+    void loadTpvEditorV2OperationalMap(rid)
+      .then((operationalMap) => {
         if (cancelled) return;
-        setStatus(draft?.document ? "mounting" : "missing");
+        setStatus(operationalMap?.document ? "mounting" : "missing");
       })
       .catch(() => {
         if (cancelled) return;
