@@ -343,7 +343,11 @@ function mapDocToTable(d: QueryDocumentSnapshot): Table {
     typeof restaurantIdRaw === "string" && restaurantIdRaw.trim() !== ""
       ? restaurantIdRaw.trim()
       : "";
-  const idField = typeof data.id === "string" && data.id.trim() !== "" ? data.id.trim() : d.id;
+  // Firestore's document id is the canonical operational identity. Some older
+  // table documents still carry a stale duplicated `id` field; preferring that
+  // value breaks Editor V2 links, whose `legacyTableId` correctly targets the
+  // document id (the table then exists but cannot be matched/rendered in TPV).
+  const idField = d.id;
   const shape = parseShape(data.shape);
   const tableShape = parseTableShape(data.tableShape);
   const planElementType = parsePlanElementType(data.type);
