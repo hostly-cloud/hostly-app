@@ -17589,6 +17589,117 @@ main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline
 }
 
 /* KDS operational intelligence layer */
+.hostly-kds-operation-filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  padding: 0 var(--hostly-mobile-pad-x) var(--hostly-op-gap-xs);
+}
+
+.hostly-kds-operation-filters__label,
+.hostly-kds-operation-filter__label {
+  flex: 0 0 auto;
+  color: var(--hostly-ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hostly-kds-operation-filters__rail {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hostly-kds-operation-filters__rail::-webkit-scrollbar {
+  display: none;
+}
+
+.hostly-kds-operation-filter {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
+}
+
+.hostly-kds-operation-filter__select {
+  min-height: var(--hostly-m-touch-target) !important;
+  width: auto;
+  max-width: min(200px, 55vw);
+  padding: 0 36px 0 12px !important;
+  border-radius: var(--hostly-radius-sm) !important;
+  font-size: 13px !important;
+}
+
+.hostly-kds-station-filter-section {
+  min-width: 0;
+  padding: var(--hostly-op-gap-xs) var(--hostly-mobile-pad-x);
+}
+
+.hostly-kds-op-station-filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--hostly-op-gap-xs);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  scroll-snap-type: inline proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hostly-kds-op-station-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.hostly-kds-op-station-filter {
+  min-height: var(--hostly-m-touch-target);
+  max-width: min(220px, 70vw);
+  flex: 0 0 auto;
+  overflow: hidden;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--hostly-table-divider);
+  border-radius: var(--hostly-radius-sm);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink-muted);
+  padding: 0 var(--hostly-op-button-compact-pad-x);
+  font-size: var(--hostly-op-tab-font-size);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.hostly-kds-op-station-filter:hover {
+  border-color: var(--hostly-accent);
+  color: var(--hostly-navy-mid);
+}
+
+.hostly-kds-op-station-filter:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--hostly-accent) 28%, transparent);
+  outline-offset: 2px;
+}
+
+.hostly-kds-op-station-filter.is-active {
+  border-color: var(--hostly-navy-mid);
+  background: var(--hostly-navy-mid);
+  color: white;
+  box-shadow: var(--hostly-shadow-hairline);
+}
+
 .hostly-kds-kitchen-metrics-strip {
   flex-shrink: 0;
   padding: 4px var(--hostly-mobile-pad-x) 2px;
