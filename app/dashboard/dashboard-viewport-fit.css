@@ -320,6 +320,30 @@
 }
 
 @media (max-width: 767px) {
+  .hostly-operation-shell[data-operation-module="reservas"]
+    .hostly-reservations-kpi-rail {
+    display: flex;
+    gap: var(--hostly-op-gap-xs);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .hostly-operation-shell[data-operation-module="reservas"]
+    .hostly-reservations-kpi-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hostly-operation-shell[data-operation-module="reservas"]
+    .hostly-reservations-kpi-rail
+    .hostly-mobile-kpi {
+    flex: 0 0 112px;
+    scroll-snap-align: start;
+  }
+
   [data-hostly-config-shell]:not(.hostly-config-shell--hub) {
     height: 100dvh;
     min-height: 100dvh;
