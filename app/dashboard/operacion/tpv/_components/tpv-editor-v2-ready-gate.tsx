@@ -29,6 +29,10 @@ const V2_OPERATIONAL_CONTROLLER_SELECTOR =
 const LEGACY_VISIBLE_TABLE_SELECTOR =
   '[data-hostly-tpv-legacy-table-overlay="legacy-fallback-visible"]';
 
+export function hasUsableV2ViewportSize(width: number, height: number): boolean {
+  return Number.isFinite(width) && width >= 32 && Number.isFinite(height) && height >= 32;
+}
+
 function LoadingV2MapState() {
   return (
     <div
@@ -54,7 +58,10 @@ function allV2OperationalElementsHaveMemoryController(
   return true;
 }
 
-function hasRenderableV2Stage(v2Map: HTMLElement): boolean {
+function hasRenderableV2Stage(
+  v2Map: HTMLElement,
+  nativeViewport: HTMLElement,
+): boolean {
   const logicalWidth = Number(v2Map.getAttribute("data-hostly-v2-logical-width"));
   const logicalHeight = Number(v2Map.getAttribute("data-hostly-v2-logical-height"));
   const layerItems = Number(v2Map.getAttribute("data-hostly-v2-layer-items"));
@@ -66,6 +73,11 @@ function hasRenderableV2Stage(v2Map: HTMLElement): boolean {
     !Number.isFinite(layerItems) ||
     layerItems <= 0
   ) {
+    return false;
+  }
+
+  const viewportRect = nativeViewport.getBoundingClientRect();
+  if (!hasUsableV2ViewportSize(viewportRect.width, viewportRect.height)) {
     return false;
   }
 
@@ -152,7 +164,7 @@ export function TpvEditorV2ReadyGate({
         return false;
       }
 
-      if (!hasRenderableV2Stage(v2Map)) {
+      if (!hasRenderableV2Stage(v2Map, nativeViewport)) {
         settled = true;
         setStatus("visual-error");
         return true;
@@ -193,7 +205,11 @@ export function TpvEditorV2ReadyGate({
         setStatus("interaction-error");
         return;
       }
-      if (v2Map && !hasRenderableV2Stage(v2Map)) {
+      if (
+        v2Map &&
+        nativeViewport &&
+        !hasRenderableV2Stage(v2Map, nativeViewport)
+      ) {
         setStatus("visual-error");
         return;
       }
@@ -276,10 +292,11 @@ export function TpvEditorV2ReadyGate({
     <div
       ref={hostRef}
       data-hostly-tpv-map-gate={status === "ready" ? "v2-ready" : "mounting-v2"}
-      className="relative"
+      className="relative flex min-h-0 flex-1 flex-col"
     >
       {status === "mounting" ? <LoadingV2MapState /> : null}
       <div
+        className="flex min-h-0 flex-1 flex-col"
         style={
           status === "ready"
             ? undefined
