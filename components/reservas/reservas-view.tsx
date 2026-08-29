@@ -24,6 +24,10 @@ import {
   ReservationFloorMapPicker,
   type ReservationFloorMapPickerConfirm,
 } from "@/components/reservas/reservation-floor-map-picker";
+import {
+  HostlyStatusBadge,
+  type HostlyStatusBadgeTone,
+} from "@/components/ui/hostly/data-table/HostlyStatusBadge";
 
 const upcomingRowStyle: CSSProperties = {
   display: "flex",
@@ -103,54 +107,20 @@ function statusLabel(s: ReservationStatus): string {
   }
 }
 
-function statusBadgeStyle(s: ReservationStatus): CSSProperties {
-  const base: CSSProperties = {
-    padding: "4px 10px",
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 720,
-    letterSpacing: "0.04em",
-    textTransform: "uppercase",
-    whiteSpace: "nowrap",
-  };
+function statusBadgeTone(s: ReservationStatus): HostlyStatusBadgeTone {
   if (s === "seated") {
-    return {
-      ...base,
-      background: "var(--hostly-info-soft)",
-      border: "1px solid rgba(49, 95, 125, 0.2)",
-      color: "var(--hostly-navy-deep)",
-    };
+    return "info";
   }
   if (s === "completed") {
-    return {
-      ...base,
-      background: "var(--hostly-success-soft)",
-      border: "1px solid rgba(46, 125, 80, 0.2)",
-      color: "var(--hostly-navy-deep)",
-    };
+    return "success";
   }
   if (s === "no_show") {
-    return {
-      ...base,
-      background: "var(--hostly-danger-soft)",
-      border: "1px solid rgba(180, 70, 70, 0.22)",
-      color: "#7f1d1d",
-    };
+    return "danger";
   }
   if (s === "cancelled") {
-    return {
-      ...base,
-      background: "var(--hostly-ice-100)",
-      border: "1px solid var(--hostly-line-strong)",
-      color: "var(--hostly-ink-muted)",
-    };
+    return "muted";
   }
-  return {
-    ...base,
-    background: "var(--hostly-warning-soft)",
-    border: "1px solid rgba(180, 120, 40, 0.2)",
-    color: "var(--hostly-navy-deep)",
-  };
+  return "warning";
 }
 
 export default function ReservasView() {
@@ -549,7 +519,7 @@ export default function ReservasView() {
               <div className="hostly-mobile-header-actions">
                 <button
                   type="button"
-                  className="hostly-button-primary !min-h-9 !px-3.5 !py-0 !text-[13px]"
+                  className="hostly-button-primary hostly-button-compact"
                   onClick={() => {
                     setSaveError(null);
                     setDraft((d) => ({ ...d, date: viewDate }));
@@ -588,7 +558,7 @@ export default function ReservasView() {
                   </div>
                   <input
                     type="date"
-                    className="hostly-input max-w-[158px] !min-h-10 !py-2 !text-sm"
+                    className="hostly-input max-w-[158px] !text-sm"
                     value={viewDate}
                     onChange={(e) => setViewDate(e.target.value)}
                     aria-label="Cambiar fecha"
@@ -599,7 +569,11 @@ export default function ReservasView() {
           </section>
 
           <section className="hostly-mobile-section !py-2">
-            <div className="hostly-mobile-kpi-grid hostly-mobile-kpi-grid--cols-4" aria-label="Métricas de reservas del día">
+            <div
+              className="hostly-mobile-kpi-grid hostly-mobile-kpi-grid--cols-4 hostly-reservations-kpi-rail"
+              aria-label="Métricas de reservas del día"
+              tabIndex={0}
+            >
               <div className="hostly-mobile-kpi hostly-mobile-kpi--warning">
                 <div className="hostly-mobile-kpi__label">Previstas</div>
                 <div className="hostly-mobile-kpi__value">{metrics.booked}</div>
@@ -684,7 +658,7 @@ export default function ReservasView() {
                             {r.status === "booked" ? (
                               <button
                                 type="button"
-                                className="hostly-button-primary !min-h-9 shrink-0 !px-3 !text-[13px]"
+                                className="hostly-button-primary hostly-button-compact shrink-0"
                                 onClick={() => void handleSeatReservation(r)}
                                 disabled={busy}
                               >
@@ -736,7 +710,7 @@ export default function ReservasView() {
                             {r.status === "booked" ? (
                               <button
                                 type="button"
-                                className="hostly-button-primary !min-h-9 shrink-0 !px-3 !text-[13px]"
+                                className="hostly-button-primary hostly-button-compact shrink-0"
                                 onClick={() => void handleSeatReservation(r)}
                                 disabled={busy}
                               >
@@ -861,7 +835,7 @@ export default function ReservasView() {
                           </select>
                           <button
                             type="button"
-                            className="hostly-button-secondary shrink-0 !min-h-10 whitespace-nowrap sm:self-stretch"
+                            className="hostly-button-secondary hostly-button-compact shrink-0 whitespace-nowrap sm:self-stretch"
                             disabled={savingReservation || !restaurantId || !draft.date}
                             onClick={() => setFloorMapPicker({ mode: "create" })}
                           >
@@ -954,9 +928,13 @@ export default function ReservasView() {
                             <span className="text-sm font-semibold text-[var(--hostly-accent)]">{tableZone}</span>
                           ) : null}
                         </div>
-                        <span style={statusBadgeStyle(r.status)} className="shrink-0">
+                        <HostlyStatusBadge
+                          tone={statusBadgeTone(r.status)}
+                          className="shrink-0"
+                          aria-label={`Estado: ${statusLabel(r.status)}`}
+                        >
                           {statusLabel(r.status)}
-                        </span>
+                        </HostlyStatusBadge>
                       </div>
 
                       <div>
@@ -983,7 +961,7 @@ export default function ReservasView() {
                           </select>
                           <button
                             type="button"
-                            className="hostly-button-secondary shrink-0 !min-h-10 whitespace-nowrap sm:self-stretch"
+                            className="hostly-button-secondary hostly-button-compact shrink-0 whitespace-nowrap sm:self-stretch"
                             disabled={busy || !restaurantId}
                             onClick={() =>
                               setFloorMapPicker({ mode: "edit", reservationId: r.id })
@@ -998,7 +976,7 @@ export default function ReservasView() {
                         <div className="mt-1 flex flex-wrap justify-end gap-2">
                           <button
                             type="button"
-                            className="hostly-button-primary !min-h-9 !px-3 !text-[13px]"
+                            className="hostly-button-primary hostly-button-compact"
                             onClick={() => void handleSeatReservation(r)}
                             disabled={busy}
                           >
@@ -1006,7 +984,7 @@ export default function ReservasView() {
                           </button>
                           <button
                             type="button"
-                            className="hostly-button-secondary !min-h-9 !px-3 !text-[13px] font-semibold text-red-800"
+                            className="hostly-button-secondary hostly-button-compact font-semibold text-red-800"
                             style={{ background: "var(--hostly-danger-soft)", borderColor: "rgba(180, 70, 70, 0.22)" }}
                             onClick={() => void handleUpdateReservationStatus(r.id, "no_show")}
                             disabled={busy}
@@ -1015,7 +993,7 @@ export default function ReservasView() {
                           </button>
                           <button
                             type="button"
-                            className="hostly-button-secondary !min-h-9 !px-3 !text-[13px] font-semibold"
+                            className="hostly-button-secondary hostly-button-compact font-semibold"
                             onClick={() => void handleUpdateReservationStatus(r.id, "cancelled")}
                             disabled={busy}
                           >
@@ -1027,7 +1005,7 @@ export default function ReservasView() {
                           {r.tableId ? (
                             <button
                               type="button"
-                              className="hostly-button-secondary !min-h-9 !px-3 !text-[13px]"
+                              className="hostly-button-secondary hostly-button-compact"
                               onClick={() => handleOpenTable(r)}
                               disabled={busy}
                             >
@@ -1036,7 +1014,7 @@ export default function ReservasView() {
                           ) : null}
                           <button
                             type="button"
-                            className="hostly-button-secondary !min-h-9 !px-3 !text-[13px] font-semibold"
+                            className="hostly-button-secondary hostly-button-compact font-semibold"
                             style={{
                               background: "var(--hostly-success-soft)",
                               borderColor: "rgba(46, 125, 80, 0.22)",
