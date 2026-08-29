@@ -6,10 +6,8 @@ import Link from "next/link";
 import {
   Timestamp,
   collection,
-  doc,
   onSnapshot,
   query,
-  serverTimestamp,
   where,
 } from "firebase/firestore";
 import { useAuth } from "@/components/auth/auth-context";
@@ -680,7 +678,6 @@ export default function SalaView() {
     const key = `${orderId}:${itemId}`;
     if (busyItemIds[key]) return;
     setBusyItemIds((prev) => ({ ...prev, [key]: true }));
-    const now = Date.now();
     const item = order.items.find((it) => it.id === itemId);
     const expectedStatus = item?.status ?? "prepared";
     try {
@@ -832,14 +829,16 @@ export default function SalaView() {
       />
       {completedTablesQueue.length > 0 ? (
         <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
-          <div
-            className="hostly-mobile-card--compact hostly-button-primary cursor-pointer rounded-full !px-4 !py-2 !text-[13px] !shadow-md"
+          <button
+            type="button"
+            className="hostly-mobile-card--compact hostly-button-primary !min-h-11 rounded-full !px-4 !py-2 !text-[13px] !shadow-md"
+            aria-label={`${completedTableText}. Cerrar aviso`}
             onClick={() => {
               setCompletedTablesQueue((prev) => prev.slice(1));
             }}
           >
             {completedTableText}
-          </div>
+          </button>
         </div>
       ) : null}
     </div>
@@ -908,7 +907,6 @@ function SalaBoard({
       </div>
       <div style={gridStyle}>
         {sortedGroups.map((g) => {
-          const isTableFullyServed = g.isTableFullyServed;
           const tone = priorityTone(g.priority);
           const mesaUrgencyScore = getSalaGroupUrgencyScore(g.lines, nowMs);
           const mesaUrgencyLabel = getUrgencyLabel(mesaUrgencyScore);
@@ -1166,13 +1164,14 @@ function SalaBoard({
                               <button
                                 type="button"
                                 disabled={busy}
-                                className="hostly-button-primary !min-h-8 shrink-0 self-center !px-3 !py-1.5 !text-[11px] disabled:opacity-60"
+                                className="hostly-button-primary !min-h-11 shrink-0 self-center !px-3 !py-2 !text-[12px] disabled:opacity-60"
                                 style={{ cursor: busy ? "progress" : "pointer" }}
+                                aria-label={`Marcar ${line.qty} ${line.name} como servido`}
                                 onClick={() =>
                                   onMarkServed(line.orderId, line.itemId)
                                 }
                               >
-                                {busy ? "Guardando…" : "Marcar como servido"}
+                                {busy ? "Guardando…" : "Servido"}
                               </button>
                             </div>
                           );
