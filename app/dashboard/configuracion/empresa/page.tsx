@@ -6,10 +6,15 @@ import { useAuth } from "@/components/auth/auth-context";
 import { useHostlyCapabilities } from "@/hooks/useHostlyCapabilities";
 import { RestaurantLogoMark } from "@/components/restaurant/restaurant-logo-mark";
 import {
-  ConfigBtnPrimary,
-  ConfigBtnSecondary,
-  ConfigCard,
-} from "../_components/config-carta-workbench";
+  HostlyAlert,
+  HostlyButton,
+  HostlyField,
+  HostlyInput,
+  HostlyLoadingState,
+  HostlySectionHeader,
+  HostlySelect,
+  HostlySurface,
+} from "@/components/ui/hostly";
 import { createStableImageFile } from "@/lib/firebase/product-image-storage";
 import { uploadRestaurantLogo } from "@/lib/firebase/restaurant-logo-storage";
 import {
@@ -26,8 +31,6 @@ import {
   timezoneSelectOptions,
 } from "@/lib/firestore/restaurant-profile-options";
 import { resolveAuthenticatedRestaurantId } from "@/lib/hostly/restaurant-scope";
-
-const inputClass = "hostly-input hostly-carta-config-field-input";
 
 type EmpresaFormState = {
   name: string;
@@ -67,35 +70,12 @@ function emptyForm(restaurantId: string): EmpresaFormState {
   return documentToForm(emptyRestaurantDocument(restaurantId));
 }
 
-function FormSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function FormSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <ConfigCard compact>
-      <h2 className="hostly-carta-config-section-title">{title}</h2>
-      <div className="hostly-carta-config-form mt-4">{children}</div>
-    </ConfigCard>
-  );
-}
-
-function Field({
-  label,
-  children,
-  className = "",
-}: {
-  label: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <label className={["hostly-carta-config-form-field", className].filter(Boolean).join(" ")}>
-      <span className="hostly-carta-config-form-label">{label}</span>
-      {children}
-    </label>
+    <HostlySurface variant="flat" className="p-4 sm:p-5">
+      <HostlySectionHeader title={title} titleVariant="section" />
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">{children}</div>
+    </HostlySurface>
   );
 }
 
@@ -233,41 +213,41 @@ export default function ConfigEmpresaPage() {
 
   return (
     <div className="hostly-company-profile-page hostly-config-page-body flex min-h-0 flex-1 flex-col overflow-auto">
-
       <div className="hostly-company-profile-content mx-auto flex w-full flex-col gap-4 pb-24">
+        <HostlySectionHeader
+          title="Empresa"
+          description="Mantén actualizados los datos, la identidad y la configuración regional del restaurante."
+        />
+
         {!profileReady || loading ? (
-          <p className="hostly-muted m-0 text-sm">Cargando perfil del restaurante…</p>
+          <HostlyLoadingState embedded label="Cargando perfil del restaurante…" />
         ) : null}
 
         {!restaurantId ? (
-          <div className="hostly-carta-config-alert hostly-carta-config-alert--warning" role="alert">
+          <HostlyAlert tone="warning">
             No hay un restaurante asignado a tu cuenta.
-          </div>
+          </HostlyAlert>
         ) : null}
 
         {error ? (
-          <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
-            {error}
-          </div>
+          <HostlyAlert tone="danger">{error}</HostlyAlert>
         ) : null}
 
         {notice ? (
-          <p className="hostly-carta-config-alert hostly-carta-config-alert--success m-0" role="status">
-            {notice}
-          </p>
+          <HostlyAlert tone="success">{notice}</HostlyAlert>
         ) : null}
 
         {restaurantId && form && !loading && !canEditEmpresa ? (
-          <div className="hostly-carta-config-alert hostly-carta-config-alert--info m-0" role="status">
+          <HostlyAlert tone="info" title="Modo lectura">
             Solo el propietario o administrador puede editar el perfil del restaurante. Estás viendo la
             información en modo lectura.
-          </div>
+          </HostlyAlert>
         ) : null}
 
         {restaurantId && form && !loading ? (
           <>
-            <ConfigCard compact>
-              <h2 className="hostly-carta-config-section-title">Logo del restaurante</h2>
+            <HostlySurface variant="ice" className="p-4 sm:p-5">
+              <HostlySectionHeader title="Logo del restaurante" titleVariant="section" />
               <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <RestaurantLogoMark
@@ -294,32 +274,31 @@ export default function ConfigEmpresaPage() {
                     }}
                   />
                   {canEditEmpresa ? (
-                    <ConfigBtnSecondary
+                    <HostlyButton
+                      variant="secondary"
                       type="button"
                       disabled={logoUploading || saving}
                       onClick={() => logoInputRef.current?.click()}
                     >
                       {logoUploading ? "Subiendo…" : "Subir logo"}
-                    </ConfigBtnSecondary>
+                    </HostlyButton>
                   ) : null}
                 </div>
               </div>
-            </ConfigCard>
+            </HostlySurface>
 
             <FormSection title="Información del restaurante">
-              <Field label="Nombre comercial">
-                <input
-                  className={inputClass}
+              <HostlyField label="Nombre comercial">
+                <HostlyInput
                   value={form.name}
                   disabled={saving || !canEditEmpresa}
                   autoComplete="organization"
                   placeholder="Mi restaurante"
                   onChange={(e) => patchField("name", e.target.value)}
                 />
-              </Field>
-              <Field label="Tipo de negocio">
-                <select
-                  className={inputClass}
+              </HostlyField>
+              <HostlyField label="Tipo de negocio">
+                <HostlySelect
                   value={form.businessType}
                   disabled={saving || !canEditEmpresa}
                   onChange={(e) => patchField("businessType", e.target.value)}
@@ -330,14 +309,13 @@ export default function ConfigEmpresaPage() {
                       {option.label}
                     </option>
                   ))}
-                </select>
-              </Field>
+                </HostlySelect>
+              </HostlyField>
             </FormSection>
 
             <FormSection title="Contacto">
-              <Field label="Teléfono">
-                <input
-                  className={inputClass}
+              <HostlyField label="Teléfono">
+                <HostlyInput
                   type="tel"
                   value={form.phone}
                   disabled={saving || !canEditEmpresa}
@@ -345,10 +323,9 @@ export default function ConfigEmpresaPage() {
                   placeholder="+34 600 000 000"
                   onChange={(e) => patchField("phone", e.target.value)}
                 />
-              </Field>
-              <Field label="Email">
-                <input
-                  className={inputClass}
+              </HostlyField>
+              <HostlyField label="Email">
+                <HostlyInput
                   type="email"
                   value={form.email}
                   disabled={saving || !canEditEmpresa}
@@ -356,10 +333,9 @@ export default function ConfigEmpresaPage() {
                   placeholder="contacto@restaurante.com"
                   onChange={(e) => patchField("email", e.target.value)}
                 />
-              </Field>
-              <Field label="Sitio web">
-                <input
-                  className={inputClass}
+              </HostlyField>
+              <HostlyField label="Sitio web" className="sm:col-span-2">
+                <HostlyInput
                   type="url"
                   value={form.website}
                   disabled={saving || !canEditEmpresa}
@@ -367,58 +343,53 @@ export default function ConfigEmpresaPage() {
                   placeholder="https://"
                   onChange={(e) => patchField("website", e.target.value)}
                 />
-              </Field>
+              </HostlyField>
             </FormSection>
 
             <FormSection title="Datos fiscales">
-              <Field label="CIF / NIF">
-                <input
-                  className={inputClass}
+              <HostlyField label="CIF / NIF">
+                <HostlyInput
                   value={form.taxId}
                   disabled={saving || !canEditEmpresa}
                   placeholder="B12345678"
                   onChange={(e) => patchField("taxId", e.target.value)}
                 />
-              </Field>
+              </HostlyField>
             </FormSection>
 
             <FormSection title="Dirección">
-              <Field label="Dirección">
-                <input
-                  className={inputClass}
+              <HostlyField label="Dirección" className="sm:col-span-2">
+                <HostlyInput
                   value={form.address}
                   disabled={saving || !canEditEmpresa}
                   autoComplete="street-address"
                   placeholder="Calle, número, piso…"
                   onChange={(e) => patchField("address", e.target.value)}
                 />
-              </Field>
-              <Field label="Ciudad">
-                <input
-                  className={inputClass}
+              </HostlyField>
+              <HostlyField label="Ciudad">
+                <HostlyInput
                   value={form.city}
                   disabled={saving || !canEditEmpresa}
                   autoComplete="address-level2"
                   placeholder="Madrid"
                   onChange={(e) => patchField("city", e.target.value)}
                 />
-              </Field>
-              <Field label="País">
-                <input
-                  className={inputClass}
+              </HostlyField>
+              <HostlyField label="País">
+                <HostlyInput
                   value={form.country}
                   disabled={saving || !canEditEmpresa}
                   autoComplete="country-name"
                   placeholder="España"
                   onChange={(e) => patchField("country", e.target.value)}
                 />
-              </Field>
+              </HostlyField>
             </FormSection>
 
             <FormSection title="Configuración regional">
-              <Field label="Zona horaria">
-                <select
-                  className={inputClass}
+              <HostlyField label="Zona horaria">
+                <HostlySelect
                   value={form.timezone}
                   disabled={saving || !canEditEmpresa}
                   onChange={(e) => patchField("timezone", e.target.value)}
@@ -428,11 +399,10 @@ export default function ConfigEmpresaPage() {
                       {option.label}
                     </option>
                   ))}
-                </select>
-              </Field>
-              <Field label="Moneda">
-                <select
-                  className={inputClass}
+                </HostlySelect>
+              </HostlyField>
+              <HostlyField label="Moneda">
+                <HostlySelect
                   value={form.currency}
                   disabled={saving || !canEditEmpresa}
                   onChange={(e) => patchField("currency", e.target.value)}
@@ -442,8 +412,8 @@ export default function ConfigEmpresaPage() {
                       {option.label}
                     </option>
                   ))}
-                </select>
-              </Field>
+                </HostlySelect>
+              </HostlyField>
             </FormSection>
           </>
         ) : null}
@@ -452,9 +422,9 @@ export default function ConfigEmpresaPage() {
       {restaurantId && form && !loading && canEditEmpresa ? (
         <div className="hostly-company-profile-savebar sticky bottom-0 z-10 border-t border-slate-200/90 bg-[rgba(247,252,255,0.96)] px-4 py-3 backdrop-blur-sm sm:px-6 lg:px-8">
           <div className="hostly-company-profile-savebar__inner mx-auto flex w-full justify-end">
-            <ConfigBtnPrimary type="button" disabled={saving} onClick={() => void handleSave()}>
+            <HostlyButton variant="primary" disabled={saving} onClick={() => void handleSave()}>
               {saving ? "Guardando…" : "Guardar cambios"}
-            </ConfigBtnPrimary>
+            </HostlyButton>
           </div>
         </div>
       ) : null}
