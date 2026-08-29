@@ -3,10 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import {
-  ConfigBtnPrimary,
-  ConfigCard,
   ConfigCartaWorkbench,
 } from "../_components/config-carta-workbench";
+import {
+  HostlyAlert,
+  HostlyButton,
+  HostlyField,
+  HostlyInput,
+  HostlySectionHeader,
+  HostlySelect,
+  HostlySurface,
+} from "@/components/ui/hostly";
 import {
   ModifierGroupEditorCard,
   type GroupDraft,
@@ -116,8 +123,6 @@ function formatModifierGroupError(error: unknown): string {
   }
   return "No se pudo guardar el grupo.";
 }
-
-const inputClass = "hostly-input hostly-carta-config-field-input";
 
 export default function ConfigModificadoresPage() {
   const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
@@ -450,33 +455,28 @@ export default function ConfigModificadoresPage() {
       description="Configura formatos y acompañamientos como chupito, copa o mixer. Opcionalmente vincula cada opción a un artículo de inventario para el descuento futuro de stock (sin impacto en TPV ni cobros todavía)."
     >
         {error ? (
-          <p className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
-            {error}
-          </p>
+          <HostlyAlert tone="danger">{error}</HostlyAlert>
         ) : null}
         {notice ? (
-          <p className="hostly-carta-config-alert hostly-carta-config-alert--success" role="status">
-            {notice}
-          </p>
+          <HostlyAlert tone="success">{notice}</HostlyAlert>
         ) : null}
 
-        <ConfigCard className="hostly-config-create-card hostly-modifier-form-section hostly-modifier-form-section--create">
-          <h2 className="hostly-carta-config-section-title">Nuevo grupo</h2>
-          <p className="hostly-carta-config-form-hint">Ej.: Punto de carne, Guarnición, Salsa extra.</p>
-          <div className="hostly-carta-config-form hostly-carta-config-drawer__body sm:grid sm:grid-cols-[1fr_200px_auto] sm:items-end">
-            <label className="hostly-carta-config-form-field">
-              <span className="hostly-carta-config-form-label">Nombre</span>
-              <input
-                className={inputClass}
+        <HostlySurface variant="ice" className="p-4 sm:p-5">
+          <HostlySectionHeader
+            title="Nuevo grupo"
+            titleVariant="section"
+            description="Ej.: Punto de carne, Guarnición o Salsa extra."
+          />
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_200px_auto] sm:items-end">
+            <HostlyField label="Nombre">
+              <HostlyInput
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="Punto de carne"
               />
-            </label>
-            <label className="hostly-carta-config-form-field">
-              <span className="hostly-carta-config-form-label">Tipo</span>
-              <select
-                className={inputClass}
+            </HostlyField>
+            <HostlyField label="Tipo">
+              <HostlySelect
                 value={newType}
                 onChange={(e) =>
                   setNewType(e.target.value as ModifierGroupType)
@@ -487,19 +487,20 @@ export default function ConfigModificadoresPage() {
                     {MODIFIER_GROUP_TYPE_LABELS[t]}
                   </option>
                 ))}
-              </select>
-            </label>
-            <ConfigBtnPrimary
+              </HostlySelect>
+            </HostlyField>
+            <HostlyButton
+              variant="primary"
               type="button"
               disabled={creating || !authReady}
               onClick={() => void handleCreate()}
             >
               {creating ? "Creando…" : "Crear grupo"}
-            </ConfigBtnPrimary>
+            </HostlyButton>
           </div>
-        </ConfigCard>
+        </HostlySurface>
 
-        <ConfigCard flush>
+        <HostlySurface variant="flat" className="overflow-hidden">
           <ModificadoresCartaDataView
             groups={groups}
             loading={loading}
@@ -509,7 +510,7 @@ export default function ConfigModificadoresPage() {
             onExpand={setExpandedGroupId}
             onToggleActive={(group) => void handleToggleActive(group)}
           />
-        </ConfigCard>
+        </HostlySurface>
 
         {expandedGroupId
           ? (() => {
