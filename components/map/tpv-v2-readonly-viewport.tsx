@@ -324,10 +324,10 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     [effectivePlanHeight, effectivePlanWidth],
   );
 
-  const fitSource = readonlyV2OperationalBounds
-    ? "editor-v2-operational-content"
-    : hasReadonlyV2PlanSize
-      ? "editor-v2-plan"
+  const fitSource = hasReadonlyV2PlanSize
+    ? "editor-v2-plan"
+    : readonlyV2OperationalBounds
+      ? "editor-v2-operational-content"
       : "legacy-fallback";
 
   const assignMapRef = useCallback(
@@ -348,7 +348,8 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     if (vw < 32 || vh < 32) return;
 
     const planBounds = getPlanSizeBounds(effectivePlanSize);
-    const useOperationalV2Fit = readonlyV2OperationalBounds != null;
+    const useOperationalV2Fit =
+      !hasReadonlyV2PlanSize && readonlyV2OperationalBounds != null;
     const usePlanFit =
       !useOperationalV2Fit &&
       viewportFitMode === "plan" &&
