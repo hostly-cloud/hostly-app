@@ -1,10 +1,11 @@
 import { auth } from "@/lib/firebase/client";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
+import { SALA_EDITOR_DOCUMENT_VERSION } from "@/lib/sala-editor/types/editor-document";
 
 export type SalaEditorPublishedSnapshotResponse = {
   publishedAt: number;
   sourceDraftUpdatedAt: number | null;
-  schemaVersion: string;
+  schemaVersion: typeof SALA_EDITOR_DOCUMENT_VERSION;
   snapshotVersion: number;
 };
 
@@ -57,7 +58,7 @@ export async function publishSalaEditorSnapshotApi(params: {
     !Number.isFinite(payload.publishedAt) ||
     typeof payload.snapshotVersion !== "number" ||
     !Number.isFinite(payload.snapshotVersion) ||
-    typeof payload.schemaVersion !== "string"
+    payload.schemaVersion !== SALA_EDITOR_DOCUMENT_VERSION
   ) {
     throw new Error("El servidor devolvió una respuesta de publicación incompleta.");
   }
