@@ -1,8 +1,15 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import {
+  HostlyAlert,
+  HostlyButton,
+  HostlyField,
+  HostlyInput,
+  HostlySectionHeader,
+  HostlySurface,
+} from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   countTablesUsingZone,
@@ -13,84 +20,8 @@ import {
   type Zone,
 } from "@/lib/firestore/zones";
 
-const inputStyle: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  boxSizing: "border-box",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  background: "rgba(15, 23, 42, 0.5)",
-  color: "#f8fafc",
-  padding: "10px 12px",
-  fontSize: 14,
-  outline: "none",
-};
-
-const colorInputStyle: CSSProperties = {
-  width: 40,
-  height: 40,
-  padding: 0,
-  border: "1px solid rgba(148, 163, 184, 0.22)",
-  borderRadius: 10,
-  background: "transparent",
-  cursor: "pointer",
-};
-
-const primaryBtn: CSSProperties = {
-  padding: "10px 16px",
-  borderRadius: 10,
-  border: "1px solid rgba(56, 189, 248, 0.35)",
-  background: "rgba(56, 189, 248, 0.18)",
-  color: "#e0f2fe",
-  fontWeight: 700,
-  fontSize: 14,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};
-
-const secondaryBtn: CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "transparent",
-  color: "#e2e8f0",
-  fontWeight: 600,
-  fontSize: 13,
-  cursor: "pointer",
-};
-
-const dangerBtn: CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "1px solid rgba(248, 113, 113, 0.35)",
-  background: "rgba(248, 113, 113, 0.12)",
-  color: "#fecaca",
-  fontWeight: 600,
-  fontSize: 13,
-  cursor: "pointer",
-};
-
-const rowStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.18)",
-  background: "rgba(15, 23, 42, 0.45)",
-};
-
-const dotStyle = (color?: string): CSSProperties => ({
-  width: 14,
-  height: 14,
-  borderRadius: 999,
-  background: color || "rgba(148, 163, 184, 0.35)",
-  border: "1px solid rgba(148, 163, 184, 0.35)",
-  flex: "none",
-});
-
 export default function ZonasManagement() {
-  const { restaurantId: profileRestaurantId, user, ready: authReady } = useAuth();
+  const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
   const restaurantId = profileRestaurantId ?? null;
 
   const [zones, setZones] = useState<Zone[]>([]);
@@ -208,180 +139,142 @@ export default function ZonasManagement() {
   );
 
   return (
-    <div
-      className="hostly-card"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        padding: 20,
-        borderRadius: "var(--hostly-radius-md)",
-        gap: 16,
-        overflow: "auto",
-      }}
-    >
-      <div>
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 18,
-            fontWeight: 700,
-            color: "#e2e8f0",
-            letterSpacing: "-0.02em",
-          }}
-        >
-          Zonas
-        </h2>
-        <p
-          style={{
-            margin: "4px 0 0",
-            fontSize: 13,
-            color: "#94a3b8",
-          }}
-        >
-          Áreas del local (terraza, salón, barra, piscina…)
-        </p>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+      <HostlySectionHeader
+        title="Zonas"
+        description="Organiza las áreas del local, como terraza, salón, barra o piscina."
+      />
 
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <input
-          type="text"
-          placeholder="Nueva zona (ej. Terraza)"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void handleCreateZone();
-          }}
-          style={inputStyle}
-          disabled={busy || !restaurantId}
+      <HostlySurface variant="ice" className="p-4 sm:p-5">
+        <HostlySectionHeader
+          title="Nueva zona"
+          titleVariant="section"
+          description="Ponle un nombre claro y un color para reconocerla rápidamente."
+          className="mb-4"
         />
-        <input
-          type="color"
-          value={newColor}
-          onChange={(e) => setNewColor(e.target.value)}
-          style={colorInputStyle}
-          aria-label="Color de la zona"
-          disabled={busy || !restaurantId}
-        />
-        <button
-          type="button"
-          onClick={() => void handleCreateZone()}
-          style={primaryBtn}
-          disabled={busy || !newName.trim() || !restaurantId}
-        >
-          Añadir zona
-        </button>
-      </div>
-
-      {error ? (
-        <div
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid rgba(248, 113, 113, 0.35)",
-            background: "rgba(248, 113, 113, 0.1)",
-            color: "#fecaca",
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-        >
-          {error}
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_88px_auto] sm:items-end">
+          <HostlyField label="Nombre">
+            <HostlyInput
+              type="text"
+              placeholder="Ej. Terraza"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleCreateZone();
+              }}
+              disabled={busy || !restaurantId}
+            />
+          </HostlyField>
+          <HostlyField label="Color">
+            <input
+              type="color"
+              value={newColor}
+              onChange={(e) => setNewColor(e.target.value)}
+              className="h-11 w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Color de la nueva zona"
+              disabled={busy || !restaurantId}
+            />
+          </HostlyField>
+          <HostlyButton
+            variant="primary"
+            className="h-11 whitespace-nowrap"
+            onClick={() => void handleCreateZone()}
+            disabled={busy || !newName.trim() || !restaurantId}
+          >
+            Añadir zona
+          </HostlyButton>
         </div>
-      ) : null}
+      </HostlySurface>
 
-      <div
-        style={{ display: "flex", flexDirection: "column", gap: 8 }}
-      >
+      {error ? <HostlyAlert tone="danger">{error}</HostlyAlert> : null}
+
+      <HostlySurface variant="flat" className="flex flex-col gap-3 p-4 sm:p-5">
+        <HostlySectionHeader
+          title="Zonas del restaurante"
+          titleVariant="section"
+          description={`${zones.length} ${zones.length === 1 ? "zona configurada" : "zonas configuradas"}`}
+        />
         {loading ? (
-          <div style={{ color: "#94a3b8", fontSize: 14 }}>Cargando…</div>
+          <p className="hostly-muted hostly-type-caption py-6 text-center">
+            Cargando…
+          </p>
         ) : !restaurantId || !isFirebaseConfigured ? (
-          <div style={{ color: "#94a3b8", fontSize: 14 }}>
+          <HostlyAlert tone="warning">
             Conecta Firebase para gestionar zonas.
-          </div>
+          </HostlyAlert>
         ) : zones.length === 0 ? (
-          <div style={{ color: "#94a3b8", fontSize: 14 }}>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
             Aún no hay zonas. Crea la primera arriba.
           </div>
         ) : (
-          zones.map((z) =>
-            editingId === z.id ? (
-              <div key={z.id} style={rowStyle}>
-                <input
-                  type="color"
-                  value={editColor || "#38bdf8"}
-                  onChange={(e) => setEditColor(e.target.value)}
-                  style={colorInputStyle}
-                  aria-label="Color de la zona"
-                />
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  style={inputStyle}
-                />
-                <button
-                  type="button"
-                  style={primaryBtn}
-                  onClick={() => void handleUpdateZone(z.id)}
-                  disabled={busy || !editName.trim()}
+          <div className="flex flex-col gap-2">
+            {zones.map((z) =>
+              editingId === z.id ? (
+                <div
+                  key={z.id}
+                  className="grid gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-3 sm:grid-cols-[56px_minmax(0,1fr)_auto_auto] sm:items-center"
                 >
-                  Guardar
-                </button>
-                <button
-                  type="button"
-                  style={secondaryBtn}
-                  onClick={cancelEdit}
-                  disabled={busy}
+                  <input
+                    type="color"
+                    value={editColor || "#38bdf8"}
+                    onChange={(e) => setEditColor(e.target.value)}
+                    className="h-11 w-14 cursor-pointer rounded-xl border border-slate-200 bg-white p-1"
+                    aria-label={`Color de ${z.name}`}
+                  />
+                  <HostlyInput
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    aria-label={`Nombre de ${z.name}`}
+                  />
+                  <HostlyButton
+                    variant="primary"
+                    onClick={() => void handleUpdateZone(z.id)}
+                    disabled={busy || !editName.trim()}
+                  >
+                    Guardar
+                  </HostlyButton>
+                  <HostlyButton
+                    variant="secondary"
+                    onClick={cancelEdit}
+                    disabled={busy}
+                  >
+                    Cancelar
+                  </HostlyButton>
+                </div>
+              ) : (
+                <div
+                  key={z.id}
+                  className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
                 >
-                  Cancelar
-                </button>
-              </div>
-            ) : (
-              <div key={z.id} style={rowStyle}>
-                <span style={dotStyle(z.color)} aria-hidden />
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    color: "#e2e8f0",
-                    fontWeight: 600,
-                    fontSize: 14,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {z.name}
-                </span>
-                <button
-                  type="button"
-                  style={secondaryBtn}
-                  onClick={() => startEdit(z)}
-                  disabled={busy}
-                >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  style={dangerBtn}
-                  onClick={() => void handleDeleteZone(z)}
-                  disabled={busy}
-                >
-                  Eliminar
-                </button>
-              </div>
-            ),
-          )
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full border border-slate-200 shadow-sm"
+                    style={{ backgroundColor: z.color || "#cbd5e1" }}
+                    aria-hidden
+                  />
+                  <strong className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+                    {z.name}
+                  </strong>
+                  <HostlyButton
+                    variant="tableAction"
+                    onClick={() => startEdit(z)}
+                    disabled={busy}
+                  >
+                    Editar
+                  </HostlyButton>
+                  <HostlyButton
+                    variant="destructive"
+                    onClick={() => void handleDeleteZone(z)}
+                    disabled={busy}
+                  >
+                    Eliminar
+                  </HostlyButton>
+                </div>
+              ),
+            )}
+          </div>
         )}
-      </div>
+      </HostlySurface>
     </div>
   );
 }
