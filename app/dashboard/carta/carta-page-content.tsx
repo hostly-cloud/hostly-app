@@ -184,6 +184,7 @@ import {
   loadTpvEditorV2OperationalMap,
   type TpvEditorV2OperationalMap,
 } from "@/lib/tpv/load-editor-v2-operational-map";
+import { recoverPublishedTableIdByPlan } from "@/lib/tpv/recover-published-table-id";
 import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import type { SalaEditorReadonlyTpvOperationalState } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
 import {
@@ -2322,16 +2323,6 @@ export function CartaPageContent({
         String(selectedTpvFloorPlanId ?? "").trim(),
     );
     if (!selectedSpace) return [];
-    const normalizeTableIdentityName = (value: unknown) =>
-      String(value ?? "").trim().toLocaleLowerCase("es");
-    const tableDocumentsByName = new Map<string, Table[]>();
-    for (const table of tablesList) {
-      const key = normalizeTableIdentityName(table.name);
-      if (!key) continue;
-      const peers = tableDocumentsByName.get(key) ?? [];
-      peers.push(table);
-      tableDocumentsByName.set(key, peers);
-    }
     return salaEditorOperationalMap.document.operationalElementInstances
         .filter(
           (instance) =>
@@ -2344,11 +2335,11 @@ export function CartaPageContent({
               ? instance.metadata.legacyTableId.trim()
               : "";
           if (!legacyTableId) {
-            const sameNameDocuments =
-              tableDocumentsByName.get(normalizeTableIdentityName(instance.name)) ?? [];
-            if (sameNameDocuments.length === 1) {
-              legacyTableId = String(sameNameDocuments[0].id ?? "").trim();
-            }
+            legacyTableId = recoverPublishedTableIdByPlan({
+              instanceName: instance.name,
+              floorPlanId: selectedSpace.legacyFloorPlanId,
+              tables: tablesList,
+            });
           }
           if (!legacyTableId) return [];
           return [{
