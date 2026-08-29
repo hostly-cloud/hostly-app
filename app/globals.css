@@ -3674,6 +3674,137 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg width='80' height='64' viewBox='0 0 80 64' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%230f2742' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 52h52M24 46V30M40 46V18M56 46V36'/%3E%3Cpath d='M18 22l14 8 13-14 17 8'/%3E%3C/g%3E%3C/svg%3E");
 }
 
+/* Dashboard operativo compacto: todo el servicio visible sin ilustraciones decorativas. */
+.hostly-dashboard-premium-shell .hostly-dashboard-command-center {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(10px, 1.4vh, 16px);
+  overflow: hidden;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-header {
+  min-height: 50px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-brand {
+  gap: 10px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-eyebrow {
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-title {
+  font-size: clamp(20px, 2.6vw, 32px);
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-main {
+  grid-template-columns: minmax(0, 1.22fr) minmax(420px, 1fr);
+  gap: clamp(10px, 1.3vw, 16px);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero-wrap {
+  min-height: 0;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
+  min-height: 0;
+  padding: clamp(22px, 3vw, 38px);
+  border-radius: 28px;
+  gap: 18px;
+  background: linear-gradient(145deg, #0b1a2a 0%, #132a3e 58%, #18384e 100%);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero::before,
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero::after,
+.hostly-dashboard-command-station::before,
+.hostly-dashboard-command-station::after,
+.hostly-dashboard-command-dock-item::before {
+  content: none;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero__icon {
+  width: clamp(52px, 6vw, 72px);
+  height: clamp(52px, 6vw, 72px);
+  border-radius: 22px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero__label {
+  font-size: clamp(42px, 6vw, 68px);
+  line-height: .92;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-hero__sub {
+  font-size: clamp(14px, 1.5vw, 18px);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-operation {
+  padding: 14px;
+  border-radius: 28px;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-stations {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station {
+  min-height: 0;
+  padding: 14px;
+  border-radius: 20px;
+  gap: 10px;
+  background: rgba(255, 255, 255, .94);
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-station__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-management {
+  padding: 10px 12px 12px;
+  border-radius: 22px;
+  gap: 8px;
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hostly-dashboard-premium-shell .hostly-dashboard-command-dock-item {
+  min-height: 52px;
+  padding: 9px 12px;
+  border-radius: 16px;
+  text-decoration: none;
+}
+
+@media (max-width: 1023px) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-center {
+    overflow-y: auto;
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-hero {
+    min-height: 220px;
+  }
+}
+
+@media (max-width: 640px) {
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-stations,
+  .hostly-dashboard-premium-shell .hostly-dashboard-command-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .hostly-dashboard-more-tools {
   flex-shrink: 0;
   box-sizing: border-box;

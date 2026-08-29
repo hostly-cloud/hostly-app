@@ -6,6 +6,7 @@ export type SalaEditorHistoryActionKind =
   | "operational.resize"
   | "operational.delete"
   | "operational.duplicate"
+  | "operational.rename"
   | "wall.create"
   | "wall.move"
   | "wall.resize"

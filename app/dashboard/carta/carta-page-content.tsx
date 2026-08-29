@@ -184,7 +184,7 @@ import {
   loadTpvEditorV2OperationalMap,
   type TpvEditorV2OperationalMap,
 } from "@/lib/tpv/load-editor-v2-operational-map";
-import { recoverPublishedTableIdByPlan } from "@/lib/tpv/recover-published-table-id";
+import { resolvePublishedOperationalTableId } from "@/lib/tpv/resolve-published-table-id";
 import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import type { SalaEditorReadonlyTpvOperationalState } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
 import {
@@ -2330,17 +2330,11 @@ export function CartaPageContent({
             instance.spaceId === selectedSpace.id,
         )
         .flatMap((instance) => {
-          let legacyTableId =
-            typeof instance.metadata.legacyTableId === "string"
-              ? instance.metadata.legacyTableId.trim()
-              : "";
-          if (!legacyTableId) {
-            legacyTableId = recoverPublishedTableIdByPlan({
-              instanceName: instance.name,
-              floorPlanId: selectedSpace.legacyFloorPlanId,
-              tables: tablesList,
-            });
-          }
+          const legacyTableId = resolvePublishedOperationalTableId({
+            explicitTableId: instance.metadata.legacyTableId,
+            instanceId: instance.id,
+            tables: tablesList,
+          });
           if (!legacyTableId) return [];
           return [{
             id: legacyTableId,

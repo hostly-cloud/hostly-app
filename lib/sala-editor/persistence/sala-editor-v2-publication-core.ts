@@ -14,6 +14,10 @@ import {
 import { auth, db, firebaseEnvDebug, isFirebaseConfigured } from "@/lib/firebase/client";
 import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
 import {
+  isEditorGeneratedOperationalTableId,
+  stableOperationalTableIdFromEditorInstance,
+} from "@/lib/sala-editor/identity/operational-table-identity";
+import {
   getOperationalInstanceCanvasSize,
 } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import {
@@ -833,18 +837,6 @@ function stableLegacyDecorativeId(sourceType: string, elementId: string): string
 
 function isGeneratedV2DecorativeId(tableId: string): boolean {
   return tableId.startsWith("v2-map-");
-}
-
-function stableLegacyOperationalTableIdFromV2Instance(instanceId: string): string {
-  const stable = instanceId
-    .trim()
-    .replace(/[^a-zA-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return stable ? `v2-table-${stable}` : "";
-}
-
-function isGeneratedV2OperationalTableId(tableId: string): boolean {
-  return tableId.startsWith("v2-table-");
 }
 
 function normalizeOperationalTableIdentityKey(name: string): string {
@@ -2322,6 +2314,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
   }
 
   const seenLegacyTableIds = new Set<string>();
+  const seenOperationalTableIdentityKeys = new Set<string>();
   const newOperationalTablePublishLogs: Array<{
     spaceId: string | null;
     floorPlanId: string | null;
@@ -2346,8 +2339,32 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
       : readLegacyFloorPlanId(instance.metadata);
     const tableName = instance.name.trim();
 
+    if (tableName) {
+      const identityKey = normalizeOperationalTableIdentityKey(tableName);
+      if (seenOperationalTableIdentityKeys.has(identityKey)) {
+        skippedTables.push({
+          id: instance.id,
+          name: instance.name,
+          reason: "duplicate_table_number",
+        });
+        newOperationalTablePublishLogs.push({
+          spaceId: linkedSpace?.id ?? null,
+          floorPlanId: resolvedFloorPlanId ?? null,
+          instanceId: instance.id,
+          tableNumber: tableName,
+          generatedDocumentId: null,
+          action: "conflict",
+          legacyTableIdBefore: legacyTableId || null,
+          legacyTableIdAfter: null,
+          reason: "same_restaurant_table_in_document",
+        });
+        continue;
+      }
+      seenOperationalTableIdentityKeys.add(identityKey);
+    }
+
     if (!legacyTableId) {
-      const generatedTableId = stableLegacyOperationalTableIdFromV2Instance(instance.id);
+      const generatedTableId = stableOperationalTableIdFromEditorInstance(instance.id);
       const logBase = {
         spaceId: linkedSpace?.id ?? null,
         floorPlanId: resolvedFloorPlanId ?? null,
@@ -2475,7 +2492,6 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
           if (stringOrEmpty(data.restaurantId) !== restaurantId) return false;
           if (data.isActive === false) return false;
           if ((stringOrEmpty(data.type) || "table") !== "table") return false;
-          if (stringOrEmpty(data.floorPlanId) !== resolvedFloorPlanId) return false;
           return normalizeOperationalTableIdentityKey(stringOrEmpty(data.name)) === identityKey;
         });
         if (conflictingTable) {
@@ -2488,7 +2504,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
             ...logBase,
             action: "conflict",
             legacyTableIdAfter: null,
-            reason: `same_floor_plan_table:${conflictingTable.id}`,
+            reason: `same_restaurant_table:${conflictingTable.id}`,
           });
           continue;
         }
@@ -2521,7 +2537,7 @@ export async function publishSalaEditorV2Phase1ToLegacy(params: {
 
     const ref = doc(db, "tables", legacyTableId);
     const isGeneratedNewOperationalTable =
-      isGeneratedV2OperationalTableId(legacyTableId) &&
+      isEditorGeneratedOperationalTableId(legacyTableId) &&
       newOperationalTableLinks.some(
         (link) => link.instanceId === instance.id && link.legacyTableIdAfter === legacyTableId,
       );

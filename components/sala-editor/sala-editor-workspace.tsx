@@ -26,6 +26,7 @@ import {
   type OperationalElementPosition,
 } from "@/lib/sala-editor/ose/operational-element";
 import type { OperationalElementInstance } from "@/lib/sala-editor/ose/operational-element-instance";
+import { autoCorrectDuplicateOperationalTableNames } from "@/lib/sala-editor/ose/operational-element-naming";
 import { getOperationalElementCatalogItem } from "@/lib/sala-editor/ose/operational-element-catalog";
 import { getLandscapeToolboxItem } from "@/lib/sala-editor/catalog/landscape-toolbox";
 import {
@@ -870,6 +871,7 @@ export function SalaEditorWorkspace({
   const documentSnapshotRef = useRef<SalaEditorDocument | null>(null);
   const knownOperationalInstanceIdsRef = useRef<Set<string>>(new Set());
   const knownOperationalInstanceIdsReadyRef = useRef(false);
+  const lastOperationalNameCorrectionIdRef = useRef<string | null>(null);
 
   const { historyApi } = useSalaEditorHistory();
 
@@ -1954,6 +1956,28 @@ export function SalaEditorWorkspace({
 
     historyApi.flushScheduledCommits(getDocumentSnapshot);
     const snapshot = getDocumentSnapshot();
+    const nameCorrection = autoCorrectDuplicateOperationalTableNames(snapshot);
+    if (nameCorrection.corrections.length > 0) {
+      historyApi.recordCommit(
+        "operational.rename",
+        snapshot,
+        nameCorrection.document,
+      );
+      restoreDocumentSnapshot(nameCorrection.document);
+      const preview = nameCorrection.corrections
+        .slice(0, 4)
+        .map((item) => `${item.previousName} → ${item.nextName}`)
+        .join(", ");
+      const remaining = Math.max(0, nameCorrection.corrections.length - 4);
+      setPublishToTpvStatus(
+        `Hostly corrigió ${nameCorrection.corrections.length} nombre${
+          nameCorrection.corrections.length === 1 ? "" : "s"
+        } duplicado${nameCorrection.corrections.length === 1 ? "" : "s"}: ${preview}${
+          remaining > 0 ? ` y ${remaining} más` : ""
+        }. Revisa los cambios o deshazlos; vuelve a publicar para confirmarlos.`,
+      );
+      return;
+    }
     traceBeforePublisherSpaces(snapshot);
     logSalaEditorDocumentPublicationDebug(snapshot);
     setPublishToTpvPending(true);
@@ -2167,6 +2191,26 @@ export function SalaEditorWorkspace({
     legacyTablesForLinking,
     restaurantId,
   ]);
+
+  useEffect(() => {
+    const corrected = [...document.operationalElementInstances]
+      .reverse()
+      .find(
+        (instance) =>
+          instance.id !== lastOperationalNameCorrectionIdRef.current &&
+          typeof instance.metadata.hostlyAutoCorrectedFrom === "string" &&
+          instance.metadata.hostlyAutoCorrectedFrom.trim() !== "",
+      );
+    if (!corrected) return;
+    lastOperationalNameCorrectionIdRef.current = corrected.id;
+    const previousName = String(corrected.metadata.hostlyAutoCorrectedFrom).trim();
+    const spaceName =
+      document.espacios.find((space) => space.id === corrected.spaceId)?.name.trim() ||
+      "este espacio";
+    setPublishToTpvStatus(
+      `Nombre corregido para evitar duplicados: ${previousName} → ${corrected.name} en ${spaceName}.`,
+    );
+  }, [document.espacios, document.operationalElementInstances]);
 
   useEffect(() => {
     if (legacyTablesForLinking.length === 0) return;
