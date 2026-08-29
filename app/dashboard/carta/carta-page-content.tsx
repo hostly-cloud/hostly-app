@@ -2314,29 +2314,47 @@ export function CartaPageContent({
     () => floorPlans.filter((p) => p.active !== false && p.showInTpv !== false),
     [floorPlans],
   );
-  const publishedV2TableIdsForSelectedPlan = useMemo(() => {
-    if (salaEditorOperationalMap?.source !== "published") return new Set<string>();
+  const publishedV2TablesForSelectedPlan = useMemo<Table[]>(() => {
+    if (salaEditorOperationalMap?.source !== "published") return [];
     const selectedSpace = salaEditorOperationalMap.document.espacios.find(
       (space) =>
         String(space.legacyFloorPlanId ?? "").trim() ===
         String(selectedTpvFloorPlanId ?? "").trim(),
     );
-    if (!selectedSpace) return new Set<string>();
-    return new Set(
-      salaEditorOperationalMap.document.operationalElementInstances
+    if (!selectedSpace) return [];
+    return salaEditorOperationalMap.document.operationalElementInstances
         .filter(
           (instance) =>
             instance.elementType === "TABLE" &&
             instance.spaceId === selectedSpace.id,
         )
-        .map((instance) =>
-          typeof instance.metadata.legacyTableId === "string"
-            ? instance.metadata.legacyTableId.trim()
-            : "",
-        )
-        .filter(Boolean),
-    );
-  }, [salaEditorOperationalMap, selectedTpvFloorPlanId]);
+        .flatMap((instance) => {
+          const legacyTableId =
+            typeof instance.metadata.legacyTableId === "string"
+              ? instance.metadata.legacyTableId.trim()
+              : "";
+          if (!legacyTableId) return [];
+          return [{
+            id: legacyTableId,
+            restaurantId: String(restaurantId ?? "").trim(),
+            name: instance.name.trim() || "Mesa",
+            type: "table" as const,
+            status: "free" as const,
+            tableShape: "square" as const,
+            seats: Math.max(1, Math.round(instance.capacity || 1)),
+            x: instance.position.x,
+            y: instance.position.y,
+            floorPlanId: selectedSpace.legacyFloorPlanId,
+            source: "editor-v2-published",
+            editorV2InstanceId: instance.id,
+            isActive: true,
+          }];
+        });
+  }, [restaurantId, salaEditorOperationalMap, selectedTpvFloorPlanId]);
+  const publishedV2TableIdsForSelectedPlan = useMemo(
+    () => new Set(publishedV2TablesForSelectedPlan.map((table) => table.id)),
+    [publishedV2TablesForSelectedPlan],
+  );
   const { getActiveLayoutForPlan } = useFloorPlanLayoutsConfig(restaurantId);
   const tpvActiveLayoutLabel = useMemo(() => {
     if (salaEditorOperationalMap?.source === "published") return "Plano publicado";
@@ -6426,7 +6444,14 @@ export function CartaPageContent({
   }, [tablesList, ordersByTable]);
 
   const planElementsForTpvMap = useMemo(() => {
-    const activeElements = tablesList.filter(
+    const tableDocumentIds = new Set(tablesList.map((table) => String(table.id)));
+    const allOperationalElements = [
+      ...tablesList,
+      ...publishedV2TablesForSelectedPlan.filter(
+        (table) => !tableDocumentIds.has(String(table.id)),
+      ),
+    ];
+    const activeElements = allOperationalElements.filter(
       (element) =>
         element.isActive !== false ||
         publishedV2TableIdsForSelectedPlan.has(String(element.id)),
@@ -6449,6 +6474,7 @@ export function CartaPageContent({
     selectedTpvFloorPlanId,
     floorPlans,
     publishedV2TableIdsForSelectedPlan,
+    publishedV2TablesForSelectedPlan,
   ]);
 
   const zonesForTpvMap = useMemo(() => {
