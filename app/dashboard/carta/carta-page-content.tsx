@@ -180,8 +180,10 @@ import {
 import { SalaEditorReadonlyMap } from "@/components/sala-editor/readonly/sala-editor-readonly-map";
 import { PinchZoomMap } from "./_components/pinch-zoom-map";
 import { ElementCard } from "@/components/map/element-map-card";
-import type { SalaEditorDocument } from "@/lib/sala-editor/types/editor-document";
-import { loadSalaEditorDraft } from "@/lib/sala-editor/persistence/sala-editor-draft-store";
+import {
+  loadTpvEditorV2OperationalMap,
+  type TpvEditorV2OperationalMap,
+} from "@/lib/tpv/load-editor-v2-operational-map";
 import { buildEditorTpvReadonlyVisualContract } from "@/lib/sala-editor/readonly/editor-tpv-readonly-contract";
 import type { SalaEditorReadonlyTpvOperationalState } from "@/components/sala-editor/readonly/sala-editor-readonly-operational-layer";
 import {
@@ -2254,55 +2256,72 @@ export function CartaPageContent({
   const [tablesList, setTablesList] = useState<Table[]>([]);
   const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
   const [zonesList, setZonesList] = useState<Zone[]>([]);
-  const [salaEditorDraftDocument, setSalaEditorDraftDocument] =
-    useState<SalaEditorDocument | null>(null);
-  const [salaEditorDraftLoadError, setSalaEditorDraftLoadError] =
+  const [salaEditorOperationalMap, setSalaEditorOperationalMap] =
+    useState<TpvEditorV2OperationalMap | null>(null);
+  const [salaEditorOperationalLoadError, setSalaEditorOperationalLoadError] =
     useState<string | null>(null);
+  const salaEditorOperationalRequestRef = useRef(0);
   const [selectedTpvFloorPlanId, setSelectedTpvFloorPlanId] =
     useState<string | null>(null);
 
-  useEffect(() => {
+  const refreshSalaEditorOperationalMap = useCallback(async () => {
+    const requestId = ++salaEditorOperationalRequestRef.current;
     const rid = typeof restaurantId === "string" ? restaurantId.trim() : "";
     if (!authReady || !user?.uid || !rid || !isFirebaseConfigured) {
-      setSalaEditorDraftDocument(null);
-      setSalaEditorDraftLoadError(null);
+      setSalaEditorOperationalMap(null);
+      setSalaEditorOperationalLoadError(null);
       return;
     }
 
-    let cancelled = false;
-    void loadSalaEditorDraft(rid)
-      .then((draft) => {
-        if (cancelled) return;
-        setSalaEditorDraftDocument(draft?.document ?? null);
-        setSalaEditorDraftLoadError(null);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        const message =
-          error instanceof Error ? error.message : String(error ?? "unknown");
-        setSalaEditorDraftDocument(null);
-        setSalaEditorDraftLoadError(message);
-        console.warn("[TPV] readonly map draft load fallback", {
-          restaurantId: rid,
-          error: message,
-        });
+    try {
+      const operationalMap = await loadTpvEditorV2OperationalMap(rid);
+      if (requestId !== salaEditorOperationalRequestRef.current) return;
+      setSalaEditorOperationalMap(operationalMap);
+      setSalaEditorOperationalLoadError(null);
+    } catch (error) {
+      if (requestId !== salaEditorOperationalRequestRef.current) return;
+      const message =
+        error instanceof Error ? error.message : String(error ?? "unknown");
+      setSalaEditorOperationalMap(null);
+      setSalaEditorOperationalLoadError(message);
+      console.warn("[TPV] readonly operational map load failed", {
+        restaurantId: rid,
+        error: message,
       });
+    }
+  }, [authReady, user?.uid, restaurantId, isFirebaseConfigured]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void refreshSalaEditorOperationalMap();
+
+    const refreshWhenVisible = () => {
+      if (cancelled || document.visibilityState === "hidden") return;
+      void refreshSalaEditorOperationalMap();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       cancelled = true;
+      salaEditorOperationalRequestRef.current += 1;
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [authReady, user?.uid, restaurantId, isFirebaseConfigured]);
+  }, [refreshSalaEditorOperationalMap]);
 
   const operationalFloorPlansForTpv = useMemo(
     () => floorPlans.filter((p) => p.active !== false && p.showInTpv !== false),
     [floorPlans],
   );
   const { getActiveLayoutForPlan } = useFloorPlanLayoutsConfig(restaurantId);
-  const tpvActiveLayoutLabel = useMemo(
-    () =>
-      formatTpvActiveLayoutLabel(getActiveLayoutForPlan(selectedTpvFloorPlanId)),
-    [getActiveLayoutForPlan, selectedTpvFloorPlanId],
-  );
+  const tpvActiveLayoutLabel = useMemo(() => {
+    if (salaEditorOperationalMap?.source === "published") return "Plano publicado";
+    if (salaEditorOperationalMap?.source === "draft-migration") {
+      return "Plano pendiente de publicación";
+    }
+    return formatTpvActiveLayoutLabel(getActiveLayoutForPlan(selectedTpvFloorPlanId));
+  }, [getActiveLayoutForPlan, salaEditorOperationalMap?.source, selectedTpvFloorPlanId]);
   /** Nombre de categoría de carta resaltada; null si aún no hay categorías en el grupo (comida/bebida). */
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   /**
@@ -6409,22 +6428,23 @@ export function CartaPageContent({
   }, [zonesList, selectedTpvFloorPlanId, floorPlans]);
 
   const readonlyMapIntegration = useMemo(() => {
-    const hasV2Draft = salaEditorDraftDocument != null;
+    const operationalDocument = salaEditorOperationalMap?.document ?? null;
+    const hasV2Draft = operationalDocument != null;
     const normalizedFloorPlanId = String(selectedTpvFloorPlanId ?? "").trim();
     let reasonForFallback: string | null = null;
     let matchedSpaceId: string | null = null;
 
     if (!hasV2Draft) {
-      reasonForFallback = salaEditorDraftLoadError
-        ? "draft-load-error"
-        : "missing-v2-draft";
+      reasonForFallback = salaEditorOperationalLoadError
+        ? "operational-map-load-error"
+        : "missing-v2-operational-map";
     } else if (!normalizedFloorPlanId) {
       reasonForFallback = "missing-selected-floor-plan";
     }
 
     const matchedSpace =
       hasV2Draft && normalizedFloorPlanId
-        ? salaEditorDraftDocument.espacios.find(
+        ? operationalDocument.espacios.find(
             (space) =>
               String(space.legacyFloorPlanId ?? "").trim() === normalizedFloorPlanId,
           ) ?? null
@@ -6437,9 +6457,9 @@ export function CartaPageContent({
     }
 
     const contract =
-      salaEditorDraftDocument && matchedSpace
+      operationalDocument && matchedSpace
         ? buildEditorTpvReadonlyVisualContract(
-            salaEditorDraftDocument,
+            operationalDocument,
             matchedSpace.id,
           )
         : null;
@@ -6472,8 +6492,8 @@ export function CartaPageContent({
       reasonForFallback,
     } as const;
   }, [
-    salaEditorDraftDocument,
-    salaEditorDraftLoadError,
+    salaEditorOperationalMap,
+    salaEditorOperationalLoadError,
     selectedTpvFloorPlanId,
   ]);
 
