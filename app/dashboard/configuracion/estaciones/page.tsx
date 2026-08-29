@@ -3,11 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import {
-  ConfigBtnPrimary,
-  ConfigBtnSecondary,
-  ConfigCard,
-} from "../_components/config-carta-workbench";
-import { ConfigModulePageHeader } from "../_components/config-module-page-header";
+  HostlyAlert,
+  HostlyButton,
+  HostlyDrawer,
+  HostlyField,
+  HostlyFormToggle,
+  HostlyInput,
+  HostlyKpiCard,
+  HostlySectionHeader,
+  HostlySelect,
+  HostlySurface,
+} from "@/components/ui/hostly";
 import { ProductionStationsDataView } from "@/components/produccion/production-stations-data-view";
 import {
   createProductionStation,
@@ -25,8 +31,6 @@ import {
   type ProductionStationDocument,
   type ProductionStationType,
 } from "@/lib/produccion/production-station-types";
-
-const inputClass = "hostly-input hostly-carta-config-field-input";
 
 type StationFormDraft = {
   name: string;
@@ -176,56 +180,49 @@ export default function ConfigEstacionesPage() {
 
   return (
     <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
-      <ConfigModulePageHeader
-        actions={
-          <ConfigBtnPrimary type="button" disabled={!authReady || !restaurantId} onClick={openNew}>
+      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4 pb-6">
+        <HostlySectionHeader
+          title="Estaciones"
+          description="Organiza los puntos de producción y su identificación visual."
+        >
+          <HostlyButton
+            variant="primary"
+            type="button"
+            disabled={!authReady || !restaurantId}
+            onClick={openNew}
+          >
             Nueva estación
-          </ConfigBtnPrimary>
-        }
-      />
+          </HostlyButton>
+        </HostlySectionHeader>
 
-      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
-        <ConfigCard compact className="hostly-carta-config-card--muted hostly-carta-familia-concept">
-          <p className="hostly-carta-config-section-body">
-            Las estaciones son los puntos de producción del restaurante. Más adelante los productos y
-            familias podrán asignarse a una estación concreta.
-          </p>
-          <p className="hostly-carta-config-form-hint hostly-carta-familia-concept__hint">
+        <HostlyAlert tone="info" title="Puntos de producción">
+          Las estaciones representan cocinas, barras y otros destinos operativos.
+          <span className="mt-1 block">
             Esta configuración aún no afecta al TPV ni a las pantallas de cocina.
-          </p>
-        </ConfigCard>
+          </span>
+        </HostlyAlert>
 
         {!restaurantId ? (
-          <div className="hostly-carta-config-alert hostly-carta-config-alert--warning">
+          <HostlyAlert tone="warning">
             Selecciona un restaurante para gestionar estaciones.
-          </div>
+          </HostlyAlert>
         ) : null}
 
         {error ? (
-          <div className="hostly-carta-config-alert hostly-carta-config-alert--error" role="alert">
-            {error}
-          </div>
+          <HostlyAlert tone="danger">{error}</HostlyAlert>
         ) : null}
         {notice ? (
-          <p className="hostly-carta-config-alert hostly-carta-config-alert--success" role="status">
-            {notice}
-          </p>
+          <HostlyAlert tone="success">{notice}</HostlyAlert>
         ) : null}
 
         {restaurantId && !loading ? (
-          <div className="hostly-carta-config-kpi-strip hostly-carta-config-kpi-strip--dense">
-            <div className="hostly-carta-config-kpi-pill">
-              <span className="hostly-carta-config-kpi-pill__label">Estaciones activas</span>
-              <span className="hostly-carta-config-kpi-pill__value">{activeCount}</span>
-            </div>
-            <div className="hostly-carta-config-kpi-pill">
-              <span className="hostly-carta-config-kpi-pill__label">Total</span>
-              <span className="hostly-carta-config-kpi-pill__value">{items.length}</span>
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <HostlyKpiCard title="Estaciones activas" value={activeCount} />
+            <HostlyKpiCard title="Total" value={items.length} variant="soft" />
           </div>
         ) : null}
 
-        <ConfigCard flush>
+        <HostlySurface variant="flat" className="overflow-hidden">
           <ProductionStationsDataView
             items={items}
             loading={loading}
@@ -233,31 +230,55 @@ export default function ConfigEstacionesPage() {
             onToggleActive={(s) => void toggleActive(s)}
             onCreateNew={openNew}
           />
-        </ConfigCard>
+        </HostlySurface>
       </div>
 
       {panelOpen ? (
-        <div className="hostly-carta-config-drawer-backdrop" role="dialog" aria-modal="true">
-          <ConfigCard className="hostly-carta-config-drawer hostly-production-station-drawer">
-            <h2 className="hostly-carta-config-drawer__title">
-              {editing ? "Editar estación" : "Nueva estación"}
-            </h2>
-            <div className="hostly-carta-config-form hostly-carta-config-drawer__body">
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Nombre</span>
-                <input
-                  className={inputClass}
+        <div className="hostly-carta-config-drawer-backdrop">
+          <HostlyDrawer
+            className="hostly-production-station-drawer"
+            title={editing ? "Editar estación" : "Nueva estación"}
+            description="Define cómo se identifica este punto de producción."
+            footer={
+              <>
+                <HostlyButton
+                  variant="primary"
+                  disabled={saving}
+                  onClick={() => void savePanel()}
+                >
+                  {saving ? "Guardando…" : "Guardar estación"}
+                </HostlyButton>
+                {editing ? (
+                  <HostlyButton
+                    variant="secondary"
+                    disabled={saving}
+                    onClick={() => void toggleActive(editing)}
+                  >
+                    {editing.active ? "Desactivar" : "Activar"}
+                  </HostlyButton>
+                ) : null}
+                <HostlyButton
+                  variant="ghost"
+                  disabled={saving}
+                  onClick={() => setPanelOpen(false)}
+                >
+                  Cancelar
+                </HostlyButton>
+              </>
+            }
+          >
+            <div className="grid gap-4">
+              <HostlyField label="Nombre">
+                <HostlyInput
                   value={draft.name}
                   onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="Cocina, Barra Piscina, Pizzería…"
                   disabled={saving}
                 />
-              </label>
+              </HostlyField>
 
-              <label className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Tipo</span>
-                <select
-                  className={inputClass}
+              <HostlyField label="Tipo">
+                <HostlySelect
                   value={draft.type}
                   disabled={saving}
                   onChange={(e) =>
@@ -272,12 +293,18 @@ export default function ConfigEstacionesPage() {
                       {PRODUCTION_STATION_TYPE_LABELS[type]}
                     </option>
                   ))}
-                </select>
-              </label>
+                </HostlySelect>
+              </HostlyField>
 
-              <div className="hostly-carta-config-form-field">
-                <span className="hostly-carta-config-form-label">Color</span>
-                <div className="hostly-production-station-color-picker" role="radiogroup" aria-label="Color de estación">
+              <div className="hostly-ds-field">
+                <span className="hostly-ds-field__label hostly-type-caption">
+                  Color
+                </span>
+                <div
+                  className="hostly-production-station-color-picker"
+                  role="radiogroup"
+                  aria-label="Color de estación"
+                >
                   {PRODUCTION_STATION_COLOR_PRESETS.map((preset) => {
                     const selected =
                       normalizeProductionStationColor(draft.color).toLowerCase() ===
@@ -300,39 +327,20 @@ export default function ConfigEstacionesPage() {
                     );
                   })}
                 </div>
-                <p className="hostly-carta-config-form-hint">
+                <span className="hostly-ds-field__message hostly-type-caption">
                   Se usará en listados y pantallas de producción.
-                </p>
+                </span>
               </div>
 
-              <label className="hostly-carta-config-form-checkbox">
-                <input
-                  type="checkbox"
-                  checked={draft.active}
-                  disabled={saving}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, active: e.target.checked }))}
-                />
-                <span className="hostly-carta-config-form-label">Estación activa</span>
-              </label>
+              <HostlyFormToggle
+                label="Estación activa"
+                hint="Permite utilizarla como destino operativo."
+                checked={draft.active}
+                disabled={saving}
+                onChange={(e) => setDraft((prev) => ({ ...prev, active: e.target.checked }))}
+              />
             </div>
-            <div className="hostly-carta-config-drawer__footer">
-              <ConfigBtnPrimary type="button" disabled={saving} onClick={() => void savePanel()}>
-                {saving ? "Guardando…" : "Guardar estación"}
-              </ConfigBtnPrimary>
-              {editing ? (
-                <ConfigBtnSecondary
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void toggleActive(editing)}
-                >
-                  {editing.active ? "Desactivar" : "Activar"}
-                </ConfigBtnSecondary>
-              ) : null}
-              <ConfigBtnSecondary type="button" disabled={saving} onClick={() => setPanelOpen(false)}>
-                Cancelar
-              </ConfigBtnSecondary>
-            </div>
-          </ConfigCard>
+          </HostlyDrawer>
         </div>
       ) : null}
     </div>
