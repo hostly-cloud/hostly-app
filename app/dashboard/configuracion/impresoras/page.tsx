@@ -4,10 +4,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import {
-  ConfigBtnPrimary,
-  ConfigBtnSecondary,
-  ConfigCard,
-} from "../_components/config-carta-workbench";
+  HostlyAlert,
+  HostlyButton,
+  HostlyField,
+  HostlyFormToggle,
+  HostlyInput,
+  HostlyLoadingState,
+  HostlyPermissionState,
+  HostlySectionHeader,
+  HostlySurface,
+} from "@/components/ui/hostly";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
   PRINTER_CONFIG_DEFAULT_DISPLAY_NAMES,
@@ -131,8 +137,20 @@ export default function ConfigImpresorasPage() {
 
   return (
     <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
-        <div className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2.5 text-sm leading-relaxed text-amber-950">
+      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4 pb-6">
+        <HostlySectionHeader
+          title="Impresoras"
+          description="Configura el destino y las copias de los tickets por estación."
+        >
+          <Link
+            href="/dashboard/configuracion/impresoras/cola"
+            className="hostly-button-secondary hostly-button-compact"
+          >
+            Ver cola de impresión
+          </Link>
+        </HostlySectionHeader>
+
+        <HostlyAlert tone="warning" title="Configuración de respaldo">
           La configuración por Cocina/Barra/Coctelería se usa como fallback.
           Para varias barras usa{" "}
           <Link
@@ -142,142 +160,86 @@ export default function ConfigImpresorasPage() {
             Configuración → Estaciones
           </Link>
           .
-        </div>
-        <p>
-          <Link
-            href="/dashboard/configuracion/impresoras/cola"
-            className="text-sm font-medium text-sky-700 hover:text-sky-800"
-          >
-            Ver cola de impresión (simulador) →
-          </Link>
-        </p>
+        </HostlyAlert>
+
         {loading ? (
-          <ConfigCard>
-            <p className="text-sm text-slate-600">Cargando configuración…</p>
-          </ConfigCard>
+          <HostlyLoadingState embedded label="Cargando configuración de impresoras…" />
         ) : null}
 
         {!loading && !user ? (
-          <ConfigCard>
-            <p className="text-sm text-amber-900">
-              Inicia sesión para guardar la configuración de impresoras.
-            </p>
-          </ConfigCard>
+          <HostlyPermissionState embedded title="Sesión necesaria">
+            Inicia sesión para guardar la configuración de impresoras.
+          </HostlyPermissionState>
         ) : null}
 
         {!loading ? (
           <>
-            <ConfigCard>
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">
-                    Activar impresión
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Cuando esté activo, Hostly podrá enrutar tickets por estación
-                    (sin imprimir hasta conectar hardware).
-                  </p>
-                </div>
-                <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300"
-                    checked={draft.enabled}
-                    onChange={(e) =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        enabled: e.target.checked,
-                      }))
-                    }
-                  />
-                  <span className="text-sm font-medium text-slate-800">
-                    {draft.enabled ? "Activada" : "Desactivada"}
-                  </span>
-                </label>
-              </div>
+            <HostlySurface variant="ice" className="p-4 sm:p-5">
+              <HostlyFormToggle
+                label={draft.enabled ? "Impresión activada" : "Impresión desactivada"}
+                hint="Hostly enrutará los tickets por estación cuando se conecte el hardware."
+                checked={draft.enabled}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, enabled: e.target.checked }))
+                }
+              />
               {usingDefaults && remoteConfig === null ? (
-                <p className="mt-3 text-xs text-slate-500">
-                  Sin documento en Firestore — se muestran valores por defecto
-                  hasta guardar.
-                </p>
+                <p className="hostly-muted mt-3 text-xs">Se muestran valores por defecto hasta guardar por primera vez.</p>
               ) : null}
-            </ConfigCard>
+            </HostlySurface>
 
-            <div className="grid gap-4 lg:grid-cols-1">
+            <div className="grid gap-3">
               {PRINTER_STATION_KEYS.map((key) => {
                 const station = draft.stations[key];
                 return (
-                  <ConfigCard key={key}>
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                      <div>
-                        <h2 className="text-sm font-semibold text-slate-900">
-                          {stationFieldLabel(key)}
-                        </h2>
-                        <p className="text-xs text-slate-500">
-                          Estación{" "}
-                          <code className="text-[10px]">{key}</code>
-                        </p>
-                      </div>
-                      <label className="inline-flex min-h-[40px] cursor-pointer items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300"
-                          checked={station.enabled}
-                          onChange={(e) =>
-                            patchStation(key, { enabled: e.target.checked })
-                          }
-                        />
-                        <span className="text-xs font-medium text-slate-700">
-                          Estación activa
-                        </span>
-                      </label>
-                    </div>
+                  <HostlySurface key={key} variant="flat" className="p-4 sm:p-5">
+                    <HostlySectionHeader
+                      title={stationFieldLabel(key)}
+                      description={`Destino ${key}`}
+                      className="mb-4 border-b border-[var(--hostly-line)] pb-3"
+                    >
+                      <HostlyFormToggle
+                        label="Estación activa"
+                        checked={station.enabled}
+                        onChange={(e) => patchStation(key, { enabled: e.target.checked })}
+                      />
+                    </HostlySectionHeader>
 
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="block text-xs font-medium text-slate-700">
-                        Nombre impresora
-                        <input
+                      <HostlyField label="Nombre impresora">
+                        <HostlyInput
                           type="text"
-                          className="hostly-surface-flat mt-1 w-full min-h-[44px] rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                           placeholder="Ej. EPSON-COCINA"
                           value={station.printerName ?? ""}
                           onChange={(e) =>
-                            patchStation(key, {
-                              printerName: e.target.value,
-                            })
+                            patchStation(key, { printerName: e.target.value })
                           }
                         />
-                      </label>
-                      <label className="block text-xs font-medium text-slate-700">
-                        Canal / identificador
-                        <input
+                      </HostlyField>
+                      <HostlyField label="Canal / identificador">
+                        <HostlyInput
                           type="text"
-                          className="hostly-surface-flat mt-1 w-full min-h-[44px] rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                           placeholder="Ej. kitchen-main"
                           value={station.channel ?? ""}
                           onChange={(e) =>
                             patchStation(key, { channel: e.target.value })
                           }
                         />
-                      </label>
-                      <label className="block text-xs font-medium text-slate-700">
-                        Nombre visible
-                        <input
+                      </HostlyField>
+                      <HostlyField label="Nombre visible">
+                        <HostlyInput
                           type="text"
-                          className="hostly-surface-flat mt-1 w-full min-h-[44px] rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                           value={station.displayName}
                           onChange={(e) =>
                             patchStation(key, { displayName: e.target.value })
                           }
                         />
-                      </label>
-                      <label className="block text-xs font-medium text-slate-700">
-                        Copias (1–5)
-                        <input
+                      </HostlyField>
+                      <HostlyField label="Copias (1–5)">
+                        <HostlyInput
                           type="number"
                           min={1}
                           max={5}
-                          className="hostly-surface-flat mt-1 w-full min-h-[44px] rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900"
                           value={station.copies ?? 1}
                           onChange={(e) => {
                             const n = Number(e.target.value);
@@ -286,35 +248,26 @@ export default function ConfigImpresorasPage() {
                             });
                           }}
                         />
-                      </label>
+                      </HostlyField>
                     </div>
-                  </ConfigCard>
+                  </HostlySurface>
                 );
               })}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <ConfigBtnPrimary disabled={saving || !restaurantId} onClick={() => void handleSave()}>
+            <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-[var(--hostly-line)] bg-[var(--hostly-surface-page-soft)] py-3">
+              <HostlyButton variant="primary" disabled={saving || !restaurantId} onClick={() => void handleSave()}>
                 {saving ? "Guardando…" : "Guardar"}
-              </ConfigBtnPrimary>
-              <ConfigBtnSecondary disabled={saving} onClick={handleResetDraft}>
+              </HostlyButton>
+              <HostlyButton variant="secondary" disabled={saving} onClick={handleResetDraft}>
                 Descartar cambios
-              </ConfigBtnSecondary>
+              </HostlyButton>
             </div>
 
-            {notice ? (
-              <p className="text-sm font-medium text-emerald-800">{notice}</p>
-            ) : null}
-            {error ? (
-              <p className="text-sm font-medium text-red-800">{error}</p>
-            ) : null}
+            {notice ? <HostlyAlert tone="success">{notice}</HostlyAlert> : null}
+            {error ? <HostlyAlert tone="danger">{error}</HostlyAlert> : null}
 
-            <p className="text-xs text-slate-500">
-              Documento:{" "}
-              <code className="text-[10px]">
-                restaurants/{restaurantId || "…"}/config/printers
-              </code>
-            </p>
+            <p className="hostly-muted text-xs">Configuración aislada para el restaurante activo.</p>
           </>
         ) : null}
       </div>
