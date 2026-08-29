@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import {
-  ConfigBtnPrimary,
-  ConfigBtnSecondary,
-  ConfigCard,
-} from "../_components/config-carta-workbench";
-import {
   HostlyAlert,
+  HostlyButton,
+  HostlyField,
   HostlyFormToggle,
   HostlyInput,
+  HostlyLoadingState,
+  HostlySectionHeader,
   HostlySelect,
+  HostlySurface,
 } from "@/components/ui/hostly";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
@@ -223,8 +223,12 @@ export default function ConfigFamiliasProductoPage() {
 
   return (
     <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4 pb-6">
+        <HostlySectionHeader
+          title="Familias de producto"
+          description="Agrupa productos para mantener el catálogo ordenado y fácil de filtrar."
+        />
 
-      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
         {error ? (
           <HostlyAlert tone="danger">
             {error}
@@ -236,25 +240,25 @@ export default function ConfigFamiliasProductoPage() {
           </HostlyAlert>
         ) : null}
 
-        <ConfigCard>
-          <h2 className="hostly-type-card-title">Nueva familia de producto</h2>
-          <p className="hostly-type-caption mt-1 text-[color:var(--hostly-ink-muted)]">
-            Ej.: Cócteles, Cafés, Tapas, Menú del día.
-          </p>
+        <HostlySurface variant="ice" className="p-4 sm:p-5">
+          <HostlySectionHeader
+            title="Nueva familia"
+            titleVariant="section"
+            description="Ej.: Cócteles, Cafés, Tapas o Menú del día."
+          />
           <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">
-            <label className="block">
-              <span className="hostly-form-label">Nombre</span>
+            <HostlyField label="Nombre">
               <HostlyInput
-                className="mt-1"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="Cócteles"
               />
-            </label>
-            <label className="block">
-              <span className="hostly-form-label">Clasificación</span>
+            </HostlyField>
+            <HostlyField
+              label="Clasificación"
+              hint="Alimenta filtros como Comida / Bebida en Productos."
+            >
               <HostlySelect
-                className="mt-1"
                 value={newType}
                 onChange={(e) =>
                   setNewType(e.target.value as ProductFamilyType)
@@ -266,30 +270,26 @@ export default function ConfigFamiliasProductoPage() {
                   </option>
                 ))}
               </HostlySelect>
-              <p className="hostly-type-caption mt-1 text-[color:var(--hostly-ink-muted)]">
-                Comida, bebida u otros. Alimenta filtros como Comida / Bebida en Productos.
-              </p>
-            </label>
-            <ConfigBtnPrimary
+            </HostlyField>
+            <HostlyButton
+              variant="primary"
               type="button"
               disabled={creating || !authReady}
               onClick={() => void handleCreate()}
             >
               {creating ? "Creando…" : "Crear familia"}
-            </ConfigBtnPrimary>
+            </HostlyButton>
           </div>
-        </ConfigCard>
+        </HostlySurface>
 
         {loading || ensuringDefaults ? (
-          <ConfigCard>
-            <p className="hostly-muted">Cargando familias…</p>
-          </ConfigCard>
+          <HostlyLoadingState embedded label="Cargando familias…" />
         ) : families.length === 0 ? (
-          <ConfigCard>
+          <HostlySurface variant="soft" className="p-5 text-center">
             <p className="hostly-muted">
               No hay familias. Se crearán las predeterminadas al conectar.
             </p>
-          </ConfigCard>
+          </HostlySurface>
         ) : (
           <ul className="flex flex-col gap-3">
             {families.map((family, index) => {
@@ -301,27 +301,19 @@ export default function ConfigFamiliasProductoPage() {
                 draft.active !== family.active;
               return (
                 <li key={family.id}>
-                  <ConfigCard>
+                  <HostlySurface variant="flat" interactive className="p-4 sm:p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1 grid gap-3 sm:grid-cols-2">
-                        <label className="block sm:col-span-2">
-                          <span className="hostly-form-label">
-                            Nombre
-                          </span>
+                        <HostlyField label="Nombre" className="sm:col-span-2">
                           <HostlyInput
-                            className="mt-1"
                             value={draft.name}
                             onChange={(e) =>
                               patchDraft(family.id, { name: e.target.value })
                             }
                           />
-                        </label>
-                        <label className="block">
-                          <span className="hostly-form-label">
-                            Clasificación
-                          </span>
+                        </HostlyField>
+                        <HostlyField label="Clasificación">
                           <HostlySelect
-                            className="mt-1"
                             value={draft.type}
                             onChange={(e) =>
                               patchDraft(family.id, {
@@ -335,7 +327,7 @@ export default function ConfigFamiliasProductoPage() {
                               </option>
                             ))}
                           </HostlySelect>
-                        </label>
+                        </HostlyField>
                         <HostlyFormToggle
                           className="pt-6"
                           label="Activa"
@@ -349,42 +341,46 @@ export default function ConfigFamiliasProductoPage() {
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col lg:items-stretch">
                         <div className="flex gap-1">
-                          <ConfigBtnSecondary
+                          <HostlyButton
+                            variant="secondary"
                             type="button"
                             disabled={busy || index === 0}
                             onClick={() => void handleMove(family.id, "up")}
                           >
                             ↑
-                          </ConfigBtnSecondary>
-                          <ConfigBtnSecondary
+                          </HostlyButton>
+                          <HostlyButton
+                            variant="secondary"
                             type="button"
                             disabled={busy || index === families.length - 1}
                             onClick={() => void handleMove(family.id, "down")}
                           >
                             ↓
-                          </ConfigBtnSecondary>
+                          </HostlyButton>
                         </div>
-                        <ConfigBtnPrimary
+                        <HostlyButton
+                          variant="primary"
                           type="button"
                           disabled={busy || !dirty}
                           onClick={() => void handleSave(family)}
                         >
                           {busy ? "Guardando…" : "Guardar"}
-                        </ConfigBtnPrimary>
-                        <ConfigBtnSecondary
+                        </HostlyButton>
+                        <HostlyButton
+                          variant="secondary"
                           type="button"
                           disabled={busy}
                           onClick={() => void handleToggleActive(family)}
                         >
                           {family.active ? "Desactivar" : "Activar"}
-                        </ConfigBtnSecondary>
+                        </HostlyButton>
                       </div>
                     </div>
                     <p className="mt-3 font-mono text-[10px] text-slate-400">
                       {family.id} · orden {family.sortOrder}
                       {!family.active ? " · inactiva" : ""}
                     </p>
-                  </ConfigCard>
+                  </HostlySurface>
                 </li>
               );
             })}
