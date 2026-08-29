@@ -445,3 +445,194 @@
     padding-bottom: 4px;
   }
 }
+
+/* Activity and active sessions share a compact operational audit layout. */
+.hostly-operation-audit-view {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--hostly-surface-page);
+}
+
+.hostly-operation-audit-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  padding: var(--hostly-op-gap-sm) var(--hostly-op-gap-lg);
+  border-bottom: 1px solid var(--hostly-line);
+  background: rgba(247, 252, 255, 0.92);
+}
+
+.hostly-operation-audit-toolbar .hostly-segmented-scroll {
+  min-width: 0;
+}
+
+.hostly-operation-audit-search {
+  width: min(320px, 34vw);
+  min-height: var(--hostly-m-touch-target);
+  margin-left: auto;
+}
+
+.hostly-operation-audit-summary {
+  margin-left: auto;
+  color: var(--hostly-ink-muted);
+  font-size: var(--hostly-type-caption);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.hostly-operation-audit-alert {
+  margin: var(--hostly-op-gap-sm) var(--hostly-op-gap-lg) 0;
+}
+
+.hostly-operation-audit-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hostly-operation-audit-empty {
+  margin: var(--hostly-op-gap-lg);
+}
+
+.hostly-operation-activity-row,
+.hostly-operation-session-row {
+  display: grid;
+  align-items: center;
+  gap: var(--hostly-op-gap-md);
+  min-height: 58px;
+  padding: 8px var(--hostly-op-gap-lg);
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  background: var(--hostly-surface-card-solid);
+}
+
+.hostly-operation-activity-row {
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+}
+
+.hostly-operation-session-row {
+  grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) auto minmax(90px, 0.7fr) minmax(90px, 0.7fr);
+}
+
+.hostly-operation-audit-primary {
+  min-width: 0;
+}
+
+.hostly-operation-audit-title {
+  overflow: hidden;
+  color: var(--hostly-ink-strong);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostly-operation-audit-meta,
+.hostly-operation-audit-time,
+.hostly-operation-session-route,
+.hostly-operation-activity-summary {
+  color: var(--hostly-ink-muted);
+  font-size: 11px;
+}
+
+.hostly-operation-audit-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hostly-operation-activity-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  min-width: 0;
+}
+
+.hostly-operation-activity-summary,
+.hostly-operation-session-route {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hostly-operation-activity-summary {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.hostly-operation-activity-action {
+  display: flex;
+  align-items: center;
+}
+
+.hostly-operation-activity-id,
+.hostly-operation-session-ids {
+  color: var(--hostly-ink-faint);
+  font-family: monospace;
+  font-size: 10px;
+}
+
+@media (max-width: 767px) {
+  .hostly-operation-audit-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px var(--hostly-mobile-pad-x);
+  }
+
+  .hostly-operation-audit-toolbar .hostly-tab {
+    min-height: var(--hostly-m-touch-target);
+  }
+
+  .hostly-operation-audit-search {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .hostly-operation-audit-summary {
+    margin-left: 0;
+    padding-inline: 2px;
+  }
+
+  .hostly-operation-audit-alert,
+  .hostly-operation-audit-empty {
+    margin: 6px var(--hostly-mobile-pad-x);
+  }
+
+  .hostly-operation-activity-row,
+  .hostly-operation-session-row {
+    margin: 0 var(--hostly-mobile-pad-x);
+    padding: 10px 0;
+    background: transparent;
+  }
+
+  .hostly-operation-activity-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .hostly-operation-activity-row > .hostly-operation-audit-time {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .hostly-operation-session-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .hostly-operation-session-route {
+    grid-column: 1 / -1;
+  }
+
+  .hostly-operation-session-row > .hostly-operation-audit-time,
+  .hostly-operation-session-ids {
+    grid-column: auto;
+  }
+
+  .hostly-operation-session-ids {
+    text-align: right;
+  }
+}

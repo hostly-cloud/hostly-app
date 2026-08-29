@@ -2,12 +2,18 @@
 
 import Link from "next/link";
 import {
-  type CSSProperties,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import {
+  HostlyAlert,
+  HostlyInput,
+  HostlyOperationalEmptyState,
+  HostlySegmentedControl,
+  hostlySegmentTabClassName,
+} from "@/components/ui/hostly";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   activityLogCategory,
@@ -113,55 +119,6 @@ function matchesSearch(log: ActivityLogDocument, queryText: string): boolean {
   return haystack.includes(q);
 }
 
-const toolbarStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 8,
-  padding: "12px 16px",
-  borderBottom: "1px solid var(--hostly-line)",
-  background: "rgba(247, 252, 255, 0.92)",
-};
-
-const filterChipStyle = (active: boolean): CSSProperties => ({
-  padding: "6px 10px",
-  borderRadius: 999,
-  border: active
-    ? "1px solid rgba(49, 95, 125, 0.35)"
-    : "1px solid rgba(148, 163, 184, 0.24)",
-  background: active ? "#ffffff" : "rgba(255,255,255,0.72)",
-  color: active ? "#1f2933" : "#667085",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
-});
-
-const searchStyle: CSSProperties = {
-  flex: "1 1 220px",
-  minWidth: 180,
-  padding: "8px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(148, 163, 184, 0.28)",
-  background: "#fff",
-  fontSize: 13,
-  color: "#1f2933",
-};
-
-const listStyle: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  overflow: "auto",
-  padding: "8px 0",
-};
-
-const rowStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "88px minmax(0, 1fr) auto",
-  gap: 12,
-  alignItems: "center",
-  padding: "10px 16px",
-  borderBottom: "1px solid rgba(148, 163, 184, 0.12)",
-};
-
 export default function OperacionActivityPage() {
   const { restaurantId, ready: authReady } = useAuth();
   const [logs, setLogs] = useState<ActivityLogDocument[]>([]);
@@ -171,8 +128,8 @@ export default function OperacionActivityPage() {
 
   useEffect(() => {
     if (!authReady || !isFirebaseConfigured || !restaurantId) {
-      setLogs([]);
-      return;
+      const resetId = window.setTimeout(() => setLogs([]), 0);
+      return () => window.clearTimeout(resetId);
     }
     return listenActivityLogs(restaurantId, setLogs, {
       limit: 120,
@@ -193,132 +150,84 @@ export default function OperacionActivityPage() {
 
   return (
     <OperacionModuleShell title="Actividad">
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          minHeight: 0,
-          background: "var(--hostly-surface-page)",
-        }}
-      >
-        <div style={toolbarStyle}>
-          {FILTERS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              style={filterChipStyle(filter === item.key)}
-              onClick={() => setFilter(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
-          <input
+      <div className="hostly-operation-audit-view">
+        <div className="hostly-operation-audit-toolbar">
+          <HostlySegmentedControl aria-label="Filtrar actividad">
+            {FILTERS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                className={hostlySegmentTabClassName()}
+                aria-selected={filter === item.key}
+                onClick={() => setFilter(item.key)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </HostlySegmentedControl>
+          <HostlyInput
             type="search"
             placeholder="Buscar mesa, orderId, usuario…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            style={searchStyle}
+            className="hostly-operation-audit-search"
             aria-label="Buscar actividad"
           />
         </div>
 
         {loadError ? (
-          <p style={{ padding: "12px 16px", color: "#b45309", fontSize: 13 }}>
+          <HostlyAlert tone="warning" className="hostly-operation-audit-alert">
             {loadError}
-          </p>
+          </HostlyAlert>
         ) : null}
 
-        <div style={listStyle}>
+        <div className="hostly-operation-audit-list">
           {visibleLogs.length === 0 ? (
-            <p
-              style={{
-                padding: "24px 16px",
-                color: "#667085",
-                fontSize: 13,
-                textAlign: "center",
-              }}
-            >
-              {logs.length === 0
-                ? "Sin actividad registrada todavía."
-                : "Ningún resultado con estos filtros."}
-            </p>
+            <HostlyOperationalEmptyState
+              className="hostly-operation-audit-empty"
+              title={logs.length === 0 ? "Sin actividad registrada" : "Sin resultados"}
+              text={logs.length === 0
+                ? "Las acciones operativas aparecerán aquí conforme se registren."
+                : "No hay actividad que coincida con los filtros y la búsqueda."}
+            />
           ) : (
             visibleLogs.map((log) => {
               const href = entityHref(log);
               const summary = metadataSummary(log);
               return (
-                <div key={log.id} style={rowStyle}>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "#667085",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
+                <article key={log.id} className="hostly-operation-activity-row">
+                  <span className="hostly-operation-audit-time">
                     {formatWhen(log.createdAt)}
                   </span>
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#1f2933",
-                        }}
-                      >
+                  <div className="hostly-operation-audit-primary">
+                    <div className="hostly-operation-activity-heading">
+                      <span className="hostly-operation-audit-title">
                         {activityLogTypeLabel(log.type)}
                       </span>
-                      <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                      <span className="hostly-operation-audit-meta">
                         {actorLabel(log)}
                       </span>
                     </div>
-                    <div
-                      style={{
-                        marginTop: 2,
-                        fontSize: 12,
-                        color: "#667085",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <div className="hostly-operation-activity-summary">
                       {summary ?? log.entityId}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div className="hostly-operation-activity-action">
                     {href ? (
                       <Link
                         href={href}
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "#315f7d",
-                          textDecoration: "none",
-                        }}
+                        className="hostly-button-secondary hostly-button-compact"
                       >
                         Abrir
                       </Link>
                     ) : (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: "#94a3b8",
-                          fontFamily: "monospace",
-                        }}
-                      >
+                      <span className="hostly-operation-activity-id">
                         {log.entityId.slice(0, 10)}
                       </span>
                     )}
                   </div>
-                </div>
+                </article>
               );
             })
           )}
