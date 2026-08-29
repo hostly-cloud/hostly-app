@@ -12,7 +12,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import ModulePageShell from "@/components/module-page-shell";
-import { HostlyAlert, HostlyButton, HostlyInput } from "@/components/ui/hostly";
+import {
+  HostlyAlert,
+  HostlyButton,
+  HostlyInput,
+  HostlyKpiCard,
+  HostlySectionHeader,
+  HostlyStatusBadge,
+  HostlySurface,
+} from "@/components/ui/hostly";
 
 type OrderDoc = {
   id: string;
@@ -205,11 +213,15 @@ export default function MetricsPage() {
       : null;
 
   useEffect(() => {
+    let alertTimer: number | undefined;
     if (prevTrend.current !== "worse" && currentTrend === "worse") {
       new Audio("/alert.mp3").play().catch(() => {});
-      setShowAlert(true);
+      alertTimer = window.setTimeout(() => setShowAlert(true), 0);
     }
     prevTrend.current = currentTrend;
+    return () => {
+      if (alertTimer != null) window.clearTimeout(alertTimer);
+    };
   }, [currentTrend]);
 
   useEffect(() => {
@@ -298,114 +310,134 @@ export default function MetricsPage() {
 
   return (
     <ModulePageShell title="Métricas" subtitle="Resumen del servicio" maxWidth={1180} compactLayout>
-      <div className="hostly-legacy-metrics">
-      <HostlyButton
-        variant="secondary"
-        onClick={() => {
-          new Audio("/alert.mp3").play().catch(console.error);
-        }}
-      >
-        Probar sonido
-      </HostlyButton>
-      {showAlert ? (
-        <HostlyAlert tone="danger">
-          ⚠️ Servicio empeorando
-        </HostlyAlert>
-      ) : null}
-      {slowTables.length > 0 ? (
-        <div style={{ marginTop: "10px" }}>
-          <p style={{ fontWeight: "600" }}>⚠️ Mesas con retraso:</p>
-          <ul>
-            {slowTables.map((row, i) => (
-              <li
-                key={i}
-                title="Abrir comanda"
-                onClick={() => {
-                  router.push(
-                    `/dashboard/carta?tableId=${row.tableId}&orderId=${row.orderId}`,
-                  );
-                }}
-                style={{
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                  fontWeight: "600",
-                }}
-              >
-                {row.tableName} ({row.minutes} min)
-              </li>
-            ))}
-          </ul>
+      <div className="hostly-service-metrics">
+        <div className="hostly-service-metrics__toolbar">
+          <HostlyInput
+            className="hostly-service-metrics__date"
+            type="date"
+            aria-label="Fecha de las métricas"
+            value={toDateInputValue(selectedDate)}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              const [y, m, d] = v.split("-").map(Number);
+              setSelectedDate(new Date(y, m - 1, d));
+            }}
+          />
+          <HostlyButton
+            variant="secondary"
+            className="hostly-button-compact"
+            onClick={() => {
+              new Audio("/alert.mp3").play().catch(console.error);
+            }}
+          >
+            Probar alerta sonora
+          </HostlyButton>
         </div>
-      ) : null}
-      {slowOrdersCount > 0 ? (
-        <HostlyAlert tone="danger">
-          ⚠️ Hay comandas con retraso
-        </HostlyAlert>
-      ) : null}
-      <HostlyInput
-        className="hostly-legacy-date-input"
-        type="date"
-        value={toDateInputValue(selectedDate)}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (!v) return;
-          const [y, m, d] = v.split("-").map(Number);
-          setSelectedDate(new Date(y, m - 1, d));
-        }}
-      />
-      <p>Hoy: {totalOrders} comandas</p>
-      <p>Ayer: {totalOrdersYesterday} comandas</p>
-      {ordersCompareTrend ? <p>{ordersCompareTrend}</p> : null}
-      <p>Listas: {readyOrders}</p>
-      <p>
-        Tiempo medio hoy:{" "}
-        {avgTimeToday != null ? `${avgTimeToday} min` : "—"}
-      </p>
-      <p>
-        Tiempo medio ayer:{" "}
-        {avgTimeYesterday != null ? `${avgTimeYesterday} min` : "—"}
-      </p>
-      {avgTimeToday != null && avgTimeYesterday != null ? (
-        <HostlyAlert
-          tone={
-            avgTimeToday < avgTimeYesterday
-              ? "success"
-              : avgTimeToday > avgTimeYesterday
-                ? "danger"
-                : "neutral"
-          }
-        >
-          <p style={{ fontWeight: "600" }}>
+
+        {showAlert ? (
+          <HostlyAlert tone="danger" title="Servicio empeorando">
+            El tiempo medio ha aumentado respecto al día anterior.
+          </HostlyAlert>
+        ) : null}
+
+        {slowOrdersCount > 0 ? (
+          <HostlyAlert tone="danger" title={`${slowOrdersCount} comandas con retraso`}>
+            {slowOrderTableLabels.join(" · ")}
+          </HostlyAlert>
+        ) : null}
+
+        <div className="hostly-kpi-grid-unified hostly-service-metrics__kpis">
+          <HostlyKpiCard
+            title="Comandas"
+            value={totalOrders}
+            helper={`Ayer: ${totalOrdersYesterday}${ordersCompareTrend ? ` · ${ordersCompareTrend}` : ""}`}
+          />
+          <HostlyKpiCard
+            title="Listas"
+            value={readyOrders}
+            helper="Preparadas para servir"
+          />
+          <HostlyKpiCard
+            title="Tiempo medio"
+            value={avgTimeToday != null ? `${avgTimeToday} min` : "—"}
+            helper={`Ayer: ${avgTimeYesterday != null ? `${avgTimeYesterday} min` : "—"}`}
+          />
+          <HostlyKpiCard
+            title="Con retraso"
+            value={slowOrdersCount}
+            helper="Más de 20 minutos"
+            variant={slowOrdersCount > 0 ? "soft" : "ice"}
+          />
+        </div>
+
+        {avgTimeToday != null && avgTimeYesterday != null ? (
+          <HostlyAlert
+            tone={
+              avgTimeToday < avgTimeYesterday
+                ? "success"
+                : avgTimeToday > avgTimeYesterday
+                  ? "danger"
+                  : "neutral"
+            }
+          >
             {avgTimeToday < avgTimeYesterday
-              ? `🟢 Servicio más rápido que ayer (-${Math.abs(avgTimeToday - avgTimeYesterday)} min)`
+              ? `Servicio más rápido que ayer (-${Math.abs(avgTimeToday - avgTimeYesterday)} min)`
               : avgTimeToday > avgTimeYesterday
-                ? `🔴 Servicio más lento que ayer (+${Math.abs(avgTimeToday - avgTimeYesterday)} min)`
-                : "⚪ Mismo rendimiento que ayer"}
-          </p>
-        </HostlyAlert>
-      ) : null}
-      <p>Comandas con retraso: {slowOrdersCount}</p>
-      {slowOrderTableLabels.length > 0 ? (
-        <ul style={{ marginTop: 4, marginBottom: 0, paddingLeft: 20 }}>
-          {slowOrderTableLabels.map((name, i) => (
-            <li key={`${name}-${i}`}>{name}</li>
-          ))}
-        </ul>
-      ) : null}
-      <div style={{ marginTop: 16 }}>
-        <p style={{ marginBottom: 8 }}>Mesas más lentas:</p>
-        {!Array.isArray(slowestTables) || slowestTables.length === 0 ? (
-          <p>—</p>
-        ) : (
-          <ol style={{ margin: 0, paddingLeft: 20 }}>
-            {(Array.isArray(slowestTables) ? slowestTables : []).map((row) => (
-              <li key={row.name}>
-                {row.name} - {row.avgMin} min
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
+                ? `Servicio más lento que ayer (+${Math.abs(avgTimeToday - avgTimeYesterday)} min)`
+                : "Mismo rendimiento que ayer"}
+          </HostlyAlert>
+        ) : null}
+
+        <div className="hostly-service-metrics__details">
+          <HostlySurface variant="flat" className="hostly-service-metrics__panel">
+            <HostlySectionHeader
+              title="Mesas con retraso"
+              description="Comandas abiertas durante más de 20 minutos"
+            />
+            {slowTables.length > 0 ? (
+              <div className="hostly-service-metrics__rows">
+                {slowTables.map((row) => (
+                  <button
+                    key={row.orderId}
+                    type="button"
+                    className="hostly-service-metrics__row"
+                    title="Abrir comanda"
+                    onClick={() => {
+                      router.push(
+                        `/dashboard/carta?tableId=${row.tableId}&orderId=${row.orderId}`,
+                      );
+                    }}
+                  >
+                    <span>{row.tableName}</span>
+                    <HostlyStatusBadge tone="danger">{row.minutes} min</HostlyStatusBadge>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="hostly-service-metrics__empty">Sin retrasos activos.</p>
+            )}
+          </HostlySurface>
+
+          <HostlySurface variant="flat" className="hostly-service-metrics__panel">
+            <HostlySectionHeader
+              title="Mesas más lentas"
+              description="Promedio de las comandas cerradas en la fecha seleccionada"
+            />
+            {slowestTables.length > 0 ? (
+              <ol className="hostly-service-metrics__ranking">
+                {slowestTables.map((row) => (
+                  <li key={row.name}>
+                    <span>{row.name}</span>
+                    <strong>{row.avgMin} min</strong>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="hostly-service-metrics__empty">Todavía no hay comandas cerradas.</p>
+            )}
+          </HostlySurface>
+        </div>
       </div>
     </ModulePageShell>
   );

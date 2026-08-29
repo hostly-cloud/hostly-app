@@ -18730,6 +18730,135 @@ main:has(.hostly-productos-v3--operations) .hostly-productos-carta-header-inline
   margin-bottom: 4px;
 }
 
+.hostly-service-metrics {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-md);
+}
+
+.hostly-service-metrics__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+}
+
+.hostly-service-metrics__date {
+  width: min(100%, 220px);
+  min-height: var(--hostly-m-touch-target);
+}
+
+.hostly-service-metrics__kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.hostly-service-metrics__details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--hostly-op-gap-md);
+}
+
+.hostly-service-metrics__panel {
+  min-width: 0;
+  padding: var(--hostly-op-gap-lg);
+}
+
+.hostly-service-metrics__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-xs);
+  margin-top: var(--hostly-op-gap-md);
+}
+
+.hostly-service-metrics__row {
+  display: flex;
+  min-height: var(--hostly-m-touch-target);
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hostly-op-gap-sm);
+  padding: 7px 10px;
+  border: 1px solid var(--hostly-table-divider-soft);
+  border-radius: var(--hostly-radius-sm);
+  background: var(--hostly-surface-card-solid);
+  color: var(--hostly-ink-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hostly-service-metrics__row:hover {
+  border-color: var(--hostly-line-strong);
+  background: var(--hostly-surface-operational);
+}
+
+.hostly-service-metrics__ranking {
+  display: flex;
+  margin: var(--hostly-op-gap-md) 0 0;
+  padding: 0;
+  flex-direction: column;
+  gap: var(--hostly-op-gap-xs);
+  list-style: none;
+  counter-reset: hostly-metrics-rank;
+}
+
+.hostly-service-metrics__ranking li {
+  display: grid;
+  min-height: var(--hostly-m-touch-target);
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--hostly-op-gap-sm);
+  border-bottom: 1px solid var(--hostly-table-divider-faint);
+  color: var(--hostly-ink);
+  font-size: 13px;
+  counter-increment: hostly-metrics-rank;
+}
+
+.hostly-service-metrics__ranking li::before {
+  content: counter(hostly-metrics-rank);
+  color: var(--hostly-ink-faint);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.hostly-service-metrics__ranking strong {
+  color: var(--hostly-ink-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.hostly-service-metrics__empty {
+  margin: var(--hostly-op-gap-md) 0 0;
+  color: var(--hostly-ink-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 767px) {
+  .hostly-service-metrics__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hostly-service-metrics__date,
+  .hostly-service-metrics__toolbar .hostly-ds-button {
+    width: 100%;
+  }
+
+  .hostly-service-metrics__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hostly-service-metrics__details {
+    grid-template-columns: 1fr;
+  }
+
+  .hostly-service-metrics__panel {
+    padding: 12px;
+  }
+}
+
 .hostly-legacy-tables__grid,
 .hostly-mesas-grid {
   display: grid;
