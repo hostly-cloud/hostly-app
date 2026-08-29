@@ -2314,11 +2314,21 @@ export function CartaPageContent({
     () => floorPlans.filter((p) => p.active !== false && p.showInTpv !== false),
     [floorPlans],
   );
-  const publishedV2TableIds = useMemo(() => {
+  const publishedV2TableIdsForSelectedPlan = useMemo(() => {
     if (salaEditorOperationalMap?.source !== "published") return new Set<string>();
+    const selectedSpace = salaEditorOperationalMap.document.espacios.find(
+      (space) =>
+        String(space.legacyFloorPlanId ?? "").trim() ===
+        String(selectedTpvFloorPlanId ?? "").trim(),
+    );
+    if (!selectedSpace) return new Set<string>();
     return new Set(
       salaEditorOperationalMap.document.operationalElementInstances
-        .filter((instance) => instance.elementType === "TABLE")
+        .filter(
+          (instance) =>
+            instance.elementType === "TABLE" &&
+            instance.spaceId === selectedSpace.id,
+        )
         .map((instance) =>
           typeof instance.metadata.legacyTableId === "string"
             ? instance.metadata.legacyTableId.trim()
@@ -2326,7 +2336,7 @@ export function CartaPageContent({
         )
         .filter(Boolean),
     );
-  }, [salaEditorOperationalMap]);
+  }, [salaEditorOperationalMap, selectedTpvFloorPlanId]);
   const { getActiveLayoutForPlan } = useFloorPlanLayoutsConfig(restaurantId);
   const tpvActiveLayoutLabel = useMemo(() => {
     if (salaEditorOperationalMap?.source === "published") return "Plano publicado";
@@ -6418,21 +6428,28 @@ export function CartaPageContent({
   const planElementsForTpvMap = useMemo(() => {
     const activeElements = tablesList.filter(
       (element) =>
-        element.isActive !== false || publishedV2TableIds.has(String(element.id)),
+        element.isActive !== false ||
+        publishedV2TableIdsForSelectedPlan.has(String(element.id)),
     );
     if (!selectedTpvFloorPlanId) return activeElements;
     const visibleOperationalFloorPlans = floorPlans.filter(
       (plan) => plan.active !== false && plan.showInTpv !== false,
     );
     const hasMultipleOperationalFloorPlans = visibleOperationalFloorPlans.length > 1;
-    return activeElements.filter((element) =>
-      hasMultipleOperationalFloorPlans &&
-      !isDecorativePlanElementType(element.type) &&
-      !element.floorPlanId?.trim()
+    return activeElements.filter((element) => {
+      if (publishedV2TableIdsForSelectedPlan.has(String(element.id))) return true;
+      return hasMultipleOperationalFloorPlans &&
+        !isDecorativePlanElementType(element.type) &&
+        !element.floorPlanId?.trim()
         ? false
-        : entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
-    );
-  }, [tablesList, selectedTpvFloorPlanId, floorPlans, publishedV2TableIds]);
+        : entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans);
+    });
+  }, [
+    tablesList,
+    selectedTpvFloorPlanId,
+    floorPlans,
+    publishedV2TableIdsForSelectedPlan,
+  ]);
 
   const zonesForTpvMap = useMemo(() => {
     if (!selectedTpvFloorPlanId) return zonesList;
@@ -6532,11 +6549,11 @@ export function CartaPageContent({
   const tablesForTpvMap = useMemo(() => {
     const list = planElementsForTpvMap.filter(
       (element) =>
-        publishedV2TableIds.has(String(element.id)) ||
+        publishedV2TableIdsForSelectedPlan.has(String(element.id)) ||
         filterTablesForTpvMap([element]).length > 0,
     );
     return [...list].sort(sortTablesForTpvMap);
-  }, [planElementsForTpvMap, publishedV2TableIds]);
+  }, [planElementsForTpvMap, publishedV2TableIdsForSelectedPlan]);
 
   const mapZoneOptions = useMemo(() => {
     if (embeddedInOperacion) return [];
