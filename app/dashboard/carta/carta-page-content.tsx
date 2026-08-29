@@ -2314,6 +2314,19 @@ export function CartaPageContent({
     () => floorPlans.filter((p) => p.active !== false && p.showInTpv !== false),
     [floorPlans],
   );
+  const publishedV2TableIds = useMemo(() => {
+    if (salaEditorOperationalMap?.source !== "published") return new Set<string>();
+    return new Set(
+      salaEditorOperationalMap.document.operationalElementInstances
+        .filter((instance) => instance.elementType === "TABLE")
+        .map((instance) =>
+          typeof instance.metadata.legacyTableId === "string"
+            ? instance.metadata.legacyTableId.trim()
+            : "",
+        )
+        .filter(Boolean),
+    );
+  }, [salaEditorOperationalMap]);
   const { getActiveLayoutForPlan } = useFloorPlanLayoutsConfig(restaurantId);
   const tpvActiveLayoutLabel = useMemo(() => {
     if (salaEditorOperationalMap?.source === "published") return "Plano publicado";
@@ -6404,7 +6417,8 @@ export function CartaPageContent({
 
   const planElementsForTpvMap = useMemo(() => {
     const activeElements = tablesList.filter(
-      (element) => element.isActive !== false,
+      (element) =>
+        element.isActive !== false || publishedV2TableIds.has(String(element.id)),
     );
     if (!selectedTpvFloorPlanId) return activeElements;
     const visibleOperationalFloorPlans = floorPlans.filter(
@@ -6418,7 +6432,7 @@ export function CartaPageContent({
         ? false
         : entityBelongsToFloorPlan(element, selectedTpvFloorPlanId, floorPlans),
     );
-  }, [tablesList, selectedTpvFloorPlanId, floorPlans]);
+  }, [tablesList, selectedTpvFloorPlanId, floorPlans, publishedV2TableIds]);
 
   const zonesForTpvMap = useMemo(() => {
     if (!selectedTpvFloorPlanId) return zonesList;
@@ -6516,9 +6530,13 @@ export function CartaPageContent({
   );
 
   const tablesForTpvMap = useMemo(() => {
-    const list = filterTablesForTpvMap(planElementsForTpvMap);
+    const list = planElementsForTpvMap.filter(
+      (element) =>
+        publishedV2TableIds.has(String(element.id)) ||
+        filterTablesForTpvMap([element]).length > 0,
+    );
     return [...list].sort(sortTablesForTpvMap);
-  }, [planElementsForTpvMap]);
+  }, [planElementsForTpvMap, publishedV2TableIds]);
 
   const mapZoneOptions = useMemo(() => {
     if (embeddedInOperacion) return [];
