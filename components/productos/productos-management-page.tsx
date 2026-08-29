@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode, SVGProps } from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/components/i18n-provider";
@@ -111,7 +111,6 @@ import {
   buildProductStationPatchFromSelectValue,
   isLegacyOperationStationSelectValue,
   operationStationSelectValueFromProduct,
-  resolveOperationStationFromSelectValue,
 } from "@/lib/operacion/product-operation-station";
 import type { OperationStationDocument } from "@/lib/operacion/operation-station-types";
 import {
@@ -150,7 +149,6 @@ import {
   listenProductsForInventory,
   setCentralProductPublication,
   reorderCentralProductsInCategory,
-  swapCentralProductSortOrderInCategory,
 } from "@/lib/firestore/products";
 import { createStableImageFile } from "@/lib/firebase/product-image-storage";
 import {
@@ -537,16 +535,6 @@ function labelTipoVenta(t: (key: string) => string, tipo: TipoProductoVenta): st
   return t(TIPO_VENTA_I18N[tipo]);
 }
 
-function operationStationLabelFromSelect(
-  selectValue: string,
-  stations: readonly OperationStationDocument[],
-  tipoFallback: TipoProductoVenta,
-): string {
-  const resolved = resolveOperationStationFromSelectValue(selectValue, stations);
-  if (resolved?.name?.trim()) return resolved.name.trim();
-  return tipoFallback === "bebida" ? "Barra" : "Cocina";
-}
-
 function normalizeForSearch(s: string): string {
   return s
     .trim()
@@ -738,16 +726,6 @@ const productGridPriceCell: CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
   alignItems: "center",
-};
-
-const rowActionBtn: CSSProperties = {
-  padding: "4px 7px",
-  borderRadius: 6,
-  fontSize: 10,
-  fontWeight: 630,
-  cursor: "pointer",
-  minHeight: 28,
-  lineHeight: 1.18,
 };
 
 type ProductoEstadoVenta = PlatoCarta & { enCarta?: boolean; isActive?: boolean };
@@ -2079,9 +2057,10 @@ export default function ProductosManagementPage({
   const [deleteChoiceBusy, setDeleteChoiceBusy] = useState(false);
 
   const persist = useCallback(
-    (_next: PlatoCarta[]) => {
+    (next: PlatoCarta[]) => {
       if (isCentralCatalog) return;
       // Fase 10C: catálogo legacy solo lectura — no escribir localStorage.
+      void next;
     },
     [isCentralCatalog],
   );
@@ -2620,47 +2599,6 @@ export default function ProductosManagementPage({
     });
   }, [canUseProductReorder, clearSelection]);
 
-  const moveProductInCategory = useCallback(
-    async (productId: string, direction: "up" | "down") => {
-      if (!operationalRestaurantId || reorderBusyId || !canUseProductReorder) return;
-      const orderedIds = tabFilteredSorted.map((p) => p.id);
-      setReorderBusyId(productId);
-      try {
-        await swapCentralProductSortOrderInCategory(
-          operationalRestaurantId,
-          productId,
-          direction,
-          orderedIds,
-        );
-      } catch (e) {
-        setNotice(formatCentralCatalogWriteError(e));
-        window.setTimeout(() => setNotice(null), 4200);
-      } finally {
-        setReorderBusyId(null);
-      }
-    },
-    [
-      operationalRestaurantId,
-      reorderBusyId,
-      canUseProductReorder,
-      tabFilteredSorted,
-    ],
-  );
-
-  const handleMoveProductUp = useCallback(
-    (productId: string) => {
-      void moveProductInCategory(productId, "up");
-    },
-    [moveProductInCategory],
-  );
-
-  const handleMoveProductDown = useCallback(
-    (productId: string) => {
-      void moveProductInCategory(productId, "down");
-    },
-    [moveProductInCategory],
-  );
-
   const reorderProductsInCategory = useCallback(
     async (orderedIds: string[]) => {
       if (!operationalRestaurantId || reorderBusyId || !canUseProductReorder) return;
@@ -2711,7 +2649,7 @@ export default function ProductosManagementPage({
     return () => {
       alive = false;
     };
-  }, [items]);
+  }, [items, setSelectedIds]);
 
   useLayoutEffect(() => {
     const el = selectAllRef.current;
@@ -2722,7 +2660,7 @@ export default function ProductosManagementPage({
     }
     const nSel = displayed.filter((p) => selectedIds.has(p.id)).length;
     el.indeterminate = nSel > 0 && nSel < displayed.length;
-  }, [displayed, selectedIds]);
+  }, [displayed, selectAllRef, selectedIds]);
 
   const toggleSelectAllDisplayed = useCallback(() => {
     toggleSelectAllDisplayedBase(displayed.map((p) => p.id));
@@ -3054,6 +2992,7 @@ export default function ProductosManagementPage({
     meta,
     centralDocsById,
     applyCentralDeleteOutcomeToUi,
+    tieneEscandalloForPlato,
     t,
     clearSelection,
   ]);
@@ -3143,7 +3082,6 @@ export default function ProductosManagementPage({
     [iceVisual],
   );
 
-  const editingPlato = useMemo(() => (editingId ? (items.find((p) => p.id === editingId) ?? null) : null), [editingId, items]);
   const draftSkipsMenuCourse = useMemo(
     () =>
       productFormSkipsMenuCourse({
@@ -3709,6 +3647,10 @@ export default function ProductosManagementPage({
     setProductFormTab("basico");
   }, [formOpen, editFocus]);
 
+  const openRecipeFromDeepLink = useEffectEvent((plato: PlatoCarta) => {
+    openEdit(plato, { focus: "recipe" });
+  });
+
   useEffect(() => {
     if (!isConfigCartaProductosRoute || !hydrated || operationalCatalog.loading) return;
 
@@ -3736,7 +3678,7 @@ export default function ProductosManagementPage({
     }
 
     recipeDeepLinkHandledRef.current = linkKey;
-    openEdit(plato, { focus: "recipe" });
+    openRecipeFromDeepLink(plato);
     router.replace(pathname, { scroll: false });
   }, [
     hydrated,
@@ -4726,7 +4668,15 @@ export default function ProductosManagementPage({
           className="hostly-button-primary hostly-button-compact hostly-productos-carta-header-inline-actions__btn hostly-productos-carta-header-inline-actions__btn--primary whitespace-nowrap"
           style={isLegacyReadOnly ? { opacity: 0.48, cursor: "not-allowed" } : undefined}
         >
-          {t("carta.ctaNew")}
+          <svg
+            className="hostly-productos-carta-header-inline-actions__icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden
+          >
+            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          Nuevo producto
         </button>
         <button
           type="button"
@@ -4735,6 +4685,16 @@ export default function ProductosManagementPage({
           aria-controls="hostly-productos-carta-advanced-panel"
           onClick={() => setConfigCartaAdvancedOpen((open) => !open)}
         >
+          <svg
+            className="hostly-productos-carta-header-inline-actions__icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden
+          >
+            <path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <circle cx="16" cy="7" r="2" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="8" cy="17" r="2" stroke="currentColor" strokeWidth="1.8" />
+          </svg>
           {configCartaAdvancedOpen ? "Menos opciones" : "Más opciones"}
         </button>
       </div>
@@ -4747,6 +4707,7 @@ export default function ProductosManagementPage({
         <ConfigCartaWorkbench
           title="Productos"
           description="Catálogo maestro de productos del restaurante"
+          compactSectionHeader={false}
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
           visualVariant="productos"
@@ -4780,6 +4741,7 @@ export default function ProductosManagementPage({
         <ConfigCartaWorkbench
           title="Productos"
           description="Catálogo maestro de productos del restaurante"
+          compactSectionHeader={false}
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
           visualVariant="productos"
@@ -5635,6 +5597,9 @@ export default function ProductosManagementPage({
       <>
         <style dangerouslySetInnerHTML={{ __html: productosTableInteractionStyles }} />
         <ConfigCartaWorkbench
+          title="Productos"
+          description="Catálogo, precios y configuración de venta del restaurante."
+          compactSectionHeader={false}
           lockViewport
           lockViewportFillParent={lockViewportFillParent}
           visualVariant="productos"
@@ -6756,4 +6721,3 @@ export default function ProductosManagementPage({
     </>
   );
 }
-

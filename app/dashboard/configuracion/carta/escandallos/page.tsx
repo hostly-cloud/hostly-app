@@ -7,7 +7,6 @@ import { ConfigCard, ConfigCartaWorkbench } from "../../_components/config-carta
 import { EscandallosCartaDataView } from "@/components/carta/escandallos/escandallos-carta-data-view";
 import { EscandallosCartaToolbar, type EscandalloToolbarTier } from "@/components/carta/escandallos/escandallos-carta-toolbar";
 import {
-  computeEscandalloKpiStats,
   computeEscandalloListStats,
   getDraftForItem,
   parseNullableNumber,
@@ -116,11 +115,6 @@ export default function ConfigCartaEscandallosPage() {
     [economicsOptions, items],
   );
 
-  const kpiStats = useMemo(
-    () => computeEscandalloKpiStats(items, EMPTY_DRAFTS, economicsOptions),
-    [economicsOptions, items],
-  );
-
   const filteredItems = useMemo(() => {
     let rows = listStats.sortedItems;
     const q = search.trim().toLowerCase();
@@ -176,7 +170,17 @@ export default function ConfigCartaEscandallosPage() {
       description="Coste, margen y recetas del catálogo central. Lectura operacional densa para cocina y dirección."
       lockViewport
       lockViewportFillParent
+      headerActions={
+        <Link
+          href="/dashboard/configuracion/carta/productos"
+          className="hostly-button-secondary hostly-button-compact hostly-escandallos-products-link"
+        >
+          <span aria-hidden>←</span>
+          Productos
+        </Link>
+      }
     >
+      <div className="hostly-escandallos-workspace">
       {!restauranteId ? (
         <div className="hostly-carta-config-alert hostly-carta-config-alert--warning">
           Necesitas un restaurante autenticado para gestionar escandallos.
@@ -186,7 +190,7 @@ export default function ConfigCartaEscandallosPage() {
       {restauranteId ? (
         <div className="hostly-carta-config-kpi-strip hostly-carta-config-kpi-strip--dense">
           <div className="hostly-carta-config-kpi-pill">
-            <span className="hostly-carta-config-kpi-pill__label">Productos activos</span>
+            <span className="hostly-carta-config-kpi-pill__label">Productos</span>
             <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.activos}</span>
           </div>
           <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--success">
@@ -196,22 +200,6 @@ export default function ConfigCartaEscandallosPage() {
           <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--warning">
             <span className="hostly-carta-config-kpi-pill__label">Incompletos</span>
             <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.incompletos}</span>
-          </div>
-          <div className="hostly-carta-config-kpi-pill">
-            <span className="hostly-carta-config-kpi-pill__label">Sin escandallo</span>
-            <span className="hostly-carta-config-kpi-pill__value">{escandalloStateStats.sinEscandallo}</span>
-          </div>
-          <div className="hostly-carta-config-kpi-pill">
-            <span className="hostly-carta-config-kpi-pill__label">Margen bajo</span>
-            <span className="hostly-carta-config-kpi-pill__value">{kpiStats.margenBajo}</span>
-          </div>
-          <div className="hostly-carta-config-kpi-pill">
-            <span className="hostly-carta-config-kpi-pill__label">Coste medio</span>
-            <span className="hostly-carta-config-kpi-pill__value">
-              {kpiStats.costeMedio != null
-                ? `${kpiStats.costeMedio.toFixed(2).replace(".", ",")} €`
-                : "—"}
-            </span>
           </div>
           {listStats.avgMargin != null ? (
             <div className="hostly-carta-config-kpi-pill hostly-carta-config-kpi-pill--success">
@@ -225,10 +213,10 @@ export default function ConfigCartaEscandallosPage() {
       ) : null}
 
       {restauranteId ? (
-        <div className="hostly-carta-config-alert hostly-carta-config-alert--info">
-          Coste y margen se calculan desde la receta central. Para cambiar ingredientes, mermas o PVP,
-          abre la ficha del producto.
-        </div>
+        <p className="hostly-escandallos-context-note">
+          Coste y margen se calculan desde la receta. Ingredientes, mermas y PVP se editan en
+          <Link href="/dashboard/configuracion/carta/productos"> Productos</Link>.
+        </p>
       ) : null}
 
       {!operationalCatalog.loading && items.length > 0 ? (
@@ -243,7 +231,7 @@ export default function ConfigCartaEscandallosPage() {
         />
       ) : null}
 
-      <ConfigCard flush>
+      <ConfigCard flush className="hostly-escandallos-table-card">
         <EscandallosCartaDataView
           items={filteredItems}
           drafts={EMPTY_DRAFTS}
@@ -261,12 +249,6 @@ export default function ConfigCartaEscandallosPage() {
         />
       </ConfigCard>
 
-      <div className="hostly-carta-config-alert hostly-carta-config-alert--info">
-        <span className="font-semibold">Mermas: </span>
-        prevé pérdidas por fileteado o cocción dentro de la receta detallada.{" "}
-        <Link href="/dashboard/configuracion/carta/productos" className="hostly-carta-config-text-link">
-          Abrir Productos
-        </Link>
       </div>
     </ConfigCartaWorkbench>
   );

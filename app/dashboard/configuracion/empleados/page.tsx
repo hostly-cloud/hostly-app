@@ -1,6 +1,6 @@
 "use client";
 
-import EmpleadosDashboardPage from "@/app/dashboard/empleados/page";
+import EmpleadosDashboardPage from "@/app/dashboard/empleados/employees-page-content";
 
 export default function ConfigEmpleadosPage() {
   return (

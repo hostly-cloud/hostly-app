@@ -46,16 +46,16 @@ import {
   mapOnboardingRoleToStaffInviteRole,
   normalizeStaffInviteInputRole,
 } from "@/lib/staff-invites/map-onboarding-role";
-import { handleProfileBootstrapRequest } from "@/app/api/auth/profile-bootstrap/route";
-import { handleCreateStaffInviteRequest } from "@/app/api/staff-invites/create/route";
+import { handleProfileBootstrapRequest } from "@/app/api/auth/profile-bootstrap/handler";
+import { handleCreateStaffInviteRequest } from "@/app/api/staff-invites/create/handler";
 import {
   handleListStaffInvitesRequest,
   handleRevokeStaffInviteRequest,
-} from "@/app/api/staff-invites/manage/route";
+} from "@/app/api/staff-invites/manage/handler";
 import {
   handleListManagedUsersRequest,
   handleUpdateManagedUserRequest,
-} from "@/app/api/users/manage/route";
+} from "@/app/api/users/manage/handler";
 import {
   handleListRestaurantUserRosterRequest,
   type RosterRouteDependencies,
@@ -63,23 +63,23 @@ import {
 import {
   handleProcessMenuImportRequest,
   type ProcessRouteDependencies,
-} from "@/app/api/menu-imports/process/route";
+} from "@/app/api/menu-imports/process/handler";
 import {
   handlePublishMenuImportRequest,
   type PublishRouteDependencies,
-} from "@/app/api/menu-imports/publish/route";
+} from "@/app/api/menu-imports/publish/handler";
 import {
   handlePublishMenuImportPreviewRequest,
   type PreviewRouteDependencies,
-} from "@/app/api/menu-imports/publish-preview/route";
+} from "@/app/api/menu-imports/publish-preview/handler";
 import {
   handleCreateMenuImportCategoriesRequest,
   type CreateCategoriesRouteDependencies,
-} from "@/app/api/menu-imports/create-categories/route";
+} from "@/app/api/menu-imports/create-categories/handler";
 import {
   handleExtractSupplierInvoiceRequest,
   type SupplierInvoiceExtractDependencies,
-} from "@/app/api/supplier-invoices/extract/route";
+} from "@/app/api/supplier-invoices/extract/handler";
 import { copyInviteLink } from "@/lib/staff-invites/copy-invite-link";
 import {
   supplierInvoiceFileSignatureMatches,
@@ -103,11 +103,11 @@ import { resolveHostlyAiTenant } from "@/lib/ai/hostly-ai-context";
 import {
   handleImportMenuRequest,
   type ImportMenuRouteDependencies,
-} from "@/app/api/ai/import-menu/route";
+} from "@/app/api/ai/import-menu/handler";
 import {
   handleManagerSummaryRequest,
   type ManagerSummaryRouteDependencies,
-} from "@/app/api/ai/manager-summary/route";
+} from "@/app/api/ai/manager-summary/handler";
 import type {
   AuthenticatedRestaurantDependencies,
   AuthTokenVerifier,
@@ -4346,7 +4346,7 @@ describe("Rules: lecturas administrativas y mutaciones TPV", () => {
       total: 10,
     });
 
-    for (const [label, payload] of [
+    for (const [, payload] of [
       ["items kds", { items: [{ id: "line-1", qty: 1, status: "prepared", preparedAt: Date.now() }], updatedAt: Date.now() }],
       ["items discount", { items: [{ id: "line-1", qty: 1, status: "sent", discount: 5 }], updatedAt: Date.now() }],
       ["mergedIntoTableId", { mergedIntoTableId: "m2", updatedAt: Date.now() }],
@@ -4391,7 +4391,7 @@ describe("Rules: lecturas administrativas y mutaciones TPV", () => {
       quantity: 1,
     });
 
-    for (const [label, payload] of [
+    for (const [, payload] of [
       ["orderId", { orderId: "other-order", updatedAt: Date.now() }],
       ["productId", { productId: "other-prod", updatedAt: Date.now() }],
       ["price", { price: 50, updatedAt: Date.now() }],
