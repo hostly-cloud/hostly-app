@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
+import {
+  HostlyAlert,
+  HostlyButton,
+  HostlyLoadingState,
+  HostlyPermissionState,
+  HostlySectionHeader,
+  HostlySurface,
+} from "@/components/ui/hostly";
 import type { ProcessPendingPrintJobsResult } from "@/lib/printing/print-worker-types";
 import { requestProcessPendingPrintJobs } from "@/lib/printing/request-process-pending-print-jobs";
-import {
-  ConfigBtnPrimary,
-  ConfigBtnSecondary,
-  ConfigCard,
-} from "../../_components/config-carta-workbench";
-import { ConfigModulePageHeader } from "../../_components/config-module-page-header";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
   KDS_OPERATION_STATION_FILTER_ALL,
@@ -102,7 +104,7 @@ function statusBadgeClass(status: PrintJobStatus): string {
 }
 
 export default function ConfigImpresorasColaPage() {
-  const { restaurantId: profileRestaurantId, ready: authReady } = useAuth();
+  const { restaurantId: profileRestaurantId, ready: authReady, user } = useAuth();
   const restaurantId = useMemo(
     () => resolveOperationalRestaurantId(profileRestaurantId),
     [profileRestaurantId],
@@ -267,58 +269,65 @@ export default function ConfigImpresorasColaPage() {
 
   return (
     <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
-      <ConfigModulePageHeader title="Cola de impresión">
-        <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
-          <span className="font-medium text-slate-800">Simulador.</span> No imprime
-          físicamente todavía. El worker automático marca jobs como impresos o
-          fallidos según la configuración (canal/impresora por estación).
-        </p>
-        <p className="mt-2">
+      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4 pb-6">
+        <HostlySectionHeader
+          title="Cola de impresión"
+          description="Supervisa y gestiona los tickets enviados a cada estación."
+        >
           <Link
             href="/dashboard/configuracion/impresoras"
-            className="text-sm font-medium text-sky-700 hover:text-sky-800"
+            className="hostly-button-secondary hostly-button-compact"
           >
             ← Impresoras
           </Link>
-        </p>
+        </HostlySectionHeader>
+
+        <HostlyAlert tone="info" title="Entorno de simulación">
+          Todavía no imprime físicamente. El worker marca los trabajos como
+          impresos o fallidos según la configuración de cada estación.
+        </HostlyAlert>
+
         {stalePendingCount > 0 ? (
-          <p className="mt-2 text-sm font-medium text-amber-800">
+          <HostlyAlert tone="warning" title="Trabajos pendientes antiguos">
             {stalePendingCount} pendiente
             {stalePendingCount === 1 ? "" : "s"} con más de {STALE_PENDING_MINUTES}{" "}
             min sin imprimir.
-          </p>
+          </HostlyAlert>
         ) : null}
-      </ConfigModulePageHeader>
 
-      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4">
-        <ConfigCard>
+        <HostlySurface variant="ice" className="p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <ConfigBtnPrimary
+            <HostlyButton
+              variant="primary"
               type="button"
               disabled={workerBusy || !authReady}
               onClick={() => void runWorker(false)}
             >
               {workerBusy ? "Procesando…" : "Procesar pendientes"}
-            </ConfigBtnPrimary>
-            <ConfigBtnSecondary
+            </HostlyButton>
+            <HostlyButton
+              variant="secondary"
               type="button"
               disabled={workerBusy || !authReady}
               onClick={() => void runWorker(true)}
             >
               Simular procesamiento
-            </ConfigBtnSecondary>
-            <p className="text-xs text-slate-500">
+            </HostlyButton>
+            <p className="hostly-muted text-xs">
               Máx. 20 jobs por ejecución. Respeta{" "}
               <span className="font-mono">nextRetryAt</span> y estaciones activas.
             </p>
           </div>
           {workerError ? (
-            <p className="mt-3 text-sm text-rose-700" role="alert">
+            <HostlyAlert tone="danger" className="mt-3">
               {workerError}
-            </p>
+            </HostlyAlert>
           ) : null}
           {workerSummary ? (
-            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200/80">
+            <HostlySurface
+              variant="soft"
+              className="mt-3 px-3 py-2 text-sm text-slate-700"
+            >
               <p className="font-medium text-slate-900">
                 {workerSummary.dryRun
                   ? "Simulación (sin cambios)"
@@ -359,11 +368,11 @@ export default function ConfigImpresorasColaPage() {
                   ))}
                 </ul>
               ) : null}
-            </div>
+            </HostlySurface>
           ) : null}
-        </ConfigCard>
+        </HostlySurface>
 
-        <ConfigCard>
+        <HostlySurface variant="flat" className="p-4 sm:p-5">
           <div className="flex flex-col gap-4">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -478,25 +487,25 @@ export default function ConfigImpresorasColaPage() {
               </p>
             </div>
           </div>
-        </ConfigCard>
+        </HostlySurface>
 
         {error ? (
-          <p className="text-sm text-rose-700" role="alert">
-            {error}
-          </p>
+          <HostlyAlert tone="danger">{error}</HostlyAlert>
         ) : null}
 
         {loading ? (
-          <ConfigCard>
-            <p className="text-sm text-slate-600">Cargando cola…</p>
-          </ConfigCard>
+          <HostlyLoadingState embedded label="Cargando cola de impresión…" />
+        ) : !user || !restaurantId ? (
+          <HostlyPermissionState embedded title="Sesión necesaria">
+            Inicia sesión para consultar y gestionar la cola de impresión.
+          </HostlyPermissionState>
         ) : filteredJobs.length === 0 ? (
-          <ConfigCard>
-            <p className="text-sm text-slate-600">
+          <HostlySurface variant="soft" className="p-5 text-center">
+            <p className="hostly-muted text-sm">
               No hay jobs con los filtros actuales. Envía una comanda con impresión
               activada para generar tickets.
             </p>
-          </ConfigCard>
+          </HostlySurface>
         ) : (
           <ul className="flex flex-col gap-3">
             {filteredJobs.map((job) => {
@@ -508,7 +517,7 @@ export default function ConfigImpresorasColaPage() {
               const busy = actingJobId === jobId;
               return (
                 <li key={jobId}>
-                  <ConfigCard>
+                  <HostlySurface variant="flat" interactive className="p-4 sm:p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -610,59 +619,65 @@ export default function ConfigImpresorasColaPage() {
                       <div className="flex shrink-0 flex-wrap gap-2">
                         {isPending ? (
                           <>
-                            <ConfigBtnPrimary
+                            <HostlyButton
+                              variant="primary"
                               type="button"
                               disabled={busy}
                               onClick={() => void runAction(job, "printed")}
                             >
                               Marcar impreso
-                            </ConfigBtnPrimary>
-                            <ConfigBtnSecondary
+                            </HostlyButton>
+                            <HostlyButton
+                              variant="secondary"
                               type="button"
                               disabled={busy}
                               onClick={() => void runAction(job, "failed")}
                             >
                               Marcar error
-                            </ConfigBtnSecondary>
-                            <ConfigBtnSecondary
+                            </HostlyButton>
+                            <HostlyButton
+                              variant="secondary"
                               type="button"
                               disabled={busy}
                               onClick={() => void runAction(job, "cancelled")}
                             >
                               Cancelar
-                            </ConfigBtnSecondary>
+                            </HostlyButton>
                           </>
                         ) : null}
                         {isFailed ? (
                           <>
-                            <ConfigBtnPrimary
+                            <HostlyButton
+                              variant="primary"
                               type="button"
                               disabled={busy}
                               onClick={() => void runAction(job, "retry")}
                             >
                               Reintentar
-                            </ConfigBtnPrimary>
-                            <ConfigBtnSecondary
+                            </HostlyButton>
+                            <HostlyButton
+                              variant="secondary"
                               type="button"
                               disabled={busy}
                               onClick={() => void runAction(job, "cancelled")}
                             >
                               Cancelar
-                            </ConfigBtnSecondary>
+                            </HostlyButton>
                           </>
                         ) : null}
                         {isCancelled ? (
-                          <ConfigBtnSecondary
+                          <HostlyButton
+                            variant="secondary"
                             type="button"
                             disabled={busy}
                             onClick={() => void runAction(job, "requeue")}
                           >
                             Reenviar a pendiente
-                          </ConfigBtnSecondary>
+                          </HostlyButton>
                         ) : null}
                       </div>
                     </div>
-                  </ConfigCard>
+                  </HostlySurface>
                 </li>
               );
             })}
