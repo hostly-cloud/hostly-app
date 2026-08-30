@@ -334,14 +334,14 @@ export default function FacturasProveedorPage() {
   return (
     <ModulePageShell
       title="Facturas de proveedor"
-      subtitle="Coste real recibido · actualiza unitCost del inventario"
+      subtitle="Actualiza el coste real de los productos recibidos"
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
       <div className="hostly-mobile-op-page-stack">
         <HostlySectionHeader
           title="Registro de factura"
-          description="Registra el coste real facturado. No modifica stock. Los márgenes históricos del TPV siguen usando snapshots persistidos."
+          description="Registra el coste real facturado sin modificar el stock. Las ventas anteriores conservarán el coste que tenían al cobrarse."
         />
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -523,8 +523,8 @@ export default function FacturasProveedorPage() {
                 }
                 hints={[
                   "Coste real por producto",
-                  "Histórico protegido por snapshots",
-                  "Preparado para matching OCR",
+                  "Histórico de ventas protegido",
+                  "Reconocimiento automático de productos",
                 ]}
               />
             }

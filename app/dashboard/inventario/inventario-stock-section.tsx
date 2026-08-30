@@ -688,7 +688,7 @@ export default function InventarioStockSection() {
 
     try {
       if (usingMock) {
-        throw new Error("Firestore no disponible: creación desactivada en modo demo");
+        throw new Error("El servicio de inventario no está disponible: creación desactivada en modo de demostración");
       }
       if (!rid) {
         throw new Error("No hay restaurante activo para crear inventario");
@@ -727,7 +727,7 @@ export default function InventarioStockSection() {
 
     try {
       if (usingMock) {
-        throw new Error("Firestore no disponible: edición desactivada en modo demo");
+        throw new Error("El servicio de inventario no está disponible: edición desactivada en modo de demostración");
       }
       if (!rid) {
         throw new Error("No hay restaurante activo para guardar inventario");
@@ -848,7 +848,7 @@ export default function InventarioStockSection() {
 
     try {
       if (usingMock) {
-        throw new Error("Firestore no disponible: borrado desactivado en modo demo");
+        throw new Error("El servicio de inventario no está disponible: borrado desactivado en modo de demostración");
       }
       if (!rid) {
         throw new Error("No hay restaurante activo para borrar inventario");
@@ -1292,7 +1292,7 @@ export default function InventarioStockSection() {
                 className="hostly-inventory-timeline-link"
                 prefetch
               >
-                Ver timeline
+                Ver historial
               </Link>
             </div>
             {centralStockMovements.length === 0 && legacyStockMovements.length === 0 ? (
@@ -1478,7 +1478,7 @@ export default function InventarioStockSection() {
         {error ? <div className="hostly-inventory-error">{error}</div> : null}
         {usingMock ? (
           <div className="hostly-inventory-warning">
-            No se pudo leer Firestore. Mostrando datos de ejemplo temporalmente.
+            No se pudo cargar el inventario. Mostrando datos de ejemplo temporalmente.
           </div>
         ) : null}
 
@@ -1521,7 +1521,7 @@ export default function InventarioStockSection() {
                           {item.nombre?.trim() || "Ingrediente sin nombre"}
                         </span>
                         <span className="hostly-inventory-row-meta">
-                          {formatMoney2(item.coste_unitario)} €/ud · {item.unidad ?? "ud"}
+                          {formatMoney2(item.coste_unitario)} €/{item.unidad ?? "ud"}
                         </span>
                       </span>
                       <span className="hostly-inventory-row-side">
@@ -2594,4 +2594,3 @@ export default function InventarioStockSection() {
     </ModulePageShell>
   );
 }
-

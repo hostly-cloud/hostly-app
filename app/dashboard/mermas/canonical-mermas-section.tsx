@@ -341,7 +341,7 @@ export default function CanonicalMermasSection() {
 
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <HostlyKpiCard
-            title="Mermas canónicas"
+            title="Mermas registradas"
             value={canonical.length}
             helper="Persistidas y auditables"
             accentColor="#60a5fa"
@@ -355,13 +355,13 @@ export default function CanonicalMermasSection() {
           <HostlyKpiCard
             title="Producto con más merma"
             value={topProduct}
-            helper="Historial canónico"
+            helper="Según el historial"
             accentColor="#a78bfa"
           />
           <HostlyKpiCard
             title="Motivo principal"
             value={topReason}
-            helper="Historial canónico"
+            helper="Según el historial"
             accentColor="var(--hostly-ink-muted)"
           />
         </div>
@@ -479,7 +479,7 @@ export default function CanonicalMermasSection() {
         <HostlySurface variant="flat" style={{ padding: 12 }}>
           <HostlySectionHeader
             title="Historial"
-            description="Historial canónico, centralizado y auditable del restaurante."
+            description="Historial centralizado y auditable de las mermas del restaurante."
           >
             <HostlyInput
               value={search}

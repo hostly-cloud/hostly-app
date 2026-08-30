@@ -260,14 +260,14 @@ export default function PedidosCompraPage() {
   return (
     <ModulePageShell
       title="Pedidos de compra"
-      subtitle="Recepción operativa · stock vía ledger central"
+      subtitle="Recepción de pedidos y actualización automática del stock"
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
       <div className="hostly-mobile-op-page-stack">
         <HostlySectionHeader
           title="Recepción de pedidos"
-          description="Recibe total o parcialmente un pedido. El stock solo se actualiza mediante movimientos purchase_receipt en el ledger central."
+          description="Recibe total o parcialmente un pedido. El stock se actualizará automáticamente con cada recepción."
         />
 
         {loadError ? (
@@ -296,7 +296,7 @@ export default function PedidosCompraPage() {
               }}
               hints={[
                 "Recepción total o parcial",
-                "Stock actualizado por ledger",
+                "Stock actualizado automáticamente",
                 "Factura vinculable después",
               ]}
             />
@@ -451,7 +451,7 @@ export default function PedidosCompraPage() {
                   Recepción confirmada
                 </div>
                 <p style={{ margin: 0, fontSize: 13, color: "var(--hostly-ink-muted)" }}>
-                  {receiptSuccess} El stock se ha actualizado mediante movimientos en el ledger central.
+                  {receiptSuccess} El stock se ha actualizado correctamente.
                 </p>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                   <button type="button" style={primaryButtonStyle} onClick={handleCloseReceive}>

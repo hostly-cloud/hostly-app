@@ -492,7 +492,7 @@ export default function ComprasInteligentesPage() {
       <div className="hostly-mobile-op-page-stack">
         <HostlySectionHeader
           title="Riesgo de rotura"
-          description="Basado en stock actual y movimientos TPV (modifier/recipe sale). No modifica stock ni crea pedidos."
+          description="Basado en el stock actual y en el consumo registrado por el TPV. Estas sugerencias no modifican el stock ni crean pedidos."
         />
 
         {loadError ? (

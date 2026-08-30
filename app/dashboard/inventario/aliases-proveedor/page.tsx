@@ -91,7 +91,7 @@ export default function AliasesProveedorPage() {
       setLoading(false);
     }, {
       onError: () => {
-        setLoadError("No se pudieron cargar los aliases.");
+        setLoadError("No se pudieron cargar los nombres aprendidos.");
         setLoading(false);
       },
     });
@@ -162,10 +162,14 @@ export default function AliasesProveedorPage() {
           aliasId: alias.id,
           active: nextActive,
         });
-        setFeedback(nextActive ? "Alias activado." : "Alias desactivado. No afecta facturas históricas.");
+        setFeedback(
+          nextActive
+            ? "Vinculación activada."
+            : "Vinculación desactivada. No afecta a las facturas anteriores.",
+        );
         triggerFlash([alias.id]);
       } catch {
-        setFeedback("No se pudo cambiar el estado del alias.");
+        setFeedback("No se pudo cambiar el estado de la vinculación.");
       }
     },
     [restaurantId, triggerFlash],
@@ -176,7 +180,7 @@ export default function AliasesProveedorPage() {
       if (!restaurantId) return;
       try {
         await softDeleteSupplierProductAlias({ restaurantId, aliasId: alias.id });
-        setFeedback("Alias eliminado (soft delete).");
+        setFeedback("Vinculación eliminada.");
         if (detailAliasId === alias.id) closeDetail();
         setSelectedIds((prev) => {
           const next = new Set(prev);
@@ -185,7 +189,7 @@ export default function AliasesProveedorPage() {
         });
         triggerFlash([alias.id]);
       } catch {
-        setFeedback("No se pudo eliminar el alias.");
+        setFeedback("No se pudo eliminar la vinculación.");
       }
     },
     [closeDetail, detailAliasId, restaurantId, triggerFlash],
@@ -260,8 +264,8 @@ export default function AliasesProveedorPage() {
       });
       setFeedback(
         active
-          ? `Aliases activados${failed > 0 ? ` (${failed} fallidos)` : ""}.`
-          : `Aliases desactivados${failed > 0 ? ` (${failed} fallidos)` : ""}.`,
+          ? `Vinculaciones activadas${failed > 0 ? ` (${failed} fallidas)` : ""}.`
+          : `Vinculaciones desactivadas${failed > 0 ? ` (${failed} fallidas)` : ""}.`,
       );
       triggerFlash([...selectedIds]);
     } catch {
@@ -283,7 +287,7 @@ export default function AliasesProveedorPage() {
           patch: { active: false, deletedAt: now },
         })),
       });
-      setFeedback(`Aliases eliminados${failed > 0 ? ` (${failed} fallidos)` : ""}.`);
+      setFeedback(`Vinculaciones eliminadas${failed > 0 ? ` (${failed} fallidas)` : ""}.`);
       triggerFlash([...selectedIds]);
       setSelectedIds(new Set());
       closeDetail();
@@ -408,8 +412,8 @@ export default function AliasesProveedorPage() {
 
   return (
     <ModulePageShell
-      title="Aliases OCR proveedor"
-      subtitle="Gestión operacional del aprendizaje IA · matching futuro"
+      title="Nombres aprendidos de proveedor"
+      subtitle="Revisa cómo se relacionan los textos de las facturas con tus productos"
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
@@ -433,8 +437,8 @@ export default function AliasesProveedorPage() {
         </Link>
 
         <HostlySectionHeader
-          title="Aliases aprendidos"
-          description="Controla qué textos OCR enlazan con productos Hostly. Desactivar un alias no modifica facturas ya registradas."
+          title="Vinculaciones aprendidas"
+          description="Controla qué nombres detectados en las facturas se enlazan con tus productos. Desactivar una vinculación no modifica facturas ya registradas."
         />
 
         <div className="hostly-mobile-op-kpi-grid">
@@ -485,8 +489,8 @@ export default function AliasesProveedorPage() {
         ) : filteredRows.length === 0 ? (
           aliases.length === 0 ? (
             <HostlyOperationalEmptyState
-              title="Sin aliases OCR todavía"
-              text="Cuando vincules textos detectados por OCR con productos o proveedores, Hostly aprenderá esas relaciones aquí."
+              title="Sin nombres aprendidos todavía"
+              text="Cuando vincules nombres detectados en las facturas con productos o proveedores, Hostly aprenderá esas relaciones aquí."
               secondaryAction={{
                 label: "Volver a facturas",
                 href: "/dashboard/inventario/facturas-proveedor",
@@ -560,7 +564,7 @@ export default function AliasesProveedorPage() {
       {confirmState?.kind === "product_change" ? (
         <AliasConfirmModal
           title="Confirmar cambio de producto"
-          message="Cambiar este alias afectará futuros matches automáticos. Las facturas ya registradas no se modifican."
+          message="Cambiar esta vinculación afectará a las próximas asociaciones automáticas. Las facturas ya registradas no se modifican."
           confirmLabel="Confirmar cambio"
           isBusy={isBusy}
           onCancel={() => setConfirmState(null)}
@@ -577,7 +581,7 @@ export default function AliasesProveedorPage() {
       {confirmState?.kind === "bulk_product" ? (
         <AliasConfirmModal
           title="Confirmar cambio masivo"
-          message={`Aplicar "${confirmState.productName}" a ${selectedIds.size} alias(es) afectará futuros matches automáticos.`}
+          message={`Aplicar "${confirmState.productName}" a ${selectedIds.size} vinculaciones afectará a las próximas asociaciones automáticas.`}
           confirmLabel="Aplicar producto"
           isBusy={isBusy}
           onCancel={() => setConfirmState(null)}

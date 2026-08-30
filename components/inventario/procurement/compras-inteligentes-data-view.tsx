@@ -95,7 +95,9 @@ export function ComprasInteligentesDataView({
                     </span>
                   </HostlyDataCell>
                   <HostlyDataCell align="end" col="coverage">
-                    <span className="hostly-data-table-metric">{formatProcurementDays(row.daysRemaining)} d</span>
+                    <span className="hostly-data-table-metric">
+                      {row.daysRemaining == null ? "—" : `${formatProcurementDays(row.daysRemaining)} d`}
+                    </span>
                   </HostlyDataCell>
                   <HostlyDataCell align="center" col="status">
                     <HostlyStatusBadge tone={purchaseRiskStatusTone(row.riskLevel)}>
@@ -119,7 +121,7 @@ export function ComprasInteligentesDataView({
                         className="hostly-row-actions__btn hostly-row-actions__btn--text"
                         prefetch
                       >
-                        Timeline
+                        Historial
                       </Link>
                     </HostlyRowActions>
                   </HostlyDataCell>
@@ -150,7 +152,9 @@ export function ComprasInteligentesDataView({
                   <span className="hostly-mobile-list-item__dot" aria-hidden>
                     ·
                   </span>
-                  <span>{formatProcurementDays(row.daysRemaining)} d</span>
+                  <span>
+                    {row.daysRemaining == null ? "—" : `${formatProcurementDays(row.daysRemaining)} d`}
+                  </span>
                 </>
               }
               aside={
@@ -165,7 +169,7 @@ export function ComprasInteligentesDataView({
               }
               actions={
                 <Link href={productTimelineHref(row.productId)} className="hostly-button-secondary hostly-button-compact" prefetch>
-                  Timeline
+                  Historial
                 </Link>
               }
             />

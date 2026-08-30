@@ -140,7 +140,7 @@ export default function NuevoPedidoCompraPage() {
   return (
     <ModulePageShell
       title="Nuevo pedido de compra"
-      subtitle="Creación manual · Firestore canónico"
+      subtitle="Crea un pedido manual para tu proveedor"
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
@@ -152,7 +152,7 @@ export default function NuevoPedidoCompraPage() {
                 Pedido manual
               </div>
               <div style={{ marginTop: 3, fontSize: 12, color: "var(--hostly-ink-muted)" }}>
-                El pedido se guarda en Firestore y después puede recibirse total o parcialmente.
+                Después podrás recibir el pedido total o parcialmente y actualizar el stock.
               </div>
             </div>
             <Link href="/dashboard/inventario/pedidos-compra" style={{ fontSize: 13, fontWeight: 700 }}>
@@ -233,7 +233,7 @@ export default function NuevoPedidoCompraPage() {
                     />
                   </label>
                   <label>
-                    <span style={{ display: "block", marginBottom: 5, fontSize: 11, fontWeight: 700 }}>Coste/u €</span>
+                    <span style={{ display: "block", marginBottom: 5, fontSize: 11, fontWeight: 700 }}>Coste por unidad (€)</span>
                     <input
                       type="number"
                       min="0"

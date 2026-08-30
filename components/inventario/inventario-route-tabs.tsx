@@ -22,7 +22,7 @@ const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] =
   },
   {
     id: "pedidos-compra",
-    label: "Pedidos compra",
+    label: "Pedidos de compra",
     href: "/dashboard/inventario/pedidos-compra",
   },
   {
@@ -37,7 +37,7 @@ const TABS: readonly { id: InventarioHubTabId; label: string; href: string }[] =
   },
   {
     id: "aliases-proveedor",
-    label: "Aliases OCR",
+    label: "Nombres aprendidos",
     href: "/dashboard/inventario/aliases-proveedor",
   },
   { id: "mermas", label: "Mermas", href: "/dashboard/mermas" },
