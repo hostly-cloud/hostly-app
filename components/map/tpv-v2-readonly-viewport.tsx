@@ -325,6 +325,25 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     [effectivePlanHeight, effectivePlanWidth],
   );
 
+  // Keep auto-fit tied to geometric values, not to live array identities. A
+  // recreated callback reattaches ResizeObserver and resets manual zoom.
+  const rawFallbackFitBounds =
+    !hasReadonlyV2PlanSize && readonlyV2OperationalBounds == null
+      ? getPlanContentBounds(
+          viewportFitElements ?? props.elements,
+          viewportFitZones ?? props.zones,
+          includeExplicitFitElementsInPlan ? effectivePlanSize : null,
+        )
+      : null;
+  const fallbackFitMinX = rawFallbackFitBounds?.minX ?? 0;
+  const fallbackFitMinY = rawFallbackFitBounds?.minY ?? 0;
+  const fallbackFitMaxX = rawFallbackFitBounds?.maxX ?? 0;
+  const fallbackFitMaxY = rawFallbackFitBounds?.maxY ?? 0;
+  const fallbackFitWidth = rawFallbackFitBounds?.width ?? 1;
+  const fallbackFitHeight = rawFallbackFitBounds?.height ?? 1;
+  const fallbackFitCenterX = rawFallbackFitBounds?.centerX ?? 0;
+  const fallbackFitCenterY = rawFallbackFitBounds?.centerY ?? 0;
+
   const fitSource = hasReadonlyV2PlanSize
     ? "editor-v2-plan"
     : readonlyV2OperationalBounds
@@ -360,11 +379,16 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
       ? readonlyV2OperationalBounds
       : usePlanFit
         ? planBounds
-        : getPlanContentBounds(
-            viewportFitElements ?? props.elements,
-            viewportFitZones ?? props.zones,
-            includeExplicitFitElementsInPlan ? effectivePlanSize : null,
-          );
+        : {
+            minX: fallbackFitMinX,
+            minY: fallbackFitMinY,
+            maxX: fallbackFitMaxX,
+            maxY: fallbackFitMaxY,
+            width: fallbackFitWidth,
+            height: fallbackFitHeight,
+            centerX: fallbackFitCenterX,
+            centerY: fallbackFitCenterY,
+          };
 
     let nextZoom: number;
     let nextPan: { x: number; y: number };
@@ -419,20 +443,24 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
     });
   }, [
     effectivePlanSize,
+    fallbackFitCenterX,
+    fallbackFitCenterY,
+    fallbackFitHeight,
+    fallbackFitMaxX,
+    fallbackFitMaxY,
+    fallbackFitMinX,
+    fallbackFitMinY,
+    fallbackFitWidth,
     fitPaddingPx,
     fitZoomMax,
     hasReadonlyV2PlanSize,
     includeExplicitFitElementsInPlan,
     mapLayoutEmphasis,
-    props.elements,
-    props.zones,
     readonlyV2OperationalBounds,
     viewportFitAlign,
-    viewportFitElements,
     viewportFitMode,
     viewportFitOffsetX,
     viewportFitOffsetY,
-    viewportFitZones,
     viewportFitZoomMultiplier,
   ]);
 
