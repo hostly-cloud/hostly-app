@@ -18,11 +18,11 @@ type HubCard = {
 };
 
 const RESTAURANT_STATUS = [
-  { label: "Restaurante listo", tone: "ok" as const },
-  { label: "Carta publicada", tone: "ok" as const },
-  { label: "TPV configurado", tone: "ok" as const },
-  { label: "Usuarios activos", tone: "ok" as const },
-  { label: "1 impresora pendiente", tone: "warn" as const },
+  { label: "Perfil del local", tone: "neutral" as const },
+  { label: "Carta y productos", tone: "neutral" as const },
+  { label: "Operación y TPV", tone: "neutral" as const },
+  { label: "Equipo y permisos", tone: "neutral" as const },
+  { label: "Impresión y dispositivos", tone: "neutral" as const },
 ];
 
 const CONFIG_ROUTES = {
@@ -48,8 +48,8 @@ const HUB_CARDS: HubCard[] = [
     title: "Mi restaurante",
     description: "Nombre, dirección, horarios y datos del local.",
     href: CONFIG_ROUTES.restaurant,
-    status: "Perfil básico",
-    statusTone: "ok",
+    status: "Configurar perfil",
+    statusTone: "neutral",
     visual: "restaurant",
     icon: <IconRestaurant />,
   },
@@ -58,7 +58,7 @@ const HUB_CARDS: HubCard[] = [
     title: "Mi operación",
     description: "Estaciones, zonas, mesas y flujo de servicio.",
     href: CONFIG_ROUTES.operation,
-    status: "4 estaciones",
+    status: "Configurar operación",
     statusTone: "neutral",
     visual: "operation",
     icon: <IconOperation />,
@@ -68,8 +68,8 @@ const HUB_CARDS: HubCard[] = [
     title: "Mi carta",
     description: "Categorías, familias, precios y estructura de la oferta.",
     href: CONFIG_ROUTES.menuCategories,
-    status: "Publicada",
-    statusTone: "ok",
+    status: "Gestionar carta",
+    statusTone: "neutral",
     visual: "menu",
     icon: <IconMenu />,
   },
@@ -78,7 +78,7 @@ const HUB_CARDS: HubCard[] = [
     title: "Mis productos",
     description: "Catálogo de venta, alérgenos, variantes y modificadores.",
     href: CONFIG_ROUTES.products,
-    status: "142 productos",
+    status: "Gestionar catálogo",
     statusTone: "neutral",
     visual: "products",
     icon: <IconProducts />,
@@ -88,8 +88,8 @@ const HUB_CARDS: HubCard[] = [
     title: "Mi equipo",
     description: "Empleados, roles, accesos e invitaciones.",
     href: CONFIG_ROUTES.team,
-    status: "8 usuarios",
-    statusTone: "ok",
+    status: "Gestionar accesos",
+    statusTone: "neutral",
     visual: "team",
     icon: <IconTeam />,
   },
@@ -107,8 +107,8 @@ const HUB_CARDS: HubCard[] = [
     title: "Dispositivos",
     description: "Impresoras, cola de impresión y hardware conectado.",
     href: CONFIG_ROUTES.printers,
-    status: "1 pendiente",
-    statusTone: "warn",
+    status: "Configurar impresión",
+    statusTone: "neutral",
     visual: "devices",
     icon: <IconDevices />,
   },
@@ -469,10 +469,10 @@ export function ConfiguracionHubPageContent() {
           ) : null}
         </div>
 
-        <section className="hostly-config-hub__status" aria-label="Estado del restaurante">
+        <section className="hostly-config-hub__status" aria-label="Áreas de configuración">
           <div className="hostly-config-hub__status-head">
-            <h2 className="hostly-config-hub__section-title">Restaurante listo</h2>
-            <span className="hostly-config-hub__placeholder-badge">Orientativo</span>
+            <h2 className="hostly-config-hub__section-title">Preparación del restaurante</h2>
+            <span className="hostly-config-hub__placeholder-badge">Accesos rápidos</span>
           </div>
           <ul className="hostly-config-hub__status-list">
             {RESTAURANT_STATUS.map((item) => (
@@ -481,7 +481,7 @@ export function ConfiguracionHubPageContent() {
                 className={`hostly-config-hub__status-item hostly-config-hub__status-item--${item.tone}`}
               >
                 <span className="hostly-config-hub__status-mark" aria-hidden>
-                  {item.tone === "warn" ? "⚠" : "✓"}
+                  •
                 </span>
                 {item.label}
               </li>
