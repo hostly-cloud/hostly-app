@@ -61,7 +61,7 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
       },
       {
         href: "/dashboard/configuracion/espacios/editor-v2",
-        label: "Editor V2 Preview",
+        label: "Editor de mapas V2",
       },
     ],
   },
