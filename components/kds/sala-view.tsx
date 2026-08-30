@@ -884,7 +884,7 @@ function SalaBoard({
               </svg>
             </div>
             <h3 className="hostly-mobile-empty-state__title">No hay comandas pendientes</h3>
-            <p className="hostly-mobile-empty-state__desc">La cocina está al día.</p>
+            <p className="hostly-mobile-empty-state__desc">Todo servido; no hay platos pendientes.</p>
           </div>
         ) : (
           <>
