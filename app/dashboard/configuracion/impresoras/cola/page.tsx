@@ -11,7 +11,10 @@ import {
   HostlySectionHeader,
   HostlySurface,
 } from "@/components/ui/hostly";
-import type { ProcessPendingPrintJobsResult } from "@/lib/printing/print-worker-types";
+import type {
+  ProcessPendingPrintJobsResult,
+  ProcessPrintJobItemOutcome,
+} from "@/lib/printing/print-worker-types";
 import { requestProcessPendingPrintJobs } from "@/lib/printing/request-process-pending-print-jobs";
 import { resolveOperationalRestaurantId } from "@/lib/hostly/restaurant-scope";
 import {
@@ -76,6 +79,25 @@ function statusLabel(status: PrintJobStatus): string {
   }
 }
 
+function processingOutcomeLabel(outcome: ProcessPrintJobItemOutcome): string {
+  switch (outcome) {
+    case "printed":
+      return "Impreso";
+    case "failed":
+      return "Fallido";
+    case "omitted":
+      return "Omitido";
+    case "dry_run_print":
+      return "Se imprimiría";
+    case "dry_run_fail":
+      return "Fallaría";
+    case "skipped":
+      return "Actualizado en paralelo";
+    case "error":
+      return "Error";
+  }
+}
+
 function isLegacyPrintJob(job: Pick<PrintJobDocument, "operationStationId">): boolean {
   return !job.operationStationId?.trim();
 }
@@ -85,7 +107,7 @@ function operationStationBadgeLabel(
 ): string {
   const name = job.operationStationName?.trim();
   if (name) return name;
-  return "Legacy";
+  return "Sin estación específica";
 }
 
 function statusBadgeClass(status: PrintJobStatus): string {
@@ -238,7 +260,7 @@ export default function ConfigImpresorasColaPage() {
         }
       } catch (e) {
         console.error("print job action", e);
-        setError("No se pudo actualizar el job. Revisa permisos y conexión.");
+        setError("No se pudo actualizar el ticket. Revisa permisos y conexión.");
       } finally {
         setActingJobId(null);
       }
@@ -283,8 +305,8 @@ export default function ConfigImpresorasColaPage() {
         </HostlySectionHeader>
 
         <HostlyAlert tone="info" title="Entorno de simulación">
-          Todavía no imprime físicamente. El worker marca los trabajos como
-          impresos o fallidos según la configuración de cada estación.
+          Todavía no imprime físicamente. El sistema simula si cada ticket se
+          imprimiría o fallaría según la configuración de su estación.
         </HostlyAlert>
 
         {stalePendingCount > 0 ? (
@@ -314,8 +336,8 @@ export default function ConfigImpresorasColaPage() {
               Simular procesamiento
             </HostlyButton>
             <p className="hostly-muted text-xs">
-              Máx. 20 jobs por ejecución. Respeta{" "}
-              <span className="font-mono">nextRetryAt</span> y estaciones activas.
+              Se procesan hasta 20 tickets cada vez, respetando los reintentos
+              programados y las estaciones activas.
             </p>
           </div>
           {workerError ? (
@@ -347,7 +369,7 @@ export default function ConfigImpresorasColaPage() {
                   </>
                 )}
                 <li>Omitidos: {workerSummary.omitted}</li>
-                <li>Omitidos por carrera: {workerSummary.skipped}</li>
+                <li>Actualizados en paralelo: {workerSummary.skipped}</li>
                 <li>Errores: {workerSummary.errors}</li>
               </ul>
               {workerSummary.items.length > 0 ? (
@@ -355,7 +377,7 @@ export default function ConfigImpresorasColaPage() {
                   {workerSummary.items.slice(0, 12).map((item) => (
                     <li key={item.jobId} className="truncate">
                       <span className="font-medium text-slate-800">
-                        {item.productName?.trim() || item.jobId}
+                        {item.productName?.trim() || "Ticket sin nombre"}
                       </span>
                       {item.modifiersLabel ? (
                         <span className="text-slate-500">
@@ -363,7 +385,9 @@ export default function ConfigImpresorasColaPage() {
                           · {item.modifiersLabel}
                         </span>
                       ) : null}
-                      <span className="text-slate-400"> — {item.outcome}</span>
+                      <span className="text-slate-400">
+                        {" "}— {processingOutcomeLabel(item.outcome)}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -406,7 +430,7 @@ export default function ConfigImpresorasColaPage() {
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Destino impresión (legacy)
+                Destino general
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -482,7 +506,7 @@ export default function ConfigImpresorasColaPage() {
                 })}
               </div>
               <p className="mt-1.5 text-[11px] text-slate-500">
-                Jobs sin estación operativa (legacy) solo aparecen en «Todas las
+                Los tickets sin una estación específica solo aparecen en «Todas las
                 estaciones».
               </p>
             </div>
@@ -502,7 +526,7 @@ export default function ConfigImpresorasColaPage() {
         ) : filteredJobs.length === 0 ? (
           <HostlySurface variant="soft" className="p-5 text-center">
             <p className="hostly-muted text-sm">
-              No hay jobs con los filtros actuales. Envía una comanda con impresión
+              No hay tickets con los filtros actuales. Envía una comanda con impresión
               activada para generar tickets.
             </p>
           </HostlySurface>
@@ -606,9 +630,6 @@ export default function ConfigImpresorasColaPage() {
                             {job.channel ? `Canal: ${job.channel}` : null}
                           </p>
                         ) : null}
-                        <p className="mt-2 font-mono text-[10px] text-slate-400">
-                          {jobId}
-                        </p>
                         <p className="text-[10px] text-slate-400">
                           Creado {formatJobTime(job.createdAt)}
                           {job.lastAttemptAt
