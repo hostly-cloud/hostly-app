@@ -21,6 +21,7 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
     id: "produccion",
     label: "Producción",
     children: [
+      { href: "/dashboard/configuracion/operacion", label: "Operación" },
       { href: "/dashboard/configuracion/estaciones", label: "Estaciones" },
       { href: "/dashboard/configuracion/impresoras", label: "Impresoras" },
     ],
