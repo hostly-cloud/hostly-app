@@ -240,9 +240,6 @@ export function EscandallosCartaDataView({
                     {useComputedEconomics ? (
                       <span className="hostly-recipe-editor__readonly-money">
                         {formatSaleCellValue(ventaN)}
-                        {ventaN != null ? (
-                          <span className="hostly-recipe-editor__money-suffix"> €</span>
-                        ) : null}
                       </span>
                     ) : (
                       <label className="hostly-recipe-editor__inline-money">
@@ -363,7 +360,7 @@ export function EscandallosCartaDataView({
                   <span className="hostly-mobile-list-item__dot" aria-hidden>
                     ·
                   </span>
-                  <span>{formatSaleCellValue(ventaN)}{ventaN != null ? " €" : ""}</span>
+                  <span>{formatSaleCellValue(ventaN)}</span>
                 </>
               }
               aside={
@@ -401,14 +398,12 @@ export function EscandallosCartaDataView({
                     <span className="hostly-carta-config-form-label">Coste</span>
                     <span className="hostly-recipe-editor__readonly-money">
                       {formatCostCellValue(costeN)}
-                      {costeN != null ? " €" : ""}
                     </span>
                   </div>
                   <div className="hostly-carta-config-form-field">
                     <span className="hostly-carta-config-form-label">Venta</span>
                     <span className="hostly-recipe-editor__readonly-money">
                       {formatSaleCellValue(ventaN)}
-                      {ventaN != null ? " €" : ""}
                     </span>
                   </div>
                 </div>
