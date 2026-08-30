@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Boxes, ChefHat, Layers3, LayoutGrid, type LucideIcon } from "lucide-react";
+import { Boxes, ChefHat, Layers3, type LucideIcon } from "lucide-react";
 import { ConfigModulePageHeader } from "../_components/config-module-page-header";
 
 type OperationShortcut = {
@@ -23,14 +23,8 @@ const OPERATION_SHORTCUTS: OperationShortcut[] = [
     Icon: Layers3,
   },
   {
-    title: "Mesas",
-    description: "Configura espacios, mesas y distribución inicial.",
-    href: "/dashboard/configuracion/espacios/mesas",
-    Icon: LayoutGrid,
-  },
-  {
-    title: "Editor de espacios",
-    description: "Ajusta visualmente el plano y sus elementos.",
+    title: "Editor de mapas V2",
+    description: "Configura planos, zonas, mesas y elementos del restaurante.",
     href: "/dashboard/configuracion/espacios/editor-v2",
     Icon: Boxes,
   },

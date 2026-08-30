@@ -1,16 +1,7 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import RoomsAssistant from "./rooms-assistant";
+import { redirect } from "next/navigation";
 
 const EDITOR_V2_HREF = "/dashboard/configuracion/espacios/editor-v2";
 
 export default function ConfigEspaciosMesasPage() {
-  const router = useRouter();
-
-  return (
-    <RoomsAssistant
-      onOpenAdvancedEditor={() => router.push(EDITOR_V2_HREF)}
-    />
-  );
+  redirect(EDITOR_V2_HREF);
 }

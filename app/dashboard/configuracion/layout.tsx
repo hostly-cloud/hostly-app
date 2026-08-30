@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { ConfiguracionCapabilityShell } from "@/components/auth/configuracion-capability-shell";
 import { ConfiguracionContextSelector } from "./_components/configuracion-context-selector";
 
-const MAP_EDITOR_CONFIG_PATH = "/dashboard/configuracion/espacios/mesas";
+const MAP_EDITOR_CONFIG_PATH = "/dashboard/configuracion/espacios/editor-v2";
 const EMPRESA_CONFIG_PATH = "/dashboard/configuracion/empresa";
 const CONFIG_HUB_PATH = "/dashboard/configuracion";
 const PRODUCTOS_CONFIG_PATH = "/dashboard/configuracion/carta/productos";
@@ -35,10 +35,10 @@ export default function ConfiguracionLayout({
     [pathname],
   );
 
-  const isMapEspaciosMesasEditor = useMemo(
+  const isMapEditor = useMemo(
     () =>
       pathname === MAP_EDITOR_CONFIG_PATH ||
-      pathname.endsWith("/configuracion/espacios/mesas"),
+      pathname.endsWith("/configuracion/espacios/editor-v2"),
     [pathname],
   );
 
@@ -59,7 +59,7 @@ export default function ConfiguracionLayout({
       <div
         data-hostly-config-workspace=""
         className={
-          isMapEspaciosMesasEditor
+          isMapEditor
             ? "flex min-w-0 flex-1 flex-col"
             : isConfigHub
               ? "flex min-w-0 flex-1 flex-col"
@@ -74,11 +74,14 @@ export default function ConfiguracionLayout({
           className={`flex flex-1 flex-col ${
             isConfigHub
               ? "min-h-0 overflow-visible"
-              : `min-h-0 overflow-hidden ${isMapEspaciosMesasEditor ? "p-1 sm:p-1.5 lg:p-2" : ""}`
+              : `min-h-0 overflow-hidden ${isMapEditor ? "p-1 sm:p-1.5 lg:p-2" : ""}`
           }`}
         >
-          {isMapEspaciosMesasEditor ? (
-            <div className="hostly-config-map-frame-shell" data-hostly-map-editor-chrome="">
+          {isMapEditor ? (
+            <div
+              className="hostly-config-map-frame-shell"
+              data-hostly-map-editor-chrome=""
+            >
               <div className="hostly-config-map-frame flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden text-slate-200">
                 {children}
               </div>
@@ -86,7 +89,9 @@ export default function ConfiguracionLayout({
           ) : isEmpresaPage ? (
             children
           ) : (
-            <ConfiguracionCapabilityShell>{children}</ConfiguracionCapabilityShell>
+            <ConfiguracionCapabilityShell>
+              {children}
+            </ConfiguracionCapabilityShell>
           )}
         </div>
       </div>
