@@ -4,8 +4,6 @@ import Script from "next/script";
 import { Providers } from "@/components/providers";
 import { SelectedTableProvider } from "@/context/SelectedTableContext";
 import "./globals.css";
-import "@/styles/hostly-visual-navigation.css";
-import "@/styles/hostly-dashboard-v4.css";
 import "@/components/sala-editor/panels/sala-operational-element-visual.shared.css";
 
 const metadataBase = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://hostly.app");
