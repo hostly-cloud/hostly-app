@@ -7,12 +7,12 @@ export type RestaurantUserRosterEntry = {
   displayName: string;
 };
 
-function displayName(data: Record<string, unknown>, uid: string): string {
+function displayName(data: Record<string, unknown>): string {
   for (const key of ["displayName", "nombre", "name"] as const) {
     const value = data[key];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
-  return `Usuario ${uid.slice(0, 6)}`;
+  return "Camarero sin nombre";
 }
 
 export async function listRestaurantUserRoster(
@@ -47,10 +47,7 @@ export async function listRestaurantUserRoster(
       }
       roster.push({
         id: document.id,
-        displayName: displayName(
-          document.data() as Record<string, unknown>,
-          document.id,
-        ),
+        displayName: displayName(document.data() as Record<string, unknown>),
       });
     } catch {
       // Un perfil incoherente o disabled nunca entra en el roster operativo.
