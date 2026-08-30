@@ -282,11 +282,6 @@ export function ModifierGroupEditorCard({
         </div>
       </div>
 
-      <p className="hostly-modifier-form-meta">
-        {group.id} · orden {group.sortOrder}
-        {!group.active ? " · inactivo" : ""}
-        {group.required ? " · obligatorio" : ""}
-      </p>
     </ConfigCard>
   );
 }
