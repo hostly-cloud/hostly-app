@@ -128,6 +128,7 @@ export function CategoriaProductosOrdenView({ categoriaId }: CategoriaProductosO
     <ConfigCartaWorkbench
       title={t("cartaCategories.orderProductsTitle")}
       description={categoryName}
+      compactSectionHeader={false}
       headerActions={
         <Link
           href="/dashboard/configuracion/carta/categorias"
