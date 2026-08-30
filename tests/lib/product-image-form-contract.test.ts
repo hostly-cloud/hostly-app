@@ -28,6 +28,8 @@ describe("Product image form contract", () => {
     assert.match(modalSource, /imageDraftMode === "manual_pending"/);
     assert.match(modalSource, /carta\.fieldFotoPending/);
     assert.match(spanishLocale, /fieldFotoUpload: "Seleccionar imagen"/);
+    assert.match(spanishLocale, /fieldFotoChange: "Elegir otra imagen"/);
     assert.match(spanishLocale, /pulsa Guardar para subirla/);
+    assert.match(modalSource, /doneLabel = "Volver a la ficha"/);
   });
 });
