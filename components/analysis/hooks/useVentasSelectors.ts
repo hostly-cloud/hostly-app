@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { formatCurrency } from "@/components/analysis/utils";
 import type { VentasOrderInput } from "./useVentasData";
 import type {
   VentasChartPoint,
@@ -294,9 +295,9 @@ export function useVentasSelectors(input: UseVentasSelectorsInput): UseVentasSel
     const ticketMedio = kpis.ticketMedio;
 
     const summaryLines = [
-      `Ventas totales registradas: ${totalVentas.toFixed(2)} €`,
+      `Ventas totales registradas: ${formatCurrency(totalVentas)}`,
       `Total de tickets detectados: ${totalTickets}`,
-      `Ticket medio actual: ${ticketMedio.toFixed(2)} €`,
+      `Ticket medio actual: ${formatCurrency(ticketMedio)}`,
     ];
 
     return {

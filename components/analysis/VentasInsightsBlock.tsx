@@ -2,6 +2,7 @@ import type {
   VentasSelectorsInsights,
   VentasTopZona,
 } from "@/components/analysis/hooks/useVentasSelectors";
+import { formatCurrency } from "@/components/analysis/utils";
 
 export type VentasZonaRendimientoInsight = {
   zoneName: string;
@@ -91,7 +92,7 @@ export function VentasInsightsBlock({
           </div>
           {topZonasVentas.map((z, i) => (
             <div key={i} style={{ fontSize: 13 }}>
-              {i + 1}. {z.zoneName} — {z.total.toFixed(2)} €
+              {i + 1}. {z.zoneName} — {formatCurrency(z.total)}
             </div>
           ))}
         </div>
@@ -101,7 +102,7 @@ export function VentasInsightsBlock({
           <div style={{ fontSize: 12, opacity: 0.7 }}>Mejor rendimiento</div>
           <div style={{ fontSize: 13 }}>
             {zonasVentasInsights.mejorRendimiento.zoneName} —{" "}
-            {zonasVentasInsights.mejorRendimiento.ventas.toFixed(2)} €
+            {formatCurrency(zonasVentasInsights.mejorRendimiento.ventas)}
           </div>
         </div>
       )}
@@ -110,7 +111,7 @@ export function VentasInsightsBlock({
           <div style={{ fontSize: 12, opacity: 0.7 }}>Peor rendimiento</div>
           <div style={{ fontSize: 13 }}>
             {zonasVentasInsights.peorRendimiento.zoneName} —{" "}
-            {zonasVentasInsights.peorRendimiento.ventas.toFixed(2)} €
+            {formatCurrency(zonasVentasInsights.peorRendimiento.ventas)}
           </div>
         </div>
       )}
@@ -119,7 +120,7 @@ export function VentasInsightsBlock({
           <div style={{ fontSize: 12, opacity: 0.7 }}>Zonas con alto uso y bajo rendimiento</div>
           {zonasVentasAlertas.map((z, i) => (
             <div key={i} style={{ fontSize: 13 }}>
-              {z.zoneName} — {z.ventas.toFixed(2)} €
+              {z.zoneName} — {formatCurrency(z.ventas)}
             </div>
           ))}
         </div>

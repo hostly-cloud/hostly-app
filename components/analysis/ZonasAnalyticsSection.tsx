@@ -9,7 +9,6 @@ import {
   analysisRechartsTooltipProps,
 } from "@/components/analysis/analysis-recharts-surface";
 import { AnalysisSectionEnd } from "@/components/analysis/AnalysisSectionEnd";
-import { ZonasActions } from "@/components/analysis/ZonasActions";
 import { ZonasKpiBlock } from "@/components/analysis/ZonasKpiBlock";
 import { ZonasTable } from "@/components/analysis/ZonasTable";
 import { ZonasViewState } from "@/components/analysis/ZonasViewState";
@@ -98,7 +97,6 @@ export function ZonasAnalyticsSection({
   zonasKpis,
   zonasTableData,
   zonasInsights,
-  zonasExportsData,
   compactViewZonas,
   setCompactViewZonas,
   ordenZonas,
@@ -120,19 +118,6 @@ export function ZonasAnalyticsSection({
   resetUsoAccionesZonas,
   resetAnaliticaUsoZonas,
   exportarZonas,
-  exportarZonasJSON,
-  copiarCsvZonas,
-  copiarJsonZonas,
-  copiarVistaActualZonas,
-  copiarKpisZonas,
-  copiarInsightZonas,
-  copiarTopScoreZonas,
-  copiarZonasCriticas,
-  copiarResumenEjecutivoZonas,
-  copiarEstadoVistaZonas,
-  copiarTodoZonas,
-  copiarResumenUltraZonas,
-  exportarResumenZonas,
   copiarResumenZonas,
   formatLastInteraction,
 }: ZonasAnalyticsSectionProps) {
@@ -153,14 +138,6 @@ export function ZonasAnalyticsSection({
     controlesActivosZonas,
     vistaDefaultZonas,
     modoVistaZonas,
-    densidadVistaZonas,
-    cargaVistaZonas,
-    nivelPersonalizacionZonas,
-    complejidadVistaZonas,
-    estadoExportacionZonas,
-    legibilidadVistaZonas,
-    recomendacionVistaZonas,
-    idoneidadVistaZonas,
     interaccionTotalZonas,
     interaccionesPorSesionZonas,
     frecuenciaUsoZonas,
@@ -174,11 +151,7 @@ export function ZonasAnalyticsSection({
     insightEvolucionZona,
     resumenEvolucionZona,
     balanceOperativoZonas,
-    zonasCriticas,
     prioridadOperativaZonas,
-    totalZonas,
-    mejorZona,
-    peorZona,
     zonasProblema,
     checklistZonas,
     titularZonas,
@@ -197,11 +170,25 @@ export function ZonasAnalyticsSection({
     insightEficienciaZona,
     resumenZonas,
     insightZona,
-    insightPrincipalZonas,
     tendenciaZonas,
     alertaConcentracionZona,
     zonaMayorPaxReserva,
   } = zonasAnalytics;
+
+  if (zoneMetrics.length === 0) {
+    return (
+      <div className="mt-6" style={placeholderStyle}>
+        <div>
+          <div style={{ color: "var(--hostly-ink-strong)", fontWeight: 750, marginBottom: 6 }}>
+            Sin datos por zona
+          </div>
+          <div>
+            Cuando las reservas tengan una zona asignada, aquí verás su ocupación y rendimiento.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -592,86 +579,6 @@ export function ZonasAnalyticsSection({
                     }}
                   >
                     Exportar zonas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => exportarZonasJSON(zoneMetricsLimited)}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "var(--hostly-surface-card-solid)",
-                      color: "var(--hostly-ink-muted)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      letterSpacing: "-0.02em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Exportar JSON
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copiarCsvZonas}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "var(--hostly-surface-card-solid)",
-                      color: "var(--hostly-ink-muted)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      letterSpacing: "-0.02em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Copiar CSV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copiarJsonZonas}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "var(--hostly-surface-card-solid)",
-                      color: "var(--hostly-ink-muted)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      letterSpacing: "-0.02em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Copiar JSON
-                  </button>
-                  <ZonasActions
-                    data={zonasExportsData}
-                    copiarVistaActualZonas={copiarVistaActualZonas}
-                    copiarKpisZonas={copiarKpisZonas}
-                    copiarInsightZonas={copiarInsightZonas}
-                    copiarTopScoreZonas={copiarTopScoreZonas}
-                    copiarZonasCriticas={copiarZonasCriticas}
-                    copiarResumenEjecutivoZonas={copiarResumenEjecutivoZonas}
-                    copiarEstadoVistaZonas={copiarEstadoVistaZonas}
-                    copiarTodoZonas={copiarTodoZonas}
-                    copiarResumenUltraZonas={copiarResumenUltraZonas}
-                  />
-                  <button
-                    type="button"
-                    onClick={exportarResumenZonas}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: 10,
-                      border: "1px solid rgba(148, 163, 184, 0.22)",
-                      background: "var(--hostly-surface-card-solid)",
-                      color: "var(--hostly-ink-muted)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      letterSpacing: "-0.02em",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Exportar resumen
                   </button>
                   <button
                     type="button"

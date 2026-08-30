@@ -29,10 +29,8 @@ import { db } from "@/lib/firebase/client";
 type AnalisisTab = "ventas" | "rentabilidad" | "horas" | "productos" | "comensales";
 
 const TABS: { id: AnalisisTab; label: string; placeholder: string }[] = [
-  { id: "ventas", label: "Ventas", placeholder: "Próximamente: análisis de ventas" },
+  { id: "ventas", label: "Ventas", placeholder: "Todavía no hay ventas en este periodo." },
   { id: "rentabilidad", label: "Rentabilidad", placeholder: "Margen histórico por snapshot de coste" },
-  { id: "horas", label: "Horas", placeholder: "Próximamente: análisis por franjas horarias" },
-  { id: "productos", label: "Productos", placeholder: "Próximamente: análisis por producto" },
   { id: "comensales", label: "Comensales", placeholder: "Próximamente: análisis de comensales" },
 ];
 

@@ -8,8 +8,6 @@ import {
   analysisRechartsTooltipProps,
 } from "@/components/analysis/analysis-recharts-surface";
 import type {
-  ComensalesDailyAttendanceRow,
-  ComensalesDailyReservationsRow,
   ComensalesSelectorsCharts,
 } from "@/components/analysis/hooks/useComensalesSelectors";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -62,7 +60,7 @@ export function ComensalesChartsBlock({ data }: ComensalesChartsBlockProps) {
 
       <div className="hostly-panel p-4">
         <div className="mb-2.5 text-[13px] font-extrabold tracking-tight text-[var(--hostly-ink-strong)]">
-          Llegadas vs No-show
+          Llegadas y ausencias
         </div>
         <ResponsiveContainer width="100%" height={ANALYSIS_CHART_HEIGHT} className="min-w-0 [&_.recharts-surface]:outline-none">
           <BarChart

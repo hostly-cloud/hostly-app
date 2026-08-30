@@ -11,6 +11,7 @@ import {
   useVentasSelectors,
   type VentasAnalyticsSnapshot,
 } from "@/components/analysis/hooks/useVentasSelectors";
+import { formatCurrency } from "@/components/analysis/utils";
 
 /** Slice mínimo de analítica de zonas para el cruce ventas vs ocupación (sin acoplar al hook completo). */
 export type VentasZonasAnalyticsBridge = {
@@ -161,9 +162,9 @@ export function VentasAnalyticsSection({
     lines.push("VENTAS");
     lines.push("");
 
-    lines.push(`Ventas totales: ${actionsData.kpis.totalVentas.toFixed(2)} €`);
+    lines.push(`Ventas totales: ${formatCurrency(actionsData.kpis.totalVentas)}`);
     lines.push(`Total tickets: ${actionsData.kpis.totalTickets}`);
-    lines.push(`Ticket medio: ${actionsData.kpis.ticketMedio.toFixed(2)} €`);
+    lines.push(`Ticket medio: ${formatCurrency(actionsData.kpis.ticketMedio)}`);
 
     if (actionsData.insights.summaryLines.length > 0) {
       lines.push("");
@@ -184,9 +185,9 @@ export function VentasAnalyticsSection({
     const lines = [
       "KPIS DE VENTAS",
       "",
-      `Ventas totales: ${actionsData.kpis.totalVentas.toFixed(2)} €`,
+      `Ventas totales: ${formatCurrency(actionsData.kpis.totalVentas)}`,
       `Total tickets: ${actionsData.kpis.totalTickets}`,
-      `Ticket medio: ${actionsData.kpis.ticketMedio.toFixed(2)} €`,
+      `Ticket medio: ${formatCurrency(actionsData.kpis.ticketMedio)}`,
     ];
 
     const text = lines.join("\n");

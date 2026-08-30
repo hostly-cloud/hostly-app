@@ -15,7 +15,7 @@ export function ComensalesKpiBlock({ data }: ComensalesKpiBlockProps) {
       <HostlyKpiCard title="Previstas" value={booked} accentColor="#fbbf24" />
       <HostlyKpiCard title="Llegadas" value={seated} accentColor="#38bdf8" />
       <HostlyKpiCard title="Completadas" value={completed} accentColor="#22c55e" />
-      <HostlyKpiCard title="No show" value={noShow} accentColor="#f87171" />
+      <HostlyKpiCard title="Ausencias" value={noShow} accentColor="#f87171" />
       <HostlyKpiCard title="Canceladas" value={cancelled} accentColor="#94a3b8" />
       <HostlyKpiCard title="Pax previstas" value={paxPlanned} variant="soft" />
       <HostlyKpiCard title="Pax llegadas" value={paxSeated} variant="soft" />
