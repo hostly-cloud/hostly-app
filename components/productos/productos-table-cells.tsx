@@ -663,6 +663,7 @@ export function ProductosCartaRowActions({
       <HostlyRowActionButton
         variant="icon"
         tone={cartaTone}
+        className="hostly-product-row-action hostly-product-row-action--publish"
         disabled={legacyReadOnly}
         onClick={legacyReadOnly ? undefined : onPrimaryCarta}
         title={cartaTitle}
@@ -671,26 +672,32 @@ export function ProductosCartaRowActions({
         <IconCartaPrimary status={status} />
       </HostlyRowActionButton>
       <HostlyRowActionButton
-        variant="icon"
+        variant="text"
+        tone="primary"
+        className="hostly-product-row-action hostly-product-row-action--edit"
         disabled={legacyReadOnly}
         onClick={legacyReadOnly ? undefined : onEdit}
         title={editTitle}
         aria-label={editTitle}
       >
         <IconPencil />
+        <span>{t("carta.actionEdit")}</span>
       </HostlyRowActionButton>
       <HostlyRowActionButton
-        variant="icon"
+        variant="text"
+        className="hostly-product-row-action hostly-product-row-action--recipe"
         disabled={!escEnabled}
         onClick={onEsc}
         title={escTitle}
         aria-label={escLabel}
       >
         <IconChart />
+        <span>{escLabel}</span>
       </HostlyRowActionButton>
       <HostlyRowActionButton
         variant="icon"
         tone="danger"
+        className="hostly-product-row-action hostly-product-row-action--delete"
         disabled={legacyReadOnly}
         onClick={legacyReadOnly ? undefined : onDelete}
         title={deleteTitle}

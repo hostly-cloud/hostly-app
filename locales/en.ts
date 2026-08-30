@@ -1157,6 +1157,11 @@ export const en: MessageTree = {
       "This section is mixed. Choose whether you sell this as a dish or a drink.",
     productFormNewHint: "Fill in the basics to sell. Everything else is optional.",
     productFormEditHint: "Sale and kitchen/bar routing for this item.",
+    productFormEyebrowEdit: "Operational record",
+    productFormEyebrowNew: "Catalog setup",
+    productFormClose: "Close",
+    productFormRestaurantScopeHint:
+      "Changes apply only to this restaurant's product.",
     productFormCourseNotApplicable:
       "No course — not used for drinks or items routed to bar or cocktail.",
     productFormCourseLockedLabel: "No course",

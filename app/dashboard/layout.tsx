@@ -20,6 +20,7 @@ import "./mobile-horizontal-hardening.css";
 import "./dashboard-visual-overrides-v2.css";
 import "./dashboard-viewport-fit.css";
 import "./dashboard-viewport-fit-secondary.css";
+import "./catalog-workbench-v4.css";
 
 /**
  * Todo el área /dashboard sigue reglas TPV táctil (data-hostly-touch → globals.css).

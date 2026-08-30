@@ -11,11 +11,12 @@ export type ProductFormDrawerTabId =
 export const PRODUCT_FORM_DRAWER_TAB_SPECS: ReadonlyArray<{
   id: ProductFormDrawerTabId;
   label: string;
+  shortLabel: string;
 }> = [
-  { id: "basico", label: "Básico" },
-  { id: "modificadores", label: "Modificadores" },
-  { id: "escandallo", label: "Escandallo" },
-  { id: "comercial", label: "Info comercial" },
+  { id: "basico", label: "Básico", shortLabel: "01" },
+  { id: "modificadores", label: "Modificadores", shortLabel: "02" },
+  { id: "escandallo", label: "Escandallo", shortLabel: "03" },
+  { id: "comercial", label: "Info comercial", shortLabel: "04" },
 ];
 
 export function ProductFormDrawerTabs({
@@ -41,7 +42,10 @@ export function ProductFormDrawerTabs({
             className={`hostly-product-form-drawer-tabs__tab${active ? " is-active" : ""}`}
             onClick={() => onTabChange(tab.id)}
           >
-            {tab.label}
+            <span className="hostly-product-form-drawer-tabs__index" aria-hidden>
+              {tab.shortLabel}
+            </span>
+            <span>{tab.label}</span>
           </button>
         );
       })}

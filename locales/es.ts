@@ -1159,6 +1159,11 @@ export const es: MessageTree = {
       "Esta sección es mixta. Indica si vendes esto como plato o bebida.",
     productFormNewHint: "Completa lo básico para vender. El resto es opcional.",
     productFormEditHint: "Datos de venta y operación del producto.",
+    productFormEyebrowEdit: "Ficha operativa",
+    productFormEyebrowNew: "Alta de catálogo",
+    productFormClose: "Cerrar",
+    productFormRestaurantScopeHint:
+      "Los cambios se aplican únicamente al producto de este restaurante.",
     productFormCourseNotApplicable:
       "Sin pase — no aplica a bebidas ni a productos que salen por barra o coctelería.",
     productFormCourseLockedLabel: "Sin pase",
