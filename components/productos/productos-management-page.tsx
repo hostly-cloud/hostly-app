@@ -5341,6 +5341,7 @@ export default function ProductosManagementPage({
       {formOpen ? (
         <ProductFormCommercialInfoModal
           open={commercialInfoModalOpen}
+          productId={editingId}
           productName={draftNombre}
           isCentralCatalog={isCentralCatalog}
           description={draftDesc}

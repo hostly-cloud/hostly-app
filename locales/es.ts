@@ -1084,10 +1084,13 @@ export const es: MessageTree = {
     fieldActivo: "Activo a la venta",
     fieldFoto: "Foto del producto (opcional)",
     fieldFotoHint: "Enlace a la imagen del plato o bebida. La subida directa llegará más adelante.",
-    fieldFotoUploadHint: "JPG, PNG o WebP. Máximo 3 MB.",
+    fieldFotoUploadHint:
+      "JPG, PNG o WebP. Máximo 3 MB. La imagen se subirá al guardar el producto.",
+    fieldFotoPending:
+      "Imagen seleccionada. Vuelve a la ficha y pulsa Guardar para subirla.",
     fieldFotoEmpty: "Sin imagen",
-    fieldFotoChange: "Cambiar imagen",
-    fieldFotoUpload: "Subir imagen",
+    fieldFotoChange: "Elegir otra imagen",
+    fieldFotoUpload: "Seleccionar imagen",
     fieldFotoRemove: "Quitar imagen",
     productFormBlockProduct: "Producto",
     productFormBlockProductHint: "Información principal del artículo.",

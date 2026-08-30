@@ -1084,10 +1084,13 @@ export const en: MessageTree = {
     fieldActivo: "Active for sale",
     fieldFoto: "Product photo (optional)",
     fieldFotoHint: "Link to the dish or drink image (legacy catalog).",
-    fieldFotoUploadHint: "JPG, PNG or WebP. Max 3 MB.",
+    fieldFotoUploadHint:
+      "JPG, PNG or WebP. Max 3 MB. The image is uploaded when you save the product.",
+    fieldFotoPending:
+      "Image selected. Return to the product form and press Save to upload it.",
     fieldFotoEmpty: "No image",
-    fieldFotoChange: "Change image",
-    fieldFotoUpload: "Upload image",
+    fieldFotoChange: "Choose another image",
+    fieldFotoUpload: "Select image",
     fieldFotoRemove: "Remove image",
     productFormBlockProduct: "Product",
     productFormBlockProductHint: "Core information about this item.",

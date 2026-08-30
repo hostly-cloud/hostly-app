@@ -116,17 +116,12 @@ export function ProductFormCommercialInfoModal({
   drawerInputClass,
   t,
   onClose,
-  doneLabel = "Listo",
+  doneLabel = "Volver a la ficha",
 }: ProductFormCommercialInfoModalProps) {
   const localFileInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = imageFileInputRef ?? localFileInputRef;
   const [aiResolvedImageUrl, setAiResolvedImageUrl] = useState<string | null>(null);
   const [imageReviewRevision, setImageReviewRevision] = useState(0);
-
-  useEffect(() => {
-    setAiResolvedImageUrl(null);
-    setImageReviewRevision(0);
-  }, [productId, productName]);
 
   useEffect(() => {
     if (!open) return;
@@ -271,6 +266,14 @@ export function ProductFormCommercialInfoModal({
                   ) : null}
                 </div>
                 <p className="hostly-product-commercial-modal__hint">{t("carta.fieldFotoUploadHint")}</p>
+                {imageDraftMode === "manual_pending" ? (
+                  <p
+                    className="hostly-product-commercial-modal__hint"
+                    role="status"
+                  >
+                    {t("carta.fieldFotoPending")}
+                  </p>
+                ) : null}
 
                 <ProductAiImageReviewPanel
                   key={`${productId ?? "new"}:${productName}:${imageReviewRevision}`}
