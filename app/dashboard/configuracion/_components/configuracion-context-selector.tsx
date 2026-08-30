@@ -51,6 +51,7 @@ const NAV_ICON_BY_HREF: Record<string, LucideIcon> = {
   "/dashboard/configuracion/carta/escandallos": ReceiptText,
   "/dashboard/configuracion/carta/importacion": Sparkles,
   "/dashboard/configuracion/carta/import-workspace": ClipboardList,
+  "/dashboard/configuracion/espacios/zonas": Layers3,
   "/dashboard/configuracion/espacios/editor-v2": LayoutGrid,
   "/dashboard/configuracion/familias-producto": Boxes,
   "/dashboard/configuracion/empleados": Users,
