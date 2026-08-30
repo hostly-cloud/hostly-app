@@ -13,6 +13,7 @@ import {
   type ReactNode,
   type WheelEvent as ReactWheelEvent,
 } from "react";
+import { HostlyButton } from "@/components/ui/hostly";
 import type { FloorPlanCanvasSize } from "@/lib/firestore/floorPlans";
 import { getOperationalInstanceCanvasSize } from "@/lib/sala-editor/canvas/operational-instance-layout";
 import { projectOperationalElement } from "@/lib/sala-editor/geometry/v2-geometry-projection";
@@ -653,10 +654,40 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
             backdropFilter: "blur(8px)",
           }}
         >
-          <button type="button" aria-label="Alejar plano" onClick={() => setZoom((value) => clamp(value / 1.12, ZOOM_MIN, ZOOM_MAX))}>−</button>
-          <button type="button" aria-label="Zoom natural" onClick={applyNaturalZoomCentered}>{Math.round(zoom * 100)}%</button>
-          <button type="button" aria-label="Acercar plano" onClick={() => setZoom((value) => clamp(value * 1.12, ZOOM_MIN, ZOOM_MAX))}>+</button>
-          <button type="button" aria-label="Centrar plano" onClick={applyFitToViewport}>Centrar</button>
+          <HostlyButton
+            variant="icon"
+            iconOnlyLabel="Alejar plano"
+            onClick={() =>
+              setZoom((value) => clamp(value / 1.12, ZOOM_MIN, ZOOM_MAX))
+            }
+          >
+            −
+          </HostlyButton>
+          <HostlyButton
+            variant="secondary"
+            className="hostly-button-compact"
+            aria-label="Zoom natural"
+            onClick={applyNaturalZoomCentered}
+          >
+            {Math.round(zoom * 100)}%
+          </HostlyButton>
+          <HostlyButton
+            variant="icon"
+            iconOnlyLabel="Acercar plano"
+            onClick={() =>
+              setZoom((value) => clamp(value * 1.12, ZOOM_MIN, ZOOM_MAX))
+            }
+          >
+            +
+          </HostlyButton>
+          <HostlyButton
+            variant="secondary"
+            className="hostly-button-compact"
+            aria-label="Centrar plano"
+            onClick={applyFitToViewport}
+          >
+            Centrar
+          </HostlyButton>
         </div>
       ) : null}
     </div>
