@@ -97,13 +97,26 @@ export function ProductosCartaNameThumb({
 
   if (imageUrl) {
     return (
-      <span className={classes} style={style} aria-hidden>
+      <span
+        className={classes}
+        style={{
+          ...style,
+          position: "relative",
+          backgroundColor: softBackgroundFromName(p.nombre),
+        }}
+        aria-hidden
+      >
+        <span className="hostly-productos-carta-name-thumb__initial">{initial}</span>
         <img
           src={imageUrl}
           alt=""
           className="hostly-productos-carta-name-thumb__img"
           loading="lazy"
           decoding="async"
+          style={{ position: "absolute", inset: 0 }}
+          onError={(event) => {
+            event.currentTarget.hidden = true;
+          }}
         />
       </span>
     );
