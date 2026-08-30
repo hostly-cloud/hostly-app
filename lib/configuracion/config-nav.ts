@@ -1,5 +1,20 @@
 export type ConfigNavLeaf = { href: string; label: string };
 export type ConfigNavGroup = { id: string; label: string; children: ConfigNavLeaf[] };
+export type ConfigScrollOwner = "document" | "content" | "internal" | "viewport";
+
+const CONFIG_HUB_PATH = "/dashboard/configuracion";
+const MAP_EDITOR_PATH = "/dashboard/configuracion/espacios/editor-v2";
+
+const INTERNAL_SCROLL_PATHS = [
+  "/dashboard/configuracion/carta/productos",
+  "/dashboard/configuracion/carta/escandallos",
+  "/dashboard/configuracion/carta/import-workspace",
+  "/dashboard/configuracion/empleados",
+  "/dashboard/configuracion/empresa",
+  "/dashboard/configuracion/espacios/zonas",
+  "/dashboard/configuracion/operacion",
+  "/dashboard/configuracion/integraciones",
+] as const;
 
 export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
   {
@@ -77,4 +92,21 @@ export function configPathnameMatches(pathname: string, href: string): boolean {
   if (pathname === href) return true;
   if (href !== "/" && pathname.startsWith(`${href}/`)) return true;
   return false;
+}
+
+/**
+ * Defines the single vertical scroll owner for every Configuration route.
+ *
+ * - document: the hub grows naturally with the document.
+ * - content: the pane below the context selector scrolls as one page.
+ * - internal: a bounded workbench owns scrolling in its list/form region.
+ * - viewport: immersive tools stay fixed and must not create outer scrolling.
+ */
+export function resolveConfigScrollOwner(pathname: string): ConfigScrollOwner {
+  if (pathname === CONFIG_HUB_PATH) return "document";
+  if (configPathnameMatches(pathname, MAP_EDITOR_PATH)) return "viewport";
+  if (INTERNAL_SCROLL_PATHS.some((path) => configPathnameMatches(pathname, path))) {
+    return "internal";
+  }
+  return "content";
 }

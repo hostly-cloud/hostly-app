@@ -23,7 +23,7 @@
   min-height: 0;
 }
 
-[data-hostly-config-shell]:not(.hostly-config-shell--hub)
+[data-hostly-config-scroll-owner="internal"]
   [data-hostly-config-content]
   > .hostly-module-shell {
   flex: 1 1 0 !important;
@@ -35,11 +35,11 @@
   flex-direction: column !important;
 }
 
-[data-hostly-config-shell]:not(.hostly-config-shell--hub)
+[data-hostly-config-scroll-owner="internal"]
   [data-hostly-config-content]
   > .hostly-module-shell
   > .hostly-module-content--dashboard,
-[data-hostly-config-shell]:not(.hostly-config-shell--hub)
+[data-hostly-config-scroll-owner="internal"]
   [data-hostly-config-content]
   > .hostly-module-shell
   > .hostly-module-content--mobile {
@@ -52,34 +52,34 @@
 }
 
 /* List workbenches: one scroll owner only -- the list itself. */
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--categorias)
   > .hostly-module-content--dashboard,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--categorias)
   > .hostly-module-content--mobile,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
   > .hostly-module-content--dashboard,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
   > .hostly-module-content--mobile,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--escandallos)
   > .hostly-module-content--dashboard,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--escandallos)
   > .hostly-module-content--mobile {
   overflow: hidden !important;
 }
 
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--categorias)
   .hostly-carta-config-stack,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
   .hostly-carta-config-stack,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--escandallos)
   .hostly-carta-config-stack {
   flex: 1 1 0;
@@ -89,28 +89,28 @@
   padding-bottom: 2px;
 }
 
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--categorias)
   .hostly-carta-config-stack
   > *,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
   .hostly-carta-config-stack
   > *,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--escandallos)
   .hostly-carta-config-stack
   > * {
   flex-shrink: 0;
 }
 
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--categorias)
   .hostly-carta-config-card:has(.hostly-data-table-viewport),
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
   .hostly-carta-config-card:has(.hostly-carta-familia-list-wrap),
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--escandallos)
   .hostly-carta-config-card:has(.hostly-data-table-viewport--escandallos) {
   flex: 1 1 0;
@@ -120,10 +120,10 @@
   flex-direction: column;
 }
 
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--categorias)
   .hostly-data-table-viewport--embedded,
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-data-table--escandallos)
   .hostly-data-table-viewport--embedded {
   flex: 1 1 0 !important;
@@ -132,7 +132,7 @@
   overflow: hidden !important;
 }
 
-[data-hostly-config-shell]
+[data-hostly-config-scroll-owner="internal"]
   main.hostly-module-shell:has(.hostly-carta-familia-list-wrap)
   .hostly-carta-familia-list-wrap {
   flex: 1 1 0;
@@ -142,6 +142,37 @@
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   padding: 6px 7px 8px;
+}
+
+/* Standard pages: the pane below the context selector is the only scroll owner. */
+[data-hostly-config-scroll-owner="content"] [data-hostly-config-content] {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+[data-hostly-config-scroll-owner="content"]
+  [data-hostly-config-content]
+  > .hostly-module-shell {
+  flex: 0 0 auto !important;
+  min-height: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+[data-hostly-config-scroll-owner="content"]
+  [data-hostly-config-content]
+  > .hostly-module-shell
+  > .hostly-module-content--dashboard,
+[data-hostly-config-scroll-owner="content"]
+  [data-hostly-config-content]
+  > .hostly-module-shell
+  > .hostly-module-content--mobile {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
 }
 
 /* Compact chrome, not touch targets. */
