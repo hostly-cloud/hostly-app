@@ -22,6 +22,10 @@ import {
   type ActivityLogCategory,
   type ActivityLogDocument,
 } from "@/lib/firestore/activity-log";
+import {
+  activityActorLabel,
+  activitySummary,
+} from "@/lib/operacion/activity-presentation";
 import { OperacionModuleShell } from "../_components/operacion-module-shell";
 
 type FilterKey = "all" | ActivityLogCategory;
@@ -44,14 +48,6 @@ function formatWhen(ms: number): string {
   });
 }
 
-function actorLabel(log: ActivityLogDocument): string {
-  return (
-    log.actorUserName?.trim() ||
-    log.actorUserId?.slice(0, 8) ||
-    "Sistema"
-  );
-}
-
 function entityHref(log: ActivityLogDocument): string | null {
   switch (log.entityType) {
     case "order":
@@ -70,38 +66,6 @@ function entityHref(log: ActivityLogDocument): string | null {
   }
 }
 
-function metadataSummary(log: ActivityLogDocument): string | null {
-  const meta = log.metadata;
-  if (!meta) return null;
-  const parts: string[] = [];
-  if (typeof meta.tableName === "string" && meta.tableName.trim()) {
-    parts.push(meta.tableName.trim());
-  } else if (typeof meta.tableId === "string" && meta.tableId.trim()) {
-    parts.push(`Mesa ${meta.tableId.trim()}`);
-  }
-  if (typeof meta.lineCount === "number" && Number.isFinite(meta.lineCount)) {
-    parts.push(`${meta.lineCount} líneas`);
-  }
-  if (typeof meta.amount === "number" && Number.isFinite(meta.amount)) {
-    parts.push(
-      `${new Intl.NumberFormat("es-ES", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(meta.amount)} €`,
-    );
-  }
-  if (typeof meta.productName === "string" && meta.productName.trim()) {
-    parts.push(meta.productName.trim());
-  }
-  if (typeof meta.paymentMethod === "string" && meta.paymentMethod.trim()) {
-    parts.push(meta.paymentMethod.trim());
-  }
-  if (typeof meta.secondaryTableId === "string" && meta.secondaryTableId.trim()) {
-    parts.push(`+ ${meta.secondaryTableId.trim()}`);
-  }
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
 function matchesSearch(log: ActivityLogDocument, queryText: string): boolean {
   const q = queryText.trim().toLowerCase();
   if (!q) return true;
@@ -110,7 +74,7 @@ function matchesSearch(log: ActivityLogDocument, queryText: string): boolean {
     log.type,
     log.actorUserName,
     log.actorUserId,
-    metadataSummary(log),
+    activitySummary(log),
     JSON.stringify(log.metadata ?? {}),
   ]
     .filter(Boolean)
@@ -168,7 +132,7 @@ export default function OperacionActivityPage() {
           </HostlySegmentedControl>
           <HostlyInput
             type="search"
-            placeholder="Buscar mesa, orderId, usuario…"
+            placeholder="Buscar mesa, acción o usuario…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="hostly-operation-audit-search"
@@ -194,7 +158,6 @@ export default function OperacionActivityPage() {
           ) : (
             visibleLogs.map((log) => {
               const href = entityHref(log);
-              const summary = metadataSummary(log);
               return (
                 <article key={log.id} className="hostly-operation-activity-row">
                   <span className="hostly-operation-audit-time">
@@ -206,11 +169,11 @@ export default function OperacionActivityPage() {
                         {activityLogTypeLabel(log.type)}
                       </span>
                       <span className="hostly-operation-audit-meta">
-                        {actorLabel(log)}
+                        {activityActorLabel(log)}
                       </span>
                     </div>
                     <div className="hostly-operation-activity-summary">
-                      {summary ?? log.entityId}
+                      {activitySummary(log)}
                     </div>
                   </div>
                   <div className="hostly-operation-activity-action">
@@ -221,11 +184,7 @@ export default function OperacionActivityPage() {
                       >
                         Abrir
                       </Link>
-                    ) : (
-                      <span className="hostly-operation-activity-id">
-                        {log.entityId.slice(0, 10)}
-                      </span>
-                    )}
+                    ) : null}
                   </div>
                 </article>
               );
