@@ -76,27 +76,6 @@ export function presentProductOperationalRoutingAudit(
   };
 }
 
-function parityIssueTitleI18nKey(issue: ProductResolverParityIssue): string {
-  switch (issue) {
-    case "OK":
-      return "productos.resolverParityOkTitle";
-    case "DIVERGENCIA_BUCKET":
-      return "productos.resolverParityBucketTitle";
-    case "DIVERGENCIA_STATION":
-      return "productos.resolverParityStationTitle";
-    case "DIVERGENCIA_PREPARATION_AREA":
-      return "productos.resolverParityPrepAreaTitle";
-    case "FALTA_STATION":
-      return "productos.resolverParityMissingStationTitle";
-    case "FALLBACK_HEURISTICO":
-      return "productos.resolverParityHeuristicTitle";
-    case "SIN_OPERATION_STATION":
-      return "productos.resolverParityNoOpStationTitle";
-    default:
-      return "productos.resolverParityOkTitle";
-  }
-}
-
 export type ProductResolverParityRecommendationSeverity =
   | "ok"
   | "warning"
@@ -208,27 +187,15 @@ export function presentProductResolverParityRecommendation(
   return `${rec.title} — ${rec.description}`;
 }
 
-/** Tooltip ampliado: paridad legacy vs resolveEffectiveProductionStation. */
+/** Tooltip operativo para el usuario, sin exponer detalles internos del resolver. */
 export function presentProductResolverParityAudit(
   parity: ProductResolverParityAudit,
   t: TranslateFn,
   baseTitle: string,
-  catalogHint?: string | null,
 ): string {
-  const catalogSuffix = catalogHint?.trim() ? ` · ${catalogHint.trim()}` : "";
   const recommendation = getProductResolverParityRecommendation(parity, t);
-  const recommendationSuffix = ` · ${t("productos.resolverParityRecommendLabel")}: ${recommendation.title} — ${recommendation.description}`;
-  if (parity.primaryIssue === "OK") {
-    return `${baseTitle} ${t("productos.resolverParityOkTitle")}${catalogSuffix}${recommendationSuffix}`;
+  if (recommendation.severity === "ok") {
+    return baseTitle;
   }
-  const legacyDest = KDS_DESTINATION_LABEL[parity.legacy.kdsDestination];
-  const resolverDest = KDS_DESTINATION_LABEL[parity.resolver.kdsDestination];
-  const parityTitle = t(parityIssueTitleI18nKey(parity.primaryIssue), {
-    legacyDestination: legacyDest,
-    resolverDestination: resolverDest,
-    legacyBucket: parity.legacy.legacyBucket,
-    resolverBucket: parity.resolver.legacyBucket,
-    resolverSource: parity.resolver.resolverSource ?? "—",
-  });
-  return `${baseTitle} · ${parityTitle}${catalogSuffix}${recommendationSuffix}`;
+  return `${baseTitle} · ${t("productos.resolverParityRecommendLabel")}: ${recommendation.title} — ${recommendation.description}`;
 }
