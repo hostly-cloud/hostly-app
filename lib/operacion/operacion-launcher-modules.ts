@@ -23,7 +23,7 @@ export const OPERACION_LAUNCHER_MODULES: readonly OperacionLauncherModule[] = [
   { slug: "tpv", label: "TPV", subtitle: "Pedidos y cobro" },
   { slug: "cocina", label: "Cocina", subtitle: "Preparación en tiempo real" },
   { slug: "barra", label: "Barra", subtitle: "Bebidas y tickets" },
-  { slug: "cocteleria", label: "Coctelería", subtitle: "Cocteles y preparación" },
+  { slug: "cocteleria", label: "Coctelería", subtitle: "Cócteles y preparación" },
   { slug: "sala", label: "Sala", subtitle: "Entrega y servicio" },
   { slug: "reservas", label: "Reservas", subtitle: "Gestión de mesas" },
   { slug: "activity", label: "Actividad", subtitle: "Historial del servicio" },

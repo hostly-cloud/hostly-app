@@ -1750,6 +1750,8 @@ export default function OrderItemsBoard({
     const idleCopy =
       emptyMessage.toLowerCase().includes("barra")
         ? "La barra está al día."
+        : emptyMessage.toLowerCase().includes("cocteler")
+          ? "La coctelería está al día."
         : emptyMessage.toLowerCase().includes("sala") ||
             emptyMessage.toLowerCase().includes("servir")
           ? "Todo servido o sin platos listos."
