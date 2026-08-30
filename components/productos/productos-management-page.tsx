@@ -4820,6 +4820,11 @@ export default function ProductosManagementPage({
           >
             <div className="hostly-product-form-drawer__header">
               <div className="hostly-product-form-drawer__header-text">
+                <span className="hostly-product-form-drawer__eyebrow">
+                  {editingId
+                    ? t("carta.productFormEyebrowEdit")
+                    : t("carta.productFormEyebrowNew")}
+                </span>
                 <h2 className="hostly-product-form-drawer__title">
                   {editingId ? t("carta.editProduct") : t("carta.newProduct")}
                 </h2>
@@ -4827,9 +4832,17 @@ export default function ProductosManagementPage({
                   {editingId ? t("carta.productFormEditHint") : t("carta.productFormNewHint")}
                 </p>
               </div>
-              <ConfigBtnSecondary type="button" onClick={requestCloseForm}>
-                {t("common.cancel")}
-              </ConfigBtnSecondary>
+              <button
+                type="button"
+                className="hostly-product-form-drawer__close"
+                onClick={requestCloseForm}
+                aria-label={t("carta.productFormClose")}
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="m7 7 10 10M17 7 7 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                <span>{t("carta.productFormClose")}</span>
+              </button>
             </div>
 
             <ProductFormDrawerTabs activeTab={productFormTab} onTabChange={setProductFormTab} />
@@ -5297,6 +5310,9 @@ export default function ProductosManagementPage({
             </div>
 
             <div className="hostly-product-form-drawer__footer">
+              <p className="hostly-product-form-drawer__footer-hint">
+                {t("carta.productFormRestaurantScopeHint")}
+              </p>
               <ConfigBtnPrimary
                 type="button"
                 className="hostly-product-form-drawer__footer-primary"

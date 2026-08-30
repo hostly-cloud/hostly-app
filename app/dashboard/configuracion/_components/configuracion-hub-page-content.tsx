@@ -127,7 +127,7 @@ const HUB_CARDS: HubCard[] = [
     title: "Integraciones",
     description: "Conexiones con delivery, pagos y herramientas externas.",
     href: CONFIG_ROUTES.integrations,
-    status: "2 activas",
+    status: "Próximamente",
     statusTone: "neutral",
     visual: "integrations",
     icon: <IconIntegrations />,
