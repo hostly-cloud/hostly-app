@@ -54,7 +54,7 @@ const expectedOutputs = [
   "Menús",
 ] as const;
 
-const futurePreviews = ["Preview TPV", "Preview Cocina", "Preview Barra"] as const;
+const futurePreviews = ["Vista TPV", "Vista Cocina", "Vista Barra"] as const;
 
 export function ImportWorkspacePageContent() {
   return (
@@ -62,7 +62,7 @@ export function ImportWorkspacePageContent() {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[var(--hostly-page-pad-x)] py-[var(--hostly-page-pad-y)]">
         <div className="hostly-config-page-body mx-auto flex w-full max-w-6xl flex-col gap-3">
         <ConfigModulePageHeader
-          secondaryActions={<HostlyStatusBadge tone="info">Workspace futuro</HostlyStatusBadge>}
+          secondaryActions={<HostlyStatusBadge tone="info">Próximamente</HostlyStatusBadge>}
         />
 
         <HostlySurface
@@ -80,7 +80,10 @@ export function ImportWorkspacePageContent() {
                   Un solo espacio para cualquier carta
                 </h2>
               </div>
-              <p className="hostly-muted text-sm font-semibold">Sin conexión todavía. Las tarjetas están preparadas visualmente para drag & drop.</p>
+              <p className="hostly-muted text-sm font-semibold">
+                Esta nueva experiencia todavía no está disponible. Para importar una carta ahora,
+                utiliza IA / Importación.
+              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -101,7 +104,7 @@ export function ImportWorkspacePageContent() {
                     <h3 className="text-lg font-black tracking-[-0.02em] text-[var(--hostly-ink)]">{source.title}</h3>
                     <p className="text-sm font-semibold leading-5 text-[var(--hostly-ink-muted)]">{source.description}</p>
                     <div className="mt-4 rounded-2xl border border-[rgba(148,163,184,0.22)] bg-[rgba(248,250,252,0.72)] px-3 py-2 text-xs font-bold text-[var(--hostly-ink-muted)] group-hover:border-[rgba(59,130,246,0.18)]">
-                      Arrastrar aquí
+                      Disponible próximamente
                     </div>
                   </div>
                 </div>
@@ -115,12 +118,14 @@ export function ImportWorkspacePageContent() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="hostly-section-label hostly-type-caption">Asistente</p>
-                <h2 className="hostly-heading hostly-type-section-title">Hostly está preparando tu workspace</h2>
+                <h2 className="hostly-heading hostly-type-section-title">
+                  Hostly está preparando tu espacio de importación
+                </h2>
                 <p className="hostly-muted mt-2 text-sm font-semibold leading-6">
-                  Este bloque reservará el seguimiento del análisis cuando la IA esté conectada.
+                  Aquí podrás seguir el análisis paso a paso cuando esta experiencia esté disponible.
                 </p>
               </div>
-              <HostlyStatusBadge tone="muted">Placeholder</HostlyStatusBadge>
+              <HostlyStatusBadge tone="muted">Próximamente</HostlyStatusBadge>
             </div>
             <ol className="mt-6 space-y-3">
               {progressSteps.map((step) => (
@@ -174,7 +179,7 @@ export function ImportWorkspacePageContent() {
                   <p className="hostly-section-label hostly-type-caption">Control humano</p>
                   <h2 className="hostly-heading hostly-type-section-title">Nada se publicará automáticamente</h2>
                   <p className="hostly-muted mt-3 max-w-3xl text-sm font-semibold leading-6">
-                    Todo se importará primero a un Workspace de revisión. Tú tendrás siempre la última decisión antes de publicar.
+                    Todo se importará primero a un espacio de revisión. Tú tendrás siempre la última decisión antes de publicar.
                   </p>
                 </div>
               </div>
@@ -196,7 +201,7 @@ export function ImportWorkspacePageContent() {
         </HostlyCard>
 
         <p className="pb-4 text-center text-xs font-bold uppercase tracking-[0.16em] text-[var(--hostly-ink-muted)]">
-          Import Workspace · Arquitectura visual sin datos conectados
+          Nueva experiencia de importación · Próximamente
         </p>
         </div>
       </div>
