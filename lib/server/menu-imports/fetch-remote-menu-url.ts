@@ -1,3 +1,4 @@
+import { HOSTLY_PUBLIC_SITE_URL } from "@/lib/hostly/public-site-url";
 import { URL_FETCH_TIMEOUT_MS, MAX_REMOTE_MENU_BYTES } from "./menu-import-limits";
 
 export type FetchedRemoteMenu = {
@@ -52,7 +53,7 @@ export async function fetchRemoteMenuContent(sourceUrl: string): Promise<Fetched
       signal: controller.signal,
       headers: {
         Accept: "text/html,application/pdf,application/xhtml+xml;q=0.9,*/*;q=0.8",
-        "User-Agent": "HostlyMenuImport/1.0 (+https://hostly.app)",
+        "User-Agent": `HostlyMenuImport/1.0 (+${HOSTLY_PUBLIC_SITE_URL})`,
       },
     });
 
