@@ -376,10 +376,6 @@ export default function ConfigFamiliasProductoPage() {
                         </HostlyButton>
                       </div>
                     </div>
-                    <p className="mt-3 font-mono text-[10px] text-slate-400">
-                      {family.id} · orden {family.sortOrder}
-                      {!family.active ? " · inactiva" : ""}
-                    </p>
                   </HostlySurface>
                 </li>
               );
