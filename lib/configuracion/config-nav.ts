@@ -47,7 +47,7 @@ export const CONFIG_NAV_GROUPS: ConfigNavGroup[] = [
       },
       {
         href: "/dashboard/configuracion/carta/import-workspace",
-        label: "Import Workspace",
+        label: "Espacio de importación",
       },
     ],
   },
