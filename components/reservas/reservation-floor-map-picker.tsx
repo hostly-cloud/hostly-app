@@ -118,7 +118,7 @@ function reservationStatusChipLabel(status: Reservation["status"]): string {
     case "completed":
       return "Cerrada";
     case "no_show":
-      return "No show";
+      return "No presentado";
     case "cancelled":
       return "Cancelada";
     default:
@@ -834,7 +834,7 @@ export function ReservationFloorMapPicker({
                   }}
                   aria-hidden
                 />
-                No show
+                No presentado
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span
@@ -1081,7 +1081,7 @@ export function ReservationFloorMapPicker({
                                     color: "#64748b",
                                   }}
                                 >
-                                  {displayRes.partySize} pax
+                                  {displayRes.partySize} comensales
                                 </span>
                                 <span
                                   style={{
@@ -1180,7 +1180,7 @@ export function ReservationFloorMapPicker({
                           <span className="tabular-nums">
                             {livePreview.reservation.time}
                           </span>
-                          <span>{livePreview.reservation.partySize} pax</span>
+                          <span>{livePreview.reservation.partySize} comensales</span>
                         </div>
                         {livePreview.reservation.notes?.trim() ? (
                           <p
@@ -1243,10 +1243,6 @@ export function ReservationFloorMapPicker({
                         Liberar
                       </button>
                     </div>
-                    <p className="mb-0 mt-2 text-[10px] font-medium italic text-[#94a3b8]">
-                      Roadmap: drag entre mesas, doble turno, SLA retraso, VIP
-                      por zona.
-                    </p>
                   </div>
                 ) : null}
               </div>
