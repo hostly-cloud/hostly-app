@@ -100,6 +100,10 @@ Reglas específicas:
   principal.
 - Densidad por tipo: módulos administrativos compactos, flujos guiados con algo
   más de aire y herramientas canvas con chrome mínimo.
+- Cada ruta declara un único propietario vertical del scroll: `content` para
+  páginas administrativas completas, `internal` para workbenches con listas o
+  formularios acotados, `viewport` para herramientas inmersivas y `document`
+  para el hub. No se bloquea el overflow global sin asignar antes ese propietario.
 
 ---
 

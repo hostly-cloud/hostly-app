@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 import { ConfiguracionCapabilityShell } from "@/components/auth/configuracion-capability-shell";
+import { resolveConfigScrollOwner } from "@/lib/configuracion/config-nav";
 import { ConfiguracionContextSelector } from "./_components/configuracion-context-selector";
 
 const MAP_EDITOR_CONFIG_PATH = "/dashboard/configuracion/espacios/editor-v2";
@@ -30,6 +31,7 @@ export default function ConfiguracionLayout({
   const pathname = usePathname() ?? "";
 
   const isConfigHub = useMemo(() => isConfigHubPath(pathname), [pathname]);
+  const scrollOwner = useMemo(() => resolveConfigScrollOwner(pathname), [pathname]);
   const isProductosPage = useMemo(
     () => isProductosConfigPath(pathname),
     [pathname],
@@ -52,6 +54,7 @@ export default function ConfiguracionLayout({
   return (
     <div
       data-hostly-config-shell=""
+      data-hostly-config-scroll-owner={scrollOwner}
       className={`hostly-config-shell flex min-h-[100dvh] w-full text-slate-900${
         isConfigHub ? " hostly-config-shell--hub" : ""
       }${isProductosPage ? " hostly-config-shell--productos" : ""}`}
@@ -74,7 +77,9 @@ export default function ConfiguracionLayout({
           className={`flex flex-1 flex-col ${
             isConfigHub
               ? "min-h-0 overflow-visible"
-              : `min-h-0 overflow-hidden ${isMapEditor ? "p-1 sm:p-1.5 lg:p-2" : ""}`
+              : scrollOwner === "content"
+                ? "min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain"
+                : `min-h-0 overflow-hidden ${isMapEditor ? "p-1 sm:p-1.5 lg:p-2" : ""}`
           }`}
         >
           {isMapEditor ? (
