@@ -20,6 +20,7 @@ import {
   Sparkles,
   Tags,
   Users,
+  Workflow,
   X,
 } from "lucide-react";
 import {
@@ -40,6 +41,7 @@ type ConfigContextGroup = {
 };
 
 const NAV_ICON_BY_HREF: Record<string, LucideIcon> = {
+  "/dashboard/configuracion/operacion": Workflow,
   "/dashboard/configuracion/estaciones": ChefHat,
   "/dashboard/configuracion/impresoras": Printer,
   "/dashboard/configuracion/carta/familias": Layers3,
