@@ -18,6 +18,7 @@ import {
 import { computeReservationDayMetrics } from "@/lib/reservas/reservation-metrics";
 import {
   activeReservationTables,
+  reservationTableDisplayLabels,
   reservationTableOptionsForReference,
 } from "@/lib/reservas/reservation-table-options";
 import {
@@ -99,7 +100,7 @@ function statusLabel(s: ReservationStatus): string {
     case "completed":
       return "Completada";
     case "no_show":
-      return "No show";
+      return "No presentado";
     case "cancelled":
       return "Cancelada";
     default:
@@ -171,16 +172,8 @@ export default function ReservasView() {
       restaurantId,
       viewDate,
       setReservations,
-      (err) => {
-        const msg =
-          err instanceof Error
-            ? err.message
-            : typeof err === "object" && err && "code" in err
-              ? String((err as { code?: string }).code)
-              : String(err);
-        setListError(
-          `No se pudieron cargar las reservas (${msg}). Comprueba índices Firestore y reglas.`,
-        );
+      () => {
+        setListError("No se pudieron cargar las reservas. Vuelve a intentarlo en unos instantes.");
       },
     );
     return () => unsub();
@@ -229,6 +222,10 @@ export default function ReservasView() {
   const tablesOptions = useMemo(() => {
     return activeReservationTables(tables, restaurantId ?? "");
   }, [tables, restaurantId]);
+  const tableDisplayLabels = useMemo(
+    () => reservationTableDisplayLabels(tablesOptions, floorPlans),
+    [tablesOptions, floorPlans],
+  );
 
   const [nowMin, setNowMin] = useState(() => {
     const d = new Date();
@@ -514,7 +511,7 @@ export default function ReservasView() {
               </Link>
               <div className="hostly-mobile-title-block">
                 <h1 className="hostly-mobile-title">Reservas</h1>
-                <p className="hostly-mobile-subtitle">Gestiona llegadas, no show y ocupación</p>
+                <p className="hostly-mobile-subtitle">Gestiona llegadas, ausencias y ocupación</p>
               </div>
               <div className="hostly-mobile-header-actions">
                 <button
@@ -587,7 +584,7 @@ export default function ReservasView() {
                 <div className="hostly-mobile-kpi__value">{metrics.completed}</div>
               </div>
               <div className="hostly-mobile-kpi hostly-mobile-kpi--danger">
-                <div className="hostly-mobile-kpi__label">No show</div>
+                <div className="hostly-mobile-kpi__label">No presentadas</div>
                 <div className="hostly-mobile-kpi__value">{metrics.noShow}</div>
               </div>
               <div className="hostly-mobile-kpi hostly-mobile-kpi--neutral">
@@ -595,11 +592,11 @@ export default function ReservasView() {
                 <div className="hostly-mobile-kpi__value">{metrics.cancelled}</div>
               </div>
               <div className="hostly-mobile-kpi hostly-mobile-kpi--neutral">
-                <div className="hostly-mobile-kpi__label">Pax previstas</div>
+                <div className="hostly-mobile-kpi__label">Comensales previstos</div>
                 <div className="hostly-mobile-kpi__value">{metrics.paxPlanned}</div>
               </div>
               <div className="hostly-mobile-kpi hostly-mobile-kpi--neutral">
-                <div className="hostly-mobile-kpi__label">Pax llegadas</div>
+                <div className="hostly-mobile-kpi__label">Comensales llegados</div>
                 <div className="hostly-mobile-kpi__value">{metrics.paxSeated}</div>
               </div>
             </div>
@@ -649,7 +646,7 @@ export default function ReservasView() {
                               </span>
                               <span className="font-semibold">{r.customerName || "—"}</span>
                               <span className="text-sm text-[var(--hostly-ink-muted)]">
-                                {r.partySize ? `${r.partySize} pax` : "—"}
+                                {r.partySize ? `${r.partySize} comensales` : "—"}
                               </span>
                               {tableZone ? (
                                 <span className="text-sm font-medium text-[var(--hostly-accent)]">{tableZone}</span>
@@ -686,7 +683,7 @@ export default function ReservasView() {
                               </span>
                               <span className="font-semibold">{r.customerName || "—"}</span>
                               <span className="text-sm text-[var(--hostly-ink-muted)]">
-                                {r.partySize ? `${r.partySize} pax` : "—"}
+                                {r.partySize ? `${r.partySize} comensales` : "—"}
                               </span>
                               {tableZone ? (
                                 <span className="text-sm font-medium text-[var(--hostly-accent)]">{tableZone}</span>
@@ -829,7 +826,7 @@ export default function ReservasView() {
                             <option value="">—</option>
                             {tablesOptions.map((t) => (
                               <option key={t.id} value={t.id}>
-                                {t.name}
+                                {tableDisplayLabels.get(t.id) ?? t.name}
                               </option>
                             ))}
                           </select>
@@ -909,7 +906,10 @@ export default function ReservasView() {
                     allTables: tables,
                     restaurantId: restaurantId ?? "",
                     reference: r,
-                  });
+                  }).map((option) => ({
+                    ...option,
+                    label: tableDisplayLabels.get(option.id) ?? option.label,
+                  }));
                   return (
                     <div
                       key={r.id}
@@ -922,7 +922,7 @@ export default function ReservasView() {
                           </span>
                           <span className="font-semibold text-[var(--hostly-ink)]">{r.customerName || "—"}</span>
                           <span className="text-sm font-medium text-[var(--hostly-ink-muted)]">
-                            {r.partySize ? `${r.partySize} pax` : "—"}
+                            {r.partySize ? `${r.partySize} comensales` : "—"}
                           </span>
                           {tableZone ? (
                             <span className="text-sm font-semibold text-[var(--hostly-accent)]">{tableZone}</span>
@@ -989,7 +989,7 @@ export default function ReservasView() {
                             onClick={() => void handleUpdateReservationStatus(r.id, "no_show")}
                             disabled={busy}
                           >
-                            No show
+                            No presentado
                           </button>
                           <button
                             type="button"

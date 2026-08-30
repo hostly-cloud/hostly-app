@@ -1,4 +1,8 @@
 import type { Table } from "@/lib/firestore/tables";
+import {
+  effectiveTableFloorPlanId,
+  type FloorPlan,
+} from "@/lib/firestore/floorPlans";
 
 export type ReservationTableOption = {
   id: string;
@@ -13,6 +17,55 @@ type HistoricalTableReference = {
 
 function sortReservationTables(a: Table, b: Table): number {
   return a.name.localeCompare(b.name, "es", { numeric: true });
+}
+
+function normalizedTableName(table: Table): string {
+  return table.name.trim().toLocaleLowerCase("es");
+}
+
+/**
+ * Mantiene el nombre corto cuando es único. Si dos planos reutilizan el mismo
+ * número de mesa, añade el plano y la zona para que el selector sea inequívoco.
+ */
+export function reservationTableDisplayLabels(
+  tables: readonly Table[],
+  floorPlans: readonly FloorPlan[],
+): Map<string, string> {
+  const nameCounts = new Map<string, number>();
+  for (const table of tables) {
+    const key = normalizedTableName(table);
+    nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1);
+  }
+
+  const floorNames = new Map(
+    floorPlans.map((plan) => [plan.id, plan.name.trim()] as const),
+  );
+  const baseLabels = tables.map((table) => {
+    const name = table.name.trim() || "Mesa";
+    if ((nameCounts.get(normalizedTableName(table)) ?? 0) < 2) {
+      return { id: table.id, label: name };
+    }
+
+    const floorId = effectiveTableFloorPlanId(table, null, [...floorPlans]);
+    const floorName = floorNames.get(floorId)?.trim() ?? "";
+    const zoneName = (table.zoneName ?? table.zone ?? "").trim();
+    const context = [floorName, zoneName].filter(Boolean).join(" · ");
+    return { id: table.id, label: context ? `${name} · ${context}` : name };
+  });
+
+  const labelCounts = new Map<string, number>();
+  for (const item of baseLabels) {
+    labelCounts.set(item.label, (labelCounts.get(item.label) ?? 0) + 1);
+  }
+  const occurrences = new Map<string, number>();
+  return new Map(
+    baseLabels.map((item) => {
+      if ((labelCounts.get(item.label) ?? 0) < 2) return [item.id, item.label];
+      const occurrence = (occurrences.get(item.label) ?? 0) + 1;
+      occurrences.set(item.label, occurrence);
+      return [item.id, `${item.label} (${occurrence})`];
+    }),
+  );
 }
 
 export function activeReservationTables(

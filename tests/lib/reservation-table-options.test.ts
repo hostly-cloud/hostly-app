@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Table } from "../../lib/firestore/tables";
+import type { FloorPlan } from "../../lib/firestore/floorPlans";
 import {
   activeReservationTables,
+  reservationTableDisplayLabels,
   reservationTableOptionsForReference,
 } from "../../lib/reservas/reservation-table-options";
 
@@ -10,17 +12,20 @@ function table(params: {
   id: string;
   restaurantId?: string;
   isActive?: boolean;
+  name?: string;
+  floorPlanId?: string;
 }): Table {
   return {
     id: params.id,
     restaurantId: params.restaurantId ?? "restaurant-a",
-    name: params.id,
+    name: params.name ?? params.id,
     type: "table",
     status: "free",
     tableShape: "square",
     seats: 4,
     x: 0,
     y: 0,
+    ...(params.floorPlanId ? { floorPlanId: params.floorPlanId } : {}),
     ...(params.isActive === undefined ? {} : { isActive: params.isActive }),
   };
 }
@@ -66,6 +71,27 @@ describe("reservation table options", () => {
         (option) => option.id,
       ),
       ["Mesa 3"],
+    );
+  });
+
+  test("añade el nombre del plano solo cuando hay mesas homónimas", () => {
+    const plans: FloorPlan[] = [
+      { id: "sala", restaurantId: "restaurant-a", name: "Sala", isDefault: true },
+      { id: "terraza", restaurantId: "restaurant-a", name: "Terraza" },
+    ];
+    const tables = [
+      table({ id: "sala-1", name: "Mesa 1", floorPlanId: "sala" }),
+      table({ id: "terraza-1", name: "Mesa 1", floorPlanId: "terraza" }),
+      table({ id: "sala-2", name: "Mesa 2", floorPlanId: "sala" }),
+    ];
+
+    assert.deepEqual(
+      [...reservationTableDisplayLabels(tables, plans)],
+      [
+        ["sala-1", "Mesa 1 · Sala"],
+        ["terraza-1", "Mesa 1 · Terraza"],
+        ["sala-2", "Mesa 2"],
+      ],
     );
   });
 });
