@@ -25,7 +25,7 @@ function normalizedTableName(table: Table): string {
 
 /**
  * Mantiene el nombre corto cuando es único. Si dos planos reutilizan el mismo
- * número de mesa, añade el plano y la zona para que el selector sea inequívoco.
+ * número de mesa, añade el plano (o la zona si falta) para que el selector sea inequívoco.
  */
 export function reservationTableDisplayLabels(
   tables: readonly Table[],
@@ -47,9 +47,12 @@ export function reservationTableDisplayLabels(
     }
 
     const floorId = effectiveTableFloorPlanId(table, null, [...floorPlans]);
-    const floorName = floorNames.get(floorId)?.trim() ?? "";
+    const rawFloorName = floorNames.get(floorId)?.trim() ?? "";
+    const floorName = /^\d+$/.test(rawFloorName)
+      ? `Plano ${rawFloorName}`
+      : rawFloorName;
     const zoneName = (table.zoneName ?? table.zone ?? "").trim();
-    const context = [floorName, zoneName].filter(Boolean).join(" · ");
+    const context = floorName || zoneName;
     return { id: table.id, label: context ? `${name} · ${context}` : name };
   });
 
