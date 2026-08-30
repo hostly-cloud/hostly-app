@@ -78,11 +78,13 @@ describe("reservation table options", () => {
     const plans: FloorPlan[] = [
       { id: "sala", restaurantId: "restaurant-a", name: "Sala", isDefault: true },
       { id: "terraza", restaurantId: "restaurant-a", name: "Terraza" },
+      { id: "one", restaurantId: "restaurant-a", name: "1" },
     ];
     const tables = [
       table({ id: "sala-1", name: "Mesa 1", floorPlanId: "sala" }),
       table({ id: "terraza-1", name: "Mesa 1", floorPlanId: "terraza" }),
       table({ id: "sala-2", name: "Mesa 2", floorPlanId: "sala" }),
+      table({ id: "one-2", name: "Mesa 2", floorPlanId: "one" }),
     ];
 
     assert.deepEqual(
@@ -90,7 +92,8 @@ describe("reservation table options", () => {
       [
         ["sala-1", "Mesa 1 · Sala"],
         ["terraza-1", "Mesa 1 · Terraza"],
-        ["sala-2", "Mesa 2"],
+        ["sala-2", "Mesa 2 · Sala"],
+        ["one-2", "Mesa 2 · Plano 1"],
       ],
     );
   });
