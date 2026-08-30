@@ -133,6 +133,7 @@ export function ConfiguracionContextSelector() {
             className="hostly-config-context-selector__trigger"
             aria-haspopup="dialog"
             aria-expanded={open}
+            aria-controls={open ? "hostly-config-context-panel" : undefined}
             onClick={() => setOpen((value) => !value)}
           >
             <span className="hostly-config-context-selector__trigger-icon" aria-hidden>
@@ -166,69 +167,72 @@ export function ConfiguracionContextSelector() {
         />
       ) : null}
 
-      <div
-        className="hostly-config-context-selector__panel"
-        role="dialog"
-        aria-label="Cambiar área de configuración"
-      >
-        <div className="hostly-config-context-selector__sheet-header">
-          <div>
-            <p className="hostly-config-context-selector__sheet-kicker">
-              Cambiar contexto
-            </p>
-            <p className="hostly-config-context-selector__sheet-title">
-              Configuración
-            </p>
-          </div>
-          <button
-            type="button"
-            className="hostly-config-context-selector__close"
-            aria-label="Cerrar selector"
-            onClick={() => setOpen(false)}
-          >
-            <X size={18} strokeWidth={2.3} />
-          </button>
-        </div>
-
-        <div className="hostly-config-context-selector__groups">
-          {CONTEXT_GROUPS.map((group) => (
-            <section
-              key={group.id}
-              className="hostly-config-context-selector__section"
-            >
-              <p className="hostly-config-context-selector__section-label">
-                {group.label}
+      {open ? (
+        <div
+          id="hostly-config-context-panel"
+          className="hostly-config-context-selector__panel"
+          role="dialog"
+          aria-label="Cambiar área de configuración"
+        >
+          <div className="hostly-config-context-selector__sheet-header">
+            <div>
+              <p className="hostly-config-context-selector__sheet-kicker">
+                Cambiar contexto
               </p>
-              <div className="hostly-config-context-selector__items">
-                {group.children.map(({ href, label, Icon }) => {
-                  const active = configPathnameMatches(pathname, href);
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      className={`hostly-config-context-selector__item${
-                        active ? " is-active" : ""
-                      }`}
-                      aria-current={active ? "page" : undefined}
-                      onClick={() => setOpen(false)}
-                    >
-                      <span
-                        className="hostly-config-context-selector__item-icon"
-                        aria-hidden
+              <p className="hostly-config-context-selector__sheet-title">
+                Configuración
+              </p>
+            </div>
+            <button
+              type="button"
+              className="hostly-config-context-selector__close"
+              aria-label="Cerrar selector"
+              onClick={() => setOpen(false)}
+            >
+              <X size={18} strokeWidth={2.3} />
+            </button>
+          </div>
+
+          <div className="hostly-config-context-selector__groups">
+            {CONTEXT_GROUPS.map((group) => (
+              <section
+                key={group.id}
+                className="hostly-config-context-selector__section"
+              >
+                <p className="hostly-config-context-selector__section-label">
+                  {group.label}
+                </p>
+                <div className="hostly-config-context-selector__items">
+                  {group.children.map(({ href, label, Icon }) => {
+                    const active = configPathnameMatches(pathname, href);
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        className={`hostly-config-context-selector__item${
+                          active ? " is-active" : ""
+                        }`}
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => setOpen(false)}
                       >
-                        <Icon size={17} strokeWidth={2.2} />
-                      </span>
-                      <span className="hostly-config-context-selector__item-label">
-                        {label}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+                        <span
+                          className="hostly-config-context-selector__item-icon"
+                          aria-hidden
+                        >
+                          <Icon size={17} strokeWidth={2.2} />
+                        </span>
+                        <span className="hostly-config-context-selector__item-label">
+                          {label}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
