@@ -38,7 +38,7 @@ export default function BarView() {
           </div>
         </header>
         <p className="hostly-mobile-text-caption hostly-mobile-section hidden !py-0 md:!mb-0 md:!mt-0 md:!block">
-          Barra · mismos tickets que cocina, filtrado bebidas
+          Barra · preparación y entrega de bebidas
         </p>
 
         <OperationStationKdsFilter

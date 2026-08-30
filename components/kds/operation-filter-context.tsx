@@ -24,6 +24,7 @@ import {
   type RestaurantRosterErrorKind,
 } from "@/lib/firestore/users";
 import { logFirestorePermissionError } from "@/lib/firestore/log-firestore-permission-error";
+import { operationZoneFilterId } from "@/lib/operacion/operation-zone-filter";
 
 export type OperationWaiterFilter = "all" | "me" | string;
 
@@ -201,15 +202,13 @@ export function OperationFilterProvider({ children }: { children: ReactNode }) {
         const effectiveId = zoneId || legacyZone || "";
         const effectiveName =
           zoneName || legacyZone || (zoneId ? zoneId : "");
+        const filterZoneId = operationZoneFilterId(effectiveName || effectiveId);
         zoneMap[d.id] = {
-          zoneId: effectiveId || null,
+          zoneId: filterZoneId || null,
           zoneName: effectiveName || null,
         };
-        if (effectiveId) {
-          const existing = zonesByKey.get(effectiveId);
-          if (!existing || (effectiveName && existing !== effectiveName)) {
-            zonesByKey.set(effectiveId, effectiveName || effectiveId);
-          }
+        if (filterZoneId && !zonesByKey.has(filterZoneId)) {
+          zonesByKey.set(filterZoneId, effectiveName || effectiveId);
         }
       }
       const list: OperationZone[] = Array.from(zonesByKey.entries()).map(
