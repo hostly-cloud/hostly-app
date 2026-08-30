@@ -96,7 +96,6 @@ export type EditableFloorMapProps = {
   editorVisualPreset?: "default" | "premium";
   placementRequest?: { id: number; planType: PlanElementType } | null;
   onPlacementRequestHandled?: () => void;
-  mapRef?: React.Ref<HTMLDivElement | null>;
   onWheel?: (e: ReactWheelEvent<HTMLDivElement>) => void;
   className?: string;
   mapAutoFitKey?: string;

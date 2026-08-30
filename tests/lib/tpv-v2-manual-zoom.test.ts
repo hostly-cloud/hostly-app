@@ -20,4 +20,17 @@ describe("TPV V2 manual zoom lifecycle", () => {
     assert.match(applyFitCallback, /fallbackFitMinX/);
     assert.match(applyFitCallback, /fallbackFitCenterY/);
   });
+
+  it("mantiene el nodo del viewport en una referencia local", () => {
+    assert.match(source, /ref=\{rootRef\}/);
+    assert.doesNotMatch(source, /mapRef\.current/);
+  });
+
+  it("programa el autoencuadre sin actualizar estado de forma síncrona en el efecto", () => {
+    assert.match(
+      source,
+      /window\.requestAnimationFrame\(applyFitToViewport\)/,
+    );
+    assert.match(source, /window\.cancelAnimationFrame\(frameId\)/);
+  });
 });
