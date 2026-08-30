@@ -183,7 +183,7 @@ export function FacturasProveedorListDataView({
                       className="hostly-row-actions__btn hostly-row-actions__btn--text"
                       prefetch
                     >
-                      Timeline
+                      Historial
                     </Link>
                   </div>
                 ))}

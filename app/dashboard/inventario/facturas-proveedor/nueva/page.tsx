@@ -412,7 +412,7 @@ export default function NuevaFacturaProveedorPage() {
     const rows = withRowKeys(enriched.lines);
     setLineRows(rows);
     setLearnedAliasRows(detectLearnedAliasRowKeys(rows, aliasMatchCandidates));
-    setUploadMeta("Factura demo QA · sin subida a Storage");
+    setUploadMeta("Factura de demostración · archivo no subido");
     setSimilarOffer(null);
     setMobileTab("review");
     setPhase("ready");
@@ -846,7 +846,7 @@ export default function NuevaFacturaProveedorPage() {
   return (
     <ModulePageShell
       title="Nueva factura (OCR)"
-      subtitle="OCR + IA · revisión manual · registro confirmado"
+      subtitle="Lectura automática con revisión antes de guardar"
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
     >
@@ -866,7 +866,7 @@ export default function NuevaFacturaProveedorPage() {
         >
           <HostlySectionHeader
             title="Subir y revisar factura"
-            description="Revisión operativa rápida · matching · registro manual confirmado"
+            description="Comprueba los datos detectados y confirma cada producto antes de registrar la factura"
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-start", justifyContent: "flex-end" }}>
             <SessionLearningPanel entries={sessionLearnings} />
@@ -888,8 +888,8 @@ export default function NuevaFacturaProveedorPage() {
               color: "#b45309",
             }}
           >
-            <strong>Modo demo QA.</strong> Datos ficticios para probar matching, edición, aliases y
-            registro.
+            <strong>Modo de demostración.</strong> Datos ficticios para probar la vinculación, la
+            edición y el registro.
           </div>
         ) : null}
 

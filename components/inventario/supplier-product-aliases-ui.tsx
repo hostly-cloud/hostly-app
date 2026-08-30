@@ -151,7 +151,7 @@ export function AliasesFilterToolbar({
         className="hostly-mobile-op-toolbar__search hostly-input"
         value={filters.query}
         onChange={(event) => onChange({ query: event.target.value })}
-        placeholder="Buscar alias, producto o proveedor…"
+        placeholder="Buscar nombre, producto o proveedor…"
         style={{ ...touchInputStyle, flex: "1 1 200px", minWidth: 180 }}
       />
       <div className="hostly-mobile-op-toolbar__filters">
@@ -346,7 +346,7 @@ export function AliasesTable({
                     type="checkbox"
                     checked={selectedIds.has(alias.id)}
                     onChange={(event) => onToggleSelected(alias.id, event.target.checked)}
-                    aria-label="Seleccionar alias"
+                    aria-label="Seleccionar vinculación"
                   />
                 </td>
                 <td style={{ fontWeight: 600, maxWidth: 200 }}>{alias.rawText}</td>

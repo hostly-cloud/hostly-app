@@ -679,7 +679,7 @@ export default function PedidoCompraDetallePage() {
             <div className="hostly-panel p-3" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <HostlySectionHeader
                 title="Movimientos de stock"
-                description="Ledger central · source purchase_receipt"
+                description="Cambios de stock generados por las recepciones de este pedido"
               />
               {movements.length === 0 ? (
                 <div style={{ fontSize: 13, color: "var(--hostly-ink-muted)" }}>Sin movimientos.</div>

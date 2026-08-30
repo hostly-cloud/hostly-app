@@ -320,7 +320,7 @@ export default function ProductTimelinePage() {
 
   return (
     <ModulePageShell
-      title="Timeline operacional"
+      title="Historial de movimientos"
       subtitle={productName}
       {...inventoryHubShellLayout}
       headerBelow={<InventarioRouteTabs />}
