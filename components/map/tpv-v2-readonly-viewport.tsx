@@ -665,7 +665,6 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
           </HostlyButton>
           <HostlyButton
             variant="secondary"
-            className="hostly-button-compact"
             aria-label="Zoom natural"
             onClick={applyNaturalZoomCentered}
           >
@@ -682,7 +681,6 @@ export function TpvV2ReadonlyViewport(props: EditableFloorMapProps) {
           </HostlyButton>
           <HostlyButton
             variant="secondary"
-            className="hostly-button-compact"
             aria-label="Centrar plano"
             onClick={applyFitToViewport}
           >
