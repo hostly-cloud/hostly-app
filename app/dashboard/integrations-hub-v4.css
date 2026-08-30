@@ -1,0 +1,488 @@
+/* Integrations roadmap — honest preview surface, no connection side effects. */
+
+main.hostly-module-shell:has(.hostly-integrations-hub) {
+  background:
+    radial-gradient(
+      circle at 92% 4%,
+      rgba(56, 189, 248, 0.11),
+      transparent 27rem
+    ),
+    linear-gradient(155deg, #f8fbfd 0%, #f1f8fc 52%, #edf7fc 100%);
+}
+
+.hostly-integrations-hub {
+  padding: 16px 18px 24px;
+}
+
+.hostly-integrations-hub__inner {
+  display: flex;
+  width: 100%;
+  max-width: var(--hostly-config-content-max, 1320px);
+  margin: 0 auto;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.hostly-integrations-hub__hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  min-height: 252px;
+  overflow: hidden;
+  border: 1px solid rgba(125, 171, 195, 0.2);
+  border-radius: 24px;
+  background:
+    radial-gradient(
+      circle at 78% 0%,
+      rgba(90, 193, 231, 0.34),
+      transparent 22rem
+    ),
+    linear-gradient(135deg, #173c53, #0b2638 72%);
+  box-shadow: 0 24px 58px rgba(8, 33, 49, 0.17);
+  color: #fff;
+}
+
+.hostly-integrations-hub__hero::after {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  right: -150px;
+  bottom: -190px;
+  border: 1px solid rgba(186, 230, 253, 0.16);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 38px rgba(186, 230, 253, 0.03),
+    0 0 0 78px rgba(186, 230, 253, 0.02);
+  content: "";
+  pointer-events: none;
+}
+
+.hostly-integrations-hub__hero-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  max-width: 720px;
+  justify-content: center;
+  flex-direction: column;
+  padding: 30px 34px;
+}
+
+.hostly-integrations-hub__eyebrow,
+.hostly-integrations-hub__section-heading > div > span,
+.hostly-integrations-hub__trust > div > span {
+  display: block;
+  color: #79cdec;
+  font-size: 9px;
+  font-weight: 830;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.hostly-integrations-hub__hero-copy h1 {
+  max-width: 660px;
+  margin: 9px 0 0;
+  font-size: clamp(30px, 4vw, 48px);
+  font-weight: 820;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.hostly-integrations-hub__hero-copy p {
+  max-width: 620px;
+  margin: 14px 0 0;
+  color: rgba(224, 242, 254, 0.72);
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 1.5;
+}
+
+.hostly-integrations-hub__hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.hostly-integrations-hub__hero-badges span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 3px 9px;
+  border: 1px solid rgba(186, 230, 253, 0.17);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.065);
+  color: rgba(240, 249, 255, 0.82);
+  font-size: 9px;
+  font-weight: 730;
+}
+
+.hostly-integrations-hub__orbit {
+  position: relative;
+  display: flex;
+  min-height: 252px;
+  align-items: center;
+  justify-content: center;
+}
+
+.hostly-integrations-hub__orbit::before,
+.hostly-integrations-hub__orbit::after {
+  position: absolute;
+  border: 1px solid rgba(186, 230, 253, 0.16);
+  border-radius: 50%;
+  content: "";
+}
+
+.hostly-integrations-hub__orbit::before {
+  width: 214px;
+  height: 214px;
+}
+
+.hostly-integrations-hub__orbit::after {
+  width: 132px;
+  height: 132px;
+  border-style: dashed;
+}
+
+.hostly-integrations-hub__orbit-core {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 72px;
+  height: 72px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(186, 230, 253, 0.28);
+  border-radius: 22px;
+  background: linear-gradient(
+    145deg,
+    rgba(90, 193, 231, 0.3),
+    rgba(255, 255, 255, 0.08)
+  );
+  box-shadow:
+    0 16px 30px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 32px;
+  font-weight: 850;
+  letter-spacing: -0.08em;
+}
+
+.hostly-integrations-hub__orbit > span {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(186, 230, 253, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.09);
+  color: #9edcf2;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.13);
+  backdrop-filter: blur(8px);
+}
+
+.hostly-integrations-hub__orbit > span svg {
+  width: 30px;
+  height: 30px;
+}
+
+.hostly-integrations-hub__orbit .is-delivery {
+  transform: translate(-94px, -66px) rotate(-5deg);
+}
+
+.hostly-integrations-hub__orbit .is-payments {
+  transform: translate(96px, -56px) rotate(5deg);
+}
+
+.hostly-integrations-hub__orbit .is-management {
+  transform: translate(-90px, 76px) rotate(4deg);
+}
+
+.hostly-integrations-hub__orbit .is-api {
+  transform: translate(96px, 68px) rotate(-4deg);
+}
+
+.hostly-integrations-hub__section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 7px 3px 0;
+}
+
+.hostly-integrations-hub__section-heading > div > span {
+  color: #4798ba;
+}
+
+.hostly-integrations-hub__section-heading h2 {
+  margin: 6px 0 0;
+  color: #153448;
+  font-size: clamp(19px, 2vw, 24px);
+  font-weight: 810;
+  letter-spacing: -0.04em;
+}
+
+.hostly-integrations-hub__coming {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid rgba(65, 169, 213, 0.22);
+  border-radius: 999px;
+  background: #eaf7fc;
+  color: #176d94;
+  font-size: 9px;
+  font-weight: 810;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.hostly-integrations-hub__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.hostly-integration-card {
+  --integration-accent: #38bdf8;
+  --integration-soft: #e0f2fe;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 246px;
+  overflow: hidden;
+  flex-direction: column;
+  padding: 16px;
+  border: 1px solid rgba(125, 171, 195, 0.21);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 16px 36px rgba(18, 52, 71, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
+}
+
+.hostly-integration-card--payments {
+  --integration-accent: #10b981;
+  --integration-soft: #d1fae5;
+}
+
+.hostly-integration-card--management {
+  --integration-accent: #8b5cf6;
+  --integration-soft: #ede9fe;
+}
+
+.hostly-integration-card--api {
+  --integration-accent: #f59e0b;
+  --integration-soft: #fef3c7;
+}
+
+.hostly-integration-card::after {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  top: -80px;
+  right: -60px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--integration-soft) 64%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.hostly-integration-card__icon {
+  display: flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--integration-accent) 20%, white);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--integration-soft) 78%, white);
+  color: var(--integration-accent);
+  box-shadow: 0 7px 16px
+    color-mix(in srgb, var(--integration-accent) 8%, transparent);
+}
+
+.hostly-integration-card__icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.hostly-integration-card__copy {
+  margin-top: 13px;
+}
+
+.hostly-integration-card__copy > span {
+  color: color-mix(in srgb, var(--integration-accent) 76%, #455f6f);
+  font-size: 8px;
+  font-weight: 830;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hostly-integration-card__copy h3 {
+  margin: 5px 0 0;
+  color: #153448;
+  font-size: 19px;
+  font-weight: 810;
+  letter-spacing: -0.04em;
+}
+
+.hostly-integration-card__copy p {
+  margin: 7px 0 0;
+  color: #6d8593;
+  font-size: 10.5px;
+  font-weight: 540;
+  line-height: 1.45;
+}
+
+.hostly-integration-card__examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 13px;
+}
+
+.hostly-integration-card__examples span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid rgba(125, 171, 195, 0.16);
+  border-radius: 7px;
+  background: #f5fafc;
+  color: #5f7887;
+  font-size: 8.5px;
+  font-weight: 690;
+}
+
+.hostly-integration-card__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 13px;
+  color: #78909d;
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hostly-integration-card__status > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--integration-accent);
+  box-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--integration-soft) 72%, transparent);
+}
+
+.hostly-integrations-hub__trust {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 15px 17px;
+  border: 1px solid rgba(125, 171, 195, 0.2);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 14px 30px rgba(18, 52, 71, 0.045);
+}
+
+.hostly-integrations-hub__trust-icon {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 14px;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.hostly-integrations-hub__trust-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.hostly-integrations-hub__trust > div > span {
+  color: #059669;
+}
+
+.hostly-integrations-hub__trust h2 {
+  margin: 5px 0 0;
+  color: #153448;
+  font-size: 15px;
+  font-weight: 790;
+  letter-spacing: -0.025em;
+}
+
+.hostly-integrations-hub__trust p {
+  max-width: 740px;
+  margin: 4px 0 0;
+  color: #6d8593;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.hostly-integrations-hub__trust .hostly-button-secondary {
+  min-height: 40px;
+  border-radius: 11px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1040px) {
+  .hostly-integrations-hub__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hostly-integration-card {
+    min-height: 220px;
+  }
+}
+
+@media (max-width: 760px) {
+  .hostly-integrations-hub {
+    padding: 10px 10px 18px;
+  }
+
+  .hostly-integrations-hub__hero {
+    grid-template-columns: 1fr;
+    border-radius: 20px;
+  }
+
+  .hostly-integrations-hub__hero-copy {
+    padding: 24px 20px 8px;
+  }
+
+  .hostly-integrations-hub__orbit {
+    min-height: 220px;
+  }
+
+  .hostly-integrations-hub__section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .hostly-integrations-hub__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hostly-integration-card {
+    min-height: 214px;
+  }
+
+  .hostly-integrations-hub__trust {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .hostly-integrations-hub__trust .hostly-button-secondary {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}
