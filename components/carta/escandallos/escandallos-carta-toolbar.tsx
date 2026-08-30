@@ -38,7 +38,9 @@ export function EscandallosCartaToolbar({
   return (
     <div className="hostly-recipe-editor__toolbar">
       <div className="hostly-recipe-editor__toolbar-meta">
-        <span className="hostly-recipe-editor__toolbar-count">{totalCount} escandallos</span>
+        <span className="hostly-recipe-editor__toolbar-count">
+          {totalCount} {totalCount === 1 ? "producto" : "productos"}
+        </span>
         {bestSummary ? (
           <span className="hostly-recipe-editor__toolbar-highlight hostly-recipe-editor__toolbar-highlight--up">
             {bestSummary}
