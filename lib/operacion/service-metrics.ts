@@ -30,6 +30,12 @@ export type ServiceMetrics = {
   avgServeMinutes: number | null;
 };
 
+const MAX_PLAUSIBLE_SERVICE_DURATION_MS = 12 * 60 * 60 * 1000;
+
+function isPlausibleServiceDuration(durationMs: number): boolean {
+  return durationMs >= 0 && durationMs <= MAX_PLAUSIBLE_SERVICE_DURATION_MS;
+}
+
 function readMs(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (v && typeof v === "object") {
@@ -108,12 +114,16 @@ export function computeServiceMetrics(
     const preparedMs = readMs(it.preparedAt);
     const servedMs = readMs(it.servedAt);
 
-    if (sentMs != null && preparedMs != null && preparedMs >= sentMs) {
-      prepSumMs += preparedMs - sentMs;
+    const prepDurationMs =
+      sentMs != null && preparedMs != null ? preparedMs - sentMs : null;
+    if (prepDurationMs != null && isPlausibleServiceDuration(prepDurationMs)) {
+      prepSumMs += prepDurationMs;
       prepCount += 1;
     }
-    if (preparedMs != null && servedMs != null && servedMs >= preparedMs) {
-      serveSumMs += servedMs - preparedMs;
+    const serveDurationMs =
+      preparedMs != null && servedMs != null ? servedMs - preparedMs : null;
+    if (serveDurationMs != null && isPlausibleServiceDuration(serveDurationMs)) {
+      serveSumMs += serveDurationMs;
       serveCount += 1;
     }
   }
