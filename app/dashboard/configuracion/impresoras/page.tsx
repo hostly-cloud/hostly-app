@@ -28,6 +28,50 @@ import {
   savePrinterConfig,
 } from "@/lib/firestore/printer-config";
 
+const STATION_PRESENTATION: Record<
+  PrinterStationKey,
+  { eyebrow: string; description: string }
+> = {
+  kitchen: {
+    eyebrow: "Producción caliente",
+    description: "Comandas de cocina y pase",
+  },
+  bar: {
+    eyebrow: "Bebidas",
+    description: "Tickets de barra y cafetería",
+  },
+  cocktail: {
+    eyebrow: "Coctelería",
+    description: "Comandas del punto de cócteles",
+  },
+};
+
+function PrinterStationGlyph({ station }: { station: PrinterStationKey }) {
+  if (station === "kitchen") {
+    return (
+      <svg viewBox="0 0 48 48" fill="none" aria-hidden>
+        <path d="M10 31h28v6H10zM15 27c0-7 4-12 9-12s9 5 9 12" stroke="currentColor" strokeWidth="2.3" strokeLinejoin="round" />
+        <path d="M24 11v4M12 24H8m32 0h-4" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (station === "bar") {
+    return (
+      <svg viewBox="0 0 48 48" fill="none" aria-hidden>
+        <path d="M13 12h22l-4 12a7.5 7.5 0 0 1-14 0L13 12Z" stroke="currentColor" strokeWidth="2.3" strokeLinejoin="round" />
+        <path d="M24 30v7m-6 0h12" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden>
+      <path d="M12 14h24L25 27v9h5M18 36h12" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M17 19h14" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
+      <circle cx="34" cy="11" r="3" fill="currentColor" opacity=".55" />
+    </svg>
+  );
+}
+
 function cloneConfig(doc: PrinterConfigDocument): PrinterConfigDocument {
   return {
     enabled: doc.enabled,
@@ -135,9 +179,17 @@ export default function ConfigImpresorasPage() {
     setError(null);
   }, [remoteConfig]);
 
+  const activeStationCount = PRINTER_STATION_KEYS.filter(
+    (key) => draft.stations[key].enabled,
+  ).length;
+  const configuredStationCount = PRINTER_STATION_KEYS.filter((key) => {
+    const station = draft.stations[key];
+    return Boolean(station.printerName?.trim() || station.channel?.trim());
+  }).length;
+
   return (
-    <div className="hostly-config-page-body flex min-h-0 flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4 pb-6">
+    <div className="hostly-config-page-body hostly-printer-control flex min-h-0 flex-1 flex-col">
+      <div className="hostly-printer-control__inner mx-auto flex w-full max-w-[var(--hostly-config-content-max)] flex-col gap-4 pb-6">
         <HostlySectionHeader
           title="Impresoras"
           description="Configura el destino y las copias de los tickets por estación."
@@ -149,18 +201,6 @@ export default function ConfigImpresorasPage() {
             Ver cola de impresión
           </Link>
         </HostlySectionHeader>
-
-        <HostlyAlert tone="warning" title="Configuración de respaldo">
-          La configuración por Cocina/Barra/Coctelería se usa como fallback.
-          Para varias barras usa{" "}
-          <Link
-            href="/dashboard/configuracion/estaciones"
-            className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-800"
-          >
-            Configuración → Estaciones
-          </Link>
-          .
-        </HostlyAlert>
 
         {loading ? (
           <HostlyLoadingState embedded label="Cargando configuración de impresoras…" />
@@ -174,38 +214,79 @@ export default function ConfigImpresorasPage() {
 
         {!loading ? (
           <>
-            <HostlySurface variant="ice" className="p-4 sm:p-5">
-              <HostlyFormToggle
-                label={draft.enabled ? "Impresión activada" : "Impresión desactivada"}
-                hint="Hostly enrutará los tickets por estación cuando se conecte el hardware."
-                checked={draft.enabled}
-                onChange={(e) =>
-                  setDraft((prev) => ({ ...prev, enabled: e.target.checked }))
-                }
-              />
-              {usingDefaults && remoteConfig === null ? (
-                <p className="hostly-muted mt-3 text-xs">Se muestran valores por defecto hasta guardar por primera vez.</p>
-              ) : null}
-            </HostlySurface>
+            <section
+              className={`hostly-printer-control__hero${draft.enabled ? " is-enabled" : ""}`}
+              aria-label="Estado de impresión"
+            >
+              <div className="hostly-printer-control__hero-icon" aria-hidden>
+                <svg viewBox="0 0 56 56" fill="none">
+                  <path d="M17 19V9h22v10M17 39v8h22v-8" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                  <path d="M12 20h32a5 5 0 0 1 5 5v13H7V25a5 5 0 0 1 5-5Z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+                  <path d="M18 31h20M40 26h2" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="hostly-printer-control__hero-copy">
+                <span className="hostly-printer-control__eyebrow">Salida de tickets</span>
+                <h3>{draft.enabled ? "Impresión preparada" : "Impresión en pausa"}</h3>
+                <p>Hostly enrutará cada comanda al destino configurado cuando se conecte el hardware.</p>
+              </div>
+              <div className="hostly-printer-control__hero-toggle">
+                <HostlyFormToggle
+                  label={draft.enabled ? "Sistema activo" : "Sistema inactivo"}
+                  checked={draft.enabled}
+                  onChange={(e) =>
+                    setDraft((prev) => ({ ...prev, enabled: e.target.checked }))
+                  }
+                />
+              </div>
+              <div className="hostly-printer-control__metrics" aria-label="Resumen de impresión">
+                <div>
+                  <strong>{activeStationCount}</strong>
+                  <span>estaciones activas</span>
+                </div>
+                <div>
+                  <strong>{configuredStationCount}</strong>
+                  <span>destinos enlazados</span>
+                </div>
+                <div>
+                  <strong>{usingDefaults && remoteConfig === null ? "Demo" : "Guardado"}</strong>
+                  <span>origen de configuración</span>
+                </div>
+              </div>
+              <div className="hostly-printer-control__fallback-note">
+                <span>Respaldo operativo</span>
+                Cocina, Barra y Coctelería actúan como destinos generales. Para varias barras usa{" "}
+                <Link href="/dashboard/configuracion/estaciones">Estaciones</Link>.
+              </div>
+            </section>
 
-            <div className="grid gap-3">
+            <div className="hostly-printer-control__station-grid">
               {PRINTER_STATION_KEYS.map((key) => {
                 const station = draft.stations[key];
+                const presentation = STATION_PRESENTATION[key];
                 return (
-                  <HostlySurface key={key} variant="flat" className="p-4 sm:p-5">
-                    <HostlySectionHeader
-                      title={stationFieldLabel(key)}
-                      description={`Destino ${key}`}
-                      className="mb-4 border-b border-[var(--hostly-line)] pb-3"
-                    >
+                  <HostlySurface
+                    key={key}
+                    variant="flat"
+                    className={`hostly-printer-station-card hostly-printer-station-card--${key}${station.enabled ? " is-enabled" : ""}`}
+                  >
+                    <header className="hostly-printer-station-card__header">
+                      <div className="hostly-printer-station-card__glyph">
+                        <PrinterStationGlyph station={key} />
+                      </div>
+                      <div className="hostly-printer-station-card__heading">
+                        <span>{presentation.eyebrow}</span>
+                        <h3>{stationFieldLabel(key)}</h3>
+                        <p>{presentation.description}</p>
+                      </div>
                       <HostlyFormToggle
-                        label="Estación activa"
+                        label={station.enabled ? "Activa" : "Inactiva"}
                         checked={station.enabled}
                         onChange={(e) => patchStation(key, { enabled: e.target.checked })}
                       />
-                    </HostlySectionHeader>
+                    </header>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="hostly-printer-station-card__fields">
                       <HostlyField label="Nombre impresora">
                         <HostlyInput
                           type="text"
@@ -255,7 +336,8 @@ export default function ConfigImpresorasPage() {
               })}
             </div>
 
-            <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-[var(--hostly-line)] bg-[var(--hostly-surface-page-soft)] py-3">
+            <div className="hostly-printer-control__savebar sticky bottom-0 z-10 flex flex-wrap items-center gap-3">
+              <p>Los cambios no afectan a otras cuentas ni restaurantes.</p>
               <HostlyButton variant="primary" disabled={saving || !restaurantId} onClick={() => void handleSave()}>
                 {saving ? "Guardando…" : "Guardar"}
               </HostlyButton>
