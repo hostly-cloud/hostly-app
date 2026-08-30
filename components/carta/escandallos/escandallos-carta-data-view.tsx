@@ -169,7 +169,7 @@ export function EscandallosCartaDataView({
               </HostlyDataCell>
             ) : null}
             <HostlyDataCell align="center" col="status">
-              Margen
+              Nivel de margen
             </HostlyDataCell>
             <HostlyDataCell align="end" col="actions">
               Acciones
