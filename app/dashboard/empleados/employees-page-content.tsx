@@ -142,7 +142,10 @@ export default function EmpleadosPageContent({
               Gestiona el rol y el acceso de cada persona sin salir de esta pantalla.
             </p>
           </div>
-          <span className="hostly-employees-count" aria-label={`${rows.length} empleados`}>
+          <span
+            className="hostly-employees-count"
+            aria-label={`${rows.length} ${rows.length === 1 ? "empleado" : "empleados"}`}
+          >
             {rows.length}
           </span>
         </header>
