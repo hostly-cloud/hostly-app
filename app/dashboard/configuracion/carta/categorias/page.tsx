@@ -816,13 +816,8 @@ export default function ConfigCartaCategoriasPage() {
       />
 
       <p className="hostly-carta-config-section-body">
-        Las categorías viven en{" "}
-        <span className="font-mono text-[10px] text-slate-500">
-          restaurantes/&#123;id&#125;/cartaCategorias
-        </span>
-        . El recuento de productos usa{" "}
-        <span className="font-mono text-[10px] text-slate-500">categoriaCartaId</span> en
-        artículos locales o central.
+        El recuento muestra los productos asignados a cada categoría. Revisa las categorías
+        para mantener la carta ordenada y facilitar la navegación durante el servicio.
       </p>
     </ConfigCartaWorkbench>
   );
